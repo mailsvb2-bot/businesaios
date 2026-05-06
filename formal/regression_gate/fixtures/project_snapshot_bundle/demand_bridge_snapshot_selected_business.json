@@ -1,0 +1,70 @@
+{
+  "name": "demand_bridge_snapshot_selected_business",
+  "scenario_type": "demand_bridge",
+  "payload": {
+    "mode": "select",
+    "request_id": "req-snapshot-select",
+    "selected_business_id": "biz-2",
+    "delivery_channel": "whatsapp",
+    "trace": {
+      "preferred_channels": {
+        "biz-1": "telegram",
+        "biz-2": "whatsapp"
+      }
+    },
+    "ranked_candidates": [
+      {
+        "business_id": "biz-1",
+        "rank_score": 0.61,
+        "trace": {
+          "adjusted_score": 0.61,
+          "match_score": 0.61
+        }
+      },
+      {
+        "business_id": "biz-2",
+        "rank_score": 0.93,
+        "trace": {
+          "adjusted_score": 0.93,
+          "match_score": 0.93
+        }
+      }
+    ]
+  },
+  "expected_contract": {
+    "request_id": "req-snapshot-select",
+    "selected_business_id": "biz-2",
+    "runner_up_business_ids": [
+      "biz-1"
+    ],
+    "requires_manual_review": false,
+    "trace": {
+      "request_id": "req-snapshot-select",
+      "preferred_channels": {
+        "biz-1": "telegram",
+        "biz-2": "whatsapp"
+      },
+      "decision_path": "core.decision",
+      "optimization_target": "route_quality_and_business_value",
+      "selected_from_candidates": 2,
+      "blocked_candidate_count": 0,
+      "decision_id": "snapshot-allow",
+      "delivery_channel": "whatsapp",
+      "candidate_count": 2
+    }
+  },
+  "expected_trace": {
+    "request_id": "req-snapshot-select",
+    "preferred_channels": {
+      "biz-1": "telegram",
+      "biz-2": "whatsapp"
+    },
+    "decision_path": "core.decision",
+    "optimization_target": "route_quality_and_business_value",
+    "selected_from_candidates": 2,
+    "blocked_candidate_count": 0,
+    "decision_id": "snapshot-allow",
+    "delivery_channel": "whatsapp",
+    "candidate_count": 2
+  }
+}

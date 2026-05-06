@@ -1,0 +1,22 @@
+{
+  "public_api_count": 9,
+  "catalog_count": 29,
+  "collapsed_public_api_files": [
+    "runtime/ads/public_api.py",
+    "runtime/ceo/public_api.py",
+    "runtime/creative/public_api.py",
+    "runtime/governance/public_api.py",
+    "runtime/llm/public_api.py"
+  ],
+  "kept_owner_public_api_files": [
+    "boot/public_api.py",
+    "core/decision/public_api.py",
+    "execution/public_api.py",
+    "observability/public_api.py",
+    "observability/platform/public_api.py",
+    "observability/platform/observability/public_api.py",
+    "runtime/application/public_api.py",
+    "runtime/tenancy/public_api.py",
+    "runtime/world_model/public_api.py"
+  ]
+}

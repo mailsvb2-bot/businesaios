@@ -1,0 +1,16 @@
+# Product-scoped offer catalog (default tenant)
+catalog_id: default:salesbot:prod
+offers:
+  - offer_id: sales_entry
+    base_price_rub: 600
+    rules:
+      min_engagement: 0.00
+      max_fatigue: 1.00
+      cooldown_hours: 12
+    variants:
+      a:
+        title: "💼 Стартовый доступ"
+        body: "Открою доступ и помогу настроить первые шаги. Если не вовремя — можно снизить цену."
+    meta:
+      product: salesbot
+      kind: offer

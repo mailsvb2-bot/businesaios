@@ -1,0 +1,23 @@
+{
+  "name": "runtime_snapshot_blocked",
+  "scenario_type": "runtime",
+  "payload": {
+    "allowed": false,
+    "action_type": "PromoteAction"
+  },
+  "expected_contract": {
+    "status": "blocked",
+    "action_type": "PromoteAction",
+    "reason": "governance_rejected",
+    "trace": {
+      "route": "DecisionCore->RuntimeExecutor",
+      "guard_passed": false,
+      "status": "blocked"
+    }
+  },
+  "expected_trace": {
+    "route": "DecisionCore->RuntimeExecutor",
+    "guard_passed": false,
+    "status": "blocked"
+  }
+}

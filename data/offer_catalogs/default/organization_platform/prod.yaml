@@ -1,0 +1,16 @@
+schema_version: 1
+catalog_id: default:organization_platform:prod
+offers:
+  - offer_id: launch
+    base_price_rub: 990
+    rules:
+      min_engagement: 0.00
+      max_fatigue: 1.00
+      cooldown_hours: 12
+    variants:
+      a:
+        title: "🚀 Запуск организации"
+        body: "Подключение к платформе BusinesAIOS и активация базовых контуров управления."
+    meta:
+      product: organization_platform
+      kind: launch

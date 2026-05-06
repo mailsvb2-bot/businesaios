@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Episode",
+  "type": "object",
+  "required": ["trajectory"],
+  "properties": {
+    "trajectory": {
+      "$ref": "trajectory.schema.json"
+    }
+  },
+  "additionalProperties": false
+}

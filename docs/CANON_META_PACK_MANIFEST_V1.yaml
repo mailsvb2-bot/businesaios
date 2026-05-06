@@ -1,0 +1,63 @@
+meta_pack:
+  marker: "CANON_META_PACK"
+  meta_pack_id: "CANON-META-PACK-V1"
+  description: "Single entrypoint and machine-readable manifest for the repository engineering constitution"
+  onboarding_doc: "docs/CANON_ONBOARDING_FOR_ARCHITECTS_V1.md"
+  index_doc: "docs/CANON_META_PACK_INDEX_V1.md"
+
+  packs:
+    - pack_id: "red-flags"
+      paths:
+        - "docs/CANON_RED_FLAGS_CHECKLIST_V1.md"
+
+    - pack_id: "decision-space"
+      paths:
+        - "docs/CANON_DECISION_SPACE_LOCKS_V1.md"
+        - "docs/CANON_REMEDIATION_PATTERNS_V1.md"
+
+    - pack_id: "capabilities"
+      paths:
+        - "docs/CANON_TYPESTATE_CAPABILITIES_V1.md"
+
+    - pack_id: "boot-runtime-registry"
+      paths:
+        - "docs/CANON_BOOT_RUNTIME_REGISTRY_AUDIT_V1.md"
+        - "docs/CANON_BOOT_RUNTIME_REGISTRY_REMEDIATION_V1.md"
+        - "tests/arch/_canon_boot_runtime_registry_guard.py"
+
+    - pack_id: "domain-registry"
+      paths:
+        - "docs/CANON_DOMAIN_REGISTRY_AUDIT_V1.md"
+        - "docs/CANON_DOMAIN_REGISTRY_REMEDIATION_V1.md"
+        - "tests/arch/_canon_domain_registry_guard.py"
+
+    - pack_id: "test-quality"
+      paths:
+        - "docs/CANON_TEST_QUALITY_AUDIT_V1.md"
+        - "docs/CANON_TEST_QUALITY_REMEDIATION_V1.md"
+        - "tests/arch/_canon_test_quality_guard.py"
+
+    - pack_id: "exception-registry"
+      paths:
+        - "docs/CANON_EXCEPTION_REGISTRY_V1.md"
+        - "docs/CANON_EXCEPTION_REGISTRY_REMEDIATION_V1.md"
+        - "docs/CANON_EXCEPTION_REGISTRY_DATA_V1.yaml"
+        - "tests/arch/_canon_exception_registry_guard.py"
+
+    - pack_id: "migration-registry"
+      paths:
+        - "docs/CANON_MIGRATION_DEPRECATION_REGISTRY_V1.md"
+        - "docs/CANON_MIGRATION_DEPRECATION_REMEDIATION_V1.md"
+        - "docs/CANON_MIGRATION_DEPRECATION_REGISTRY_DATA_V1.yaml"
+        - "tests/arch/_canon_migration_registry_guard.py"
+
+    - pack_id: "arch-audit"
+      paths:
+        - "tests/arch/_canon_arch_audit_index.py"
+
+    - pack_id: "master-layer"
+      paths:
+        - "docs/CANON_MASTER_CHECKLIST_V1.md"
+        - "docs/CANON_MASTER_LAYER_V1.md"
+        - "tests/arch/_canon_master_audit_guard.py"
+        - "tests/arch/test_master_audit_stack_is_consistent.py"

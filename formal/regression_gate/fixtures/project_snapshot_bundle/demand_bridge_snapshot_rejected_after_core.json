@@ -1,0 +1,55 @@
+{
+  "name": "demand_bridge_snapshot_rejected_after_core",
+  "scenario_type": "demand_bridge",
+  "payload": {
+    "mode": "reject",
+    "request_id": "req-snapshot-reject",
+    "trace": {
+      "preferred_channels": {
+        "biz-1": "telegram"
+      }
+    },
+    "ranked_candidates": [
+      {
+        "business_id": "biz-1",
+        "rank_score": 0.91,
+        "trace": {
+          "adjusted_score": 0.91,
+          "match_score": 0.91
+        }
+      }
+    ]
+  },
+  "expected_contract": {
+    "request_id": "req-snapshot-reject",
+    "selected_business_id": null,
+    "runner_up_business_ids": [],
+    "requires_manual_review": true,
+    "trace": {
+      "request_id": "req-snapshot-reject",
+      "preferred_channels": {
+        "biz-1": "telegram"
+      },
+      "decision_path": "core.decision",
+      "optimization_target": "route_quality_and_business_value",
+      "selected_from_candidates": 1,
+      "blocked_candidate_count": 0,
+      "manual_review_reason": "decision_core_rejected_all_candidates",
+      "decision_id": "snapshot-reject",
+      "candidate_count": 1
+    }
+  },
+  "expected_trace": {
+    "request_id": "req-snapshot-reject",
+    "preferred_channels": {
+      "biz-1": "telegram"
+    },
+    "decision_path": "core.decision",
+    "optimization_target": "route_quality_and_business_value",
+    "selected_from_candidates": 1,
+    "blocked_candidate_count": 0,
+    "manual_review_reason": "decision_core_rejected_all_candidates",
+    "decision_id": "snapshot-reject",
+    "candidate_count": 1
+  }
+}

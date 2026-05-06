@@ -1,0 +1,22 @@
+[Unit]
+Description=businesaios Telegram Runtime
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/businesaios
+EnvironmentFile=/opt/businesaios/.env
+
+Environment=RUN_MODE=telegram
+Environment=LOG_LEVEL=INFO
+
+ExecStartPre=/opt/businesaios/.venv/bin/python -m scripts.server.migrate_before_start
+ExecStart=/opt/businesaios/.venv/bin/python -m scripts.server.run_profile
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

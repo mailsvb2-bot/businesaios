@@ -1,0 +1,23 @@
+{
+  "name": "runtime_path_executed",
+  "payload": {
+    "allowed": true,
+    "action_type": "ScaleBudgetAction",
+    "action_id": "act-exec-001"
+  },
+  "expected_contract": {
+    "status": "executed",
+    "action_type": "ScaleBudgetAction",
+    "reason": null,
+    "trace": {
+      "route": "DecisionCore->RuntimeExecutor",
+      "guard_passed": true,
+      "status": "executed"
+    }
+  },
+  "expected_trace": {
+    "route": "DecisionCore->RuntimeExecutor",
+    "guard_passed": true,
+    "status": "executed"
+  }
+}

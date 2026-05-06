@@ -1,0 +1,32 @@
+tenant_id: businesaios-sales
+product_id: salesbot
+product_version: v1
+domain: sales
+modules:
+  audio: false
+  pricing: true
+  offers: true
+name: SalesBot
+entry_policy: telegram_policy@v3
+environment: prod
+offer_catalog_ref: default:salesbot:prod
+autopilot_contract_ref: default
+economics:
+  target_cac_rub: 600
+  target_payback_days: 30
+  min_ltv_cac_ratio: 2.0
+pricing_model:
+  id: pricing_ladder@v1
+  params:
+    base_price_rub: 490
+    ladder:
+      low: 199
+      standard: 490
+      premium: 990
+offer_catalog:
+  id: offer_catalog_sales@v1
+  params: {}
+telemetry_schema:
+  id: telemetry_default@v1
+  params:
+    sla_router_p95_ms: 250

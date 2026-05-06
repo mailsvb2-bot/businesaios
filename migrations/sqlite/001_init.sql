@@ -1,0 +1,3 @@
+-- SQLite init (reference)
+-- The runtime creates tables if missing, but this file documents the canonical schema used by sqlite_* stores.
+-- Tables: decision_ledger, outbox, event_log, snapshots, model_registry, decision_archive

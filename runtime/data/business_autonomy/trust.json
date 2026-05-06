@@ -1,0 +1,13 @@
+{
+  "items": {
+    "default": {
+      "business_id": "default",
+      "metadata": {},
+      "reasons": [
+        "bootstrapped"
+      ],
+      "score": 0.8,
+      "trust_tier": "bounded_autonomy"
+    }
+  }
+}

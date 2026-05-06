@@ -1,0 +1,31 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+# Start conservative, expand over time.
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "T20",  # flake8-print (catch debug prints)
+]
+ignore = [
+    "E501",   # line too long (пока не форсируем)
+    "E741",   # ambiguous variable name
+    "B904",   # raise without from (слишком много мест)
+    "SIM108", # ternary (стиль)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "SIM", "T20"]
+"scripts/*" = ["T20"]
+
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

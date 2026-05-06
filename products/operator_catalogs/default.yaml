@@ -1,0 +1,25 @@
+# Operator Catalogs (Behavioral OS)
+#
+# Catalogs tune coefficients of the fixed operator alphabet.
+# They must not introduce new operator keys.
+
+catalog_id: default
+phase_gain: 0.25
+k_tp: 0.08
+k_vp: 0.06
+k_it: 0.04
+anti_drain: 0.15
+
+# Per-event scaling: normalized event_type -> multiplier
+# Keep within [0.25..3.0].
+event_scales:
+  purchase_success: 1.10
+  purchase_failed: 1.05
+  paywall_closed: 1.05
+  offer_clicked: 1.02
+  audio_completed: 1.02
+
+# Optional domain multipliers
+# domain_scales:
+#   saas: 1.10
+#   services: 0.95

@@ -1,0 +1,22 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: egress-http-l7
+  namespace: businesaios
+spec:
+  endpointSelector:
+    matchLabels:
+      app: runtime
+  egress:
+    - toFQDNs:
+        - matchName: api.yookassa.ru
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+          rules:
+            http:
+              - method: "POST"
+                path: "^/v3/payments.*"
+              - method: "GET"
+                path: "^/v3/payments/.*"

@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: decision-executor
+spec:
+  template:
+    spec:
+      runtimeClassName: gvisor
+      restartPolicy: Never
+
+      containers:
+        - name: executor
+          image: businesaios/executor:latest
+          command: ["python", "-m", "runtime.sandbox.entrypoint"]
+
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop: ["ALL"]
+
+          resources:
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+
+      automountServiceAccountToken: false
+      hostNetwork: false
+      hostPID: false
+      hostIPC: false

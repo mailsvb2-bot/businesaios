@@ -1,0 +1,35 @@
+# Operator Policy Catalog (default)
+# This catalog constrains which behavior operators may be applied in which funnel stage / role.
+name: default
+version: 1
+
+# Default: allow all canonical operators (except those explicitly denied elsewhere)
+defaults:
+  allow: ["*"]
+  deny: []
+
+# Funnel stages are OS-level; they should be derived from event context and/or product funnel mapping.
+stages:
+  discovery:
+    deny: ["price_hard_push", "deadline_pressure"]
+  consideration:
+    deny: ["deadline_pressure"]
+  decision:
+    deny: []
+  onboarding:
+    deny: ["deadline_pressure"]
+  retention:
+    deny: ["price_hard_push"]
+
+# Role-based constraints for B2B governance
+roles:
+  finance:
+    deny: ["deadline_pressure"]   # finance tends to react negatively to urgency tactics
+  it:
+    deny: ["price_hard_push"]     # IT needs clarity/value, not pressure
+
+# Strongest overrides: (stage, role)
+stage_role:
+  discovery:
+    finance:
+      deny: ["price_hard_push", "deadline_pressure"]

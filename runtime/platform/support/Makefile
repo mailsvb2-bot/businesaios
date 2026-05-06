@@ -1,0 +1,1 @@
+PYTHON ?= python3 .PHONY: test lint typecheck compile test: $(PYTHON) -m pytest platform/tests lint: $(PYTHON) -m ruff check platform typecheck: $(PYTHON) -m mypy platform compile: $(PYTHON) -m compileall platform

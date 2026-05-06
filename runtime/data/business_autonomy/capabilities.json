@@ -1,0 +1,15 @@
+{
+  "items": {
+    "default": {
+      "business_id": "default",
+      "capabilities": [
+        {
+          "confidence": 0.9,
+          "enabled": true,
+          "kind": "crm",
+          "notes": "default"
+        }
+      ]
+    }
+  }
+}

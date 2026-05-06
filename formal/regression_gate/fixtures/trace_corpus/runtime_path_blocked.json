@@ -1,0 +1,23 @@
+{
+  "name": "runtime_path_blocked",
+  "payload": {
+    "allowed": false,
+    "action_type": "ScaleBudgetAction",
+    "action_id": "act-block-001"
+  },
+  "expected_contract": {
+    "status": "blocked",
+    "action_type": "ScaleBudgetAction",
+    "reason": "governance_rejected",
+    "trace": {
+      "route": "DecisionCore->RuntimeExecutor",
+      "guard_passed": false,
+      "status": "blocked"
+    }
+  },
+  "expected_trace": {
+    "route": "DecisionCore->RuntimeExecutor",
+    "guard_passed": false,
+    "status": "blocked"
+  }
+}

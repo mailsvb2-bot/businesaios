@@ -1,0 +1,16 @@
+# Product-scoped offer catalog (default tenant)
+catalog_id: default:retentionbot:prod
+offers:
+  - offer_id: retention_soft
+    base_price_rub: 600
+    rules:
+      min_engagement: 0.20
+      max_fatigue: 0.80
+      cooldown_hours: 48
+    variants:
+      a:
+        title: "🔔 Мягкое возвращение"
+        body: "Вернуться в ритм без давления: короткие сессии + напоминания."
+    meta:
+      product: retentionbot
+      kind: soft

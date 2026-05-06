@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: businesaios-runtime
+  labels:
+    app: runtime
+spec:
+  selector:
+    app: runtime
+  ports:
+    - name: health
+      port: 8080
+      targetPort: health

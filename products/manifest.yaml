@@ -1,0 +1,12 @@
+schema: products_manifest@v1
+engine_min_version: v14P4
+packages:
+  - config: organization_platform.yaml
+    domain: organization_platform
+    entry_policy: telegram_policy@v3
+  - config: sales.yaml
+    domain: sales
+    entry_policy: telegram_policy@v3
+  - config: retention.yaml
+    domain: retention
+    entry_policy: telegram_policy@v3

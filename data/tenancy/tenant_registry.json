@@ -1,0 +1,37 @@
+{
+  "records": [
+    {
+      "aliases": [],
+      "billing_account_id": null,
+      "created_at": "2026-04-01T16:10:40.409248+00:00",
+      "data_region": null,
+      "display_name": "demo",
+      "metadata": {},
+      "plan": "starter",
+      "status": "active",
+      "tenant_id": "demo"
+    },
+    {
+      "aliases": [],
+      "billing_account_id": null,
+      "created_at": "2026-03-29T14:50:41.614540+00:00",
+      "data_region": null,
+      "display_name": "tenant-1",
+      "metadata": {},
+      "plan": "starter",
+      "status": "active",
+      "tenant_id": "tenant-1"
+    },
+    {
+      "aliases": [],
+      "billing_account_id": null,
+      "created_at": "2026-03-29T14:50:41.325805+00:00",
+      "data_region": null,
+      "display_name": "tenant-live",
+      "metadata": {},
+      "plan": "starter",
+      "status": "active",
+      "tenant_id": "tenant-live"
+    }
+  ]
+}

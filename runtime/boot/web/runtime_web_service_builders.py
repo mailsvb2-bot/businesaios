@@ -1,0 +1,210 @@
+from __future__ import annotations
+
+CANON_BOOT_WIRING_ONLY = True
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from interfaces.web.debug.messaging_policy_alerts.route_bundle import MessagingPolicyAlertsRouteBundle
+from interfaces.web.debug.messaging_policy_dashboard.route_bundle import MessagingPolicyDashboardRouteBundle
+from interfaces.web.debug.messaging_policy_observability_nav.route_bundle import MessagingPolicyObservabilityNavRouteBundle
+from interfaces.web.debug.messaging_policy_snapshot.route_bundle import MessagingPolicySnapshotRouteBundle
+from interfaces.web.debug.messaging_policy_trace_search.route_bundle import MessagingPolicyTraceSearchRouteBundle
+from interfaces.web.settings.alert_subscriptions_integration.route_bundle import AlertSubscriptionsRouteBundle
+from interfaces.web.settings.messaging_preferences_integration.route_bundle import MessagingPreferencesRouteBundle
+from runtime.messaging_policy_alerts.service import MessagingPolicyAlertService
+from runtime.messaging_policy_dashboard.service import MessagingPolicyDashboardService
+from runtime.messaging_policy_trace.search_service import MessagingPolicyTraceSearchService
+from runtime.messaging_policy_trace.search_store import MessagingPolicyTraceSearchStore
+
+from runtime.boot.web.messaging_policy_alert_subscription_service import build_messaging_policy_alert_subscription_service
+from runtime.boot.web.messaging_policy_service_graph import build_messaging_policy_service_graph
+from runtime.boot.web.runtime_web_build_args import RuntimeWebBuildArgs
+from runtime.boot.web.runtime_web_routed_services import RuntimeWebRoutedServices
+
+
+class _MessagingPolicyAlertsRouteBundle(MessagingPolicyAlertsRouteBundle):
+    def __init__(self, *, alert_service):
+        super().__init__(alert_service=alert_service)
+        self.alert_service = alert_service
+
+
+class _MessagingPolicyDashboardRouteBundle(MessagingPolicyDashboardRouteBundle):
+    def __init__(self, *, dashboard_service):
+        super().__init__(dashboard_service=dashboard_service)
+        self.dashboard_service = dashboard_service
+        self._dashboard_service = dashboard_service
+
+
+class _MessagingPolicyTraceSearchRouteBundle(MessagingPolicyTraceSearchRouteBundle):
+    def __init__(self, *, search_service):
+        super().__init__(search_service=search_service)
+        self.search_service = search_service
+        self._trace_search_service = search_service
+
+
+def build_alert_subscriptions_bundle(*, project_root: Path, settings_gateway):
+    return AlertSubscriptionsRouteBundle(project_root=project_root, settings_gateway=settings_gateway)
+
+
+def build_messaging_preferences_bundle(*, project_root: Path, settings_gateway):
+    return MessagingPreferencesRouteBundle(project_root=project_root, settings_gateway=settings_gateway)
+
+
+def build_messaging_policy_observability_nav_bundle():
+    return MessagingPolicyObservabilityNavRouteBundle()
+
+
+def build_messaging_policy_snapshot_bundle(*, read_service):
+    return MessagingPolicySnapshotRouteBundle(read_service=read_service)
+
+
+def build_messaging_policy_trace_search_bundle(*, event_store):
+    search_store = MessagingPolicyTraceSearchStore(event_store=event_store)
+    search_service = MessagingPolicyTraceSearchService(search_store=search_store)
+    return _MessagingPolicyTraceSearchRouteBundle(search_service=search_service)
+
+
+def build_messaging_policy_dashboard_bundle(*, trace_search_service):
+    dashboard_service = MessagingPolicyDashboardService(trace_search_service=trace_search_service)
+    return _MessagingPolicyDashboardRouteBundle(dashboard_service=dashboard_service)
+
+
+def build_messaging_policy_alerts_bundle(*, dashboard_service):
+    return _MessagingPolicyAlertsRouteBundle(alert_service=MessagingPolicyAlertService(dashboard_service=dashboard_service))
+
+
+@dataclass(frozen=True)
+class RuntimeWebNavigationParts:
+    messaging_policy_observability_nav_bundle: object | None = None
+
+
+@dataclass(frozen=True)
+class RuntimeWebSettingsParts:
+    messaging_preferences_bundle: object | None = None
+    alert_subscriptions_bundle: object | None = None
+
+
+@dataclass(frozen=True)
+class RuntimeWebSnapshotParts:
+    messaging_policy_snapshot_bundle: object | None = None
+
+
+@dataclass(frozen=True)
+class RuntimeWebEventParts:
+    messaging_policy_trace_search_bundle: object | None = None
+    messaging_policy_dashboard_bundle: object | None = None
+    messaging_policy_alerts_bundle: object | None = None
+    messaging_policy_trace_search_service: object | None = None
+    messaging_policy_dashboard_service: object | None = None
+    messaging_policy_alert_service: object | None = None
+    messaging_policy_alert_subscription_service: object | None = None
+    messaging_policy_alert_notifier_stack: object | None = None
+
+
+def build_runtime_web_navigation_parts() -> RuntimeWebNavigationParts:
+    return RuntimeWebNavigationParts(
+        messaging_policy_observability_nav_bundle=build_messaging_policy_observability_nav_bundle(),
+    )
+
+
+def build_runtime_web_settings_parts(*, args) -> RuntimeWebSettingsParts:
+    if args.settings_gateway is None:
+        return RuntimeWebSettingsParts()
+    return RuntimeWebSettingsParts(
+        messaging_preferences_bundle=build_messaging_preferences_bundle(
+            project_root=args.project_root,
+            settings_gateway=args.settings_gateway,
+        ),
+        alert_subscriptions_bundle=build_alert_subscriptions_bundle(
+            project_root=args.project_root,
+            settings_gateway=args.settings_gateway,
+        ),
+    )
+
+
+def build_runtime_web_snapshot_parts(*, args) -> RuntimeWebSnapshotParts:
+    if args.messaging_policy_read_service is None:
+        return RuntimeWebSnapshotParts()
+    return RuntimeWebSnapshotParts(
+        messaging_policy_snapshot_bundle=build_messaging_policy_snapshot_bundle(
+            read_service=args.messaging_policy_read_service,
+        )
+    )
+
+
+def build_runtime_web_event_parts(*, args) -> RuntimeWebEventParts:
+    if args.messaging_policy_event_store is None:
+        return RuntimeWebEventParts()
+
+    graph = build_messaging_policy_service_graph(
+        event_store=args.messaging_policy_event_store,
+    )
+    built = build_messaging_policy_alert_subscription_service(
+        alert_service=graph.alert_service,
+        settings_gateway=args.settings_gateway,
+    )
+    return RuntimeWebEventParts(
+        messaging_policy_trace_search_bundle=build_messaging_policy_trace_search_bundle(
+            event_store=args.messaging_policy_event_store,
+        ),
+        messaging_policy_dashboard_bundle=build_messaging_policy_dashboard_bundle(
+            trace_search_service=graph.trace_search_service,
+        ),
+        messaging_policy_alerts_bundle=build_messaging_policy_alerts_bundle(
+            dashboard_service=graph.dashboard_service,
+        ),
+        messaging_policy_trace_search_service=graph.trace_search_service,
+        messaging_policy_dashboard_service=graph.dashboard_service,
+        messaging_policy_alert_service=graph.alert_service,
+        messaging_policy_alert_subscription_service=built['service'],
+        messaging_policy_alert_notifier_stack=built['notifier_stack'],
+    )
+
+
+def build_runtime_web_routed_services(*, project_root, settings_gateway=None, messaging_policy_read_service=None, messaging_policy_event_store=None):
+    args = RuntimeWebBuildArgs(
+        project_root=Path(project_root),
+        settings_gateway=settings_gateway,
+        messaging_policy_read_service=messaging_policy_read_service,
+        messaging_policy_event_store=messaging_policy_event_store,
+    )
+    navigation = build_runtime_web_navigation_parts()
+    settings = build_runtime_web_settings_parts(args=args)
+    snapshot = build_runtime_web_snapshot_parts(args=args)
+    events = build_runtime_web_event_parts(args=args)
+
+    return RuntimeWebRoutedServices(
+        messaging_preferences_bundle=settings.messaging_preferences_bundle,
+        alert_subscriptions_bundle=settings.alert_subscriptions_bundle,
+        messaging_policy_snapshot_bundle=snapshot.messaging_policy_snapshot_bundle,
+        messaging_policy_trace_search_bundle=events.messaging_policy_trace_search_bundle,
+        messaging_policy_dashboard_bundle=events.messaging_policy_dashboard_bundle,
+        messaging_policy_alerts_bundle=events.messaging_policy_alerts_bundle,
+        messaging_policy_observability_nav_bundle=navigation.messaging_policy_observability_nav_bundle,
+        messaging_policy_trace_search_service=events.messaging_policy_trace_search_service,
+        messaging_policy_dashboard_service=events.messaging_policy_dashboard_service,
+        messaging_policy_alert_service=events.messaging_policy_alert_service,
+        messaging_policy_alert_subscription_service=events.messaging_policy_alert_subscription_service,
+        messaging_policy_alert_notifier_stack=events.messaging_policy_alert_notifier_stack,
+    )
+
+
+__all__ = [
+    "build_alert_subscriptions_bundle",
+    "build_messaging_policy_alerts_bundle",
+    "build_messaging_policy_dashboard_bundle",
+    "build_messaging_policy_observability_nav_bundle",
+    "build_messaging_policy_snapshot_bundle",
+    "build_messaging_policy_trace_search_bundle",
+    "build_messaging_preferences_bundle",
+    "RuntimeWebNavigationParts",
+    "RuntimeWebSettingsParts",
+    "RuntimeWebSnapshotParts",
+    "RuntimeWebEventParts",
+    "build_runtime_web_navigation_parts",
+    "build_runtime_web_settings_parts",
+    "build_runtime_web_snapshot_parts",
+    "build_runtime_web_event_parts",
+    "build_runtime_web_routed_services",
+]

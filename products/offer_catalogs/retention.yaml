@@ -1,0 +1,16 @@
+catalog_id: offer_catalog_retention@v1
+schema_version: 1
+offers:
+  - offer_id: retention_soft
+    base_price_rub: 600
+    rules:
+      min_engagement: 0.20
+      max_fatigue: 0.80
+      cooldown_hours: 48
+    variants:
+      a:
+        title: "🔔 Мягкое возвращение"
+        body: "Вернуться в ритм без давления: короткие сессии + напоминания."
+    meta:
+      product: retentionbot
+      kind: soft

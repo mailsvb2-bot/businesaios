@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Transition",
+  "type": "object",
+  "required": ["observation", "action", "reward", "done"],
+  "properties": {
+    "observation": {
+      "$ref": "observation.fragment.json"
+    },
+    "action": {
+      "$ref": "action.fragment.json"
+    },
+    "reward": {
+      "$ref": "reward.fragment.json"
+    },
+    "done": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,6 @@
+from __future__ import annotations
+
+RUNTIME_TENANCY_PUBLIC_API = True
+TENANCY_NORMALIZATION_CANON = "runtime.tenancy"
+
+__all__ = ["RUNTIME_TENANCY_PUBLIC_API", "TENANCY_NORMALIZATION_CANON"]

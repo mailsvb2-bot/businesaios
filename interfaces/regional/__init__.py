@@ -1,0 +1,1 @@
+"""Regional messaging channel adapters."""

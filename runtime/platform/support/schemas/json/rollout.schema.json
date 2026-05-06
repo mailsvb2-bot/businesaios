@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RolloutResult",
+  "type": "object",
+  "required": ["rollout_id", "episodes"],
+  "properties": {
+    "rollout_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "episodes": {
+      "type": "array",
+      "items": {
+        "$ref": "episode.schema.json"
+      }
+    }
+  },
+  "additionalProperties": false
+}

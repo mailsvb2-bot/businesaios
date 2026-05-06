@@ -1,0 +1,18 @@
+# Example: SaaS product policy in prod
+name: default:saas:prod
+version: 1
+
+defaults:
+  allow: ["*"]
+
+stages:
+  discovery:
+    deny: ["price_hard_push", "deadline_pressure", "scarcity_urgency"]
+
+roles:
+  decision_maker:
+    deny: []
+  user:
+    deny: ["price_hard_push"]
+  finance:
+    deny: ["deadline_pressure", "scarcity_urgency"]

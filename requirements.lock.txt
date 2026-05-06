@@ -1,0 +1,15 @@
+# Locked dependencies for reproducible installs.
+#
+# This project intentionally keeps runtime deps minimal.
+# If you add deps, update this lock with your chosen tool (pip-tools/uv/poetry).
+#
+pytest==8.3.3
+aiogram==3.4.1
+python-dotenv==1.0.1
+psycopg[binary]==3.2.3
+typing-extensions==4.12.2
+PyYAML==6.0.2
+hypothesis==6.92.1
+fastapi==0.115.0
+flask==3.0.3
+uvicorn==0.32.1

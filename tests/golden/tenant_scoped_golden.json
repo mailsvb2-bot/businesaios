@@ -1,0 +1,14 @@
+{
+  "cases": {
+    "synthetic_sqlite_tenant_scoped_v1": {
+      "meta": {
+        "event_limit": 200,
+        "tenant_id": "t1",
+        "user_id": "u2",
+        "window_ms": 1500
+      },
+      "snapshot_sha256": "62664d883a1c79e54fefb7869a4e027d53e6e0593e5f1adeb13ceb786c221b47"
+    }
+  },
+  "schema_version": 1
+}

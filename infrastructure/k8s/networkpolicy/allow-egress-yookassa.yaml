@@ -1,0 +1,29 @@
+# NOTE:
+# Kubernetes NetworkPolicy (vanilla) does not support FQDN targets.
+# Previous versions used RFC5737 TEST-NET placeholder IPs (203.0.113.0/24),
+# which breaks payments in real clusters.
+#
+# Canonical strict egress for YooKassa is implemented via Cilium FQDN policy:
+#   infrastructure/k8s/cilium/egress-fqdn-only.yaml
+#
+# This policy keeps vanilla clusters working by allowing HTTPS egress from the
+# runtime pods to anywhere (port 443). If you need strict egress, use Cilium.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-yookassa-https
+  namespace: businesaios
+spec:
+  podSelector:
+    matchLabels:
+      app: runtime
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 443

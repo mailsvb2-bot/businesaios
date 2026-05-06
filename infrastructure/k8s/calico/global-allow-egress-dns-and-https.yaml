@@ -1,0 +1,23 @@
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-egress-dns-and-https
+spec:
+  selector: app == "runtime"
+  types:
+    - Egress
+  egress:
+    - action: Allow
+      protocol: UDP
+      destination:
+        ports: [53]
+    - action: Allow
+      protocol: TCP
+      destination:
+        ports: [53]
+    - action: Allow
+      protocol: TCP
+      destination:
+        nets:
+          - 0.0.0.0/0
+        ports: [443]

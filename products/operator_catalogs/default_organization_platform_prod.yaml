@@ -1,0 +1,14 @@
+# Generic organization template. Ready for many tenants on one platform.
+catalog_id: default:organization_platform:prod
+phase_gain: 0.25
+k_tp: 0.08
+k_vp: 0.06
+k_it: 0.04
+anti_drain: 0.15
+event_scales:
+  purchase_success: 1.10
+  purchase_failed: 1.05
+  paywall_closed: 1.05
+  offer_clicked: 1.02
+  workspace_connected: 1.05
+  campaign_synced: 1.03

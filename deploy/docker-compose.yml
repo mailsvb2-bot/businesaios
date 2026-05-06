@@ -1,0 +1,47 @@
+services:
+  businesaios_telegram:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: businesaios_telegram
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - RUN_MODE=telegram
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - businesaios_data:/app/runtime/entrypoints/data
+    command: ["python", "main.py"]
+    depends_on:
+      businesaios_evolution:
+        condition: service_healthy
+
+  businesaios_evolution:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: businesaios_evolution
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - RUN_MODE=evolution
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - EVOLUTION_POLL_INTERVAL_SEC=${EVOLUTION_POLL_INTERVAL_SEC:-2}
+      - EVOLUTION_BATCH_SIZE=${EVOLUTION_BATCH_SIZE:-10}
+      - EVOLUTION_HEALTH_PORT=${EVOLUTION_HEALTH_PORT:-8087}
+    ports:
+      - "${EVOLUTION_HEALTH_PORT:-8087}:8087"
+    volumes:
+      - businesaios_data:/app/runtime/entrypoints/data
+    command: ["python", "main.py"]
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8087/health').read()"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+      start_period: 10s
+
+volumes:
+  businesaios_data:

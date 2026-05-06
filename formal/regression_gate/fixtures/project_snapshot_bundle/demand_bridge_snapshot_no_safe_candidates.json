@@ -1,0 +1,35 @@
+{
+  "name": "demand_bridge_snapshot_no_safe_candidates",
+  "scenario_type": "demand_bridge",
+  "payload": {
+    "mode": "reject",
+    "request_id": "req-snapshot-empty",
+    "trace": {},
+    "ranked_candidates": [],
+    "requires_manual_review": true
+  },
+  "expected_contract": {
+    "request_id": "req-snapshot-empty",
+    "selected_business_id": null,
+    "runner_up_business_ids": [],
+    "requires_manual_review": true,
+    "trace": {
+      "request_id": "req-snapshot-empty",
+      "decision_path": "core.decision",
+      "optimization_target": "route_quality_and_business_value",
+      "selected_from_candidates": 0,
+      "blocked_candidate_count": 0,
+      "manual_review_reason": "no_safe_candidates",
+      "candidate_count": 0
+    }
+  },
+  "expected_trace": {
+    "request_id": "req-snapshot-empty",
+    "decision_path": "core.decision",
+    "optimization_target": "route_quality_and_business_value",
+    "selected_from_candidates": 0,
+    "blocked_candidate_count": 0,
+    "manual_review_reason": "no_safe_candidates",
+    "candidate_count": 0
+  }
+}

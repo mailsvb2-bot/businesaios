@@ -1,0 +1,31 @@
+[Unit]
+Description=businesaios API Service
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=businesaios
+Group=businesaios
+WorkingDirectory=/opt/businesaios
+EnvironmentFile=/opt/businesaios/.env
+Environment=APP_PROFILE=api
+Environment=LOG_LEVEL=INFO
+ExecStartPre=/opt/businesaios/.venv/bin/python -m scripts.server.migrate_before_start
+ExecStart=/opt/businesaios/.venv/bin/python -m scripts.server.run_profile
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=120
+TimeoutStopSec=30
+KillSignal=SIGTERM
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=businesaios-api
+
+[Install]
+WantedBy=multi-user.target

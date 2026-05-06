@@ -1,0 +1,29 @@
+catalog_id: offer_catalog_organization_platform@v1
+schema_version: 1
+offers:
+  - offer_id: org_launch
+    base_price_rub: 990
+    rules:
+      min_engagement: 0.00
+      max_fatigue: 1.00
+      cooldown_hours: 12
+    variants:
+      a:
+        title: "🚀 Launch Workspace"
+        body: "Подключим организацию к платформе, активируем базовые сценарии и первые автоматизации."
+    meta:
+      product: organization_platform
+      kind: launch
+  - offer_id: org_scale
+    base_price_rub: 2990
+    rules:
+      min_engagement: 0.10
+      max_fatigue: 0.90
+      cooldown_hours: 24
+    variants:
+      a:
+        title: "📈 Scale Suite"
+        body: "Расширим контуры роста, рекламы и DecisionCore для работающей организации."
+    meta:
+      product: organization_platform
+      kind: scale

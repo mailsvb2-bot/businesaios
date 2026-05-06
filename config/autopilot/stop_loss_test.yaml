@@ -1,0 +1,28 @@
+contract_id: autopilot_stop_loss_test@v1
+north_star_metric: profit
+constraints:
+  max_price_changes_per_day: 1
+  cooldown_hours: 24
+  daily_budget_minor: 0
+  currency: RUB
+data_requirements:
+  required_event_types:
+    - lead_created@v1
+    - purchase_completed@v1
+safety_policy:
+  # Trigger stop-loss if profit below -100 minor today.
+  stop_loss_min_profit_minor: -100
+  stop_loss_profit_days: 1
+  stop_loss_max_cac_minor: 0
+  stop_loss_cac_days: 1
+  stop_loss_max_spend_minor_no_conv: 0
+  stop_loss_no_conv_days: 1
+  allow_channels:
+    - internal
+control_surface:
+  can_change_offer: true
+  can_change_price: true
+  can_change_copy: true
+  can_change_frequency: true
+metadata:
+  description: "Test contract for stop-loss."

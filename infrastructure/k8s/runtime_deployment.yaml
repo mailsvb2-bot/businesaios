@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: businesaios-runtime
+  labels:
+    app: runtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: runtime
+  template:
+    metadata:
+      labels:
+        app: runtime
+    spec:
+      runtimeClassName: gvisor
+      automountServiceAccountToken: false
+      hostNetwork: false
+      hostPID: false
+      hostIPC: false
+      containers:
+        - name: runtime
+          image: businesaios/run
+          imagePullPolicy: IfNotPresent
+          command: ["python", "main.py"]
+          env:
+            - name: RUN_MODE
+              value: "evolution"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: ENV
+              value: "prod"
+            - name: EVOLUTION_HEALTH_PORT
+              value: "8087"
+          ports:
+            - name: health
+              containerPort: 8087
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

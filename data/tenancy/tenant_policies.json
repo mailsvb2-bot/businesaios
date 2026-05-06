@@ -1,0 +1,220 @@
+{
+  "bundles": [
+    {
+      "audit_scope": {
+        "export_enabled": false,
+        "include_payloads": false,
+        "pii_redaction_enabled": true,
+        "redacted_fields": [
+          "token",
+          "password",
+          "secret",
+          "authorization",
+          "cookie"
+        ],
+        "required_labels": {},
+        "retention_days": 365,
+        "tenant_id": "demo"
+      },
+      "billing_scope": {
+        "allow_overage": false,
+        "currency": "USD",
+        "customer_id": null,
+        "invoice_enabled": true,
+        "metadata": {},
+        "meter_prices": {},
+        "mode": "postpaid",
+        "tenant_id": "demo"
+      },
+      "connector_scope": {
+        "allowed_connectors": [],
+        "denied_connectors": [],
+        "require_explicit_allowlist": true,
+        "secret_scopes_by_connector": {},
+        "tenant_id": "demo"
+      },
+      "feature_flags": {
+        "flags": {},
+        "tenant_id": "demo",
+        "variants": {}
+      },
+      "memory_scope": {
+        "allow_cross_business_reads": false,
+        "max_bytes": 268435456,
+        "max_records": 100000,
+        "namespace_prefixes": [
+          "default"
+        ],
+        "retention_days": 365,
+        "tenant_id": "demo"
+      },
+      "quotas": {
+        "actions_per_day": 25.0,
+        "connector_calls_per_hour": 2000.0,
+        "daily_budget": 0.0,
+        "memory_writes_per_day": 1000.0,
+        "outbound_messages_per_day": 100.0,
+        "publications_per_day": 20.0
+      },
+      "runtime_limits": {
+        "allow_background_automation": true,
+        "max_actions_per_run": 25,
+        "max_concurrent_runs": 1,
+        "max_connector_calls_per_hour": 2000,
+        "max_daily_budget": 0.0,
+        "max_effects_per_run": 10,
+        "max_memory_writes_per_day": 1000,
+        "max_outbound_messages_per_day": 100,
+        "max_publications_per_day": 20,
+        "require_human_approval_for_strategic_change": true,
+        "tenant_id": "demo"
+      },
+      "tenant_id": "demo",
+      "updated_at": "2026-04-01T16:10:40.409630+00:00"
+    },
+    {
+      "audit_scope": {
+        "export_enabled": false,
+        "include_payloads": false,
+        "pii_redaction_enabled": true,
+        "redacted_fields": [
+          "token",
+          "password",
+          "secret",
+          "authorization",
+          "cookie"
+        ],
+        "required_labels": {},
+        "retention_days": 365,
+        "tenant_id": "tenant-1"
+      },
+      "billing_scope": {
+        "allow_overage": false,
+        "currency": "USD",
+        "customer_id": null,
+        "invoice_enabled": true,
+        "metadata": {},
+        "meter_prices": {},
+        "mode": "postpaid",
+        "tenant_id": "tenant-1"
+      },
+      "connector_scope": {
+        "allowed_connectors": [],
+        "denied_connectors": [],
+        "require_explicit_allowlist": true,
+        "secret_scopes_by_connector": {},
+        "tenant_id": "tenant-1"
+      },
+      "feature_flags": {
+        "flags": {},
+        "tenant_id": "tenant-1",
+        "variants": {}
+      },
+      "memory_scope": {
+        "allow_cross_business_reads": false,
+        "max_bytes": 268435456,
+        "max_records": 100000,
+        "namespace_prefixes": [
+          "default"
+        ],
+        "retention_days": 365,
+        "tenant_id": "tenant-1"
+      },
+      "quotas": {
+        "actions_per_day": 25.0,
+        "connector_calls_per_hour": 2000.0,
+        "daily_budget": 0.0,
+        "memory_writes_per_day": 1000.0,
+        "outbound_messages_per_day": 100.0,
+        "publications_per_day": 20.0
+      },
+      "runtime_limits": {
+        "allow_background_automation": true,
+        "max_actions_per_run": 25,
+        "max_concurrent_runs": 1,
+        "max_connector_calls_per_hour": 2000,
+        "max_daily_budget": 0.0,
+        "max_effects_per_run": 10,
+        "max_memory_writes_per_day": 1000,
+        "max_outbound_messages_per_day": 100,
+        "max_publications_per_day": 20,
+        "require_human_approval_for_strategic_change": true,
+        "tenant_id": "tenant-1"
+      },
+      "tenant_id": "tenant-1",
+      "updated_at": "2026-03-29T14:50:41.615082+00:00"
+    },
+    {
+      "audit_scope": {
+        "export_enabled": false,
+        "include_payloads": false,
+        "pii_redaction_enabled": true,
+        "redacted_fields": [
+          "token",
+          "password",
+          "secret",
+          "authorization",
+          "cookie"
+        ],
+        "required_labels": {},
+        "retention_days": 365,
+        "tenant_id": "tenant-live"
+      },
+      "billing_scope": {
+        "allow_overage": false,
+        "currency": "USD",
+        "customer_id": null,
+        "invoice_enabled": true,
+        "metadata": {},
+        "meter_prices": {},
+        "mode": "postpaid",
+        "tenant_id": "tenant-live"
+      },
+      "connector_scope": {
+        "allowed_connectors": [],
+        "denied_connectors": [],
+        "require_explicit_allowlist": true,
+        "secret_scopes_by_connector": {},
+        "tenant_id": "tenant-live"
+      },
+      "feature_flags": {
+        "flags": {},
+        "tenant_id": "tenant-live",
+        "variants": {}
+      },
+      "memory_scope": {
+        "allow_cross_business_reads": false,
+        "max_bytes": 268435456,
+        "max_records": 100000,
+        "namespace_prefixes": [
+          "default"
+        ],
+        "retention_days": 365,
+        "tenant_id": "tenant-live"
+      },
+      "quotas": {
+        "actions_per_day": 25.0,
+        "connector_calls_per_hour": 2000.0,
+        "daily_budget": 0.0,
+        "memory_writes_per_day": 1000.0,
+        "outbound_messages_per_day": 100.0,
+        "publications_per_day": 20.0
+      },
+      "runtime_limits": {
+        "allow_background_automation": true,
+        "max_actions_per_run": 25,
+        "max_concurrent_runs": 1,
+        "max_connector_calls_per_hour": 2000,
+        "max_daily_budget": 0.0,
+        "max_effects_per_run": 10,
+        "max_memory_writes_per_day": 1000,
+        "max_outbound_messages_per_day": 100,
+        "max_publications_per_day": 20,
+        "require_human_approval_for_strategic_change": true,
+        "tenant_id": "tenant-live"
+      },
+      "tenant_id": "tenant-live",
+      "updated_at": "2026-03-29T14:50:41.326340+00:00"
+    }
+  ]
+}

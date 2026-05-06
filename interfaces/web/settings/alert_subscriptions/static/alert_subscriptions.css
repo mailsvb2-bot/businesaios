@@ -1,0 +1,95 @@
+:root {
+  --as-gap: 12px;
+  --as-radius: 14px;
+  --as-border: #d7dbe3;
+  --as-bg: #ffffff;
+  --as-muted: #687285;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+  font-family: Arial, sans-serif;
+  background: #f7f8fb;
+  color: #1d2433;
+}
+
+.as-shell {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.as-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+
+.as-subtitle {
+  color: var(--as-muted);
+  margin: 0 0 18px;
+}
+
+.as-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.as-btn {
+  border: 1px solid var(--as-border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.as-card {
+  background: var(--as-bg);
+  border: 1px solid var(--as-border);
+  border-radius: var(--as-radius);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.as-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--as-gap);
+}
+
+.as-field label {
+  display: block;
+  font-size: 12px;
+  color: var(--as-muted);
+  margin-bottom: 6px;
+}
+
+.as-field input,
+.as-field select,
+.as-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--as-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.as-inline {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.as-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.as-status {
+  min-height: 20px;
+  color: var(--as-muted);
+  margin-top: 12px;
+}
