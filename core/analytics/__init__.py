@@ -1,1 +1,0 @@
-"""Analytics modules (stable, deterministic)."""

@@ -1,1 +1,0 @@
-"""Contracts namespace package."""
