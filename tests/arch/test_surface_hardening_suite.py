@@ -15,7 +15,24 @@ from runtime.canonical_surface_manifest import (
 )
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 def _iter_py_files() -> list[Path]:
-    return [p for p in PROJECT_ROOT.rglob('*.py') if '__pycache__' not in p.parts]
+    excluded_parts = {
+        ".git",
+        ".venv",
+        "venv",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        "build",
+        "dist",
+        "htmlcov",
+        "_audit",
+    }
+    return [
+        p
+        for p in PROJECT_ROOT.rglob("*.py")
+        if not any(part in excluded_parts for part in p.relative_to(PROJECT_ROOT).parts)
+    ]
 def test_bootstrap_surfaces_are_marked_as_compat_and_point_to_one_owner() -> None:
     assert 'runtime.bootstrap' in CANONICAL_BOOTSTRAP_OWNER_MODULES
     expected_markers = {

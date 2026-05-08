@@ -59,7 +59,7 @@ def _build_webhook_runtime(
     settings = validate_telegram_settings(load_telegram_settings())
     token = resolve_telegram_bot_token()
     if not token:
-        raise RuntimeError('TELEGRAM_BOT_TOKEN_MISSING')
+        raise RuntimeError('telegram_token_missing')
     webhook_runtime = TelegramWebhookRuntime(
         decide_fn=core.decide,
         execute_fn=executor.execute,
