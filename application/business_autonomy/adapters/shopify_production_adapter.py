@@ -6,8 +6,17 @@ from typing import Sequence
 from application.business_autonomy.adapters._base import BaseStaticChannelAdapter, StaticCapabilityBundle
 from application.business_autonomy.channel_contracts import ChannelCapabilityDescriptor, ChannelExecutionEnvelope, ChannelIdentity, ChannelKind
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult, ExecutionVerdict
+from runtime.business_autonomy.provider_transport_bindings import provider_endpoint_url
 
 CANON_SHOPIFY_PRODUCTION_ADAPTER = True
+
+
+def _shopify_domain_suffix() -> str:
+    endpoint_template = provider_endpoint_url('shopify')
+    marker = '{shop}'
+    if marker in endpoint_template:
+        return endpoint_template.split(marker, 1)[1].removeprefix('.')
+    return 'configured-shop-domain'
 
 
 @dataclass(frozen=True)
@@ -17,8 +26,9 @@ class ShopifyCredentials:
     webhook_secret: str | None = None
 
     def validate(self) -> None:
-        if '.myshopify.com' not in str(self.shop_domain or ''):
-            raise ValueError('shop_domain must be a myshopify domain')
+        required_suffix = _shopify_domain_suffix()
+        if required_suffix != 'configured-shop-domain' and not str(self.shop_domain or '').endswith(required_suffix):
+            raise ValueError(f'shop_domain must end with {required_suffix}')
         if not str(self.admin_access_token or '').strip():
             raise ValueError('admin_access_token is required')
 
@@ -54,7 +64,7 @@ class ShopifyProductionAdapter(BaseStaticChannelAdapter):
 
     def credential_contract(self) -> dict[str, str]:
         return {
-            'shop_domain': 'store domain ending in .myshopify.com',
+            'shop_domain': f'store domain ending in {_shopify_domain_suffix()}',
             'admin_access_token': 'private app or custom app admin token',
             'webhook_secret': 'optional webhook signing secret',
         }
