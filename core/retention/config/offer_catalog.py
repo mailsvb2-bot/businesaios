@@ -6,7 +6,7 @@ Historically, v13 owned offer definitions under retention.config.* which caused
 cyclic import pressure once offers/catalogs started depending on retention.
 
 Canonical ownership is now in the offers layer:
-  core.offers.catalogs.legacy_catalog
+  core.offers.catalogs.retention_catalog
 
 We keep this module ONLY to avoid breaking older imports.
 It must stay *lazy* and must not import OfferEngine/registries at import-time.
@@ -17,7 +17,7 @@ from typing import Any, Dict, Iterable, Iterator, Mapping, MutableMapping, Optio
 
 def _load_offers() -> Dict[str, Any]:
     # Lazy import to avoid cycles.
-    from core.offers.catalogs.legacy_catalog import OFFERS
+    from core.offers.catalogs.retention_catalog import OFFERS
 
     # Return a plain dict (stable snapshot).
     return dict(OFFERS)

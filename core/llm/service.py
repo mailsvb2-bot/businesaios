@@ -9,7 +9,7 @@ from .contracts import LLMClient
 from .providers.anthropic import AnthropicTransport, build_anthropic
 from .providers.gigachat import GigaChatTransport, build_gigachat
 from .providers.mock import MockLLMClient
-from .providers.openai_compat import OpenAICompatClient, OpenAICompatConfig
+from .providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
 from .providers.yandexgpt import YandexGPTTransport, build_yandexgpt
 
 OpenAICompatTransport = Callable[[str, str, Dict[str, Any], int], Dict[str, Any]]

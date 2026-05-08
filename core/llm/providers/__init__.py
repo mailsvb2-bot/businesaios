@@ -1,7 +1,7 @@
 from core.llm.providers.anthropic import AnthropicClient, AnthropicTransport, build_anthropic
 from core.llm.providers.gigachat import GigaChatClient, GigaChatTransport, build_gigachat
 from core.llm.providers.mock import MockLLMClient
-from core.llm.providers.openai_compat import OpenAICompatClient, OpenAICompatTransport
+from core.llm.providers.openai_provider import OpenAICompatClient, OpenAICompatTransport
 from core.llm.providers.yandexgpt import YandexGPTClient, YandexGPTTransport, build_yandexgpt
 
 __all__ = [

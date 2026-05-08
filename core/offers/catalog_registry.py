@@ -12,7 +12,7 @@ from core.offers.offer_types import OfferCatalog
 
 # IMPORTANT:
 # Keep imports here offers-only. Do NOT import retention engines/adapters.
-from core.offers.catalogs.legacy_catalog import LegacyOfferCatalogV1
+from core.offers.catalogs.retention_catalog import LegacyOfferCatalogV1
 from core.offers.catalogs.none_catalog import NoneOfferCatalogV1
 from core.offers.catalogs.yaml_catalog import YamlOfferCatalogV1
 from core.offers.catalogs.yaml_catalog_loader import YamlOfferCatalogLoaderV1

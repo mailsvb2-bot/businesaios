@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Mapping, Tuple
 from core.offers.offer_types import OfferCatalog, OfferEligibility, OfferRender
 from core.observability.silent import swallow
 
-CANON_COMPAT_SHIM = True
 CATALOG_ID: str = "retention_legacy"
 
 
@@ -18,7 +17,7 @@ class Offer:
     entitlements: List[Tuple[str, int]]
 
 
-# Stable legacy IDs preserved for old retention/pricing flows.
+# Stable retention offer IDs preserved for existing pricing flows.
 OFFERS: Dict[str, Offer] = {
     "offer_30": Offer(
         arm="offer_30",
@@ -47,7 +46,7 @@ def build_catalog() -> Dict[str, Offer]:
 
 @dataclass(frozen=True)
 class LegacyOfferCatalogV1(OfferCatalog):
-    """Legacy catalog backed by the preserved retention offer data."""
+    """Retention catalog backed by the preserved offer data."""
 
     id: str = "offer_catalog_legacy@v1"
 
@@ -67,7 +66,7 @@ class LegacyOfferCatalogV1(OfferCatalog):
             if bool((entitlements or {}).get("full_access")):
                 return OfferEligibility(ok=False, reason="already_full_access")
         except Exception:
-            swallow(__name__, "core/offers/catalogs/legacy_catalog.py")
+            swallow(__name__, "core/offers/catalogs/retention_catalog.py")
         return OfferEligibility(ok=True, reason="ok")
 
     def render(self, *, offer_id: str, user_id: str, price_rub: int, variant: str, context: Mapping[str, Any]) -> OfferRender:
@@ -88,7 +87,6 @@ class LegacyOfferCatalogV1(OfferCatalog):
 
 
 __all__ = [
-    "CANON_COMPAT_SHIM",
     "CATALOG_ID",
     "OFFERS",
     "Offer",

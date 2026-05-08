@@ -9,7 +9,6 @@ from ..redaction import safe_metadata
 
 
 
-CANON_COMPAT_SHIM = True
 OpenAICompatTransport = Callable[[str, str, Dict[str, Any], int], Dict[str, Any]]
 
 
@@ -126,7 +125,6 @@ def _extract_finish(data: Dict[str, Any]) -> str:
     return "stop"
 
 __all__ = [
-    "CANON_COMPAT_SHIM",
     "OpenAICompatTransport",
     "OpenAICompatConfig",
     "OpenAICompatClient",

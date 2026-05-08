@@ -13,7 +13,7 @@ from __future__ import annotations
 from config.llm_provider_policy import DEFAULT_LLM_PROVIDER_POLICY, LLMProviderPolicy
 from .contracts import LLMClient
 from .providers.mock import MockLLMClient as _MockAdapter
-from .providers.openai_compat import OpenAICompatClient, OpenAICompatConfig
+from .providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
 from .providers.anthropic import AnthropicClient, AnthropicTransport
 from .providers.gigachat import GigaChatClient, GigaChatTransport
 from .providers.yandexgpt import YandexGPTClient, YandexGPTTransport
