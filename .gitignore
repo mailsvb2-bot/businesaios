@@ -37,3 +37,9 @@ artifacts/ci/
 *.db-shm
 BUSINESAIOS_RUNTIME_RELEASE.zip
 desktop.ini
+
+# Local server/operator artifacts: never part of canonical source tree
+_audit/
+runtime_state/
+run_smoke.sh
+status_server.py
