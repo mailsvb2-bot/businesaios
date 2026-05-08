@@ -89,6 +89,12 @@ ALLOWED_NETWORK_PRIMITIVE_IMPORTERS: tuple[str, ...] = (
     "runtime/business_autonomy/provider_vendor_transports.py",
 )
 
+ALLOWED_OPERATOR_NETWORK_PROBES: tuple[str, ...] = (
+    "scripts/healthcheck.py",
+    "scripts/server/health_probe.py",
+    "scripts/server/smoke_flow.py",
+)
+
 ALLOWED_NETWORK_LITERAL_SURFACES: tuple[str, ...] = (
     "runtime/_internal/_effects_impl.py",
     "runtime/_internal/effects_clients/telegram_client.py",
