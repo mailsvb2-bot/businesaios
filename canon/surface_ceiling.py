@@ -17,17 +17,46 @@ SURFACE_CEILING = SurfaceCeiling(
     max_path_legacy_compat_shim_files=5,
 )
 
+_NON_SOURCE_DIR_NAMES = frozenset({
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".runtime",
+    ".artifacts",
+    "artifacts",
+    "data",
+    "runtime_state",
+    "_audit",
+    "htmlcov",
+    "build",
+    "dist",
+})
+
+
+def is_canonical_source_path(path: Path) -> bool:
+    return not any(part in _NON_SOURCE_DIR_NAMES for part in path.parts)
+
+
+def iter_canonical_python_files(root: Path):
+    for path in root.rglob("*.py"):
+        if path.is_file() and is_canonical_source_path(path.relative_to(root)):
+            yield path
+
 
 def count_python_files(root: Path) -> int:
-    return sum(1 for path in root.rglob("*.py") if path.is_file())
+    return sum(1 for _ in iter_canonical_python_files(root))
 
 
 def count_path_marked_transition_files(root: Path) -> int:
     tokens = ("legacy", "compat", "shim")
     return sum(
         1
-        for path in root.rglob("*.py")
-        if path.is_file() and any(token in path.as_posix() for token in tokens)
+        for path in iter_canonical_python_files(root)
+        if any(token in path.relative_to(root).as_posix() for token in tokens)
     )
 
 
@@ -36,4 +65,6 @@ __all__ = [
     "SurfaceCeiling",
     "count_path_marked_transition_files",
     "count_python_files",
+    "is_canonical_source_path",
+    "iter_canonical_python_files",
 ]
