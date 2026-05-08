@@ -46,3 +46,6 @@ status_server.py
 
 # Local runtime state
 /data/runtime/
+data/runtime/queue/*.sqlite3
+data/runtime/queue/*.db
+data/runtime/queue/*.sqlite
