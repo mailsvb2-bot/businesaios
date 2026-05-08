@@ -17,6 +17,7 @@ from runtime.business_autonomy.provider_sync_scheduler import ProviderSyncSchedu
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
 from runtime.business_autonomy.provider_sync_history import ProviderSyncHistory
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
+from runtime.business_autonomy.provider_runtime_write_guard import ProviderRuntimeWriteGuard
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_LIVE_SYNC_RUNTIME = True
@@ -39,6 +40,7 @@ class ProviderLiveSyncRuntime:
     response_parsers: ProviderResponseParsers = field(default_factory=ProviderResponseParsers)
     sync_history: ProviderSyncHistory = field(default_factory=ProviderSyncHistory)
     incident_registry: FileProviderIncidentRegistry = field(default_factory=FileProviderIncidentRegistry)
+    write_guard: ProviderRuntimeWriteGuard = field(default_factory=ProviderRuntimeWriteGuard)
 
     def describe_runner(self, provider: ProviderDefinition) -> dict[str, Any]:
         planner = ProviderSyncRuntimePlanner().describe(provider)
@@ -51,6 +53,12 @@ class ProviderLiveSyncRuntime:
             'operations': list(planner.operations),
             'read_operations': list(planner.read_operations),
             'write_operations': list(planner.write_operations),
+            'write_guard': {
+                'enabled': True,
+                'source': 'runtime.business_autonomy.provider_runtime_write_guard',
+                'truth_source': 'application.business_autonomy.provider_truth_matrix',
+                'fail_closed': True,
+            },
             'transport_binding': binding,
             'response_parser': self.response_parsers.describe(provider=provider),
         }
@@ -123,6 +131,28 @@ class ProviderLiveSyncRuntime:
                 metadata={'available_operations': list(planner.operations)},
             )
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
+        write_guard_decision = self.write_guard.evaluate(provider=provider, operation=normalized_operation, mode=normalized_mode)
+        if not write_guard_decision.allowed:
+            result = ProviderSyncRunResult(
+                provider_key=provider.provider_key,
+                operation=normalized_operation,
+                mode=normalized_mode,
+                status=write_guard_decision.status,
+                accepted=False,
+                metadata={
+                    'provider_write_guard': write_guard_decision.to_metadata(),
+                    'request_envelope': {
+                        'provider_key': provider.provider_key,
+                        'operation': normalized_operation,
+                        'tenant_id': str(tenant_id),
+                        'business_id': str(business_id),
+                        'payload': dict(payload or {}),
+                        'domain': provider.domain,
+                        'adapter_key': provider.adapter_key,
+                    },
+                },
+            )
+            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
         health = ProviderConnectorHealthService(self.secret_vault).probe(
             provider=provider, tenant_id=tenant_id, business_id=business_id, probe_mode=normalized_mode
         )
@@ -133,7 +163,7 @@ class ProviderLiveSyncRuntime:
                 mode=normalized_mode,
                 status='rejected_misconfigured',
                 accepted=False,
-                metadata={'health_probe': {'status': health.status, 'reason': health.reason, 'metadata': dict(health.metadata or {})}},
+                metadata={'health_probe': {'status': health.status, 'reason': health.reason, 'metadata': dict(health.metadata or {})}, 'provider_write_guard': write_guard_decision.to_metadata()},
             )
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
         binding = ProviderTransportBindings().describe(provider)
@@ -147,6 +177,7 @@ class ProviderLiveSyncRuntime:
             'adapter_key': provider.adapter_key,
             'transport_binding': binding,
             'response_parser': self.response_parsers.describe(provider=provider),
+            'provider_write_guard': write_guard_decision.to_metadata(),
         }
         if normalized_mode != 'live':
             result = ProviderSyncRunResult(
@@ -155,7 +186,7 @@ class ProviderLiveSyncRuntime:
                 mode=normalized_mode,
                 status='dry_run_ready',
                 accepted=True,
-                metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}},
+                metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata()},
             )
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
         transport = self.transports.get(provider.provider_key)
@@ -166,7 +197,7 @@ class ProviderLiveSyncRuntime:
                 mode=normalized_mode,
                 status='live_transport_unbound',
                 accepted=False,
-                metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}},
+                metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata()},
             )
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
         try:
@@ -182,7 +213,7 @@ class ProviderLiveSyncRuntime:
                     mode=normalized_mode,
                     status='live_prepared_only',
                     accepted=False,
-                    metadata={'request_envelope': envelope, 'transport_response': response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider)},
+                    metadata={'request_envelope': envelope, 'transport_response': response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider), 'provider_write_guard': write_guard_decision.to_metadata()},
                 )
             else:
                 result = ProviderSyncRunResult(
@@ -191,7 +222,7 @@ class ProviderLiveSyncRuntime:
                     mode=normalized_mode,
                     status='live_executed',
                     accepted=True,
-                    metadata={'request_envelope': envelope, 'transport_response': response, 'parsed_response': parsed_response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider)},
+                    metadata={'request_envelope': envelope, 'transport_response': response, 'parsed_response': parsed_response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider), 'provider_write_guard': write_guard_decision.to_metadata()},
                 )
         except Exception as exc:
             error_view = self.error_taxonomy.classify(provider_key=provider.provider_key, error=exc)
@@ -203,7 +234,7 @@ class ProviderLiveSyncRuntime:
                 mode=normalized_mode,
                 status='live_execution_failed',
                 accepted=False,
-                metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'error': {'category': error_view.category, 'code': error_view.code, 'retryable': error_view.retryable, 'message': error_view.message, 'metadata': dict(error_view.metadata)}, 'retry_policy': {'category': retry_decision.category, 'retryable': retry_decision.retryable, 'next_delay_seconds': retry_decision.next_delay_seconds, 'max_attempts': retry_decision.max_attempts, 'metadata': dict(retry_decision.metadata)}, 'scheduled_retry': {'scheduled': scheduled_retry.scheduled, 'status': scheduled_retry.status, 'metadata': dict(scheduled_retry.metadata)}},
+                metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata(), 'error': {'category': error_view.category, 'code': error_view.code, 'retryable': error_view.retryable, 'message': error_view.message, 'metadata': dict(error_view.metadata)}, 'retry_policy': {'category': retry_decision.category, 'retryable': retry_decision.retryable, 'next_delay_seconds': retry_decision.next_delay_seconds, 'max_attempts': retry_decision.max_attempts, 'metadata': dict(retry_decision.metadata)}, 'scheduled_retry': {'scheduled': scheduled_retry.scheduled, 'status': scheduled_retry.status, 'metadata': dict(scheduled_retry.metadata)}},
             )
         return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
 
