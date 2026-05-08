@@ -84,6 +84,8 @@ ALLOWED_EFFECT_DOMAIN_ENTRYPOINTS: tuple[str, ...] = (
 ALLOWED_NETWORK_PRIMITIVE_IMPORTERS: tuple[str, ...] = (
     "runtime/_internal/http_transport.py",
     "runtime/security/ast_bypass_guard.py",
+    "runtime/business_autonomy/provider_http_live_clients.py",
+    "runtime/business_autonomy/provider_vendor_transports.py",
 )
 
 ALLOWED_NETWORK_LITERAL_SURFACES: tuple[str, ...] = (
@@ -97,6 +99,8 @@ ALLOWED_NETWORK_LITERAL_SURFACES: tuple[str, ...] = (
     "runtime/_internal/effect_types.py",
     "runtime/_internal/effect_payloads.py",
     "runtime/_internal/effects_actions/payments/yookassa.py",
+    "runtime/business_autonomy/provider_http_live_clients.py",
+    "runtime/business_autonomy/provider_vendor_transports.py",
 )
 
 CANONICAL_ROUTE_OWNER_MODULES: tuple[str, ...] = (
