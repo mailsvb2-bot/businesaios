@@ -30,11 +30,21 @@ class ProviderTokensAdminPage:
                 'actions': {
                     'list_endpoint': '/control-plane/provider-admin/catalog',
                     'capabilities_endpoint': '/control-plane/provider-admin/capabilities',
+                    'truth_matrix_path': '/web/provider-truth',
+                    'truth_matrix_endpoint': '/control-plane/provider-admin/catalog',
                     'activate_endpoint': '/control-plane/provider-admin/activate',
                     'platform_admin_path': '/web/platform-admin',
                 },
+                'truth_rules': {
+                    'provider_in_catalog_is_not_implemented': True,
+                    'endpoint_is_not_live_ready': True,
+                    'runtime_write_operation_is_not_write_supported': True,
+                    'telegram_bot_is_not_telegram_ads': True,
+                    'write_requires_approval_budget_risk_verification_evidence': True,
+                },
                 'ui_schema': {
                     'primary_buttons': [
+                        {'label': 'Открыть Provider Truth Matrix', 'provider_key': '*', 'action': 'open_truth_matrix'},
                         {'label': 'Ввести токен для Telegram Bot', 'provider_key': 'telegram_bot', 'action': 'open_modal'},
                         {'label': 'Ввести токен для сайта', 'provider_key': 'generic_website', 'action': 'open_modal'},
                         {'label': 'Ввести токен для Shopify', 'provider_key': 'shopify', 'action': 'open_modal'},
