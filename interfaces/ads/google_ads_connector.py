@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Dict, Iterable, Optional, Sequence
 
@@ -17,6 +17,7 @@ from interfaces.common.connector_support import (
     normalize_operation,
     normalize_payload,
 )
+from runtime.business_autonomy.provider_transport_bindings import provider_endpoint_url
 
 from ._write_stage import raise_write_stage_disabled
 from .base import (
@@ -53,11 +54,13 @@ from .connector_read_surface import (
     list_campaigns_with_token,
 )
 from .connector_spec_adapter_support import (
-    fetch_metrics_from_spec_adapter,
-    list_campaigns_from_spec_adapter,
     provider_fetch_metrics_from_spec_adapter,
     provider_list_campaigns_from_spec_adapter,
 )
+
+
+def _google_ads_endpoint(endpoint_key: str) -> str:
+    return provider_endpoint_url("google_ads", endpoint_key)
 
 
 @dataclass(frozen=True)
@@ -65,8 +68,8 @@ class GoogleAdsConfig:
     """Explicit connector configuration (tests / embedded runtimes)."""
 
     oauth: OAuthAppConfig
-    authorize_url: str = "https://accounts.google.com/o/oauth2/v2/auth"
-    token_url: str = "https://oauth2.googleapis.com/token"
+    authorize_url: str = field(default_factory=lambda: _google_ads_endpoint("oauth_authorize_url"))
+    token_url: str = field(default_factory=lambda: _google_ads_endpoint("oauth_token_url"))
 
 
 class GoogleAdsConnector(AdsConnector):
@@ -77,8 +80,6 @@ class GoogleAdsConnector(AdsConnector):
     That keeps the connector honest: no false-ready skeletons, but also no hidden
     business logic or parallel decision path.
     """
-
-
 
     _CAMPAIGN_SPEC = CampaignReadSpec(
         connector_name="GoogleAdsConnector",
@@ -160,10 +161,11 @@ class GoogleAdsConnector(AdsConnector):
         )
 
     def _authorize_url(self, *, tenant_id: str) -> str:
+        default = _google_ads_endpoint("oauth_authorize_url")
         return resolve_runtime_oauth_value(
             explicit=(self._cfg.authorize_url if self._cfg is not None else None),
-            resolver=lambda: resolve_url_with_default(vault=self._vault, tenant_id=str(tenant_id or ""), vault_key=f"{self.platform.value}_authorize_url", default='https://accounts.google.com/o/oauth2/v2/auth'),
-            default='https://accounts.google.com/o/oauth2/v2/auth',
+            resolver=lambda: resolve_url_with_default(vault=self._vault, tenant_id=str(tenant_id or ""), vault_key=f"{self.platform.value}_authorize_url", default=default),
+            default=default,
         )
 
     def _token_url(self, *, tenant_id: str) -> str:
@@ -171,7 +173,7 @@ class GoogleAdsConnector(AdsConnector):
             cfg_value=self._cfg.token_url if self._cfg is not None else None,
             vault=self._vault,
             vault_key="GOOGLE_ADS_OAUTH_TOKEN_URL",
-            default="https://oauth2.googleapis.com/token",
+            default=_google_ads_endpoint("oauth_token_url"),
             tenant_id=str(tenant_id or ""),
         )
 
@@ -219,7 +221,7 @@ class GoogleAdsConnector(AdsConnector):
             vault=self._vault,
             vault_key="GOOGLE_ADS_OAUTH_SCOPES",
             tenant_id=str(tenant_id or ""),
-            default="https://www.googleapis.com/auth/adwords",
+            default=_google_ads_endpoint("oauth_scope"),
         )
 
     async def _tokens_put(
