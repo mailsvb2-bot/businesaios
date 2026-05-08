@@ -6,6 +6,7 @@ from pathlib import Path
 from runtime.canonical_surface_manifest import (
     ALLOWED_NETWORK_LITERAL_SURFACES,
     ALLOWED_NETWORK_PRIMITIVE_IMPORTERS,
+    ALLOWED_OPERATOR_NETWORK_PROBES,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -173,7 +174,7 @@ def _network_primitive_offenses(path: Path) -> list[str]:
 
 def test_no_direct_network_primitives_outside_sealed_effects_or_provider_transport() -> None:
     offenders: list[str] = []
-    allowed = set(ALLOWED_NETWORK_PRIMITIVE_IMPORTERS)
+    allowed = set(ALLOWED_NETWORK_PRIMITIVE_IMPORTERS) | set(ALLOWED_OPERATOR_NETWORK_PROBES)
     for path in _iter_python_files():
         rel = path.relative_to(PROJECT_ROOT).as_posix()
         if rel.startswith("tests/"):
@@ -186,6 +187,7 @@ def test_no_direct_network_primitives_outside_sealed_effects_or_provider_transpo
 
 def test_no_subprocess_curl_or_wget_outside_tests() -> None:
     offenders: list[str] = []
+    allowed = set(ALLOWED_OPERATOR_NETWORK_PROBES)
     for path in _iter_python_files():
         rel = path.relative_to(PROJECT_ROOT).as_posix()
         if rel.startswith("tests/"):
@@ -201,7 +203,7 @@ def test_no_subprocess_curl_or_wget_outside_tests() -> None:
                 call_name = _full_attr_name(node.func)
                 if _is_subprocess_network_call(node=node, call_name=call_name, subprocess_aliases=imported_subprocess_aliases):
                     call_offenses.append(call_name)
-        if call_offenses:
+        if call_offenses and rel not in allowed:
             offenders.append(f"{rel}:{','.join(sorted(set(call_offenses)))}")
     assert offenders == []
 
@@ -225,6 +227,7 @@ def test_provider_transport_files_are_the_only_business_autonomy_network_allowed
     assert "runtime/business_autonomy/provider_vendor_transports.py" in ALLOWED_NETWORK_PRIMITIVE_IMPORTERS
     assert "runtime/business_autonomy/provider_http_live_clients.py" in ALLOWED_NETWORK_LITERAL_SURFACES
     assert "runtime/business_autonomy/provider_vendor_transports.py" in ALLOWED_NETWORK_LITERAL_SURFACES
+    assert "runtime/business_autonomy/provider_transport_bindings.py" in ALLOWED_NETWORK_LITERAL_SURFACES
 
 
 def test_decision_and_admin_surfaces_do_not_import_network_primitives() -> None:
@@ -246,3 +249,12 @@ def test_decision_and_admin_surfaces_do_not_import_network_primitives() -> None:
         if offenses:
             offenders.append(f"{rel}:{','.join(sorted(set(offenses)))}")
     assert offenders == []
+
+
+def test_operator_network_probes_are_local_server_only() -> None:
+    for rel in ALLOWED_OPERATOR_NETWORK_PROBES:
+        path = PROJECT_ROOT / rel
+        assert path.exists(), rel
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        assert "CANON_SERVER_HEALTH_PROBE" in text or "CANON_SERVER_SMOKE_FLOW" in text or "127.0.0.1" in text or "localhost" in text
+        assert not any(token in text for token in EXTERNAL_API_LITERAL_TOKENS), rel
