@@ -8,7 +8,7 @@ from canon.collapse.decision_path_map import FindingSeverity, LegacyCanonConfig,
 from canon.collapse.duplicate_detector import scan_duplicate_logic
 from canon.collapse.god_module_detector import scan_god_modules
 from canon.collapse.hidden_logic_detector import scan_hidden_logic
-from canon.collapse.legacy_wrapper_guard import scan_legacy_wrappers
+from canon.collapse.wrapper_guard import scan_legacy_wrappers
 
 
 @dataclass(frozen=True)
