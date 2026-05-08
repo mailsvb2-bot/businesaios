@@ -8,6 +8,7 @@ from uuid import uuid4
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderSyncRunResult
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
+from runtime.business_autonomy.provider_runtime_write_guard import ProviderRuntimeWriteGuard
 from runtime.queue.job_contract import JobDispatchRequest, JobResult
 from runtime.queue.job_scheduler import JobScheduler
 from runtime.queue.job_store_sqlite import SqliteJobStore
@@ -37,14 +38,32 @@ class ProviderQueueExecutionRuntime:
     secret_vault: SecretVault
     live_runtime: ProviderLiveSyncRuntime
     store: SqliteJobStore = field(default_factory=lambda: SqliteJobStore(_queue_store_path()))
+    write_guard: ProviderRuntimeWriteGuard = field(default_factory=ProviderRuntimeWriteGuard)
 
     def enqueue_sync(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None, queue_name: str = _PROVIDER_QUEUE_NAME) -> ProviderQueueDispatchResult:
+        normalized_mode = str(mode or 'live').strip().lower() or 'live'
+        normalized_operation = str(operation).strip()
+        guard_decision = self.write_guard.evaluate(provider=provider, operation=normalized_operation, mode=normalized_mode)
+        if not guard_decision.allowed:
+            return ProviderQueueDispatchResult(
+                job_id='',
+                queued=False,
+                status=guard_decision.status,
+                metadata={
+                    'queue_name': str(queue_name),
+                    'job_type': _PROVIDER_JOB_TYPE,
+                    'provider_key': provider.provider_key,
+                    'provider_write_guard': guard_decision.to_metadata(),
+                    'fail_closed_before_queue': True,
+                },
+            )
         normalized_payload = {
             'provider_key': provider.provider_key,
             'business_id': str(business_id),
-            'operation': str(operation),
-            'mode': str(mode or 'live'),
+            'operation': normalized_operation,
+            'mode': normalized_mode,
             'payload': dict(payload or {}),
+            'provider_write_guard': guard_decision.to_metadata(),
         }
         job_id = f"provider-sync-{provider.provider_key}-{uuid4().hex}"
         req = JobDispatchRequest(
@@ -53,11 +72,11 @@ class ProviderQueueExecutionRuntime:
             queue_name=str(queue_name),
             job_type=_PROVIDER_JOB_TYPE,
             payload=normalized_payload,
-            dedupe_key=f"{provider.provider_key}:{business_id}:{operation}:{normalized_payload['mode']}:{uuid4().hex[:8]}",
+            dedupe_key=f"{provider.provider_key}:{business_id}:{normalized_operation}:{normalized_payload['mode']}:{uuid4().hex[:8]}",
             tags=(f"provider:{provider.provider_key}", f"business:{business_id}"),
         )
         self.store.put(req.to_record())
-        return ProviderQueueDispatchResult(job_id=job_id, queued=True, status='queued', metadata={'queue_name': str(queue_name), 'job_type': _PROVIDER_JOB_TYPE, 'provider_key': provider.provider_key})
+        return ProviderQueueDispatchResult(job_id=job_id, queued=True, status='queued', metadata={'queue_name': str(queue_name), 'job_type': _PROVIDER_JOB_TYPE, 'provider_key': provider.provider_key, 'provider_write_guard': guard_decision.to_metadata()})
 
     def tick(self, *, provider_registry: Mapping[str, ProviderDefinition], tenant_id: str, queue_name: str = _PROVIDER_QUEUE_NAME, worker_id: str = 'provider-runtime-worker') -> Mapping[str, Any]:
         scheduler = JobScheduler(store=self.store)
