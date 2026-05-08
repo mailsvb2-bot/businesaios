@@ -17,6 +17,7 @@ from entrypoints.api.connector_admin_route_handlers import ConnectorAdminRouteHa
 from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
 from adapters.api.fastapi.dependencies import FastAPIDependencyContainer
 from adapters.api.fastapi.control_plane_routes import register_control_plane_routes
+from adapters.api.fastapi.provider_truth_matrix_routes import register_provider_truth_matrix_routes
 from adapters.api.fastapi.public_routes import register_public_api_routes
 from adapters.api.fastapi.router_support import build_auth_bundle, build_webhook_verifier, resolve_metrics, tenant_registry_has_records
 from entrypoints.api.governance_advanced_route_handlers import GovernanceAdvancedRouteHandlers
@@ -119,4 +120,5 @@ def create_api_router(*, application_service: object, dependency_container: Fast
 
     register_public_api_routes(router=router, dependency_container=dependency_container, health_handler=health_handler, handlers=handlers, headless_handlers=headless_handlers, governance_handlers=governance_handlers, business_memory_handlers=business_memory_handlers, governance_advanced_handlers=governance_advanced_handlers, security_guard=security_bundle.public_surface_guard, analytics_handlers=analytics_handlers)
     register_control_plane_routes(router=router, auth_bundle=auth_bundle, authz_bundle=authz_bundle, tenant_guard=tenant_guard, rate_limit_bundle=rate_limit_bundle, audit_handlers=audit_handlers, approval_handlers=approval_handlers, admin_handlers=admin_handlers, connector_admin_handlers=connector_admin_handlers, provider_admin_handlers=provider_admin_handlers, metrics_handlers=metrics_handlers, webhook_handlers=webhook_handlers, queue_ops_handlers=queue_ops_handlers, security_guard=security_bundle.control_plane_guard, analytics_ops_handlers=analytics_ops_handlers, analytics_signed_export_handlers=analytics_signed_export_handlers)
+    register_provider_truth_matrix_routes(router=router)
     return router
