@@ -1,8 +1,6 @@
 from __future__ import annotations
-
 from dataclasses import dataclass, field
 from typing import Any, Mapping
-
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_truth_matrix import ProviderTruthRow, provider_truth_map
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
