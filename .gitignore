@@ -43,3 +43,6 @@ _audit/
 runtime_state/
 run_smoke.sh
 status_server.py
+
+# Local runtime state
+/data/runtime/
