@@ -1,1 +1,0 @@
-"""Platform-layer privacy adapters."""
