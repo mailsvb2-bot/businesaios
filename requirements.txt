@@ -7,3 +7,5 @@ PyYAML==6.0.2
 hypothesis==6.92.1
 fastapi==0.115.0
 flask==3.0.3
+httpx==0.28.1
+uvicorn[standard]==0.34.2
