@@ -88,6 +88,21 @@ class PostgresLedger:
             return False
         return self.is_executed(decision_id)
 
+    @staticmethod
+    def _chain_fields(*, decision_id: str, action: str, payload_hash_value: str, signature: str, kid: str) -> dict[str, str]:
+        """Return the canonical ledger-chain fields used for write and verification.
+
+        The field set must stay identical for try_mark_executed() and verify_chain().
+        Changing either side independently breaks the tamper-evident proof chain.
+        """
+        return {
+            "decision_id": str(decision_id),
+            "action": str(action or ""),
+            "payload_hash": str(payload_hash_value or ""),
+            "signature": str(signature or ""),
+            "kid": str(kid or ""),
+        }
+
     def try_mark_executed(self, env) -> bool:
         assert self._port is not None
         decision = getattr(env, "decision", env)
@@ -139,13 +154,16 @@ class PostgresLedger:
                 ),
             )
 
-            eh = entry_hash(prev_hash=str(prev), fields={
-                'decision_id': decision_id,
-                'action': action,
-                'payload_hash': ph,
-                'signature': sig,
-                'kid': kid,
-            })
+            eh = entry_hash(
+                prev_hash=str(prev),
+                fields=self._chain_fields(
+                    decision_id=decision_id,
+                    action=action,
+                    payload_hash_value=ph,
+                    signature=sig,
+                    kid=kid,
+                ),
+            )
             self._port.execute(
                 "INSERT INTO executed_chain (decision_id, prev_hash, entry_hash) VALUES (%s,%s,%s);",
                 (decision_id, str(prev), str(eh)),
@@ -171,20 +189,25 @@ class PostgresLedger:
             if str(prev_hash) != str(prev):
                 return False
             row = self._port.fetchone(
-                "SELECT payload_hash, signature FROM executed WHERE decision_id=%s LIMIT 1;",
+                "SELECT action, payload_hash, signature, kid FROM executed WHERE decision_id=%s LIMIT 1;",
                 (str(decision_id),),
             )
             if not row:
                 return False
-            ph, sig = row
-            calc = entry_hash(prev_hash=str(prev), fields={
-                'decision_id': str(decision_id),
-                'payload_hash': str(ph),
-                'signature': str(sig),
-            })
+            action, ph, sig, kid = row
+            calc = entry_hash(
+                prev_hash=str(prev_hash),
+                fields=self._chain_fields(
+                    decision_id=str(decision_id),
+                    action=str(action or ""),
+                    payload_hash_value=str(ph or ""),
+                    signature=str(sig or ""),
+                    kid=str(kid or ""),
+                ),
+            )
             if str(calc) != str(eh):
                 return False
-            prev = eh
+            prev = str(eh)
         return True
 
     def mark_effect_completed(self, envelope_id: str) -> None:
