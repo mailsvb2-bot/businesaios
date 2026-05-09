@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from security.kms_provider_backend import KMSProviderBackendSelector, KMSProviderSelection, KMSProviderSelectionRequest
 from security.kms_provider_contract import KMSProvider, KMSProviderCapability
 
 
@@ -15,10 +16,11 @@ class KMSRegistryEntry:
 
 
 class KMSProviderRegistry:
-    """Canonical owner of KMS/HSM-ready provider registration."""
+    """Canonical owner of KMS/HSM-ready provider registration and selection."""
 
     def __init__(self) -> None:
         self._providers: dict[str, KMSProvider] = {}
+        self._selector = KMSProviderBackendSelector()
 
     def register(self, provider: KMSProvider) -> KMSRegistryEntry:
         capability = provider.capability()
@@ -35,6 +37,10 @@ class KMSProviderRegistry:
         items = [provider.capability() for provider in self._providers.values()]
         items.sort(key=lambda item: item.provider_name)
         return items
+
+    def select(self, request: KMSProviderSelectionRequest) -> tuple[KMSProvider, KMSProviderSelection]:
+        selection = self._selector.resolve_provider(providers=self._providers.values(), request=request)
+        return self.get(selection.provider_name), selection
 
 
 __all__ = [
