@@ -10,14 +10,16 @@ from scripts.ci.pytest_tools import run_pytest_with_report
 from scripts.ci.step_build_artifact import run as run_build_artifact
 from scripts.ci.step_quality import run as run_quality
 from scripts.ci.step_verify_release import run as run_verify_release
-from scripts.ci.subprocess_io import run_python
+from scripts.ci.subprocess_io import run_command, run_python
 
 StepHandler = Callable[[], tuple[bool, str]]
 
 
 def project_shape() -> str: return _step_ids.project_shape()
+def dependency_lock() -> str: return _step_ids.dependency_lock()
 def doctor() -> str: return _step_ids.doctor()
 def import_smoke() -> str: return _step_ids.import_smoke()
+def demo_e2e_smoke() -> str: return _step_ids.demo_e2e_smoke()
 def quality() -> str: return _step_ids.quality()
 def canon_audit() -> str: return _step_ids.canon_audit()
 def lock_tests() -> str: return _step_ids.lock_tests()
@@ -27,11 +29,39 @@ def verify_release() -> str: return _step_ids.verify_release()
 def build_artifact() -> str: return _step_ids.build_artifact()
 
 
+def run_dependency_lock() -> tuple[bool, str]:
+    outcome = run_python(["scripts/ci/check_requirements_lock.py"], timeout=30)
+    if outcome.returncode != 0:
+        return False, outcome.stdout.strip() or outcome.stderr.strip() or "dependency lock drift detected"
+    return True, outcome.stdout.strip() or "dependency lock passed"
+
+
 def run_import_smoke() -> tuple[bool, str]:
     outcome = run_python(["scripts/import_smoke.py"], timeout=90)
     if outcome.returncode != 0:
         return False, "import smoke failed or timed out"
     return True, "import smoke passed"
+
+
+def run_demo_e2e_smoke() -> tuple[bool, str]:
+    outcome = run_command(
+        ["python", "main.py"],
+        env={
+            "RUN_MODE": "demo",
+            "DEMO_E2E_SMOKE": "1",
+            "APP_ENV": "ci",
+            "ENV": "ci",
+            "TENANT_ID": "ci-demo-tenant",
+            "SYSTEM_TZ": "Europe/Amsterdam",
+            "CI_STEP_TIMEOUT_SECONDS": "180",
+        },
+        timeout=180,
+    )
+    if outcome.returncode != 0:
+        if outcome.returncode == 124:
+            return False, "demo e2e smoke timed out"
+        return False, outcome.stdout.strip() or outcome.stderr.strip() or "demo e2e smoke failed"
+    return True, "demo e2e smoke passed"
 
 
 def run_canon_audit() -> tuple[bool, str]:
@@ -290,8 +320,10 @@ def run_integration_tests() -> tuple[bool, str]:
 
 _REGISTRY: dict[str, StepHandler] = {
     project_shape(): run_project_shape,
+    dependency_lock(): run_dependency_lock,
     doctor(): run_doctor,
     import_smoke(): run_import_smoke,
+    demo_e2e_smoke(): run_demo_e2e_smoke,
     quality(): run_quality,
     canon_audit(): run_canon_audit,
     lock_tests(): run_lock_tests,
