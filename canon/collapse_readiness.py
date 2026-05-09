@@ -11,11 +11,11 @@ CORE_RUNTIME_COLLAPSE_READY_SURFACES = {}
 
 CORE_RUNTIME_COLLAPSED_SURFACES = {
     "runtime.executor_contract": "runtime.execution.contracts",
-    "runtime.read_only_registry": "runtime.application",
-    "runtime.service_exports": "runtime.application",
-    "runtime.capability_access": "runtime.application",
-    "runtime.typed_access": "runtime.application",
-    "runtime.domain_ports": "runtime.application",
+    "runtime.read_only_registry": "runtime.application.contracts",
+    "runtime.service_exports": "runtime.application.contracts",
+    "runtime.capability_access": "runtime.application.contracts",
+    "runtime.typed_access": "runtime.application.contracts",
+    "runtime.domain_ports": "runtime.application.contracts",
     "runtime.platform.support.serving.runtime.action_validator": "application.decision.action_validator",
     "runtime.application.action_dispatcher": "application.decision.action_dispatcher",
     "runtime.application.application_ports": "application.decision.ports",
