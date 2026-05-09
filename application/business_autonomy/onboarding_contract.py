@@ -26,8 +26,8 @@ class BusinessOnboardingRequest:
     ownership_key: str = "owner"
     region: str = "global"
     channel_kind: ChannelKind | str = ChannelKind.CHATBOT
-    adapter_key: str = "chatbot.default"
-    external_ref: str = "chatbot.default"
+    adapter_key: str = ""
+    external_ref: str = ""
     requested_by: str = "system"
     metadata: Mapping[str, Any] = field(default_factory=dict)
     integration_mode: str = ""
@@ -41,12 +41,21 @@ class BusinessOnboardingRequest:
             raise ValueError("ownership_key is required")
         if not str(self.region or "").strip():
             raise ValueError("region is required")
-        if not str(self.adapter_key or "").strip():
+        if not str(self.normalized_adapter_key or "").strip():
             raise ValueError("adapter_key is required")
-        if not str(self.external_ref or "").strip():
+        if not str(self.normalized_external_ref or "").strip():
             raise ValueError("external_ref is required")
         if not str(self.requested_by or "").strip():
             raise ValueError("requested_by is required")
+
+    @property
+    def normalized_adapter_key(self) -> str:
+        raw_kind = _raw_channel_kind(self.channel_kind)
+        return str(self.adapter_key or f"{raw_kind}.default").strip()
+
+    @property
+    def normalized_external_ref(self) -> str:
+        return str(self.external_ref or self.normalized_adapter_key).strip()
 
     def to_identity(self) -> ChannelIdentity:
         self.validate()
@@ -54,17 +63,23 @@ class BusinessOnboardingRequest:
             business_id=self.business_id,
             tenant_id=self.tenant_id,
             channel_kind=_coerce_channel_kind(self.channel_kind),
-            adapter_key=self.adapter_key,
-            external_ref=self.external_ref,
+            adapter_key=self.normalized_adapter_key,
+            external_ref=self.normalized_external_ref,
             region=self.region,
             metadata=dict(self.metadata),
         )
 
 
+def _raw_channel_kind(value: ChannelKind | str) -> str:
+    if isinstance(value, ChannelKind):
+        return value.value
+    return str(value or "chatbot").strip().lower().replace("-", "_")
+
+
 def _coerce_channel_kind(value: ChannelKind | str) -> ChannelKind:
     if isinstance(value, ChannelKind):
         return value
-    raw = str(value or "chatbot").strip().lower().replace("-", "_")
+    raw = _raw_channel_kind(value)
     if raw in {"telegram", "webchat", "chat"}:
         return ChannelKind.CHATBOT
     try:
