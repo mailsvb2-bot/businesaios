@@ -53,46 +53,15 @@ class SecurityGovernanceOrchestrator:
         self._approval_replay_guard = approval_replay_guard
         self._governance_journal = governance_journal
 
-    def _journal(
-        self,
-        *,
-        event_kind: str,
-        entity_kind: str,
-        entity_id: str,
-        payload: Mapping[str, Any],
-        incident_id: int | None = None,
-        approval_id: str | None = None,
-    ) -> None:
+    def _journal(self, *, event_kind: str, entity_kind: str, entity_id: str, payload: Mapping[str, Any], incident_id: int | None = None, approval_id: str | None = None) -> None:
         if self._governance_journal is None:
             return
-        self._governance_journal.append(
-            GovernanceJournalEvent(
-                event_kind=event_kind,
-                entity_kind=entity_kind,
-                entity_id=entity_id,
-                payload=dict(payload),
-                related_incident_id=incident_id,
-                related_approval_id=approval_id,
-            )
-        )
+        self._governance_journal.append(GovernanceJournalEvent(event_kind=event_kind, entity_kind=entity_kind, entity_id=entity_id, payload=dict(payload), related_incident_id=incident_id, related_approval_id=approval_id))
 
-    def execute_high_risk_operation(
-        self,
-        *,
-        operation_kind: str,
-        actor: str,
-        approval_id: str | None,
-        payload: Mapping[str, Any],
-    ) -> SecurityGovernanceReport:
+    def execute_high_risk_operation(self, *, operation_kind: str, actor: str, approval_id: str | None, payload: Mapping[str, Any]) -> SecurityGovernanceReport:
         verdict = self._approval_gate.evaluate(operation_kind=operation_kind)
         if self._workflow_store is not None:
-            self._workflow_store.append_step(
-                workflow_id=str(approval_id or 'inline-' + operation_kind),
-                operation_kind=operation_kind,
-                actor=actor,
-                step_kind='requested',
-                payload=dict(payload),
-            )
+            self._workflow_store.append_step(workflow_id=str(approval_id or 'inline-' + operation_kind), operation_kind=operation_kind, actor=actor, step_kind='requested', payload=dict(payload))
         if verdict.requires_signed_approval:
             if not approval_id:
                 return SecurityGovernanceReport(False, 'approval', 'signed approval required', {})
@@ -104,95 +73,38 @@ class SecurityGovernanceOrchestrator:
             if str(verified.get('actor')) != str(actor):
                 return SecurityGovernanceReport(False, 'approval', 'approval actor mismatch', {'approval_id': approval_id})
             if self._approval_replay_guard is not None:
-                consumed = self._approval_replay_guard.consume(
-                    approval_id=str(approval_id),
-                    operation_kind=str(operation_kind),
-                    actor=str(actor),
-                )
+                consumed = self._approval_replay_guard.consume(approval_id=str(approval_id), operation_kind=str(operation_kind), actor=str(actor))
                 if not consumed:
-                    incident_id = self._incident_registry.open_incident(
-                        incident_kind='approval-replay-suspected',
-                        payload={'approval_id': approval_id, 'operation_kind': operation_kind, 'actor': actor},
-                    )
-                    self._quarantine_registry.quarantine(
-                        entity_kind='approval',
-                        entity_id=str(approval_id),
-                        reason='approval replay detected',
-                        payload={'actor': actor, 'incident_id': incident_id},
-                    )
-                    self._journal(
-                        event_kind='approval.quarantined',
-                        entity_kind='approval',
-                        entity_id=str(approval_id),
-                        payload={'actor': actor, 'operation_kind': operation_kind},
-                        incident_id=int(incident_id),
-                        approval_id=str(approval_id),
-                    )
+                    incident_id = self._incident_registry.open_incident(incident_kind='approval-replay-suspected', payload={'approval_id': approval_id, 'operation_kind': operation_kind, 'actor': actor})
+                    self._quarantine_registry.quarantine(entity_kind='approval', entity_id=str(approval_id), reason='approval replay detected', payload={'actor': actor, 'incident_id': incident_id})
+                    self._journal(event_kind='approval.quarantined', entity_kind='approval', entity_id=str(approval_id), payload={'actor': actor, 'operation_kind': operation_kind}, incident_id=int(incident_id), approval_id=str(approval_id))
                     return SecurityGovernanceReport(False, 'approval', 'approval replay detected', {'approval_id': approval_id, 'incident_id': incident_id})
-
-        self._audit_chain.append(
-            event_kind='security.governance.operation',
-            payload={'operation_kind': operation_kind, 'actor': actor, 'payload': dict(payload)},
-        )
+        self._audit_chain.append(event_kind='security.governance.operation', payload={'operation_kind': operation_kind, 'actor': actor, 'payload': dict(payload)})
         if self._workflow_store is not None:
-            self._workflow_store.append_step(
-                workflow_id=str(approval_id or 'inline-' + operation_kind),
-                operation_kind=operation_kind,
-                actor=actor,
-                step_kind='completed',
-                payload={'requires_signed_approval': verdict.requires_signed_approval},
-            )
+            self._workflow_store.append_step(workflow_id=str(approval_id or 'inline-' + operation_kind), operation_kind=operation_kind, actor=actor, step_kind='completed', payload={'requires_signed_approval': verdict.requires_signed_approval})
         return SecurityGovernanceReport(True, 'completed', verdict.reason, {'requires_signed_approval': verdict.requires_signed_approval})
 
     def quarantine_compromised_token(self, *, token_fingerprint: str, actor: str, reason: str) -> SecurityGovernanceReport:
-        incident_id = self._incident_registry.open_incident(
-            incident_kind='compromised-token',
-            payload={'token_fingerprint': token_fingerprint, 'actor': actor, 'reason': reason},
-        )
+        incident_id = self._incident_registry.open_incident(incident_kind='compromised-token', payload={'token_fingerprint': token_fingerprint, 'actor': actor, 'reason': reason})
         self._revocation_store.revoke(token_fingerprint=token_fingerprint, reason=reason)
-        self._quarantine_registry.quarantine(
-            entity_kind='token',
-            entity_id=token_fingerprint,
-            reason=reason,
-            payload={'actor': actor, 'incident_id': incident_id},
-        )
-        self._audit_chain.append(
-            event_kind='security.governance.quarantine',
-            payload={'entity_kind': 'token', 'entity_id': token_fingerprint, 'incident_id': incident_id, 'actor': actor},
-        )
-        self._journal(
-            event_kind='token.quarantined',
-            entity_kind='token',
-            entity_id=token_fingerprint,
-            payload={'actor': actor, 'reason': reason},
-            incident_id=int(incident_id),
-        )
+        self._quarantine_registry.quarantine(entity_kind='token', entity_id=token_fingerprint, reason=reason, payload={'actor': actor, 'incident_id': incident_id})
+        self._audit_chain.append(event_kind='security.governance.quarantine', payload={'entity_kind': 'token', 'entity_id': token_fingerprint, 'incident_id': incident_id, 'actor': actor})
+        self._journal(event_kind='token.quarantined', entity_kind='token', entity_id=token_fingerprint, payload={'actor': actor, 'reason': reason}, incident_id=int(incident_id))
         return SecurityGovernanceReport(True, 'completed', 'token revoked and quarantined', {'incident_id': incident_id, 'token_fingerprint': token_fingerprint})
 
     def quarantine_compromised_secret(self, *, secret_id: str, actor: str, reason: str) -> SecurityGovernanceReport:
-        incident_id = self._incident_registry.open_incident(
-            incident_kind='compromised-secret',
-            payload={'secret_id': secret_id, 'actor': actor, 'reason': reason},
-        )
-        self._quarantine_registry.quarantine(
-            entity_kind='secret',
-            entity_id=secret_id,
-            reason=reason,
-            payload={'actor': actor, 'incident_id': incident_id},
-        )
-        self._audit_chain.append(
-            event_kind='security.governance.quarantine',
-            payload={'entity_kind': 'secret', 'entity_id': secret_id, 'incident_id': incident_id, 'actor': actor},
-        )
+        incident_id = self._incident_registry.open_incident(incident_kind='compromised-secret', payload={'secret_id': secret_id, 'actor': actor, 'reason': reason})
+        self._quarantine_registry.quarantine(entity_kind='secret', entity_id=secret_id, reason=reason, payload={'actor': actor, 'incident_id': incident_id})
+        self._audit_chain.append(event_kind='security.governance.quarantine', payload={'entity_kind': 'secret', 'entity_id': secret_id, 'incident_id': incident_id, 'actor': actor})
         self._journal(event_kind='secret.quarantined', entity_kind='secret', entity_id=secret_id, payload={'actor': actor, 'reason': reason}, incident_id=int(incident_id))
         return SecurityGovernanceReport(True, 'completed', 'secret quarantined', {'incident_id': incident_id, 'secret_id': secret_id})
 
     def quarantine_compromised_connector_secret(self, *, connector_id: str, secret_id: str, actor: str, reason: str) -> SecurityGovernanceReport:
         entity_id = f'{connector_id}:{secret_id}'
-        report = self.quarantine_compromised_secret(secret_id=entity_id, actor=actor, reason=reason)
-        details = dict(report.details)
-        details.update({'connector_id': connector_id, 'secret_id': secret_id})
-        return SecurityGovernanceReport(report.success, report.phase, 'connector secret quarantined', details)
+        incident_id = self._incident_registry.open_incident(incident_kind='compromised-connector-secret', payload={'connector_id': connector_id, 'secret_id': secret_id, 'actor': actor, 'reason': reason})
+        self._quarantine_registry.quarantine(entity_kind='connector-secret', entity_id=entity_id, reason=reason, payload={'actor': actor, 'incident_id': incident_id, 'connector_id': connector_id})
+        self._journal(event_kind='connector-secret.quarantined', entity_kind='connector-secret', entity_id=entity_id, payload={'actor': actor, 'reason': reason, 'connector_id': connector_id}, incident_id=int(incident_id))
+        return SecurityGovernanceReport(True, 'completed', 'connector secret quarantined', {'incident_id': incident_id, 'connector_id': connector_id, 'secret_id': secret_id})
 
     def quarantine_compromised_key_id(self, *, key_id: str, actor: str, reason: str) -> SecurityGovernanceReport:
         incident_id = self._incident_registry.open_incident(incident_kind='compromised-key', payload={'key_id': key_id, 'actor': actor, 'reason': reason})
@@ -200,37 +112,14 @@ class SecurityGovernanceOrchestrator:
         self._journal(event_kind='key.quarantined', entity_kind='key', entity_id=key_id, payload={'actor': actor, 'reason': reason}, incident_id=int(incident_id))
         return SecurityGovernanceReport(True, 'completed', 'key quarantined', {'incident_id': incident_id, 'key_id': key_id})
 
-    def recover_quarantined_entity(
-        self,
-        *,
-        incident_id: int,
-        entity_kind: str,
-        entity_id: str,
-        actor: str,
-        resolution_payload: Mapping[str, Any] | None = None,
-    ) -> SecurityGovernanceReport:
+    def recover_quarantined_entity(self, *, incident_id: int, entity_kind: str, entity_id: str, actor: str, resolution_payload: Mapping[str, Any] | None = None) -> SecurityGovernanceReport:
         if self._recovery is None:
             return SecurityGovernanceReport(False, 'recovery', 'recovery orchestrator not configured', {})
-        result = self._recovery.recover_quarantined_entity(
-            incident_id=incident_id,
-            entity_kind=entity_kind,
-            entity_id=entity_id,
-            actor=actor,
-            resolution_payload=resolution_payload,
-            release_quarantine=True,
-        )
-        self._journal(
-            event_kind=f'{entity_kind}.recovered',
-            entity_kind=entity_kind,
-            entity_id=entity_id,
-            payload={'actor': actor, 'resolution': dict(resolution_payload or {})},
-            incident_id=int(incident_id),
-        )
+        result = self._recovery.recover_quarantined_entity(incident_id=incident_id, entity_kind=entity_kind, entity_id=entity_id, actor=actor, resolution_payload=resolution_payload, release_quarantine=True)
+        payload = {'actor': actor, 'resolution': dict(resolution_payload or {}), 'entity_kind': entity_kind, 'entity_id': entity_id}
+        self._journal(event_kind=f'{entity_kind}.recovered', entity_kind=entity_kind, entity_id=entity_id, payload=payload, incident_id=int(incident_id))
+        self._journal(event_kind='incident.recovered', entity_kind=entity_kind, entity_id=entity_id, payload=payload, incident_id=int(incident_id))
         return SecurityGovernanceReport(result.success, 'completed' if result.success else 'recovery', result.reason, result.details)
 
 
-__all__ = [
-    'CANON_SECURITY_GOVERNANCE_ORCHESTRATOR',
-    'SecurityGovernanceOrchestrator',
-    'SecurityGovernanceReport',
-]
+__all__ = ['CANON_SECURITY_GOVERNANCE_ORCHESTRATOR', 'SecurityGovernanceOrchestrator', 'SecurityGovernanceReport']
