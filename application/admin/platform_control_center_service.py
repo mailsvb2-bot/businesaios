@@ -15,6 +15,11 @@ def _count_python_lines(path: Path) -> int:
         return 0
 
 
+def _with_alias(payload: dict[str, Any], alias: str, source: str = 'rows') -> dict[str, Any]:
+    payload.setdefault(alias, payload.get(source, ()))
+    return payload
+
+
 @dataclass(frozen=True)
 class PlatformControlCenterService:
     repo_root: Path
@@ -56,22 +61,28 @@ class PlatformControlCenterService:
         }
 
     def build_dependency_graph(self) -> dict[str, Any]:
-        return {'rows': [{'from': 'admin_route_handlers', 'to': 'platform_control_center_service'}, {'from': 'platform_control_center_service', 'to': 'repo_files'}]}
+        rows = [{'from': 'admin_route_handlers', 'to': 'platform_control_center_service'}, {'from': 'platform_control_center_service', 'to': 'repo_files'}]
+        return {'rows': rows, 'dependency_rows': rows}
 
     def build_remediation_plan(self) -> dict[str, Any]:
-        return {'rows': [{'file_path': 'application/admin/platform_control_center_service.py', 'risk_type': 'large_module', 'next_step': 'keep owner service thin'}]}
+        rows = [{'file_path': 'application/admin/platform_control_center_service.py', 'risk_type': 'large_module', 'next_step': 'keep owner service thin'}]
+        return {'rows': rows, 'remediation_rows': rows}
 
     def build_risk_diff(self, *, tenant_id: str) -> dict[str, Any]:
-        return {'tenant_id': tenant_id, 'added': 0, 'removed': 0, 'changed': 1}
+        rows = [{'risk_type': 'large_module', 'change': 'unchanged'}]
+        return {'tenant_id': tenant_id, 'added': 0, 'removed': 0, 'changed': 1, 'risk_diff_rows': rows}
 
     def build_ownership_graph(self) -> dict[str, Any]:
-        return {'rows': [{'owner': 'application.admin.platform_control_center_service', 'surface': 'platform_control_center'}]}
+        rows = [{'owner': 'application.admin.platform_control_center_service', 'surface': 'platform_control_center'}]
+        return {'rows': rows, 'ownership_rows': rows}
 
     def build_patch_suggestions(self) -> dict[str, Any]:
-        return {'rows': [{'file_path': 'application/admin/platform_control_center_service.py', 'patch_hint': 'keep service under 320 lines and delegate helpers'}]}
+        rows = [{'file_path': 'application/admin/platform_control_center_service.py', 'patch_hint': 'keep service under 320 lines and delegate helpers'}]
+        return {'rows': rows, 'patch_suggestion_rows': rows}
 
     def build_snapshot_diff_view(self, *, tenant_id: str) -> dict[str, Any]:
-        return {'tenant_id': tenant_id, 'changed_files': 0, 'summary': 'no snapshot drift detected'}
+        rows = [{'file_path': 'application/admin/platform_control_center_service.py', 'status': 'unchanged'}]
+        return {'tenant_id': tenant_id, 'changed_files': 0, 'summary': 'no snapshot drift detected', 'code_diff_rows': rows}
 
     def build_file_passport(self, *, file_path: str) -> dict[str, Any]:
         path = self.repo_root / file_path
@@ -83,35 +94,41 @@ class PlatformControlCenterService:
         }
 
     def build_ownership_drilldown(self, *, block: str) -> dict[str, Any]:
-        return {'block': block, 'owners': [{'owner': 'application.admin.platform_control_center_service', 'reason': 'final admin owner'}]}
+        rows = [{'owner': 'application.admin.platform_control_center_service', 'reason': 'final admin owner'}]
+        return {'block': block, 'owners': rows, 'owner_rows': rows}
 
     def build_risk_trends(self, *, tenant_id: str) -> dict[str, Any]:
         return {'tenant_id': tenant_id, 'trend_rows': [{'period': 'current', 'major': 1, 'minor': 1}]}
 
     def build_maturity_trends(self, *, tenant_id: str) -> dict[str, Any]:
-        return {'tenant_id': tenant_id, 'trend_rows': [{'period': 'current', 'maturity': 0.72}]}
+        rows = [{'period': 'current', 'maturity': 0.72}]
+        return {'tenant_id': tenant_id, 'trend_rows': rows, 'maturity_trend_rows': rows}
 
     def build_stop_conditions(self) -> dict[str, Any]:
-        return {'rows': [{'name': 'import_graph_regression', 'state': 'blocked'}, {'name': 'artifact_corruption', 'state': 'blocked'}]}
+        rows = [{'name': 'import_graph_regression', 'state': 'blocked'}, {'name': 'artifact_corruption', 'state': 'blocked'}]
+        return {'rows': rows, 'stop_condition_rows': rows}
 
     def build_live_widget_bundle(self, *, overview_payload: Mapping[str, Any]) -> dict[str, Any]:
         del overview_payload
-        return {'widgets': [{'id': 'risk-summary', 'status': 'ready'}]}
+        widgets = [{'id': 'risk-summary', 'status': 'ready'}]
+        return {'widgets': widgets, 'widget_rows': widgets}
 
     def build_visual_conflict_map(self) -> dict[str, Any]:
-        return {'conflicts': []}
+        return {'conflicts': [], 'conflict_rows': []}
 
     def build_widget_runtime(self, *, tenant_id: str, business_id: str) -> dict[str, Any]:
         return {'tenant_id': tenant_id, 'business_id': business_id, 'runtime': 'static_preview'}
 
     def save_dashboard_layout(self, *, tenant_id: str, layout: Mapping[str, Any]) -> dict[str, Any]:
-        return {'tenant_id': tenant_id, 'saved': True, 'layout': dict(layout or {})}
+        return {'tenant_id': tenant_id, 'saved': True, 'layout': dict(layout or {}), 'layout_rows': tuple(dict(layout or {}).get('widgets') or ())}
 
     def build_remediation_workflow(self, *, file_path: str, risk_type: str = '') -> dict[str, Any]:
+        steps = ['inspect', 'patch', 'verify']
         return {
             'file_path': file_path,
             'risk_type': risk_type or 'unspecified',
-            'workflow_steps': ['inspect', 'patch', 'verify'],
+            'workflow_steps': steps,
+            'workflow_rows': [{'step': item} for item in steps],
             'code_navigation': {'editor_hint': f'open:{file_path}:1'},
         }
 
