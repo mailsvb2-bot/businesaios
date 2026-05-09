@@ -7,6 +7,7 @@ from scripts.ci.subprocess_io import run_command
 
 _RUNTIME_STATE_PATTERNS = ("*.sqlite3", "*.sqlite", "*.db")
 _RUNTIME_STATE_ROOTS = (
+    ".runtime",
     "data/runtime",
     "data/tenancy",
     "data/config",
