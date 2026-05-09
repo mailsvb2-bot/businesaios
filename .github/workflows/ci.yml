@@ -24,6 +24,6 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
       - name: Run canonical CI gate
-        run: python scripts/ci/cli.py --gate fast
+        run: python -m scripts.ci.cli --gate fast
