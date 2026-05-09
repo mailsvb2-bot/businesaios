@@ -10,18 +10,18 @@ Historical helper APIs remain available as transitional ABI only.
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping, TYPE_CHECKING
 
+from bootstrap.decision_core_contract import RuntimeDecisionCorePort as DecisionIssuer
+
 if TYPE_CHECKING:  # pragma: no cover
     from runtime.decision_input.decision_input_service import DecisionInputService
     from runtime.decision_input.runtime_state_enrichment import RuntimeStateEnrichmentService
     from runtime.integration.decision_input_packet import DecisionInputPacket
     from runtime.runtime_observability import RuntimeObservability
-    from bootstrap.decision_core_contract import RuntimeDecisionCorePort as DecisionIssuer
 else:
     DecisionInputService = Any  # type: ignore[misc,assignment]
     RuntimeStateEnrichmentService = Any  # type: ignore[misc,assignment]
     DecisionInputPacket = Any  # type: ignore[misc,assignment]
     RuntimeObservability = Any  # type: ignore[misc,assignment]
-    DecisionIssuer = Any  # type: ignore[misc,assignment]
 
 CANON_RUNTIME_DECISION_GATEWAY_SINGLE_PATH = True
 CANON_RUNTIME_DECISION_GATEWAY_NO_RAW_DECISION_LOGIC = True
@@ -220,6 +220,7 @@ __all__ = [
     "COMPAT_DECISION_GATEWAY_FUNCTION",
     "DecisionGateway",
     "DecisionGatewayContractError",
+    "DecisionIssuer",
     "RuntimeDecisionGateway",
     "RuntimeDecisionIssueGateway",
     "RuntimeDecisionRouteGateway",
