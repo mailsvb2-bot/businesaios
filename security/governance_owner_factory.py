@@ -50,6 +50,13 @@ class SecurityCryptoAgilityService:
             CryptoAgilityProfile(profile_name='post-quantum-ready', signing_algorithm='hybrid-ed25519-dilithium', encryption_algorithm='aes256_gcm+kyber'),
         )
 
+    def get(self, profile_name: str) -> CryptoAgilityProfile:
+        normalized = str(profile_name).strip()
+        for profile in self.list_profiles():
+            if profile.profile_name == normalized:
+                return profile
+        raise KeyError(normalized)
+
 
 class SecurityDrillRuntime:
     def __init__(self, *, schedule_store: SQLiteSecurityDrillScheduleStore, drill_executor: SecurityDrillExecutor) -> None:
