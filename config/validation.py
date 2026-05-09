@@ -52,6 +52,15 @@ def validate_telegram_settings(settings: TelegramSettings) -> TelegramSettings:
 
     if settings.webhook_enabled and not settings.webhook_secret:
         raise ValueError('Telegram webhook is enabled, but webhook secret is missing.')
+
+    if settings.webhook_enabled and settings.webhook_auto_register and not settings.webhook_url:
+        raise ValueError('TELEGRAM_WEBHOOK_URL is required when webhook auto registration is enabled.')
+
+    if settings.webhook_enabled and not settings.webhook_path:
+        raise ValueError('Telegram webhook is enabled, but webhook path is missing.')
+
+    if settings.webhook_enabled and (settings.webhook_listen_port <= 0 or settings.webhook_listen_port > 65535):
+        raise ValueError('Telegram webhook listen port must be between 1 and 65535.')
     return settings
 
 
