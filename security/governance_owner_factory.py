@@ -22,6 +22,11 @@ from security.security_drill_executor import SecurityDrillExecutor
 from security.kms_provider_registry import KMSProviderRegistry
 from security.kms_provider_inmemory import InMemoryKMSProvider
 from security.kms_provider_sqlite import SQLiteKMSProvider
+from security.governance_journal import SQLiteGovernanceJournal
+from security.reencryption_job_store import SQLiteReencryptionJobStore
+from security.security_drill_schedule_store import SQLiteSecurityDrillScheduleStore
+from security.security_runtime_summary import SecurityRuntimeSummaryService
+from security.tenant_security_isolation import TenantScopedSecurityIsolation
 
 
 CANON_SECURITY_GOVERNANCE_OWNER_FACTORY = True
@@ -35,6 +40,11 @@ class SecurityGovernanceInfrastructureOwner:
     replay_guard: SQLiteApprovalReplayGuard
     drill_executor: SecurityDrillExecutor
     kms_registry: KMSProviderRegistry
+    governance_journal: SQLiteGovernanceJournal
+    reencryption_jobs: SQLiteReencryptionJobStore
+    drill_schedule_store: SQLiteSecurityDrillScheduleStore
+    runtime_summary: SecurityRuntimeSummaryService
+    tenant_isolation: TenantScopedSecurityIsolation
 
 
 def build_security_governance_infrastructure(*, base_dir: str | Path, shared_secret: str) -> SecurityGovernanceInfrastructureOwner:
@@ -49,6 +59,9 @@ def build_security_governance_infrastructure(*, base_dir: str | Path, shared_sec
     workflow = SQLiteSecurityOperatorWorkflowStore(str(root / 'security_operator_workflow.sqlite3'))
     drill_history = SQLiteSecurityIncidentDrillHistory(str(root / 'security_incident_drills.sqlite3'))
     replay_guard = SQLiteApprovalReplayGuard(str(root / 'security_consumed_approvals.sqlite3'))
+    governance_journal = SQLiteGovernanceJournal(str(root / 'security_governance_journal.sqlite3'))
+    reencryption_jobs = SQLiteReencryptionJobStore(str(root / 'security_reencryption_jobs.sqlite3'))
+    drill_schedule_store = SQLiteSecurityDrillScheduleStore(str(root / 'security_drill_schedule.sqlite3'))
 
     recovery = SecurityIncidentRecoveryOrchestrator(
         incident_registry=incidents,
@@ -75,7 +88,23 @@ def build_security_governance_infrastructure(*, base_dir: str | Path, shared_sec
     drill_executor = SecurityDrillExecutor(governance=governance)
     kms_registry = KMSProviderRegistry()
     kms_registry.register(InMemoryKMSProvider())
+    kms_registry.register(InMemoryKMSProvider(provider_name='hardware-hsm', hsm_backed=True))
+    kms_registry.register(InMemoryKMSProvider(provider_name='aws-kms', hsm_backed=True))
     kms_registry.register(SQLiteKMSProvider(str(root / 'sqlite_kms.sqlite3')))
+    runtime_summary = SecurityRuntimeSummaryService(
+        incident_registry=incidents,
+        quarantine_registry=quarantine,
+        reencryption_job_store=reencryption_jobs,
+        drill_history=drill_history,
+        governance_journal=governance_journal,
+    )
+    tenant_isolation = TenantScopedSecurityIsolation(
+        governance_journal=governance_journal,
+        reencryption_jobs=reencryption_jobs,
+        drill_schedule_store=drill_schedule_store,
+        kms_registry=kms_registry,
+        audit_export_service=export_service,
+    )
     return SecurityGovernanceInfrastructureOwner(
         governance=governance,
         recovery=recovery,
@@ -83,6 +112,11 @@ def build_security_governance_infrastructure(*, base_dir: str | Path, shared_sec
         replay_guard=replay_guard,
         drill_executor=drill_executor,
         kms_registry=kms_registry,
+        governance_journal=governance_journal,
+        reencryption_jobs=reencryption_jobs,
+        drill_schedule_store=drill_schedule_store,
+        runtime_summary=runtime_summary,
+        tenant_isolation=tenant_isolation,
     )
 
 
