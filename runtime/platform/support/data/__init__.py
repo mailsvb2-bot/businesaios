@@ -80,26 +80,21 @@ def _transition_from_payload(payload: object, *, line_number: int, source: Path)
     if not isinstance(reward_payload, dict):
         raise ValueError(f"{source}:{line_number}: transition.reward must be an object")
     return Transition(
-        observation=Observation(values=_observation_values(observation_payload)),
-        action=Action(name=str(action_payload.get("name", "")), params=_action_params(action_payload)),
+        observation=Observation(data=_observation_data(observation_payload)),
+        action=Action(name=str(action_payload.get("name", "")), payload=_action_payload(action_payload)),
         reward=Reward(value=float(reward_payload.get("value", 0.0))),
         done=done,
     )
 
 
-def _observation_values(payload: dict[str, Any]) -> dict[str, float]:
+def _observation_data(payload: dict[str, Any]) -> dict[str, Any]:
     raw_values = payload.get("values") if isinstance(payload.get("values"), dict) else payload.get("data")
     if isinstance(raw_values, dict):
-        payload = raw_values
-    values: dict[str, float] = {}
-    for key, value in payload.items():
-        if isinstance(value, dict):
-            continue
-        values[str(key)] = float(value)
-    return values
+        return {str(key): value for key, value in raw_values.items()}
+    return {str(key): value for key, value in payload.items()}
 
 
-def _action_params(payload: dict[str, Any]) -> dict[str, Any]:
+def _action_payload(payload: dict[str, Any]) -> dict[str, Any]:
     raw = payload.get("params") if isinstance(payload.get("params"), dict) else payload.get("payload")
     return {str(k): v for k, v in dict(raw or {}).items()}
 
