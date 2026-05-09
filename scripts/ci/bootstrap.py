@@ -21,6 +21,16 @@ def _install_requirements(path: Path) -> None:
             raise RuntimeError(f"dependency install failed for: {path}")
 
 
+def _verify_hypothesis_import(root: Path) -> None:
+    requirements = root / "requirements.txt"
+    text = requirements.read_text(encoding="utf-8") if requirements.exists() else ""
+    if "hypothesis" not in text:
+        return
+    outcome = run_python(["-c", "import hypothesis"])
+    if outcome.returncode != 0:
+        raise RuntimeError("hypothesis import verification failed")
+
+
 def main() -> int:
     outcome = run_python(["-m", "pip", "install", "--upgrade", "pip", "wheel", "setuptools"])
     if outcome.returncode != 0:
@@ -38,6 +48,7 @@ def main() -> int:
     outcome = run_python(["-m", "pip", "install", *extras])
     if outcome.returncode != 0:
         raise RuntimeError("failed to install CI extras")
+    _verify_hypothesis_import(root)
 
     print("[ci] bootstrap completed")
     return 0
