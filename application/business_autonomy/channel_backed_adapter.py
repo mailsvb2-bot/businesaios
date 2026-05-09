@@ -94,6 +94,14 @@ class ChannelBackedBusinessAdapter(ExternalBusinessAdapter):
         return self.channel_adapter.adapter_key
 
     @property
+    def adapter_key(self) -> str:
+        return self.channel_adapter.adapter_key
+
+    @property
+    def channel_kind(self) -> ChannelKind:
+        return self.identity.channel_kind
+
+    @property
     def business_id(self) -> str:
         return self.identity.business_id
 
@@ -102,6 +110,9 @@ class ChannelBackedBusinessAdapter(ExternalBusinessAdapter):
 
     def declared_capabilities(self) -> Sequence[BusinessCapability]:
         return self.capabilities
+
+    def discover_capabilities(self, *, identity: ChannelIdentity):
+        return self.channel_adapter.discover_capabilities(identity=identity)
 
     async def execute(self, request: BusinessExecutionRequest) -> BusinessExecutionResult:
         envelope = ChannelExecutionEnvelope(
