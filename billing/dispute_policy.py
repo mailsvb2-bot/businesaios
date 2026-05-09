@@ -25,6 +25,8 @@ class DisputePolicy:
         normalized = dict(payload or {})
         if bool(normalized.get('attribution_mismatch')) and bool(normalized.get('duplicate_flag')):
             result = DisputeClassification(case_type='compound_attribution_duplicate_challenge', severity='high', metadata={'owner': 'billing.dispute_policy'})
+        elif bool(normalized.get('missing_proof')):
+            result = DisputeClassification(case_type='evidence_gap_review', severity='medium', metadata={'owner': 'billing.dispute_policy'})
         elif bool(normalized.get('existing_customer_flag')):
             result = DisputeClassification(case_type='existing_customer_challenge', severity='medium', metadata={'owner': 'billing.dispute_policy'})
         elif bool(normalized.get('duplicate_flag')):
