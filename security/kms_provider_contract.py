@@ -34,9 +34,10 @@ class KMSProvider(Protocol):
         key_id: str,
         algorithm: str,
         exportable: bool = False,
+        credential_ref: str | None = None,
     ) -> KMSKeyHandle: ...
 
-    def get_active_key(self, *, key_id: str) -> KMSKeyHandle: ...
+    def get_active_key(self, *, key_id: str, credential_ref: str | None = None) -> KMSKeyHandle: ...
 
 
 __all__ = [
