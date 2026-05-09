@@ -1,15 +1,16 @@
-# Locked dependencies for reproducible installs.
+# Locked top-level dependencies for reproducible installs.
 #
-# This project intentionally keeps runtime deps minimal.
-# If you add deps, update this lock with your chosen tool (pip-tools/uv/poetry).
-#
-pytest==8.3.3
+# Keep this file in exact sync with requirements.txt for runtime/CI installs.
+# Transitive dependency locking can be added later with pip-tools/uv/poetry,
+# but CI must never install a different top-level dependency set than runtime.
 aiogram==3.4.1
 python-dotenv==1.0.1
+pytest==8.3.3
 psycopg[binary]==3.2.3
 typing-extensions==4.12.2
 PyYAML==6.0.2
 hypothesis==6.92.1
 fastapi==0.115.0
 flask==3.0.3
-uvicorn==0.32.1
+httpx==0.28.1
+uvicorn[standard]==0.34.2
