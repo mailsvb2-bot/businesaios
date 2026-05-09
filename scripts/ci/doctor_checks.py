@@ -6,6 +6,11 @@ from pathlib import Path
 from scripts.ci.config import project_shape_config
 from scripts.ci.step_ids import all_step_names
 
+CANON_CI_WORKFLOW_ENTRYPOINTS = (
+    "python -m scripts.ci.cli --gate",
+    "python scripts/ci/cli.py --gate",
+)
+
 
 def python_files(root: Path) -> list[Path]:
     if not root.exists():
@@ -87,7 +92,7 @@ def find_workflows_without_single_entrypoint(root: Path) -> list[str]:
         text = path.read_text(encoding="utf-8")
         if rel.endswith("docker-image.yml"):
             continue
-        if "python scripts/ci/cli.py --gate" not in text:
+        if not any(entrypoint in text for entrypoint in CANON_CI_WORKFLOW_ENTRYPOINTS):
             offenders.append(rel)
     return offenders
 
