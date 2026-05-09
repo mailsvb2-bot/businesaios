@@ -5,27 +5,56 @@ from __future__ import annotations
 CANON_FASTAPI_PUBLIC_ROUTES_FINAL_OWNER = True
 
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException, Request, status
 
+from adapters.api.fastapi.analytics_routes import register_analytics_routes
 from entrypoints.api.action_models import ExecuteActionRequest, ExecuteActionResponse
 from entrypoints.api.baseline_models import PromoteBaselineRequest, PromoteBaselineResponse, SelectBaselineRequest, SelectBaselineResponse
 from entrypoints.api.business_memory_models import BusinessMemoryGetRequest, BusinessMemoryPatternsResponse, BusinessMemoryRecentRunsRequest, BusinessMemoryRecentRunsResponse, BusinessMemoryResponse, BusinessMemorySummaryRequest, BusinessMemorySummaryResponse
+from entrypoints.api.client_outcome_admin_models import ClientOutcomeAdminSummaryRequest
+from entrypoints.api.client_outcome_cycle_models import ExecuteClientOutcomeCycleRequest
+from entrypoints.api.client_outcome_dispute_models import OpenClientOutcomeDisputeRequest, ReverseClientOutcomeDisputeRequest
+from entrypoints.api.client_outcome_models import AmendClientOutcomeOrderRequest, SelectClientOutcomePackageRequest
 from entrypoints.api.drift_models import DriftAuditRequest, DriftAuditResponse, RollbackBaselineRequest, RollbackBaselineResponse
 from entrypoints.api.governance_advanced_models import BusinessMemoryGovernanceSummaryRequest, BusinessMemoryGovernanceSummaryResponse, DriftTrendRequest, DriftTrendResponse, JoinedHistoryRequest, JoinedHistoryResponse, PromoteScenarioBaselineRequest, PromoteScenarioBaselineResponse, PromotionEvidenceVerifyRequest, PromotionEvidenceVerifyResponse, RollbackRecommendationRequest, RollbackRecommendationResponse, RollbackTimelineRequest, RollbackTimelineResponse
 from entrypoints.api.health_models import HealthResponse
 from entrypoints.api.headless_models import ExecuteGoalRequest, ExecuteGoalResponse
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
-from adapters.api.fastapi.analytics_routes import register_analytics_routes
 
 
-def register_public_api_routes(*, router: APIRouter, dependency_container, health_handler, handlers, headless_handlers, governance_handlers, business_memory_handlers, governance_advanced_handlers, security_guard: PublicSurfaceSecurityGuard, analytics_handlers=None) -> None:
+def register_public_api_routes(
+    *,
+    router: APIRouter,
+    dependency_container,
+    health_handler,
+    handlers,
+    headless_handlers,
+    governance_handlers,
+    business_memory_handlers,
+    governance_advanced_handlers,
+    security_guard: PublicSurfaceSecurityGuard,
+    analytics_handlers=None,
+    client_outcome_handlers=None,
+    economic_handlers=None,
+) -> None:
 
     def enforce_public_security(*, route_path: str, request_context: RequestContext, body: dict | None = None) -> None:
         try:
             security_guard.enforce(route_path=route_path, request_context=request_context, body=body)
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+    def _body(payload) -> dict | None:
+        model_dump = getattr(payload, 'model_dump', None)
+        if callable(model_dump):
+            return model_dump()
+        if isinstance(payload, dict):
+            return payload
+        return None
+
     @router.get('/health', response_model=HealthResponse, tags=['system'])
     def health() -> HealthResponse:
         return health_handler.health()
@@ -149,6 +178,108 @@ def register_public_api_routes(*, router: APIRouter, dependency_container, healt
         enforce_public_security(route_path='/governance/business-memory-summary', request_context=request_context, body=request.model_dump())
         return governance_advanced_handlers.business_memory_summary(request)
 
+    if client_outcome_handlers is not None:
+        @router.get('/client-outcome/packages')
+        def client_outcome_packages(http_request: Request):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/packages'})
+            enforce_public_security(route_path='/client-outcome/packages', request_context=ctx)
+            return client_outcome_handlers.list_packages()
+
+        @router.post('/client-outcome/select')
+        def client_outcome_select(http_request: Request, request: SelectClientOutcomePackageRequest):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/select'})
+            enforce_public_security(route_path='/client-outcome/select', request_context=ctx, body=request.model_dump())
+            return client_outcome_handlers.select_package(now=datetime.now(timezone.utc), request=request)
+
+        @router.get('/client-outcome/orders/{order_id}')
+        def client_outcome_order(http_request: Request, order_id: str):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/orders/{order_id}'})
+            enforce_public_security(route_path='/client-outcome/orders/{order_id}', request_context=ctx, body={'order_id': order_id})
+            return client_outcome_handlers.get_order(order_id=order_id)
+
+        @router.post('/client-outcome/orders/{order_id}/amend')
+        def client_outcome_amend(http_request: Request, order_id: str, request: AmendClientOutcomeOrderRequest):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/orders/{order_id}/amend'})
+            enforce_public_security(route_path='/client-outcome/orders/{order_id}/amend', request_context=ctx, body=request.model_dump())
+            try:
+                return client_outcome_handlers.amend_order(now=datetime.now(timezone.utc), order_id=order_id, request=request)
+            except ValueError as exc:
+                if str(exc) == 'amendment_not_allowed_for_current_commercial_state':
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+                raise
+
+        @router.post('/client-outcome/execute')
+        def client_outcome_execute(http_request: Request, request: SelectClientOutcomePackageRequest):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/execute'})
+            enforce_public_security(route_path='/client-outcome/execute', request_context=ctx, body=request.model_dump())
+            return client_outcome_handlers.execute_package(now=datetime.now(timezone.utc), request=request)
+
+        @router.post('/client-outcome/disputes/open')
+        def client_outcome_open_dispute(http_request: Request, request: OpenClientOutcomeDisputeRequest):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/disputes/open'})
+            enforce_public_security(route_path='/client-outcome/disputes/open', request_context=ctx, body=request.model_dump())
+            return client_outcome_handlers.open_dispute(now=datetime.now(timezone.utc), request=request)
+
+        @router.post('/client-outcome/disputes/reverse')
+        def client_outcome_reverse_dispute(http_request: Request, request: ReverseClientOutcomeDisputeRequest):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/disputes/reverse'})
+            enforce_public_security(route_path='/client-outcome/disputes/reverse', request_context=ctx, body=request.model_dump())
+            return client_outcome_handlers.reverse_dispute(now=datetime.now(timezone.utc), request=request)
+
+        @router.post('/client-outcome/full-cycle')
+        def client_outcome_full_cycle(http_request: Request, request: ExecuteClientOutcomeCycleRequest):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/full-cycle'})
+            enforce_public_security(route_path='/client-outcome/full-cycle', request_context=ctx, body=request.model_dump())
+            return client_outcome_handlers.execute_full_cycle(now=datetime.now(timezone.utc), request=request)
+
+        @router.get('/client-outcome/lifecycle/{order_id}/{lead_id}')
+        def client_outcome_lifecycle(http_request: Request, order_id: str, lead_id: str):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/lifecycle/{order_id}/{lead_id}'})
+            enforce_public_security(route_path='/client-outcome/lifecycle/{order_id}/{lead_id}', request_context=ctx, body={'order_id': order_id, 'lead_id': lead_id})
+            return client_outcome_handlers.get_lifecycle(order_id=order_id, lead_id=lead_id)
+
+        @router.get('/client-outcome/commercial-state/{order_id}/{lead_id}')
+        def client_outcome_commercial_state(http_request: Request, order_id: str, lead_id: str):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/commercial-state/{order_id}/{lead_id}'})
+            enforce_public_security(route_path='/client-outcome/commercial-state/{order_id}/{lead_id}', request_context=ctx, body={'order_id': order_id, 'lead_id': lead_id})
+            return client_outcome_handlers.get_commercial_state(order_id=order_id, lead_id=lead_id)
+
+        @router.get('/client-outcome/corrected-economics/{order_id}/{lead_id}')
+        def client_outcome_corrected_economics(http_request: Request, order_id: str, lead_id: str):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/corrected-economics/{order_id}/{lead_id}'})
+            enforce_public_security(route_path='/client-outcome/corrected-economics/{order_id}/{lead_id}', request_context=ctx, body={'order_id': order_id, 'lead_id': lead_id})
+            return client_outcome_handlers.get_corrected_economics(order_id=order_id, lead_id=lead_id)
+
+        @router.get('/client-outcome/reconciliation/{order_id}/{lead_id}')
+        def client_outcome_reconciliation(http_request: Request, order_id: str, lead_id: str):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/reconciliation/{order_id}/{lead_id}'})
+            enforce_public_security(route_path='/client-outcome/reconciliation/{order_id}/{lead_id}', request_context=ctx, body={'order_id': order_id, 'lead_id': lead_id})
+            return client_outcome_handlers.get_reconciliation(order_id=order_id, lead_id=lead_id)
+
+        @router.get('/client-outcome/orders/{order_id}/{lead_id}/admin-view')
+        def client_outcome_admin_view(http_request: Request, order_id: str, lead_id: str):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/orders/{order_id}/{lead_id}/admin-view'})
+            enforce_public_security(route_path='/client-outcome/orders/{order_id}/{lead_id}/admin-view', request_context=ctx, body={'order_id': order_id, 'lead_id': lead_id})
+            return client_outcome_handlers.get_admin_view(order_id=order_id, lead_id=lead_id)
+
+        @router.post('/client-outcome/admin-summary')
+        def client_outcome_admin_summary(http_request: Request, request: ClientOutcomeAdminSummaryRequest):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/admin-summary'})
+            enforce_public_security(route_path='/client-outcome/admin-summary', request_context=ctx, body=request.model_dump())
+            return client_outcome_handlers.build_admin_summary(request=request)
+
+    if economic_handlers is not None:
+        @router.get('/economic/client-outcome-truth/{order_id}/{lead_id}')
+        def economic_client_truth(http_request: Request, order_id: str, lead_id: str):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/economic/client-outcome-truth/{order_id}/{lead_id}'})
+            enforce_public_security(route_path='/economic/client-outcome-truth/{order_id}/{lead_id}', request_context=ctx, body={'order_id': order_id, 'lead_id': lead_id})
+            return economic_handlers.get_client_outcome_truth(order_id=order_id, lead_id=lead_id)
+
+        @router.get('/economic/business-truth/{order_id}/{lead_id}')
+        def economic_business_truth(http_request: Request, order_id: str, lead_id: str):
+            ctx = RequestContext.from_http_request(http_request, metadata={'route': '/economic/business-truth/{order_id}/{lead_id}'})
+            enforce_public_security(route_path='/economic/business-truth/{order_id}/{lead_id}', request_context=ctx, body={'order_id': order_id, 'lead_id': lead_id})
+            return economic_handlers.get_business_truth(order_id=order_id, lead_id=lead_id)
 
     if analytics_handlers is not None:
         register_analytics_routes(router=router, analytics_handlers=analytics_handlers, security_guard=security_guard)
