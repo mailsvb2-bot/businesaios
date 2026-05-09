@@ -45,7 +45,8 @@ class CryptoAgilityProfile:
 class SecurityCryptoAgilityService:
     def list_profiles(self) -> tuple[CryptoAgilityProfile, ...]:
         return (
-            CryptoAgilityProfile(profile_name='baseline-v1', signing_algorithm='hmac-sha256', encryption_algorithm='aes256_gcm'),
+            CryptoAgilityProfile(profile_name='default-sealed-box', signing_algorithm='hmac-sha256', encryption_algorithm='sealed-box-v1'),
+            CryptoAgilityProfile(profile_name='regulated-aes-gcm', signing_algorithm='hmac-sha256', encryption_algorithm='aes256_gcm'),
             CryptoAgilityProfile(profile_name='post-quantum-ready', signing_algorithm='hybrid-ed25519-dilithium', encryption_algorithm='aes256_gcm+kyber'),
         )
 
@@ -63,21 +64,44 @@ class SecurityDrillRuntime:
         results: list[object] = []
         for item in self._schedule_store.due(now_epoch_s=resolved_now, limit=limit):
             if item.drill_kind == 'token_quarantine_recovery':
-                result = self._drill_executor.run_token_quarantine_recovery_drill(
-                    actor=item.actor,
-                    token_fingerprint=item.target_entity_id,
-                )
+                result = self._drill_executor.run_token_quarantine_recovery_drill(actor=item.actor, token_fingerprint=item.target_entity_id)
             else:
-                result = self._drill_executor.run_secret_quarantine_recovery_drill(
-                    actor=item.actor,
-                    secret_id=item.target_entity_id,
-                )
+                result = self._drill_executor.run_secret_quarantine_recovery_drill(actor=item.actor, secret_id=item.target_entity_id)
             results.append(result)
-            self._schedule_store.mark_run(
-                drill_id=item.drill_id,
-                next_run_epoch_s=resolved_now + max(int(item.interval_seconds), 1),
-            )
+            self._schedule_store.mark_run(drill_id=item.drill_id, next_run_epoch_s=resolved_now + max(int(item.interval_seconds), 1))
         return tuple(results)
+
+
+class SecurityChaosMode:
+    def __init__(self, *, incident_registry: SQLiteSecurityIncidentRegistry) -> None:
+        self._incidents = incident_registry
+
+    def simulate(self, *, event_kind: str, target_id: str) -> dict[str, object]:
+        incident_id = self._incidents.open_incident(
+            incident_kind=f'chaos:{event_kind}',
+            payload={'target_id': target_id, 'simulated': True},
+        )
+        return {'incident_id': incident_id, 'event_kind': event_kind, 'target_id': target_id}
+
+
+@dataclass(frozen=True)
+class SecuritySLOVerdict:
+    rotation_backlog_ok: bool
+    reencryption_backlog_ok: bool
+    incident_backlog_ok: bool
+    drill_success_rate_ok: bool
+
+
+class SecuritySLOModel:
+    def evaluate(self, *, rotation_backlog: int, reencryption_backlog: int, open_incidents: int, successful_drills: int, total_drills: int) -> SecuritySLOVerdict:
+        total = max(int(total_drills), 1)
+        drill_rate = int(successful_drills) / total
+        return SecuritySLOVerdict(
+            rotation_backlog_ok=int(rotation_backlog) <= 100,
+            reencryption_backlog_ok=int(reencryption_backlog) <= 100,
+            incident_backlog_ok=int(open_incidents) <= 10,
+            drill_success_rate_ok=drill_rate >= 0.95,
+        )
 
 
 @dataclass(frozen=True)
@@ -96,6 +120,8 @@ class SecurityGovernanceInfrastructureOwner:
     crypto_agility: SecurityCryptoAgilityService
     drill_runtime: SecurityDrillRuntime
     pressure_monitor: SecurityPressureMonitor
+    chaos_mode: SecurityChaosMode
+    slo_model: SecuritySLOModel
 
 
 def build_security_governance_infrastructure(*, base_dir: str | Path, shared_secret: str) -> SecurityGovernanceInfrastructureOwner:
@@ -114,12 +140,7 @@ def build_security_governance_infrastructure(*, base_dir: str | Path, shared_sec
     reencryption_jobs = SQLiteReencryptionJobStore(str(root / 'security_reencryption_jobs.sqlite3'))
     drill_schedule_store = SQLiteSecurityDrillScheduleStore(str(root / 'security_drill_schedule.sqlite3'))
 
-    recovery = SecurityIncidentRecoveryOrchestrator(
-        incident_registry=incidents,
-        quarantine_registry=quarantine,
-        audit_chain=audit_chain,
-        drill_history=drill_history,
-    )
+    recovery = SecurityIncidentRecoveryOrchestrator(incident_registry=incidents, quarantine_registry=quarantine, audit_chain=audit_chain, drill_history=drill_history)
     governance = SecurityGovernanceOrchestrator(
         approval_gate=SecurityApprovalGate(),
         approval_store=approvals,
@@ -132,11 +153,7 @@ def build_security_governance_infrastructure(*, base_dir: str | Path, shared_sec
         approval_replay_guard=replay_guard,
         governance_journal=governance_journal,
     )
-    export_service = SecurityAuditExportService(
-        redaction_policy=AuditRedactionPolicy(),
-        signer=ExternalAuditExportSigner(shared_secret),
-        verifier=AuditExportVerifier(shared_secret),
-    )
+    export_service = SecurityAuditExportService(redaction_policy=AuditRedactionPolicy(), signer=ExternalAuditExportSigner(shared_secret), verifier=AuditExportVerifier(shared_secret))
     drill_executor = SecurityDrillExecutor(governance=governance)
     kms_registry = KMSProviderRegistry()
     kms_registry.register(InMemoryKMSProvider())
@@ -145,27 +162,9 @@ def build_security_governance_infrastructure(*, base_dir: str | Path, shared_sec
     kms_registry.register(InMemoryKMSProvider(provider_name='gcp-kms', hsm_backed=True))
     kms_registry.register(InMemoryKMSProvider(provider_name='vault-transit', hsm_backed=True))
     kms_registry.register(SQLiteKMSProvider(str(root / 'sqlite_kms.sqlite3')))
-    runtime_summary = SecurityRuntimeSummaryService(
-        incident_registry=incidents,
-        quarantine_registry=quarantine,
-        reencryption_job_store=reencryption_jobs,
-        drill_history=drill_history,
-        governance_journal=governance_journal,
-    )
-    tenant_isolation = TenantScopedSecurityIsolation(
-        governance_journal=governance_journal,
-        reencryption_jobs=reencryption_jobs,
-        drill_schedule_store=drill_schedule_store,
-        kms_registry=kms_registry,
-        audit_export_service=export_service,
-    )
-    pressure_monitor = SecurityPressureMonitor(
-        incident_registry=incidents,
-        quarantine_registry=quarantine,
-        reencryption_job_store=reencryption_jobs,
-    )
-    drill_runtime = SecurityDrillRuntime(schedule_store=drill_schedule_store, drill_executor=drill_executor)
-    crypto_agility = SecurityCryptoAgilityService()
+    runtime_summary = SecurityRuntimeSummaryService(incident_registry=incidents, quarantine_registry=quarantine, reencryption_job_store=reencryption_jobs, drill_history=drill_history, governance_journal=governance_journal)
+    tenant_isolation = TenantScopedSecurityIsolation(governance_journal=governance_journal, reencryption_jobs=reencryption_jobs, drill_schedule_store=drill_schedule_store, kms_registry=kms_registry, audit_export_service=export_service)
+    pressure_monitor = SecurityPressureMonitor(incident_registry=incidents, quarantine_registry=quarantine, reencryption_job_store=reencryption_jobs)
     return SecurityGovernanceInfrastructureOwner(
         governance=governance,
         recovery=recovery,
@@ -178,17 +177,22 @@ def build_security_governance_infrastructure(*, base_dir: str | Path, shared_sec
         drill_schedule_store=drill_schedule_store,
         runtime_summary=runtime_summary,
         tenant_isolation=tenant_isolation,
-        crypto_agility=crypto_agility,
-        drill_runtime=drill_runtime,
+        crypto_agility=SecurityCryptoAgilityService(),
+        drill_runtime=SecurityDrillRuntime(schedule_store=drill_schedule_store, drill_executor=drill_executor),
         pressure_monitor=pressure_monitor,
+        chaos_mode=SecurityChaosMode(incident_registry=incidents),
+        slo_model=SecuritySLOModel(),
     )
 
 
 __all__ = [
     'CANON_SECURITY_GOVERNANCE_OWNER_FACTORY',
     'CryptoAgilityProfile',
+    'SecurityChaosMode',
     'SecurityCryptoAgilityService',
     'SecurityDrillRuntime',
     'SecurityGovernanceInfrastructureOwner',
+    'SecuritySLOModel',
+    'SecuritySLOVerdict',
     'build_security_governance_infrastructure',
 ]
