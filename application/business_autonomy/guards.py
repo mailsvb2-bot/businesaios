@@ -16,9 +16,14 @@ class BudgetGuardDecision:
 
 
 class BusinessBudgetGuard:
+    def __init__(self, max_budget_minor: int | float | None = None) -> None:
+        self.max_budget_minor = max_budget_minor
+
     def evaluate(self, request: BusinessExecutionRequest) -> BudgetGuardDecision:
         estimated_cost = _float_or_zero(request.envelope.goal_payload.get("estimated_cost", 0.0))
         budget_limit = _extract_float_constraint(request, "monthly_budget_limit")
+        if budget_limit is None and self.max_budget_minor is not None:
+            budget_limit = _float_or_none(self.max_budget_minor)
         if budget_limit is None:
             return BudgetGuardDecision(True, "No explicit budget limit provided.", None, estimated_cost)
         if estimated_cost > budget_limit:
@@ -35,9 +40,14 @@ class BlastRadiusDecision:
 
 
 class BusinessBlastRadiusGuard:
+    def __init__(self, max_parallel_actions: int | None = None) -> None:
+        self.max_parallel_actions = max_parallel_actions
+
     def evaluate(self, request: BusinessExecutionRequest) -> BlastRadiusDecision:
         requested = _int_or_default(request.envelope.goal_payload.get("outbound_count", 1), 1)
         limit = _extract_int_constraint(request, "outbound_message_limit")
+        if limit is None and self.max_parallel_actions is not None:
+            limit = _int_or_none(self.max_parallel_actions)
         if limit is None:
             return BlastRadiusDecision(True, "No explicit outbound blast radius limit provided.", None, requested)
         if requested > limit:
