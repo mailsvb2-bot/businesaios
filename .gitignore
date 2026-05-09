@@ -66,3 +66,10 @@ data/runtime/*.db
 data/runtime/**/*.db
 data/runtime/*.sqlite
 data/runtime/**/*.sqlite
+
+# Runtime mutable state must never be committed
+data/**/*.sqlite
+data/**/*.sqlite3
+data/**/*.db
+data/config/
+.runtime/
