@@ -23,6 +23,7 @@ REQUIRED = [
     "scripts/ci/install_hooks.py",
     "scripts/ci/pytest_tools.py",
     "scripts/ci/doctor.py",
+    "scripts/ci/check_requirements_lock.py",
     "scripts/ci/step_doctor.py",
     "scripts/ci/plan_registry.py",
     "scripts/ci/step_registry.py",
