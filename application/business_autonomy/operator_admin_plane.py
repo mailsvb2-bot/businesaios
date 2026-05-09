@@ -27,6 +27,10 @@ class FleetView:
     distributed_conflict_rows: tuple[Mapping[str, Any], ...] = ()
     export_surface: Mapping[str, Any] = field(default_factory=dict)
 
+    @property
+    def distributed_state_conflict_rows(self) -> tuple[Mapping[str, Any], ...]:
+        return self.distributed_conflict_rows
+
 
 # Backward-compatible name for route surfaces; logic remains owned by FleetHealthCard.
 FleetCard = FleetHealthCard
