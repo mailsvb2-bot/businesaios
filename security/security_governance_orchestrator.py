@@ -108,8 +108,8 @@ class SecurityGovernanceOrchestrator:
 
     def quarantine_compromised_key_id(self, *, key_id: str, actor: str, reason: str) -> SecurityGovernanceReport:
         incident_id = self._incident_registry.open_incident(incident_kind='compromised-key', payload={'key_id': key_id, 'actor': actor, 'reason': reason})
-        self._quarantine_registry.quarantine(entity_kind='key', entity_id=key_id, reason=reason, payload={'actor': actor, 'incident_id': incident_id})
-        self._journal(event_kind='key.quarantined', entity_kind='key', entity_id=key_id, payload={'actor': actor, 'reason': reason}, incident_id=int(incident_id))
+        self._quarantine_registry.quarantine(entity_kind='key-id', entity_id=key_id, reason=reason, payload={'actor': actor, 'incident_id': incident_id})
+        self._journal(event_kind='key-id.quarantined', entity_kind='key-id', entity_id=key_id, payload={'actor': actor, 'reason': reason}, incident_id=int(incident_id))
         return SecurityGovernanceReport(True, 'completed', 'key quarantined', {'incident_id': incident_id, 'key_id': key_id})
 
     def recover_quarantined_entity(self, *, incident_id: int, entity_kind: str, entity_id: str, actor: str, resolution_payload: Mapping[str, Any] | None = None) -> SecurityGovernanceReport:
