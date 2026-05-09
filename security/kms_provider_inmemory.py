@@ -35,7 +35,8 @@ class InMemoryKMSProvider:
             supports_hsm_backed_keys=self._hsm_backed,
         )
 
-    def create_key(self, *, key_id: str, algorithm: str, exportable: bool = False) -> KMSKeyHandle:
+    def create_key(self, *, key_id: str, algorithm: str, exportable: bool = False, credential_ref: str | None = None) -> KMSKeyHandle:
+        _ = credential_ref
         resolved_key_id = str(key_id).strip()
         resolved_algorithm = str(algorithm).strip()
         if not resolved_key_id:
@@ -60,10 +61,14 @@ class InMemoryKMSProvider:
             exportable=stored.exportable,
         )
 
-    def get_active_key(self, *, key_id: str) -> KMSKeyHandle:
+    def get_active_key(self, *, key_id: str, credential_ref: str | None = None) -> KMSKeyHandle:
+        _ = credential_ref
         resolved_key_id = str(key_id).strip()
         with self._lock:
             versions = self._keys.get(resolved_key_id)
+            if not versions:
+                self.create_key(key_id=resolved_key_id, algorithm='aes256_gcm', exportable=False, credential_ref=credential_ref)
+                versions = self._keys.get(resolved_key_id)
             if not versions:
                 raise KeyError(f'unknown kms key_id: {resolved_key_id}')
             stored = versions[-1]
