@@ -45,10 +45,12 @@ class SecurityAuditExportService:
     ) -> dict[str, object]:
         signed_payload = self.export_payload(payload=payload)
         payload_hash = self._canonical_hash(dict(signed_payload.get('payload') or {}))
+        ts = int(time.time())
         receipt = {
             'notary_provider': 'local-notary',
-            'timestamp_epoch_s': int(time.time()),
-            'ledger_anchor': payload_hash,
+            'timestamp_epoch_s': ts,
+            'timestamp_token': f'tsa::{ts}::{payload_hash[:16]}',
+            'ledger_anchor': f'ledger::{payload_hash}',
             'payload_hash': payload_hash,
             'credential_ref': str(credential_ref or ''),
         }
@@ -71,4 +73,5 @@ class SecurityAuditExportService:
         if not self.verify_export(signed_payload=signed_payload):
             return False
         payload_hash = self._canonical_hash(dict(signed_payload.get('payload') or {}))
-        return str(receipt.get('payload_hash') or receipt.get('ledger_anchor') or '') == payload_hash
+        anchor = str(receipt.get('ledger_anchor') or '')
+        return str(receipt.get('payload_hash') or '') == payload_hash and anchor.endswith(payload_hash)
