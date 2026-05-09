@@ -180,11 +180,13 @@ def _read_delayed_outcome_actions_from_data_dir(*, limit: int) -> Sequence[Mappi
             except json.JSONDecodeError:
                 continue
             if isinstance(payload, Mapping):
-                rows.append(dict(payload))
+                normalized = dict(payload)
+                normalized.setdefault('action_type', str(normalized.get('action') or 'release'))
+                rows.append(normalized)
         if rows:
             return tuple(rows)
     # A released delayed outcome is an operator action even when the legacy action log is absent.
-    return tuple({'action': 'delayed_outcome_release', **row} for row in _read_distributed_conflicts_from_data_dir(limit=limit))
+    return tuple({'action': 'delayed_outcome_release', 'action_type': 'release', **row} for row in _read_distributed_conflicts_from_data_dir(limit=limit))
 
 
 __all__ = [
