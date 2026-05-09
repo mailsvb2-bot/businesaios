@@ -20,20 +20,23 @@ def describe_declared_absence() -> dict[str, object]:
         "placeholder": True,
         "module": "runtime.platform.event_store.postgres_event_store",
         "canonical_module": "runtime.platform.event_store.postgres_event_store",
-        "reason": "driver-backed adapter requires psycopg at runtime",
+        "reason": "driver-backed adapter requires explicit production enablement",
     }
 
 
 def raise_if_used() -> None:
-    raise RuntimeError("POSTGRES_EVENT_STORE_REQUIRES_PSYCOG_RUNTIME")
+    raise RuntimeError("POSTGRES_EVENT_STORE_REQUIRES_EXPLICIT_ENABLEMENT")
 
 
 class PostgresEventStore:
-    def __init__(self, dsn: str) -> None:
+    def __init__(self, dsn: str, *, enabled: bool = False) -> None:
         self._dsn = str(dsn)
+        self._enabled = bool(enabled)
         self._port: PostgresPort | None = None
 
     def __enter__(self) -> "PostgresEventStore":
+        if not self._enabled:
+            raise_if_used()
         try:
             __import__("psycopg")
         except Exception as exc:
