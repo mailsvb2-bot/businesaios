@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -84,5 +85,6 @@ __all__ = [
     "build_bound_decision_execution_service",
     "build_bound_decision_execution_service_spec",
     "build_decision_execution_service",
+    "importlib",
     "validate_and_run_decision_command",
 ]
