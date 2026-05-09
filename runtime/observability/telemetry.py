@@ -7,12 +7,32 @@ propagation helpers. Runtime execution surfaces may depend on it, but should
 not re-implement span wiring locally.
 """
 
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Mapping
 
 from runtime.observability.tracing import correlation_key_scope, span_with_sla
 
 
 CANON_RUNTIME_TELEMETRY_OWNER = True
+
+
+@dataclass(frozen=True)
+class TelemetryEvent:
+    name: str
+    payload: Mapping[str, Any] = field(default_factory=dict)
+    tenant_id: str = ""
+    correlation_id: str = ""
+
+
+def emit_telemetry(event: TelemetryEvent | str, payload: Mapping[str, Any] | None = None, **metadata: Any) -> dict[str, Any]:
+    if isinstance(event, TelemetryEvent):
+        return {
+            "name": event.name,
+            "payload": dict(event.payload or {}),
+            "tenant_id": event.tenant_id,
+            "correlation_id": event.correlation_id,
+        }
+    return {"name": str(event), "payload": dict(payload or {}), **metadata}
 
 
 def execute_total_span(
@@ -55,7 +75,9 @@ def telegram_api_span(
 
 __all__ = [
     "CANON_RUNTIME_TELEMETRY_OWNER",
+    "TelemetryEvent",
     "correlation_key_scope",
+    "emit_telemetry",
     "execute_total_span",
     "telegram_api_span",
 ]
