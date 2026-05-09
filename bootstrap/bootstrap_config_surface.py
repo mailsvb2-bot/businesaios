@@ -35,6 +35,14 @@ def _env_text(name: str, default: str) -> str:
     return raw or default
 
 
+def _env_text_any(names: tuple[str, ...], default: str) -> str:
+    for name in names:
+        raw = str(os.getenv(name, '')).strip().lower()
+        if raw:
+            return raw
+    return str(default).strip().lower() or default
+
+
 def _env_int(name: str, default: int) -> int:
     raw = str(os.getenv(name, str(default))).strip()
     try:
@@ -109,14 +117,14 @@ class BootstrapConfigSurface:
 
 
 def build_bootstrap_config_surface() -> BootstrapConfigSurface:
-    data_dir = _env_path("APP_RUNTIME_DATA_DIR", str(_env_path("BUSINESAIOS_DATA_DIR", ".runtime")))
-    observability_data_dir = _env_path("APP_OBSERVABILITY_DATA_DIR", str(data_dir / "observability"))
-    observability_store_mode = _env_text("APP_OBSERVABILITY_STORE_MODE", "sqlite")
-    action_audit_backend = _env_text("APP_ACTION_AUDIT_BACKEND", observability_store_mode)
-    decision_audit_backend = _env_text("APP_DECISION_AUDIT_BACKEND", observability_store_mode)
-    export_dir = _env_path("APP_OBSERVABILITY_EXPORT_DIR", str(observability_data_dir / "exports"))
-    export_catalog_path = _env_path("APP_OBSERVABILITY_EXPORT_CATALOG_PATH", str(export_dir / "bundle_catalog.json"))
-    telemetry_backend = _env_text("APP_TELEMETRY_EVENT_STORE_BACKEND", observability_store_mode)
+    data_dir = _env_path_any(("APP_RUNTIME_DATA_DIR", "BUSINESAIOS_DATA_DIR"), ".runtime")
+    observability_data_dir = _env_path_any(("APP_OBSERVABILITY_DATA_DIR", "BUSINESAIOS_OBSERVABILITY_DATA_DIR"), str(data_dir / "observability"))
+    observability_store_mode = _env_text_any(("APP_OBSERVABILITY_STORE_MODE", "BUSINESAIOS_OBSERVABILITY_STORE_MODE"), "sqlite")
+    action_audit_backend = _env_text_any(("APP_ACTION_AUDIT_BACKEND", "BUSINESAIOS_ACTION_AUDIT_BACKEND"), observability_store_mode)
+    decision_audit_backend = _env_text_any(("APP_DECISION_AUDIT_BACKEND", "BUSINESAIOS_DECISION_AUDIT_BACKEND"), observability_store_mode)
+    export_dir = _env_path_any(("APP_OBSERVABILITY_EXPORT_DIR", "BUSINESAIOS_OBSERVABILITY_EXPORT_DIR"), str(observability_data_dir / "exports"))
+    export_catalog_path = _env_path_any(("APP_OBSERVABILITY_EXPORT_CATALOG_PATH", "BUSINESAIOS_OBSERVABILITY_EXPORT_CATALOG_PATH"), str(export_dir / "bundle_catalog.json"))
+    telemetry_backend = _env_text_any(("APP_TELEMETRY_EVENT_STORE_BACKEND", "BUSINESAIOS_TELEMETRY_EVENT_STORE_BACKEND"), observability_store_mode)
     return BootstrapConfigSurface(
         data_dir=data_dir,
         observability_data_dir=observability_data_dir,
@@ -124,13 +132,13 @@ def build_bootstrap_config_surface() -> BootstrapConfigSurface:
         action_audit_backend=action_audit_backend,
         decision_audit_backend=decision_audit_backend,
         api_idempotency_path=_env_path_any(("APP_API_IDEMPOTENCY_PATH", "BUSINESAIOS_API_IDEMPOTENCY_PATH"), str(data_dir / "api_idempotency.sqlite3")),
-        action_audit_log_path=_env_path("APP_ACTION_AUDIT_LOG_PATH", str(observability_data_dir / "action_audit.jsonl")),
-        decision_audit_log_path=_env_path("APP_DECISION_AUDIT_LOG_PATH", str(observability_data_dir / "decision_audit.jsonl")),
-        execution_trace_store_path=_env_path("APP_EXECUTION_TRACE_STORE_PATH", str(observability_data_dir / "execution_traces.sqlite3")),
-        decision_trace_store_path=_env_path("APP_DECISION_TRACE_STORE_PATH", str(observability_data_dir / "decision_traces.sqlite3")),
-        runtime_effect_trace_store_path=_env_path("APP_RUNTIME_EFFECT_TRACE_STORE_PATH", str(observability_data_dir / "runtime_effect_traces.sqlite3")),
-        incident_signal_store_path=_env_path("APP_INCIDENT_SIGNAL_STORE_PATH", str(observability_data_dir / "incident_signals.sqlite3")),
-        telemetry_event_store_path=_env_path("APP_TELEMETRY_EVENT_STORE_PATH", str(observability_data_dir / "telemetry_events.sqlite3")),
+        action_audit_log_path=_env_path_any(("APP_ACTION_AUDIT_LOG_PATH", "BUSINESAIOS_ACTION_AUDIT_LOG_PATH"), str(observability_data_dir / "action_audit.jsonl")),
+        decision_audit_log_path=_env_path_any(("APP_DECISION_AUDIT_LOG_PATH", "BUSINESAIOS_DECISION_AUDIT_LOG_PATH"), str(observability_data_dir / "decision_audit.jsonl")),
+        execution_trace_store_path=_env_path_any(("APP_EXECUTION_TRACE_STORE_PATH", "BUSINESAIOS_EXECUTION_TRACE_STORE_PATH"), str(observability_data_dir / "execution_traces.sqlite3")),
+        decision_trace_store_path=_env_path_any(("APP_DECISION_TRACE_STORE_PATH", "BUSINESAIOS_DECISION_TRACE_STORE_PATH"), str(observability_data_dir / "decision_traces.sqlite3")),
+        runtime_effect_trace_store_path=_env_path_any(("APP_RUNTIME_EFFECT_TRACE_STORE_PATH", "BUSINESAIOS_RUNTIME_EFFECT_TRACE_STORE_PATH"), str(observability_data_dir / "runtime_effect_traces.sqlite3")),
+        incident_signal_store_path=_env_path_any(("APP_INCIDENT_SIGNAL_STORE_PATH", "BUSINESAIOS_INCIDENT_SIGNAL_STORE_PATH"), str(observability_data_dir / "incident_signals.sqlite3")),
+        telemetry_event_store_path=_env_path_any(("APP_TELEMETRY_EVENT_STORE_PATH", "BUSINESAIOS_TELEMETRY_EVENT_STORE_PATH"), str(observability_data_dir / "telemetry_events.sqlite3")),
         telemetry_event_store_backend=telemetry_backend,
         observability_export_dir=export_dir,
         observability_export_catalog_path=export_catalog_path,
