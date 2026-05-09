@@ -5,6 +5,7 @@ CANON_API_HANDLER_BUNDLE_FINAL_OWNER = True
 from dataclasses import dataclass
 
 from entrypoints.api.business_memory_route_handlers import BusinessMemoryRouteHandlers, build_business_memory_route_handlers
+from entrypoints.api.client_outcome_route_handlers import ClientOutcomeRouteHandlers, build_client_outcome_route_handlers
 from entrypoints.api.execute_action_port_provider import ExecuteActionPortProvider, build_execute_action_port_provider
 from entrypoints.api.headless_route_handlers import HeadlessRouteHandlers, build_headless_route_handlers
 from entrypoints.api.headless_runtime_provider import HeadlessRuntimeProvider, build_default_headless_runtime_provider
@@ -21,6 +22,7 @@ class ApiHandlerBundle:
     route_handlers: RouteHandlers
     headless_handlers: HeadlessRouteHandlers
     business_memory_handlers: BusinessMemoryRouteHandlers
+    client_outcome_handlers: ClientOutcomeRouteHandlers
     execute_action_port_provider: ExecuteActionPortProvider | None = None
 
 
@@ -40,13 +42,15 @@ def build_api_handler_bundle(
         action_audit_log=action_audit_log,
     )
     resolved_execute_action_port = execute_action_port if execute_action_port is not None else execute_action_port_provider.build_port()
+    headless_handlers = build_headless_route_handlers(runtime_provider=runtime_provider)
     return ApiHandlerBundle(
         route_handlers=build_route_handlers(
             application_service=application_service,
             execute_action_port=resolved_execute_action_port,
         ),
-        headless_handlers=build_headless_route_handlers(runtime_provider=runtime_provider),
+        headless_handlers=headless_handlers,
         business_memory_handlers=build_business_memory_route_handlers(runtime_provider=runtime_provider),
+        client_outcome_handlers=build_client_outcome_route_handlers(headless_handlers=headless_handlers),
         execute_action_port_provider=execute_action_port_provider,
     )
 
