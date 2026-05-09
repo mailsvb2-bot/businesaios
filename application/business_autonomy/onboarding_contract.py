@@ -23,13 +23,15 @@ class OnboardingStage(str, Enum):
 class BusinessOnboardingRequest:
     business_id: str
     tenant_id: str
-    ownership_key: str
-    region: str
-    channel_kind: ChannelKind
-    adapter_key: str
-    external_ref: str
-    requested_by: str
+    ownership_key: str = "owner"
+    region: str = "global"
+    channel_kind: ChannelKind | str = ChannelKind.CHATBOT
+    adapter_key: str = "chatbot.default"
+    external_ref: str = "chatbot.default"
+    requested_by: str = "system"
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    integration_mode: str = ""
+    requested_capabilities: tuple[str, ...] = field(default_factory=tuple)
 
     def validate(self) -> None:
         require_tenant_id(self.tenant_id)
@@ -51,12 +53,24 @@ class BusinessOnboardingRequest:
         return ChannelIdentity(
             business_id=self.business_id,
             tenant_id=self.tenant_id,
-            channel_kind=self.channel_kind,
+            channel_kind=_coerce_channel_kind(self.channel_kind),
             adapter_key=self.adapter_key,
             external_ref=self.external_ref,
             region=self.region,
             metadata=dict(self.metadata),
         )
+
+
+def _coerce_channel_kind(value: ChannelKind | str) -> ChannelKind:
+    if isinstance(value, ChannelKind):
+        return value
+    raw = str(value or "chatbot").strip().lower().replace("-", "_")
+    if raw in {"telegram", "webchat", "chat"}:
+        return ChannelKind.CHATBOT
+    try:
+        return ChannelKind(raw)
+    except ValueError:
+        return ChannelKind.CHATBOT
 
 
 @dataclass(frozen=True)
