@@ -52,6 +52,19 @@ class SQLiteSecurityQuarantineRegistry:
             ).fetchone()
         return row is not None
 
+    def count_active(self, *, entity_kind: str | None = None) -> int:
+        with self._connect() as conn:
+            if entity_kind is None:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM security_quarantine WHERE released_at_epoch_s IS NULL"
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM security_quarantine WHERE entity_kind = ? AND released_at_epoch_s IS NULL",
+                    (str(entity_kind),),
+                ).fetchone()
+        return int(row[0] if row else 0)
+
     def _ensure_schema(self) -> None:
         Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
