@@ -60,7 +60,7 @@ class BusinessGoalEnvelope:
     business_id: str
     goal_id: str
     goal_type: str
-    goal_payload: Mapping[str, Any]
+    goal_payload: Mapping[str, Any] = field(default_factory=dict)
     priority: int = 50
     requested_by: str = "platform"
     simulation: bool = False
@@ -94,6 +94,12 @@ class BusinessExecutionResult:
 class BusinessExecutionRequest:
     envelope: BusinessGoalEnvelope
     integration_mode: IntegrationMode
-    correlation_id: str
-    idempotency_key: str
+    correlation_id: str = ""
+    idempotency_key: str = ""
     timeout_seconds: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        if not self.correlation_id:
+            object.__setattr__(self, "correlation_id", f"exec:{self.envelope.business_id}:{self.envelope.goal_id}")
+        if not self.idempotency_key:
+            object.__setattr__(self, "idempotency_key", self.correlation_id)
