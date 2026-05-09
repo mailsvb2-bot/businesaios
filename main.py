@@ -19,6 +19,7 @@ CANON_MAIN_USES_RUNTIME_ENTRYPOINT_SHIM = True
 CANON_MAIN_NO_LEGACY_BOOT_IMPORTS = True
 CANON_MAIN_IMPORT_LIGHTWEIGHT = True
 CANON_MAIN_DEMO_BOUNDED_SMOKE = True
+CANON_MAIN_DEMO_E2E_SMOKE_OPT_IN = True
 
 
 def _telegram_ep() -> Any:
@@ -89,11 +90,31 @@ def _run_demo(core: Any, executor: Any, event_log: Any) -> None:
     )
     env = core.optimize(state)
     res = executor.execute(env)
-    log.info("Demo executed=%s", bool(res.ok))
+    log.info("Demo e2e smoke executed=%s decision_id=%s", bool(res.ok), getattr(res, "decision_id", ""))
+    if not bool(getattr(res, "ok", False)):
+        raise RuntimeError(f"demo e2e smoke failed: {getattr(res, 'error', None)}")
 
     if _env_bool("PRINT_EVENTS", False):
         for e in list(event_log):
             log.info("event=%s", e)
+
+
+def _run_demo_e2e_smoke() -> None:
+    """Run the bounded local decision -> execution smoke path.
+
+    The default demo path intentionally stays lightweight. Operators can set
+    DEMO_E2E_SMOKE=1 to prove the canonical DecisionCore/RuntimeExecutor path
+    without starting Telegram polling/webhook transport.
+    """
+    _bootstrap_runtime_process()
+    core, executor, event_log, _event_store, _payment_outbox, stack, _learning_job = _telegram_ep().build_system()
+    try:
+        _run_demo(core=core, executor=executor, event_log=event_log)
+    finally:
+        try:
+            stack.close()
+        except Exception:
+            log.exception("Demo e2e smoke stack close failed")
 
 
 def main() -> None:
@@ -123,9 +144,12 @@ def main() -> None:
         return
 
     if run_mode == "demo":
+        if _env_bool("DEMO_E2E_SMOKE", False):
+            _run_demo_e2e_smoke()
+            return
         # Bounded startup smoke: demo must prove the process can boot without
-        # importing or starting the heavy Telegram/runtime graph. Full runtime
-        # execution belongs to telegram/webhook/worker modes.
+        # importing or starting the heavy Telegram/runtime graph. To prove the
+        # full decision -> execution path, set DEMO_E2E_SMOKE=1.
         log.info("Demo startup smoke passed")
         return
 
