@@ -32,7 +32,8 @@ class SQLiteKMSProvider:
             supports_hsm_backed_keys=self._hsm_backed,
         )
 
-    def create_key(self, *, key_id: str, algorithm: str, exportable: bool = False) -> KMSKeyHandle:
+    def create_key(self, *, key_id: str, algorithm: str, exportable: bool = False, credential_ref: str | None = None) -> KMSKeyHandle:
+        _ = credential_ref
         resolved_key_id = str(key_id).strip()
         resolved_algorithm = str(algorithm).strip()
         if not resolved_key_id:
@@ -67,7 +68,9 @@ class SQLiteKMSProvider:
             exportable=bool(exportable),
         )
 
-    def get_active_key(self, *, key_id: str) -> KMSKeyHandle:
+    def get_active_key(self, *, key_id: str, credential_ref: str | None = None) -> KMSKeyHandle:
+        _ = credential_ref
+        resolved_key_id = str(key_id).strip()
         with self._connect() as conn:
             row = conn.execute(
                 """
@@ -77,13 +80,13 @@ class SQLiteKMSProvider:
                 ORDER BY key_version DESC
                 LIMIT 1
                 """,
-                (str(key_id),),
+                (resolved_key_id,),
             ).fetchone()
         if row is None:
-            raise KeyError(f'active kms key not found: {key_id}')
+            return self.create_key(key_id=resolved_key_id, algorithm='aes256_gcm', exportable=False, credential_ref=credential_ref)
         return KMSKeyHandle(
             provider_name=self._provider_name,
-            key_id=str(key_id),
+            key_id=resolved_key_id,
             key_version=int(row[0]),
             algorithm=str(row[1]),
             exportable=bool(int(row[2])),
