@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Iterable
 
 from application.business_autonomy.channel_contracts import ChannelIdentity, TypedChannelAdapter
 
@@ -12,8 +13,10 @@ class ResolvedChannelAdapter:
 
 
 class TypedChannelAdapterRegistry:
-    def __init__(self) -> None:
+    def __init__(self, adapters: Iterable[TypedChannelAdapter] | None = None) -> None:
         self._by_kind: dict[tuple[str, str], TypedChannelAdapter] = {}
+        if adapters is not None:
+            self.register_many(adapters)
 
     def register(self, adapter: TypedChannelAdapter) -> None:
         key = (adapter.channel_kind.value, str(adapter.adapter_key).strip())
