@@ -10,13 +10,14 @@ def _plan(gate: str, *steps: str) -> ExecutionPlan:
 def plan_for_gate(gate: str) -> ExecutionPlan:
     if gate == "doctor":
         # Doctor must stay lightweight: filesystem shape + deterministic health checks only.
-        return _plan("doctor", "assert-project-shape", "doctor-check")
+        return _plan("doctor", "assert-project-shape", "dependency-lock", "doctor-check")
 
     if gate == "fast":
         # Fast is the required P0 developer gate: boot/import smoke before heavier checks.
         return _plan(
             "fast",
             "assert-project-shape",
+            "dependency-lock",
             "doctor-check",
             "import-smoke",
             "quality-check",
@@ -27,8 +28,10 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
         return _plan(
             "full",
             "assert-project-shape",
+            "dependency-lock",
             "doctor-check",
             "import-smoke",
+            "demo-e2e-smoke",
             "quality-check",
             "canon-audit",
             "lock-tests",
@@ -40,8 +43,10 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
         return _plan(
             "release",
             "assert-project-shape",
+            "dependency-lock",
             "doctor-check",
             "import-smoke",
+            "demo-e2e-smoke",
             "quality-check",
             "canon-audit",
             "lock-tests",
@@ -55,6 +60,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
         return _plan(
             "pre-push",
             "assert-project-shape",
+            "dependency-lock",
             "doctor-check",
             "import-smoke",
             "quality-check",
@@ -65,8 +71,10 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
         return _plan(
             "pre-release",
             "assert-project-shape",
+            "dependency-lock",
             "doctor-check",
             "import-smoke",
+            "demo-e2e-smoke",
             "quality-check",
             "canon-audit",
             "lock-tests",
