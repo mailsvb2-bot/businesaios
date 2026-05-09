@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from pathlib import Path
+import json
+import os
+
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult, ExecutionVerdict
 from application.business_autonomy.guards import (
     ApprovalStatus,
@@ -18,19 +23,21 @@ from application.business_autonomy.service import BusinessAutonomyService
 class BusinessAutonomyGuardedService:
     def __init__(
         self,
+        business_id: str | None = None,
         *,
-        autonomy_service: BusinessAutonomyService,
-        trust_policy: BusinessTrustPolicy,
-        budget_guard: BusinessBudgetGuard,
-        blast_radius_guard: BusinessBlastRadiusGuard,
-        approval_gate: BusinessApprovalGate,
-        idempotency_store: BusinessIdempotencyStore,
-        operator_override_policy: BusinessOperatorOverridePolicy,
+        autonomy_service: BusinessAutonomyService | None = None,
+        trust_policy: BusinessTrustPolicy | None = None,
+        budget_guard: BusinessBudgetGuard | None = None,
+        blast_radius_guard: BusinessBlastRadiusGuard | None = None,
+        approval_gate: BusinessApprovalGate | None = None,
+        idempotency_store: BusinessIdempotencyStore | None = None,
+        operator_override_policy: BusinessOperatorOverridePolicy | None = None,
         audit_sink: object | None = None,
         evidence_store: object | None = None,
         planning_memory_sink: object | None = None,
         governance_alignment_bridge: BusinessAutonomyCapabilityVerdictBridge | None = None,
     ) -> None:
+        self.business_id = str(business_id or '').strip()
         self._autonomy_service = autonomy_service
         self._trust_policy = trust_policy
         self._budget_guard = budget_guard
@@ -44,6 +51,15 @@ class BusinessAutonomyGuardedService:
         self._governance_alignment_bridge = governance_alignment_bridge or BusinessAutonomyCapabilityVerdictBridge()
 
     async def execute(self, request: BusinessExecutionRequest) -> BusinessExecutionResult:
+        if self._autonomy_service is None or self._trust_policy is None or self._budget_guard is None or self._blast_radius_guard is None or self._approval_gate is None or self._idempotency_store is None or self._operator_override_policy is None:
+            return BusinessExecutionResult(
+                verdict=ExecutionVerdict.REJECTED,
+                business_id=request.envelope.business_id,
+                goal_id=request.envelope.goal_id,
+                execution_id=request.correlation_id,
+                message='business autonomy guarded execution dependencies are not configured',
+                metadata={'surface': 'compatibility_guarded_service'},
+            )
         scoped_idempotency_key = _scoped_idempotency_key(request)
         cached = self._idempotency_store.get(scoped_idempotency_key)
         if cached is not None:
@@ -170,6 +186,63 @@ class BusinessAutonomyGuardedService:
             )
         return result
 
+    def _record_distributed_state_conflict(self, *, tenant_id: str, business_id: str, document: str, expected_version: int | None = None, current_version: int | None = None, recovery_plan: str = 'reload_merge_retry') -> None:
+        append_dir = _distributed_append_dir()
+        append_dir.mkdir(parents=True, exist_ok=True)
+        now = _utc_now()
+        event = {
+            'event': 'business_autonomy_distributed_state_version_conflict',
+            'tenant_id': tenant_id,
+            'business_id': business_id,
+            'document': document,
+            'expected_version': expected_version,
+            'current_version': current_version,
+            'recovery_plan': recovery_plan,
+            'recorded_at_utc': now,
+        }
+        with (append_dir / 'distributed_state_conflicts.jsonl').open('a', encoding='utf-8') as fh:
+            fh.write(json.dumps(event, sort_keys=True) + '\n')
+        state_path = append_dir / 'distributed_state_conflicts_state.json'
+        state = _read_plain_state(state_path)
+        key = _conflict_key(tenant_id=tenant_id, business_id=business_id, document=document)
+        previous = dict(state.get('items', {}).get(key) or {})
+        occurrence_count = int(previous.get('occurrence_count') or 0) + 1
+        row = {
+            **previous,
+            'tenant_id': tenant_id,
+            'business_id': business_id,
+            'document': document,
+            'status': 'open',
+            'expected_version': expected_version,
+            'current_version': current_version,
+            'recovery_plan': recovery_plan,
+            'occurrence_count': occurrence_count,
+            'first_recorded_at_utc': previous.get('first_recorded_at_utc') or now,
+            'last_recorded_at_utc': now,
+            'acknowledged_by': '',
+            'acknowledged_at_utc': '',
+            'resolved_by': '',
+            'resolution_note': '',
+            'resolved_at_utc': '',
+        }
+        _write_plain_state(state_path, {**dict(state.get('items') or {}), key: row})
+
+    def acknowledge_distributed_state_conflict(self, *, tenant_id: str, business_id: str, document: str, acknowledged_by: str) -> bool:
+        return _update_conflict_state(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            document=document,
+            updates={'status': 'acknowledged', 'acknowledged_by': acknowledged_by, 'acknowledged_at_utc': _utc_now()},
+        )
+
+    def resolve_distributed_state_conflict(self, *, tenant_id: str, business_id: str, document: str, resolved_by: str, resolution_note: str) -> bool:
+        return _update_conflict_state(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            document=document,
+            updates={'status': 'resolved', 'resolved_by': resolved_by, 'resolution_note': resolution_note, 'resolved_at_utc': _utc_now()},
+        )
+
 
 def _cache_terminal_result(idempotency_store: BusinessIdempotencyStore, key: str, result: BusinessExecutionResult) -> None:
     if result.verdict in {
@@ -188,11 +261,56 @@ def _scoped_idempotency_key(request: BusinessExecutionRequest) -> str:
     return f"{tenant_id}:{business_id}:{raw_key}"
 
 
+def _distributed_append_dir() -> Path:
+    root = Path(os.environ.get('DATA_DIR') or os.environ.get('BUSINESAIOS_DATA_DIR') or 'data')
+    return root / 'runtime' / 'distributed' / 'append'
+
+
+def _conflict_key(*, tenant_id: str, business_id: str, document: str) -> str:
+    return f'{tenant_id}:{business_id}:{document}'
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _read_plain_state(path: Path) -> dict:
+    if not path.exists():
+        return {'items': {}}
+    try:
+        payload = json.loads(path.read_text(encoding='utf-8'))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError('business_autonomy_distributed_conflict_state_corrupt') from exc
+    if not isinstance(payload, dict):
+        return {'items': {}}
+    items = payload.get('items')
+    if not isinstance(items, dict):
+        payload['items'] = {}
+    return payload
+
+
+def _write_plain_state(path: Path, items: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + '.tmp')
+    tmp.write_text(json.dumps({'items': items}, sort_keys=True, separators=(',', ':')), encoding='utf-8')
+    os.replace(tmp, path)
+
+
+def _update_conflict_state(*, tenant_id: str, business_id: str, document: str, updates: dict) -> bool:
+    state_path = _distributed_append_dir() / 'distributed_state_conflicts_state.json'
+    state = _read_plain_state(state_path)
+    key = _conflict_key(tenant_id=tenant_id, business_id=business_id, document=document)
+    items = dict(state.get('items') or {})
+    if key not in items:
+        return False
+    row = {**dict(items[key]), **updates}
+    items[key] = row
+    _write_plain_state(state_path, items)
+    return True
+
+
 def _read_document_state(path):
     """Read a versioned business-autonomy document state."""
-    import json
-    from pathlib import Path
-
     target = Path(path)
     if not target.exists():
         return {"version": 0, "items": {}}
@@ -211,10 +329,6 @@ def _read_document_state(path):
 
 def _write_document_state(path, items, *, expected_version: int):
     """Atomically write a versioned state document with fail-closed CAS."""
-    import json
-    import os
-    from pathlib import Path
-
     target = Path(path)
     state = _read_document_state(target)
     if int(state["version"]) != int(expected_version):
