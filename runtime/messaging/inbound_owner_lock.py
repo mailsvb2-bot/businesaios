@@ -5,6 +5,7 @@ CANON_MESSAGING_INBOUND_OWNER_LOCK = True
 _ALLOWED_INBOUND_ENTRYPOINTS = {
     'runtime.messaging.inbound_entrypoint',
     'runtime.business_autonomy.provider_webhook_inbound_processor',
+    'interfaces.web.chat_widget.api_handlers',
 }
 
 
