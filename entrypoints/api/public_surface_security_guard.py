@@ -151,6 +151,18 @@ _ROUTE_SPECS: dict[str, PublicSurfaceRouteSpec] = {
         action=SecurityAction.READ,
         tags=('internal', 'analytics', 'dashboard', 'public_api'),
     ),
+    '/public-site/cta/start': PublicSurfaceRouteSpec(
+        operation_name='api.public.public_site.cta_start',
+        resource_type='public_site_cta_intake',
+        action=SecurityAction.WRITE,
+        tags=('public', 'public_site', 'cta', 'public_api'),
+    ),
+    '/public-site/cta/{intake_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.public_site.cta_status',
+        resource_type='public_site_cta_intake',
+        action=SecurityAction.READ,
+        tags=('public', 'public_site', 'cta', 'public_api'),
+    ),
 }
 
 
