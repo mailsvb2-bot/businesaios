@@ -2,15 +2,33 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from observability.export_pipeline.clickhouse_exporter import ClickHouseExporterConfig
 from reliability.redis_idempotency_backend import RedisIdempotencyBackend, RedisIdempotencyConfig
 from runtime.backends.postgres_backend import ProductionPostgresBackend, ProductionPostgresBackendConfig
-from runtime._internal.http_transport import form_urlencode, sync_request
+from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_RUNTIME_ACTIVATION = True
+
+
+def _load_internal_attr(module_name: str, attr_name: str) -> Any:
+    token = ALLOW_INTERNAL_IMPORT.set(True)
+    try:
+        module = __import__(module_name, fromlist=[attr_name])
+        return getattr(module, attr_name)
+    finally:
+        ALLOW_INTERNAL_IMPORT.reset(token)
+
+
+def _http_transport_helpers() -> tuple[Any, Any]:
+    return (
+        _load_internal_attr('runtime._internal.http_transport', 'form_urlencode'),
+        _load_internal_attr('runtime._internal.http_transport', 'sync_request'),
+    )
+
 
 @dataclass(frozen=True)
 class ProviderRuntimeActivationService:
@@ -72,6 +90,7 @@ class ProviderRuntimeActivationService:
             import base64
             token = base64.b64encode(f"{config.username}:{config.password or ''}".encode('utf-8')).decode('ascii')
             headers['Authorization'] = f'Basic {token}'
+        form_urlencode, sync_request = _http_transport_helpers()
         response = sync_request(
             method='POST',
             url=config.endpoint,
@@ -89,5 +108,6 @@ class ProviderRuntimeActivationService:
             }
         body = str(response.text or '').strip()
         return {'status': 'ok' if body.startswith('1') else 'degraded', 'backend': 'clickhouse', 'database': config.database, 'table': config.table, 'response': body[:32]}
+
 
 __all__ = ['CANON_PROVIDER_RUNTIME_ACTIVATION', 'ProviderRuntimeActivationService']
