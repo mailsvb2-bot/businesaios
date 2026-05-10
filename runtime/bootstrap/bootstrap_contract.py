@@ -85,6 +85,10 @@ class BootstrapAuditEvent:
     message: str
     details: Mapping[str, str] = field(default_factory=dict)
 @dataclass(frozen=True)
+class SovereignRuntimeState:
+    ready: bool
+    status: str
+@dataclass(frozen=True)
 class SovereignRuntime:
     status: BootstrapStatus
     environment: BootstrapEnvironment
@@ -104,3 +108,7 @@ class SovereignRuntime:
         if runtime_components:
             names.extend(str(item) for item in runtime_components)
         return tuple(dict.fromkeys(name for name in names if str(name).strip()))
+
+    @property
+    def state(self) -> SovereignRuntimeState:
+        return SovereignRuntimeState(ready=self.status is BootstrapStatus.READY, status=self.status.value)
