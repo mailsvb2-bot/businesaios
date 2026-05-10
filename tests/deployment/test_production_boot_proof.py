@@ -22,6 +22,7 @@ from entrypoints.api.api_key_policy import PersistentApiKeyStore
 from governance.rbac_contract import RoleId
 from tenancy.tenant_contract import TenantRecord, TenantPlan, TenantStatus
 from tenancy.tenant_registry import PersistentTenantRegistry
+from runtime.enforcement.idempotency_gate import mark_execution_once
 from runtime.wiring import build_durable_stores, resolve_storage_config
 
 
@@ -155,7 +156,7 @@ class _ProofApplicationService:
         )
         payment_job_id = self._payment_outbox.enqueue_once(dedupe_key='payment-proof-1', payload={'decision_id': decision.decision_id})
         self._payment_outbox.mark_delivered(payment_job_id)
-        self._ledger.try_mark_executed(envelope)
+        mark_execution_once(ledger=self._ledger, env=envelope)
         self._event_store.append_event({
             'tenant_id': 'tenant-proof',
             'user_id': 'user-proof',
