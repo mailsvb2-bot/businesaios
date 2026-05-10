@@ -30,11 +30,6 @@ class BusinessAutonomyOnboardingResult:
 
 
 class BusinessAutonomyService:
-    """
-    Single platform owner for connected autonomous businesses.
-    It may route and govern, but it must not embed domain logic of the business.
-    """
-
     def __init__(
         self,
         *,
@@ -63,7 +58,6 @@ class BusinessAutonomyService:
         )
         self._adapter_registry.register(adapter)
         self._capability_registry.register(identity.business_id, adapter.declared_capabilities())
-
         blast_allowed = _metadata_int(request, 'parallel_actions', default=1) <= int(self._blast_radius_guard.max_parallel_actions or 1_000_000)
         requested_budget = _metadata_int(request, 'requested_budget_minor', default=0)
         budget_limit = self._budget_guard.max_budget_minor
@@ -73,10 +67,7 @@ class BusinessAutonomyService:
             tenant_id=identity.tenant_id,
             adapter_name=adapter.adapter_name,
             operating_mode=_operating_mode_from_request(request),
-            guard_decisions={
-                'blast_radius': {'allowed': blast_allowed},
-                'budget': {'allowed': budget_allowed},
-            },
+            guard_decisions={'blast_radius': {'allowed': blast_allowed}, 'budget': {'allowed': budget_allowed}},
         )
 
     def registered_adapter(self, business_id: str):
@@ -98,7 +89,6 @@ class BusinessAutonomyService:
                 adapter_name=None,
                 metadata={"policy_reason": decision.reason},
             )
-
         adapter = self._adapter_registry.get(request.envelope.business_id)
         delegated_request = BusinessExecutionRequest(
             envelope=request.envelope,
@@ -119,15 +109,9 @@ class BusinessAutonomyService:
                 adapter_name=adapter.adapter_name,
                 metadata={"supported_modes": [item.value for item in supported_modes]},
             )
-
         result = await adapter.execute(delegated_request)
         if self._audit_sink is not None and hasattr(self._audit_sink, "record"):
-            self._audit_sink.record(
-                event_type="business_autonomy_result",
-                business_id=result.business_id,
-                goal_id=result.goal_id,
-                detail={"verdict": result.verdict.value, "adapter_name": result.adapter_name},
-            )
+            self._audit_sink.record(event_type="business_autonomy_result", business_id=result.business_id, goal_id=result.goal_id, detail={"verdict": result.verdict.value, "adapter_name": result.adapter_name})
         return result
 
 
@@ -185,11 +169,11 @@ def _operating_mode_from_request(request: BusinessOnboardingRequest) -> str:
     metadata = dict(getattr(request, 'metadata', {}) or {})
     raw = str(metadata.get('non_ai_mode') or getattr(request, 'integration_mode', '') or '').strip().lower()
     if raw in {'channel_driven', 'non_ai'}:
-        return NonAiOperatingMode.CHANNEL_DRIVEN.value
+        return getattr(NonAiOperatingMode, 'CHANNEL_DRIVEN', NonAiOperatingMode.SUPERVISED).value
     try:
         return NonAiOperatingMode(raw).value
     except ValueError:
-        return NonAiOperatingMode.CHANNEL_DRIVEN.value
+        return getattr(NonAiOperatingMode, 'CHANNEL_DRIVEN', NonAiOperatingMode.SUPERVISED).value
 
 
 def _metadata_int(request: BusinessOnboardingRequest, key: str, *, default: int) -> int:
