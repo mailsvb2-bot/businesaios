@@ -11,9 +11,19 @@ from config.validation import validate_telegram_settings
 from interfaces.telegram.runner import TelegramRunnerConfig
 from interfaces.telegram.webhook_runtime import TelegramWebhookConfig, TelegramWebhookRuntime
 from runtime.boot.env import env_bool, env_int, resolve_telegram_bot_token
+from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
 from runtime.platform.config.env_flags import env_str
 
 log = logging.getLogger('runtime.telegram_webhook')
+
+
+def _load_internal_attr(module_name: str, attr_name: str) -> Any:
+    token = ALLOW_INTERNAL_IMPORT.set(True)
+    try:
+        module = __import__(module_name, fromlist=[attr_name])
+        return getattr(module, attr_name)
+    finally:
+        ALLOW_INTERNAL_IMPORT.reset(token)
 
 
 def _build_runner_config() -> TelegramRunnerConfig:
@@ -31,8 +41,7 @@ def _build_runner_config() -> TelegramRunnerConfig:
 def _register_webhook(settings, *, token: str) -> None:
     if not settings.webhook_enabled or not settings.webhook_auto_register:
         return
-    from runtime._internal.effect_router import EffectRouter
-
+    EffectRouter = _load_internal_attr('runtime._internal.effect_router', 'EffectRouter')
     router = EffectRouter()
     result = router.telegram_set_webhook(
         token=token,
@@ -87,7 +96,6 @@ def create_telegram_webhook_app(
     payment_outbox: Any,
     learning_job: Any,
 ) -> FastAPI:
-    settings = validate_telegram_settings(load_telegram_settings())
     runtime = _build_webhook_runtime(
         core=core,
         executor=executor,
