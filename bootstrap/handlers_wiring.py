@@ -1,15 +1,14 @@
 from __future__ import annotations
+
+from typing import Any
+
 CANON_BOOT_HANDLERS_WIRING_FINAL_OWNER = True
-
-
 CANON_BOOT_WIRING_ONLY = True
 """Wire all action handlers into an ActionHandlerRegistry.
 
 The canonical registry remains single and strict, but handler definitions are
 cut into domain groups so boot wiring does not become a god module again.
 """
-
-from runtime.handlers import ActionHandlerRegistry
 
 from runtime.boot.handler_groups.ads import register_ads_handlers
 from runtime.boot.handler_groups.core import register_core_handlers
@@ -19,8 +18,13 @@ from runtime.boot.handler_groups.ops import register_ops_handlers
 from runtime.boot.handler_groups.shared import get_ctx_value
 
 
-def wire_handlers(*, ctx, event_store, composer) -> ActionHandlerRegistry:
-    handlers = ActionHandlerRegistry()
+def _action_handler_registry_cls() -> Any:
+    module = __import__('runtime.handlers', fromlist=['ActionHandlerRegistry'])
+    return getattr(module, 'ActionHandlerRegistry')
+
+
+def wire_handlers(*, ctx, event_store, composer):
+    handlers = _action_handler_registry_cls()()
 
     register_messaging_handlers(handlers=handlers, composer=composer)
 
@@ -52,4 +56,3 @@ def wire_handlers(*, ctx, event_store, composer) -> ActionHandlerRegistry:
         raise RuntimeError(f"ACTIONS_REGISTRY_DRIFT missing={missing} extra={extra}")
 
     return handlers
-
