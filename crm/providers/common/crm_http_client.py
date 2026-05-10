@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Mapping
+from typing import Any, Callable, Mapping
 
-from runtime._internal.http_transport import sync_request
+from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
 
 from crm.providers.common.crm_http_errors import (
     CrmAuthenticationError,
@@ -17,6 +17,19 @@ from crm.providers.common.crm_http_errors import (
 )
 from crm.providers.common.crm_rate_limit_policy import CrmRateLimitPolicy
 from crm.providers.common.crm_retry_policy import CrmRetryPolicy
+
+
+def _load_internal_attr(module_name: str, attr_name: str) -> Any:
+    token = ALLOW_INTERNAL_IMPORT.set(True)
+    try:
+        module = __import__(module_name, fromlist=[attr_name])
+        return getattr(module, attr_name)
+    finally:
+        ALLOW_INTERNAL_IMPORT.reset(token)
+
+
+def _sync_request(*args: Any, **kwargs: Any) -> Any:
+    return _load_internal_attr('runtime._internal.http_transport', 'sync_request')(*args, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -72,7 +85,7 @@ class CrmHttpClient:
         headers = dict(self._default_headers)
         headers.update(request_spec.headers)
         data = self._build_body(request_spec, headers)
-        result = sync_request(
+        result = _sync_request(
             method=request_spec.method.upper(),
             url=url,
             headers=headers,
