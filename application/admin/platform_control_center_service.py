@@ -69,7 +69,7 @@ class PlatformControlCenterService:
 
     def build_patch_suggestions(self) -> dict[str, Any]:
         rows = [{'file_path': 'application/admin/platform_control_center_service.py', 'patch_hint': 'keep service under 320 lines and delegate helpers'}]
-        return {'rows': rows, 'patch_suggestion_rows': rows}
+        return {'rows': rows, 'patch_suggestion_rows': rows, 'patch_suggestions': rows}
 
     def build_snapshot_diff_view(self, *, tenant_id: str) -> dict[str, Any]:
         rows = [{'file_path': 'application/admin/platform_control_center_service.py', 'status': 'unchanged'}]
@@ -105,7 +105,8 @@ class PlatformControlCenterService:
         return {'polling': {'enabled': True, 'interval_seconds': 30}, 'widgets': widgets, 'widget_rows': widgets}
 
     def build_visual_conflict_map(self) -> dict[str, Any]:
-        return {'conflicts': [], 'conflict_rows': []}
+        rows: list[dict[str, Any]] = []
+        return {'conflicts': rows, 'conflict_rows': rows, 'visual_conflict_map': rows}
 
     def build_widget_runtime(self, *, tenant_id: str, business_id: str) -> dict[str, Any]:
         return {'tenant_id': tenant_id, 'business_id': business_id, 'runtime': 'static_preview'}
