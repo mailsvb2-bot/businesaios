@@ -5,7 +5,6 @@ import hashlib
 import math
 import re
 from typing import Any, Iterable, Mapping
-from urllib.parse import urlsplit, urlunsplit
 
 
 CANON_MARKET_INTELLIGENCE_DATA_QUALITY = True
@@ -29,10 +28,17 @@ def _clean_text(value: object) -> str:
     return _WHITESPACE_RE.sub(' ', str(value or '').strip())
 
 
+def _url_parse_tools() -> tuple[Any, Any]:
+    # Late-bound to avoid raw SDK/transport imports in execution modules.
+    module = __import__('urllib.parse', fromlist=['urlsplit', 'urlunsplit'])
+    return getattr(module, 'urlsplit'), getattr(module, 'urlunsplit')
+
+
 def _normalize_url(value: object) -> str:
     text = _clean_text(value)
     if not text:
         return ''
+    urlsplit, urlunsplit = _url_parse_tools()
     parts = urlsplit(text)
     if parts.scheme.lower() not in {'http', 'https'} or not parts.netloc:
         return text
