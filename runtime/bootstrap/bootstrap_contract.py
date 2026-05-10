@@ -91,3 +91,7 @@ class SovereignRuntime:
     artifacts: BootstrapArtifacts
     attestation: BootstrapAttestation
     started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def services(self) -> tuple[str, ...]:
+        return tuple(self.attestation.service_names or ())
