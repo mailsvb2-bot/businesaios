@@ -10,6 +10,7 @@ class NonAiOperatingMode(str, Enum):
     POLICY_GUIDED = "policy_guided"
     SUPERVISED = "supervised"
     EXTERNAL_HUMAN_OWNED = "external_human_owned"
+    CHANNEL_DRIVEN = "channel_driven"
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,8 @@ class NonAiModeResolver:
             return NonAiModePolicy(mode, "policy_guided", True, False, True)
         if mode is NonAiOperatingMode.EXTERNAL_HUMAN_OWNED:
             return NonAiModePolicy(mode, "external_human_owned", True, True, False)
+        if mode is NonAiOperatingMode.CHANNEL_DRIVEN:
+            return NonAiModePolicy(mode, "channel_driven", True, False, False)
         return NonAiModePolicy(mode, "supervised", True, False, True)
 
 
