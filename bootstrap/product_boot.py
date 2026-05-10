@@ -3,13 +3,17 @@ from __future__ import annotations
 CANON_BOOT_WIRING_ONLY = True
 
 from dataclasses import dataclass
-from typing import Mapping
+from importlib import import_module
+from typing import Any, Mapping
 
+from bootstrap.route_surface import attach_route_surface
 from contracts.product_contract import ProductContract
 from runtime.platform.products.registry import ProductRegistry
-from bootstrap.route_surface import attach_route_surface
-from runtime.handlers.product_build import handle_product_build
-from runtime.handlers.product_explain import handle_product_explain
+
+
+def _load_handler(module_name: str, attr_name: str) -> Any:
+    module = import_module(module_name)
+    return getattr(module, attr_name)
 
 
 @dataclass(frozen=True)
@@ -53,15 +57,18 @@ class ProductBoot:
         )
 
 
-def register_product_routes(app: object) -> object:
-    handlers = {
-        "product_build": handle_product_build,
-        "product_explain": handle_product_explain,
+def _product_handlers() -> dict[str, Any]:
+    return {
+        "product_build": _load_handler("runtime.handlers.product_build", "handle_product_build"),
+        "product_explain": _load_handler("runtime.handlers.product_explain", "handle_product_explain"),
     }
+
+
+def register_product_routes(app: object) -> object:
     return attach_route_surface(
         app,
         domain="product",
-        handlers=handlers,
+        handlers=_product_handlers(),
         services={
             "boot_context_cls": BootProductContext,
             "boot_cls": ProductBoot,
