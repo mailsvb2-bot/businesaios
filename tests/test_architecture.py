@@ -48,6 +48,7 @@ SQLITE_ALLOWED_PREFIXES = (
     "runtime/platform/billing_sqlite_store.py",
     "runtime/platform/billing_dispute_store.py",
     "runtime/platform/billing_recovery_store.py",
+    "runtime/platform/safety_sqlite_migrations.py",
 )
 
 
