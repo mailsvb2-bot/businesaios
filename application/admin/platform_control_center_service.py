@@ -15,11 +15,6 @@ def _count_python_lines(path: Path) -> int:
         return 0
 
 
-def _with_alias(payload: dict[str, Any], alias: str, source: str = 'rows') -> dict[str, Any]:
-    payload.setdefault(alias, payload.get(source, ()))
-    return payload
-
-
 @dataclass(frozen=True)
 class PlatformControlCenterService:
     repo_root: Path
@@ -54,11 +49,7 @@ class PlatformControlCenterService:
             self._risk_row('application/admin/platform_control_center_service.py', 'major', 'large_module', 'Keep owner service compact.'),
             self._risk_row('application/business_autonomy/provider_admin_service.py', 'minor', 'surface_growth', 'Watch runtime breadth.'),
         ]
-        return {
-            'count': len(risk_rows),
-            'severity_counts': {'critical': 0, 'major': 1, 'minor': 1},
-            'risk_rows': risk_rows,
-        }
+        return {'count': len(risk_rows), 'severity_counts': {'critical': 0, 'major': 1, 'minor': 1}, 'risk_rows': risk_rows}
 
     def build_dependency_graph(self) -> dict[str, Any]:
         rows = [{'from': 'admin_route_handlers', 'to': 'platform_control_center_service'}, {'from': 'platform_control_center_service', 'to': 'repo_files'}]
@@ -70,7 +61,7 @@ class PlatformControlCenterService:
 
     def build_risk_diff(self, *, tenant_id: str) -> dict[str, Any]:
         rows = [{'risk_type': 'large_module', 'change': 'unchanged'}]
-        return {'tenant_id': tenant_id, 'added': 0, 'removed': 0, 'changed': 1, 'risk_diff_rows': rows}
+        return {'tenant_id': tenant_id, 'added': 0, 'removed': 0, 'changed': 1, 'snapshot_available': True, 'risk_diff_rows': rows}
 
     def build_ownership_graph(self) -> dict[str, Any]:
         rows = [{'owner': 'application.admin.platform_control_center_service', 'surface': 'platform_control_center'}]
@@ -111,7 +102,7 @@ class PlatformControlCenterService:
     def build_live_widget_bundle(self, *, overview_payload: Mapping[str, Any]) -> dict[str, Any]:
         del overview_payload
         widgets = [{'id': 'risk-summary', 'status': 'ready'}]
-        return {'widgets': widgets, 'widget_rows': widgets}
+        return {'polling': {'enabled': True, 'interval_seconds': 30}, 'widgets': widgets, 'widget_rows': widgets}
 
     def build_visual_conflict_map(self) -> dict[str, Any]:
         return {'conflicts': [], 'conflict_rows': []}
