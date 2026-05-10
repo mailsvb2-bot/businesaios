@@ -44,6 +44,7 @@ SQLITE_ALLOWED_PREFIXES = (
     "observability/platform/snapshot_store/",
     "runtime/platform/behavior_graph/",
     "runtime/platform/delivery_state.py",
+    "runtime/platform/security_sqlite_stores.py",
 )
 
 
