@@ -9,6 +9,15 @@ from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
 CANON_MARKET_INTELLIGENCE_PROVIDER_SUPPORT = True
 
 
+def _load_internal_attr(module_name: str, attr_name: str) -> Any:
+    token = ALLOW_INTERNAL_IMPORT.set(True)
+    try:
+        module = __import__(module_name, fromlist=[attr_name])
+        return getattr(module, attr_name)
+    finally:
+        ALLOW_INTERNAL_IMPORT.reset(token)
+
+
 @dataclass
 class RuntimeMarketIntelligenceProviderSupport:
     _runtime_factory: Any | None = None
@@ -17,11 +26,10 @@ class RuntimeMarketIntelligenceProviderSupport:
 
     def _ensure_runtime_factory(self) -> Any:
         if self._runtime_factory is None:
-            token = ALLOW_INTERNAL_IMPORT.set(True)
-            try:
-                from runtime._internal.market_intelligence.provider_runtime import ProviderRuntimeFactory
-            finally:
-                ALLOW_INTERNAL_IMPORT.reset(token)
+            ProviderRuntimeFactory = _load_internal_attr(
+                'runtime._internal.market_intelligence.provider_runtime',
+                'ProviderRuntimeFactory',
+            )
             self._runtime_factory = ProviderRuntimeFactory()
         return self._runtime_factory
 
@@ -35,11 +43,10 @@ class RuntimeMarketIntelligenceProviderSupport:
             return None
         with self._lock:
             if self._shared_client is None:
-                token = ALLOW_INTERNAL_IMPORT.set(True)
-                try:
-                    from runtime._internal.market_intelligence.provider_clients import MarketIntelligenceProviderClient
-                finally:
-                    ALLOW_INTERNAL_IMPORT.reset(token)
+                MarketIntelligenceProviderClient = _load_internal_attr(
+                    'runtime._internal.market_intelligence.provider_clients',
+                    'MarketIntelligenceProviderClient',
+                )
                 self._shared_client = MarketIntelligenceProviderClient(runtime_factory=runtime_factory)
             return self._shared_client
 
