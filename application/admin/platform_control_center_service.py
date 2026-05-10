@@ -97,7 +97,7 @@ class PlatformControlCenterService:
 
     def build_stop_conditions(self) -> dict[str, Any]:
         rows = [{'name': 'import_graph_regression', 'state': 'blocked'}, {'name': 'artifact_corruption', 'state': 'blocked'}]
-        return {'rows': rows, 'stop_condition_rows': rows}
+        return {'rows': rows, 'stop_condition_rows': rows, 'stop_conditions': rows}
 
     def build_live_widget_bundle(self, *, overview_payload: Mapping[str, Any]) -> dict[str, Any]:
         del overview_payload
@@ -112,7 +112,9 @@ class PlatformControlCenterService:
         return {'tenant_id': tenant_id, 'business_id': business_id, 'runtime': 'static_preview'}
 
     def save_dashboard_layout(self, *, tenant_id: str, layout: Mapping[str, Any]) -> dict[str, Any]:
-        return {'tenant_id': tenant_id, 'saved': True, 'layout': dict(layout or {}), 'layout_rows': tuple(dict(layout or {}).get('widgets') or ())}
+        normalized = dict(layout or {})
+        normalized.setdefault('mode', 'drag_drop_dashboard')
+        return {'tenant_id': tenant_id, 'saved': True, 'layout': normalized, 'layout_rows': tuple(normalized.get('widgets') or ())}
 
     def build_remediation_workflow(self, *, file_path: str, risk_type: str = '') -> dict[str, Any]:
         steps = ['inspect', 'patch', 'verify']
