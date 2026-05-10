@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+from scripts.ci.subprocess_io import run_command
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / ".artifacts"
@@ -22,42 +23,28 @@ def _run(spec: dict[str, object]) -> dict[str, object]:
     env = os.environ.copy()
     env.update(spec.get("env", {}))  # type: ignore[arg-type]
     started = datetime.now(timezone.utc)
-    proc = subprocess.run(
+    outcome = run_command(
         spec["cmd"],  # type: ignore[arg-type]
         cwd=ROOT,
         env=env,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
         timeout=180,
     )
     finished = datetime.now(timezone.utc)
+    output = f"{outcome.stdout}{outcome.stderr}"
     return {
         "name": spec["name"],
         "cmd": spec["cmd"],
-        "returncode": proc.returncode,
-        "ok": proc.returncode == 0,
+        "returncode": outcome.returncode,
+        "ok": outcome.returncode == 0,
         "started_at": started.isoformat(),
         "finished_at": finished.isoformat(),
-        "output_tail": proc.stdout[-6000:],
+        "output_tail": output[-6000:],
     }
 
 
 def main() -> int:
     ARTIFACTS.mkdir(exist_ok=True)
-    results = []
-    for spec in COMMANDS:
-        try:
-            results.append(_run(spec))
-        except subprocess.TimeoutExpired as exc:
-            results.append({
-                "name": spec["name"],
-                "cmd": spec["cmd"],
-                "returncode": 124,
-                "ok": False,
-                "error": f"timeout after {exc.timeout}s",
-                "output_tail": (exc.stdout or "")[-6000:] if isinstance(exc.stdout, str) else "",
-            })
+    results = [_run(spec) for spec in COMMANDS]
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "scope": "bounded P0 production-readiness smoke, not full production certification",
