@@ -95,3 +95,12 @@ class SovereignRuntime:
     @property
     def services(self) -> tuple[str, ...]:
         return tuple(self.attestation.service_names or ())
+
+    @property
+    def components(self) -> tuple[str, ...]:
+        names: list[str] = list(self.services)
+        built_runtime = getattr(self.artifacts, 'built_runtime', None)
+        runtime_components = getattr(built_runtime, 'components', None)
+        if runtime_components:
+            names.extend(str(item) for item in runtime_components)
+        return tuple(dict.fromkeys(name for name in names if str(name).strip()))
