@@ -45,6 +45,7 @@ SQLITE_ALLOWED_PREFIXES = (
     "runtime/platform/behavior_graph/",
     "runtime/platform/delivery_state.py",
     "runtime/platform/security_sqlite_stores.py",
+    "runtime/platform/billing_sqlite_store.py",
 )
 
 
