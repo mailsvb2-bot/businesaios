@@ -23,6 +23,7 @@ from entrypoints.api.health_models import HealthResponse
 from entrypoints.api.headless_models import ExecuteGoalRequest, ExecuteGoalResponse
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
+from application.public_site.cta_intake import CTALandingIntakeService
 
 
 def register_public_api_routes(
@@ -56,6 +57,7 @@ def register_public_api_routes(
         return None
 
     @router.get('/health', response_model=HealthResponse, tags=['system'])
+    @router.get('/healthz', response_model=HealthResponse, tags=['system'])
     def health() -> HealthResponse:
         return health_handler.health()
 
@@ -177,6 +179,47 @@ def register_public_api_routes(
         request_context = RequestContext.from_http_request(http_request, metadata={'route': '/governance/business-memory-summary'})
         enforce_public_security(route_path='/governance/business-memory-summary', request_context=request_context, body=request.model_dump())
         return governance_advanced_handlers.business_memory_summary(request)
+
+
+    cta_intake_service = CTALandingIntakeService()
+
+    @router.post('/public-site/cta/start', tags=['public-site'])
+    async def public_site_cta_start(http_request: Request) -> dict:
+        request_context = RequestContext.from_http_request(http_request, metadata={'route': '/public-site/cta/start'})
+        enforce_public_security(route_path='/public-site/cta/start', request_context=request_context)
+        try:
+            payload = await http_request.json()
+        except Exception:
+            payload = {}
+        if not isinstance(payload, dict):
+            payload = {}
+        result = cta_intake_service.submit(payload=payload)
+        return {
+            'ok': True,
+            'intake_id': result.intake_id,
+            'created_at': result.created_at,
+            'next': {'ui_url': result.app_url},
+            'measurable_outcome': result.outcome,
+        }
+
+    @router.get('/public-site/cta/{intake_id}', tags=['public-site'])
+    async def public_site_cta_status(http_request: Request, intake_id: str) -> dict:
+        request_context = RequestContext.from_http_request(http_request, metadata={'route': '/public-site/cta/{intake_id}'})
+        enforce_public_security(route_path='/public-site/cta/{intake_id}', request_context=request_context, body={'intake_id': intake_id})
+        status_payload = cta_intake_service.get_status(intake_id=intake_id)
+        if not status_payload.found:
+            return {
+                'ok': False,
+                'error': 'not_found',
+                'intake_id': status_payload.intake_id,
+            }
+        return {
+            'ok': True,
+            'intake_id': status_payload.intake_id,
+            'found': status_payload.found,
+            'created_at': status_payload.created_at,
+            'measurable_outcome': status_payload.outcome,
+        }
 
     if client_outcome_handlers is not None:
         @router.get('/client-outcome/packages')
