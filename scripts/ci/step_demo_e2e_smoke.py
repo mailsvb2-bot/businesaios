@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from scripts.ci.paths import repo_root
@@ -9,18 +10,19 @@ _RUNTIME_STATE_PATTERNS = ("*.sqlite3", "*.sqlite", "*.db")
 _RUNTIME_STATE_ROOTS = (
     ".runtime",
     "data/runtime",
-    "data/tenancy",
     "data/config",
 )
+_CI_DEMO_STATE_ROOT = Path("/tmp/businesaios-ci-demo-state")
+_CI_DEMO_TENANCY_DIR = _CI_DEMO_STATE_ROOT / "tenancy"
+_CI_DEMO_DATA_DIR = _CI_DEMO_STATE_ROOT / "data"
 
 
 def _cleanup_demo_runtime_state() -> list[str]:
     """Remove mutable runtime state created by the demo E2E smoke.
 
     The smoke proves boot -> DecisionCore -> RuntimeExecutor. It must not leave
-    repository-local sqlite/state artifacts that make later repo hygiene locks
-    fail. Only generated runtime-state roots are cleaned here; source fixtures
-    and code are never touched.
+    repository-local sqlite/state artifacts or mutate tracked tenancy JSON.
+    Runtime tenancy state is routed to /tmp via explicit env vars below.
     """
     root = repo_root()
     removed: list[str] = []
@@ -38,6 +40,9 @@ def _cleanup_demo_runtime_state() -> list[str]:
                     removed.append(path.relative_to(root).as_posix())
                     path.unlink(missing_ok=True)
         _remove_empty_dirs(state_root, stop_at=root)
+    if _CI_DEMO_STATE_ROOT.exists():
+        shutil.rmtree(_CI_DEMO_STATE_ROOT, ignore_errors=True)
+        removed.append(str(_CI_DEMO_STATE_ROOT))
     return sorted(removed)
 
 
@@ -57,6 +62,9 @@ def _remove_empty_dirs(path: Path, *, stop_at: Path) -> None:
 
 def run() -> tuple[bool, str]:
     try:
+        _cleanup_demo_runtime_state()
+        _CI_DEMO_TENANCY_DIR.mkdir(parents=True, exist_ok=True)
+        _CI_DEMO_DATA_DIR.mkdir(parents=True, exist_ok=True)
         outcome = run_command(
             ["python", "main.py"],
             env={
@@ -67,6 +75,10 @@ def run() -> tuple[bool, str]:
                 "TENANT_ID": "ci-demo-tenant",
                 "SYSTEM_TZ": "Europe/Amsterdam",
                 "CI_STEP_TIMEOUT_SECONDS": "180",
+                "DATA_DIR": str(_CI_DEMO_DATA_DIR),
+                "BUSINESAIOS_TENANCY_DATA_DIR": str(_CI_DEMO_TENANCY_DIR),
+                "BUSINESAIOS_TENANT_REGISTRY_PATH": str(_CI_DEMO_TENANCY_DIR / "tenant_registry.json"),
+                "BUSINESAIOS_TENANT_POLICY_STORE_PATH": str(_CI_DEMO_TENANCY_DIR / "tenant_policies.json"),
             },
             timeout=180,
         )
