@@ -7,7 +7,6 @@ from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from urllib.request import urlopen
 
 from fastapi.testclient import TestClient
 
@@ -24,6 +23,7 @@ from tenancy.tenant_contract import TenantRecord, TenantPlan, TenantStatus
 from tenancy.tenant_registry import PersistentTenantRegistry
 from runtime.enforcement.idempotency_gate import mark_execution_once
 from runtime.wiring import build_durable_stores, resolve_storage_config
+from scripts.ci.http_probe_io import fetch_text
 
 
 class _SQLiteCursorWrapper:
@@ -37,7 +37,7 @@ class _SQLiteCursorWrapper:
         if upper.startswith('SET ') or upper in {'BEGIN;', 'BEGIN'}:
             self.description = None
             return self
-        sql2 = statement.replace('%s', '?')
+        sql2 = statement.replace('%s', '?').replace('BIGSERIAL', 'INTEGER')
         if params is None:
             self._cursor.execute(sql2)
         else:
@@ -201,6 +201,7 @@ def test_production_boot_is_proved_for_prod_profile(monkeypatch, tmp_path) -> No
     monkeypatch.setenv('APP_ENV', 'prod')
     monkeypatch.setenv('METRO_DB_ENGINE', 'postgres')
     monkeypatch.setenv('DATABASE_URL', 'postgresql://proof')
+    monkeypatch.setenv('BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE', '1')
     monkeypatch.setenv('BUSINESAIOS_API_KEY_STORE_PATH', str(tmp_path / 'api_keys.json'))
     monkeypatch.setenv('BUSINESAIOS_TENANT_REGISTRY_PATH', str(tmp_path / 'tenant_registry.json'))
     tenant_registry = PersistentTenantRegistry(path=tmp_path / 'tenant_registry.json')
@@ -222,6 +223,7 @@ def test_production_boot_is_proved_for_prod_profile(monkeypatch, tmp_path) -> No
 
     with ExitStack() as stack:
         storage = resolve_storage_config()
+        assert storage.postgres_event_store_enabled is True
         event_store, ledger, snapshot_store, decision_archive, outbox, payment_outbox = build_durable_stores(
             stack,
             base_dir=str(tmp_path),
@@ -275,7 +277,7 @@ def test_production_boot_is_proved_for_prod_profile(monkeypatch, tmp_path) -> No
                 assert ledger.is_executed('dec-prod-proof-1') is True
                 assert outbox.status('dec-prod-proof-1') == 'delivered'
 
-                raw_health = urlopen('http://127.0.0.1:18089/health', timeout=2).read().decode('utf-8')
+                _, raw_health = fetch_text('http://127.0.0.1:18089/health', timeout=2)
                 assert '"profile":"prod"' in raw_health
         finally:
             if health_thread is not None:
