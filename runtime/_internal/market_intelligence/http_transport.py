@@ -7,8 +7,8 @@ import json
 import random
 import time
 from typing import Any, Iterable, Mapping
-from urllib import error, parse, request
 
+from runtime._internal.http_transport import sync_request, url_with_params
 
 CANON_MARKET_INTELLIGENCE_HTTP_TRANSPORT = True
 
@@ -32,18 +32,15 @@ class HttpRequest:
     accept_json: bool = True
 
     def build_url(self) -> str:
-        pairs: list[tuple[str, Any]] = []
+        pairs: dict[str, Any] = {}
         for key, value in dict(self.params or {}).items():
             if value is None:
                 continue
             if isinstance(value, Iterable) and not isinstance(value, (str, bytes, bytearray, Mapping)):
-                for item in value:
-                    if item is not None:
-                        pairs.append((str(key), str(item)))
+                pairs[str(key)] = tuple(str(item) for item in value if item is not None)
             else:
-                pairs.append((str(key), str(value)))
-        query = parse.urlencode(pairs, doseq=True)
-        return f'{self.url}?{query}' if query else self.url
+                pairs[str(key)] = str(value)
+        return url_with_params(url=str(self.url), params=pairs)
 
 
 @dataclass(frozen=True)
@@ -121,10 +118,11 @@ class CanonicalHttpTransport:
         url = str(req.url or '').strip()
         if not url:
             raise HttpTransportError('invalid_request', 'url is required')
-        parsed = parse.urlparse(url)
-        if parsed.scheme not in {'http', 'https'}:
+        lower = url.lower()
+        if not (lower.startswith('http://') or lower.startswith('https://')):
             raise HttpTransportError('invalid_request', 'only http/https urls are allowed', payload={'url': url})
-        if not parsed.netloc:
+        host = url.split('://', 1)[1].split('/', 1)[0].split('?', 1)[0].split('#', 1)[0].strip()
+        if not host:
             raise HttpTransportError('invalid_request', 'url host is required', payload={'url': url})
 
     def _wait_for_rate_limit(self, provider: str) -> None:
@@ -145,34 +143,28 @@ class CanonicalHttpTransport:
             headers.setdefault('Content-Type', 'application/json; charset=utf-8')
             data = json.dumps(dict(req.body), ensure_ascii=False).encode('utf-8')
         timeout_seconds = min(max(float(req.timeout_seconds), 1.0), 120.0)
-        request_obj = request.Request(url=url, headers=headers, method=method, data=data)
-        try:
-            with request.urlopen(request_obj, timeout=timeout_seconds) as handle:
-                payload = handle.read()
-                text = payload.decode('utf-8', errors='replace')
-                response_headers = {str(k): str(v) for k, v in handle.headers.items()}
-                json_payload = None
-                if req.accept_json:
-                    try:
-                        parsed_payload = json.loads(text)
-                    except json.JSONDecodeError as exc:
-                        raise HttpTransportError('invalid_json', 'response is not valid json', status_code=getattr(handle, 'status', None), payload={'error': str(exc), 'body_preview': text[:200]}) from exc
-                    if isinstance(parsed_payload, Mapping):
-                        json_payload = dict(parsed_payload)
-                    elif isinstance(parsed_payload, list):
-                        json_payload = tuple(dict(item) if isinstance(item, Mapping) else item for item in parsed_payload)
-                    else:
-                        json_payload = parsed_payload
-                return HttpResponse(status_code=int(getattr(handle, 'status', 200)), headers=response_headers, text=text, json_payload=json_payload)
-        except error.HTTPError as exc:
-            body = exc.read().decode('utf-8', errors='replace') if hasattr(exc, 'read') else ''
-            headers = {str(k): str(v) for k, v in getattr(exc, 'headers', {}).items()}
-            self._update_rate_limit(provider_key, headers)
-            raise HttpTransportError('http_error', f'http status {exc.code}', status_code=int(exc.code), payload={'headers': headers, 'body_preview': body[:200]}) from exc
-        except error.URLError as exc:
-            reason = getattr(exc, 'reason', exc)
-            code = 'timeout' if 'timed out' in str(reason).lower() else 'transport_error'
-            raise HttpTransportError(code, str(reason), payload={'reason': str(reason)}) from exc
+        result = sync_request(method=method, url=url, headers=headers, body=data, timeout_s=timeout_seconds)
+        response_headers = dict(result.headers or {})
+        if result.error_kind:
+            code = str(result.error_kind)
+            if code == 'http_error':
+                code = 'http_error'
+            raise HttpTransportError(code, result.error_message or code, status_code=result.status, payload={'headers': response_headers, 'body_preview': str(result.text or '')[:200]})
+        status = int(result.status or 599)
+        text = str(result.text or '')
+        json_payload = result.json
+        if req.accept_json and json_payload is None and text:
+            try:
+                parsed_payload = json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise HttpTransportError('invalid_json', 'response is not valid json', status_code=status, payload={'error': str(exc), 'body_preview': text[:200]}) from exc
+            if isinstance(parsed_payload, Mapping):
+                json_payload = dict(parsed_payload)
+            elif isinstance(parsed_payload, list):
+                json_payload = tuple(dict(item) if isinstance(item, Mapping) else item for item in parsed_payload)
+            else:
+                json_payload = parsed_payload
+        return HttpResponse(status_code=status, headers=response_headers, text=text, json_payload=json_payload)
 
     def _read_retry_after_seconds(self, headers: Mapping[str, Any]) -> float | None:
         value = str(dict(headers or {}).get('Retry-After') or '').strip()
