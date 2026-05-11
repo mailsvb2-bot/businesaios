@@ -3,16 +3,29 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 from typing import Any, Mapping
-from urllib import error, request
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
+from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_HTTP_LIVE_CLIENTS = True
+
+
+def _load_internal_attr(module_name: str, attr_name: str) -> Any:
+    token = ALLOW_INTERNAL_IMPORT.set(True)
+    try:
+        module = __import__(module_name, fromlist=[attr_name])
+        return getattr(module, attr_name)
+    finally:
+        ALLOW_INTERNAL_IMPORT.reset(token)
+
+
+def _sync_request(*args: Any, **kwargs: Any) -> Any:
+    return _load_internal_attr('runtime._internal.http_transport', 'sync_request')(*args, **kwargs)
 
 
 @dataclass(frozen=True)
@@ -38,25 +51,34 @@ class VendorHttpLiveTransport:
                 'transport_binding': binding,
                 'response_parser': self.response_parsers.describe(provider=provider),
             }
-        try:
-            body = prepared.get('json_body')
-            raw = None if body is None else json.dumps(body, sort_keys=True).encode('utf-8')
-            req = request.Request(url=str(prepared['url']), method=str(prepared.get('method') or 'POST'), headers={str(k): str(v) for k, v in dict(prepared.get('headers') or {}).items()}, data=raw)
-            with request.urlopen(req, timeout=float(self.timeout_seconds)) as resp:
-                payload_text = resp.read().decode('utf-8', errors='replace')
-                parsed = self.response_parsers.parse(provider=provider, operation=operation, response={'http_status': int(getattr(resp, 'status', 200)), 'response_body': payload_text[:2000]})
-                return {
-                    'provider_key': provider.provider_key,
-                    'network_capable': True,
-                    'http_status': int(getattr(resp, 'status', 200)),
-                    'response_body': payload_text[:2000],
-                    'request': prepared,
-                    'parsed_response': parsed,
-                }
-        except error.HTTPError as exc:
-            body_text = exc.read().decode('utf-8', errors='replace')[:2000]
-            parsed = self.response_parsers.parse(provider=provider, operation=operation, response={'http_status': int(exc.code), 'response_body': body_text})
-            return {'provider_key': provider.provider_key, 'network_capable': True, 'http_status': int(exc.code), 'response_body': body_text, 'request': prepared, 'parsed_response': parsed}
+        body = prepared.get('json_body')
+        raw = None if body is None else json.dumps(body, sort_keys=True).encode('utf-8')
+        result = _sync_request(
+            method=str(prepared.get('method') or 'POST'),
+            url=str(prepared['url']),
+            headers={str(k): str(v) for k, v in dict(prepared.get('headers') or {}).items()},
+            body=raw,
+            timeout_s=float(self.timeout_seconds),
+        )
+        http_status = int(result.status or 599)
+        payload_text = str(result.text or '')[:2000]
+        parsed = self.response_parsers.parse(
+            provider=provider,
+            operation=operation,
+            response={'http_status': http_status, 'response_body': payload_text, 'error_kind': result.error_kind},
+        )
+        response: dict[str, Any] = {
+            'provider_key': provider.provider_key,
+            'network_capable': True,
+            'http_status': http_status,
+            'response_body': payload_text,
+            'request': prepared,
+            'parsed_response': parsed,
+        }
+        if result.error_kind:
+            response['error_kind'] = result.error_kind
+            response['error_message'] = result.error_message or ''
+        return response
 
     def _prepare_request(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, operation: str, payload: Mapping[str, Any], binding: Mapping[str, Any]) -> Mapping[str, Any]:
         secrets = self._load_secrets(provider=provider, tenant_id=tenant_id, business_id=business_id)
