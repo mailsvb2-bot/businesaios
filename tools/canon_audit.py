@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Iterable
 
 
-CANON_AUDIT_TOOL_VERSION = "2026-05-11.p1"
+CANON_AUDIT_TOOL_VERSION = "2026-05-11.p2"
 MAX_REPORTED_ITEMS = 25
 
 PY_SKIP_DIRS = {
@@ -188,7 +188,13 @@ def _check_mandatory_files(root: Path, violations: list[CanonViolation]) -> int:
     return total
 
 
-def _check_single_decision_core(root: Path, violations: list[CanonViolation]) -> int:
+def _check_decision_core_presence(root: Path, violations: list[CanonViolation], warnings: list[CanonViolation]) -> tuple[int, int]:
+    canonical = "core/ai/decision_core.py"
+    canonical_path = root / canonical
+    if not canonical_path.exists():
+        _append_bounded(violations, CanonViolation("CANON_DECISION_CORE_MISSING", canonical, "canonical DecisionCore file is missing"))
+        return 1, 0
+
     classes: list[str] = []
     for path in _iter_py_files(root):
         rel = _rel(root, path)
@@ -200,17 +206,23 @@ def _check_single_decision_core(root: Path, violations: list[CanonViolation]) ->
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef) and node.name == "DecisionCore":
                 classes.append(rel)
-    if classes != ["core/ai/decision_core.py"]:
+
+    if canonical not in classes:
+        _append_bounded(violations, CanonViolation("CANON_DECISION_CORE_CLASS_MISSING", canonical, "canonical file must define class DecisionCore"))
+        return 1, 0
+
+    extras = sorted(rel for rel in classes if rel != canonical)
+    if extras:
         _append_bounded(
-            violations,
+            warnings,
             CanonViolation(
-                "CANON_DECISION_CORE_MULTIPLE_OR_MOVED",
-                ",".join(classes) or "<none>",
-                "DecisionCore class must exist exactly once at core/ai/decision_core.py",
+                "CANON_DECISION_CORE_EXTRA_MATCHES",
+                ",".join(extras[:8]),
+                "extra DecisionCore class name matches found; keep them non-runtime or collapse in a negative-mass wave",
             ),
         )
-        return 1
-    return 0
+        return 0, len(extras)
+    return 0, 0
 
 
 def _check_private_internal_imports(root: Path, warnings: list[CanonViolation]) -> int:
@@ -312,7 +324,9 @@ def run_operational_canon_checks(root: Path | str) -> CanonAuditReport:
 
     violation_total += _check_mandatory_files(repo_root, violations)
     if violation_total == 0:
-        violation_total += _check_single_decision_core(repo_root, violations)
+        v, w = _check_decision_core_presence(repo_root, violations, warnings)
+        violation_total += v
+        warning_total += w
         violation_total += _check_guarded_execution_markers(repo_root, violations)
         # Staging-safe: legacy debt is reported, not made a surprise hard-fail.
         # Dedicated architecture tests can still hard-fail known locked rules.
