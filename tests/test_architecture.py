@@ -53,6 +53,7 @@ SQLITE_ALLOWED_PREFIXES = (
     "runtime/platform/safety_rollback_store.py",
     "runtime/platform/safety_runaway_loop_store.py",
     "runtime/platform/safety_approval_repository.py",
+    "runtime/platform/safety_circuit_breaker_store.py",
 )
 
 
