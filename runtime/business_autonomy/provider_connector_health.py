@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
-from urllib.parse import urlparse
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderHealthProbeResult
@@ -34,6 +32,21 @@ _REQUIRED_BY_PROVIDER = {
     'redis_runtime': ('url',),
     'clickhouse_export': ('endpoint', 'database', 'username', 'password'),
 }
+
+
+def _has_http_endpoint_shape(value: str) -> bool:
+    text = str(value or '').strip()
+    if not text:
+        return False
+    lower = text.lower()
+    if lower.startswith('https://'):
+        rest = text[8:]
+    elif lower.startswith('http://'):
+        rest = text[7:]
+    else:
+        return False
+    host = rest.split('/', 1)[0].split('?', 1)[0].split('#', 1)[0].strip()
+    return bool(host and not host.startswith(':') and ' ' not in host)
 
 
 @dataclass(frozen=True)
@@ -91,8 +104,7 @@ class ProviderConnectorHealthService:
             return (url.startswith('redis://') or url.startswith('rediss://'), 'invalid_redis_url' if url else 'missing_redis_url')
         if provider_key == 'clickhouse_export':
             endpoint = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.endpoint')
-            parsed = urlparse(endpoint)
-            return (bool(parsed.scheme and parsed.netloc), 'invalid_clickhouse_endpoint' if endpoint else 'missing_clickhouse_endpoint')
+            return (_has_http_endpoint_shape(endpoint), 'invalid_clickhouse_endpoint' if endpoint else 'missing_clickhouse_endpoint')
         return True, 'ok'
 
     def _read_optional_secret(self, *, tenant_id: str, connector_id: str, business_id: str, secret_name: str) -> str:
