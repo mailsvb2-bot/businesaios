@@ -4,13 +4,27 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from security.secret_vault import SecretVault
-from urllib.parse import urlencode
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 
 CANON_PROVIDER_VENDOR_TRANSPORTS = True
+
+
+def _query_string(params: Mapping[str, str]) -> str:
+    # Prepared-only templates here use controlled placeholder tokens. Keep this
+    # local and deterministic so runtime/business does not import raw URL SDKs.
+    parts = []
+    for key, value in params.items():
+        k = str(key).strip()
+        v = str(value).strip()
+        if not k:
+            continue
+        if any(ch.isspace() for ch in k):
+            raise ValueError('query parameter keys must not contain whitespace')
+        parts.append(f'{k}={v}')
+    return '&'.join(parts)
 
 
 @dataclass(frozen=True)
@@ -72,7 +86,7 @@ class WooCommerceVendorTransport(_PreparedOnlyTransport):
     def _build_request(self, *, provider: ProviderDefinition, operation: str, payload: Mapping[str, Any], binding: Mapping[str, Any]) -> Mapping[str, Any]:
         store_url = str(payload.get('store_url') or '{store_url}')
         path = str(binding['sync_path_family']).format(operation=operation)
-        query = urlencode({'consumer_key': '{consumer_key}', 'consumer_secret': '{consumer_secret}'})
+        query = _query_string({'consumer_key': '{consumer_key}', 'consumer_secret': '{consumer_secret}'})
         return {'method': 'GET' if operation.endswith('_sync') else 'POST', 'url_template': f"{store_url}{path}?{query}", 'json_body': dict(payload or {})}
 
 
