@@ -10,7 +10,7 @@ from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
-from runtime.platform.config.env_flags import env_path, env_str
+from runtime.platform.config.env_flags import env_bool, env_path, env_str
 
 CANON_RUNTIME_WIRING_OWNER = True
 CANON_RUNTIME_WIRING_STORAGE_ONLY = True
@@ -23,6 +23,7 @@ class StorageConfig:
     env: str
     backend: str  # sqlite | postgres
     postgres_dsn: str | None
+    postgres_event_store_enabled: bool = False
 
 
 def _sqlite_path(env_name: str, *, base_dir: str, filename: str) -> str:
@@ -35,14 +36,22 @@ def resolve_storage_config() -> StorageConfig:
     engine = (env_str("METRO_DB_ENGINE").strip().lower() or "")
     backend_default = "postgres" if (pg_dsn or engine == "postgres") else "sqlite"
     backend = (env_str("STORAGE_BACKEND", backend_default) or backend_default).strip().lower()
+    postgres_event_store_enabled = env_bool("BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE", False)
 
     if env == "prod":
         if backend != "postgres":
             raise RuntimeError(f"PROD_REQUIRES_POSTGRES_STORAGE_BACKEND:{backend}")
         if not pg_dsn:
             raise RuntimeError("PROD_REQUIRES_POSTGRES_DSN")
+        if not postgres_event_store_enabled:
+            raise RuntimeError("PROD_REQUIRES_EXPLICIT_POSTGRES_EVENT_STORE_ENABLEMENT")
 
-    return StorageConfig(env=env, backend=backend, postgres_dsn=pg_dsn)
+    return StorageConfig(
+        env=env,
+        backend=backend,
+        postgres_dsn=pg_dsn,
+        postgres_event_store_enabled=postgres_event_store_enabled,
+    )
 
 
 def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageConfig):
@@ -57,7 +66,7 @@ def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageCon
         from runtime.platform.outbox.postgres_payment_outbox import PostgresPaymentOutbox
         from observability.platform.snapshot_store.postgres_snapshot_store import PostgresSnapshotStore
 
-        event_store = stack.enter_context(PostgresEventStore(storage.postgres_dsn))
+        event_store = stack.enter_context(PostgresEventStore(storage.postgres_dsn, enabled=storage.postgres_event_store_enabled))
         ledger = stack.enter_context(PostgresLedger(storage.postgres_dsn))
         snapshot_store = stack.enter_context(PostgresSnapshotStore(storage.postgres_dsn))
         decision_archive = stack.enter_context(PostgresDecisionArchive(storage.postgres_dsn))
