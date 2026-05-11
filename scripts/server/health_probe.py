@@ -3,16 +3,13 @@ from __future__ import annotations
 import json
 import os
 
-from runtime._internal.http_transport import sync_request
+from scripts.ci.http_probe_io import fetch_text
 
 CANON_SERVER_HEALTH_PROBE = True
 
 
 def _fetch(url: str) -> tuple[int, str]:
-    result = sync_request(method='GET', url=url, timeout_s=5)
-    if result.error_kind:
-        raise RuntimeError(result.error_message or result.error_kind)
-    return int(result.status or 0), str(result.text or '')
+    return fetch_text(url, method='GET', timeout=5)
 
 
 def main() -> int:
