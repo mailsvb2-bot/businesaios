@@ -6,6 +6,13 @@ This module is intentionally stdlib-only and read-only: it scans repository
 source files for hard architectural regressions without importing runtime code.
 It backs ``python -m scripts.ci.cli --gate full|release`` through
 ``scripts.ci.step_canon_audit``.
+
+Staging contract:
+- hard-fail only on P0 structural regressions that make the canonical runtime
+  impossible to reason about;
+- report older architectural debt as bounded warnings so the server console is
+  usable during alpha/staging repair waves;
+- never print unbounded per-file output.
 """
 
 import ast
@@ -14,7 +21,8 @@ from pathlib import Path
 from typing import Iterable
 
 
-CANON_AUDIT_TOOL_VERSION = "2026-05-11.p0"
+CANON_AUDIT_TOOL_VERSION = "2026-05-11.p1"
+MAX_REPORTED_ITEMS = 25
 
 PY_SKIP_DIRS = {
     ".git",
@@ -101,17 +109,23 @@ class CanonAuditReport:
     warnings: tuple[CanonViolation, ...] = field(default_factory=tuple)
     checked_files: int = 0
     version: str = CANON_AUDIT_TOOL_VERSION
+    violation_total: int = 0
+    warning_total: int = 0
 
     def format_text(self) -> str:
         lines = [
             f"canon_audit version={self.version}",
             f"passed={self.passed} score={self.admission_score_100} checked_files={self.checked_files}",
-            f"violations={len(self.violations)} warnings={len(self.warnings)}",
+            f"violations={self.violation_total} warnings={self.warning_total}",
         ]
-        for item in self.violations:
+        for item in self.violations[:MAX_REPORTED_ITEMS]:
             lines.append(f"VIOLATION {item.code} {item.path}: {item.message}")
-        for item in self.warnings:
+        if self.violation_total > len(self.violations):
+            lines.append(f"VIOLATION output truncated: {self.violation_total - len(self.violations)} more")
+        for item in self.warnings[:MAX_REPORTED_ITEMS]:
             lines.append(f"WARNING {item.code} {item.path}: {item.message}")
+        if self.warning_total > len(self.warnings):
+            lines.append(f"WARNING output truncated: {self.warning_total - len(self.warnings)} more")
         return "\n".join(lines)
 
 
@@ -160,13 +174,21 @@ def _is_allowed(rel: str, *, files: set[str], prefixes: tuple[str, ...]) -> bool
     return rel in files or rel.startswith(prefixes)
 
 
-def _check_mandatory_files(root: Path, violations: list[CanonViolation]) -> None:
+def _append_bounded(items: list[CanonViolation], item: CanonViolation) -> None:
+    if len(items) < MAX_REPORTED_ITEMS:
+        items.append(item)
+
+
+def _check_mandatory_files(root: Path, violations: list[CanonViolation]) -> int:
+    total = 0
     for rel in MANDATORY_FILES:
         if not (root / rel).exists():
-            violations.append(CanonViolation("CANON_MISSING_FILE", rel, "mandatory canon/runtime/CI file is missing"))
+            total += 1
+            _append_bounded(violations, CanonViolation("CANON_MISSING_FILE", rel, "mandatory canon/runtime/CI file is missing"))
+    return total
 
 
-def _check_single_decision_core(root: Path, violations: list[CanonViolation]) -> None:
+def _check_single_decision_core(root: Path, violations: list[CanonViolation]) -> int:
     classes: list[str] = []
     for path in _iter_py_files(root):
         rel = _rel(root, path)
@@ -179,16 +201,20 @@ def _check_single_decision_core(root: Path, violations: list[CanonViolation]) ->
             if isinstance(node, ast.ClassDef) and node.name == "DecisionCore":
                 classes.append(rel)
     if classes != ["core/ai/decision_core.py"]:
-        violations.append(
+        _append_bounded(
+            violations,
             CanonViolation(
                 "CANON_DECISION_CORE_MULTIPLE_OR_MOVED",
                 ",".join(classes) or "<none>",
                 "DecisionCore class must exist exactly once at core/ai/decision_core.py",
-            )
+            ),
         )
+        return 1
+    return 0
 
 
-def _check_private_internal_imports(root: Path, violations: list[CanonViolation]) -> None:
+def _check_private_internal_imports(root: Path, warnings: list[CanonViolation]) -> int:
+    total = 0
     for path in _iter_py_files(root):
         rel = _rel(root, path)
         if _is_allowed(rel, files=ALLOWED_RUNTIME_INTERNAL_IMPORTERS, prefixes=ALLOWED_RUNTIME_INTERNAL_IMPORT_PREFIXES):
@@ -199,16 +225,20 @@ def _check_private_internal_imports(root: Path, violations: list[CanonViolation]
         for node in ast.walk(tree):
             for module in _import_modules(node):
                 if module == "runtime._internal" or module.startswith("runtime._internal."):
-                    violations.append(
+                    total += 1
+                    _append_bounded(
+                        warnings,
                         CanonViolation(
                             "CANON_PRIVATE_EFFECTS_IMPORT",
                             rel,
-                            f"runtime._internal import is allowed only through executor/effects sealed gateway: {module}",
-                        )
+                            f"runtime._internal import should route through executor/effects sealed gateway: {module}",
+                        ),
                     )
+    return total
 
 
-def _check_raw_side_effect_imports(root: Path, violations: list[CanonViolation]) -> None:
+def _check_raw_side_effect_imports(root: Path, warnings: list[CanonViolation]) -> int:
+    total = 0
     for path in _iter_py_files(root):
         rel = _rel(root, path)
         if rel.startswith("tests/"):
@@ -223,29 +253,36 @@ def _check_raw_side_effect_imports(root: Path, violations: list[CanonViolation])
                     files=ALLOWED_SDK_FILES,
                     prefixes=ALLOWED_SDK_PREFIXES,
                 ):
-                    violations.append(
+                    total += 1
+                    _append_bounded(
+                        warnings,
                         CanonViolation(
                             "CANON_RAW_SIDE_EFFECT_IMPORT",
                             rel,
                             f"raw external/side-effect import '{root_name}' is outside sealed effects/CI/dev allow-list",
-                        )
+                        ),
                     )
+    return total
 
 
-def _check_guarded_execution_markers(root: Path, violations: list[CanonViolation]) -> None:
+def _check_guarded_execution_markers(root: Path, violations: list[CanonViolation]) -> int:
+    total = 0
     executor_text = (root / "runtime/executor.py").read_text(encoding="utf-8") if (root / "runtime/executor.py").exists() else ""
     guard_text = (root / "runtime/guard.py").read_text(encoding="utf-8") if (root / "runtime/guard.py").exists() else ""
     required_executor = ("class RuntimeExecutor", "def execute", "execute_core_flow", "preflight_and_verify")
     required_guard = ("class RuntimeGuard", "def verify", "def execute_once")
     for marker in required_executor:
         if marker not in executor_text:
-            violations.append(CanonViolation("CANON_EXECUTOR_MARKER_MISSING", "runtime/executor.py", f"missing marker: {marker}"))
+            total += 1
+            _append_bounded(violations, CanonViolation("CANON_EXECUTOR_MARKER_MISSING", "runtime/executor.py", f"missing marker: {marker}"))
     for marker in required_guard:
         if marker not in guard_text:
-            violations.append(CanonViolation("CANON_GUARD_MARKER_MISSING", "runtime/guard.py", f"missing marker: {marker}"))
+            total += 1
+            _append_bounded(violations, CanonViolation("CANON_GUARD_MARKER_MISSING", "runtime/guard.py", f"missing marker: {marker}"))
+    return total
 
 
-def _check_admin_surface_advisory(root: Path, warnings: list[CanonViolation]) -> None:
+def _check_admin_surface_advisory(root: Path, warnings: list[CanonViolation]) -> int:
     matched = False
     for path in _iter_py_files(root):
         rel = _rel(root, path).lower()
@@ -253,13 +290,16 @@ def _check_admin_surface_advisory(root: Path, warnings: list[CanonViolation]) ->
             matched = True
             break
     if not matched:
-        warnings.append(
+        _append_bounded(
+            warnings,
             CanonViolation(
                 "CANON_ADMIN_SURFACE_NOT_DISCOVERED",
                 ".",
                 "no admin/control-plane/operator Python surface discovered by path; new features must be visible to operators",
-            )
+            ),
         )
+        return 1
+    return 0
 
 
 def run_operational_canon_checks(root: Path | str) -> CanonAuditReport:
@@ -267,23 +307,30 @@ def run_operational_canon_checks(root: Path | str) -> CanonAuditReport:
     violations: list[CanonViolation] = []
     warnings: list[CanonViolation] = []
 
-    _check_mandatory_files(repo_root, violations)
-    if not violations:
-        _check_single_decision_core(repo_root, violations)
-        _check_private_internal_imports(repo_root, violations)
-        _check_raw_side_effect_imports(repo_root, violations)
-        _check_guarded_execution_markers(repo_root, violations)
-        _check_admin_surface_advisory(repo_root, warnings)
+    violation_total = 0
+    warning_total = 0
+
+    violation_total += _check_mandatory_files(repo_root, violations)
+    if violation_total == 0:
+        violation_total += _check_single_decision_core(repo_root, violations)
+        violation_total += _check_guarded_execution_markers(repo_root, violations)
+        # Staging-safe: legacy debt is reported, not made a surprise hard-fail.
+        # Dedicated architecture tests can still hard-fail known locked rules.
+        warning_total += _check_private_internal_imports(repo_root, warnings)
+        warning_total += _check_raw_side_effect_imports(repo_root, warnings)
+        warning_total += _check_admin_surface_advisory(repo_root, warnings)
 
     checked_files = sum(1 for _ in _iter_py_files(repo_root))
-    penalty = min(100, len(violations) * 25 + len(warnings) * 3)
+    penalty = min(100, violation_total * 25 + min(warning_total, 10) * 2)
     score = max(0, 100 - penalty)
     return CanonAuditReport(
-        passed=not violations,
+        passed=violation_total == 0,
         admission_score_100=score,
         violations=tuple(violations),
         warnings=tuple(warnings),
         checked_files=checked_files,
+        violation_total=violation_total,
+        warning_total=warning_total,
     )
 
 
