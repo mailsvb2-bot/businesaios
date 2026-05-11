@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import json
 import os
-import urllib.request
+
+from scripts.ci.http_probe_io import fetch_json
 
 CANON_SERVER_SMOKE_FLOW = True
 
@@ -13,16 +13,17 @@ def _url(path: str) -> str:
 
 
 def _get(path: str) -> tuple[int, dict]:
-    req = urllib.request.Request(_url(path), method='GET', headers={'x-api-key': os.getenv('CONTROL_PLANE_API_KEY', 'development-control-plane-key')})
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        return int(getattr(resp, 'status', 0) or 0), json.loads(resp.read().decode('utf-8'))
+    return fetch_json(
+        _url(path),
+        method='GET',
+        headers={'x-api-key': os.getenv('CONTROL_PLANE_API_KEY', 'development-control-plane-key')},
+        timeout=10,
+    )
 
 
 def _post(path: str, payload: dict) -> tuple[int, dict]:
-    data = json.dumps(payload).encode('utf-8')
-    req = urllib.request.Request(
+    return fetch_json(
         _url(path),
-        data=data,
         method='POST',
         headers={
             'content-type': 'application/json',
@@ -31,9 +32,9 @@ def _post(path: str, payload: dict) -> tuple[int, dict]:
             'x-action-id': 'server-smoke-action-1',
             'x-api-key': os.getenv('CONTROL_PLANE_API_KEY', 'development-control-plane-key'),
         },
+        payload=payload,
+        timeout=10,
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        return int(getattr(resp, 'status', 0) or 0), json.loads(resp.read().decode('utf-8'))
 
 
 def main() -> int:
