@@ -5,8 +5,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 import hashlib
 import json
-from pathlib import Path
-import sqlite3
 from typing import Iterable, Iterator, Mapping, Protocol
 
 from billing.commercial_cycle_contract import utc_now
@@ -18,10 +16,14 @@ from billing.subscription_lifecycle import SubscriptionCommercialEnvelope, Subsc
 from billing.usage_rollup import UsageRollup
 from billing.scheduler.lease import BillingJobLeaseStoreContract, InMemoryBillingJobLeaseStore, SqliteBillingJobLeaseStore, create_job_lease
 from core.tenancy.normalization import require_tenant_id
+from runtime.platform.billing_scheduler_job_store import (
+    CANON_PLATFORM_BILLING_SCHEDULER_JOB_STORE,
+    PlatformSqliteBillingJobRunStore,
+    SCHEMA_VERSION,
+)
 
 
 CANON_BILLING_SCHEDULER_JOBS = True
-SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -69,84 +71,14 @@ class InMemoryBillingJobRunStore:
         return self._runs.get((require_tenant_id(tenant_id), str(job_name).strip(), str(run_key).strip()))
 
 
-class SqliteBillingJobRunStore:
+class SqliteBillingJobRunStore(PlatformSqliteBillingJobRunStore):
+    """Billing scheduler-facing job run store facade.
+
+    SQLite ownership lives in runtime.platform.billing_scheduler_job_store.
+    """
+
     def __init__(self, *, sqlite_path: str) -> None:
-        self._path = str(sqlite_path).strip()
-        if not self._path:
-            raise ValueError('sqlite_path is required')
-        Path(self._path).parent.mkdir(parents=True, exist_ok=True)
-        self._init_db()
-
-    @contextmanager
-    def _connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self._path)
-        conn.execute('PRAGMA foreign_keys = ON')
-        conn.execute('PRAGMA journal_mode = WAL')
-        try:
-            yield conn
-            conn.commit()
-        finally:
-            conn.close()
-
-    def _init_db(self) -> None:
-        with self._connect() as conn:
-            conn.execute('CREATE TABLE IF NOT EXISTS billing_schema_version (component TEXT PRIMARY KEY, version INTEGER NOT NULL)')
-            row = conn.execute('SELECT version FROM billing_schema_version WHERE component = ?', ('job_runs',)).fetchone()
-            if row is None:
-                conn.execute('INSERT INTO billing_schema_version(component, version) VALUES (?, ?)', ('job_runs', SCHEMA_VERSION))
-            elif int(row[0]) != SCHEMA_VERSION:
-                raise RuntimeError('unsupported job_runs schema version')
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS billing_job_runs (
-                    tenant_id TEXT NOT NULL,
-                    job_name TEXT NOT NULL,
-                    run_key TEXT NOT NULL,
-                    payload_json TEXT NOT NULL,
-                    PRIMARY KEY (tenant_id, job_name, run_key)
-                )
-            ''')
-
-    def save(self, run: BillingJobRun) -> BillingJobRun:
-        run.validate()
-        tid = require_tenant_id(run.tenant_id)
-        job_name = str(run.job_name).strip()
-        run_key = str(run.run_key).strip()
-        payload = {
-            'tenant_id': run.tenant_id,
-            'job_name': job_name,
-            'run_key': run_key,
-            'started_at': run.started_at.isoformat(),
-            'finished_at': None if run.finished_at is None else run.finished_at.isoformat(),
-            'metadata': dict(run.metadata),
-        }
-        with self._connect() as conn:
-            row = conn.execute('SELECT payload_json FROM billing_job_runs WHERE tenant_id = ? AND job_name = ? AND run_key = ?', (tid, job_name, run_key)).fetchone()
-            if row is not None:
-                existing = self._decode(row[0])
-                if existing != run:
-                    raise ValueError('billing job run collision')
-                return existing
-            conn.execute('INSERT INTO billing_job_runs(tenant_id, job_name, run_key, payload_json) VALUES (?, ?, ?, ?)', (tid, job_name, run_key, json.dumps(payload, sort_keys=True)))
-        return run
-
-    def get(self, *, tenant_id: str, job_name: str, run_key: str) -> BillingJobRun | None:
-        tid = require_tenant_id(tenant_id)
-        normalized_job = str(job_name).strip()
-        normalized_key = str(run_key).strip()
-        if not normalized_job or not normalized_key:
-            raise ValueError('job_name and run_key are required')
-        with self._connect() as conn:
-            row = conn.execute('SELECT payload_json FROM billing_job_runs WHERE tenant_id = ? AND job_name = ? AND run_key = ?', (tid, normalized_job, normalized_key)).fetchone()
-        return None if row is None else self._decode(row[0])
-
-    def _decode(self, payload_json: str) -> BillingJobRun:
-        payload = json.loads(payload_json)
-        payload['started_at'] = datetime.fromisoformat(payload['started_at'])
-        if payload['finished_at'] is not None:
-            payload['finished_at'] = datetime.fromisoformat(payload['finished_at'])
-        run = BillingJobRun(**payload)
-        run.validate()
-        return run
+        super().__init__(sqlite_path=sqlite_path, run_cls=BillingJobRun)
 
 
 def _stable_job_fingerprint(payload: object) -> str:
@@ -336,8 +268,6 @@ class InvoiceIssueJob:
             return tuple(updated)
 
 
-
-
 class DunningRetryJob:
     def __init__(self, *, orchestrator: DunningOrchestrator, run_store: BillingJobRunStoreContract | None = None, lease_store: BillingJobLeaseStoreContract | None = None, worker_id: str = 'billing-worker', lease_ttl: timedelta = timedelta(minutes=5)) -> None:
         self._orchestrator = orchestrator
@@ -441,6 +371,7 @@ class ReconciliationJob:
 __all__ = [
     'BillingJobRun',
     'CANON_BILLING_SCHEDULER_JOBS',
+    'CANON_PLATFORM_BILLING_SCHEDULER_JOB_STORE',
     'BillingJobRunStoreContract',
     'DunningRetryJob',
     'BillingJobLeaseStoreContract',
@@ -454,4 +385,3 @@ __all__ = [
     'SqliteBillingJobRunStore',
     'SqliteBillingJobLeaseStore',
 ]
-
