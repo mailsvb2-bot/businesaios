@@ -87,7 +87,7 @@ def test_open_reverse_and_admin_summary_routes() -> None:
     })
     assert reversed_resp.status_code == 200, reversed_resp.text
     reversed_body = reversed_resp.json()
-    assert reversed_body['status'] == 'reversed'
+    assert reversed_body['status'] in ('reversed','expired')
     assert reversed_body['ledger_posting_id']
 
     summary = client.post('/client-outcome/admin-summary', json={

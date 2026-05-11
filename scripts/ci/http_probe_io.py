@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
+# removed, handled via http_client
+from runtime._internal import http_client as client
 from typing import Mapping
 
 CANON_CI_HTTP_PROBE_IO = True
