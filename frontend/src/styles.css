@@ -2,11 +2,17 @@
 body { margin: 0; background: #0b1220; color: #e5e7eb; }
 .page { max-width: 980px; margin: 0 auto; padding: 24px; }
 .muted { color: #94a3b8; }
+.eyebrow { color: #93c5fd; font-size: 12px; font-weight: 700; letter-spacing: .12em; margin: 0 0 8px; text-transform: uppercase; }
+.hero { background: radial-gradient(circle at 10% 0%, rgba(37, 99, 235, .25), transparent 34%), #111827; }
 .card { background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-.row { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
-input { width: 100%; background: #0f172a; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 10px; margin-top: 8px; }
+.row { display: flex; gap: 12px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.cta-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: end; margin-top: 18px; }
+input { width: 100%; box-sizing: border-box; background: #0f172a; color: #e5e7eb; border: 1px solid #334155; border-radius: 8px; padding: 10px; margin-top: 8px; }
 button { background: #2563eb; color: #fff; border: none; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .65; }
+button.primary { background: #16a34a; min-height: 40px; }
 a { color: #93c5fd; text-decoration: none; }
 pre { white-space: pre-wrap; word-break: break-word; }
 .error { color: #fecaca; background: #7f1d1d; border-radius: 8px; padding: 12px; }
+.success { color: #bbf7d0; background: #052e16; border-radius: 8px; padding: 12px; }
