@@ -11,6 +11,7 @@ _RUNTIME_STATE_ROOTS = (
     ".runtime",
     "data/runtime",
     "data/config",
+    "data/tenancy",
 )
 _CI_DEMO_STATE_ROOT = Path("/tmp/businesaios-ci-demo-state")
 _CI_DEMO_TENANCY_DIR = _CI_DEMO_STATE_ROOT / "tenancy"
@@ -22,7 +23,9 @@ def _cleanup_demo_runtime_state() -> list[str]:
 
     The smoke proves boot -> DecisionCore -> RuntimeExecutor. It must not leave
     repository-local sqlite/state artifacts or mutate tracked tenancy JSON.
-    Runtime tenancy state is routed to /tmp via explicit env vars below.
+    Runtime tenancy state is routed to /tmp via explicit env vars below; this
+    cleanup also removes repository-local tenancy DB fallbacks if any legacy path
+    still creates them during smoke execution.
     """
     root = repo_root()
     removed: list[str] = []
