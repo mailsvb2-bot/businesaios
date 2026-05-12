@@ -3,8 +3,9 @@ from __future__ import annotations
 """Canonical route handlers for business autonomy operational visibility."""
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
+from application.business_autonomy.delayed_outcome_bridge import BusinessAutonomyDelayedOutcomeBridge
 from runtime.business_autonomy.public_api import build_business_autonomy_operationalization
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
 
@@ -60,7 +61,6 @@ class BusinessAutonomyRouteHandlers:
     def run_chaos_dry_run(self, scenario_name: str) -> dict[str, Any]:
         return dict(self.stack["chaos_execution_service"].execute(scenario_name=scenario_name, dry_run=True))
 
-
     def get_observability_report(self) -> dict[str, Any]:
         service = self.stack["observability_report_service"]
         return dict(service.build_report())
@@ -73,13 +73,10 @@ class BusinessAutonomyRouteHandlers:
         service = self.stack["observability_report_service"]
         return dict(service.export_audit_bundle(bundle_name=bundle_name))
 
-
-
-
     def get_fleet_view(self, limit: int = 100) -> dict[str, Any]:
         plane = self.stack.get("operator_admin_plane")
         if plane is None:
-            return {"fleet_cards": [], "business_class_rows": [], "trust_capability_rows": [], "approval_bottlenecks": [], "cross_business_failures": [], "export_surface": {}}
+            return {"fleet_cards": [], "business_class_rows": [], "trust_capability_rows": [], "approval_bottlenecks": [], "cross_business_failures": [], "delayed_outcome_quarantine_rows": [], "export_surface": {}}
         view = plane.get_fleet_view(limit=limit)
         return {
             "fleet_cards": [
@@ -94,6 +91,36 @@ class BusinessAutonomyRouteHandlers:
                 dict(item) for item in getattr(view, "delayed_outcome_quarantine_rows", ())
             ],
             "export_surface": dict(view.export_surface),
+        }
+
+    def _delayed_outcome_bridge(self) -> BusinessAutonomyDelayedOutcomeBridge:
+        return BusinessAutonomyDelayedOutcomeBridge.default()
+
+    def release_delayed_outcome_quarantine(self, outcome_id: str, *, released_by: str = "system", note: str = "") -> dict[str, Any]:
+        released = self._delayed_outcome_bridge().release_quarantined(
+            outcome_id=str(outcome_id),
+            released_by=str(released_by),
+            note=str(note or ""),
+        )
+        return {
+            "outcome_id": str(outcome_id),
+            "released": bool(released),
+            "status": "released" if released else "not_found",
+            "released_by": str(released_by),
+        }
+
+    def retry_delayed_outcome_quarantine(self, outcome_id: str, *, retried_by: str = "system", planning_horizon: str | None = None, note: str = "") -> dict[str, Any]:
+        retried = self._delayed_outcome_bridge().retry_quarantined(
+            outcome_id=str(outcome_id),
+            retried_by=str(retried_by),
+            planning_horizon=planning_horizon,
+            note=str(note or ""),
+        )
+        return {
+            "outcome_id": str(outcome_id),
+            "retried": bool(retried),
+            "status": "retried" if retried else "not_found",
+            "retried_by": str(retried_by),
         }
 
     def get_governance_alignment(self, business_id: str) -> dict[str, Any]:
@@ -169,7 +196,6 @@ class BusinessAutonomyRouteHandlers:
             "reasons": list(snapshot.reasons),
             "metadata": dict(snapshot.metadata or {}),
         }
-
 
 
 def build_business_autonomy_route_handlers(
