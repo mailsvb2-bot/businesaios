@@ -128,7 +128,6 @@ class PostgresLedger:
 
             ph = str(getattr(decision, "payload_hash", "") or "") or payload_hash(getattr(decision, "payload", {}))
 
-            self._port.execute("BEGIN;")
             self._port.execute(
                 """
                 INSERT INTO executed (
