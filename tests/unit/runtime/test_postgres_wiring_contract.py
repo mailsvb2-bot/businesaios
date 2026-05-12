@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from runtime.wiring import StorageConfig, describe_storage_readiness, storage_control_plane_status
+from runtime.wiring import (
+    StorageConfig,
+    describe_storage_readiness,
+    storage_control_plane_status,
+    storage_live_smoke_status,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -146,5 +151,30 @@ def test_storage_control_plane_status_keeps_blockers_visible() -> None:
     assert status["admin_visible"] is True
     assert status["read_only"] is True
     assert status["side_effects"] is False
+    assert "PROD_REQUIRES_POSTGRES_STORAGE_BACKEND:sqlite" in status["blockers"]
+    assert "PROD_REQUIRES_POSTGRES_DSN" in status["blockers"]
+
+
+def test_storage_live_smoke_status_is_explicit_side_effect_surface() -> None:
+    source = _read_repo_file("runtime/wiring.py")
+
+    assert "CANON_RUNTIME_WIRING_LIVE_SMOKE_SURFACE = True" in source
+    assert "def storage_live_smoke_status" in source
+    assert '"surface": "runtime.storage.live_smoke"' in source
+    assert '"read_only": False' in source
+    assert '"side_effects": True' in source
+    assert '"live_smoke_checked": True' in source
+    assert "build_durable_stores" in source
+
+
+def test_storage_live_smoke_blocks_before_opening_stores_when_readiness_blocked() -> None:
+    status = storage_live_smoke_status(StorageConfig(env="prod", backend="sqlite", postgres_dsn=None))
+
+    assert status["surface"] == "runtime.storage.live_smoke"
+    assert status["status"] == "blocked"
+    assert status["ok"] is False
+    assert status["side_effects"] is True
+    assert status["live_smoke_checked"] is True
+    assert status["role_status"] == {}
     assert "PROD_REQUIRES_POSTGRES_STORAGE_BACKEND:sqlite" in status["blockers"]
     assert "PROD_REQUIRES_POSTGRES_DSN" in status["blockers"]
