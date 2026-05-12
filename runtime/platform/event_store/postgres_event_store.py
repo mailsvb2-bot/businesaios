@@ -3,14 +3,14 @@ from __future__ import annotations
 """Canonical Postgres event-store adapter.
 
 The driver remains sealed behind runtime.platform.postgres_port.PostgresPort.
-This adapter mirrors the canonical sqlite event-store append semantics used by
-runtime boot: append durable events, query latest events, and provide a health
-probe. It intentionally keeps explicit production enablement so capability
-surfaces cannot be mistaken for live adapters.
+This adapter mirrors the canonical sqlite event-store append/query semantics used
+by runtime boot: append durable events, query governance readers, query latest
+events, and provide a health probe. It intentionally keeps explicit production
+enablement so capability surfaces cannot be mistaken for live adapters.
 """
 
 import json
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from runtime.platform.event_store.append_contract import normalize_append_event
 from runtime.platform.postgres_port import PostgresPort
@@ -29,6 +29,20 @@ def describe_declared_absence() -> dict[str, object]:
 
 def raise_if_used() -> None:
     raise RuntimeError("POSTGRES_EVENT_STORE_REQUIRES_EXPLICIT_ENABLEMENT")
+
+
+def _row_to_event(row: tuple[Any, ...]) -> dict[str, Any]:
+    return {
+        "event_id": row[0],
+        "tenant_id": row[1],
+        "user_id": row[2],
+        "source": row[3],
+        "event_type": row[4],
+        "timestamp_ms": int(row[5] or 0),
+        "decision_id": row[6],
+        "correlation_id": row[7],
+        "payload": json.loads(row[8] or "{}"),
+    }
 
 
 class PostgresEventStore:
@@ -111,6 +125,60 @@ class PostgresEventStore:
         if commit:
             self._db.commit()
 
+    def _event_select_sql(self) -> str:
+        return "SELECT event_id, tenant_id, user_id, source, event_type, timestamp_ms, decision_id, correlation_id, payload_json FROM events"
+
+    def iter_events(
+        self,
+        *,
+        tenant_id: str,
+        start_ms: int = 0,
+        end_ms=None,
+        event_type=None,
+        user_id=None,
+    ) -> Iterable[dict[str, Any]]:
+        params: list[Any] = [str(tenant_id), int(start_ms or 0)]
+        where = ["tenant_id=%s", "timestamp_ms >= %s"]
+        if end_ms is not None:
+            where.append("timestamp_ms < %s")
+            params.append(int(end_ms))
+        if event_type is not None:
+            where.append("event_type=%s")
+            params.append(str(event_type))
+        if user_id is not None:
+            where.append("user_id=%s")
+            params.append(str(user_id))
+        rows = self._db.fetchall(
+            f"{self._event_select_sql()} WHERE {' AND '.join(where)} ORDER BY timestamp_ms ASC, event_id ASC;",
+            tuple(params),
+        )
+        return [_row_to_event(row) for row in rows]
+
+    def count_events(
+        self,
+        *,
+        tenant_id: str,
+        event_type: str,
+        start_ms: int = 0,
+        end_ms=None,
+        user_id=None,
+    ) -> int:
+        params: list[Any] = [str(tenant_id), str(event_type), int(start_ms or 0)]
+        where = ["tenant_id=%s", "event_type=%s", "timestamp_ms >= %s"]
+        if end_ms is not None:
+            where.append("timestamp_ms < %s")
+            params.append(int(end_ms))
+        if user_id is not None:
+            where.append("user_id=%s")
+            params.append(str(user_id))
+        row = self._db.fetchone(
+            f"SELECT COUNT(*) FROM events WHERE {' AND '.join(where)};",
+            tuple(params),
+        )
+        if not row:
+            return 0
+        return int(row[0] or 0)
+
     def latest_event(
         self,
         *,
@@ -129,23 +197,12 @@ class PostgresEventStore:
             where.append(f"event_type IN ({placeholders})")
             params.extend(event_type_values)
         row = self._db.fetchone(
-            "SELECT event_id, tenant_id, user_id, source, event_type, timestamp_ms, decision_id, correlation_id, payload_json "
-            f"FROM events WHERE {' AND '.join(where)} ORDER BY timestamp_ms DESC, event_id DESC LIMIT 1;",
+            f"{self._event_select_sql()} WHERE {' AND '.join(where)} ORDER BY timestamp_ms DESC, event_id DESC LIMIT 1;",
             tuple(params),
         )
         if not row:
             return None
-        return {
-            "event_id": row[0],
-            "tenant_id": row[1],
-            "user_id": row[2],
-            "source": row[3],
-            "event_type": row[4],
-            "timestamp_ms": int(row[5] or 0),
-            "decision_id": row[6],
-            "correlation_id": row[7],
-            "payload": json.loads(row[8] or "{}"),
-        }
+        return _row_to_event(row)
 
 
 __all__ = ["CANON_POSTGRES_EVENT_STORE", "PostgresEventStore", "describe_declared_absence", "raise_if_used"]
