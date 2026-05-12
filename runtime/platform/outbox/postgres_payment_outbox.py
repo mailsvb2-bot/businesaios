@@ -4,6 +4,7 @@ import json
 import time
 import uuid
 
+from runtime.platform.config.env_flags import env_int
 from runtime.platform.postgres_port import PostgresPort
 
 
@@ -13,6 +14,11 @@ class PostgresPaymentOutbox:
     def __init__(self, dsn: str):
         self._dsn = str(dsn)
         self._port: PostgresPort | None = None
+        try:
+            self._lease_ms = int(env_int("PAYMENT_OUTBOX_LEASE_MS", 60000, lo=5_000, hi=10 * 60_000))
+        except (TypeError, ValueError):
+            self._lease_ms = 60000
+        self._lease_ms = max(5_000, min(10 * 60_000, int(self._lease_ms)))
 
     def __enter__(self) -> "PostgresPaymentOutbox":
         self._port = PostgresPort(self._dsn, application_name="businesaios-payment-outbox").__enter__()
@@ -73,8 +79,19 @@ class PostgresPaymentOutbox:
         row = self._port.fetchone("SELECT id FROM payment_outbox WHERE dedupe_key=%s LIMIT 1;", (str(dedupe_key),))
         return str(row[0]) if row else jid
 
+    def _reap_stale_inflight(self) -> None:
+        assert self._port is not None
+        now = int(time.time() * 1000)
+        cutoff = now - int(self._lease_ms)
+        self._port.execute(
+            "UPDATE payment_outbox SET status='pending', updated_at_ms=%s WHERE status='inflight' AND updated_at_ms <= %s;",
+            (now, cutoff),
+        )
+        self._port.commit()
+
     def list_pending(self, *, limit: int = 50) -> list[dict]:
         assert self._port is not None
+        self._reap_stale_inflight()
         now = int(time.time() * 1000)
         rows = self._port.fetchall(
             "SELECT id, dedupe_key, payload_json, attempts, run_after_ms FROM payment_outbox "
@@ -89,10 +106,17 @@ class PostgresPaymentOutbox:
     def claim(self, job_id: str) -> bool:
         assert self._port is not None
         now = int(time.time() * 1000)
-        self._port.execute("UPDATE payment_outbox SET status='inflight', updated_at_ms=%s WHERE id=%s AND status='pending';", (now, str(job_id)))
+        row = self._port.fetchone(
+            """
+            UPDATE payment_outbox
+            SET status='inflight', updated_at_ms=%s
+            WHERE id=%s AND status='pending'
+            RETURNING id;
+            """,
+            (now, str(job_id)),
+        )
         self._port.commit()
-        row = self._port.fetchone("SELECT status FROM payment_outbox WHERE id=%s LIMIT 1;", (str(job_id),))
-        return bool(row and row[0] == "inflight")
+        return bool(row and row[0] == str(job_id))
 
     def mark_delivered(self, job_id: str) -> None:
         assert self._port is not None
