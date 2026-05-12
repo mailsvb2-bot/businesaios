@@ -58,3 +58,13 @@ def test_postgres_ledger_does_not_issue_manual_begin_inside_port_transaction() -
     assert "self._port.rollback()" in source
     assert "INSERT INTO executed (" in source
     assert "INSERT INTO executed_chain" in source
+
+
+def test_postgres_ledger_serializes_hash_chain_head_updates() -> None:
+    """Regression lock: concurrent workers must not read the same chain head."""
+    source = _read_repo_file("runtime/platform/ledger/postgres_ledger.py")
+
+    assert "LEDGER_CHAIN_ADVISORY_LOCK_KEY" in source
+    assert "pg_advisory_xact_lock(hashtext(%s))" in source
+    assert "_lock_chain_for_transaction()" in source
+    assert source.index("self._lock_chain_for_transaction()") < source.index("SELECT entry_hash FROM executed_chain")
