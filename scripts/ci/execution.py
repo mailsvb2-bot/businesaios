@@ -7,9 +7,30 @@ from scripts.ci.junit_report import write_junit_xml
 from scripts.ci.paths import coverage_dir, execution_dir, junit_dir, reports_dir
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.reports import write_report
+from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state
 from scripts.ci.step_registry import handler_for_step
 from scripts.ci.summary import write_failure_summary
 from scripts.ci.timing import measure_time
+
+
+def _cleanup_after_gate(report: ExecutionReport) -> None:
+    if report.gate not in {"fast", "full", "release", "pre-push", "pre-release"}:
+        return
+    with measure_time() as watch:
+        removed = cleanup_ci_runtime_state()
+    message = (
+        f"final runtime artifact cleanup removed {len(removed)} item(s)"
+        if removed
+        else "final runtime artifact cleanup found no mutable DB artifacts"
+    )
+    report.add(
+        StepResult(
+            name="final-runtime-artifact-cleanup",
+            status="passed",
+            message=message,
+            duration_ms=watch.duration_ms,
+        )
+    )
 
 
 def execute(request: ExecutionRequest) -> ExecutionReport:
@@ -32,6 +53,8 @@ def execute(request: ExecutionRequest) -> ExecutionReport:
 
         if result.status == "failed":
             break
+
+    _cleanup_after_gate(report)
 
     if request.emit_report:
         write_report(reports_dir() / f"{request.gate}.report.json", report)
