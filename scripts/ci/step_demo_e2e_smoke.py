@@ -18,14 +18,12 @@ _CI_DEMO_TENANCY_DIR = _CI_DEMO_STATE_ROOT / "tenancy"
 _CI_DEMO_DATA_DIR = _CI_DEMO_STATE_ROOT / "data"
 
 
-def _cleanup_demo_runtime_state() -> list[str]:
-    """Remove mutable runtime state created by the demo E2E smoke.
+def cleanup_ci_runtime_state() -> list[str]:
+    """Remove mutable runtime DB state created by CI smoke/tests.
 
-    The smoke proves boot -> DecisionCore -> RuntimeExecutor. It must not leave
-    repository-local sqlite/state artifacts or mutate tracked tenancy JSON.
-    Runtime tenancy state is routed to /tmp via explicit env vars below; this
-    cleanup also removes repository-local tenancy DB fallbacks if any legacy path
-    still creates them during smoke execution.
+    Full CI intentionally runs demo/unit/integration flows that may exercise
+    sqlite-backed dev adapters. The gate must prove those flows but must not
+    leave repository-local DB artifacts after completion.
     """
     root = repo_root()
     removed: list[str] = []
@@ -46,7 +44,12 @@ def _cleanup_demo_runtime_state() -> list[str]:
     if _CI_DEMO_STATE_ROOT.exists():
         shutil.rmtree(_CI_DEMO_STATE_ROOT, ignore_errors=True)
         removed.append(str(_CI_DEMO_STATE_ROOT))
-    return sorted(removed)
+    return sorted(set(removed))
+
+
+def _cleanup_demo_runtime_state() -> list[str]:
+    """Backward-compatible alias for the demo smoke cleanup contract."""
+    return cleanup_ci_runtime_state()
 
 
 def _remove_empty_dirs(path: Path, *, stop_at: Path) -> None:
@@ -65,7 +68,7 @@ def _remove_empty_dirs(path: Path, *, stop_at: Path) -> None:
 
 def run() -> tuple[bool, str]:
     try:
-        _cleanup_demo_runtime_state()
+        cleanup_ci_runtime_state()
         _CI_DEMO_TENANCY_DIR.mkdir(parents=True, exist_ok=True)
         _CI_DEMO_DATA_DIR.mkdir(parents=True, exist_ok=True)
         outcome = run_command(
@@ -86,7 +89,7 @@ def run() -> tuple[bool, str]:
             timeout=180,
         )
     finally:
-        removed = _cleanup_demo_runtime_state()
+        removed = cleanup_ci_runtime_state()
     if outcome.returncode != 0:
         if outcome.returncode == 124:
             return False, "demo e2e smoke timed out"
@@ -95,4 +98,4 @@ def run() -> tuple[bool, str]:
     return True, "demo e2e smoke passed" + suffix
 
 
-__all__ = ["run"]
+__all__ = ["cleanup_ci_runtime_state", "run"]
