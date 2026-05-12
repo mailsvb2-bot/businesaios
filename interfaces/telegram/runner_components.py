@@ -19,6 +19,10 @@ from interfaces.telegram.runner_helpers import env_hours, env_int, env_ms
 from products.product_loader import load_product_from_env
 
 
+def _bounded_int(name: str, default: int, lo: int, hi: int) -> int:
+    return max(int(lo), min(int(hi), int(env_int(name, int(default)))))
+
+
 def build_runner_components(*, decide_fn: Any, execute_fn: Any, event_store: Any, event_log: Any, payment_outbox: Any, learning_job: Any, cfg: Any) -> dict[str, Any]:
     tenant_id = current_tenant_id()
     enricher = TelegramReadModelEnricher(event_store=event_store, ttl_ms=2000, tenant_id=tenant_id)
@@ -48,7 +52,7 @@ def build_runner_components(*, decide_fn: Any, execute_fn: Any, event_store: Any
             cfg=PaymentJobsConfig(
                 every_ms=env_ms("PAYMENT_JOBS_EVERY_S", 1.0, 200, 10_000),
                 retry_after_ms=env_ms("PAYMENT_JOB_RETRY_AFTER_S", 10.0, 1000, 300_000),
-                max_attempts=env_int("PAYMENT_JOB_MAX_ATTEMPTS", 10, 1, 50),
+                max_attempts=_bounded_int("PAYMENT_JOB_MAX_ATTEMPTS", 10, 1, 50),
             ),
         ),
         "ml": MLLearningLoop(
@@ -64,10 +68,10 @@ def build_runner_components(*, decide_fn: Any, execute_fn: Any, event_store: Any
             execute_fn=execute_fn,
             event_store=event_store,
             cfg=OfferOutcomeConfig(
-                every_ms=env_int("OFFER_OUTCOME_EVERY_MS", 60_000, 5_000, 300_000),
+                every_ms=_bounded_int("OFFER_OUTCOME_EVERY_MS", 60_000, 5_000, 300_000),
                 timeout_ms=env_hours("OFFER_OUTCOME_TIMEOUT_H", 6, 1, 72) * 3600 * 1000,
                 lookback_ms=env_hours("OFFER_OUTCOME_LOOKBACK_H", 168, 6, 24 * 30) * 3600 * 1000,
-                max_emits_per_tick=env_int("OFFER_OUTCOME_MAX_EMITS", 20, 1, 200),
+                max_emits_per_tick=_bounded_int("OFFER_OUTCOME_MAX_EMITS", 20, 1, 200),
             ),
         ),
     }
