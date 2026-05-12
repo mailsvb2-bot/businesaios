@@ -80,3 +80,4 @@ data/tenancy/*.sqlite3
 data/tenancy/*.db
 data/tenancy/*.db-journal
 data/tenancy/*.sqlite3-journal
+.env
