@@ -18,6 +18,7 @@ CANON_RUNTIME_WIRING_STORAGE_ONLY = True
 CANON_RUNTIME_WIRING_NO_DECISION_LOGIC = True
 CANON_RUNTIME_WIRING_NO_ROOT_REGISTRY = True
 CANON_RUNTIME_WIRING_READINESS_SURFACE = True
+CANON_RUNTIME_WIRING_ADMIN_VISIBLE = True
 
 DURABLE_STORE_ROLES = (
     "event_store",
@@ -88,6 +89,31 @@ def describe_storage_readiness(storage: StorageConfig) -> dict[str, Any]:
     }
 
 
+def storage_control_plane_status(storage: StorageConfig) -> dict[str, Any]:
+    """Return the admin/control-plane payload for storage readiness.
+
+    This is a read-only status surface. It never upgrades capability into live
+    integration claims: a configured DSN means configuration is present, not that
+    a live database smoke has passed.
+    """
+    readiness = describe_storage_readiness(storage)
+    status = "ready" if bool(readiness["live_ready"]) else "blocked"
+    return {
+        "surface": "admin.control_plane.storage",
+        "admin_visible": True,
+        "status": status,
+        "read_only": True,
+        "side_effects": False,
+        "live_smoke_checked": False,
+        "canonical_owner": readiness["canonical_owner"],
+        "backend": readiness["backend"],
+        "env": readiness["env"],
+        "roles": readiness["roles"],
+        "blockers": readiness["blockers"],
+        "readiness": readiness,
+    }
+
+
 def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageConfig):
     """Return (event_store, ledger, snapshot_store, decision_archive, outbox, payment_outbox)."""
 
@@ -143,6 +169,7 @@ def build_behavior_graph_store(stack: ExitStack, *, base_dir: str, storage: Stor
 
 
 __all__ = [
+    "CANON_RUNTIME_WIRING_ADMIN_VISIBLE",
     "CANON_RUNTIME_WIRING_NO_DECISION_LOGIC",
     "CANON_RUNTIME_WIRING_NO_ROOT_REGISTRY",
     "CANON_RUNTIME_WIRING_OWNER",
@@ -154,4 +181,5 @@ __all__ = [
     "build_durable_stores",
     "describe_storage_readiness",
     "resolve_storage_config",
+    "storage_control_plane_status",
 ]
