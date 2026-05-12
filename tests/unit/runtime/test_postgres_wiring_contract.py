@@ -47,3 +47,14 @@ def test_postgres_runtime_outbox_claim_and_enqueue_report_real_row_changes() -> 
     assert "RETURNING decision_id" in source
     assert "SELECT status, claimed_at_ms FROM outbox WHERE decision_id=%s" not in source
     assert "int(row[1] or 0) == now" not in source
+
+
+def test_postgres_ledger_does_not_issue_manual_begin_inside_port_transaction() -> None:
+    """Regression lock: PostgresPort already owns transaction boundaries."""
+    source = _read_repo_file("runtime/platform/ledger/postgres_ledger.py")
+
+    assert 'execute("BEGIN;' not in source
+    assert "self._port.commit()" in source
+    assert "self._port.rollback()" in source
+    assert "INSERT INTO executed (" in source
+    assert "INSERT INTO executed_chain" in source
