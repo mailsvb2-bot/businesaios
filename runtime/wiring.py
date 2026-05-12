@@ -57,7 +57,7 @@ def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageCon
         from runtime.platform.outbox.postgres_payment_outbox import PostgresPaymentOutbox
         from observability.platform.snapshot_store.postgres_snapshot_store import PostgresSnapshotStore
 
-        event_store = stack.enter_context(PostgresEventStore(storage.postgres_dsn))
+        event_store = stack.enter_context(PostgresEventStore(storage.postgres_dsn, enabled=True))
         ledger = stack.enter_context(PostgresLedger(storage.postgres_dsn))
         snapshot_store = stack.enter_context(PostgresSnapshotStore(storage.postgres_dsn))
         decision_archive = stack.enter_context(PostgresDecisionArchive(storage.postgres_dsn))
