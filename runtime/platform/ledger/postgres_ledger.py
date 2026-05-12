@@ -7,6 +7,8 @@ from runtime.platform.utils.canonical import payload_hash
 from runtime.platform.postgres_port import PostgresPort
 from observability.platform.observability.silent import swallow
 
+LEDGER_CHAIN_ADVISORY_LOCK_KEY = "businesaios:ledger:executed_chain"
+
 
 class PostgresLedger:
     """Production DecisionLedger (Postgres).
@@ -88,6 +90,16 @@ class PostgresLedger:
             return False
         return self.is_executed(decision_id)
 
+    def _lock_chain_for_transaction(self) -> None:
+        """Serialize hash-chain head reads/writes for the current transaction.
+
+        SQLite uses BEGIN IMMEDIATE for this section. In Postgres we use a
+        transaction-scoped advisory lock so concurrent workers cannot read the
+        same chain head and produce competing prev_hash links.
+        """
+        assert self._port is not None
+        self._port.execute("SELECT pg_advisory_xact_lock(hashtext(%s));", (LEDGER_CHAIN_ADVISORY_LOCK_KEY,))
+
     @staticmethod
     def _chain_fields(*, decision_id: str, action: str, payload_hash_value: str, signature: str, kid: str) -> dict[str, str]:
         """Return the canonical ledger-chain fields used for write and verification.
@@ -111,6 +123,7 @@ class PostgresLedger:
             return False
 
         try:
+            self._lock_chain_for_transaction()
             row = self._port.fetchone("SELECT entry_hash FROM executed_chain ORDER BY seq DESC LIMIT 1;")
             prev = row[0] if row and row[0] else GENESIS
 
@@ -234,3 +247,6 @@ class PostgresLedger:
             (str(envelope_id), now),
         )
         self._port.commit()
+
+
+__all__ = ["LEDGER_CHAIN_ADVISORY_LOCK_KEY", "PostgresLedger"]
