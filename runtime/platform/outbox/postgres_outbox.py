@@ -57,17 +57,17 @@ class PostgresOutbox:
     def enqueue_once(self, *, decision_id: str, correlation_id: str, action: str, payload_json: str) -> bool:
         assert self._port is not None
         now = int(time.time() * 1000)
-        self._port.execute(
+        row = self._port.fetchone(
             """
             INSERT INTO outbox(decision_id, correlation_id, action, payload_json, created_at_ms, next_attempt_at_ms, retry_count, status)
             VALUES (%s,%s,%s,%s,%s,%s,0,'pending')
-            ON CONFLICT (decision_id) DO NOTHING;
+            ON CONFLICT (decision_id) DO NOTHING
+            RETURNING decision_id;
             """,
             (str(decision_id), str(correlation_id), str(action), str(payload_json), now, now),
         )
         self._port.commit()
-        row = self._port.fetchone("SELECT 1 FROM outbox WHERE decision_id=%s LIMIT 1;", (str(decision_id),))
-        return bool(row)
+        return bool(row and row[0] == str(decision_id))
 
     def _reap_stale_delivering(self) -> None:
         assert self._port is not None
@@ -117,19 +117,19 @@ class PostgresOutbox:
         assert self._port is not None
         now = int(time.time() * 1000)
         stale_cutoff = now - int(self._lease_ms)
-        self._port.execute(
+        row = self._port.fetchone(
             """
             UPDATE outbox SET status='delivering', claimed_at_ms=%s
             WHERE decision_id=%s AND (
                 (status='pending' AND (next_attempt_at_ms IS NULL OR next_attempt_at_ms<=%s)) OR
                 (status='delivering' AND claimed_at_ms IS NOT NULL AND claimed_at_ms<=%s)
-            );
+            )
+            RETURNING decision_id;
             """,
             (now, str(decision_id), now, stale_cutoff),
         )
-        row = self._port.fetchone("SELECT status, claimed_at_ms FROM outbox WHERE decision_id=%s LIMIT 1;", (str(decision_id),))
         self._port.commit()
-        return bool(row and row[0] == 'delivering' and int(row[1] or 0) == now)
+        return bool(row and row[0] == str(decision_id))
 
     def mark_delivered(self, decision_id: str) -> None:
         assert self._port is not None
