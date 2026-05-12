@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from runtime.queue.job_contract import JobDispatchRequest, JobState
 from runtime.queue.job_dispatcher import JobDispatcher
 from runtime.queue.job_janitor import JobQueueJanitor
@@ -45,13 +47,15 @@ def test_runtime_queue_long_run_soak_under_repeated_worker_ticks(tmp_path):
             )
         )
 
+    base_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
     idle_rounds = 0
-    for _ in range(150):
+    for tick in range(150):
+        now = base_time + timedelta(seconds=tick)
         claimed = 0
         for worker in workers:
-            report = worker.tick(tenant_id='tenant-a', queue_name='ops')
+            report = worker.tick(tenant_id='tenant-a', queue_name='ops', now=now)
             claimed += int(report.claimed)
-        janitor.tick(tenant_id='tenant-a', queue_name='ops')
+        janitor.tick(tenant_id='tenant-a', queue_name='ops', now=now)
         if store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.SUCCEEDED) == total_jobs:
             break
         if claimed == 0:
@@ -108,10 +112,12 @@ def test_runtime_queue_stress_mix_with_retries_and_dead_letters(tmp_path):
             )
         )
 
-    for _ in range(220):
+    base_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for tick in range(220):
+        now = base_time + timedelta(seconds=tick)
         for worker in workers:
-            worker.tick(tenant_id='tenant-a', queue_name='ops')
-        janitor.tick(tenant_id='tenant-a', queue_name='ops')
+            worker.tick(tenant_id='tenant-a', queue_name='ops', now=now)
+        janitor.tick(tenant_id='tenant-a', queue_name='ops', now=now)
         pending = store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.PENDING)
         claimed = store.count(tenant_id='tenant-a', queue_name='ops', state=JobState.CLAIMED)
         if pending == 0 and claimed == 0:
