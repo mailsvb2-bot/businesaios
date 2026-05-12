@@ -87,8 +87,12 @@ def test_open_reverse_and_admin_summary_routes() -> None:
     })
     assert reversed_resp.status_code == 200, reversed_resp.text
     reversed_body = reversed_resp.json()
-    assert reversed_body['status'] in ('reversed','expired')
-    assert reversed_body.get('ledger_posting_id') or True  # demo-tolerant
+    assert reversed_body['status'] in ('reversed', 'expired')
+    is_reversed = reversed_body['status'] == 'reversed'
+    if is_reversed:
+        assert reversed_body['ledger_posting_id']
+    else:
+        assert reversed_body.get('ledger_posting_id') in (None, '')
 
     summary = client.post('/client-outcome/admin-summary', json={
         'order': {
@@ -105,5 +109,8 @@ def test_open_reverse_and_admin_summary_routes() -> None:
     })
     assert summary.status_code == 200, summary.text
     summary_body = summary.json()
-    assert summary_body['reversed_clients'] == 1
+    if is_reversed:
+        assert summary_body['reversed_clients'] == 1
+    else:
+        assert summary_body['reversed_clients'] == 0
     assert len(summary_body['widgets']) == 3

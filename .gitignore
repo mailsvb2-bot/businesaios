@@ -73,3 +73,10 @@ data/**/*.sqlite3
 data/**/*.db
 data/config/
 .runtime/
+
+# Runtime tenancy DB artifacts - never commit
+data/tenancy/*.sqlite
+data/tenancy/*.sqlite3
+data/tenancy/*.db
+data/tenancy/*.db-journal
+data/tenancy/*.sqlite3-journal
