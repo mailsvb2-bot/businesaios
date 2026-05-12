@@ -36,3 +36,14 @@ def test_postgres_payment_outbox_claim_uses_update_returning_not_status_probe() 
     assert "WHERE id=%s AND status='pending'" in source
     assert "SELECT status FROM payment_outbox WHERE id=%s" not in source
     assert "_reap_stale_inflight" in source
+
+
+def test_postgres_runtime_outbox_claim_and_enqueue_report_real_row_changes() -> None:
+    """Regression lock: claim/enqueue success must come from UPDATE/INSERT ownership."""
+    source = _read_repo_file("runtime/platform/outbox/postgres_outbox.py")
+
+    assert "ON CONFLICT (decision_id) DO NOTHING\n            RETURNING decision_id" in source
+    assert "UPDATE outbox SET status='delivering', claimed_at_ms=%s" in source
+    assert "RETURNING decision_id" in source
+    assert "SELECT status, claimed_at_ms FROM outbox WHERE decision_id=%s" not in source
+    assert "int(row[1] or 0) == now" not in source
