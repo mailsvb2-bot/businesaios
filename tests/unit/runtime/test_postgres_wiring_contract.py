@@ -26,3 +26,13 @@ def test_postgres_event_store_uses_postgres_ddl_and_canonical_event_id() -> None
     assert "event_id TEXT PRIMARY KEY" in source
     assert "normalize_append_event" in source
     assert "ORDER BY timestamp_ms DESC, event_id DESC" in source
+
+
+def test_postgres_payment_outbox_claim_uses_update_returning_not_status_probe() -> None:
+    """Regression lock: only the worker that changed the row may own the claim."""
+    source = _read_repo_file("runtime/platform/outbox/postgres_payment_outbox.py")
+
+    assert "RETURNING id" in source
+    assert "WHERE id=%s AND status='pending'" in source
+    assert "SELECT status FROM payment_outbox WHERE id=%s" not in source
+    assert "_reap_stale_inflight" in source
