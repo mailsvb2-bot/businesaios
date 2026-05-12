@@ -178,3 +178,28 @@ def test_storage_live_smoke_blocks_before_opening_stores_when_readiness_blocked(
     assert status["role_status"] == {}
     assert "PROD_REQUIRES_POSTGRES_STORAGE_BACKEND:sqlite" in status["blockers"]
     assert "PROD_REQUIRES_POSTGRES_DSN" in status["blockers"]
+
+
+def test_canonical_e2e_smoke_is_explicit_no_external_effect_ops_surface() -> None:
+    source = _read_repo_file("runtime/canonical_e2e_smoke.py")
+
+    assert "CANON_E2E_SMOKE_SURFACE = True" in source
+    assert "CANON_E2E_SMOKE_NO_EXTERNAL_EFFECTS = True" in source
+    assert "CANON_E2E_SMOKE_NO_DECISION_CORE = True" in source
+    assert '"surface": "runtime.canonical_e2e_smoke"' in source
+    assert '"external_effects": False' in source
+    assert "signed_envelope_from_decision" in source
+    assert "ledger.try_mark_executed" in source
+    assert "decision_archive.put" in source
+    assert "outbox.enqueue_once" in source
+    assert "payment_outbox.enqueue_once" in source
+
+
+def test_ops_cli_exposes_e2e_as_explicit_gate_only() -> None:
+    source = _read_repo_file("scripts/ops/storage_status.py")
+
+    assert "run_canonical_e2e_smoke" in source
+    assert "--e2e" in source
+    assert "CHOOSE_ONLY_ONE_OF_LIVE_OR_E2E" in source
+    assert "if args.e2e:" in source
+    assert "elif args.live:" in source
