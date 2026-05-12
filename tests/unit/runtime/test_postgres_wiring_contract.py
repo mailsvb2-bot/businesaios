@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from runtime.wiring import StorageConfig, describe_storage_readiness
+from runtime.wiring import StorageConfig, describe_storage_readiness, storage_control_plane_status
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -123,3 +123,28 @@ def test_storage_readiness_reports_postgres_roles_when_configured() -> None:
         "outbox",
         "payment_outbox",
     ]
+
+
+def test_storage_control_plane_status_is_admin_visible_but_does_not_claim_live_smoke() -> None:
+    status = storage_control_plane_status(
+        StorageConfig(env="prod", backend="postgres", postgres_dsn="postgresql://example.invalid/db")
+    )
+
+    assert status["surface"] == "admin.control_plane.storage"
+    assert status["admin_visible"] is True
+    assert status["status"] == "ready"
+    assert status["read_only"] is True
+    assert status["side_effects"] is False
+    assert status["live_smoke_checked"] is False
+    assert status["readiness"]["live_ready"] is True
+
+
+def test_storage_control_plane_status_keeps_blockers_visible() -> None:
+    status = storage_control_plane_status(StorageConfig(env="prod", backend="sqlite", postgres_dsn=None))
+
+    assert status["status"] == "blocked"
+    assert status["admin_visible"] is True
+    assert status["read_only"] is True
+    assert status["side_effects"] is False
+    assert "PROD_REQUIRES_POSTGRES_STORAGE_BACKEND:sqlite" in status["blockers"]
+    assert "PROD_REQUIRES_POSTGRES_DSN" in status["blockers"]
