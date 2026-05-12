@@ -68,3 +68,26 @@ def test_postgres_ledger_serializes_hash_chain_head_updates() -> None:
     assert "pg_advisory_xact_lock(hashtext(%s))" in source
     assert "_lock_chain_for_transaction()" in source
     assert source.index("self._lock_chain_for_transaction()") < source.index("SELECT entry_hash FROM executed_chain")
+
+
+def test_postgres_session_is_a_postgres_port_wrapper_not_a_second_driver_surface() -> None:
+    """Regression lock: storage session must stay a typed wrapper over PostgresPort."""
+    source = _read_repo_file("storage/postgres_session.py")
+
+    assert "from runtime.platform.postgres_port import PostgresPort" in source
+    assert "PostgresPort(self._dsn" in source
+    assert "import psycopg" not in source
+    assert "return {name: value for name, value in zip(names, row)}" in source
+
+
+def test_postgres_archive_and_snapshot_use_mapping_rows_from_session() -> None:
+    """Regression lock: PostgresSession.fetchone returns dict-like rows."""
+    archive = _read_repo_file("observability/platform/decision_archive/postgres_decision_archive.py")
+    snapshot = _read_repo_file("observability/platform/snapshot_store/postgres_snapshot_store.py")
+
+    assert 'row.get("envelope_json")' in archive
+    assert 'row.get("canonical_bytes")' in snapshot
+    assert "row[0]" not in archive
+    assert "row[0]" not in snapshot
+    assert "PostgresSessionFactory" in archive
+    assert "PostgresSessionFactory" in snapshot
