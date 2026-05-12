@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from runtime.wiring import StorageConfig, describe_storage_readiness
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -91,3 +93,33 @@ def test_postgres_archive_and_snapshot_use_mapping_rows_from_session() -> None:
     assert "row[0]" not in snapshot
     assert "PostgresSessionFactory" in archive
     assert "PostgresSessionFactory" in snapshot
+
+
+def test_storage_readiness_reports_prod_postgres_blockers_without_side_effects() -> None:
+    readiness = describe_storage_readiness(StorageConfig(env="prod", backend="sqlite", postgres_dsn=None))
+
+    assert readiness["surface"] == "runtime.storage.wiring"
+    assert readiness["canonical_owner"] == "runtime.wiring"
+    assert readiness["storage_only"] is True
+    assert readiness["decision_logic"] is False
+    assert readiness["live_ready"] is False
+    assert "PROD_REQUIRES_POSTGRES_STORAGE_BACKEND:sqlite" in readiness["blockers"]
+    assert "PROD_REQUIRES_POSTGRES_DSN" in readiness["blockers"]
+
+
+def test_storage_readiness_reports_postgres_roles_when_configured() -> None:
+    readiness = describe_storage_readiness(
+        StorageConfig(env="prod", backend="postgres", postgres_dsn="postgresql://example.invalid/db")
+    )
+
+    assert readiness["live_ready"] is True
+    assert readiness["postgres_dsn_configured"] is True
+    assert readiness["blockers"] == []
+    assert readiness["roles"] == [
+        "event_store",
+        "ledger",
+        "snapshot_store",
+        "decision_archive",
+        "outbox",
+        "payment_outbox",
+    ]
