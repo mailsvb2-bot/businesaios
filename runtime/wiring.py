@@ -9,6 +9,7 @@ an alternative runtime assembly path, registry surface, or decision owner.
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from runtime.platform.config.env_flags import env_path, env_str
 
@@ -16,6 +17,16 @@ CANON_RUNTIME_WIRING_OWNER = True
 CANON_RUNTIME_WIRING_STORAGE_ONLY = True
 CANON_RUNTIME_WIRING_NO_DECISION_LOGIC = True
 CANON_RUNTIME_WIRING_NO_ROOT_REGISTRY = True
+CANON_RUNTIME_WIRING_READINESS_SURFACE = True
+
+DURABLE_STORE_ROLES = (
+    "event_store",
+    "ledger",
+    "snapshot_store",
+    "decision_archive",
+    "outbox",
+    "payment_outbox",
+)
 
 
 @dataclass(frozen=True)
@@ -43,6 +54,38 @@ def resolve_storage_config() -> StorageConfig:
             raise RuntimeError("PROD_REQUIRES_POSTGRES_DSN")
 
     return StorageConfig(env=env, backend=backend, postgres_dsn=pg_dsn)
+
+
+def describe_storage_readiness(storage: StorageConfig) -> dict[str, Any]:
+    """Return a side-effect-free storage readiness snapshot for admin/control-plane.
+
+    This function intentionally does not open sockets, import drivers, create
+    adapters, or make decisions. It exposes the storage contract that boot will
+    enforce, so admin surfaces can show production blockers before startup.
+    """
+    backend = str(storage.backend or "").strip().lower()
+    env = str(storage.env or "").strip().lower() or "dev"
+    has_postgres_dsn = bool(str(storage.postgres_dsn or "").strip())
+    blockers: list[str] = []
+    if env == "prod" and backend != "postgres":
+        blockers.append(f"PROD_REQUIRES_POSTGRES_STORAGE_BACKEND:{backend}")
+    if env == "prod" and not has_postgres_dsn:
+        blockers.append("PROD_REQUIRES_POSTGRES_DSN")
+    if backend == "postgres" and not has_postgres_dsn:
+        blockers.append("POSTGRES_BACKEND_REQUIRES_DSN")
+
+    return {
+        "surface": "runtime.storage.wiring",
+        "canonical_owner": "runtime.wiring",
+        "storage_only": True,
+        "decision_logic": False,
+        "backend": backend,
+        "env": env,
+        "postgres_dsn_configured": has_postgres_dsn,
+        "roles": list(DURABLE_STORE_ROLES),
+        "live_ready": not blockers,
+        "blockers": blockers,
+    }
 
 
 def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageConfig):
@@ -103,9 +146,12 @@ __all__ = [
     "CANON_RUNTIME_WIRING_NO_DECISION_LOGIC",
     "CANON_RUNTIME_WIRING_NO_ROOT_REGISTRY",
     "CANON_RUNTIME_WIRING_OWNER",
+    "CANON_RUNTIME_WIRING_READINESS_SURFACE",
     "CANON_RUNTIME_WIRING_STORAGE_ONLY",
+    "DURABLE_STORE_ROLES",
     "StorageConfig",
     "build_behavior_graph_store",
     "build_durable_stores",
+    "describe_storage_readiness",
     "resolve_storage_config",
 ]
