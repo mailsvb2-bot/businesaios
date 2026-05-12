@@ -5,10 +5,11 @@ from __future__ import annotations
 Usage on the server:
     python -m scripts.ops.storage_status --env-file /opt/businesaios/.env
     python -m scripts.ops.storage_status --env-file /opt/businesaios/.env --live
+    python -m scripts.ops.storage_status --env-file /opt/businesaios/.env --e2e
 
 Default mode is safe/read-only and does not open database connections. The
---live flag intentionally opens configured durable stores and can initialize
-schemas, so it must be used only as an explicit ops gate.
+--live and --e2e flags intentionally open configured durable stores and can
+initialize schemas, so they must be used only as explicit ops gates.
 """
 
 import argparse
@@ -23,6 +24,7 @@ try:
 except Exception:  # pragma: no cover - dependency is in requirements.lock.txt; kept defensive for bootstrap diagnostics.
     load_dotenv = None  # type: ignore[assignment]
 
+from runtime.canonical_e2e_smoke import run_canonical_e2e_smoke
 from runtime.wiring import resolve_storage_config, storage_control_plane_status, storage_live_smoke_status
 
 
@@ -54,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-file", default=os.environ.get("BUSINESAIOS_ENV_FILE"), help="Path to .env file, for example /opt/businesaios/.env")
     parser.add_argument("--base-dir", default=os.environ.get("BUSINESAIOS_DATA_DIR", "data/runtime"), help="Runtime data dir used by sqlite/dev stores")
     parser.add_argument("--live", action="store_true", help="Run explicit live smoke through canonical durable stores")
+    parser.add_argument("--e2e", action="store_true", help="Run explicit canonical decision/execution/evidence/archive smoke")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print JSON")
     return parser
 
@@ -61,15 +64,18 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     try:
+        if args.live and args.e2e:
+            raise ValueError("CHOOSE_ONLY_ONE_OF_LIVE_OR_E2E")
         _load_env_file(args.env_file)
         storage = resolve_storage_config()
-        payload = (
-            storage_live_smoke_status(storage, base_dir=str(args.base_dir))
-            if args.live
-            else storage_control_plane_status(storage)
-        )
+        if args.e2e:
+            payload = run_canonical_e2e_smoke(storage, base_dir=str(args.base_dir))
+        elif args.live:
+            payload = storage_live_smoke_status(storage, base_dir=str(args.base_dir))
+        else:
+            payload = storage_control_plane_status(storage)
         print(json.dumps(_redact(payload), ensure_ascii=False, sort_keys=True, indent=2 if args.pretty else None))
-        if args.live:
+        if args.live or args.e2e:
             return 0 if bool(payload.get("ok")) else 2
         return 0 if payload.get("status") == "ready" else 1
     except Exception as exc:
