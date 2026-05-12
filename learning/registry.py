@@ -9,6 +9,11 @@ import json
 from runtime.platform.config.env_flags import env_path, env_str
 
 
+MODEL_REGISTRY_BACKEND_ENV = "MODEL_REGISTRY_BACKEND"
+MODEL_REGISTRY_BACKEND_SQLITE = "sqlite"
+MODEL_REGISTRY_BACKEND_POSTGRES = "postgres"
+
+
 def _stable_hash(obj: Any) -> str:
     raw = json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
@@ -81,10 +86,38 @@ class ModelRegistry:
         return out
 
 
+def _model_registry_backend() -> str:
+    """Resolve ML model registry backend independently from durable storage.
+
+    Durable runtime storage may use Postgres while the ML model registry remains
+    file-backed. The disabled PostgresModelRegistry must never be selected merely
+    because POSTGRES_DSN is configured for event/ledger/archive storage.
+    """
+    backend = (env_str(MODEL_REGISTRY_BACKEND_ENV, MODEL_REGISTRY_BACKEND_SQLITE) or MODEL_REGISTRY_BACKEND_SQLITE).strip().lower()
+    return backend or MODEL_REGISTRY_BACKEND_SQLITE
+
+
 def build_model_registry() -> SupportsModelRegistry:
-    dsn = env_str("POSTGRES_DSN", "") or None
-    if dsn:
+    backend = _model_registry_backend()
+    if backend == MODEL_REGISTRY_BACKEND_POSTGRES:
+        dsn = env_str("MODEL_REGISTRY_POSTGRES_DSN", "") or env_str("POSTGRES_DSN", "") or None
+        if not dsn:
+            raise RuntimeError("MODEL_REGISTRY_POSTGRES_REQUIRES_DSN")
         from runtime.platform.ml.postgres_model_registry import PostgresModelRegistry
         return PostgresModelRegistry(dsn)
+    if backend != MODEL_REGISTRY_BACKEND_SQLITE:
+        raise RuntimeError(f"UNKNOWN_MODEL_REGISTRY_BACKEND:{backend}")
     dir_path = env_path("MODEL_REGISTRY_DIR", "./data/ml_models")
     return ModelRegistry(dir_path)
+
+
+__all__ = [
+    "ArtifactRegistry",
+    "MODEL_REGISTRY_BACKEND_ENV",
+    "MODEL_REGISTRY_BACKEND_POSTGRES",
+    "MODEL_REGISTRY_BACKEND_SQLITE",
+    "ModelArtifact",
+    "ModelRegistry",
+    "SupportsModelRegistry",
+    "build_model_registry",
+]
