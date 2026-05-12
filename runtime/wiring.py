@@ -19,6 +19,7 @@ CANON_RUNTIME_WIRING_NO_DECISION_LOGIC = True
 CANON_RUNTIME_WIRING_NO_ROOT_REGISTRY = True
 CANON_RUNTIME_WIRING_READINESS_SURFACE = True
 CANON_RUNTIME_WIRING_ADMIN_VISIBLE = True
+CANON_RUNTIME_WIRING_LIVE_SMOKE_SURFACE = True
 
 DURABLE_STORE_ROLES = (
     "event_store",
@@ -114,6 +115,51 @@ def storage_control_plane_status(storage: StorageConfig) -> dict[str, Any]:
     }
 
 
+def storage_live_smoke_status(storage: StorageConfig, *, base_dir: str = "data/runtime") -> dict[str, Any]:
+    """Explicitly run a live storage smoke through canonical wiring.
+
+    This function intentionally has side effects: it enters the configured store
+    adapters, which can open connections and initialize schemas. Call it only
+    from an explicit smoke/ops gate with approved environment configuration.
+    """
+    readiness = describe_storage_readiness(storage)
+    result: dict[str, Any] = {
+        "surface": "runtime.storage.live_smoke",
+        "canonical_owner": "runtime.wiring",
+        "read_only": False,
+        "side_effects": True,
+        "live_smoke_checked": True,
+        "backend": readiness["backend"],
+        "env": readiness["env"],
+        "roles": list(DURABLE_STORE_ROLES),
+        "role_status": {},
+        "ok": False,
+        "blockers": list(readiness["blockers"]),
+    }
+    if result["blockers"]:
+        result["status"] = "blocked"
+        return result
+
+    try:
+        with ExitStack() as stack:
+            stores = build_durable_stores(stack, base_dir=base_dir, storage=storage)
+            role_status: dict[str, bool] = {}
+            for role, store in zip(DURABLE_STORE_ROLES, stores, strict=True):
+                ping = getattr(store, "ping", None)
+                role_status[role] = bool(ping()) if callable(ping) else False
+            result["role_status"] = role_status
+            result["ok"] = all(role_status.values())
+            result["status"] = "passed" if result["ok"] else "failed"
+            if not result["ok"]:
+                result["blockers"].extend([f"ROLE_PING_FAILED:{role}" for role, ok in role_status.items() if not ok])
+            return result
+    except Exception as exc:
+        result["status"] = "failed"
+        result["error_type"] = type(exc).__name__
+        result["error"] = str(exc)
+        return result
+
+
 def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageConfig):
     """Return (event_store, ledger, snapshot_store, decision_archive, outbox, payment_outbox)."""
 
@@ -170,6 +216,7 @@ def build_behavior_graph_store(stack: ExitStack, *, base_dir: str, storage: Stor
 
 __all__ = [
     "CANON_RUNTIME_WIRING_ADMIN_VISIBLE",
+    "CANON_RUNTIME_WIRING_LIVE_SMOKE_SURFACE",
     "CANON_RUNTIME_WIRING_NO_DECISION_LOGIC",
     "CANON_RUNTIME_WIRING_NO_ROOT_REGISTRY",
     "CANON_RUNTIME_WIRING_OWNER",
@@ -182,4 +229,5 @@ __all__ = [
     "describe_storage_readiness",
     "resolve_storage_config",
     "storage_control_plane_status",
+    "storage_live_smoke_status",
 ]
