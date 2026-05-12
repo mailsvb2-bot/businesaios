@@ -1,0 +1,21 @@
+[Unit]
+Description=BusinesAIOS storage live smoke gate
+Documentation=https://github.com/mailsvb2-bot/businesaios
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/businesaios
+EnvironmentFile=/opt/businesaios/.env
+ExecStart=/opt/businesaios/.venv/bin/python -m scripts.ops.storage_status --env-file /opt/businesaios/.env --base-dir /opt/businesaios/data/runtime --live --pretty
+User=businesaios
+Group=businesaios
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/businesaios/data
+
+[Install]
+WantedBy=multi-user.target

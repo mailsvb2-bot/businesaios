@@ -9,13 +9,26 @@ an alternative runtime assembly path, registry surface, or decision owner.
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
-from runtime.platform.config.env_flags import env_bool, env_path, env_str
+from runtime.platform.config.env_flags import env_path, env_str
 
 CANON_RUNTIME_WIRING_OWNER = True
 CANON_RUNTIME_WIRING_STORAGE_ONLY = True
 CANON_RUNTIME_WIRING_NO_DECISION_LOGIC = True
 CANON_RUNTIME_WIRING_NO_ROOT_REGISTRY = True
+CANON_RUNTIME_WIRING_READINESS_SURFACE = True
+CANON_RUNTIME_WIRING_ADMIN_VISIBLE = True
+CANON_RUNTIME_WIRING_LIVE_SMOKE_SURFACE = True
+
+DURABLE_STORE_ROLES = (
+    "event_store",
+    "ledger",
+    "snapshot_store",
+    "decision_archive",
+    "outbox",
+    "payment_outbox",
+)
 
 
 @dataclass(frozen=True)
@@ -23,7 +36,6 @@ class StorageConfig:
     env: str
     backend: str  # sqlite | postgres
     postgres_dsn: str | None
-    postgres_event_store_enabled: bool = False
 
 
 def _sqlite_path(env_name: str, *, base_dir: str, filename: str) -> str:
@@ -36,22 +48,116 @@ def resolve_storage_config() -> StorageConfig:
     engine = (env_str("METRO_DB_ENGINE").strip().lower() or "")
     backend_default = "postgres" if (pg_dsn or engine == "postgres") else "sqlite"
     backend = (env_str("STORAGE_BACKEND", backend_default) or backend_default).strip().lower()
-    postgres_event_store_enabled = env_bool("BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE", False)
 
     if env == "prod":
         if backend != "postgres":
             raise RuntimeError(f"PROD_REQUIRES_POSTGRES_STORAGE_BACKEND:{backend}")
         if not pg_dsn:
             raise RuntimeError("PROD_REQUIRES_POSTGRES_DSN")
-        if not postgres_event_store_enabled:
-            raise RuntimeError("PROD_REQUIRES_EXPLICIT_POSTGRES_EVENT_STORE_ENABLEMENT")
 
-    return StorageConfig(
-        env=env,
-        backend=backend,
-        postgres_dsn=pg_dsn,
-        postgres_event_store_enabled=postgres_event_store_enabled,
-    )
+    return StorageConfig(env=env, backend=backend, postgres_dsn=pg_dsn)
+
+
+def describe_storage_readiness(storage: StorageConfig) -> dict[str, Any]:
+    """Return a side-effect-free storage readiness snapshot for admin/control-plane.
+
+    This function intentionally does not open sockets, import drivers, create
+    adapters, or make decisions. It exposes the storage contract that boot will
+    enforce, so admin surfaces can show production blockers before startup.
+    """
+    backend = str(storage.backend or "").strip().lower()
+    env = str(storage.env or "").strip().lower() or "dev"
+    has_postgres_dsn = bool(str(storage.postgres_dsn or "").strip())
+    blockers: list[str] = []
+    if env == "prod" and backend != "postgres":
+        blockers.append(f"PROD_REQUIRES_POSTGRES_STORAGE_BACKEND:{backend}")
+    if env == "prod" and not has_postgres_dsn:
+        blockers.append("PROD_REQUIRES_POSTGRES_DSN")
+    if backend == "postgres" and not has_postgres_dsn:
+        blockers.append("POSTGRES_BACKEND_REQUIRES_DSN")
+
+    return {
+        "surface": "runtime.storage.wiring",
+        "canonical_owner": "runtime.wiring",
+        "storage_only": True,
+        "decision_logic": False,
+        "backend": backend,
+        "env": env,
+        "postgres_dsn_configured": has_postgres_dsn,
+        "roles": list(DURABLE_STORE_ROLES),
+        "live_ready": not blockers,
+        "blockers": blockers,
+    }
+
+
+def storage_control_plane_status(storage: StorageConfig) -> dict[str, Any]:
+    """Return the admin/control-plane payload for storage readiness.
+
+    This is a read-only status surface. It never upgrades capability into live
+    integration claims: a configured DSN means configuration is present, not that
+    a live database smoke has passed.
+    """
+    readiness = describe_storage_readiness(storage)
+    status = "ready" if bool(readiness["live_ready"]) else "blocked"
+    return {
+        "surface": "admin.control_plane.storage",
+        "admin_visible": True,
+        "status": status,
+        "read_only": True,
+        "side_effects": False,
+        "live_smoke_checked": False,
+        "canonical_owner": readiness["canonical_owner"],
+        "backend": readiness["backend"],
+        "env": readiness["env"],
+        "roles": readiness["roles"],
+        "blockers": readiness["blockers"],
+        "readiness": readiness,
+    }
+
+
+def storage_live_smoke_status(storage: StorageConfig, *, base_dir: str = "data/runtime") -> dict[str, Any]:
+    """Explicitly run a live storage smoke through canonical wiring.
+
+    This function intentionally has side effects: it enters the configured store
+    adapters, which can open connections and initialize schemas. Call it only
+    from an explicit smoke/ops gate with approved environment configuration.
+    """
+    readiness = describe_storage_readiness(storage)
+    result: dict[str, Any] = {
+        "surface": "runtime.storage.live_smoke",
+        "canonical_owner": "runtime.wiring",
+        "read_only": False,
+        "side_effects": True,
+        "live_smoke_checked": True,
+        "backend": readiness["backend"],
+        "env": readiness["env"],
+        "roles": list(DURABLE_STORE_ROLES),
+        "role_status": {},
+        "ok": False,
+        "blockers": list(readiness["blockers"]),
+    }
+    if result["blockers"]:
+        result["status"] = "blocked"
+        return result
+
+    try:
+        with ExitStack() as stack:
+            stores = build_durable_stores(stack, base_dir=base_dir, storage=storage)
+            role_status: dict[str, bool] = {}
+            for role, store in zip(DURABLE_STORE_ROLES, stores, strict=True):
+                ping = getattr(store, "ping", None)
+                role_status[role] = bool(ping()) if callable(ping) else False
+            result["role_status"] = role_status
+            result["ok"] = all(role_status.values())
+            result["status"] = "passed" if result["ok"] else "failed"
+            if not result["ok"]:
+                result["blockers"].extend([f"ROLE_PING_FAILED:{role}" for role, ok in role_status.items() if not ok])
+            return result
+    except Exception as exc:
+        result["status"] = "failed"
+        result["error_type"] = type(exc).__name__
+        result["error"] = str(exc)
+        return result
 
 
 def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageConfig):
@@ -66,7 +172,7 @@ def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageCon
         from runtime.platform.outbox.postgres_payment_outbox import PostgresPaymentOutbox
         from observability.platform.snapshot_store.postgres_snapshot_store import PostgresSnapshotStore
 
-        event_store = stack.enter_context(PostgresEventStore(storage.postgres_dsn, enabled=storage.postgres_event_store_enabled))
+        event_store = stack.enter_context(PostgresEventStore(storage.postgres_dsn, enabled=True))
         ledger = stack.enter_context(PostgresLedger(storage.postgres_dsn))
         snapshot_store = stack.enter_context(PostgresSnapshotStore(storage.postgres_dsn))
         decision_archive = stack.enter_context(PostgresDecisionArchive(storage.postgres_dsn))
@@ -109,12 +215,19 @@ def build_behavior_graph_store(stack: ExitStack, *, base_dir: str, storage: Stor
 
 
 __all__ = [
+    "CANON_RUNTIME_WIRING_ADMIN_VISIBLE",
+    "CANON_RUNTIME_WIRING_LIVE_SMOKE_SURFACE",
     "CANON_RUNTIME_WIRING_NO_DECISION_LOGIC",
     "CANON_RUNTIME_WIRING_NO_ROOT_REGISTRY",
     "CANON_RUNTIME_WIRING_OWNER",
+    "CANON_RUNTIME_WIRING_READINESS_SURFACE",
     "CANON_RUNTIME_WIRING_STORAGE_ONLY",
+    "DURABLE_STORE_ROLES",
     "StorageConfig",
     "build_behavior_graph_store",
     "build_durable_stores",
+    "describe_storage_readiness",
     "resolve_storage_config",
+    "storage_control_plane_status",
+    "storage_live_smoke_status",
 ]

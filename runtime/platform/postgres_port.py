@@ -29,7 +29,9 @@ class PostgresPort:
         self._conn = psycopg.connect(self.dsn, autocommit=False)
         try:
             with self._conn.cursor() as cur:
-                cur.execute("SET application_name = %s;", (self.application_name,))
+                # PostgreSQL does not accept bind parameters in ``SET name = value``.
+                # ``set_config`` is parameterizable and keeps the driver boundary sealed.
+                cur.execute("SELECT set_config('application_name', %s, false);", (self.application_name,))
             self._conn.commit()
         except Exception:
             self._conn.rollback()

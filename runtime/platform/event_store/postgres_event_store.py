@@ -3,13 +3,16 @@ from __future__ import annotations
 """Canonical Postgres event-store adapter.
 
 The driver remains sealed behind runtime.platform.postgres_port.PostgresPort.
-This adapter mirrors the sqlite event-store semantics used by runtime boot:
-append durable events, query latest events, and provide a health probe.
+This adapter mirrors the canonical sqlite event-store append semantics used by
+runtime boot: append durable events, query latest events, and provide a health
+probe. It intentionally keeps explicit production enablement so capability
+surfaces cannot be mistaken for live adapters.
 """
 
 import json
 from typing import Any, Mapping
 
+from runtime.platform.event_store.append_contract import normalize_append_event
 from runtime.platform.postgres_port import PostgresPort
 
 CANON_POSTGRES_EVENT_STORE = True
@@ -60,9 +63,9 @@ class PostgresEventStore:
         self._db.execute(
             """
             CREATE TABLE IF NOT EXISTS events (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              event_id TEXT PRIMARY KEY,
               tenant_id TEXT NOT NULL,
-              user_id TEXT NOT NULL,
+              user_id TEXT,
               source TEXT NOT NULL,
               event_type TEXT NOT NULL,
               timestamp_ms BIGINT NOT NULL,
@@ -72,52 +75,76 @@ class PostgresEventStore:
             );
             """
         )
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_tenant_user_time ON events(tenant_id, user_id, timestamp_ms);")
+        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_ts ON events(timestamp_ms);")
+        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_type_ts ON events(event_type, timestamp_ms);")
+        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, timestamp_ms);")
+        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_type_user_ts ON events(event_type, user_id, timestamp_ms);")
+        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_tenant_user_ts ON events(tenant_id, user_id, timestamp_ms);")
+        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_tenant_type_ts ON events(tenant_id, event_type, timestamp_ms);")
         self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_decision_id ON events(decision_id);")
         self._db.commit()
 
     def ping(self) -> bool:
         return self._db.ping()
 
-    def append_event(self, event: Mapping[str, Any]) -> None:
-        payload = dict(event.get("payload") or {})
+    def append_event(self, event: Mapping[str, Any], *, commit: bool = True) -> None:
+        append = normalize_append_event(dict(event or {}))
         self._db.execute(
             """
-            INSERT INTO events(tenant_id, user_id, source, event_type, timestamp_ms, decision_id, correlation_id, payload_json)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s);
+            INSERT INTO events(
+              event_id, tenant_id, user_id, source, event_type, timestamp_ms,
+              decision_id, correlation_id, payload_json
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s);
             """,
             (
-                str(event.get("tenant_id") or "global"),
-                str(event.get("user_id") or ""),
-                str(event.get("source") or "runtime"),
-                str(event.get("event_type") or "event"),
-                int(event.get("timestamp_ms") or 0),
-                event.get("decision_id"),
-                event.get("correlation_id"),
-                json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                append.event_id,
+                append.tenant_id,
+                append.user_id,
+                append.source,
+                append.event_type,
+                append.timestamp_ms,
+                append.decision_id,
+                append.correlation_id,
+                json.dumps(append.payload, ensure_ascii=False, sort_keys=True),
             ),
         )
-        self._db.commit()
+        if commit:
+            self._db.commit()
 
-    def latest_event(self, *, tenant_id: str, user_id: str) -> dict[str, Any] | None:
+    def latest_event(
+        self,
+        *,
+        tenant_id: str = "default",
+        user_id: Any = None,
+        event_types: list[str] | tuple[str, ...] | set[str] | None = None,
+    ) -> dict[str, Any] | None:
+        params: list[Any] = [str(tenant_id)]
+        where = ["tenant_id=%s"]
+        if user_id is not None:
+            where.append("user_id=%s")
+            params.append(user_id)
+        if event_types:
+            event_type_values = [str(v) for v in event_types]
+            placeholders = ",".join(["%s"] * len(event_type_values))
+            where.append(f"event_type IN ({placeholders})")
+            params.extend(event_type_values)
         row = self._db.fetchone(
-            """
-            SELECT tenant_id, user_id, source, event_type, timestamp_ms, decision_id, correlation_id, payload_json
-            FROM events WHERE tenant_id=%s AND user_id=%s ORDER BY timestamp_ms DESC, id DESC LIMIT 1;
-            """,
-            (str(tenant_id), str(user_id)),
+            "SELECT event_id, tenant_id, user_id, source, event_type, timestamp_ms, decision_id, correlation_id, payload_json "
+            f"FROM events WHERE {' AND '.join(where)} ORDER BY timestamp_ms DESC, event_id DESC LIMIT 1;",
+            tuple(params),
         )
         if not row:
             return None
         return {
-            "tenant_id": row[0],
-            "user_id": row[1],
-            "source": row[2],
-            "event_type": row[3],
-            "timestamp_ms": int(row[4] or 0),
-            "decision_id": row[5],
-            "correlation_id": row[6],
-            "payload": json.loads(row[7] or "{}"),
+            "event_id": row[0],
+            "tenant_id": row[1],
+            "user_id": row[2],
+            "source": row[3],
+            "event_type": row[4],
+            "timestamp_ms": int(row[5] or 0),
+            "decision_id": row[6],
+            "correlation_id": row[7],
+            "payload": json.loads(row[8] or "{}"),
         }
 
 
