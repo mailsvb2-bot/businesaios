@@ -99,8 +99,9 @@ class PostgresBehaviorGraphStore:
         meta_obj["built_at_ms"] = int(built_at_ms)
         meta_json = json.dumps(meta_obj, ensure_ascii=False)
 
-        # Replace-by-scope for determinism.
-        with self._port.transaction():
+        # Replace-by-scope for determinism. Keep transaction control inside
+        # the sealed PostgresPort boundary: execute + explicit commit/rollback.
+        try:
             self._port.execute(
                 "INSERT INTO behavior_graph_snapshots(tenant_id, scope, built_at_ms, meta_json) VALUES(%s,%s,%s,%s) "
                 "ON CONFLICT(tenant_id, scope) DO UPDATE SET built_at_ms=EXCLUDED.built_at_ms, meta_json=EXCLUDED.meta_json",
@@ -109,47 +110,47 @@ class PostgresBehaviorGraphStore:
             self._port.execute("DELETE FROM behavior_graph_nodes WHERE tenant_id=%s AND scope=%s", (tid, sc))
             self._port.execute("DELETE FROM behavior_graph_edges WHERE tenant_id=%s AND scope=%s", (tid, sc))
 
-            if nodes:
-                self._port.executemany(
+            for n in nodes:
+                self._port.execute(
                     "INSERT INTO behavior_graph_nodes(tenant_id, scope, node_id, node_type, key, title, props_json) "
                     "VALUES(%s,%s,%s,%s,%s,%s,%s)",
-                    [
-                        (
-                            tid,
-                            sc,
-                            n.node_id,
-                            str(n.node_type),
-                            str(n.key),
-                            str(n.title),
-                            json.dumps(n.props or {}, ensure_ascii=False),
-                        )
-                        for n in nodes
-                    ],
+                    (
+                        tid,
+                        sc,
+                        n.node_id,
+                        str(n.node_type),
+                        str(n.key),
+                        str(n.title),
+                        json.dumps(n.props or {}, ensure_ascii=False),
+                    ),
                 )
-            if edges:
-                self._port.executemany(
+
+            for e in edges:
+                self._port.execute(
                     "INSERT INTO behavior_graph_edges(tenant_id, scope, edge_id, edge_type, src, dst, weight, props_json) "
                     "VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
-                    [
-                        (
-                            tid,
-                            sc,
-                            e.edge_id,
-                            str(e.edge_type),
-                            str(e.src),
-                            str(e.dst),
-                            float(e.weight),
-                            json.dumps(e.props or {}, ensure_ascii=False),
-                        )
-                        for e in edges
-                    ],
+                    (
+                        tid,
+                        sc,
+                        e.edge_id,
+                        str(e.edge_type),
+                        str(e.src),
+                        str(e.dst),
+                        float(e.weight),
+                        json.dumps(e.props or {}, ensure_ascii=False),
+                    ),
                 )
+
+            self._port.commit()
+        except Exception:
+            self._port.rollback()
+            raise
 
     def get_snapshot(self, *, tenant_id: str, scope: str) -> Optional[GraphSnapshot]:
         assert self._port is not None
         tid = str(tenant_id).strip()
         sc = str(scope).strip()
-        row = self._port.fetch_one(
+        row = self._port.fetchone(
             "SELECT built_at_ms, meta_json FROM behavior_graph_snapshots WHERE tenant_id=%s AND scope=%s",
             (tid, sc),
         )
@@ -158,11 +159,11 @@ class PostgresBehaviorGraphStore:
         built_at_ms = int(row[0])
         meta = json.loads(row[1]) if row[1] else {}
 
-        nrows = self._port.fetch_all(
+        nrows = self._port.fetchall(
             "SELECT node_id,node_type,key,title,props_json FROM behavior_graph_nodes WHERE tenant_id=%s AND scope=%s",
             (tid, sc),
         )
-        erows = self._port.fetch_all(
+        erows = self._port.fetchall(
             "SELECT edge_id,edge_type,src,dst,weight,props_json FROM behavior_graph_edges WHERE tenant_id=%s AND scope=%s",
             (tid, sc),
         )
@@ -175,7 +176,7 @@ class PostgresBehaviorGraphStore:
         tid = str(tenant_id).strip()
         sc = str(scope).strip()
         nid = str(node_id).strip()
-        row = self._port.fetch_one(
+        row = self._port.fetchone(
             "SELECT node_id,node_type,key,title,props_json FROM behavior_graph_nodes WHERE tenant_id=%s AND scope=%s AND node_id=%s",
             (tid, sc, nid),
         )
@@ -213,7 +214,7 @@ class PostgresBehaviorGraphStore:
             params.append(et)
         q += " ORDER BY weight DESC LIMIT %s"
         params.append(lim)
-        rows = self._port.fetch_all(q, tuple(params))
+        rows = self._port.fetchall(q, tuple(params))
         out: list[Neighbor] = []
         for r in rows:
             other = r[3] if d == "out" else r[2]
@@ -249,7 +250,7 @@ class PostgresBehaviorGraphStore:
             cur, depth = q.popleft()
             if depth >= mh:
                 continue
-            rows = self._port.fetch_all(
+            rows = self._port.fetchall(
                 "SELECT edge_id,edge_type,src,dst,weight FROM behavior_graph_edges WHERE tenant_id=%s AND scope=%s AND src=%s",
                 (tid, sc, cur),
             )
