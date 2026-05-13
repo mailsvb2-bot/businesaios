@@ -72,8 +72,22 @@ def _matches_glob(rel: str) -> bool:
     return any(rel_path.match(pattern) for pattern in RUNTIME_RELEASE_EXCLUDE_GLOBS)
 
 
+MUTABLE_RUNTIME_RELEASE_PREFIXES = (
+    "data/",
+    "artifacts/",
+    ".runtime/",
+)
+
+MUTABLE_RUNTIME_RELEASE_EXACT = {
+    "security/process_owner_security_audit.jsonl",
+}
+
 
 def is_runtime_release_excluded(rel: str, path: Path) -> bool:
+    if rel in MUTABLE_RUNTIME_RELEASE_EXACT:
+        return True
+    if rel.startswith(MUTABLE_RUNTIME_RELEASE_PREFIXES):
+        return True
     normalized = rel.replace('\\', '/')
     if normalized in RUNTIME_RELEASE_EXCLUDE_EXACT:
         return True
