@@ -23,6 +23,16 @@ class PostgresBehaviorGraphStore:
     def __exit__(self, exc_type, exc, tb) -> None:
         assert self._port is not None
         self._port.__exit__(exc_type, exc, tb)
+        self._port = None
+
+    def ping(self) -> bool:
+        """Return true when the sealed Postgres behavior-graph store connection is alive."""
+        try:
+            if self._port is None:
+                return False
+            return bool(self._port.ping())
+        except Exception:
+            return False
 
     def _init_schema(self) -> None:
         assert self._port is not None
