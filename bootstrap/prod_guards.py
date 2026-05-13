@@ -18,15 +18,52 @@ def enforce_production_strict_mode() -> None:
     app_env = env_str('APP_ENV', env_str('ENV', 'dev')).lower()
     if app_env != 'prod' or not env_bool('PRODUCTION_STRICT_MODE', True):
         return
+
     import os.path as osp
-    base = osp.basename(sys.argv[0] or '')
-    if base and base not in {'main.py'}:
-        raise RuntimeError(f'PROD_STRICT_ENTRYPOINT:{base}')
+
     run_mode = env_str('RUN_MODE', '').lower().strip()
-    if run_mode and run_mode != 'telegram':
-        raise RuntimeError(f'PROD_STRICT_RUN_MODE:{run_mode}')
     if not run_mode:
         raise RuntimeError('PROD_STRICT_RUN_MODE:unset')
+
+    allowed_profiles = {
+        'api': {
+            'entrypoint_basenames': {'run_http.py'},
+            'module_suffixes': {'entrypoints.api.run_http'},
+        },
+        'telegram': {
+            'entrypoint_basenames': {'main.py'},
+            'module_suffixes': {'main', 'runtime.boot.telegram_webhook_runner'},
+        },
+        'worker': {
+            'entrypoint_basenames': {'run_profile.py'},
+            'module_suffixes': {'scripts.server.run_profile'},
+        },
+        'evolution': {
+            'entrypoint_basenames': {'run_profile.py'},
+            'module_suffixes': {'scripts.server.run_profile'},
+        },
+    }
+
+    if run_mode not in allowed_profiles:
+        raise RuntimeError(f'PROD_STRICT_RUN_MODE:{run_mode}')
+
+    base = osp.basename(sys.argv[0] or '')
+    module_name = getattr(sys.modules.get('__main__'), '__spec__', None)
+    main_module = getattr(module_name, 'name', '') if module_name is not None else ''
+
+    profile = allowed_profiles[run_mode]
+    allowed_basenames = profile['entrypoint_basenames']
+    allowed_modules = profile['module_suffixes']
+
+    if base in allowed_basenames:
+        return
+    if main_module in allowed_modules:
+        return
+
+    raise RuntimeError(
+        'PROD_STRICT_ENTRYPOINT:'
+        f'run_mode={run_mode}:base={base or "<empty>"}:module={main_module or "<empty>"}'
+    )
 
 def enforce_two_admins_in_prod_or_explain() -> None:
     app_env = env_str('APP_ENV', env_str('ENV', 'dev')).lower()
