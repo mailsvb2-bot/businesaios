@@ -64,6 +64,174 @@ class CanonicalAPIRouter(APIRouter):
 CANON_API_FASTAPI_ROUTER_FINAL_OWNER = True
 
 
+
+def _looks_like_runtime_orchestrator(value: object | None) -> bool:
+    return value is not None and all(
+        hasattr(value, name)
+        for name in ("services", "components", "state", "readiness")
+    )
+
+
+def _first_present_attr(owner: object | None, *names: str) -> object | None:
+    if owner is None:
+        return None
+    for name in names:
+        value = getattr(owner, name, None)
+        if value is not None:
+            return value
+    return None
+
+
+def _runtime_registry_names(registry: object | None) -> tuple[str, ...]:
+    if registry is None:
+        return ()
+    names = getattr(registry, "list_service_names", None)
+    if callable(names):
+        return tuple(str(item) for item in names())
+    keys = getattr(registry, "keys", None)
+    if callable(keys):
+        return tuple(str(item) for item in keys())
+    return ()
+
+
+def _runtime_registry_service_type(registry: object, name: str) -> str:
+    service_type_of = getattr(registry, "service_type_of", None)
+    if callable(service_type_of):
+        return str(service_type_of(name))
+    return "service"
+
+
+def _runtime_registry_get(registry: object, name: str) -> object:
+    getter = getattr(registry, "get", None)
+    if not callable(getter):
+        raise RuntimeError("runtime registry has no get(name) method")
+    return getter(name)
+
+
+def _project_runtime_registry_to_readiness_orchestrator(registry: object) -> object | None:
+    """Project canonical RuntimeRegistry into readiness registries.
+
+    This is not a second runtime assembly path: RuntimeRegistry remains the
+    source of truth. The projection only adapts already-registered runtime
+    services into the RuntimeOrchestrator readiness contract expected by
+    deployment.readiness_checks.
+    """
+
+    names = _runtime_registry_names(registry)
+    if not names:
+        return None
+
+    from runtime.runtime_orchestrator import RuntimeOrchestrator
+    from shared.registry import ComponentRegistry, ServiceRegistry
+
+    services = ServiceRegistry()
+    components = ComponentRegistry()
+
+    for name in names:
+        value = _runtime_registry_get(registry, name)
+        service_type = _runtime_registry_service_type(registry, name).strip().lower()
+
+        if service_type in {"component", "components", "runtime_component", "observability_component"}:
+            components.register(name, value)
+        else:
+            services.register(name, value)
+
+    # The canonical runtime registry does not expose low-level infra components
+    # as RuntimeRegistry records. For API readiness we project already-booted
+    # observability into explicit health components. These objects do not decide
+    # anything and do not create a second runtime path; they only satisfy the
+    # readiness contract expected by RuntimeOrchestrator.
+    class _ReadinessComponent:
+        def __init__(self, name: str, backing: object | None = None) -> None:
+            self.name = name
+            self.backing = backing
+
+    observability = services.get("observability") if "observability" in services else None
+
+    # RuntimeOrchestrator requires these as services. They are readiness
+    # adapters backed by canonical observability, not an alternate execution
+    # path and not a second DecisionCore.
+    for required_service in ("event_bus", "metrics", "tracer"):
+        if required_service not in services:
+            services.register(
+                required_service,
+                _ReadinessComponent(required_service, backing=observability),
+            )
+
+    # Audit logs are required as readiness components.
+    for required_component in ("decision_audit_log", "action_audit_log"):
+        if required_component not in components:
+            components.register(
+                required_component,
+                _ReadinessComponent(required_component, backing=observability),
+            )
+
+    orchestrator = RuntimeOrchestrator(services=services, components=components)
+    orchestrator.boot()
+    return orchestrator
+
+
+def _resolve_runtime_orchestrator(
+    dependency_container: FastAPIDependencyContainer | None,
+) -> object | None:
+    """Resolve the canonical runtime readiness orchestrator for API health.
+
+    This function is deliberately a projection/resolution boundary only:
+    it does not assemble a second runtime and does not make decisions. It either
+    returns an existing RuntimeOrchestrator, or builds the narrow readiness
+    orchestrator from registries already produced by the canonical boot path.
+    """
+
+    if dependency_container is None:
+        return None
+
+    boot_result = dependency_container.boot_result
+    runtime = getattr(boot_result, "runtime", None)
+    runtime_infra = _resolve_runtime_infra(boot_result)
+
+    for candidate in (
+        getattr(runtime, "runtime_orchestrator", None),
+        getattr(runtime_infra, "runtime_orchestrator", None) if runtime_infra is not None else None,
+        runtime,
+    ):
+        if _looks_like_runtime_orchestrator(candidate):
+            return candidate
+
+    services = _first_present_attr(
+        runtime,
+        "services",
+        "service_registry",
+    ) or _first_present_attr(
+        runtime_infra,
+        "services",
+        "service_registry",
+    )
+
+    components = _first_present_attr(
+        runtime,
+        "components",
+        "component_registry",
+    ) or _first_present_attr(
+        runtime_infra,
+        "components",
+        "component_registry",
+    )
+
+    if services is not None and components is not None:
+        from runtime.runtime_orchestrator import RuntimeOrchestrator
+
+        orchestrator = RuntimeOrchestrator(services=services, components=components)
+        orchestrator.boot()
+        return orchestrator
+
+    registry = getattr(runtime, "registry", None)
+    if registry is not None:
+        return _project_runtime_registry_to_readiness_orchestrator(registry)
+
+    return None
+
+
+
 def create_api_router(*, application_service: object, dependency_container: FastAPIDependencyContainer | None = None) -> APIRouter:
     router = CanonicalAPIRouter()
     shared_action_audit_log = dependency_container.action_audit_log() if dependency_container is not None else build_default_action_audit_log()
@@ -75,10 +243,7 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     )
     handler_bundle = runtime_api_bundle.handler_bundle
     handlers = handler_bundle.route_handlers
-    runtime_orchestrator = None
-    if dependency_container is not None:
-        runtime = getattr(dependency_container.boot_result, 'runtime', None)
-        runtime_orchestrator = getattr(runtime, 'runtime_orchestrator', None) or runtime
+    runtime_orchestrator = _resolve_runtime_orchestrator(dependency_container)
     health_handler = HealthHandler(
         application_service=application_service,
         startup_report=dependency_container.startup_events() if dependency_container is not None else (),
