@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 CANON_BOOT_HANDLERS_WIRING_FINAL_OWNER = True
 CANON_BOOT_WIRING_ONLY = True
 """Wire all action handlers into an ActionHandlerRegistry.
@@ -16,15 +14,11 @@ from runtime.boot.handler_groups.growth import register_growth_handlers
 from runtime.boot.handler_groups.messaging import register_messaging_handlers
 from runtime.boot.handler_groups.ops import register_ops_handlers
 from runtime.boot.handler_groups.shared import get_ctx_value
-
-
-def _action_handler_registry_cls() -> Any:
-    module = __import__('runtime.handlers', fromlist=['ActionHandlerRegistry'])
-    return getattr(module, 'ActionHandlerRegistry')
+from runtime.handlers import ActionHandlerRegistry
 
 
 def wire_handlers(*, ctx, event_store, composer):
-    handlers = _action_handler_registry_cls()()
+    handlers = ActionHandlerRegistry()
 
     register_messaging_handlers(handlers=handlers, composer=composer)
 
