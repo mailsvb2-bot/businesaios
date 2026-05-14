@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from threading import Lock
 from typing import Any
 
 from runtime.time import SystemClock
@@ -12,7 +13,7 @@ def init_reference_mode(*, guard: Any, args: tuple[Any, ...], kwargs: dict[str, 
     guard._survival = args[0]
     guard._ledger = args[1]
     guard._verifier = args[2]
-    guard._lock = kwargs.get("lock") or __import__("threading").Lock()
+    guard._lock = kwargs.get("lock") or Lock()
     guard._keyring = None
     guard._schemas = None
     guard._events = None
@@ -46,7 +47,7 @@ def init_production_mode(*, guard: Any, args: tuple[Any, ...], kwargs: dict[str,
         kwargs=kwargs,
         rate_limiter_factory=rate_limiter_factory,
     )
-    guard._lock = kwargs.get("lock") or __import__("threading").Lock()
+    guard._lock = kwargs.get("lock") or Lock()
 
 
 def require_production_mode(*, mode: str, method_name: str) -> None:
