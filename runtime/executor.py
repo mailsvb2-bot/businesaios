@@ -18,10 +18,17 @@ Security:
 """
 
 import logging
+import os
 from pathlib import Path
 from dataclasses import replace
 from typing import Any, Mapping
 
+from application.autonomy.autonomy_safety_bundle import AutonomySafetyBundle
+from application.evidence.evidence_verifier import EvidenceVerifier
+from execution.action_budget_engine import ActionBudgetEngine
+from execution.blast_radius_guard import BlastRadiusGuard
+from execution.bounded_autonomy import BoundedAutonomyGuard
+from observability.decision_trace_store import NullDecisionTraceStore
 from tenancy.tenant_runtime_isolation import TenantRuntimeIsolation
 
 from governance.constitution import Constitution
@@ -136,11 +143,6 @@ class RuntimeExecutor:
         decision_trace_store=None,
         runtime_effect_trace_store=None,
     ):
-        ActionBudgetEngine = __import__('execution.action_budget_engine', fromlist=['ActionBudgetEngine']).ActionBudgetEngine
-        AutonomySafetyBundle = __import__('application.autonomy.autonomy_safety_bundle', fromlist=['AutonomySafetyBundle']).AutonomySafetyBundle
-        BlastRadiusGuard = __import__('execution.blast_radius_guard', fromlist=['BlastRadiusGuard']).BlastRadiusGuard
-        BoundedAutonomyGuard = __import__('execution.bounded_autonomy', fromlist=['BoundedAutonomyGuard']).BoundedAutonomyGuard
-
         state = build_executor_state(
             guard=guard,
             handlers=handlers,
@@ -180,13 +182,11 @@ class RuntimeExecutor:
         self._runtime_owner_id = str(queue_worker_id or getattr(runtime_infra, 'runtime_owner_id', None) or 'runtime-executor').strip() or 'runtime-executor'
         self._action_audit_log = action_audit_log or getattr(runtime_infra, 'action_audit_log', None)
         self._execution_trace_store = execution_trace_store or getattr(runtime_infra, 'execution_trace_store', None)
-        NullDecisionTraceStore = __import__('observability.decision_trace_store', fromlist=['NullDecisionTraceStore']).NullDecisionTraceStore
         self._decision_trace_store = decision_trace_store or getattr(runtime_infra, 'decision_trace_store', None) or NullDecisionTraceStore()
         self._runtime_effect_trace_store = runtime_effect_trace_store or getattr(runtime_infra, 'runtime_effect_trace_store', None)
         self._connector_observability = getattr(runtime_infra, 'connector_observability', None)
         self._connector_health_monitor = getattr(runtime_infra, 'connector_health_monitor', None)
         self._connector_failover_router = getattr(runtime_infra, 'connector_failover_router', None)
-        EvidenceVerifier = __import__('application.evidence.evidence_verifier', fromlist=['EvidenceVerifier']).EvidenceVerifier
         self._evidence_verifier = getattr(runtime_infra, 'evidence_verifier', None) or EvidenceVerifier()
         self._logger = logger
         self._queue_support = build_executor_queue_support(
@@ -213,7 +213,7 @@ class RuntimeExecutor:
         ledger_path = str(getattr(guard_ledger, '_path', '') or '').strip()
         if runtime_infra is None or reliability is None or not ledger_path:
             return
-        if str(__import__("os").getenv("DATA_DIR", "") or "").strip() or str(__import__("os").getenv("RUNTIME_DIR", "") or "").strip():
+        if str(os.getenv("DATA_DIR", "") or "").strip() or str(os.getenv("RUNTIME_DIR", "") or "").strip():
             return
         current_path = str(getattr(getattr(reliability, 'checkpoint_store', None), 'path', '') or '').strip()
         desired_base_dir = str(Path(ledger_path).parent / '.runtime')
@@ -351,8 +351,6 @@ class RuntimeExecutor:
         )
 
     def execute_recovery(self, env: DecisionEnvelope) -> "ExecutionResult":
-        executor_context = __import__('runtime.execution.context', fromlist=['executor_context']).executor_context
-
         return execute_recovery_flow(
             executor=self,
             env=env,
