@@ -24,9 +24,9 @@ from observability.platform.telemetry.event_store import build_default_event_sto
 from reliability.idempotency_scope import build_idempotency_key
 from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
 from security.audit_redaction_policy import AuditRedactionPolicy
-from security.key_provider import KeyProvider, build_default_key_provider, describe_key_provider_backend
+from security.key_provider import KeyProvider, build_default_key_provider, describe_key_provider_backend, key_provider_sqlite_path
 from security.payload_redaction import PayloadRedactor
-from security.secret_vault import SecretVault, build_default_secret_vault
+from security.secret_vault import SecretVault, build_default_secret_vault, secret_vault_sqlite_path
 from security.key_rotation_scheduler import KeyRotationScheduler, KeyRotationSchedulerConfig, StdlibSecretReencryptionAdapter
 from security.key_provider_sqlite import SqliteKeyProviderBackend
 from security.secret_vault_sqlite import SqliteSecretVaultBackend
@@ -158,8 +158,8 @@ class FastAPIDependencyContainer:
         diagnostics = self.security_storage_diagnostics()
         if diagnostics['shared_runtime_storage'] is not True:
             raise RuntimeError('key_rotation_scheduler requires sqlite key_provider and sqlite secret_vault backends')
-        key_backend = SqliteKeyProviderBackend(__import__('security.key_provider', fromlist=['key_provider_sqlite_path']).key_provider_sqlite_path())
-        secret_backend = SqliteSecretVaultBackend(__import__('security.secret_vault', fromlist=['secret_vault_sqlite_path']).secret_vault_sqlite_path())
+        key_backend = SqliteKeyProviderBackend(key_provider_sqlite_path())
+        secret_backend = SqliteSecretVaultBackend(secret_vault_sqlite_path())
         return KeyRotationScheduler(
             key_backend=key_backend,
             secret_backend=secret_backend,
