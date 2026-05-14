@@ -8,24 +8,15 @@ from application.business_autonomy.provider_admin_contract import ProviderDefini
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
-from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
+from runtime.handler_loader import import_internal_attr
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_HTTP_LIVE_CLIENTS = True
 
 
-def _load_internal_attr(module_name: str, attr_name: str) -> Any:
-    token = ALLOW_INTERNAL_IMPORT.set(True)
-    try:
-        module = __import__(module_name, fromlist=[attr_name])
-        return getattr(module, attr_name)
-    finally:
-        ALLOW_INTERNAL_IMPORT.reset(token)
-
-
 def _sync_request(*args: Any, **kwargs: Any) -> Any:
-    return _load_internal_attr('runtime._internal.http_transport', 'sync_request')(*args, **kwargs)
+    return import_internal_attr('runtime._internal.http_transport', 'sync_request')(*args, **kwargs)
 
 
 @dataclass(frozen=True)
