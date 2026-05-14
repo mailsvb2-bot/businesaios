@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import json as _json
 import os
+import socket
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -50,17 +54,14 @@ def sync_request(
     timeout_s: float = 30,
     opener: Callable[..., object] | None = None,
 ) -> SyncHTTPResult:
-    urllib_request = _urllib_request()
-    urllib_error = _urllib_error()
-    socket_mod = __import__("socket")
     hdrs = dict(headers or {})
-    req = urllib_request.Request(
+    req = urllib.request.Request(
         url=_normalized_url(str(url)),
         data=body,
         headers=hdrs,
         method=str(method or "GET").upper(),
     )
-    open_call = opener or urllib_request.urlopen
+    open_call = opener or urllib.request.urlopen
     try:
         with open_call(req, timeout=timeout_s) as resp:
             decoded = _decode_response(resp)
@@ -75,7 +76,7 @@ def sync_request(
                 json=decoded.json,
                 text=decoded.text,
             )
-    except urllib_error.HTTPError as exc:
+    except urllib.error.HTTPError as exc:
         http_response = _response_from_http_error(exc)
         try:
             response_headers = {str(k): str(v) for k, v in exc.headers.items()}
@@ -89,9 +90,9 @@ def sync_request(
             error_kind="http_error",
             error_message=str(exc),
         )
-    except urllib_error.URLError as exc:
+    except urllib.error.URLError as exc:
         reason = getattr(exc, "reason", exc)
-        if isinstance(reason, socket_mod.timeout):
+        if isinstance(reason, socket.timeout):
             return SyncHTTPResult(
                 status=None,
                 headers={},
@@ -108,7 +109,7 @@ def sync_request(
             error_kind="transport_error",
             error_message=str(reason),
         )
-    except socket_mod.timeout as exc:
+    except socket.timeout as exc:
         return SyncHTTPResult(
             status=None,
             headers={},
@@ -171,32 +172,21 @@ class UrllibHttpTransport(HttpTransport):
             timeout_s=int(timeout_s or 30),
         )
 
-def _urllib_request():
-    return __import__("urllib.request", fromlist=["Request", "urlopen"])
-
-def _urllib_parse():
-    return __import__("urllib.parse", fromlist=["urlencode", "urlsplit", "urlunsplit"])
-
-def _urllib_error():
-    return __import__("urllib.error", fromlist=["HTTPError", "URLError"])
-
 def _normalized_url(url: str) -> str:
     value = str(url or "").strip()
     if not value:
         raise ValueError("url_required")
-    urllib_parse = _urllib_parse()
-    parsed = urllib_parse.urlsplit(value)
+    parsed = urllib.parse.urlsplit(value)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ValueError("absolute_http_url_required")
-    return urllib_parse.urlunsplit(parsed)
+    return urllib.parse.urlunsplit(parsed)
 
 def url_with_params(*, url: str, params: Dict[str, Any] | None = None) -> str:
     payload = params if isinstance(params, dict) else {}
     normalized = _normalized_url(str(url))
     if not payload:
         return normalized
-    urllib_parse = _urllib_parse()
-    return normalized + ("&" if "?" in normalized else "?") + urllib_parse.urlencode({k: v for k, v in payload.items() if v is not None})
+    return normalized + ("&" if "?" in normalized else "?") + urllib.parse.urlencode({k: v for k, v in payload.items() if v is not None})
 
 def form_urlencode(data: Dict[str, Any]) -> bytes:
     """Encode x-www-form-urlencoded payloads inside the sealed HTTP layer.
@@ -205,8 +195,7 @@ def form_urlencode(data: Dict[str, Any]) -> bytes:
     instead of leaking URL/form helpers into runtime domain modules.
     """
 
-    urllib_parse = _urllib_parse()
-    return urllib_parse.urlencode({str(k): v for k, v in dict(data or {}).items() if v is not None}).encode("utf-8")
+    return urllib.parse.urlencode({str(k): v for k, v in dict(data or {}).items() if v is not None}).encode("utf-8")
 
 def _decode_response(resp) -> HTTPResponse:
     raw = resp.read()
@@ -235,32 +224,28 @@ def _response_from_network_error(exc: Exception) -> HTTPResponse:
     return HTTPResponse(status=599, json=None, text=str(exc))
 
 def sync_get(*, url: str, headers: Dict[str, str], params: Optional[Dict[str, str]] = None, timeout_s: int = 30) -> HTTPResponse:
-    urllib_request = _urllib_request()
-    urllib_error = _urllib_error()
     try:
         final = url_with_params(url=str(url), params=(params or {}))
-        req = urllib_request.Request(url=final, headers=headers or {}, method="GET")
-        with urllib_request.urlopen(req, timeout=int(timeout_s or 30)) as resp:
+        req = urllib.request.Request(url=final, headers=headers or {}, method="GET")
+        with urllib.request.urlopen(req, timeout=int(timeout_s or 30)) as resp:
             return _decode_response(resp)
-    except urllib_error.HTTPError as exc:
+    except urllib.error.HTTPError as exc:
         return _response_from_http_error(exc)
-    except (urllib_error.URLError, OSError, ValueError) as exc:
+    except (urllib.error.URLError, OSError, ValueError) as exc:
         return _response_from_network_error(exc)
 
 def sync_post_json(*, url: str, headers: Dict[str, str], data: Optional[Dict[str, Any]] = None, timeout_s: int = 30) -> HTTPResponse:
-    urllib_request = _urllib_request()
-    urllib_error = _urllib_error()
     body = _json.dumps(data or {}, ensure_ascii=False).encode("utf-8")
     hdrs = dict(headers or {})
     if "Content-Type" not in hdrs:
         hdrs["Content-Type"] = "application/json"
-    req = urllib_request.Request(url=_normalized_url(str(url)), data=body, headers=hdrs, method="POST")
+    req = urllib.request.Request(url=_normalized_url(str(url)), data=body, headers=hdrs, method="POST")
     try:
-        with urllib_request.urlopen(req, timeout=int(timeout_s or 30)) as resp:
+        with urllib.request.urlopen(req, timeout=int(timeout_s or 30)) as resp:
             return _decode_response(resp)
-    except urllib_error.HTTPError as exc:
+    except urllib.error.HTTPError as exc:
         return _response_from_http_error(exc)
-    except (urllib_error.URLError, OSError, ValueError) as exc:
+    except (urllib.error.URLError, OSError, ValueError) as exc:
         return _response_from_network_error(exc)
 
 def runtime_network_mode() -> str:
