@@ -7,6 +7,8 @@ No API changes to EffectsPort.
 
 from typing import Any, Dict
 
+import yaml
+
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 from runtime.observability.error_handling import swallow
@@ -104,7 +106,7 @@ class OfferPatchEffectsMixin:
                 swallow(__name__, "runtime/_internal/_effects_impl.py")
             raw["offers"] = offers
             cat_path.parent.mkdir(parents=True, exist_ok=True)
-            cat_path.write_text(__import__("yaml").safe_dump(raw, sort_keys=False, allow_unicode=True), encoding="utf-8")
+            cat_path.write_text(yaml.safe_dump(raw, sort_keys=False, allow_unicode=True), encoding="utf-8")
             summary["status"] = "applied"
 
         if notify_user_id:
