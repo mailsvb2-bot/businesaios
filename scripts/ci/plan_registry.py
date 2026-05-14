@@ -9,11 +9,9 @@ def _plan(gate: str, *steps: str) -> ExecutionPlan:
 
 def plan_for_gate(gate: str) -> ExecutionPlan:
     if gate == "doctor":
-        # Doctor must stay lightweight: filesystem shape + deterministic health checks only.
         return _plan("doctor", "assert-project-shape", "dependency-lock", "doctor-check")
 
     if gate == "fast":
-        # Fast is the required P0 developer gate: boot/import smoke before heavier checks.
         return _plan(
             "fast",
             "assert-project-shape",
@@ -21,6 +19,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "doctor-check",
             "import-smoke",
             "quality-check",
+            "architecture-bypass-scan",
             "lock-tests",
         )
 
@@ -34,6 +33,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "demo-e2e-smoke",
             "quality-check",
             "canon-audit",
+            "architecture-bypass-scan",
             "lock-tests",
             "unit-tests",
             "integration-tests",
@@ -49,6 +49,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "demo-e2e-smoke",
             "quality-check",
             "canon-audit",
+            "architecture-bypass-scan",
             "lock-tests",
             "unit-tests",
             "integration-tests",
@@ -64,6 +65,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "doctor-check",
             "import-smoke",
             "quality-check",
+            "architecture-bypass-scan",
             "lock-tests",
         )
 
@@ -77,6 +79,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "demo-e2e-smoke",
             "quality-check",
             "canon-audit",
+            "architecture-bypass-scan",
             "lock-tests",
             "unit-tests",
             "integration-tests",
