@@ -11,19 +11,14 @@ from config.validation import validate_telegram_settings
 from interfaces.telegram.runner import TelegramRunnerConfig
 from interfaces.telegram.webhook_runtime import TelegramWebhookConfig, TelegramWebhookRuntime
 from runtime.boot.env import env_bool, env_int, resolve_telegram_bot_token
-from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
+from runtime.handler_loader import import_internal_attr
 from runtime.platform.config.env_flags import env_str
 
 log = logging.getLogger('runtime.telegram_webhook')
 
 
 def _load_internal_attr(module_name: str, attr_name: str) -> Any:
-    token = ALLOW_INTERNAL_IMPORT.set(True)
-    try:
-        module = __import__(module_name, fromlist=[attr_name])
-        return getattr(module, attr_name)
-    finally:
-        ALLOW_INTERNAL_IMPORT.reset(token)
+    return import_internal_attr(module_name, attr_name)
 
 
 def _build_runner_config() -> TelegramRunnerConfig:
@@ -78,16 +73,16 @@ def _build_webhook_runtime(
         learning_job=learning_job,
         runner_config=_build_runner_config(),
         webhook_config=TelegramWebhookConfig(
+            bot_token=token,
             secret_token=settings.webhook_secret,
-            webhook_path=settings.webhook_path,
-            periodic_tick_interval_s=float(env_str('TELEGRAM_WEBHOOK_TICK_INTERVAL_S', '1.0') or '1.0'),
+            path=settings.webhook_path,
         ),
     )
     _register_webhook(settings, token=token)
     return webhook_runtime
 
 
-def create_telegram_webhook_app(
+def build_telegram_webhook_app(
     *,
     core: Any,
     executor: Any,
@@ -104,67 +99,32 @@ def create_telegram_webhook_app(
         payment_outbox=payment_outbox,
         learning_job=learning_job,
     )
+    router = APIRouter()
+    settings = validate_telegram_settings(load_telegram_settings())
+
+    @router.get('/health')
+    async def health():
+        return {'status': 'ok', 'transport': 'telegram_webhook'}
+
+    @router.post(settings.webhook_path)
+    async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: str | None = Header(default=None)):
+        expected = env_str('TELEGRAM_WEBHOOK_SECRET_TOKEN', '').strip()
+        if expected and x_telegram_bot_api_secret_token != expected:
+            raise HTTPException(status_code=403, detail='invalid webhook secret')
+        payload = await request.json()
+        return await runtime.handle_update(payload)
+
     @asynccontextmanager
-    async def _lifespan(_app: FastAPI):
-        runtime.start()
+    async def lifespan(app: FastAPI):
+        await runtime.start()
         try:
             yield
         finally:
-            runtime.shutdown()
+            await runtime.stop()
 
-    app = FastAPI(title='BusinesAIOS Telegram Webhook', version='1.0.0', lifespan=_lifespan)
-    app.state.telegram_webhook_runtime = runtime
-
-    router = APIRouter()
-
-    @router.get('/health')
-    async def health() -> dict[str, Any]:
-        return {'ok': True, 'run_mode': 'telegram_webhook', **runtime.health_snapshot()}
-
-    @router.post(runtime.webhook_path)
-    async def telegram_webhook(
-        request: Request,
-        x_telegram_bot_api_secret_token: str | None = Header(default=None),
-    ) -> dict[str, bool]:
-        header_token = str(x_telegram_bot_api_secret_token or '').strip()
-        if header_token != runtime.secret_token:
-            raise HTTPException(status_code=401, detail='invalid telegram webhook secret token')
-        payload = await request.json()
-        if not isinstance(payload, dict):
-            raise HTTPException(status_code=400, detail='telegram update must be a JSON object')
-        runtime.process_update(payload)
-        return {'ok': True}
-
+    app = FastAPI(lifespan=lifespan)
     app.include_router(router)
     return app
 
 
-def run_telegram_webhook(
-    *,
-    core: Any,
-    executor: Any,
-    event_log: Any,
-    event_store: Any,
-    payment_outbox: Any,
-    learning_job: Any,
-    stack: Any = None,
-    **_ignored: Any,
-) -> None:
-    try:
-        import uvicorn
-    except Exception as exc:  # pragma: no cover
-        raise RuntimeError(f'uvicorn_required_for_telegram_webhook:{type(exc).__name__}:{exc}') from exc
-
-    settings = validate_telegram_settings(load_telegram_settings())
-    app = create_telegram_webhook_app(
-        core=core,
-        executor=executor,
-        event_store=event_store,
-        event_log=event_log,
-        payment_outbox=payment_outbox,
-        learning_job=learning_job,
-    )
-    uvicorn.run(app, host=settings.webhook_listen_host, port=int(settings.webhook_listen_port))
-
-
-__all__ = ['create_telegram_webhook_app', 'run_telegram_webhook']
+__all__ = ['build_telegram_webhook_app']
