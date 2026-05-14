@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import runtime.execution.context as execution_context
+import runtime.execution.executor_trace_runtime as trace_runtime
 from runtime.decision import DecisionEnvelope
-from runtime.execution.executor_stages import dispatch_effects
+from runtime.execution.executor_stages import dispatch_effects, preflight_and_verify as _preflight_and_verify
 from runtime.execution.executor_autonomy_gate import (
     deny_autonomy_execution as executor_deny_autonomy_execution,
     enforce_runtime_budget_and_blast_radius as executor_enforce_runtime_budget_and_blast_radius,
@@ -20,15 +22,12 @@ from runtime.execution.executor_queue_runtime import (
 
 
 def preflight_and_verify(*args, **kwargs):
-    _preflight_and_verify = __import__('runtime.execution.executor_stages', fromlist=['preflight_and_verify']).preflight_and_verify
     return _preflight_and_verify(*args, **kwargs)
 
 
 def execute_core_flow(*, executor, env, depth, timescale):
-    trace_runtime = __import__('runtime.execution.executor_trace_runtime', fromlist=['execute_core_flow'])
-    runtime_executor_module = __import__('runtime.executor', fromlist=['preflight_and_verify'])
     original = getattr(trace_runtime, 'preflight_and_verify', None)
-    trace_runtime.preflight_and_verify = getattr(runtime_executor_module, 'preflight_and_verify', preflight_and_verify)
+    trace_runtime.preflight_and_verify = preflight_and_verify
     try:
         return trace_runtime.execute_core_flow(executor=executor, env=env, depth=depth, timescale=timescale)
     finally:
@@ -37,13 +36,11 @@ def execute_core_flow(*, executor, env, depth, timescale):
 
 
 def executor_context(*args, **kwargs):
-    _executor_context = __import__('runtime.execution.context', fromlist=['executor_context']).executor_context
-    return _executor_context(*args, **kwargs)
+    return execution_context.executor_context(*args, **kwargs)
 
 
 def assert_called_from_executor(*args, **kwargs):
-    _assert_called_from_executor = __import__('runtime.execution.context', fromlist=['assert_called_from_executor']).assert_called_from_executor
-    return _assert_called_from_executor(*args, **kwargs)
+    return execution_context.assert_called_from_executor(*args, **kwargs)
 
 
 def _ensure_tenant_runtime_contracts(self, tenant_id: str) -> None:
