@@ -12,6 +12,7 @@ def import_smoke() -> str: return _s('import','-smoke')
 def demo_e2e_smoke() -> str: return _s('demo','-e2e','-smoke')
 def quality() -> str: return _s('quality','-check')
 def canon_audit() -> str: return _s('canon','-audit')
+def architecture_bypass_scan() -> str: return _s('architecture','-bypass','-scan')
 def lock_tests() -> str: return _s('lock','-tests')
 def unit_tests() -> str: return _s('unit','-tests')
 def integration_tests() -> str: return _s('integration','-tests')
@@ -22,12 +23,13 @@ def build_artifact() -> str: return _s('build','-artifact')
 def all_step_names() -> tuple[str, ...]:
     return (
         project_shape(), dependency_lock(), doctor(), import_smoke(), demo_e2e_smoke(), quality(),
-        canon_audit(), lock_tests(), unit_tests(), integration_tests(), verify_release(), build_artifact(),
+        canon_audit(), architecture_bypass_scan(), lock_tests(), unit_tests(), integration_tests(),
+        verify_release(), build_artifact(),
     )
 
 
 __all__ = [
     'project_shape', 'dependency_lock', 'doctor', 'import_smoke', 'demo_e2e_smoke', 'quality',
-    'canon_audit', 'lock_tests', 'unit_tests', 'integration_tests', 'verify_release',
-    'build_artifact', 'all_step_names',
+    'canon_audit', 'architecture_bypass_scan', 'lock_tests', 'unit_tests', 'integration_tests',
+    'verify_release', 'build_artifact', 'all_step_names',
 ]
