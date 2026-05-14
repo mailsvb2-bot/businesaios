@@ -1,8 +1,7 @@
 from __future__ import annotations
 CANON_BOOT_WIRING_ONLY = True
 
-
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Any
 
 from runtime.runtime_infra import RuntimeInfra
@@ -33,7 +32,8 @@ class RuntimeServicesResult(RuntimeInfra):
 
     @property
     def runtime_infra(self) -> RuntimeInfra:
-        return RuntimeInfra(**{field.name: getattr(self, field.name, None) for field in __import__("dataclasses").fields(RuntimeInfra)})
+        payload = {field.name: getattr(self, field.name, None) for field in fields(RuntimeInfra)}
+        return RuntimeInfra(**payload)
 
     def __getitem__(self, key: str):
         return getattr(self, str(key))
