@@ -2,6 +2,7 @@ from .registry import (
     ArtifactRegistry,
     ModelArtifact,
     ModelRegistry,
+    ValidatedModelRecord,
     build_model_registry,
 )
 from .trainer import (

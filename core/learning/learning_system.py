@@ -88,10 +88,10 @@ class LearningSystem:
     def maybe_propose_deployment(self) -> Optional[dict]:
         # 0) Prefer offline-validated candidate if present.
         if self._model_registry is not None:
-            try:
-                rec = self._model_registry.latest_validated()
-            except Exception:
-                rec = None
+            latest_validated = getattr(self._model_registry, "latest_validated", None)
+            if not callable(latest_validated):
+                raise RuntimeError("MODEL_REGISTRY_CONTRACT_VIOLATION:latest_validated")
+            rec = latest_validated()
             if rec and getattr(rec, "candidate_policy_id", None):
                 proposal = {"kind": "deploy", "candidate_policy_id": str(rec.candidate_policy_id), "rollout_pct": DEFAULT_LEARNING_SYSTEM_POLICY.default_rollout_pct}
                 ph = str(proposal)

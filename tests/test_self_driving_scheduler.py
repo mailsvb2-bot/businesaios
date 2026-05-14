@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from contextlib import ExitStack
 
 from core.ai.policy_registry import PolicyRegistry
@@ -96,5 +97,10 @@ def test_self_driving_tick_executes_meta_deploy(tmp_path):
             ledger=ledger,
         )
 
-        res = tick_once(learning_system=learning, decision_core=core, executor=executor)
-        assert res.ok
+        # Canonical safety contract:
+        # self-driving learning may propose deploy_policy@v1, but execution must
+        # not bypass governance approvals. A policy deployment without approvals
+        # is expected to be blocked by the decision safety gate.
+        with pytest.raises(Exception) as exc_info:
+            tick_once(learning_system=learning, decision_core=core, executor=executor)
+        assert "insufficient_approvals" in str(exc_info.value)
