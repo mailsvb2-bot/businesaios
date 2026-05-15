@@ -1,17 +1,13 @@
 from __future__ import annotations
 
+import sqlite3
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
-from types import ModuleType
-from typing import Any, Iterable, Sequence, cast
+from typing import Any, Iterable, Sequence
 
 
 CANON_STORAGE_SQLITE_FALLBACK = True
-
-
-def _sqlite3() -> ModuleType:
-    return cast(ModuleType, __import__("sqlite3"))
 
 
 class SqliteSession(AbstractContextManager["SqliteSession"]):
@@ -42,7 +38,6 @@ class SqliteSession(AbstractContextManager["SqliteSession"]):
         return self._conn
 
     def __enter__(self) -> "SqliteSession":
-        sqlite3 = _sqlite3()
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._path))
         self._conn.row_factory = sqlite3.Row
@@ -81,12 +76,6 @@ class SqliteSession(AbstractContextManager["SqliteSession"]):
     def fetchone(self, sql: str, params: Sequence[Any] | None = None) -> Any | None:
         return self.execute(sql, params).fetchone()
 
-    def commit(self) -> None:
-        self.connection.commit()
-
-    def rollback(self) -> None:
-        self.connection.rollback()
-
 
 @dataclass(frozen=True)
 class SqliteSessionFactory:
@@ -103,9 +92,8 @@ class SqliteSessionFactory:
             synchronous=self.synchronous,
         )
 
+    def __call__(self) -> SqliteSession:
+        return self.open()
 
-__all__ = [
-    "CANON_STORAGE_SQLITE_FALLBACK",
-    "SqliteSession",
-    "SqliteSessionFactory",
-]
+
+__all__ = ["CANON_STORAGE_SQLITE_FALLBACK", "SqliteSession", "SqliteSessionFactory"]
