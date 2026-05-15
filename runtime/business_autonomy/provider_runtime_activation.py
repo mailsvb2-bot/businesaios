@@ -7,7 +7,7 @@ from application.business_autonomy.provider_admin_contract import ProviderDefini
 from observability.export_pipeline.clickhouse_exporter import ClickHouseExporterConfig
 from reliability.redis_idempotency_backend import RedisIdempotencyBackend, RedisIdempotencyConfig
 from runtime.backends.postgres_backend import ProductionPostgresBackend, ProductionPostgresBackendConfig
-from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
+from runtime.handler_loader import import_internal_attr
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
@@ -15,12 +15,7 @@ CANON_PROVIDER_RUNTIME_ACTIVATION = True
 
 
 def _load_internal_attr(module_name: str, attr_name: str) -> Any:
-    token = ALLOW_INTERNAL_IMPORT.set(True)
-    try:
-        module = __import__(module_name, fromlist=[attr_name])
-        return getattr(module, attr_name)
-    finally:
-        ALLOW_INTERNAL_IMPORT.reset(token)
+    return import_internal_attr(module_name, attr_name)
 
 
 def _http_transport_helpers() -> tuple[Any, Any]:
@@ -82,32 +77,18 @@ class ProviderRuntimeActivationService:
 
     @staticmethod
     def _clickhouse_healthcheck(*, config: ClickHouseExporterConfig, dry_run: bool) -> dict[str, Any]:
-        config.validate()
         if dry_run:
-            return {'status': 'ready_for_credentials', 'backend': 'clickhouse', 'database': config.database, 'table': config.table}
-        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-        if config.username:
-            import base64
-            token = base64.b64encode(f"{config.username}:{config.password or ''}".encode('utf-8')).decode('ascii')
-            headers['Authorization'] = f'Basic {token}'
+            return {'status': 'dry_run', 'endpoint': config.endpoint, 'database': config.database}
         form_urlencode, sync_request = _http_transport_helpers()
+        body = form_urlencode({'query': 'SELECT 1'}).encode('utf-8')
         response = sync_request(
+            url=str(config.endpoint),
             method='POST',
-            url=config.endpoint,
-            headers=headers,
-            body=form_urlencode({'query': 'SELECT 1'}),
-            timeout_s=5,
+            body=body,
+            headers={'Content-Type': 'application/x-www-form-urlencoded'},
+            timeout_s=10.0,
         )
-        if response.error_kind:
-            return {
-                'status': 'degraded',
-                'backend': 'clickhouse',
-                'database': config.database,
-                'table': config.table,
-                'error': response.error_message or response.error_kind,
-            }
-        body = str(response.text or '').strip()
-        return {'status': 'ok' if body.startswith('1') else 'degraded', 'backend': 'clickhouse', 'database': config.database, 'table': config.table, 'response': body[:32]}
+        return {'status': 'ok' if int(response.get('status_code', 0)) < 400 else 'error', 'status_code': response.get('status_code')}
 
 
 __all__ = ['CANON_PROVIDER_RUNTIME_ACTIVATION', 'ProviderRuntimeActivationService']
