@@ -11,6 +11,7 @@ from typing import Mapping, Sequence
 from scripts.ci.paths import repo_root
 
 DEFAULT_TIMEOUT_SECONDS = float(os.environ.get("CI_STEP_TIMEOUT_SECONDS", "90"))
+PYTEST_REQUIRED_PLUGINS = ("pytest_asyncio",)
 
 
 @dataclass(frozen=True)
@@ -87,13 +88,28 @@ def run_python(args: Sequence[str], *, timeout: float | None = None) -> CommandO
     return run_command([sys.executable, "-S", *args], timeout=timeout)
 
 
+def _pytest_args_with_required_plugins(args: Sequence[str]) -> list[str]:
+    output = list(args)
+    existing_plugins = {
+        output[index + 1]
+        for index, item in enumerate(output[:-1])
+        if item == "-p"
+    }
+    insertion_index = 2 if len(output) >= 2 and output[0] == "-m" and output[1] == "pytest" else 0
+    plugin_args: list[str] = []
+    for plugin in PYTEST_REQUIRED_PLUGINS:
+        if plugin not in existing_plugins:
+            plugin_args.extend(["-p", plugin])
+    return [*output[:insertion_index], *plugin_args, *output[insertion_index:]]
+
+
 def run_pytest(args: Sequence[str], *, timeout: float | None = None) -> CommandOutcome:
-    # pytest lives in site-packages; -S hides it. Keep user-site/plugins disabled instead.
-    # Some hosted/sandbox interpreters keep non-project shutdown hooks alive after
-    # pytest has printed a successful result. Run pytest through a tiny hard-exit
-    # wrapper so the CI gate reflects pytest's return code, not environment hang.
+    # pytest lives in site-packages; -S hides it. Keep user-site/plugin autoload
+    # disabled, but explicitly load project-required plugins. This prevents
+    # async tests from being silently skipped while still blocking ambient plugins.
+    args_with_plugins = _pytest_args_with_required_plugins(args)
     command: list[str]
-    if len(args) >= 2 and args[0] == "-m" and args[1] == "pytest":
+    if len(args_with_plugins) >= 2 and args_with_plugins[0] == "-m" and args_with_plugins[1] == "pytest":
         wrapper = (
             "import os, sys; "
             "import pytest; "
@@ -101,11 +117,20 @@ def run_pytest(args: Sequence[str], *, timeout: float | None = None) -> CommandO
             "sys.stdout.flush(); sys.stderr.flush(); "
             "os._exit(int(code))"
         )
-        command = [sys.executable, "-c", wrapper, *args[2:]]
+        command = [sys.executable, "-c", wrapper, *args_with_plugins[2:]]
     else:
-        command = [sys.executable, *args]
+        command = [sys.executable, *args_with_plugins]
     return run_command(
         command,
         env={"PYTHONNOUSERSITE": "1", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"},
         timeout=timeout,
     )
+
+
+__all__ = [
+    "CommandOutcome",
+    "PYTEST_REQUIRED_PLUGINS",
+    "run_command",
+    "run_python",
+    "run_pytest",
+]
