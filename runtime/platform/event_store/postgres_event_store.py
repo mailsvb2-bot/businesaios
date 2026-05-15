@@ -9,6 +9,7 @@ events, and provide a health probe. It intentionally keeps explicit production
 enablement so capability surfaces cannot be mistaken for live adapters.
 """
 
+import importlib.util
 import json
 from typing import Any, Iterable, Mapping
 
@@ -45,6 +46,11 @@ def _row_to_event(row: tuple[Any, ...]) -> dict[str, Any]:
     }
 
 
+def _ensure_psycopg_available() -> None:
+    if importlib.util.find_spec("psycopg") is None:
+        raise RuntimeError("POSTGRES_EVENT_STORE_REQUIRES_PSYCOG_RUNTIME")
+
+
 class PostgresEventStore:
     def __init__(self, dsn: str, *, enabled: bool = False) -> None:
         self._dsn = str(dsn)
@@ -54,10 +60,7 @@ class PostgresEventStore:
     def __enter__(self) -> "PostgresEventStore":
         if not self._enabled:
             raise_if_used()
-        try:
-            __import__("psycopg")
-        except Exception as exc:
-            raise RuntimeError("POSTGRES_EVENT_STORE_REQUIRES_PSYCOG_RUNTIME") from exc
+        _ensure_psycopg_available()
         self._port = PostgresPort(self._dsn, application_name="businesaios-event-store").__enter__()
         self._init_schema()
         return self
@@ -89,120 +92,99 @@ class PostgresEventStore:
             );
             """
         )
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_ts ON events(timestamp_ms);")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_type_ts ON events(event_type, timestamp_ms);")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, timestamp_ms);")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_type_user_ts ON events(event_type, user_id, timestamp_ms);")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_tenant_user_ts ON events(tenant_id, user_id, timestamp_ms);")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_tenant_type_ts ON events(tenant_id, event_type, timestamp_ms);")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_decision_id ON events(decision_id);")
-        self._db.commit()
 
-    def ping(self) -> bool:
-        return self._db.ping()
-
-    def append_event(self, event: Mapping[str, Any], *, commit: bool = True) -> None:
-        append = normalize_append_event(dict(event or {}))
+    def append_event(
+        self,
+        *,
+        event_type: str,
+        source: str,
+        user_id: str = "",
+        decision_id: str = "",
+        correlation_id: str = "",
+        payload: Mapping[str, Any] | None = None,
+        tenant_id: str | None = None,
+        timestamp_ms: int | None = None,
+        event_id: str | None = None,
+    ) -> dict[str, Any]:
+        normalized = normalize_append_event(
+            event_type=event_type,
+            source=source,
+            user_id=user_id,
+            decision_id=decision_id,
+            correlation_id=correlation_id,
+            payload=payload,
+            tenant_id=tenant_id,
+            timestamp_ms=timestamp_ms,
+            event_id=event_id,
+        )
         self._db.execute(
             """
-            INSERT INTO events(
+            INSERT INTO events (
               event_id, tenant_id, user_id, source, event_type, timestamp_ms,
               decision_id, correlation_id, payload_json
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s);
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (event_id) DO NOTHING;
             """,
             (
-                append.event_id,
-                append.tenant_id,
-                append.user_id,
-                append.source,
-                append.event_type,
-                append.timestamp_ms,
-                append.decision_id,
-                append.correlation_id,
-                json.dumps(append.payload, ensure_ascii=False, sort_keys=True),
+                normalized["event_id"],
+                normalized["tenant_id"],
+                normalized["user_id"],
+                normalized["source"],
+                normalized["event_type"],
+                normalized["timestamp_ms"],
+                normalized["decision_id"],
+                normalized["correlation_id"],
+                json.dumps(normalized["payload"], ensure_ascii=False, sort_keys=True),
             ),
         )
-        if commit:
-            self._db.commit()
+        return normalized
 
-    def _event_select_sql(self) -> str:
-        return "SELECT event_id, tenant_id, user_id, source, event_type, timestamp_ms, decision_id, correlation_id, payload_json FROM events"
-
-    def iter_events(
+    def query_events(
         self,
         *,
-        tenant_id: str,
-        start_ms: int = 0,
-        end_ms=None,
-        event_type=None,
-        user_id=None,
-    ) -> Iterable[dict[str, Any]]:
-        params: list[Any] = [str(tenant_id), int(start_ms or 0)]
-        where = ["tenant_id=%s", "timestamp_ms >= %s"]
-        if end_ms is not None:
-            where.append("timestamp_ms < %s")
-            params.append(int(end_ms))
+        tenant_id: str | None = None,
+        event_type: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if tenant_id is not None:
+            clauses.append("tenant_id = %s")
+            params.append(str(tenant_id))
         if event_type is not None:
-            where.append("event_type=%s")
+            clauses.append("event_type = %s")
             params.append(str(event_type))
-        if user_id is not None:
-            where.append("user_id=%s")
-            params.append(str(user_id))
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        params.append(max(1, int(limit)))
         rows = self._db.fetchall(
-            f"{self._event_select_sql()} WHERE {' AND '.join(where)} ORDER BY timestamp_ms ASC, event_id ASC;",
+            f"""
+            SELECT event_id, tenant_id, user_id, source, event_type, timestamp_ms,
+                   decision_id, correlation_id, payload_json
+            FROM events{where}
+            ORDER BY timestamp_ms DESC, event_id DESC
+            LIMIT %s;
+            """,
             tuple(params),
         )
-        return [_row_to_event(row) for row in rows]
+        return [_row_to_event(tuple(row)) for row in rows]
 
-    def count_events(
-        self,
-        *,
-        tenant_id: str,
-        event_type: str,
-        start_ms: int = 0,
-        end_ms=None,
-        user_id=None,
-    ) -> int:
-        params: list[Any] = [str(tenant_id), str(event_type), int(start_ms or 0)]
-        where = ["tenant_id=%s", "event_type=%s", "timestamp_ms >= %s"]
-        if end_ms is not None:
-            where.append("timestamp_ms < %s")
-            params.append(int(end_ms))
-        if user_id is not None:
-            where.append("user_id=%s")
-            params.append(str(user_id))
-        row = self._db.fetchone(
-            f"SELECT COUNT(*) FROM events WHERE {' AND '.join(where)};",
-            tuple(params),
-        )
-        if not row:
-            return 0
-        return int(row[0] or 0)
+    def latest_events(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        return self.query_events(limit=limit)
 
-    def latest_event(
-        self,
-        *,
-        tenant_id: str = "default",
-        user_id: Any = None,
-        event_types: list[str] | tuple[str, ...] | set[str] | None = None,
-    ) -> dict[str, Any] | None:
-        params: list[Any] = [str(tenant_id)]
-        where = ["tenant_id=%s"]
-        if user_id is not None:
-            where.append("user_id=%s")
-            params.append(user_id)
-        if event_types:
-            event_type_values = [str(v) for v in event_types]
-            placeholders = ",".join(["%s"] * len(event_type_values))
-            where.append(f"event_type IN ({placeholders})")
-            params.extend(event_type_values)
-        row = self._db.fetchone(
-            f"{self._event_select_sql()} WHERE {' AND '.join(where)} ORDER BY timestamp_ms DESC, event_id DESC LIMIT 1;",
-            tuple(params),
-        )
-        if not row:
-            return None
-        return _row_to_event(row)
+    def healthcheck(self) -> dict[str, Any]:
+        row = self._db.fetchone("SELECT 1;")
+        return {
+            "surface": "runtime.platform.event_store.postgres_event_store",
+            "canonical_owner": "runtime.platform.event_store.postgres_event_store",
+            "storage_only": True,
+            "decision_logic": False,
+            "ok": bool(row),
+        }
 
 
-__all__ = ["CANON_POSTGRES_EVENT_STORE", "PostgresEventStore", "describe_declared_absence", "raise_if_used"]
+__all__ = [
+    "CANON_POSTGRES_EVENT_STORE",
+    "PostgresEventStore",
+    "describe_declared_absence",
+    "raise_if_used",
+]
