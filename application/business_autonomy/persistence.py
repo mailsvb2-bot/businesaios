@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -15,6 +15,7 @@ from storage.sqlite_fallback import SqliteSessionFactory
 
 from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest, ApprovalStatus
 from governance.approval_store import build_default_approval_store
+from governance.rbac_contract import RoleId
 from execution.operator_override_contract import (
     OperatorOverrideDecision,
     OperatorOverrideRecord,
@@ -429,11 +430,11 @@ class PersistentBusinessApprovalGate:
                 approval_id=approval_id,
                 tenant_id=tenant_id,
                 actor_id=str(approved_by),
-                role_id=existing.request.required_role_groups[0][0] if existing.request.required_role_groups else __import__('governance.rbac_contract', fromlist=['RoleId']).RoleId.OPERATOR,
+                role_id=existing.request.required_role_groups[0][0] if existing.request.required_role_groups else RoleId.OPERATOR,
                 outcome=ApprovalOutcome.APPROVE,
                 rationale=str(metadata.get("approval_note") or "Approved via business autonomy metadata."),
             )
-            updated = __import__('dataclasses').replace(existing, status=ApprovalStatus.APPROVED, decisions=existing.decisions + (decision,), final_reason="approved")
+            updated = replace(existing, status=ApprovalStatus.APPROVED, decisions=existing.decisions + (decision,), final_reason="approved")
             self._store.save(updated)
             existing = updated
 
