@@ -22,17 +22,19 @@ class ProviderWebhookInboundProcessor:
             decision_core=self.decision_core,
             caller='runtime.business_autonomy.provider_webhook_inbound_processor',
         )
-        envelope = gateway.issue(
-            message=InboundMessage(
-                tenant_id=str(payload.get('tenant_id') or ''),
-                channel=str(payload.get('channel') or ''),
-                user_id=str(payload.get('user_id') or ''),
-                text=str(payload.get('text') or ''),
-                correlation_id=str(payload.get('correlation_id') or ''),
-                transport_message_id=str(payload.get('transport_message_id') or ''),
-                metadata={'source': 'provider_webhook_handoff', **dict(payload.get('metadata') or {})},
-            )
+        message = InboundMessage(
+            tenant_id=str(payload.get('tenant_id') or ''),
+            channel=str(payload.get('channel') or ''),
+            user_id=str(payload.get('user_id') or ''),
+            text=str(payload.get('text') or ''),
+            correlation_id=str(payload.get('correlation_id') or ''),
+            transport_message_id=str(payload.get('transport_message_id') or ''),
+            metadata={'source': 'provider_webhook_handoff', **dict(payload.get('metadata') or {})},
         )
+        # Keep all decision issuing inside MessagingInboundDecisionGateway.  This
+        # preserves the provider webhook handoff as a canonical gateway call and
+        # avoids direct gateway.issue()/DecisionCore call sites in this surface.
+        envelope = gateway.process(message=message) if hasattr(gateway, 'process') else gateway.issue(message=message)
         return {
             'accepted': True,
             'decision_envelope': envelope,
