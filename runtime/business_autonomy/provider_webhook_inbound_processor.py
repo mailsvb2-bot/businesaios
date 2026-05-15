@@ -31,10 +31,9 @@ class ProviderWebhookInboundProcessor:
             transport_message_id=str(payload.get('transport_message_id') or ''),
             metadata={'source': 'provider_webhook_handoff', **dict(payload.get('metadata') or {})},
         )
-        # Keep all decision issuing inside MessagingInboundDecisionGateway.  This
-        # preserves the provider webhook handoff as a canonical gateway call and
-        # avoids direct gateway.issue()/DecisionCore call sites in this surface.
-        envelope = gateway.process(message=message) if hasattr(gateway, 'process') else gateway.issue(message=message)
+        # Provider webhook handoff must not issue decisions directly. The
+        # inbound gateway owns the canonical bridge to DecisionCore.
+        envelope = gateway.process(message=message)
         return {
             'accepted': True,
             'decision_envelope': envelope,
