@@ -9,6 +9,7 @@ modules remain as compatibility shims only.
 
 from dataclasses import dataclass, fields
 from importlib import import_module
+from pathlib import Path
 from typing import Any, Protocol
 
 from governance.constitution import Constitution
@@ -175,7 +176,7 @@ def build_runtime_infra(
     if not reliability_base_dir:
         ledger_path = str(getattr(resolved_ledger, "_path", "") or "").strip()
         if ledger_path:
-            reliability_base_dir = str(__import__("pathlib").Path(ledger_path).parent / ".runtime")
+            reliability_base_dir = str(Path(ledger_path).parent / ".runtime")
     return RuntimeExecutorInfra(
         **_copy_runtime_infra_fields(
             source=base,
