@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from datetime import UTC, datetime, timedelta
 
 from storage import (
@@ -9,6 +11,7 @@ from storage import (
     SqliteAuditStore,
     SqliteEvidenceStore,
     SqliteSchemaVersionStore,
+    SqliteSession,
     SqliteSessionFactory,
     StorageRetentionJobRunner,
 )
@@ -22,6 +25,28 @@ def test_tenant_partitioning_normalizes_global() -> None:
     partition = describe_tenant_partition(None, scope="evidence")
     assert partition.partition_suffix == "global"
     assert partition.postgres_schema.startswith("tenant_")
+
+
+def test_sqlite_session_exposes_explicit_transaction_contract(tmp_path) -> None:
+    db_path = tmp_path / "contract.db"
+    with SqliteSession(db_path) as session:
+        session.execute("CREATE TABLE items(id INTEGER PRIMARY KEY, value TEXT NOT NULL)")
+        session.execute("INSERT INTO items(value) VALUES (?)", ("committed",))
+        session.commit()
+
+    with SqliteSession(db_path) as session:
+        assert session.fetchone("SELECT value FROM items WHERE id = ?", (1,))["value"] == "committed"
+        session.execute("INSERT INTO items(value) VALUES (?)", ("rolled-back",))
+        session.rollback()
+        rows = session.fetchall("SELECT value FROM items ORDER BY id")
+        assert [row["value"] for row in rows] == ["committed"]
+
+
+def test_sqlite_session_is_forbidden_in_prod_env(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "prod")
+    with pytest.raises(RuntimeError, match="SQLITE_FALLBACK_FORBIDDEN_IN_PROD"):
+        with SqliteSession(tmp_path / "prod.db"):
+            raise AssertionError("sqlite fallback must not open in prod")
 
 
 def test_sqlite_audit_store_round_trip(tmp_path) -> None:
