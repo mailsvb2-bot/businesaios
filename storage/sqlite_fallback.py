@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
@@ -8,6 +9,16 @@ from typing import Any, Iterable, Sequence
 
 
 CANON_STORAGE_SQLITE_FALLBACK = True
+CANON_STORAGE_SQLITE_FALLBACK_TEST_LOCAL_ONLY = True
+
+
+_PROD_ENV_NAMES = {"prod", "production"}
+
+
+def _is_prod_environment() -> bool:
+    app_env = str(os.getenv("APP_ENV") or "").strip().lower()
+    env = str(os.getenv("ENV") or "").strip().lower()
+    return app_env in _PROD_ENV_NAMES or env in _PROD_ENV_NAMES
 
 
 class SqliteSession(AbstractContextManager["SqliteSession"]):
@@ -38,6 +49,8 @@ class SqliteSession(AbstractContextManager["SqliteSession"]):
         return self._conn
 
     def __enter__(self) -> "SqliteSession":
+        if _is_prod_environment():
+            raise RuntimeError("SQLITE_FALLBACK_FORBIDDEN_IN_PROD")
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._path))
         self._conn.row_factory = sqlite3.Row
@@ -76,6 +89,12 @@ class SqliteSession(AbstractContextManager["SqliteSession"]):
     def fetchone(self, sql: str, params: Sequence[Any] | None = None) -> Any | None:
         return self.execute(sql, params).fetchone()
 
+    def commit(self) -> None:
+        self.connection.commit()
+
+    def rollback(self) -> None:
+        self.connection.rollback()
+
 
 @dataclass(frozen=True)
 class SqliteSessionFactory:
@@ -96,4 +115,9 @@ class SqliteSessionFactory:
         return self.open()
 
 
-__all__ = ["CANON_STORAGE_SQLITE_FALLBACK", "SqliteSession", "SqliteSessionFactory"]
+__all__ = [
+    "CANON_STORAGE_SQLITE_FALLBACK",
+    "CANON_STORAGE_SQLITE_FALLBACK_TEST_LOCAL_ONLY",
+    "SqliteSession",
+    "SqliteSessionFactory",
+]
