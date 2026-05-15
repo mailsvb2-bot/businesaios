@@ -12,7 +12,6 @@ from interfaces.telegram.runner import TelegramRunnerConfig
 from interfaces.telegram.webhook_runtime import TelegramWebhookConfig, TelegramWebhookRuntime
 from runtime.boot.env import env_bool, env_int, resolve_telegram_bot_token
 from runtime.handler_loader import import_internal_attr
-from runtime.platform.config.env_flags import env_str
 
 log = logging.getLogger('runtime.telegram_webhook')
 
@@ -108,9 +107,9 @@ def build_telegram_webhook_app(
 
     @router.post(settings.webhook_path)
     async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: str | None = Header(default=None)):
-        expected = env_str('TELEGRAM_WEBHOOK_SECRET_TOKEN', '').strip()
+        expected = str(settings.webhook_secret or '').strip()
         if expected and x_telegram_bot_api_secret_token != expected:
-            raise HTTPException(status_code=403, detail='invalid webhook secret')
+            raise HTTPException(status_code=401, detail='invalid webhook secret')
         payload = await request.json()
         return await runtime.handle_update(payload)
 
@@ -127,4 +126,24 @@ def build_telegram_webhook_app(
     return app
 
 
-__all__ = ['build_telegram_webhook_app']
+def create_telegram_webhook_app(
+    *,
+    core: Any,
+    executor: Any,
+    event_store: Any,
+    event_log: Any,
+    payment_outbox: Any,
+    learning_job: Any,
+) -> FastAPI:
+    """Compatibility factory kept on the same canonical webhook builder path."""
+    return build_telegram_webhook_app(
+        core=core,
+        executor=executor,
+        event_store=event_store,
+        event_log=event_log,
+        payment_outbox=payment_outbox,
+        learning_job=learning_job,
+    )
+
+
+__all__ = ['build_telegram_webhook_app', 'create_telegram_webhook_app']
