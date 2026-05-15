@@ -5,6 +5,7 @@ from typing import Callable
 from scripts.ci import step_ids as _step_ids
 from scripts.ci.doctor import run_doctor
 from scripts.ci.step_architecture_bypass_scan import run as run_architecture_bypass_scan
+from scripts.ci.step_async_test_contract import run as run_async_test_contract
 from scripts.ci.step_build_artifact import run as run_build_artifact
 from scripts.ci.step_canon_audit import run as run_canon_audit
 from scripts.ci.step_demo_e2e_smoke import run as run_demo_e2e_smoke
@@ -29,6 +30,7 @@ _REGISTRY: dict[str, StepHandler] = {
     _step_ids.quality(): run_quality,
     _step_ids.canon_audit(): run_canon_audit,
     _step_ids.architecture_bypass_scan(): run_architecture_bypass_scan,
+    _step_ids.async_test_contract(): run_async_test_contract,
     _step_ids.lock_tests(): run_lock_tests,
     _step_ids.unit_tests(): run_unit_tests,
     _step_ids.integration_tests(): run_integration_tests,
