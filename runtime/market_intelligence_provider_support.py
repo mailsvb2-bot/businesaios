@@ -4,18 +4,13 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Any
 
-from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
+from runtime.handler_loader import import_internal_attr
 
 CANON_MARKET_INTELLIGENCE_PROVIDER_SUPPORT = True
 
 
 def _load_internal_attr(module_name: str, attr_name: str) -> Any:
-    token = ALLOW_INTERNAL_IMPORT.set(True)
-    try:
-        module = __import__(module_name, fromlist=[attr_name])
-        return getattr(module, attr_name)
-    finally:
-        ALLOW_INTERNAL_IMPORT.reset(token)
+    return import_internal_attr(module_name, attr_name)
 
 
 @dataclass
