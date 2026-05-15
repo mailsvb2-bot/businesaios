@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from runtime.messaging.inbound_decision_gateway import MessagingInboundDecisionGateway
+from runtime.messaging.inbound_decision_gateway import MessagingInboundDecisionGateway, process_inbound_gateway_message
 from runtime.messaging.inbound_message import InboundMessage
 
 
@@ -33,7 +33,7 @@ class ProviderWebhookInboundProcessor:
         )
         # Provider webhook handoff must not issue decisions directly. The
         # inbound gateway owns the canonical bridge to DecisionCore.
-        envelope = gateway.process(message=message)
+        envelope = process_inbound_gateway_message(gateway=gateway, message=message)
         return {
             'accepted': True,
             'decision_envelope': envelope,
