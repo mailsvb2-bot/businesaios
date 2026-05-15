@@ -20,6 +20,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "import-smoke",
             "quality-check",
             "architecture-bypass-scan",
+            "async-test-contract",
             "lock-tests",
         )
 
@@ -34,6 +35,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "quality-check",
             "canon-audit",
             "architecture-bypass-scan",
+            "async-test-contract",
             "lock-tests",
             "unit-tests",
             "integration-tests",
@@ -50,6 +52,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "quality-check",
             "canon-audit",
             "architecture-bypass-scan",
+            "async-test-contract",
             "lock-tests",
             "unit-tests",
             "integration-tests",
@@ -66,6 +69,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "import-smoke",
             "quality-check",
             "architecture-bypass-scan",
+            "async-test-contract",
             "lock-tests",
         )
 
@@ -80,6 +84,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "quality-check",
             "canon-audit",
             "architecture-bypass-scan",
+            "async-test-contract",
             "lock-tests",
             "unit-tests",
             "integration-tests",
