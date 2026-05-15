@@ -11,7 +11,7 @@ from typing import Mapping, Sequence
 from scripts.ci.paths import repo_root
 
 DEFAULT_TIMEOUT_SECONDS = float(os.environ.get("CI_STEP_TIMEOUT_SECONDS", "90"))
-PYTEST_REQUIRED_PLUGINS = ("pytest_asyncio",)
+PYTEST_REQUIRED_PLUGINS = ("pytest_asyncio.plugin",)
 
 
 @dataclass(frozen=True)
@@ -105,8 +105,9 @@ def _pytest_args_with_required_plugins(args: Sequence[str]) -> list[str]:
 
 def run_pytest(args: Sequence[str], *, timeout: float | None = None) -> CommandOutcome:
     # pytest lives in site-packages; -S hides it. Keep user-site/plugin autoload
-    # disabled, but explicitly load project-required plugins. This prevents
-    # async tests from being silently skipped while still blocking ambient plugins.
+    # disabled, but explicitly load project-required plugin entrypoints. This
+    # prevents async tests from being silently skipped while still blocking
+    # ambient plugins.
     args_with_plugins = _pytest_args_with_required_plugins(args)
     command: list[str]
     if len(args_with_plugins) >= 2 and args_with_plugins[0] == "-m" and args_with_plugins[1] == "pytest":
