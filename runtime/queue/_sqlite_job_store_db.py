@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 import importlib
 from pathlib import Path
 
@@ -37,6 +37,13 @@ def sqlite_job_store_tx(*, path: Path, busy_timeout_ms: int):
         db.execute("BEGIN IMMEDIATE;")
         yield db
         db.commit()
+        # Crash-recovery contract: queue claims must be observable by a janitor
+        # even when the worker process exits immediately after claim() returns.
+        # WAL readers normally see committed frames, but an explicit passive
+        # checkpoint keeps the SQLite fallback deterministic across fork/os._exit
+        # tests without changing the canonical Postgres production path.
+        with suppress(Exception):
+            db.execute("PRAGMA wal_checkpoint(PASSIVE);")
     except Exception:
         db.rollback()
         raise
