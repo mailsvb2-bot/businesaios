@@ -72,9 +72,8 @@ def _build_webhook_runtime(
         learning_job=learning_job,
         runner_config=_build_runner_config(),
         webhook_config=TelegramWebhookConfig(
-            bot_token=token,
             secret_token=settings.webhook_secret,
-            path=settings.webhook_path,
+            webhook_path=settings.webhook_path,
         ),
     )
     _register_webhook(settings, token=token)
@@ -99,27 +98,27 @@ def build_telegram_webhook_app(
         learning_job=learning_job,
     )
     router = APIRouter()
-    settings = validate_telegram_settings(load_telegram_settings())
 
     @router.get('/health')
     async def health():
         return {'status': 'ok', 'transport': 'telegram_webhook'}
 
-    @router.post(settings.webhook_path)
+    @router.post(runtime.webhook_path)
     async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: str | None = Header(default=None)):
-        expected = str(settings.webhook_secret or '').strip()
+        expected = str(runtime.secret_token or '').strip()
         if expected and x_telegram_bot_api_secret_token != expected:
             raise HTTPException(status_code=401, detail='invalid webhook secret')
         payload = await request.json()
-        return await runtime.handle_update(payload)
+        runtime.process_update(payload)
+        return {'ok': True}
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        await runtime.start()
+        runtime.start()
         try:
             yield
         finally:
-            await runtime.stop()
+            runtime.shutdown()
 
     app = FastAPI(lifespan=lifespan)
     app.include_router(router)
