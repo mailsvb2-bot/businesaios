@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const DEFAULT_API = "https://api.businessaios.ru";
 const DEFAULT_EMAIL = "pilot@example.com";
@@ -51,13 +51,18 @@ export function App() {
   const [health, setHealth] = useState(null);
   const [readyz, setReadyz] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [email, setEmail] = useState(DEFAULT_EMAIL);
-  const [intent, setIntent] = useState(DEFAULT_INTENT);
-  const [intakeId, setIntakeId] = useState(initialIntakeId());
   const [ctaLoading, setCtaLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [ctaError, setCtaError] = useState("");
   const [ctaResult, setCtaResult] = useState(null);
   const [ctaStatus, setCtaStatus] = useState(null);
+  const [intakeId, setIntakeId] = useState(initialIntakeId());
+  const [form, setForm] = useState({
+    email: DEFAULT_EMAIL,
+    business_name: "",
+    website: "",
+    intent: DEFAULT_INTENT
+  });
 
   const endpoints = useMemo(() => {
     const base = apiBase.replace(/\/$/, "");
@@ -69,6 +74,25 @@ export function App() {
       ctaStatus: (id) => `${base}/public-site/cta/${encodeURIComponent(id)}`
     };
   }, [apiBase]);
+
+  useEffect(() => {
+    const id = initialIntakeId();
+    if (!id) return;
+    let cancelled = false;
+    getJson(endpoints.ctaStatus(id))
+      .then((data) => {
+        if (!cancelled) {
+          setCtaResult(data);
+          setCtaStatus(data);
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setCtaError(String(e?.message || e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [endpoints]);
 
   const runProbe = async () => {
     setLoading(true);
@@ -90,12 +114,16 @@ export function App() {
   const startCta = async () => {
     setCtaLoading(true);
     setError("");
+    setCtaError("");
     setCtaResult(null);
     try {
       const payload = {
-        email: email.trim(),
+        email: form.email.trim(),
+        business_name: form.business_name.trim(),
+        website: form.website.trim(),
         source: "landing",
-        intent: intent.trim() || DEFAULT_INTENT
+        intent: form.intent.trim() || DEFAULT_INTENT,
+        requested_surface: "advisory_onboarding_workspace"
       };
       const result = await postJson(endpoints.ctaStart, payload);
       setCtaResult(result);
@@ -104,13 +132,22 @@ export function App() {
       }
       const uiUrl = result?.next?.ui_url;
       if (uiUrl) {
-        window.location.assign(uiUrl);
+        const nextUrl = new URL(uiUrl, window.location.origin);
+        const nextIntakeId = nextUrl.searchParams.get("intake_id");
+        if (nextIntakeId) {
+          window.history.replaceState(null, "", `?intake_id=${nextIntakeId}`);
+        }
       }
     } catch (e) {
-      setError(String(e?.message || e));
+      setCtaError(String(e?.message || e));
     } finally {
       setCtaLoading(false);
     }
+  };
+
+  const submitCta = async (event) => {
+    event.preventDefault();
+    await startCta();
   };
 
   const checkCtaStatus = async () => {
@@ -121,46 +158,59 @@ export function App() {
     }
     setCtaLoading(true);
     setError("");
+    setCtaError("");
     try {
       const statusPayload = await getJson(endpoints.ctaStatus(id));
       setCtaStatus(statusPayload);
+      setCtaResult(statusPayload);
     } catch (e) {
-      setError(String(e?.message || e));
+      setCtaError(String(e?.message || e));
     } finally {
       setCtaLoading(false);
     }
   };
 
+  const updateForm = (key) => (event) => {
+    setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  };
+
   return (
     <main className="page">
-      <section className="hero card">
-        <p className="eyebrow">Behavioral Operating System for microbusiness</p>
-        <h1>BusinessAIOS Control UI</h1>
+      <h1>BusinessAIOS Control UI</h1>
+      <p className="muted">Staging UI: public CTA onboarding, health/readiness probes, and OpenAPI link.</p>
+
+      <section className="card hero hero-card">
+        <p className="eyebrow">Public landing → advisory workspace</p>
+        <h2>Start a BusinessAIOS pilot</h2>
         <p className="muted">
-          Landing CTA is wired to the public-site intake API. The button records interest and redirects to the app URL returned by the backend.
+          This creates a read-only advisory intake. Write actions, customer messages, publications, and spend remain blocked until operator review and approvals.
         </p>
-        <div className="cta-form">
+        <form className="stack cta-form" onSubmit={submitCta}>
           <label>
             Work email
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="founder@example.com"
-              type="email"
-            />
+            <input value={form.email} onChange={updateForm("email")} placeholder="founder@example.com" type="email" />
+          </label>
+          <label>
+            Business name
+            <input value={form.business_name} onChange={updateForm("business_name")} placeholder="Your business" />
+          </label>
+          <label>
+            Website or channel
+            <input value={form.website} onChange={updateForm("website")} placeholder="https://example.com" />
           </label>
           <label>
             Intent
-            <input
-              value={intent}
-              onChange={(e) => setIntent(e.target.value)}
-              placeholder="pilot"
-            />
+            <select value={form.intent} onChange={updateForm("intent")}>
+              <option value="pilot">Pilot / advisory onboarding</option>
+              <option value="connectors">Connect read-only data sources</option>
+              <option value="autopilot">Explore approval-gated autopilot</option>
+            </select>
           </label>
-          <button className="primary" onClick={startCta} disabled={ctaLoading}>
+          <button className="primary" type="submit" disabled={ctaLoading}>
             {ctaLoading ? "Starting..." : "Start CTA flow"}
           </button>
-        </div>
+        </form>
+        {ctaError ? <pre className="error">{ctaError}</pre> : null}
         {ctaResult ? <pre className="success">{JSON.stringify(ctaResult, null, 2)}</pre> : null}
       </section>
 
@@ -179,6 +229,37 @@ export function App() {
         </div>
         {ctaStatus ? <pre>{JSON.stringify(ctaStatus, null, 2)}</pre> : null}
       </section>
+
+      {ctaResult ? (
+        <section className="grid">
+          <article className="card">
+            <h2>Workspace</h2>
+            <p><strong>Intake:</strong> {ctaResult.intake_id}</p>
+            <p><strong>Status:</strong> {ctaResult.onboarding_status || ctaResult.measurable_outcome}</p>
+            <p><strong>Tenant:</strong> {ctaResult.tenant_id || ctaResult.user_functionality?.tenant_id || "pending"}</p>
+            <p><strong>Business:</strong> {ctaResult.business_id || ctaResult.user_functionality?.business_id || "pending"}</p>
+            <p><strong>User:</strong> {ctaResult.user_id || ctaResult.user_functionality?.user_id || "pending"}</p>
+          </article>
+          <article className="card">
+            <h2>Safety</h2>
+            <p><strong>Write actions:</strong> {String(ctaResult.write_actions_enabled ?? false)}</p>
+            <p><strong>Approval required:</strong> {String(ctaResult.approval_required_before_execution ?? true)}</p>
+            <p><strong>Admin surface:</strong> {ctaResult.admin_visibility?.surface || "control-plane pending"}</p>
+          </article>
+          <article className="card wide">
+            <h2>Next actions</h2>
+            <ul>
+              {(ctaResult.next_actions || []).map((item) => (
+                <li key={item.code || item.label || item}>
+                  <strong>{item.label || item.code || item}</strong>
+                  {item.provider_lifecycle_stage ? ` — ${item.provider_lifecycle_stage}` : ""}
+                </li>
+              ))}
+            </ul>
+            <pre>{JSON.stringify(ctaResult.user_functionality || ctaResult, null, 2)}</pre>
+          </article>
+        </section>
+      ) : null}
 
       <section className="card">
         <label>API Base URL</label>
@@ -211,3 +292,5 @@ export function App() {
     </main>
   );
 }
+
+export { getJson, postJson };
