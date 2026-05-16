@@ -117,12 +117,13 @@ export function App() {
     setCtaError("");
     setCtaResult(null);
     try {
+      const intent = form.intent;
       const payload = {
         email: form.email.trim(),
         business_name: form.business_name.trim(),
         website: form.website.trim(),
         source: "landing",
-        intent: form.intent.trim() || DEFAULT_INTENT,
+        intent: intent.trim() || DEFAULT_INTENT,
         requested_surface: "advisory_onboarding_workspace"
       };
       const result = await postJson(endpoints.ctaStart, payload);
@@ -137,6 +138,7 @@ export function App() {
         if (nextIntakeId) {
           window.history.replaceState(null, "", `?intake_id=${nextIntakeId}`);
         }
+        window.location.assign(uiUrl);
       }
     } catch (e) {
       setCtaError(String(e?.message || e));
