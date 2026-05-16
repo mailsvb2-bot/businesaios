@@ -36,6 +36,7 @@ class StorageConfig:
     env: str
     backend: str  # sqlite | postgres
     postgres_dsn: str | None
+    postgres_event_store_enabled: bool = False
 
 
 def _sqlite_path(env_name: str, *, base_dir: str, filename: str) -> str:
@@ -48,6 +49,10 @@ def resolve_storage_config() -> StorageConfig:
     engine = (env_str("METRO_DB_ENGINE").strip().lower() or "")
     backend_default = "postgres" if (pg_dsn or engine == "postgres") else "sqlite"
     backend = (env_str("STORAGE_BACKEND", backend_default) or backend_default).strip().lower()
+    postgres_event_store_enabled = (
+        str(env_str("BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE", "")).strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
 
     if env == "prod":
         if backend != "postgres":
@@ -55,16 +60,15 @@ def resolve_storage_config() -> StorageConfig:
         if not pg_dsn:
             raise RuntimeError("PROD_REQUIRES_POSTGRES_DSN")
 
-    return StorageConfig(env=env, backend=backend, postgres_dsn=pg_dsn)
+    return StorageConfig(
+        env=env,
+        backend=backend,
+        postgres_dsn=pg_dsn,
+        postgres_event_store_enabled=postgres_event_store_enabled,
+    )
 
 
 def describe_storage_readiness(storage: StorageConfig) -> dict[str, Any]:
-    """Return a side-effect-free storage readiness snapshot for admin/control-plane.
-
-    This function intentionally does not open sockets, import drivers, create
-    adapters, or make decisions. It exposes the storage contract that boot will
-    enforce, so admin surfaces can show production blockers before startup.
-    """
     backend = str(storage.backend or "").strip().lower()
     env = str(storage.env or "").strip().lower() or "dev"
     has_postgres_dsn = bool(str(storage.postgres_dsn or "").strip())
@@ -84,6 +88,7 @@ def describe_storage_readiness(storage: StorageConfig) -> dict[str, Any]:
         "backend": backend,
         "env": env,
         "postgres_dsn_configured": has_postgres_dsn,
+        "postgres_event_store_enabled": bool(getattr(storage, "postgres_event_store_enabled", False)),
         "roles": list(DURABLE_STORE_ROLES),
         "live_ready": not blockers,
         "blockers": blockers,
@@ -91,12 +96,6 @@ def describe_storage_readiness(storage: StorageConfig) -> dict[str, Any]:
 
 
 def storage_control_plane_status(storage: StorageConfig) -> dict[str, Any]:
-    """Return the admin/control-plane payload for storage readiness.
-
-    This is a read-only status surface. It never upgrades capability into live
-    integration claims: a configured DSN means configuration is present, not that
-    a live database smoke has passed.
-    """
     readiness = describe_storage_readiness(storage)
     status = "ready" if bool(readiness["live_ready"]) else "blocked"
     return {
@@ -116,12 +115,6 @@ def storage_control_plane_status(storage: StorageConfig) -> dict[str, Any]:
 
 
 def storage_live_smoke_status(storage: StorageConfig, *, base_dir: str = "data/runtime") -> dict[str, Any]:
-    """Explicitly run a live storage smoke through canonical wiring.
-
-    This function intentionally has side effects: it enters the configured store
-    adapters, which can open connections and initialize schemas. Call it only
-    from an explicit smoke/ops gate with approved environment configuration.
-    """
     readiness = describe_storage_readiness(storage)
     result: dict[str, Any] = {
         "surface": "runtime.storage.live_smoke",
@@ -172,6 +165,8 @@ def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageCon
         from runtime.platform.outbox.postgres_payment_outbox import PostgresPaymentOutbox
         from observability.platform.snapshot_store.postgres_snapshot_store import PostgresSnapshotStore
 
+        if not bool(getattr(storage, "postgres_event_store_enabled", False)):
+            raise RuntimeError("POSTGRES_EVENT_STORE_REQUIRES_EXPLICIT_ENABLEMENT")
         event_store = stack.enter_context(PostgresEventStore(storage.postgres_dsn, enabled=True))
         ledger = stack.enter_context(PostgresLedger(storage.postgres_dsn))
         snapshot_store = stack.enter_context(PostgresSnapshotStore(storage.postgres_dsn))
@@ -197,10 +192,6 @@ def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageCon
 
 
 def build_behavior_graph_store(stack: ExitStack, *, base_dir: str, storage: StorageConfig):
-    """Return BehaviorGraphStore adapter (sqlite/postgres).
-
-    This is kept separate from build_durable_stores() to avoid tuple churn.
-    """
     if storage.backend == "postgres":
         assert storage.postgres_dsn
         from runtime.platform.behavior_graph.postgres_behavior_graph_store import PostgresBehaviorGraphStore
