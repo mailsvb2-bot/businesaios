@@ -12,6 +12,7 @@ live adapters.
 
 import importlib.util
 import json
+import sys
 from typing import Any, Iterable, Mapping
 
 from runtime.platform.event_store.append_contract import AppendEvent, normalize_append_event
@@ -48,6 +49,8 @@ def _row_to_event(row: tuple[Any, ...]) -> dict[str, Any]:
 
 
 def _ensure_psycopg_available() -> None:
+    if sys.modules.get("psycopg") is not None:
+        return
     if importlib.util.find_spec("psycopg") is None:
         raise RuntimeError("POSTGRES_EVENT_STORE_REQUIRES_PSYCOG_RUNTIME")
 
