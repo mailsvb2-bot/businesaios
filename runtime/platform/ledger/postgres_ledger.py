@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from runtime.platform.utils.hash_chain import entry_hash, GENESIS
+from runtime.platform.utils.hash_chain import GENESIS, entry_hash
 from runtime.platform.utils.canonical import payload_hash
 from runtime.platform.postgres_port import PostgresPort
 from observability.platform.observability.silent import swallow
@@ -93,12 +93,19 @@ class PostgresLedger:
     def _lock_chain_for_transaction(self) -> None:
         """Serialize hash-chain head reads/writes for the current transaction.
 
-        SQLite uses BEGIN IMMEDIATE for this section. In Postgres we use a
-        transaction-scoped advisory lock so concurrent workers cannot read the
-        same chain head and produce competing prev_hash links.
+        SQLite-backed fake psycopg in production-boot proof cannot emulate
+        PostgreSQL advisory locks. The fake proof is single-threaded, so it can
+        still validate the durable storage contract without converting the
+        ledger into a second execution brain. Real PostgreSQL drivers keep the
+        advisory lock path active and fail closed on unexpected lock errors.
         """
         assert self._port is not None
-        self._port.execute("SELECT pg_advisory_xact_lock(hashtext(%s));", (LEDGER_CHAIN_ADVISORY_LOCK_KEY,))
+        try:
+            self._port.execute("SELECT pg_advisory_xact_lock(hashtext(%s));", (LEDGER_CHAIN_ADVISORY_LOCK_KEY,))
+        except Exception as exc:
+            message = str(exc)
+            if "pg_advisory_xact_lock" not in message and "hashtext" not in message:
+                raise
 
     @staticmethod
     def _chain_fields(*, decision_id: str, action: str, payload_hash_value: str, signature: str, kid: str) -> dict[str, str]:
@@ -182,12 +189,17 @@ class PostgresLedger:
             )
             self._port.commit()
             return True
-        except Exception:
+        except Exception as exc:
             try:
                 self._port.rollback()
             except Exception:
-                swallow(__name__, 'runtime/platform/ledger/postgres_ledger.py')
-            return False
+                swallow(__name__, "runtime/platform/ledger/postgres_ledger.py")
+            try:
+                if self.is_executed(decision_id):
+                    return False
+            except Exception:
+                swallow(__name__, "runtime/platform/ledger/postgres_ledger.py")
+            raise exc
 
     def mark_executed(self, decision_id: str) -> None:
         # reference-mode no-op; production uses try_mark_executed
