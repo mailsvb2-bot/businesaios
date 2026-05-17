@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
 
 from scripts.ci.paths import repo_root
@@ -50,7 +51,7 @@ def run() -> tuple[bool, str]:
     missing_plugins: list[str] = []
     for plugin in PYTEST_REQUIRED_PLUGINS:
         outcome = run_command([
-            "python",
+            sys.executable,
             "-c",
             f"import {plugin}; print('{plugin}:ok')",
         ], timeout=20)
@@ -60,7 +61,7 @@ def run() -> tuple[bool, str]:
         return False, "missing required pytest async plugin(s): " + ", ".join(missing_plugins)
 
     outcome = run_command([
-        "python",
+        sys.executable,
         "-c",
         "import pytest_asyncio; print('pytest_asyncio_available')",
     ], timeout=20)
