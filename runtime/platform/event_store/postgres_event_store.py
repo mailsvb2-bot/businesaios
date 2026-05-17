@@ -282,6 +282,21 @@ class PostgresEventStore:
             limit=limit,
         )
 
+    def latest_event(
+        self,
+        *,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+        event_type: str | None = None,
+    ) -> dict[str, Any] | None:
+        events = self.latest_events(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            event_type=event_type,
+            limit=1,
+        )
+        return events[0] if events else None
+
     def ping(self) -> bool:
         return self._db.ping()
 

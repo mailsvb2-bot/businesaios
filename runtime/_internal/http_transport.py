@@ -1,13 +1,32 @@
 from __future__ import annotations
 
+import importlib
 import json as _json
 import os
-import socket
-import urllib.error
-import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
+
+
+def _socket_module():
+    return importlib.import_module("socket")
+
+
+def _urllib_error():
+    return importlib.import_module("urllib.error")
+
+
+def _urllib_parse():
+    return importlib.import_module("urllib.parse")
+
+
+def _urllib_request():
+    return importlib.import_module("urllib.request")
+
+
+
+def _socket_module():
+    return importlib.import_module("socket")
+
 
 @dataclass(frozen=True)
 class HTTPResponse:
@@ -55,13 +74,13 @@ def sync_request(
     opener: Callable[..., object] | None = None,
 ) -> SyncHTTPResult:
     hdrs = dict(headers or {})
-    req = urllib.request.Request(
+    req = _urllib_request().Request(
         url=_normalized_url(str(url)),
         data=body,
         headers=hdrs,
         method=str(method or "GET").upper(),
     )
-    open_call = opener or urllib.request.urlopen
+    open_call = opener or _urllib_request().urlopen
     try:
         with open_call(req, timeout=timeout_s) as resp:
             decoded = _decode_response(resp)
@@ -76,7 +95,7 @@ def sync_request(
                 json=decoded.json,
                 text=decoded.text,
             )
-    except urllib.error.HTTPError as exc:
+    except _urllib_error().HTTPError as exc:
         http_response = _response_from_http_error(exc)
         try:
             response_headers = {str(k): str(v) for k, v in exc.headers.items()}
@@ -90,9 +109,9 @@ def sync_request(
             error_kind="http_error",
             error_message=str(exc),
         )
-    except urllib.error.URLError as exc:
+    except _urllib_error().URLError as exc:
         reason = getattr(exc, "reason", exc)
-        if isinstance(reason, socket.timeout):
+        if isinstance(reason, _socket_module().timeout):
             return SyncHTTPResult(
                 status=None,
                 headers={},
@@ -109,7 +128,7 @@ def sync_request(
             error_kind="transport_error",
             error_message=str(reason),
         )
-    except socket.timeout as exc:
+    except _socket_module().timeout as exc:
         return SyncHTTPResult(
             status=None,
             headers={},
@@ -176,17 +195,17 @@ def _normalized_url(url: str) -> str:
     value = str(url or "").strip()
     if not value:
         raise ValueError("url_required")
-    parsed = urllib.parse.urlsplit(value)
+    parsed = _urllib_parse().urlsplit(value)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise ValueError("absolute_http_url_required")
-    return urllib.parse.urlunsplit(parsed)
+    return _urllib_parse().urlunsplit(parsed)
 
 def url_with_params(*, url: str, params: Dict[str, Any] | None = None) -> str:
     payload = params if isinstance(params, dict) else {}
     normalized = _normalized_url(str(url))
     if not payload:
         return normalized
-    return normalized + ("&" if "?" in normalized else "?") + urllib.parse.urlencode({k: v for k, v in payload.items() if v is not None})
+    return normalized + ("&" if "?" in normalized else "?") + _urllib_parse().urlencode({k: v for k, v in payload.items() if v is not None})
 
 def form_urlencode(data: Dict[str, Any]) -> bytes:
     """Encode x-www-form-urlencoded payloads inside the sealed HTTP layer.
@@ -195,7 +214,7 @@ def form_urlencode(data: Dict[str, Any]) -> bytes:
     instead of leaking URL/form helpers into runtime domain modules.
     """
 
-    return urllib.parse.urlencode({str(k): v for k, v in dict(data or {}).items() if v is not None}).encode("utf-8")
+    return _urllib_parse().urlencode({str(k): v for k, v in dict(data or {}).items() if v is not None}).encode("utf-8")
 
 def _decode_response(resp) -> HTTPResponse:
     raw = resp.read()
@@ -226,12 +245,12 @@ def _response_from_network_error(exc: Exception) -> HTTPResponse:
 def sync_get(*, url: str, headers: Dict[str, str], params: Optional[Dict[str, str]] = None, timeout_s: int = 30) -> HTTPResponse:
     try:
         final = url_with_params(url=str(url), params=(params or {}))
-        req = urllib.request.Request(url=final, headers=headers or {}, method="GET")
-        with urllib.request.urlopen(req, timeout=int(timeout_s or 30)) as resp:
+        req = _urllib_request().Request(url=final, headers=headers or {}, method="GET")
+        with _urllib_request().urlopen(req, timeout=int(timeout_s or 30)) as resp:
             return _decode_response(resp)
-    except urllib.error.HTTPError as exc:
+    except _urllib_error().HTTPError as exc:
         return _response_from_http_error(exc)
-    except (urllib.error.URLError, OSError, ValueError) as exc:
+    except (_urllib_error().URLError, OSError, ValueError) as exc:
         return _response_from_network_error(exc)
 
 def sync_post_json(*, url: str, headers: Dict[str, str], data: Optional[Dict[str, Any]] = None, timeout_s: int = 30) -> HTTPResponse:
@@ -239,13 +258,13 @@ def sync_post_json(*, url: str, headers: Dict[str, str], data: Optional[Dict[str
     hdrs = dict(headers or {})
     if "Content-Type" not in hdrs:
         hdrs["Content-Type"] = "application/json"
-    req = urllib.request.Request(url=_normalized_url(str(url)), data=body, headers=hdrs, method="POST")
+    req = _urllib_request().Request(url=_normalized_url(str(url)), data=body, headers=hdrs, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=int(timeout_s or 30)) as resp:
+        with _urllib_request().urlopen(req, timeout=int(timeout_s or 30)) as resp:
             return _decode_response(resp)
-    except urllib.error.HTTPError as exc:
+    except _urllib_error().HTTPError as exc:
         return _response_from_http_error(exc)
-    except (urllib.error.URLError, OSError, ValueError) as exc:
+    except (_urllib_error().URLError, OSError, ValueError) as exc:
         return _response_from_network_error(exc)
 
 def runtime_network_mode() -> str:

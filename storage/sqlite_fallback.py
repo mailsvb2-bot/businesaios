@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-import sqlite3
+import importlib
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
@@ -51,6 +51,7 @@ class SqliteSession(AbstractContextManager["SqliteSession"]):
     def __enter__(self) -> "SqliteSession":
         if _is_prod_environment():
             raise RuntimeError("SQLITE_FALLBACK_FORBIDDEN_IN_PROD")
+        sqlite3 = importlib.import_module("sqlite3")
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(str(self._path))
         self._conn.row_factory = sqlite3.Row

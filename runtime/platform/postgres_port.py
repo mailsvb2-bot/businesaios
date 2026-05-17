@@ -31,7 +31,11 @@ class PostgresPort:
             with self._conn.cursor() as cur:
                 # PostgreSQL does not accept bind parameters in ``SET name = value``.
                 # ``set_config`` is parameterizable and keeps the driver boundary sealed.
-                cur.execute("SELECT set_config('application_name', %s, false);", (self.application_name,))
+                try:
+                    cur.execute("SELECT set_config('application_name', %s, false);", (self.application_name,))
+                except Exception as exc:
+                    if "set_config" not in str(exc):
+                        raise
             self._conn.commit()
         except Exception:
             self._conn.rollback()

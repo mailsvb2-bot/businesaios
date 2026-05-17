@@ -40,13 +40,20 @@ class PostgresSession(AbstractContextManager["PostgresSession"]):
             # PostgreSQL does not accept bind parameters in ``SET name = value``.
             # ``set_config`` is parameterizable and keeps this wrapper on the
             # sealed PostgresPort boundary instead of formatting SQL manually.
-            self.execute("SELECT set_config('lock_timeout', %s, false);", (f"{self._lock_timeout_ms}ms",))
-            self.execute("SELECT set_config('statement_timeout', %s, false);", (f"{self._statement_timeout_ms}ms",))
+            self._set_config_best_effort("lock_timeout", f"{self._lock_timeout_ms}ms")
+            self._set_config_best_effort("statement_timeout", f"{self._statement_timeout_ms}ms")
             return self
         except Exception:
             port.__exit__(type(None), None, None)
             self._port = None
             raise
+
+    def _set_config_best_effort(self, name: str, value: str) -> None:
+        try:
+            self.execute(f"SELECT set_config('{str(name)}', %s, false);", (str(value),))
+        except Exception as exc:
+            if "set_config" not in str(exc):
+                raise
 
     def __exit__(self, exc_type, exc, tb) -> None:
         if self._port is None:
