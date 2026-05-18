@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
+from application.admin.platform_control_center.remediation_workflow_assembler import RemediationWorkflowAssembler
+
 
 CANON_PLATFORM_CONTROL_CENTER_SERVICE = True
 PLATFORM_ADMIN_RUNTIME_MODE = "read_only_advisory"
@@ -167,25 +169,27 @@ class PlatformControlCenterService:
         return {'tenant_id': tenant_id, 'saved': True, 'layout': normalized, 'layout_rows': tuple(normalized.get('widgets') or ()), 'runtime_mode': PLATFORM_ADMIN_RUNTIME_MODE}
 
     def build_remediation_workflow(self, *, file_path: str, risk_type: str = '') -> dict[str, Any]:
-        steps = ['inspect', 'patch', 'verify']
-        return {
-            'file_path': file_path,
-            'risk_type': risk_type or 'unspecified',
-            'workflow_steps': steps,
-            'workflow_rows': [{'step': item} for item in steps],
-            'code_navigation': {'editor_hint': f'open:{file_path}:1'},
-            'mode': PLATFORM_ADMIN_RUNTIME_MODE,
-        }
+        return RemediationWorkflowAssembler(self.repo_root).build_remediation_workflow(
+            file_path=file_path,
+            risk_rows=self.build_risk_registry()['risk_rows'],
+            risk_type=risk_type,
+        )
 
     def build_remediation_run(self, *, file_path: str, risk_type: str = '') -> dict[str, Any]:
-        return {
-            'status': 'manual_review_required',
-            'file_path': file_path,
-            'risk_type': risk_type or 'unspecified',
-            'patch_code': None,
-            'reason': 'admin surface must not generate pretend remediation patches without repository diff, tests, and owner context',
-            'next_step': 'inspect file, prepare real diff, run targeted tests, then full gate',
-        }
+        if risk_type != 'large_module':
+            return {
+                'status': 'manual_review_required',
+                'file_path': file_path,
+                'risk_type': risk_type or 'unspecified',
+                'patch_code': None,
+                'reason': 'admin surface must not generate pretend remediation patches without repository diff, tests, and owner context',
+                'next_step': 'inspect file, prepare real diff, run targeted tests, then full gate',
+            }
+        return RemediationWorkflowAssembler(self.repo_root).build_remediation_run(
+            file_path=file_path,
+            risk_rows=self.build_risk_registry()['risk_rows'],
+            risk_type=risk_type,
+        )
 
     def _risk_row(self, file_path: str, severity: str, risk_type: str, detail: str) -> dict[str, Any]:
         return {

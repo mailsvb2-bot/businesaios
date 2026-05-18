@@ -10,14 +10,15 @@ from typing import Any, Dict
 from bootstrap.failure_policy import raise_or_log_boot_failure
 from runtime.boot.builders.ads_stack import wire_ads_stack
 from runtime.boot.builders.product_preflight import run_product_preflight
+from runtime.handler_loader import import_attr
 
 
 LOGGER = logging.getLogger(__name__)
 
 
 def _normalized_tenant_id(value: Any) -> str:
-    module = __import__("runtime.handlers.route_failure_support", fromlist=["normalized_tenant_id"])
-    return getattr(module, "normalized_tenant_id")(value)
+    normalizer = import_attr("runtime.handlers.route_failure_support", "normalized_tenant_id")
+    return normalizer(value)
 
 
 def run_product_preflight_if_any() -> Any | None:

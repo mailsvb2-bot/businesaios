@@ -12,7 +12,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--gate",
-        choices=["doctor", "fast", "full", "release", "pre-push", "pre-release"],
+        choices=["doctor", "fast", "full", "business-critical", "release", "pre-push", "pre-release"],
         required=True,
     )
     parser.add_argument("--no-report", action="store_true")

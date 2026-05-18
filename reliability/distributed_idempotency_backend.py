@@ -255,6 +255,8 @@ class DistributedIdempotencyStore(IdempotencyStore):
 
     def _storage_key(self, key: IdempotencyKey) -> str:
         tenant_id, namespace, operation, raw_key = key.as_tuple()
+        if self._key_prefix == "__raw_scoped_key__":
+            return str(raw_key)
         return f"{self._key_prefix}/{tenant_id}/{namespace}/{operation}/{raw_key}"
 
     def _read_storage_payload(self, storage_key: str) -> Mapping[str, Any]:

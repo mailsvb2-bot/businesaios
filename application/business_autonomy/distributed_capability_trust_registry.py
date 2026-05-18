@@ -169,6 +169,28 @@ class DistributedBusinessRegistry:
         items.sort(key=lambda item: (item.updated_at_utc, item.business_id), reverse=True)
         return tuple(items)
 
+    def list_all(self, *, limit: int = 1000) -> tuple[BusinessRegistryRecord, ...]:
+        rows = self._documents.list_prefix(
+            collection=self._collection,
+            prefix="",
+            limit=max(1, int(limit)),
+        )
+        items = [BusinessRegistryRecord.from_dict(item) for item in rows]
+        items.sort(key=lambda item: (item.updated_at_utc, item.tenant_id, item.business_id), reverse=True)
+        return tuple(items)
+
+    def find_unique_by_business_id(self, business_id: str, *, limit: int = 1000) -> BusinessRegistryRecord | None:
+        key = str(business_id).strip()
+        if not key:
+            raise ValueError("business_id is required")
+        matches = [item for item in self.list_all(limit=limit) if item.business_id == key]
+        if not matches:
+            return None
+        tenants = {item.tenant_id for item in matches}
+        if len(tenants) > 1:
+            raise KeyError(f"business registry tenant binding ambiguous: {key}")
+        return matches[0]
+
     def capability_snapshot(self, *, tenant_id: str, business_id: str) -> RegisteredBusinessCapabilities:
         record = self.get(tenant_id=tenant_id, business_id=business_id)
         if record is None:

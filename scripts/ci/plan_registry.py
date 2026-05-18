@@ -7,9 +7,28 @@ def _plan(gate: str, *steps: str) -> ExecutionPlan:
     return ExecutionPlan(gate=gate, steps=tuple(StepDefinition(name=s) for s in steps))
 
 
+def _business_critical_common(gate: str) -> ExecutionPlan:
+    return _plan(
+        gate,
+        "assert-project-shape",
+        "dependency-lock",
+        "doctor-check",
+        "import-smoke",
+        "quality-check",
+        "canon-audit",
+        "architecture-bypass-scan",
+        "async-test-contract",
+        "lock-tests",
+        "business-critical-tests",
+    )
+
+
 def plan_for_gate(gate: str) -> ExecutionPlan:
     if gate == "doctor":
         return _plan("doctor", "assert-project-shape", "dependency-lock", "doctor-check")
+
+    if gate == "business-critical":
+        return _business_critical_common("business-critical")
 
     if gate == "fast":
         return _plan(
@@ -39,6 +58,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "lock-tests",
             "unit-tests",
             "integration-tests",
+            "business-critical-tests",
         )
 
     if gate == "release":
@@ -56,6 +76,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "lock-tests",
             "unit-tests",
             "integration-tests",
+            "business-critical-tests",
             "verify-release",
             "build-artifact",
         )
@@ -88,6 +109,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "lock-tests",
             "unit-tests",
             "integration-tests",
+            "business-critical-tests",
             "verify-release",
         )
 
