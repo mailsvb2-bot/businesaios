@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
+import subprocess
 from typing import Mapping
 
 CANON_CI_HTTP_PROBE_IO = True
@@ -16,17 +15,41 @@ def fetch_text(
     body: bytes | None = None,
     timeout: float = 10.0,
 ) -> tuple[int, str]:
-    req = urllib.request.Request(
-        str(url),
-        data=body,
-        method=str(method or "GET").upper(),
-        headers={str(k): str(v) for k, v in dict(headers or {}).items()},
+    cmd = [
+        "curl",
+        "-sS",
+        "-L",
+        "-X",
+        str(method or "GET").upper(),
+        "--max-time",
+        str(float(timeout)),
+        "-w",
+        "\n%{http_code}",
+    ]
+    for key, value in dict(headers or {}).items():
+        cmd.extend(["-H", f"{str(key)}: {str(value)}"])
+    if body is not None:
+        cmd.extend(["--data-binary", "@-"])
+    cmd.append(str(url))
+
+    proc = subprocess.run(
+        cmd,
+        input=body,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
     )
+    output = proc.stdout.decode("utf-8", errors="replace")
+    if proc.returncode != 0:
+        error = proc.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"HTTP_PROBE_FAILED:curl_exit_{proc.returncode}:{error}")
+
+    text, _, status_text = output.rpartition("\n")
     try:
-        with urllib.request.urlopen(req, timeout=float(timeout)) as resp:
-            return int(getattr(resp, "status", 0) or 0), resp.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        return int(getattr(exc, "code", 0) or 0), exc.read().decode("utf-8")
+        status = int(status_text.strip())
+    except ValueError as exc:
+        raise RuntimeError(f"HTTP_PROBE_FAILED:invalid_status:{status_text!r}") from exc
+    return status, text
 
 
 def fetch_json(

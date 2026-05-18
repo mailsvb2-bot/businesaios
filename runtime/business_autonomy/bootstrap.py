@@ -336,7 +336,7 @@ def _build_distributed_state() -> dict[str, object]:
         "idempotency": DistributedIdempotencyStore(
             cas=FileDistributedCompareAndSwap(documents, collection="idempotency_records"),
             sequence=FileDistributedSequenceStore(f"{root}/sequences.json"),
-            key_prefix="business_autonomy/idempotency",
+            key_prefix="__raw_scoped_key__",
         ),
         "audit": DistributedGovernanceAuditLog(evidence_port, partition_prefix="business_autonomy_audit"),
         "evidence": DistributedEvidenceStore(evidence_port),
@@ -427,7 +427,7 @@ def _build_typed_channel_registry() -> TypedChannelAdapterRegistry:
     return registry
 
 
-def build_business_autonomy_guarded_service(*, business_id: str = 'external_business') -> BusinessAutonomyGuardedService:
+def build_business_autonomy_guarded_service(*, business_id: str = 'external_business', seed_admin_read_model: bool = False) -> BusinessAutonomyGuardedService:
     admin_dependencies = build_business_autonomy_admin_dependencies()
     distributed = admin_dependencies['distributed']
     typed_registry = admin_dependencies['typed_registry']
@@ -496,7 +496,10 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
                 IntegrationMode.PLATFORM_DIRECT,
             ),
         )
-        adapter_registry.register(business_adapter)
+        try:
+            adapter_registry.get(business_adapter.business_id)
+        except KeyError:
+            adapter_registry.register(business_adapter)
         capability_registry.register_for_tenant(
             tenant_id=tenant_id,
             business_id=business_adapter.business_id,
@@ -533,13 +536,15 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         )
 
     # Admin/read surfaces may ask for capability/trust before the first execution.
-    # Seed the canonical registry through the same onboarding path used by execution.
-    ensure_scope_for(
-        tenant_id='tenant-demo',
-        scoped_business_id=str(business_id or 'external_business'),
-        requested_by='platform',
-        envelope_metadata={'tenant_id': 'tenant-demo', 'admin_read_model_seed': True},
-    )
+    # Seed is explicit so ordinary execution service construction does not pollute
+    # the canonical distributed registry with tenant-demo records.
+    if seed_admin_read_model:
+        ensure_scope_for(
+            tenant_id='tenant-demo',
+            scoped_business_id=str(business_id or 'external_business'),
+            requested_by='platform',
+            envelope_metadata={'tenant_id': 'tenant-demo', 'admin_read_model_seed': True},
+        )
 
     autonomy_service = BusinessAutonomyService(
         adapter_registry=adapter_registry,

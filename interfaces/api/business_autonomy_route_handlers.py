@@ -124,7 +124,7 @@ class BusinessAutonomyRouteHandlers:
         }
 
     def get_governance_alignment(self, business_id: str) -> dict[str, Any]:
-        service = build_business_autonomy_guarded_service(business_id=business_id)
+        service = build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
         bridge = getattr(service, "_governance_alignment_bridge", None)
         if bridge is None:
             return {"business_id": business_id, "execution_verdict": {}, "normalized_request": {}}
@@ -147,7 +147,7 @@ class BusinessAutonomyRouteHandlers:
     def get_registered_capabilities(self, business_id: str) -> dict[str, Any]:
         service = self.stack.get("guarded_service")
         if service is None:
-            service = build_business_autonomy_guarded_service(business_id=business_id)
+            service = build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
         autonomy_service = getattr(service, "_autonomy_service", None)
         policy = getattr(autonomy_service, "_autonomy_policy", None)
         registry = getattr(policy, "_capability_registry", None)
@@ -156,7 +156,7 @@ class BusinessAutonomyRouteHandlers:
         except Exception:
             entry = None
         if entry is None:
-            service = build_business_autonomy_guarded_service(business_id=business_id)
+            service = build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
             autonomy_service = getattr(service, "_autonomy_service", None)
             policy = getattr(autonomy_service, "_autonomy_policy", None)
             registry = getattr(policy, "_capability_registry", None)
@@ -178,12 +178,12 @@ class BusinessAutonomyRouteHandlers:
     def get_trust_profile(self, business_id: str) -> dict[str, Any]:
         service = self.stack.get("guarded_service")
         if service is None:
-            service = build_business_autonomy_guarded_service(business_id=business_id)
+            service = build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
         trust_policy = getattr(service, "_trust_policy", None)
         registry = getattr(trust_policy, "_trust_registry", None)
         snapshot = registry.get(business_id) if registry is not None else None
         if snapshot is None or getattr(snapshot, "business_id", None) != business_id:
-            service = build_business_autonomy_guarded_service(business_id=business_id)
+            service = build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
             trust_policy = getattr(service, "_trust_policy", None)
             registry = getattr(trust_policy, "_trust_registry", None)
             snapshot = registry.get(business_id) if registry is not None else None

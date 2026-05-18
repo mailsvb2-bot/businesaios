@@ -1,54 +1,72 @@
-import pytest
-from unittest.mock import AsyncMock, patch
-from frontend.src.App import getJson, postJson
+from __future__ import annotations
 
-@pytest.mark.asyncio
-async def test_cta_intake_submit_and_status():
-    mock_result = AsyncMock()
-    mock_result.intake_id = "intake-123"
-    mock_result.tenant_id = "tenant-1"
-    mock_result.business_id = "biz-1"
-    mock_result.user_id = "user-1"
-    mock_result.onboarding_status = "advisory_created"
-    mock_result.next_actions = ["connectors", "autopilot"]
-    mock_result.user_functionality = {"workspace_ready": True}
-    mock_result.admin_visibility = {"surface": "control-plane"}
-    mock_result.outcome = "pending"
-    
-    with patch('adapters.api.fastapi.public_routes.CTALandingIntakeService.submit', return_value=mock_result):
-        response = adapters.api.fastapi.public_routes._cta_submit_response(mock_result)
-        assert response['ok'] is True
-        assert response['intake_id'] == "intake-123"
-        assert response['tenant_id'] == "tenant-1"
-        assert response['business_id'] == "biz-1"
-        assert response['user_id'] == "user-1"
-        assert response['onboarding_status'] == "advisory_created"
-        assert response['user_functionality']['workspace_ready'] is True
-        assert response['admin_visibility']['surface'] == "control-plane"
-        assert response['measurable_outcome'] == "pending"
-        assert response['write_actions_enabled'] is False
-        assert response['approval_required_before_execution'] is True
+from types import SimpleNamespace
 
-    # test _cta_status_response for found=True
-    mock_status = AsyncMock()
-    mock_status.found = True
-    mock_status.intake_id = "intake-123"
-    mock_status.tenant_id = "tenant-1"
-    mock_status.business_id = "biz-1"
-    mock_status.user_id = "user-1"
-    mock_status.onboarding_status = "advisory_created"
-    mock_status.next_actions = ["connectors"]
-    mock_status.user_functionality = {"workspace_ready": True}
-    mock_status.admin_visibility = {"surface": "control-plane"}
-    mock_status.outcome = "pending"
-    response_status = adapters.api.fastapi.public_routes._cta_status_response(mock_status)
-    assert response_status['ok'] is True
-    assert response_status['found'] is True
-    assert response_status['intake_id'] == "intake-123"
+from adapters.api.fastapi.public_routes import _cta_status_response, _cta_submit_response
 
-    # test _cta_status_response for found=False
-    mock_status.found = False
-    response_not_found = adapters.api.fastapi.public_routes._cta_status_response(mock_status)
-    assert response_not_found['ok'] is False
-    assert response_not_found['error'] == 'not_found'
-    assert response_not_found['intake_id'] == "intake-123"
+
+def test_cta_intake_submit_response_exposes_advisory_contract() -> None:
+    result = SimpleNamespace(
+        intake_id="intake-123",
+        created_at="2026-05-17T00:00:00Z",
+        tenant_id="tenant-1",
+        business_id="biz-1",
+        user_id="user-1",
+        onboarding_status="advisory_created",
+        app_url="https://app.businessaios.ru/onboarding/intake-123",
+        next_actions=["connectors", "autopilot"],
+        user_functionality={"workspace_ready": True},
+        admin_visibility={"surface": "control-plane"},
+        outcome="pending",
+    )
+
+    response = _cta_submit_response(result)
+
+    assert response["ok"] is True
+    assert response["intake_id"] == "intake-123"
+    assert response["created_at"] == "2026-05-17T00:00:00Z"
+    assert response["tenant_id"] == "tenant-1"
+    assert response["business_id"] == "biz-1"
+    assert response["user_id"] == "user-1"
+    assert response["onboarding_status"] == "advisory_created"
+    assert response["next"]["ui_url"] == "https://app.businessaios.ru/onboarding/intake-123"
+    assert response["next_actions"] == ["connectors", "autopilot"]
+    assert response["user_functionality"]["workspace_ready"] is True
+    assert response["admin_visibility"]["surface"] == "control-plane"
+    assert response["measurable_outcome"] == "pending"
+    assert response["write_actions_enabled"] is False
+    assert response["approval_required_before_execution"] is True
+
+
+def test_cta_status_response_exposes_found_and_not_found_contracts() -> None:
+    status = SimpleNamespace(
+        found=True,
+        intake_id="intake-123",
+        created_at="2026-05-17T00:00:00Z",
+        tenant_id="tenant-1",
+        business_id="biz-1",
+        user_id="user-1",
+        onboarding_status="advisory_created",
+        next_actions=["connectors"],
+        user_functionality={"workspace_ready": True},
+        admin_visibility={"surface": "control-plane"},
+        outcome="pending",
+    )
+
+    response = _cta_status_response(status)
+
+    assert response["ok"] is True
+    assert response["found"] is True
+    assert response["intake_id"] == "intake-123"
+    assert response["created_at"] == "2026-05-17T00:00:00Z"
+    assert response["tenant_id"] == "tenant-1"
+    assert response["business_id"] == "biz-1"
+    assert response["user_functionality"]["workspace_ready"] is True
+    assert response["admin_visibility"]["surface"] == "control-plane"
+
+    status.found = False
+    response_not_found = _cta_status_response(status)
+
+    assert response_not_found["ok"] is False
+    assert response_not_found["error"] == "not_found"
+    assert response_not_found["intake_id"] == "intake-123"

@@ -14,11 +14,11 @@ from runtime.boot.handler_groups.growth import register_growth_handlers
 from runtime.boot.handler_groups.messaging import register_messaging_handlers
 from runtime.boot.handler_groups.ops import register_ops_handlers
 from runtime.boot.handler_groups.shared import get_ctx_value
+from runtime.handler_loader import import_attr
 
 
 def _action_handler_registry_type():
-    module = __import__("runtime.handlers", fromlist=["ActionHandlerRegistry"])
-    return getattr(module, "ActionHandlerRegistry")
+    return import_attr("runtime.handlers", "ActionHandlerRegistry")
 
 
 def wire_handlers(*, ctx, event_store, composer):
