@@ -1,0 +1,16 @@
+[package]
+name = "businessaios_safety_core"
+version = "0.1.0"
+edition = "2021"
+description = "Pure fail-closed safety kernel for BusinessAIOS critical invariants"
+license = "UNLICENSED"
+publish = false
+
+[lib]
+name = "businessaios_safety_core"
+path = "src/lib.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
