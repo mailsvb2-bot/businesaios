@@ -142,7 +142,11 @@ class RequestTenantCapabilityRegistryView:
         tenant_id = self._business_tenants.get(key)
         if tenant_id:
             return tenant_id
-        raise KeyError(f"business tenant binding missing: {key}")
+        record = self.registry.find_unique_by_business_id(key)
+        if record is None:
+            raise KeyError(f"business tenant binding missing: {key}")
+        self.bind(tenant_id=record.tenant_id, business_id=record.business_id)
+        return record.tenant_id
 
 
 @dataclass
@@ -189,7 +193,11 @@ class RequestTenantTrustRegistryView:
         tenant_id = self._business_tenants.get(key)
         if tenant_id:
             return tenant_id
-        raise KeyError(f"business tenant binding missing: {key}")
+        record = self.registry.find_unique_by_business_id(key)
+        if record is None:
+            raise KeyError(f"business tenant binding missing: {key}")
+        self.bind(tenant_id=record.tenant_id, business_id=record.business_id)
+        return record.tenant_id
 
 
 @dataclass(frozen=True)
@@ -248,15 +256,34 @@ class BusinessAutonomyFileSurfaceMirror:
 
     def record_execution(self, *, request, result: BusinessExecutionResult) -> None:
         self.root_dir.mkdir(parents=True, exist_ok=True)
+        tenant_id = str(request.metadata.get('tenant_id') or result.metadata.get('tenant_id') or 'global')
+        recorded_at = datetime.now(timezone.utc).isoformat()
+        row = {
+            'tenant_id': tenant_id,
+            'business_id': request.business_id,
+            'goal_id': request.goal_id,
+            'goal_type': request.goal_type,
+            'verdict': result.verdict.value,
+            'execution_id': result.execution_id,
+            'recorded_at_utc': recorded_at,
+        }
         with (self.root_dir / 'planning_memory.jsonl').open('a', encoding='utf-8') as fh:
-            fh.write(json.dumps({
-                'tenant_id': str(request.metadata.get('tenant_id') or result.metadata.get('tenant_id') or 'global'),
-                'business_id': request.business_id,
-                'goal_id': request.goal_id,
-                'goal_type': request.goal_type,
-                'verdict': result.verdict.value,
-                'recorded_at_utc': datetime.now(timezone.utc).isoformat(),
-            }, sort_keys=True) + '\n')
+            fh.write(json.dumps(row, sort_keys=True) + '\n')
+
+        runtime_root = self.root_dir.parent / 'runtime' / 'business_autonomy'
+        runtime_root.mkdir(parents=True, exist_ok=True)
+        artifact = {
+            **row,
+            'message': result.message,
+            'metrics': dict(result.metrics),
+            'metadata': dict(result.metadata or {}),
+            'adapter_name': result.adapter_name,
+            'delegated_to_domain_engine': bool(result.delegated_to_domain_engine),
+        }
+        (runtime_root / f'{result.execution_id}.json').write_text(
+            json.dumps(artifact, ensure_ascii=False, sort_keys=True, indent=2) + '\n',
+            encoding='utf-8',
+        )
 
 
 @dataclass(frozen=True)
@@ -271,6 +298,16 @@ class CompositeBusinessAutonomyEvidenceStore:
 
     def list_recent(self, *, tenant_id: str, limit: int = 20):
         return self.primary.list_recent(tenant_id=tenant_id, limit=limit)
+
+
+@dataclass(frozen=True)
+class CompositePlanningMemorySink:
+    primary: HybridBusinessPlanningMemorySink
+    mirror: BusinessAutonomyFileSurfaceMirror
+
+    def record_execution(self, *, request, result: BusinessExecutionResult) -> None:
+        self.primary.record_execution(request=request, result=result)
+        self.mirror.record_execution(request=request, result=result)
 
 
 class RequestScopedBusinessAutonomyGuardedService(BusinessAutonomyGuardedService):
@@ -409,11 +446,9 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     capability_registry = RequestTenantCapabilityRegistryView(distributed_registry)
     trust_registry = RequestTenantTrustRegistryView(distributed_registry)
 
-    def ensure_scope(request: BusinessExecutionRequest) -> None:
-        tenant_id = _tenant_id_from_request(request)
-        scoped_business_id = str(request.envelope.business_id or business_id).strip() or business_id
+    def ensure_scope_for(*, tenant_id: str, scoped_business_id: str, requested_by: str, envelope_metadata: Mapping[str, Any]) -> None:
         channel_kind, adapter_key, external_ref, region, metadata = _channel_defaults_for(scoped_business_id)
-        metadata = {**metadata, **dict(request.envelope.metadata or {})}
+        metadata = {**metadata, **dict(envelope_metadata or {})}
         existing = distributed_registry.get(tenant_id, scoped_business_id)
         if existing is None:
             onboarding_request = BusinessOnboardingRequest(
@@ -424,7 +459,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
                 channel_kind=channel_kind,
                 adapter_key=adapter_key,
                 external_ref=external_ref,
-                requested_by=str(request.envelope.requested_by or 'platform'),
+                requested_by=requested_by,
                 metadata=metadata,
             )
             onboarding.onboard(onboarding_request)
@@ -445,7 +480,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
             channel_kind=channel_kind,
             adapter_key=adapter_key,
             external_ref=external_ref,
-            requested_by=str(request.envelope.requested_by or 'platform'),
+            requested_by=requested_by,
             metadata=metadata,
         ).to_identity()
         resolved = typed_registry.resolve(identity)
@@ -487,6 +522,25 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
             trust=trust_snapshot,
         )
 
+    def ensure_scope(request: BusinessExecutionRequest) -> None:
+        tenant_id = _tenant_id_from_request(request)
+        scoped_business_id = str(request.envelope.business_id or business_id).strip() or business_id
+        ensure_scope_for(
+            tenant_id=tenant_id,
+            scoped_business_id=scoped_business_id,
+            requested_by=str(request.envelope.requested_by or 'platform'),
+            envelope_metadata=dict(request.envelope.metadata or {}),
+        )
+
+    # Admin/read surfaces may ask for capability/trust before the first execution.
+    # Seed the canonical registry through the same onboarding path used by execution.
+    ensure_scope_for(
+        tenant_id='tenant-demo',
+        scoped_business_id=str(business_id or 'external_business'),
+        requested_by='platform',
+        envelope_metadata={'tenant_id': 'tenant-demo', 'admin_read_model_seed': True},
+    )
+
     autonomy_service = BusinessAutonomyService(
         adapter_registry=adapter_registry,
         autonomy_policy=BusinessAutonomyPolicy(capability_registry),
@@ -506,9 +560,12 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         operator_override_policy=PersistentBusinessOperatorOverridePolicy(store=distributed['operator_overrides']),
         audit_sink=audit,
         evidence_store=evidence_store,
-        planning_memory_sink=HybridBusinessPlanningMemorySink(
-            distributed_sink=DistributedBusinessPlanningMemorySink(distributed['planning_memory']),
-            legacy_sink=file_surface,
+        planning_memory_sink=CompositePlanningMemorySink(
+            primary=HybridBusinessPlanningMemorySink(
+                distributed_sink=DistributedBusinessPlanningMemorySink(distributed['planning_memory']),
+                legacy_sink=PersistentBusinessPlanningMemorySink(),
+            ),
+            mirror=file_surface,
         ),
     )
     service._distributed_business_registry = distributed_registry
