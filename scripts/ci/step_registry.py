@@ -7,6 +7,7 @@ from scripts.ci.doctor import run_doctor
 from scripts.ci.step_architecture_bypass_scan import run as run_architecture_bypass_scan
 from scripts.ci.step_async_test_contract import run as run_async_test_contract
 from scripts.ci.step_build_artifact import run as run_build_artifact
+from scripts.ci.step_business_critical_tests import run as run_business_critical_tests
 from scripts.ci.step_canon_audit import run as run_canon_audit
 from scripts.ci.step_demo_e2e_smoke import run as run_demo_e2e_smoke
 from scripts.ci.step_dependency_lock import run as run_dependency_lock
@@ -34,6 +35,7 @@ _REGISTRY: dict[str, StepHandler] = {
     _step_ids.lock_tests(): run_lock_tests,
     _step_ids.unit_tests(): run_unit_tests,
     _step_ids.integration_tests(): run_integration_tests,
+    _step_ids.business_critical_tests(): run_business_critical_tests,
     _step_ids.verify_release(): run_verify_release,
     _step_ids.build_artifact(): run_build_artifact,
 }
