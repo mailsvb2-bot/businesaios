@@ -16,6 +16,7 @@ from scripts.ci.step_integration_tests import run as run_integration_tests
 from scripts.ci.step_lock_tests import run as run_lock_tests
 from scripts.ci.step_project_shape import run as run_project_shape
 from scripts.ci.step_quality import run as run_quality
+from scripts.ci.step_rust_safety_core import run as run_rust_safety_core
 from scripts.ci.step_unit_tests import run as run_unit_tests
 from scripts.ci.step_verify_release import run as run_verify_release
 
@@ -36,6 +37,7 @@ _REGISTRY: dict[str, StepHandler] = {
     _step_ids.unit_tests(): run_unit_tests,
     _step_ids.integration_tests(): run_integration_tests,
     _step_ids.business_critical_tests(): run_business_critical_tests,
+    _step_ids.rust_safety_core(): run_rust_safety_core,
     _step_ids.verify_release(): run_verify_release,
     _step_ids.build_artifact(): run_build_artifact,
 }
