@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Optional
 
 from application.business_autonomy.contracts import BusinessExecutionRequest
+from application.business_autonomy.safety_core import validate_blast_radius, validate_budget
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,7 @@ class BudgetGuardDecision:
     reason: str
     budget_limit: Optional[float] = None
     estimated_cost: Optional[float] = None
+    safety_verdict: dict[str, object] | None = None
 
 
 class BusinessBudgetGuard:
@@ -25,10 +27,18 @@ class BusinessBudgetGuard:
         if budget_limit is None and self.max_budget_minor is not None:
             budget_limit = _float_or_none(self.max_budget_minor)
         if budget_limit is None:
-            return BudgetGuardDecision(True, "No explicit budget limit provided.", None, estimated_cost)
-        if estimated_cost > budget_limit:
-            return BudgetGuardDecision(False, "Estimated cost exceeds approved budget limit.", budget_limit, estimated_cost)
-        return BudgetGuardDecision(True, "Estimated cost is within budget limit.", budget_limit, estimated_cost)
+            verdict = {"allowed": True, "reason": "budget_limit_not_configured", "source": "python_safety_core"}
+            return BudgetGuardDecision(True, "No explicit budget limit provided.", None, estimated_cost, verdict)
+        safety = validate_budget(
+            estimated_minor=_money_to_minor(estimated_cost),
+            limit_minor=_money_to_minor(budget_limit),
+            currency=str(request.envelope.metadata.get("currency") or "RUB"),
+            limit_currency=str(request.envelope.metadata.get("budget_currency") or request.envelope.metadata.get("currency") or "RUB"),
+        )
+        if not safety.allowed:
+            reason = "Estimated cost exceeds approved budget limit." if safety.reason == "budget_exceeded" else f"Budget safety denied: {safety.reason}"
+            return BudgetGuardDecision(False, reason, budget_limit, estimated_cost, safety.to_metadata())
+        return BudgetGuardDecision(True, "Estimated cost is within budget limit.", budget_limit, estimated_cost, safety.to_metadata())
 
 
 @dataclass(frozen=True)
@@ -37,6 +47,7 @@ class BlastRadiusDecision:
     reason: str
     outbound_limit: Optional[int] = None
     requested_outbound: Optional[int] = None
+    safety_verdict: dict[str, object] | None = None
 
 
 class BusinessBlastRadiusGuard:
@@ -49,10 +60,13 @@ class BusinessBlastRadiusGuard:
         if limit is None and self.max_parallel_actions is not None:
             limit = _int_or_none(self.max_parallel_actions)
         if limit is None:
-            return BlastRadiusDecision(True, "No explicit outbound blast radius limit provided.", None, requested)
-        if requested > limit:
-            return BlastRadiusDecision(False, "Requested outbound scope exceeds blast radius limit.", limit, requested)
-        return BlastRadiusDecision(True, "Requested outbound scope is within blast radius limit.", limit, requested)
+            verdict = {"allowed": True, "reason": "blast_radius_limit_not_configured", "source": "python_safety_core"}
+            return BlastRadiusDecision(True, "No explicit outbound blast radius limit provided.", None, requested, verdict)
+        safety = validate_blast_radius(requested_outbound=requested, approved_limit=limit)
+        if not safety.allowed:
+            reason = "Requested outbound scope exceeds blast radius limit." if safety.reason == "blast_radius_exceeded" else f"Blast radius safety denied: {safety.reason}"
+            return BlastRadiusDecision(False, reason, limit, requested, safety.to_metadata())
+        return BlastRadiusDecision(True, "Requested outbound scope is within blast radius limit.", limit, requested, safety.to_metadata())
 
 
 class ApprovalStatus(str, Enum):
@@ -168,3 +182,7 @@ def _int_or_none(value: object) -> Optional[int]:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _money_to_minor(value: float) -> int:
+    return int(round(float(value) * 100))
