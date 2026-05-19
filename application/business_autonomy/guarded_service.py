@@ -99,6 +99,7 @@ class BusinessAutonomyGuardedService:
             )
 
         budget = self._budget_guard.evaluate(effective_request)
+        budget_safety = dict(budget.safety_verdict or {"allowed": bool(budget.allowed), "reason": "legacy_budget_guard", "source": "legacy"})
         if not budget.allowed and override.mode != OperatorOverrideMode.FORCE_ALLOW:
             result = BusinessExecutionResult(
                 verdict=ExecutionVerdict.REJECTED,
@@ -106,12 +107,17 @@ class BusinessAutonomyGuardedService:
                 goal_id=effective_request.envelope.goal_id,
                 execution_id=effective_request.correlation_id,
                 message=budget.reason,
-                metadata={"budget_limit": budget.budget_limit, "estimated_cost": budget.estimated_cost},
+                metadata={
+                    "budget_limit": budget.budget_limit,
+                    "estimated_cost": budget.estimated_cost,
+                    "safety_core": {"budget": budget_safety},
+                },
             )
             _cache_terminal_result(self._idempotency_store, scoped_idempotency_key, result)
             return result
 
         blast = self._blast_radius_guard.evaluate(effective_request)
+        blast_safety = dict(blast.safety_verdict or {"allowed": bool(blast.allowed), "reason": "legacy_blast_radius_guard", "source": "legacy"})
         if not blast.allowed and override.mode != OperatorOverrideMode.FORCE_ALLOW:
             result = BusinessExecutionResult(
                 verdict=ExecutionVerdict.REJECTED,
@@ -119,7 +125,11 @@ class BusinessAutonomyGuardedService:
                 goal_id=effective_request.envelope.goal_id,
                 execution_id=effective_request.correlation_id,
                 message=blast.reason,
-                metadata={"outbound_limit": blast.outbound_limit, "requested_outbound": blast.requested_outbound},
+                metadata={
+                    "outbound_limit": blast.outbound_limit,
+                    "requested_outbound": blast.requested_outbound,
+                    "safety_core": {"budget": budget_safety, "blast_radius": blast_safety},
+                },
             )
             _cache_terminal_result(self._idempotency_store, scoped_idempotency_key, result)
             return result
@@ -142,7 +152,11 @@ class BusinessAutonomyGuardedService:
                 goal_id=effective_request.envelope.goal_id,
                 execution_id=effective_request.correlation_id,
                 message=trust.reason,
-                metadata={"trust_reason": trust.reason, "capability_execution_verdict": dict(governance_alignment.execution_verdict)},
+                metadata={
+                    "trust_reason": trust.reason,
+                    "capability_execution_verdict": dict(governance_alignment.execution_verdict),
+                    "safety_core": {"budget": budget_safety, "blast_radius": blast_safety},
+                },
             )
             _cache_terminal_result(self._idempotency_store, scoped_idempotency_key, result)
             return result
@@ -155,7 +169,11 @@ class BusinessAutonomyGuardedService:
                 goal_id=effective_request.envelope.goal_id,
                 execution_id=effective_request.correlation_id,
                 message=approval.reason,
-                metadata={"approval_status": approval.status.value, "capability_execution_verdict": dict(governance_alignment.execution_verdict)},
+                metadata={
+                    "approval_status": approval.status.value,
+                    "capability_execution_verdict": dict(governance_alignment.execution_verdict),
+                    "safety_core": {"budget": budget_safety, "blast_radius": blast_safety},
+                },
             )
             return result
 
@@ -170,7 +188,11 @@ class BusinessAutonomyGuardedService:
             evidence=result.evidence,
             delegated_to_domain_engine=result.delegated_to_domain_engine,
             adapter_name=result.adapter_name,
-            metadata={**dict(result.metadata), "capability_execution_verdict": dict(governance_alignment.execution_verdict)},
+            metadata={
+                **dict(result.metadata),
+                "capability_execution_verdict": dict(governance_alignment.execution_verdict),
+                "safety_core": {"budget": budget_safety, "blast_radius": blast_safety},
+            },
         )
         _cache_terminal_result(self._idempotency_store, scoped_idempotency_key, result)
         if self._evidence_store is not None and hasattr(self._evidence_store, "append_result"):
@@ -182,7 +204,11 @@ class BusinessAutonomyGuardedService:
                 event_type="business_autonomy_guarded_result",
                 business_id=result.business_id,
                 goal_id=result.goal_id,
-                detail={"verdict": result.verdict.value, "delegated": result.delegated_to_domain_engine},
+                detail={
+                    "verdict": result.verdict.value,
+                    "delegated": result.delegated_to_domain_engine,
+                    "safety_core": {"budget": budget_safety, "blast_radius": blast_safety},
+                },
             )
         return result
 
@@ -262,16 +288,15 @@ def _scoped_idempotency_key(request: BusinessExecutionRequest) -> str:
 
 
 def _distributed_append_dir() -> Path:
-    root = Path(os.environ.get('DATA_DIR') or os.environ.get('BUSINESAIOS_DATA_DIR') or 'data')
-    return root / 'runtime' / 'distributed' / 'append'
-
-
-def _conflict_key(*, tenant_id: str, business_id: str, document: str) -> str:
-    return f'{tenant_id}:{business_id}:{document}'
+    return Path(os.environ.get('DATA_DIR', 'data')) / 'runtime' / 'distributed' / 'append'
 
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _conflict_key(*, tenant_id: str, business_id: str, document: str) -> str:
+    return f'{tenant_id}:{business_id}:{document}'
 
 
 def _read_plain_state(path: Path) -> dict:
@@ -279,63 +304,27 @@ def _read_plain_state(path: Path) -> dict:
         return {'items': {}}
     try:
         payload = json.loads(path.read_text(encoding='utf-8'))
-    except json.JSONDecodeError as exc:
-        raise RuntimeError('business_autonomy_distributed_conflict_state_corrupt') from exc
-    if not isinstance(payload, dict):
+    except (OSError, json.JSONDecodeError):
         return {'items': {}}
-    items = payload.get('items')
-    if not isinstance(items, dict):
-        payload['items'] = {}
-    return payload
+    if isinstance(payload, dict) and 'items' in payload and isinstance(payload['items'], dict):
+        return payload
+    if isinstance(payload, dict):
+        return {'items': payload}
+    return {'items': {}}
 
 
 def _write_plain_state(path: Path, items: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + '.tmp')
-    tmp.write_text(json.dumps({'items': items}, sort_keys=True, separators=(',', ':')), encoding='utf-8')
-    os.replace(tmp, path)
+    path.write_text(json.dumps({'items': items}, ensure_ascii=False, sort_keys=True, indent=2) + '\n', encoding='utf-8')
 
 
 def _update_conflict_state(*, tenant_id: str, business_id: str, document: str, updates: dict) -> bool:
-    state_path = _distributed_append_dir() / 'distributed_state_conflicts_state.json'
-    state = _read_plain_state(state_path)
+    path = _distributed_append_dir() / 'distributed_state_conflicts_state.json'
+    state = _read_plain_state(path)
     key = _conflict_key(tenant_id=tenant_id, business_id=business_id, document=document)
-    items = dict(state.get('items') or {})
-    if key not in items:
+    row = dict(state.get('items', {}).get(key) or {})
+    if not row:
         return False
-    row = {**dict(items[key]), **updates}
-    items[key] = row
-    _write_plain_state(state_path, items)
+    row.update(updates)
+    _write_plain_state(path, {**dict(state.get('items') or {}), key: row})
     return True
-
-
-def _read_document_state(path):
-    """Read a versioned business-autonomy document state."""
-    target = Path(path)
-    if not target.exists():
-        return {"version": 0, "items": {}}
-    try:
-        payload = json.loads(target.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("business_autonomy_distributed_state_corrupt") from exc
-    if not isinstance(payload, dict):
-        raise RuntimeError("business_autonomy_distributed_state_invalid")
-    version = int(payload.get("version") or 0)
-    items = payload.get("items") or {}
-    if not isinstance(items, dict):
-        raise RuntimeError("business_autonomy_distributed_state_items_invalid")
-    return {"version": version, "items": items}
-
-
-def _write_document_state(path, items, *, expected_version: int):
-    """Atomically write a versioned state document with fail-closed CAS."""
-    target = Path(path)
-    state = _read_document_state(target)
-    if int(state["version"]) != int(expected_version):
-        raise RuntimeError("business_autonomy_distributed_state_version_conflict")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    payload = {"version": int(expected_version) + 1, "items": dict(items or {})}
-    tmp.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
-    os.replace(tmp, target)
-    return payload
