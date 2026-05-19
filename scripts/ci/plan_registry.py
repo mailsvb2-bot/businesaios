@@ -23,12 +23,24 @@ def _business_critical_common(gate: str) -> ExecutionPlan:
     )
 
 
+def _rust_safety_common(gate: str) -> ExecutionPlan:
+    return _plan(
+        gate,
+        "assert-project-shape",
+        "doctor-check",
+        "rust-safety-core",
+    )
+
+
 def plan_for_gate(gate: str) -> ExecutionPlan:
     if gate == "doctor":
         return _plan("doctor", "assert-project-shape", "dependency-lock", "doctor-check")
 
     if gate == "business-critical":
         return _business_critical_common("business-critical")
+
+    if gate == "rust-safety":
+        return _rust_safety_common("rust-safety")
 
     if gate == "fast":
         return _plan(
@@ -59,6 +71,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "unit-tests",
             "integration-tests",
             "business-critical-tests",
+            "rust-safety-core",
         )
 
     if gate == "release":
@@ -77,6 +90,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "unit-tests",
             "integration-tests",
             "business-critical-tests",
+            "rust-safety-core",
             "verify-release",
             "build-artifact",
         )
@@ -110,6 +124,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "unit-tests",
             "integration-tests",
             "business-critical-tests",
+            "rust-safety-core",
             "verify-release",
         )
 
