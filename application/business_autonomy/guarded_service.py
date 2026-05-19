@@ -328,3 +328,35 @@ def _update_conflict_state(*, tenant_id: str, business_id: str, document: str, u
     row.update(updates)
     _write_plain_state(path, {**dict(state.get('items') or {}), key: row})
     return True
+
+
+def _read_document_state(path):
+    """Read a versioned business-autonomy document state."""
+    target = Path(path)
+    if not target.exists():
+        return {"version": 0, "items": {}}
+    try:
+        payload = json.loads(target.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("business_autonomy_distributed_state_corrupt") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError("business_autonomy_distributed_state_invalid")
+    version = int(payload.get("version") or 0)
+    items = payload.get("items") or {}
+    if not isinstance(items, dict):
+        raise RuntimeError("business_autonomy_distributed_state_items_invalid")
+    return {"version": version, "items": items}
+
+
+def _write_document_state(path, items, *, expected_version: int):
+    """Atomically write a versioned state document with fail-closed CAS."""
+    target = Path(path)
+    state = _read_document_state(target)
+    if int(state["version"]) != int(expected_version):
+        raise RuntimeError("business_autonomy_distributed_state_version_conflict")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    payload = {"version": int(expected_version) + 1, "items": dict(items or {})}
+    tmp.write_text(json.dumps(payload, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    os.replace(tmp, target)
+    return payload
