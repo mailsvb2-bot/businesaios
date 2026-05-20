@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -25,6 +23,17 @@ class DiagnosticBridgeResult:
     passed: bool
     reason: str
     report: dict[str, object]
+
+    @classmethod
+    def unavailable(cls, reason: str = "not_provided") -> "DiagnosticBridgeResult":
+        return cls(False, False, reason, {})
+
+    @classmethod
+    def from_report(cls, report: Mapping[str, object] | None) -> "DiagnosticBridgeResult":
+        if report is None:
+            return cls.unavailable()
+        data = dict(report)
+        return cls(True, bool(data.get("passed")), "ok" if data.get("passed") is True else "rust_fixture_failed", data)
 
 
 def _bool(data: Mapping[str, object], key: str) -> bool:
@@ -114,34 +123,14 @@ def _run_cases(payload: Mapping[str, object], evaluator) -> dict[str, object]:
     return {"passed": passed, "cases": cases}
 
 
-def run_rust_fixture_diagnostic(*, repo_root: Path, fixture_path: Path) -> DiagnosticBridgeResult:
-    cargo = shutil.which("cargo")
-    if cargo is None:
-        return DiagnosticBridgeResult(False, False, "cargo_unavailable", {})
-    crate_dir = repo_root / "rust" / "businessaios_safety_core"
-    try:
-        completed = subprocess.run(
-            [cargo, "run", "--quiet", "--bin", "safety_fixture_runner", "--", "--json", str(fixture_path)],
-            cwd=crate_dir,
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
-        report = json.loads(completed.stdout)
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
-        return DiagnosticBridgeResult(True, False, f"rust_diagnostic_failed:{type(exc).__name__}", {})
-    return DiagnosticBridgeResult(True, bool(report.get("passed")), "ok" if report.get("passed") is True else "rust_fixture_failed", report)
-
-
-def build_safety_core_parity_evidence(*, repo_root: Path) -> dict[str, object]:
+def build_safety_core_parity_evidence(*, repo_root: Path, rust_report: Mapping[str, object] | None = None) -> dict[str, object]:
     core_fixture = repo_root / "safety_fixtures" / "businessaios_safety_core_golden.json"
     live_fixture = repo_root / "safety_fixtures" / "businessaios_safety_live_contract_golden.json"
     core_payload = json.loads(core_fixture.read_text(encoding="utf-8"))
     live_payload = json.loads(live_fixture.read_text(encoding="utf-8"))
     core = _run_cases(core_payload, evaluate_golden_case)
     live = _run_cases(live_payload, evaluate_live_contract_case)
-    rust_diag = run_rust_fixture_diagnostic(repo_root=repo_root, fixture_path=core_fixture)
+    rust_diag = DiagnosticBridgeResult.from_report(rust_report)
     drift_detected = not bool(core["passed"]) or not bool(live["passed"]) or (rust_diag.available and not rust_diag.passed)
     return {
         "artifact": "safety_core_parity",
@@ -162,10 +151,10 @@ def build_safety_core_parity_evidence(*, repo_root: Path) -> dict[str, object]:
     }
 
 
-def write_safety_core_parity_evidence(*, repo_root: Path, output_path: Path | None = None) -> Path:
+def write_safety_core_parity_evidence(*, repo_root: Path, output_path: Path | None = None, rust_report: Mapping[str, object] | None = None) -> Path:
     target = output_path or repo_root / "artifacts" / "ci" / "safety_core_parity.json"
     target.parent.mkdir(parents=True, exist_ok=True)
-    payload = build_safety_core_parity_evidence(repo_root=repo_root)
+    payload = build_safety_core_parity_evidence(repo_root=repo_root, rust_report=rust_report)
     target.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     return target
 
@@ -175,6 +164,5 @@ __all__ = [
     "DiagnosticBridgeResult",
     "build_safety_core_parity_evidence",
     "evaluate_live_contract_case",
-    "run_rust_fixture_diagnostic",
     "write_safety_core_parity_evidence",
 ]
