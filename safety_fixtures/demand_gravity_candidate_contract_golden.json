@@ -1,0 +1,32 @@
+{
+  "version": "demand_gravity_candidate_contract.v1",
+  "forbidden_payload_keys": [
+    "approved",
+    "autonomous_action",
+    "bid_amount",
+    "budget_allocation",
+    "execute_now",
+    "final_decision",
+    "selected_strategy",
+    "winner_channel"
+  ],
+  "valid_candidate": {
+    "candidate_id": "dgc_1234567890abcdef1234567890abcdef",
+    "tenant_id": "tenant-a",
+    "channel": "google_maps",
+    "signal_ids": ["sig-1"],
+    "write_mode": "advisory_only",
+    "evidence_refs": ["source:1"],
+    "idempotency_key": "demand-gravity:dgc_1234567890abcdef1234567890abcdef",
+    "correlation_id": "corr-1",
+    "payload": {
+      "candidate_type": "demand_signal_cluster",
+      "channel": "google_maps",
+      "signal_count": 1,
+      "normalized_terms": ["coffee near me"],
+      "source": "demand_gravity",
+      "decision_owner": "DecisionCore",
+      "execution_allowed": false
+    }
+  }
+}
