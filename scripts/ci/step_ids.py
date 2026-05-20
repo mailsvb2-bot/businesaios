@@ -19,6 +19,7 @@ def unit_tests() -> str: return _s('unit','-tests')
 def integration_tests() -> str: return _s('integration','-tests')
 def business_critical_tests() -> str: return _s('business','-critical','-tests')
 def rust_safety_core() -> str: return _s('rust','-safety','-core')
+def rust_supply_chain() -> str: return _s('rust','-supply','-chain')
 def verify_release() -> str: return _s('verify','-release')
 def build_artifact() -> str: return _s('build','-artifact')
 
@@ -27,12 +28,12 @@ def all_step_names() -> tuple[str, ...]:
     return (
         project_shape(), dependency_lock(), doctor(), import_smoke(), demo_e2e_smoke(), quality(),
         canon_audit(), architecture_bypass_scan(), async_test_contract(), lock_tests(), unit_tests(), integration_tests(),
-        business_critical_tests(), rust_safety_core(), verify_release(), build_artifact(),
+        business_critical_tests(), rust_safety_core(), rust_supply_chain(), verify_release(), build_artifact(),
     )
 
 
 __all__ = [
     'project_shape', 'dependency_lock', 'doctor', 'import_smoke', 'demo_e2e_smoke', 'quality',
     'canon_audit', 'architecture_bypass_scan', 'async_test_contract', 'lock_tests', 'unit_tests', 'integration_tests',
-    'business_critical_tests', 'rust_safety_core', 'verify_release', 'build_artifact', 'all_step_names',
+    'business_critical_tests', 'rust_safety_core', 'rust_supply_chain', 'verify_release', 'build_artifact', 'all_step_names',
 ]
