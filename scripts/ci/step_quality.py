@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import os
 from pathlib import Path
 
 from scripts.ci.config import project_shape_config
@@ -20,6 +21,11 @@ def _iter_python_files(path: Path):
         if "__pycache__" in parts or ".venv" in parts or "venv" in parts:
             continue
         yield candidate
+
+
+def _quality_target_paths(root: Path) -> tuple[Path, ...]:
+    cfg = project_shape_config(root)
+    return tuple(root / rel for rel in cfg.quality_targets)
 
 
 def _syntax_check_targets() -> tuple[bool, str]:
@@ -47,24 +53,30 @@ def _syntax_check_targets() -> tuple[bool, str]:
     return True, f"syntax check passed for {checked} Python files"
 
 
+def _quality_tools_required() -> bool:
+    return os.environ.get("BAIOS_REQUIRE_QUALITY_TOOLS", "").strip().lower() in {"1", "true", "yes", "release"}
+
+
 def _ruff_check() -> tuple[bool, str]:
     root = repo_root()
-    target = root / "scripts" / "ci"
+    targets = _quality_target_paths(root)
     config = root / "ruff.toml"
-    if not target.exists():
-        return False, "scripts/ci missing"
+    if not targets:
+        return False, "quality targets missing"
     if importlib.util.find_spec("ruff") is None:
-        return True, "ruff unavailable in environment; skipped by contract"
+        if _quality_tools_required():
+            return False, "ruff unavailable while BAIOS_REQUIRE_QUALITY_TOOLS is enabled"
+        return True, "ruff unavailable in environment; skipped by non-release contract"
 
-    args = ["-m", "ruff", "check", str(target)]
+    args = ["-m", "ruff", "check", *(str(target) for target in targets)]
     if config.exists():
         args.extend(["--config", str(config)])
 
-    outcome = run_python(args, timeout=60)
+    outcome = run_python(args, timeout=180)
     if outcome.returncode != 0:
         return False, "ruff check failed"
 
-    return True, "ruff check passed"
+    return True, "ruff check passed for repository quality targets"
 
 
 def run() -> tuple[bool, str]:
@@ -77,3 +89,6 @@ def run() -> tuple[bool, str]:
         return False, msg_ruff
 
     return True, f"{msg_syntax}; {msg_ruff}"
+
+
+__all__ = ["run"]
