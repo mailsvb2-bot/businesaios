@@ -7,6 +7,9 @@ from typing import Mapping
 
 CANON_BUSINESS_AUTONOMY_SAFETY_CORE_WRAPPER = True
 SAFETY_CORE_GOLDEN_FIXTURE_VERSION = "businessaios_safety_core_golden.v1"
+RUST_SAFETY_CORE_MSRV = "1.75.0"
+RUST_SAFETY_CORE_EDITION = "2021"
+RUST_SAFETY_CORE_ALLOWED_DIRECT_DEPENDENCIES = ("serde", "serde_json")
 
 
 class SafetyVerdictKind(str, Enum):
@@ -228,6 +231,10 @@ def build_safety_core_admin_surface(*, rust_available: bool = False, mode: str =
         "runtime_policy": "fail_closed",
         "decision_core_replaced": False,
         "ffi_enabled": False,
+        "msrv": RUST_SAFETY_CORE_MSRV,
+        "rust_edition": RUST_SAFETY_CORE_EDITION,
+        "dependency_policy": "allowlist",
+        "allowed_direct_dependencies": list(RUST_SAFETY_CORE_ALLOWED_DIRECT_DEPENDENCIES),
         "guards": ["budget", "blast_radius", "tenant_scope", "idempotency_transition", "outbox_transition", "refund"],
         "strict_rust_required_verdict": strict_verdict.to_metadata(),
         "golden_fixture_version": SAFETY_CORE_GOLDEN_FIXTURE_VERSION,
@@ -242,6 +249,9 @@ def build_safety_core_admin_surface(*, rust_available: bool = False, mode: str =
 __all__ = [
     "CANON_BUSINESS_AUTONOMY_SAFETY_CORE_WRAPPER",
     "SAFETY_CORE_GOLDEN_FIXTURE_VERSION",
+    "RUST_SAFETY_CORE_ALLOWED_DIRECT_DEPENDENCIES",
+    "RUST_SAFETY_CORE_EDITION",
+    "RUST_SAFETY_CORE_MSRV",
     "SafetyRuntimePolicy",
     "SafetyVerdict",
     "SafetyVerdictKind",
