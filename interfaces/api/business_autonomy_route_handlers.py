@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from application.business_autonomy.delayed_outcome_bridge import BusinessAutonomyDelayedOutcomeBridge
+from application.business_autonomy.safety_core import build_safety_core_admin_surface
 from runtime.business_autonomy.public_api import build_business_autonomy_operationalization
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
 
@@ -92,6 +93,9 @@ class BusinessAutonomyRouteHandlers:
             ],
             "export_surface": dict(view.export_surface),
         }
+
+    def get_safety_core_surface(self, *, rust_available: bool = False, mode: str = "python_mirror") -> dict[str, Any]:
+        return dict(build_safety_core_admin_surface(rust_available=rust_available, mode=mode))
 
     def _delayed_outcome_bridge(self) -> BusinessAutonomyDelayedOutcomeBridge:
         return BusinessAutonomyDelayedOutcomeBridge.default()
