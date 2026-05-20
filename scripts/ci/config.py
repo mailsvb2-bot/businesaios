@@ -25,7 +25,9 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             "Makefile",
             "pytest.ini",
             "requirements.txt",
+            "requirements.lock.txt",
             "ruff.toml",
+            "pyproject.toml",
             "scripts",
             "tests",
             "runtime",
@@ -41,12 +43,6 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             )
             if (root / rel).exists()
         ),
-        # Keep the default CI lock gate bounded and deterministic.
-        # The repository contains hundreds of historical arch/lock tests; running
-        # the whole directories in the fast path makes the gate hang instead of
-        # proving the canonical safety contract. Heavy/exhaustive audits remain
-        # represented by explicit full/release steps, while this curated set
-        # protects the P0 invariants that must always be fast.
         lock_targets=tuple(
             rel for rel in (
                 "tests/p0/test_startup_hooks_lightweight.py",
@@ -80,6 +76,7 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
         ) or ("tests",),
         quality_targets=tuple(
             rel for rel in (
+                "application",
                 "core",
                 "runtime",
                 "interfaces",
@@ -101,10 +98,9 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             ".githooks/pre-push",
         ),
         allowed_workflows=(
-            ".github/workflows/ci-doctor.yml",
-            ".github/workflows/ci-fast.yml",
-            ".github/workflows/ci-full.yml",
-            ".github/workflows/release.yml",
+            ".github/workflows/ci.yml",
+            ".github/workflows/full-ci.yml",
+            ".github/workflows/release-gates.yml",
             ".github/workflows/docker-image.yml",
         ),
         matrix_python_versions=("3.11", "3.12"),
