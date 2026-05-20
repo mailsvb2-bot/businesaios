@@ -33,7 +33,7 @@ def run() -> tuple[bool, str]:
         return False, "rust safety core shared fixture runner returned invalid json"
     if report.get("passed") is not True:
         return False, "rust safety core shared fixture runner reported drift"
-    artifact_path = write_safety_core_parity_evidence(repo_root=root)
+    artifact_path = write_safety_core_parity_evidence(repo_root=root, rust_report=report)
     try:
         artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
