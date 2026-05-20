@@ -39,6 +39,7 @@ class DemandSignal:
     confidence: float
     raw_fingerprint: str
     raw: Mapping[str, Any] = field(default_factory=dict)
+    business_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -53,3 +54,4 @@ class DemandCandidate:
     payload: Mapping[str, Any]
     idempotency_key: str
     correlation_id: str
+    business_id: str = ""
