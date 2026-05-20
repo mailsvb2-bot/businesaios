@@ -24,24 +24,22 @@ def _business_critical_common(gate: str) -> ExecutionPlan:
 
 
 def _rust_safety_common(gate: str) -> ExecutionPlan:
-    return _plan(
-        gate,
-        "assert-project-shape",
-        "doctor-check",
-        "rust-safety-core",
-    )
+    return _plan(gate, "assert-project-shape", "doctor-check", "rust-safety-core")
+
+
+def _rust_dependency_audit_common(gate: str) -> ExecutionPlan:
+    return _plan(gate, "assert-project-shape", "doctor-check", "rust-supply-chain")
 
 
 def plan_for_gate(gate: str) -> ExecutionPlan:
     if gate == "doctor":
         return _plan("doctor", "assert-project-shape", "dependency-lock", "doctor-check")
-
     if gate == "business-critical":
         return _business_critical_common("business-critical")
-
     if gate == "rust-safety":
         return _rust_safety_common("rust-safety")
-
+    if gate == "rust-deps":
+        return _rust_dependency_audit_common("rust-deps")
     if gate == "fast":
         return _plan(
             "fast",
@@ -54,7 +52,6 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "async-test-contract",
             "lock-tests",
         )
-
     if gate == "full":
         return _plan(
             "full",
@@ -73,7 +70,6 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "business-critical-tests",
             "rust-safety-core",
         )
-
     if gate == "release":
         return _plan(
             "release",
@@ -91,10 +87,10 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "integration-tests",
             "business-critical-tests",
             "rust-safety-core",
+            "rust-supply-chain",
             "verify-release",
             "build-artifact",
         )
-
     if gate == "pre-push":
         return _plan(
             "pre-push",
@@ -107,7 +103,6 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "async-test-contract",
             "lock-tests",
         )
-
     if gate == "pre-release":
         return _plan(
             "pre-release",
@@ -125,7 +120,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "integration-tests",
             "business-critical-tests",
             "rust-safety-core",
+            "rust-supply-chain",
             "verify-release",
         )
-
     raise ValueError(f"unknown gate: {gate}")
