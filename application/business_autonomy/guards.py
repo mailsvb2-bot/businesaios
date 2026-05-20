@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Optional
 
 from application.business_autonomy.contracts import BusinessExecutionRequest
-from application.business_autonomy.safety_core import validate_blast_radius, validate_budget
+from application.business_autonomy.safety_core import SafetyRuntimePolicy, validate_blast_radius, validate_budget
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,11 @@ class BusinessBudgetGuard:
         budget_limit = _extract_float_constraint(request, "monthly_budget_limit")
         if budget_limit is None and self.max_budget_minor is not None:
             budget_limit = _float_or_none(self.max_budget_minor)
+        policy = SafetyRuntimePolicy.from_metadata(request.envelope.metadata)
         if budget_limit is None:
+            if policy.mode == "strict_rust_required" and not policy.rust_available:
+                safety = validate_budget(estimated_minor=0, limit_minor=0, policy=policy)
+                return BudgetGuardDecision(False, f"Budget safety denied: {safety.reason}", None, estimated_cost, safety.to_metadata())
             verdict = {"allowed": True, "reason": "budget_limit_not_configured", "source": "python_safety_core"}
             return BudgetGuardDecision(True, "No explicit budget limit provided.", None, estimated_cost, verdict)
         safety = validate_budget(
@@ -34,6 +38,7 @@ class BusinessBudgetGuard:
             limit_minor=_money_to_minor(budget_limit),
             currency=str(request.envelope.metadata.get("currency") or "RUB"),
             limit_currency=str(request.envelope.metadata.get("budget_currency") or request.envelope.metadata.get("currency") or "RUB"),
+            policy=policy,
         )
         if not safety.allowed:
             reason = "Estimated cost exceeds approved budget limit." if safety.reason == "budget_exceeded" else f"Budget safety denied: {safety.reason}"
@@ -59,10 +64,14 @@ class BusinessBlastRadiusGuard:
         limit = _extract_int_constraint(request, "outbound_message_limit")
         if limit is None and self.max_parallel_actions is not None:
             limit = _int_or_none(self.max_parallel_actions)
+        policy = SafetyRuntimePolicy.from_metadata(request.envelope.metadata)
         if limit is None:
+            if policy.mode == "strict_rust_required" and not policy.rust_available:
+                safety = validate_blast_radius(requested_outbound=1, approved_limit=1, policy=policy)
+                return BlastRadiusDecision(False, f"Blast radius safety denied: {safety.reason}", None, requested, safety.to_metadata())
             verdict = {"allowed": True, "reason": "blast_radius_limit_not_configured", "source": "python_safety_core"}
             return BlastRadiusDecision(True, "No explicit outbound blast radius limit provided.", None, requested, verdict)
-        safety = validate_blast_radius(requested_outbound=requested, approved_limit=limit)
+        safety = validate_blast_radius(requested_outbound=requested, approved_limit=limit, policy=policy)
         if not safety.allowed:
             reason = "Requested outbound scope exceeds blast radius limit." if safety.reason == "blast_radius_exceeded" else f"Blast radius safety denied: {safety.reason}"
             return BlastRadiusDecision(False, reason, limit, requested, safety.to_metadata())
