@@ -74,6 +74,10 @@ def test_safety_core_admin_surface_is_visible_and_fail_closed() -> None:
     assert surface["strict_rust_required_verdict"]["reason"] == "rust_safety_core_unavailable"
     assert surface["golden_fixture_version"] == "businessaios_safety_core_golden.v1"
     assert surface["rust_fixture_runner_required"] is True
+    assert surface["msrv"] == "1.75.0"
+    assert surface["rust_edition"] == "2021"
+    assert surface["dependency_policy"] == "allowlist"
+    assert surface["allowed_direct_dependencies"] == ["serde", "serde_json"]
     assert surface["parity_checked"] is True
     assert surface["drift_detected"] is False
 
@@ -86,4 +90,6 @@ def test_route_handlers_expose_safety_core_surface() -> None:
     assert surface["admin_visibility"] is True
     assert surface["strict_rust_required_verdict"]["reason"] == "rust_safety_core_unavailable"
     assert surface["golden_fixture_version"] == "businessaios_safety_core_golden.v1"
+    assert surface["msrv"] == "1.75.0"
+    assert surface["dependency_policy"] == "allowlist"
     assert surface["drift_detected"] is False
