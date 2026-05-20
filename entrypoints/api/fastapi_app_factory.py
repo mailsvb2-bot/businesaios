@@ -45,7 +45,6 @@ def _validate_inputs(*, application_service: object, dependency_container: objec
         raise ValueError('dependency_container.boot_result.decision_application must match application_service')
 
 
-
 class _FailsClosedApplicationService:
     """Safe fail-closed default used only when the API is instantiated without a wired runtime."""
 
@@ -65,6 +64,26 @@ class _FailsClosedApplicationService:
             "details": {},
             "capability_view": {},
         }
+
+
+def _fail_closed_status(*, surface: str) -> dict[str, object]:
+    base = {
+        "surface": surface,
+        "mode": "fails_closed",
+        "runtime_wired": False,
+        "reason": "runtime_application_service_not_wired",
+    }
+    if surface == "health":
+        return {**base, "status": "alive", "process_alive": True, "ready": False}
+    if surface == "livez":
+        return {**base, "status": "alive", "process_alive": True}
+    if surface == "startupz":
+        return {**base, "status": "blocked", "startup_complete": False}
+    if surface == "storagez":
+        return {**base, "status": "blocked", "storage_ready": False}
+    if surface == "executionz":
+        return {**base, "status": "blocked", "execution_ready": False, "effects_enabled": False}
+    return {**base, "status": "blocked", "ready": False}
 
 
 def create_app(*, application_service: object | None = None, dependency_container: object | None = None) -> FastAPI:
@@ -118,11 +137,8 @@ def create_app(*, application_service: object | None = None, dependency_containe
                     "capability_view": {},
                 }
                 status = 200
-            elif method == "GET" and path == "/health":
-                response = {"status": "ok", "mode": "fails_closed"}
-                status = 200
-            elif method == "GET" and path == "/readyz":
-                response = {"status": "blocked", "reason": "runtime_application_service_not_wired"}
+            elif method == "GET" and path in {"/health", "/readyz", "/livez", "/startupz", "/storagez", "/executionz"}:
+                response = _fail_closed_status(surface=path.removeprefix("/"))
                 status = 200
             else:
                 response = {"detail": "not_found"}
