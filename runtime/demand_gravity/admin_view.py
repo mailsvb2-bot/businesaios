@@ -24,6 +24,7 @@ def serialize_demand_candidate(candidate: DemandCandidate) -> dict[str, Any]:
     return {
         "candidate_id": candidate.candidate_id,
         "tenant_id": candidate.tenant_id,
+        "business_id": candidate.business_id,
         "channel": candidate.channel.value,
         "signal_ids": list(candidate.signal_ids),
         "write_mode": candidate.write_mode.value,
@@ -36,8 +37,10 @@ def serialize_demand_candidate(candidate: DemandCandidate) -> dict[str, Any]:
 
 
 def build_demand_gravity_admin_view(*, tenant_id: str, candidates: tuple[DemandCandidate, ...], decision_refs: tuple[str, ...] = ()) -> dict[str, Any]:
+    business_ids = sorted({candidate.business_id for candidate in candidates if candidate.business_id})
     return {
         "tenant_id": tenant_id,
+        "business_ids": business_ids,
         "surface": "demand_gravity",
         "role": "signal_candidate_producer_only",
         "decision_owner": "DecisionCore",
@@ -51,6 +54,7 @@ def build_demand_gravity_admin_view(*, tenant_id: str, candidates: tuple[DemandC
             "can_rank_channels": False,
             "can_allocate_budget": False,
             "can_mutate_external_platforms": False,
+            "requires_business_scope": True,
             "requires_decision_core": True,
             "requires_evidence": True,
             "requires_admin_visibility": True,
