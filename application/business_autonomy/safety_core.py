@@ -14,6 +14,35 @@ class SafetyVerdictKind(str, Enum):
 
 
 @dataclass(frozen=True)
+class SafetyRuntimePolicy:
+    mode: str = "python_mirror"
+    rust_available: bool = False
+
+    @classmethod
+    def python_mirror(cls) -> "SafetyRuntimePolicy":
+        return cls(mode="python_mirror", rust_available=False)
+
+    @classmethod
+    def strict_rust_required(cls, *, rust_available: bool = False) -> "SafetyRuntimePolicy":
+        return cls(mode="strict_rust_required", rust_available=bool(rust_available))
+
+    @classmethod
+    def from_metadata(cls, metadata: Mapping[str, object] | None) -> "SafetyRuntimePolicy":
+        data = dict(metadata or {})
+        mode = str(data.get("safety_core_mode") or "python_mirror").strip() or "python_mirror"
+        rust_available = bool(data.get("rust_safety_core_available", False))
+        if mode == "strict_rust_required":
+            return cls.strict_rust_required(rust_available=rust_available)
+        return cls.python_mirror()
+
+
+def _policy_unavailable_verdict(policy: SafetyRuntimePolicy) -> "SafetyVerdict | None":
+    if policy.mode == "strict_rust_required" and not policy.rust_available:
+        return SafetyVerdict.deny("rust_safety_core_unavailable", source="rust_safety_core_required")
+    return None
+
+
+@dataclass(frozen=True)
 class SafetyVerdict:
     allowed: bool
     reason: str
@@ -31,7 +60,11 @@ class SafetyVerdict:
         return {"allowed": bool(self.allowed), "reason": self.reason, "source": self.source}
 
 
-def validate_tenant_scope(*, tenant_id: str, business_id: str, binding_tenant_id: str, allow_global_fallback: bool = False) -> SafetyVerdict:
+def validate_tenant_scope(*, tenant_id: str, business_id: str, binding_tenant_id: str, allow_global_fallback: bool = False, policy: SafetyRuntimePolicy | None = None) -> SafetyVerdict:
+    runtime = policy or SafetyRuntimePolicy.python_mirror()
+    unavailable = _policy_unavailable_verdict(runtime)
+    if unavailable is not None:
+        return unavailable
     tenant = str(tenant_id or "").strip()
     business = str(business_id or "").strip()
     binding = str(binding_tenant_id or "").strip()
@@ -61,7 +94,11 @@ def _money_amount(amount_minor: object, currency: object) -> SafetyVerdict:
     return SafetyVerdict.allow()
 
 
-def validate_budget(*, estimated_minor: object, limit_minor: object, currency: object = "RUB", limit_currency: object | None = None) -> SafetyVerdict:
+def validate_budget(*, estimated_minor: object, limit_minor: object, currency: object = "RUB", limit_currency: object | None = None, policy: SafetyRuntimePolicy | None = None) -> SafetyVerdict:
+    runtime = policy or SafetyRuntimePolicy.python_mirror()
+    unavailable = _policy_unavailable_verdict(runtime)
+    if unavailable is not None:
+        return unavailable
     estimated_currency = str(currency or "").strip()
     approved_currency = str(limit_currency if limit_currency is not None else currency or "").strip()
     estimated_valid = _money_amount(estimated_minor, estimated_currency)
@@ -77,14 +114,18 @@ def validate_budget(*, estimated_minor: object, limit_minor: object, currency: o
     return SafetyVerdict.allow()
 
 
-def validate_refund(*, captured_minor: object, refund_minor: object, currency: object = "RUB") -> SafetyVerdict:
-    result = validate_budget(estimated_minor=refund_minor, limit_minor=captured_minor, currency=currency)
+def validate_refund(*, captured_minor: object, refund_minor: object, currency: object = "RUB", policy: SafetyRuntimePolicy | None = None) -> SafetyVerdict:
+    result = validate_budget(estimated_minor=refund_minor, limit_minor=captured_minor, currency=currency, policy=policy)
     if not result.allowed and result.reason == "budget_exceeded":
         return SafetyVerdict.deny("refund_exceeds_captured")
     return result
 
 
-def validate_blast_radius(*, requested_outbound: object, approved_limit: object) -> SafetyVerdict:
+def validate_blast_radius(*, requested_outbound: object, approved_limit: object, policy: SafetyRuntimePolicy | None = None) -> SafetyVerdict:
+    runtime = policy or SafetyRuntimePolicy.python_mirror()
+    unavailable = _policy_unavailable_verdict(runtime)
+    if unavailable is not None:
+        return unavailable
     try:
         requested = int(requested_outbound)
         limit = int(approved_limit)
@@ -105,7 +146,11 @@ _ALLOWED_IDEMPOTENCY_TRANSITIONS = {
 }
 
 
-def validate_idempotency_transition(*, from_state: str, to_state: str) -> SafetyVerdict:
+def validate_idempotency_transition(*, from_state: str, to_state: str, policy: SafetyRuntimePolicy | None = None) -> SafetyVerdict:
+    runtime = policy or SafetyRuntimePolicy.python_mirror()
+    unavailable = _policy_unavailable_verdict(runtime)
+    if unavailable is not None:
+        return unavailable
     pair = (str(from_state or "").strip(), str(to_state or "").strip())
     if pair in _ALLOWED_IDEMPOTENCY_TRANSITIONS:
         return SafetyVerdict.allow()
@@ -126,7 +171,11 @@ _ALLOWED_OUTBOX_TRANSITIONS = {
 }
 
 
-def validate_outbox_transition(*, from_state: str, to_state: str) -> SafetyVerdict:
+def validate_outbox_transition(*, from_state: str, to_state: str, policy: SafetyRuntimePolicy | None = None) -> SafetyVerdict:
+    runtime = policy or SafetyRuntimePolicy.python_mirror()
+    unavailable = _policy_unavailable_verdict(runtime)
+    if unavailable is not None:
+        return unavailable
     pair = (str(from_state or "").strip(), str(to_state or "").strip())
     if pair in _ALLOWED_OUTBOX_TRANSITIONS:
         return SafetyVerdict.allow()
@@ -135,7 +184,7 @@ def validate_outbox_transition(*, from_state: str, to_state: str) -> SafetyVerdi
     return SafetyVerdict.deny("invalid_outbox_transition")
 
 
-def evaluate_golden_case(case: Mapping[str, object]) -> SafetyVerdict:
+def evaluate_golden_case(case: Mapping[str, object], *, policy: SafetyRuntimePolicy | None = None) -> SafetyVerdict:
     kind = str(case.get("kind") or "").strip()
     raw_input = case.get("input")
     if not isinstance(raw_input, Mapping):
@@ -147,6 +196,7 @@ def evaluate_golden_case(case: Mapping[str, object]) -> SafetyVerdict:
             business_id=str(data.get("business_id") or ""),
             binding_tenant_id=str(data.get("binding_tenant_id") or ""),
             allow_global_fallback=bool(data.get("allow_global_fallback", False)),
+            policy=policy,
         )
     if kind == "budget":
         return validate_budget(
@@ -154,22 +204,41 @@ def evaluate_golden_case(case: Mapping[str, object]) -> SafetyVerdict:
             limit_minor=data.get("limit_minor"),
             currency=data.get("currency", "RUB"),
             limit_currency=data.get("limit_currency"),
+            policy=policy,
         )
     if kind == "refund":
-        return validate_refund(captured_minor=data.get("captured_minor"), refund_minor=data.get("refund_minor"), currency=data.get("currency", "RUB"))
+        return validate_refund(captured_minor=data.get("captured_minor"), refund_minor=data.get("refund_minor"), currency=data.get("currency", "RUB"), policy=policy)
     if kind == "blast_radius":
-        return validate_blast_radius(requested_outbound=data.get("requested_outbound"), approved_limit=data.get("approved_limit"))
+        return validate_blast_radius(requested_outbound=data.get("requested_outbound"), approved_limit=data.get("approved_limit"), policy=policy)
     if kind == "idempotency_transition":
-        return validate_idempotency_transition(from_state=str(data.get("from") or ""), to_state=str(data.get("to") or ""))
+        return validate_idempotency_transition(from_state=str(data.get("from") or ""), to_state=str(data.get("to") or ""), policy=policy)
     if kind == "outbox_transition":
-        return validate_outbox_transition(from_state=str(data.get("from") or ""), to_state=str(data.get("to") or ""))
+        return validate_outbox_transition(from_state=str(data.get("from") or ""), to_state=str(data.get("to") or ""), policy=policy)
     return SafetyVerdict.deny("unknown_fixture_kind")
+
+
+def build_safety_core_admin_surface(*, rust_available: bool = False, mode: str = "python_mirror") -> dict[str, object]:
+    strict = SafetyRuntimePolicy.strict_rust_required(rust_available=rust_available)
+    strict_verdict = validate_budget(estimated_minor=1, limit_minor=1, policy=strict)
+    return {
+        "surface": "business_autonomy_safety_core",
+        "mode": str(mode or "python_mirror"),
+        "rust_available": bool(rust_available),
+        "runtime_policy": "fail_closed",
+        "decision_core_replaced": False,
+        "ffi_enabled": False,
+        "guards": ["budget", "blast_radius", "tenant_scope", "idempotency_transition", "outbox_transition", "refund"],
+        "strict_rust_required_verdict": strict_verdict.to_metadata(),
+        "admin_visibility": True,
+    }
 
 
 __all__ = [
     "CANON_BUSINESS_AUTONOMY_SAFETY_CORE_WRAPPER",
+    "SafetyRuntimePolicy",
     "SafetyVerdict",
     "SafetyVerdictKind",
+    "build_safety_core_admin_surface",
     "evaluate_golden_case",
     "validate_blast_radius",
     "validate_budget",
