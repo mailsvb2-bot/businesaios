@@ -63,7 +63,7 @@ def test_owner_guards_allow_python_mirror_default_mode() -> None:
 
 
 def test_safety_core_admin_surface_is_visible_and_fail_closed() -> None:
-    surface = build_safety_core_admin_surface(rust_available=False, mode="strict_rust_required")
+    surface = build_safety_core_admin_surface(rust_available=False, mode="strict_rust_required", parity_checked=True, drift_detected=False)
 
     assert surface["surface"] == "business_autonomy_safety_core"
     assert surface["admin_visibility"] is True
@@ -72,6 +72,10 @@ def test_safety_core_admin_surface_is_visible_and_fail_closed() -> None:
     assert surface["runtime_policy"] == "fail_closed"
     assert surface["strict_rust_required_verdict"]["allowed"] is False
     assert surface["strict_rust_required_verdict"]["reason"] == "rust_safety_core_unavailable"
+    assert surface["golden_fixture_version"] == "businessaios_safety_core_golden.v1"
+    assert surface["rust_fixture_runner_required"] is True
+    assert surface["parity_checked"] is True
+    assert surface["drift_detected"] is False
 
 
 def test_route_handlers_expose_safety_core_surface() -> None:
@@ -81,3 +85,5 @@ def test_route_handlers_expose_safety_core_surface() -> None:
     assert surface["surface"] == "business_autonomy_safety_core"
     assert surface["admin_visibility"] is True
     assert surface["strict_rust_required_verdict"]["reason"] == "rust_safety_core_unavailable"
+    assert surface["golden_fixture_version"] == "businessaios_safety_core_golden.v1"
+    assert surface["drift_detected"] is False
