@@ -19,6 +19,18 @@ def test_project_shape_enforces_actual_workflow_allowlist() -> None:
     assert ok is True, message
 
 
+def test_allowed_workflows_route_through_canonical_ci_cli() -> None:
+    root = Path.cwd()
+    cfg = project_shape_config(root)
+    for rel in cfg.allowed_workflows:
+        text = (root / rel).read_text(encoding="utf-8")
+        if rel.endswith("docker-image.yml"):
+            assert "docker build" in text
+            continue
+        assert "python -m scripts.ci.cli --gate" in text, rel
+        assert "scripts/ci/cli.py" not in text, rel
+
+
 def test_pyproject_is_required_and_contains_canonical_surface() -> None:
     cfg = project_shape_config(Path.cwd())
     text = Path("pyproject.toml").read_text(encoding="utf-8")
