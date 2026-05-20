@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
@@ -28,24 +28,68 @@ pub struct ExpectedVerdict {
     pub reason: String,
 }
 
-pub fn run_fixture_file(path: &Path) -> Result<(), String> {
+#[derive(Debug, Serialize)]
+pub struct FixtureRunReport {
+    pub version: String,
+    pub passed: bool,
+    pub cases: Vec<FixtureCaseReport>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FixtureCaseReport {
+    pub name: String,
+    pub kind: String,
+    pub allowed: bool,
+    pub reason: String,
+    pub expected_allowed: bool,
+    pub expected_reason: String,
+    pub passed: bool,
+}
+
+pub fn load_fixture_payload(path: &Path) -> Result<FixturePayload, String> {
     let text = fs::read_to_string(path).map_err(|err| format!("fixture_read_failed:{err}"))?;
     let payload: FixturePayload = serde_json::from_str(&text).map_err(|err| format!("fixture_parse_failed:{err}"))?;
     if payload.version != "businessaios_safety_core_golden.v1" {
         return Err(format!("fixture_version_mismatch:{}", payload.version));
     }
-    for case in payload.cases.iter() {
-        let actual = evaluate_case(case)?;
-        let actual_allowed = matches!(actual, SafetyVerdict::Allow);
-        let actual_reason = verdict_reason(&actual);
-        if actual_allowed != case.expected.allowed || actual_reason != case.expected.reason {
-            return Err(format!(
-                "fixture_case_failed:{}: expected allowed={} reason={} got allowed={} reason={}",
-                case.name, case.expected.allowed, case.expected.reason, actual_allowed, actual_reason
-            ));
-        }
+    Ok(payload)
+}
+
+pub fn run_fixture_file(path: &Path) -> Result<(), String> {
+    let report = run_fixture_report(path)?;
+    if !report.passed {
+        let first = report
+            .cases
+            .iter()
+            .find(|item| !item.passed)
+            .map(|item| format!("{}: expected allowed={} reason={} got allowed={} reason={}", item.name, item.expected_allowed, item.expected_reason, item.allowed, item.reason))
+            .unwrap_or_else(|| "unknown fixture failure".to_string());
+        return Err(format!("fixture_case_failed:{first}"));
     }
     Ok(())
+}
+
+pub fn run_fixture_report(path: &Path) -> Result<FixtureRunReport, String> {
+    let payload = load_fixture_payload(path)?;
+    let mut cases = Vec::with_capacity(payload.cases.len());
+    let mut passed = true;
+    for case in payload.cases.iter() {
+        let actual = evaluate_case(case)?;
+        let allowed = matches!(actual, SafetyVerdict::Allow);
+        let reason = verdict_reason(&actual);
+        let case_passed = allowed == case.expected.allowed && reason == case.expected.reason;
+        passed = passed && case_passed;
+        cases.push(FixtureCaseReport {
+            name: case.name.clone(),
+            kind: case.kind.clone(),
+            allowed,
+            reason,
+            expected_allowed: case.expected.allowed,
+            expected_reason: case.expected.reason.clone(),
+            passed: case_passed,
+        });
+    }
+    Ok(FixtureRunReport { version: payload.version, passed, cases })
 }
 
 pub fn evaluate_case(case: &FixtureCase) -> Result<SafetyVerdict, String> {
@@ -158,5 +202,14 @@ mod tests {
         let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let path = manifest_dir.join("../../safety_fixtures/businessaios_safety_core_golden.json");
         run_fixture_file(&path).expect("shared fixture file should match Rust safety core");
+    }
+
+    #[test]
+    fn shared_golden_fixture_report_is_machine_readable() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let path = manifest_dir.join("../../safety_fixtures/businessaios_safety_core_golden.json");
+        let report = run_fixture_report(&path).expect("shared fixture report should build");
+        assert!(report.passed);
+        assert!(!report.cases.is_empty());
     }
 }
