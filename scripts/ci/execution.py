@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+from contextlib import contextmanager
+from collections.abc import Iterator
+
 from scripts.ci.contracts import ExecutionReport, ExecutionRequest, StepResult
 from scripts.ci.coverage_report import write_coverage_stub_xml
 from scripts.ci.goal import optimization_goal
@@ -11,6 +15,21 @@ from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state
 from scripts.ci.step_registry import handler_for_step
 from scripts.ci.summary import write_failure_summary
 from scripts.ci.timing import measure_time
+
+
+@contextmanager
+def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
+    key = "BAIOS_REQUIRE_QUALITY_TOOLS"
+    previous = os.environ.get(key)
+    if step_name == "quality-check" and gate in {"release", "pre-release"}:
+        os.environ[key] = "release"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = previous
 
 
 def _cleanup_after_gate(report: ExecutionReport) -> None:
@@ -40,7 +59,8 @@ def execute(request: ExecutionRequest) -> ExecutionReport:
     for step in plan.steps:
         handler = handler_for_step(step.name)
         with measure_time() as watch:
-            ok, message = handler()
+            with _step_environment(gate=plan.gate, step_name=step.name):
+                ok, message = handler()
 
         status = "passed" if ok else ("skipped" if "skipped by contract" in message else "failed")
         result = StepResult(
@@ -66,3 +86,6 @@ def execute(request: ExecutionRequest) -> ExecutionReport:
             write_failure_summary(report)
 
     return report
+
+
+__all__ = ["execute"]
