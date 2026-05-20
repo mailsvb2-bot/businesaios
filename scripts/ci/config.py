@@ -98,10 +98,14 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             ".githooks/pre-push",
         ),
         allowed_workflows=(
+            ".github/workflows/ci-doctor.yml",
+            ".github/workflows/ci-fast.yml",
+            ".github/workflows/ci-full.yml",
             ".github/workflows/ci.yml",
+            ".github/workflows/docker-image.yml",
             ".github/workflows/full-ci.yml",
             ".github/workflows/release-gates.yml",
-            ".github/workflows/docker-image.yml",
+            ".github/workflows/release.yml",
         ),
         matrix_python_versions=("3.11", "3.12"),
     )
