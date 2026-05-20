@@ -6,6 +6,7 @@ from typing import Mapping
 
 
 CANON_BUSINESS_AUTONOMY_SAFETY_CORE_WRAPPER = True
+SAFETY_CORE_GOLDEN_FIXTURE_VERSION = "businessaios_safety_core_golden.v1"
 
 
 class SafetyVerdictKind(str, Enum):
@@ -217,7 +218,7 @@ def evaluate_golden_case(case: Mapping[str, object], *, policy: SafetyRuntimePol
     return SafetyVerdict.deny("unknown_fixture_kind")
 
 
-def build_safety_core_admin_surface(*, rust_available: bool = False, mode: str = "python_mirror") -> dict[str, object]:
+def build_safety_core_admin_surface(*, rust_available: bool = False, mode: str = "python_mirror", parity_checked: bool = False, drift_detected: bool = False) -> dict[str, object]:
     strict = SafetyRuntimePolicy.strict_rust_required(rust_available=rust_available)
     strict_verdict = validate_budget(estimated_minor=1, limit_minor=1, policy=strict)
     return {
@@ -229,12 +230,18 @@ def build_safety_core_admin_surface(*, rust_available: bool = False, mode: str =
         "ffi_enabled": False,
         "guards": ["budget", "blast_radius", "tenant_scope", "idempotency_transition", "outbox_transition", "refund"],
         "strict_rust_required_verdict": strict_verdict.to_metadata(),
+        "golden_fixture_version": SAFETY_CORE_GOLDEN_FIXTURE_VERSION,
+        "python_wrapper_version": "business_autonomy_safety_core_wrapper.v1",
+        "rust_fixture_runner_required": True,
+        "parity_checked": bool(parity_checked),
+        "drift_detected": bool(drift_detected),
         "admin_visibility": True,
     }
 
 
 __all__ = [
     "CANON_BUSINESS_AUTONOMY_SAFETY_CORE_WRAPPER",
+    "SAFETY_CORE_GOLDEN_FIXTURE_VERSION",
     "SafetyRuntimePolicy",
     "SafetyVerdict",
     "SafetyVerdictKind",
