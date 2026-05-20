@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+import os
+
+
 def _urllib_error():
     return __import__("urllib.error", fromlist=["_urllib_error().URLError", "_urllib_error().HTTPError"])
 
@@ -8,12 +12,22 @@ def _urllib_request():
     return __import__("urllib.request", fromlist=["_urllib_request().Request", "_urllib_request().urlopen"])
 
 
-def _urllib_parse():
-    return __import__("urllib.parse", fromlist=["_urllib_parse().urlparse", "_urllib_parse().urlencode"])
+def _require_ready() -> bool:
+    return os.getenv("HEALTHCHECK_REQUIRE_READY", "").strip().lower() in {"1", "true", "yes", "ready"}
 
 
-import json
-import os
+def _is_ready_payload(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return True
+    if payload.get("ok") is False:
+        return False
+    if payload.get("ready") is False:
+        return False
+    if payload.get("status") in {"blocked", "degraded", "fail", "failed"}:
+        return False
+    if payload.get("runtime_wired") is False:
+        return False
+    return True
 
 
 def main() -> None:
@@ -33,11 +47,13 @@ def main() -> None:
     if body:
         try:
             payload = json.loads(body)
-            ok = payload.get("ok", True)
-            if ok is False:
-                raise SystemExit("HEALTHCHECK_FAILED:ok=false")
         except json.JSONDecodeError:
-            pass
+            payload = None
+        if payload is not None:
+            if payload.get("ok") is False:
+                raise SystemExit("HEALTHCHECK_FAILED:ok=false")
+            if _require_ready() and not _is_ready_payload(payload):
+                raise SystemExit("HEALTHCHECK_FAILED:not_ready")
 
     print("OK")
 
