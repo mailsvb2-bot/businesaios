@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+pub mod fixture_runner;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SafetyVerdict {
     Allow,
