@@ -1,0 +1,65 @@
+{
+  "version": "businessaios_safety_core_golden.v1",
+  "cases": [
+    {
+      "name": "tenant_scope_allows_exact_binding",
+      "kind": "tenant_scope",
+      "input": {"tenant_id": "tenant-a", "business_id": "site-biz", "binding_tenant_id": "tenant-a", "allow_global_fallback": false},
+      "expected": {"allowed": true, "reason": "allow"}
+    },
+    {
+      "name": "tenant_scope_denies_cross_tenant_binding",
+      "kind": "tenant_scope",
+      "input": {"tenant_id": "tenant-a", "business_id": "site-biz", "binding_tenant_id": "tenant-b", "allow_global_fallback": false},
+      "expected": {"allowed": false, "reason": "tenant_binding_mismatch"}
+    },
+    {
+      "name": "tenant_scope_denies_global_fallback_for_write",
+      "kind": "tenant_scope",
+      "input": {"tenant_id": "global", "business_id": "site-biz", "binding_tenant_id": "global", "allow_global_fallback": false},
+      "expected": {"allowed": false, "reason": "global_tenant_forbidden"}
+    },
+    {
+      "name": "budget_allows_within_limit",
+      "kind": "budget",
+      "input": {"estimated_minor": 9999, "limit_minor": 10000, "currency": "RUB"},
+      "expected": {"allowed": true, "reason": "allow"}
+    },
+    {
+      "name": "budget_denies_over_limit",
+      "kind": "budget",
+      "input": {"estimated_minor": 10001, "limit_minor": 10000, "currency": "RUB"},
+      "expected": {"allowed": false, "reason": "budget_exceeded"}
+    },
+    {
+      "name": "budget_denies_currency_mismatch",
+      "kind": "budget",
+      "input": {"estimated_minor": 100, "limit_minor": 100, "currency": "USD", "limit_currency": "RUB"},
+      "expected": {"allowed": false, "reason": "currency_mismatch"}
+    },
+    {
+      "name": "refund_denies_above_captured",
+      "kind": "refund",
+      "input": {"captured_minor": 5000, "refund_minor": 5001, "currency": "RUB"},
+      "expected": {"allowed": false, "reason": "refund_exceeds_captured"}
+    },
+    {
+      "name": "blast_radius_denies_over_limit",
+      "kind": "blast_radius",
+      "input": {"requested_outbound": 26, "approved_limit": 25},
+      "expected": {"allowed": false, "reason": "blast_radius_exceeded"}
+    },
+    {
+      "name": "idempotency_denies_duplicate_commit",
+      "kind": "idempotency_transition",
+      "input": {"from": "committed", "to": "committed"},
+      "expected": {"allowed": false, "reason": "duplicate_committed_execution"}
+    },
+    {
+      "name": "outbox_denies_verified_to_pending",
+      "kind": "outbox_transition",
+      "input": {"from": "verified", "to": "pending"},
+      "expected": {"allowed": false, "reason": "terminal_outbox_transition_forbidden"}
+    }
+  ]
+}
