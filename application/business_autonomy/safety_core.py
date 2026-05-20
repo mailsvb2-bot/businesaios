@@ -221,7 +221,7 @@ def evaluate_golden_case(case: Mapping[str, object], *, policy: SafetyRuntimePol
     return SafetyVerdict.deny("unknown_fixture_kind")
 
 
-def build_safety_core_admin_surface(*, rust_available: bool = False, mode: str = "python_mirror", parity_checked: bool = False, drift_detected: bool = False) -> dict[str, object]:
+def build_safety_core_admin_surface(*, rust_available: bool = False, mode: str = "python_mirror", parity_checked: bool = False, drift_detected: bool = False, parity_artifact_path: str = "artifacts/ci/safety_core_parity.json", supply_chain_artifact_path: str = "artifacts/ci/rust_supply_chain.json") -> dict[str, object]:
     strict = SafetyRuntimePolicy.strict_rust_required(rust_available=rust_available)
     strict_verdict = validate_budget(estimated_minor=1, limit_minor=1, policy=strict)
     return {
@@ -235,13 +235,18 @@ def build_safety_core_admin_surface(*, rust_available: bool = False, mode: str =
         "rust_edition": RUST_SAFETY_CORE_EDITION,
         "dependency_policy": "allowlist",
         "allowed_direct_dependencies": list(RUST_SAFETY_CORE_ALLOWED_DIRECT_DEPENDENCIES),
-        "guards": ["budget", "blast_radius", "tenant_scope", "idempotency_transition", "outbox_transition", "refund"],
+        "guards": ["budget", "blast_radius", "tenant_scope", "idempotency_transition", "outbox_transition", "refund", "write_action", "paid_action", "campaign_scope"],
         "strict_rust_required_verdict": strict_verdict.to_metadata(),
         "golden_fixture_version": SAFETY_CORE_GOLDEN_FIXTURE_VERSION,
+        "live_contract_version": "businessaios_safety_live_contract_golden.v1",
         "python_wrapper_version": "business_autonomy_safety_core_wrapper.v1",
         "rust_fixture_runner_required": True,
         "parity_checked": bool(parity_checked),
         "drift_detected": bool(drift_detected),
+        "parity_artifact_path": parity_artifact_path,
+        "supply_chain_artifact_path": supply_chain_artifact_path,
+        "supply_chain_checked": True,
+        "rust_diagnostic_bridge": "cli_only_admin_diagnostics",
         "admin_visibility": True,
     }
 

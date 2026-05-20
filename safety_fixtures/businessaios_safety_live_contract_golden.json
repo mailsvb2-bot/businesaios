@@ -1,0 +1,35 @@
+{
+  "version": "businessaios_safety_live_contract_golden.v1",
+  "cases": [
+    {
+      "name": "write_action_requires_approval",
+      "kind": "write_action_requires_approval",
+      "input": {"write_action": true, "approved": false},
+      "expected": {"allowed": false, "reason": "write_action_requires_approval"}
+    },
+    {
+      "name": "paid_action_requires_budget",
+      "kind": "paid_action_requires_budget",
+      "input": {"paid_action": true, "budget_configured": false},
+      "expected": {"allowed": false, "reason": "paid_action_requires_budget"}
+    },
+    {
+      "name": "campaign_requires_budget",
+      "kind": "campaign_requires_budget_and_scope",
+      "input": {"campaign": true, "budget_configured": false, "scope_configured": true},
+      "expected": {"allowed": false, "reason": "campaign_requires_budget"}
+    },
+    {
+      "name": "simulation_cannot_write_outbox",
+      "kind": "simulation_cannot_write_outbox",
+      "input": {"simulation": true, "writes_outbox": true},
+      "expected": {"allowed": false, "reason": "simulation_outbox_forbidden"}
+    },
+    {
+      "name": "scope_key_is_deterministic",
+      "kind": "scope_key",
+      "input": {"tenant_id": "tenant-a", "business_id": "biz-a", "operation": "campaign", "idempotency_key": "idem-1", "scope_key": "tenant-a:biz-a:campaign:idem-1"},
+      "expected": {"allowed": true, "reason": "allow"}
+    }
+  ]
+}

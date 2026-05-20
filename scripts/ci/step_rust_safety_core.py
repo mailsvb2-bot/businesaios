@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 
+from application.business_autonomy.safety_core_diagnostics import write_safety_core_parity_evidence
 from scripts.ci.paths import repo_root
 from scripts.ci.subprocess_io import run_command
 
@@ -32,7 +33,14 @@ def run() -> tuple[bool, str]:
         return False, "rust safety core shared fixture runner returned invalid json"
     if report.get("passed") is not True:
         return False, "rust safety core shared fixture runner reported drift"
-    return True, "rust safety core cargo tests, property tests, and shared fixture json parity passed"
+    artifact_path = write_safety_core_parity_evidence(repo_root=root, rust_report=report)
+    try:
+        artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False, "rust safety core parity artifact is unreadable"
+    if artifact.get("passed") is not True or artifact.get("drift_detected") is not False:
+        return False, "rust safety core parity artifact reported drift"
+    return True, f"rust safety core cargo tests, property tests, shared fixture json parity, and evidence artifact passed: {artifact_path.relative_to(root).as_posix()}"
 
 
 __all__ = ["run"]
