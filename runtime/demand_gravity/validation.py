@@ -11,6 +11,8 @@ def validate_demand_signal(signal: DemandSignal) -> None:
         raise ValueError("demand_signal_id_required")
     if not signal.tenant_id.strip():
         raise ValueError("demand_signal_tenant_required")
+    if not signal.business_id.strip():
+        raise ValueError("demand_signal_business_required")
     if not isinstance(signal.observed_at, datetime) or signal.observed_at.tzinfo is None:
         raise ValueError("demand_signal_observed_at_timezone_required")
     if not signal.source_ref.strip():
@@ -19,6 +21,7 @@ def validate_demand_signal(signal: DemandSignal) -> None:
         raise ValueError("demand_signal_fingerprint_required")
     if not 0.0 <= float(signal.confidence) <= 1.0:
         raise ValueError("demand_signal_confidence_out_of_bounds")
+    assert_payload_has_no_decision_fields(dict(signal.raw or {}))
 
 
 def validate_demand_candidate(candidate: DemandCandidate) -> None:
@@ -26,6 +29,8 @@ def validate_demand_candidate(candidate: DemandCandidate) -> None:
         raise ValueError("demand_candidate_id_invalid")
     if not candidate.tenant_id.strip():
         raise ValueError("demand_candidate_tenant_required")
+    if not candidate.business_id.strip():
+        raise ValueError("demand_candidate_business_required")
     if candidate.created_at.tzinfo is None:
         raise ValueError("demand_candidate_created_at_timezone_required")
     if candidate.write_mode != CandidateWriteMode.ADVISORY_ONLY:

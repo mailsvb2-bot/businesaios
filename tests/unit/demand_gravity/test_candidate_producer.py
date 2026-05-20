@@ -15,10 +15,18 @@ from runtime.demand_gravity import (
 from runtime.demand_gravity.no_second_brain import DemandGravitySecondBrainViolation, assert_payload_has_no_decision_fields
 
 
-def _signal(*, signal_id: str = "sig-1", tenant_id: str = "tenant-a", fingerprint: str = "fp-1") -> DemandSignal:
+def _signal(
+    *,
+    signal_id: str = "sig-1",
+    tenant_id: str = "tenant-a",
+    business_id: str = "biz-a",
+    fingerprint: str = "fp-1",
+    raw: dict[str, object] | None = None,
+) -> DemandSignal:
     return DemandSignal(
         signal_id=signal_id,
         tenant_id=tenant_id,
+        business_id=business_id,
         kind=DemandSignalKind.SEARCH_INTENT,
         channel=DemandChannel.GOOGLE_MAPS,
         observed_at=datetime.now(timezone.utc),
@@ -26,6 +34,7 @@ def _signal(*, signal_id: str = "sig-1", tenant_id: str = "tenant-a", fingerprin
         normalized_text="coffee near me",
         confidence=0.9,
         raw_fingerprint=fingerprint,
+        raw=raw or {},
     )
 
 
@@ -33,6 +42,7 @@ def test_candidate_producer_builds_advisory_only_candidate() -> None:
     now = datetime.now(timezone.utc)
     candidates = DemandSignalCandidateProducer().build_candidates(
         tenant_id="tenant-a",
+        business_id="biz-a",
         signals=(_signal(),),
         now=now,
         correlation_id="corr-1",
@@ -42,9 +52,12 @@ def test_candidate_producer_builds_advisory_only_candidate() -> None:
     candidate = candidates[0]
     assert candidate.candidate_id.startswith("dgc_")
     assert candidate.tenant_id == "tenant-a"
+    assert candidate.business_id == "biz-a"
+    assert candidate.payload["tenant_id"] == "tenant-a"
+    assert candidate.payload["business_id"] == "biz-a"
     assert candidate.payload["execution_allowed"] is False
     assert candidate.payload["decision_owner"] == "DecisionCore"
-    assert candidate.idempotency_key == f"demand-gravity:{candidate.candidate_id}"
+    assert candidate.idempotency_key == f"demand-gravity:tenant-a:biz-a:{candidate.candidate_id}"
     assert candidate.correlation_id == "corr-1"
 
 
@@ -52,13 +65,33 @@ def test_candidate_producer_rejects_cross_tenant_signal() -> None:
     with pytest.raises(ValueError, match="cross_tenant_signal_forbidden"):
         DemandSignalCandidateProducer().build_candidates(
             tenant_id="tenant-a",
+            business_id="biz-a",
             signals=(_signal(tenant_id="tenant-b"),),
+        )
+
+
+def test_candidate_producer_rejects_cross_business_signal() -> None:
+    with pytest.raises(ValueError, match="cross_business_signal_forbidden"):
+        DemandSignalCandidateProducer().build_candidates(
+            tenant_id="tenant-a",
+            business_id="biz-a",
+            signals=(_signal(business_id="biz-b"),),
+        )
+
+
+def test_candidate_producer_rejects_decision_fields_in_raw_signal() -> None:
+    with pytest.raises(DemandGravitySecondBrainViolation, match="publish_now"):
+        DemandSignalCandidateProducer().build_candidates(
+            tenant_id="tenant-a",
+            business_id="biz-a",
+            signals=(_signal(raw={"nested": {"publish_now": True}}),),
         )
 
 
 def test_candidate_producer_deduplicates_fingerprints() -> None:
     candidates = DemandSignalCandidateProducer().build_candidates(
         tenant_id="tenant-a",
+        business_id="biz-a",
         signals=(
             _signal(signal_id="sig-1", fingerprint="same"),
             _signal(signal_id="sig-2", fingerprint="same"),
@@ -82,6 +115,7 @@ class FakeDecisionCore:
 def test_bridge_submits_only_valid_candidates_to_decision_port() -> None:
     candidate = DemandSignalCandidateProducer().build_candidates(
         tenant_id="tenant-a",
+        business_id="biz-a",
         signals=(_signal(),),
     )[0]
 
@@ -93,13 +127,17 @@ def test_bridge_submits_only_valid_candidates_to_decision_port() -> None:
 def test_admin_view_is_json_safe_and_explicit_about_ownership() -> None:
     candidate = DemandSignalCandidateProducer().build_candidates(
         tenant_id="tenant-a",
+        business_id="biz-a",
         signals=(_signal(),),
     )[0]
 
     view = build_demand_gravity_admin_view(tenant_id="tenant-a", candidates=(candidate,), decision_refs=("decision:1",))
 
     assert view["surface"] == "demand_gravity"
+    assert view["business_ids"] == ["biz-a"]
     assert view["decision_owner"] == "DecisionCore"
     assert view["hard_guards"]["can_execute"] is False
+    assert view["hard_guards"]["requires_business_scope"] is True
     assert isinstance(view["candidates"][0]["created_at"], str)
     assert view["candidates"][0]["channel"] == "google_maps"
+    assert view["candidates"][0]["business_id"] == "biz-a"
