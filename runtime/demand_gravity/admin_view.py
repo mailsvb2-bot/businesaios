@@ -46,6 +46,19 @@ def build_demand_gravity_admin_view(*, tenant_id: str, candidates: tuple[DemandC
         "decision_owner": "DecisionCore",
         "execution_owner": "canonical_execution_pipeline",
         "second_brain_status": "blocked_by_contract",
+        "decision_input_contract": {
+            "input_type": "DemandCandidateDecisionInput",
+            "goal_type": "demand_candidate_review",
+            "execution_allowed": False,
+            "decision_owner": "DecisionCore",
+            "idempotency_required": True,
+            "evidence_required": True,
+        },
+        "event_contracts": [
+            "DemandSignalReceived",
+            "DemandCandidateBuilt",
+            "DemandCandidateSubmittedToDecisionCore",
+        ],
         "candidates": [serialize_demand_candidate(candidate) for candidate in candidates],
         "decision_refs": list(decision_refs),
         "hard_guards": {
