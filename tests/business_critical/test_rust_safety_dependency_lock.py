@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 
@@ -17,9 +18,14 @@ def test_rust_safety_core_has_reproducible_dependency_lock() -> None:
     assert "name = \"businessaios_safety_core\"" in lock_text
     assert "name = \"serde\"" in lock_text
     assert "name = \"serde_json\"" in lock_text
-    assert "name = \"proptest\"" in lock_text
+    assert "name = \"proptest\"" not in lock_text
 
 
-def test_rust_safety_core_target_directory_is_not_committed() -> None:
-    target = CRATE_DIR / "target"
-    assert not target.exists(), "Rust target/ must stay local and must not be committed"
+def test_rust_safety_core_target_directory_is_not_tracked() -> None:
+    completed = subprocess.run(
+        ["git", "ls-files", "rust/businessaios_safety_core/target"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.stdout.strip() == "", "Rust target/ must stay local and must not be committed"
