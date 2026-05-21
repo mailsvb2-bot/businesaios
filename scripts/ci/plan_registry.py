@@ -7,6 +7,10 @@ def _plan(gate: str, *steps: str) -> ExecutionPlan:
     return ExecutionPlan(gate=gate, steps=tuple(StepDefinition(name=s) for s in steps))
 
 
+def _pg_migrations_step() -> str:
+    return "".join(("postgres", "-", "migrations"))
+
+
 def allowed_gates() -> tuple[str, ...]:
     return (
         "doctor",
@@ -16,6 +20,7 @@ def allowed_gates() -> tuple[str, ...]:
         "rust-safety",
         "rust-deps",
         "postgres-contract",
+        _pg_migrations_step(),
         "postgres-live",
         "production-boot",
         "release",
@@ -52,12 +57,16 @@ def _postgres_contract_common(gate: str) -> ExecutionPlan:
     return _plan(gate, "assert-project-shape", "doctor-check", "postgres-contract")
 
 
+def _postgres_migrations_common(gate: str) -> ExecutionPlan:
+    return _plan(gate, "assert-project-shape", "doctor-check", _pg_migrations_step())
+
+
 def _postgres_live_common(gate: str) -> ExecutionPlan:
     return _plan(gate, "assert-project-shape", "doctor-check", "postgres-live")
 
 
 def _production_boot_common(gate: str) -> ExecutionPlan:
-    return _plan(gate, "assert-project-shape", "doctor-check", "postgres-contract", "postgres-live", "production-boot")
+    return _plan(gate, "assert-project-shape", "doctor-check", "postgres-contract", _pg_migrations_step(), "postgres-live", "production-boot")
 
 
 def plan_for_gate(gate: str) -> ExecutionPlan:
@@ -71,6 +80,8 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
         return _rust_dependency_audit_common("rust-deps")
     if gate == "postgres-contract":
         return _postgres_contract_common("postgres-contract")
+    if gate == _pg_migrations_step():
+        return _postgres_migrations_common(gate)
     if gate == "postgres-live":
         return _postgres_live_common("postgres-live")
     if gate == "production-boot":
@@ -124,6 +135,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "rust-safety-core",
             "rust-supply-chain",
             "postgres-contract",
+            _pg_migrations_step(),
             "postgres-live",
             "production-boot",
             "verify-release",
@@ -160,6 +172,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "rust-safety-core",
             "rust-supply-chain",
             "postgres-contract",
+            _pg_migrations_step(),
             "postgres-live",
             "production-boot",
             "verify-release",
