@@ -20,6 +20,7 @@ def test_ci_profile_is_advisory_only_not_production_ready(monkeypatch) -> None:
 
     assert report["status"] == "advisory_only"
     assert report["production_profile"] is False
+    assert report["production_boot_contract_satisfied"] is False
     assert report["claims_production_ready"] is False
     assert "non_production_profile_advisory_only" in report["warnings"]
 
@@ -31,12 +32,13 @@ def test_production_without_postgres_is_blocked() -> None:
 
     assert report["status"] == "blocked"
     assert report["production_profile"] is True
+    assert report["production_boot_contract_satisfied"] is False
     assert report["claims_production_ready"] is False
     assert "production_database_url_required" in report["violations"]
     assert "production_postgres_enablement_required" in report["violations"]
 
 
-def test_production_with_required_contract_is_ready() -> None:
+def test_production_with_required_contract_is_satisfied_but_not_production_ready_claim() -> None:
     probe = ProductionBootProbe.from_env(
         {
             "ENV": "production",
@@ -50,8 +52,11 @@ def test_production_with_required_contract_is_ready() -> None:
 
     report = evaluate_production_boot(probe)
 
-    assert report["status"] == "ready"
-    assert report["claims_production_ready"] is True
+    assert report["status"] == "contract_satisfied"
+    assert report["production_boot_contract_satisfied"] is True
+    assert report["claims_production_ready"] is False
+    assert report["requires_live_postgres_probe"] is True
+    assert report["requires_container_runtime_probe"] is True
     assert report["violations"] == []
 
 
@@ -78,4 +83,5 @@ def test_production_boot_step_writes_non_prod_advisory_artifact(monkeypatch) -> 
     assert payload["artifact"] == "production_boot"
     assert payload["status"] == "advisory_only"
     assert payload["production_profile"] is False
+    assert payload["production_boot_contract_satisfied"] is False
     assert payload["claims_production_ready"] is False
