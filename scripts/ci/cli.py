@@ -6,28 +6,12 @@ import sys
 
 from scripts.ci.contracts import ExecutionRequest
 from scripts.ci.execution import execute
+from scripts.ci.plan_registry import allowed_gates
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--gate",
-        choices=[
-            "doctor",
-            "fast",
-            "full",
-            "business-critical",
-            "rust-safety",
-            "rust-deps",
-            "postgres-contract",
-            "postgres-live",
-            "production-boot",
-            "release",
-            "pre-push",
-            "pre-release",
-        ],
-        required=True,
-    )
+    parser.add_argument("--gate", choices=allowed_gates(), required=True)
     parser.add_argument("--no-report", action="store_true")
     parser.add_argument("--no-junit", action="store_true")
     parser.add_argument("--no-coverage", action="store_true")
