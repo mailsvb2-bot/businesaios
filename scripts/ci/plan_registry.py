@@ -31,8 +31,12 @@ def _rust_dependency_audit_common(gate: str) -> ExecutionPlan:
     return _plan(gate, "assert-project-shape", "doctor-check", "rust-supply-chain")
 
 
+def _postgres_contract_common(gate: str) -> ExecutionPlan:
+    return _plan(gate, "assert-project-shape", "doctor-check", "postgres-contract")
+
+
 def _production_boot_common(gate: str) -> ExecutionPlan:
-    return _plan(gate, "assert-project-shape", "doctor-check", "production-boot")
+    return _plan(gate, "assert-project-shape", "doctor-check", "postgres-contract", "production-boot")
 
 
 def plan_for_gate(gate: str) -> ExecutionPlan:
@@ -44,6 +48,8 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
         return _rust_safety_common("rust-safety")
     if gate == "rust-deps":
         return _rust_dependency_audit_common("rust-deps")
+    if gate == "postgres-contract":
+        return _postgres_contract_common("postgres-contract")
     if gate == "production-boot":
         return _production_boot_common("production-boot")
     if gate == "fast":
@@ -94,6 +100,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "business-critical-tests",
             "rust-safety-core",
             "rust-supply-chain",
+            "postgres-contract",
             "production-boot",
             "verify-release",
             "build-artifact",
@@ -128,6 +135,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "business-critical-tests",
             "rust-safety-core",
             "rust-supply-chain",
+            "postgres-contract",
             "production-boot",
             "verify-release",
         )
