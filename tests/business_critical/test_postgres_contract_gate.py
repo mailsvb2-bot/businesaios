@@ -77,6 +77,17 @@ def test_postgres_contract_ready_requires_schema_migrations_event_outbox_and_rec
     assert report["claims_production_ready"] is False
 
 
+def test_postgres_migration_file_declares_required_schema_and_migrations() -> None:
+    text = Path("migrations/postgres/0001_runtime_core.sql").read_text(encoding="utf-8")
+
+    for table in REQUIRED_SCHEMA_OBJECTS:
+        assert f"CREATE TABLE IF NOT EXISTS {table}" in text
+    for migration in REQUIRED_MIGRATIONS:
+        assert f"'{migration}'" in text
+    assert "schema_migrations" in text
+    assert "ON CONFLICT" in text
+
+
 def test_postgres_contract_gate_is_registered_and_release_ordered() -> None:
     assert callable(handler_for_step("postgres-contract"))
     assert build_parser().parse_args(["--gate", "postgres-contract"]).gate == "postgres-contract"
@@ -87,5 +98,5 @@ def test_postgres_contract_gate_is_registered_and_release_ordered() -> None:
     ]
     release_steps = [step.name for step in plan_for_gate("release").steps]
     prerelease_steps = [step.name for step in plan_for_gate("pre-release").steps]
-    assert release_steps.index("postgres-contract") < release_steps.index("production-boot")
-    assert prerelease_steps.index("postgres-contract") < prerelease_steps.index("production-boot")
+    assert release_steps.index("postgres-contract") < release_steps.index("postgres-live") < release_steps.index("production-boot")
+    assert prerelease_steps.index("postgres-contract") < prerelease_steps.index("postgres-live") < prerelease_steps.index("production-boot")

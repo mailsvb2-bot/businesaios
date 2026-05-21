@@ -7,6 +7,23 @@ def _plan(gate: str, *steps: str) -> ExecutionPlan:
     return ExecutionPlan(gate=gate, steps=tuple(StepDefinition(name=s) for s in steps))
 
 
+def allowed_gates() -> tuple[str, ...]:
+    return (
+        "doctor",
+        "fast",
+        "full",
+        "business-critical",
+        "rust-safety",
+        "rust-deps",
+        "postgres-contract",
+        "postgres-live",
+        "production-boot",
+        "release",
+        "pre-push",
+        "pre-release",
+    )
+
+
 def _business_critical_common(gate: str) -> ExecutionPlan:
     return _plan(
         gate,
@@ -35,8 +52,12 @@ def _postgres_contract_common(gate: str) -> ExecutionPlan:
     return _plan(gate, "assert-project-shape", "doctor-check", "postgres-contract")
 
 
+def _postgres_live_common(gate: str) -> ExecutionPlan:
+    return _plan(gate, "assert-project-shape", "doctor-check", "postgres-live")
+
+
 def _production_boot_common(gate: str) -> ExecutionPlan:
-    return _plan(gate, "assert-project-shape", "doctor-check", "postgres-contract", "production-boot")
+    return _plan(gate, "assert-project-shape", "doctor-check", "postgres-contract", "postgres-live", "production-boot")
 
 
 def plan_for_gate(gate: str) -> ExecutionPlan:
@@ -50,6 +71,8 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
         return _rust_dependency_audit_common("rust-deps")
     if gate == "postgres-contract":
         return _postgres_contract_common("postgres-contract")
+    if gate == "postgres-live":
+        return _postgres_live_common("postgres-live")
     if gate == "production-boot":
         return _production_boot_common("production-boot")
     if gate == "fast":
@@ -101,6 +124,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "rust-safety-core",
             "rust-supply-chain",
             "postgres-contract",
+            "postgres-live",
             "production-boot",
             "verify-release",
             "build-artifact",
@@ -136,6 +160,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "rust-safety-core",
             "rust-supply-chain",
             "postgres-contract",
+            "postgres-live",
             "production-boot",
             "verify-release",
         )
