@@ -34,13 +34,17 @@ def run() -> tuple[bool, str]:
     probe = ProductionBootProbe.from_env(proof_env)
     report = evaluate_production_boot(probe)
     postgres_report = _read_artifact(root, "postgres_contract.json")
+    postgres_migrations = _read_artifact(root, "postgres_migrations.json")
     postgres_live = _read_artifact(root, "postgres_live.json")
     report["postgres_contract"] = postgres_report
+    report["postgres_migrations"] = postgres_migrations
     report["postgres_live"] = postgres_live
     if report["production_profile"] is True:
         extra_violations: list[str] = []
         if postgres_report.get("status") != "ready":
             extra_violations.append("postgres_contract_not_ready")
+        if postgres_migrations.get("status") != "ready":
+            extra_violations.append("postgres_migrations_not_ready")
         if postgres_live.get("status") != "ready":
             extra_violations.append("postgres_live_not_ready")
         if extra_violations:
