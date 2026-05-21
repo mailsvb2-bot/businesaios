@@ -19,8 +19,8 @@ def test_postgres_live_gate_is_registered_and_release_ordered() -> None:
     ]
     release_steps = [step.name for step in plan_for_gate("release").steps]
     prerelease_steps = [step.name for step in plan_for_gate("pre-release").steps]
-    assert release_steps.index("postgres-contract") < release_steps.index("postgres-live") < release_steps.index("production-boot")
-    assert prerelease_steps.index("postgres-contract") < prerelease_steps.index("postgres-live") < prerelease_steps.index("production-boot")
+    assert release_steps.index("postgres-contract") < release_steps.index("postgres-migrations") < release_steps.index("postgres-live") < release_steps.index("production-boot")
+    assert prerelease_steps.index("postgres-contract") < prerelease_steps.index("postgres-migrations") < prerelease_steps.index("postgres-live") < prerelease_steps.index("production-boot")
 
 
 def test_postgres_live_is_advisory_when_runtime_not_declared(monkeypatch) -> None:
@@ -41,11 +41,12 @@ def test_postgres_live_is_advisory_when_runtime_not_declared(monkeypatch) -> Non
     assert payload["claims_production_ready"] is False
 
 
-def test_production_boot_gate_requires_postgres_live_before_boot() -> None:
+def test_production_boot_gate_requires_migrations_and_live_before_boot() -> None:
     assert [step.name for step in plan_for_gate("production-boot").steps] == [
         "assert-project-shape",
         "doctor-check",
         "postgres-contract",
+        "postgres-migrations",
         "postgres-live",
         "production-boot",
     ]
