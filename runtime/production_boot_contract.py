@@ -6,7 +6,7 @@ from typing import Mapping
 
 
 class ProductionBootStatus(str, Enum):
-    READY = "ready"
+    CONTRACT_SATISFIED = "contract_satisfied"
     BLOCKED = "blocked"
     ADVISORY_ONLY = "advisory_only"
 
@@ -25,9 +25,18 @@ class ProductionBootProbe:
         runtime_env = str(env.get("ENV") or env.get("APP_ENV") or "ci").strip().lower() or "ci"
         profile = str(env.get("APP_PROFILE") or env.get("RUN_MODE") or "api").strip().lower() or "api"
         database_url = str(env.get("DATABASE_URL") or env.get("POSTGRES_DSN") or "").strip()
-        postgres_enabled = str(env.get("POSTGRES_RUNTIME_ENABLED") or env.get("POSTGRES_EVENT_STORE_ENABLED") or "").strip().lower() in {"1", "true", "yes", "enabled"}
-        migrations_required = str(env.get("MIGRATIONS_REQUIRED") or env.get("RUN_MIGRATIONS_BEFORE_START") or "1").strip().lower() not in {"0", "false", "no", "disabled"}
-        release_quality = str(env.get("BAIOS_REQUIRE_QUALITY_TOOLS") or "").strip().lower() in {"1", "true", "yes", "release"}
+        postgres_enabled = str(
+            env.get("POSTGRES_RUNTIME_ENABLED") or env.get("POSTGRES_EVENT_STORE_ENABLED") or ""
+        ).strip().lower() in {"1", "true", "yes", "enabled"}
+        migrations_required = str(
+            env.get("MIGRATIONS_REQUIRED") or env.get("RUN_MIGRATIONS_BEFORE_START") or "1"
+        ).strip().lower() not in {"0", "false", "no", "disabled"}
+        release_quality = str(env.get("BAIOS_REQUIRE_QUALITY_TOOLS") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "release",
+        }
         return cls(
             env=runtime_env,
             app_profile=profile,
@@ -55,7 +64,14 @@ def evaluate_production_boot(probe: ProductionBootProbe) -> dict[str, object]:
             warnings.append("release_quality_tools_not_required_in_env")
     else:
         warnings.append("non_production_profile_advisory_only")
-    status = ProductionBootStatus.READY.value if not violations and is_production else ProductionBootStatus.BLOCKED.value if violations else ProductionBootStatus.ADVISORY_ONLY.value
+    production_contract_satisfied = is_production and not violations
+    status = (
+        ProductionBootStatus.CONTRACT_SATISFIED.value
+        if production_contract_satisfied
+        else ProductionBootStatus.BLOCKED.value
+        if violations
+        else ProductionBootStatus.ADVISORY_ONLY.value
+    )
     return {
         "artifact": "production_boot",
         "status": status,
@@ -68,13 +84,16 @@ def evaluate_production_boot(probe: ProductionBootProbe) -> dict[str, object]:
         "release_quality_tools_required": probe.release_quality_tools_required,
         "violations": violations,
         "warnings": warnings,
-        "claims_production_ready": status == ProductionBootStatus.READY.value,
+        "production_boot_contract_satisfied": production_contract_satisfied,
+        "requires_live_postgres_probe": production_contract_satisfied,
+        "requires_container_runtime_probe": production_contract_satisfied,
+        "claims_production_ready": False,
     }
 
 
 def assert_production_boot_ready(probe: ProductionBootProbe) -> None:
     report = evaluate_production_boot(probe)
-    if report["status"] != ProductionBootStatus.READY.value:
+    if report["status"] != ProductionBootStatus.CONTRACT_SATISFIED.value:
         raise RuntimeError("PRODUCTION_BOOT_NOT_READY:" + ",".join(report["violations"] or report["warnings"]))
 
 
