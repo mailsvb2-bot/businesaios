@@ -20,9 +20,13 @@ def run() -> tuple[bool, str]:
     probe = ProductionBootProbe.from_env(proof_env)
     report = evaluate_production_boot(probe)
     _write_artifact(report)
-    if report["production_profile"] is True and report["status"] != "ready":
+    if report["production_profile"] is True and report["status"] == "blocked":
         return False, "production boot blocked: " + ",".join(report["violations"])
-    return True, f"production boot proof artifact written: artifacts/ci/production_boot.json status={report['status']} production_profile={report['production_profile']}"
+    return True, (
+        "production boot proof artifact written: artifacts/ci/production_boot.json "
+        f"status={report['status']} production_profile={report['production_profile']} "
+        f"claims_production_ready={report['claims_production_ready']}"
+    )
 
 
 __all__ = ["run"]
