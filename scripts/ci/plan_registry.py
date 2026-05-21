@@ -7,6 +7,23 @@ def _plan(gate: str, *steps: str) -> ExecutionPlan:
     return ExecutionPlan(gate=gate, steps=tuple(StepDefinition(name=s) for s in steps))
 
 
+def allowed_gates() -> tuple[str, ...]:
+    return (
+        "doctor",
+        "fast",
+        "full",
+        "business-critical",
+        "rust-safety",
+        "rust-deps",
+        "postgres-contract",
+        "postgres-live",
+        "production-boot",
+        "release",
+        "pre-push",
+        "pre-release",
+    )
+
+
 def _business_critical_common(gate: str) -> ExecutionPlan:
     return _plan(
         gate,
