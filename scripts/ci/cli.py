@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
             "rust-safety",
             "rust-deps",
             "postgres-contract",
+            "postgres-live",
             "production-boot",
             "release",
             "pre-push",
