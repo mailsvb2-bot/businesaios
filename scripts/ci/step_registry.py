@@ -14,6 +14,7 @@ from scripts.ci.step_dependency_lock import run as run_dependency_lock
 from scripts.ci.step_import_smoke import run as run_import_smoke
 from scripts.ci.step_integration_tests import run as run_integration_tests
 from scripts.ci.step_lock_tests import run as run_lock_tests
+from scripts.ci.step_postgres_contract import run as run_postgres_contract
 from scripts.ci.step_production_boot import run as run_production_boot
 from scripts.ci.step_project_shape import run as run_project_shape
 from scripts.ci.step_quality import run as run_quality
@@ -41,6 +42,7 @@ _REGISTRY: dict[str, StepHandler] = {
     _step_ids.business_critical_tests(): run_business_critical_tests,
     _step_ids.rust_safety_core(): run_rust_safety_core,
     _step_ids.rust_supply_chain(): run_rust_supply_chain,
+    _step_ids.postgres_contract(): run_postgres_contract,
     _step_ids.production_boot(): run_production_boot,
     _step_ids.verify_release(): run_verify_release,
     _step_ids.build_artifact(): run_build_artifact,
