@@ -31,6 +31,10 @@ def _rust_dependency_audit_common(gate: str) -> ExecutionPlan:
     return _plan(gate, "assert-project-shape", "doctor-check", "rust-supply-chain")
 
 
+def _production_boot_common(gate: str) -> ExecutionPlan:
+    return _plan(gate, "assert-project-shape", "doctor-check", "production-boot")
+
+
 def plan_for_gate(gate: str) -> ExecutionPlan:
     if gate == "doctor":
         return _plan("doctor", "assert-project-shape", "dependency-lock", "doctor-check")
@@ -40,6 +44,8 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
         return _rust_safety_common("rust-safety")
     if gate == "rust-deps":
         return _rust_dependency_audit_common("rust-deps")
+    if gate == "production-boot":
+        return _production_boot_common("production-boot")
     if gate == "fast":
         return _plan(
             "fast",
@@ -88,6 +94,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "business-critical-tests",
             "rust-safety-core",
             "rust-supply-chain",
+            "production-boot",
             "verify-release",
             "build-artifact",
         )
@@ -121,6 +128,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "business-critical-tests",
             "rust-safety-core",
             "rust-supply-chain",
+            "production-boot",
             "verify-release",
         )
     raise ValueError(f"unknown gate: {gate}")
