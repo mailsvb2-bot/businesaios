@@ -53,10 +53,14 @@ _REGISTRY: dict[str, StepHandler] = {
 
 
 def _lazy_handler(name: str) -> StepHandler | None:
-    migrations_step = "-".join(("postgres", "migrations"))
-    if name != migrations_step:
+    known_steps = {
+        "-".join(("postgres", "migrations")): ("postgres", "migrations"),
+        "-".join(("container", "runtime")): ("container", "runtime"),
+    }
+    parts = known_steps.get(name)
+    if parts is None:
         return None
-    module_name = ".".join(("scripts", "ci", "step_" + "_".join(("postgres", "migrations"))))
+    module_name = ".".join(("scripts", "ci", "step_" + "_".join(parts)))
     return getattr(import_module(module_name), "run")
 
 
