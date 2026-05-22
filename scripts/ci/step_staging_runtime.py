@@ -10,6 +10,14 @@ from scripts.ci.paths import repo_root
 RUNNER = Path("scripts/staging/run_staging_runtime_proof.sh")
 
 
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _runner_path() -> Path:
+    return _project_root() / RUNNER
+
+
 def _write_artifact(payload: dict[str, object]) -> None:
     path = repo_root() / "artifacts" / "ci" / "staging_runtime_proof.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -21,7 +29,7 @@ def _declared() -> bool:
 
 
 def run() -> tuple[bool, str]:
-    runner = repo_root() / RUNNER
+    runner = _runner_path()
     violations: list[str] = []
     if not runner.exists():
         violations.append("staging_runtime_runner_missing")
