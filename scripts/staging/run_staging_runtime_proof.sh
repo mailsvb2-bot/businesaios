@@ -24,6 +24,17 @@ if importlib.util.find_spec("psycopg") is None:
     raise SystemExit(2)
 PY
 
+if ! command -v docker >/dev/null 2>&1; then
+  echo "Docker is required for real staging container proof, but docker was not found in PATH." >&2
+  echo "Install Docker on the staging server before running this proof." >&2
+  exit 2
+fi
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker is installed but the daemon is not reachable by this user." >&2
+  echo "Start Docker and/or grant this operator access before running staging proof." >&2
+  exit 2
+fi
+
 IMAGE="${BAIOS_STAGING_IMAGE:-businesaios:staging-proof}"
 CONTAINER="${BAIOS_STAGING_CONTAINER:-businesaios-staging-proof}"
 HOST="${BAIOS_STAGING_HOST:-127.0.0.1}"
