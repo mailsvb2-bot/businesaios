@@ -13,7 +13,7 @@ class PostgresMigrationResult:
 
 
 def migration_dir() -> Path:
-    return Path(__file__).resolve().parents[3] / "migrations" / "postgres"
+    return Path(__file__).resolve().parents[2] / "migrations" / "postgres"
 
 
 def migration_files(base: Path | None = None) -> tuple[Path, ...]:
