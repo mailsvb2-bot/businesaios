@@ -81,6 +81,9 @@ run_gate postgres-migrations
 run_gate postgres-contract
 run_gate postgres-live
 
+"$PYTHON_BIN" scripts/staging/write_staging_release_manifest.py >/dev/null
+test -s release/manifest.json
+
 docker build --pull=false --build-arg PYTHON_BASE_IMAGE="$PYTHON_BASE_IMAGE" -t "$IMAGE" .
 cleanup
 
@@ -145,6 +148,7 @@ summary = {
     "status": "ready",
     "base_image": os.environ.get("BAIOS_PYTHON_BASE_IMAGE", "businesaios/python-runtime-base:3.12-slim"),
     "base_image_pull_policy": "never_during_staging_proof",
+    "release_manifest": json.loads(Path("release/manifest.json").read_text(encoding="utf-8")),
     "postgres_contract": json.loads((artifact_dir / "postgres_contract.json").read_text(encoding="utf-8")),
     "postgres_migrations": json.loads((artifact_dir / "postgres_migrations.json").read_text(encoding="utf-8")),
     "postgres_live": json.loads((artifact_dir / "postgres_live.json").read_text(encoding="utf-8")),
