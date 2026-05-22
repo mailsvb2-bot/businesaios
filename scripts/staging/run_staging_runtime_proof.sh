@@ -38,8 +38,10 @@ export POSTGRES_APPLY_MIGRATIONS=1
 export RUN_MIGRATIONS_BEFORE_START=1
 export BAIOS_REQUIRE_QUALITY_TOOLS=release
 
-run_gate postgres-contract
+# Real staging order matters: migrations create durable schema first;
+# contract and live proofs must validate the migrated database, not an empty one.
 run_gate postgres-migrations
+run_gate postgres-contract
 run_gate postgres-live
 
 docker build -t "$IMAGE" .
