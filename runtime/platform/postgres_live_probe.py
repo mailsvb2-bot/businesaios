@@ -18,7 +18,7 @@ class PostgresLiveProbeConfig:
 
 
 def _migration_path() -> Path:
-    return Path(__file__).resolve().parents[3] / "migrations" / "postgres" / "0001_runtime_core.sql"
+    return Path(__file__).resolve().parents[2] / "migrations" / "postgres" / "0001_runtime_core.sql"
 
 
 def _apply_migrations(port: PostgresPort) -> None:
