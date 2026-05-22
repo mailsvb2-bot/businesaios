@@ -1,0 +1,23 @@
+{
+  "artifact": "container_base_image_policy",
+  "version": "1.0",
+  "default_base_image": "businesaios/python-runtime-base:3.12-slim",
+  "pull_policy": "never_during_staging_proof",
+  "allowed_base_images": [
+    {
+      "name": "businesaios/python-runtime-base:3.12-slim",
+      "purpose": "staging-runtime-proof-local-base",
+      "source": "operator_loaded_or_private_registry_mirror",
+      "requires_local_presence": true,
+      "notes": "Canonical staging proof base. Must be loaded/tagged locally or served from a trusted private mirror before running staging proof. The proof runner does not pull it implicitly."
+    },
+    {
+      "name": "python:3.12-slim",
+      "purpose": "temporary-upstream-bootstrap-only",
+      "source": "docker-hub-official-python",
+      "requires_local_presence": true,
+      "notes": "Allowed only if already present locally or pulled intentionally by the operator outside the proof run. Not pulled implicitly by staging proof."
+    }
+  ],
+  "claims_production_ready": false
+}
