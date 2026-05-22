@@ -36,6 +36,7 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 IMAGE="${BAIOS_STAGING_IMAGE:-businesaios:staging-proof}"
+PYTHON_BASE_IMAGE="${BAIOS_PYTHON_BASE_IMAGE:-python:3.12-slim}"
 CONTAINER="${BAIOS_STAGING_CONTAINER:-businesaios-staging-proof}"
 HOST="${BAIOS_STAGING_HOST:-127.0.0.1}"
 HOST_PORT="${BAIOS_STAGING_PORT:-18000}"
@@ -70,7 +71,7 @@ run_gate postgres-migrations
 run_gate postgres-contract
 run_gate postgres-live
 
-docker build -t "$IMAGE" .
+docker build --build-arg PYTHON_BASE_IMAGE="$PYTHON_BASE_IMAGE" -t "$IMAGE" .
 cleanup
 
 docker run -d \
