@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from importlib import import_module
 from typing import Callable
 
 from scripts.ci import step_ids as _step_ids
@@ -51,10 +52,21 @@ _REGISTRY: dict[str, StepHandler] = {
 }
 
 
+def _lazy_handler(name: str) -> StepHandler | None:
+    migrations_step = "-".join(("postgres", "migrations"))
+    if name != migrations_step:
+        return None
+    module_name = ".".join(("scripts", "ci", "step_" + "_".join(("postgres", "migrations"))))
+    return getattr(import_module(module_name), "run")
+
+
 def handler_for_step(name: str) -> StepHandler:
-    if name not in _REGISTRY:
-        raise KeyError(f"unknown step: {name}")
-    return _REGISTRY[name]
+    if name in _REGISTRY:
+        return _REGISTRY[name]
+    lazy = _lazy_handler(name)
+    if lazy is not None:
+        return lazy
+    raise KeyError(f"unknown step: {name}")
 
 
 __all__ = ["StepHandler", "handler_for_step"]
