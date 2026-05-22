@@ -23,11 +23,14 @@ def test_staging_runner_contains_required_real_proof_steps() -> None:
     text = Path("scripts/staging/run_staging_runtime_proof.sh").read_text(encoding="utf-8")
 
     assert text.startswith("#!/usr/bin/env bash")
+    assert 'PYTHON_BIN="${PYTHON_BIN:-$ROOT_DIR/.venv/bin/python}"' in text
+    assert "importlib.util.find_spec(\"psycopg\")" in text
     assert "DATABASE_URL is required" in text
     assert "run_gate postgres-migrations" in text
     assert "run_gate postgres-contract" in text
     assert "run_gate postgres-live" in text
     assert text.index("run_gate postgres-migrations") < text.index("run_gate postgres-contract") < text.index("run_gate postgres-live")
+    assert '"$PYTHON_BIN" -m scripts.ci.cli --gate "$gate"' in text
     assert "docker build" in text
     assert "docker run" in text
     assert "probe_url /readyz" in text
