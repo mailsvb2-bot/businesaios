@@ -26,12 +26,16 @@ def test_staging_runner_contains_required_real_proof_steps() -> None:
     assert 'PYTHON_BIN="${PYTHON_BIN:-$ROOT_DIR/.venv/bin/python}"' in text
     assert "importlib.util.find_spec(\"psycopg\")" in text
     assert "DATABASE_URL is required" in text
+    assert 'PYTHON_BASE_IMAGE="${BAIOS_PYTHON_BASE_IMAGE:-businesaios/python-runtime-base:3.12-slim}"' in text
+    assert "docker image inspect \"$PYTHON_BASE_IMAGE\"" in text
+    assert "Staging proof does not pull base images implicitly" in text
+    assert "docker build --pull=false --build-arg PYTHON_BASE_IMAGE=\"$PYTHON_BASE_IMAGE\"" in text
+    assert "base_image_pull_policy" in text
     assert "run_gate postgres-migrations" in text
     assert "run_gate postgres-contract" in text
     assert "run_gate postgres-live" in text
     assert text.index("run_gate postgres-migrations") < text.index("run_gate postgres-contract") < text.index("run_gate postgres-live")
     assert '"$PYTHON_BIN" -m scripts.ci.cli --gate "$gate"' in text
-    assert "docker build" in text
     assert "docker run" in text
     assert "probe_url /readyz" in text
     assert "probe_url /storagez" in text
