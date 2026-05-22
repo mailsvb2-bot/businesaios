@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import stat
 from pathlib import Path
 
 from scripts.ci.paths import repo_root
@@ -27,7 +26,6 @@ def run() -> tuple[bool, str]:
     if not runner.exists():
         violations.append("staging_runtime_runner_missing")
     else:
-        mode = runner.stat().st_mode
         text = runner.read_text(encoding="utf-8")
         if not text.startswith("#!/usr/bin/env bash"):
             violations.append("staging_runtime_runner_shebang_required")
@@ -37,8 +35,8 @@ def run() -> tuple[bool, str]:
             violations.append("docker_build_run_required")
         if "probe_url /readyz" not in text or "probe_url /storagez" not in text or "probe_url /executionz" not in text:
             violations.append("readiness_probe_surfaces_required")
-        if not (mode & stat.S_IXUSR):
-            violations.append("staging_runtime_runner_executable_required")
+        if "staging_runtime_proof.json" not in text:
+            violations.append("staging_runtime_artifact_required")
     if violations:
         payload = {
             "artifact": "staging_runtime_proof",
@@ -54,6 +52,7 @@ def run() -> tuple[bool, str]:
             "status": "advisory_only",
             "warnings": ["staging_runtime_not_declared"],
             "runner": RUNNER.as_posix(),
+            "runner_command": "bash " + RUNNER.as_posix(),
             "claims_production_ready": False,
         }
         _write_artifact(payload)
@@ -64,6 +63,7 @@ def run() -> tuple[bool, str]:
             "status": "blocked",
             "violations": ["database_url_required"],
             "runner": RUNNER.as_posix(),
+            "runner_command": "bash " + RUNNER.as_posix(),
             "claims_production_ready": False,
         }
         _write_artifact(payload)
@@ -71,12 +71,13 @@ def run() -> tuple[bool, str]:
     payload = {
         "artifact": "staging_runtime_proof",
         "status": "blocked",
-        "violations": ["run_scripts_staging_runtime_proof_sh_on_server"],
+        "violations": ["run_staging_runtime_proof_on_server"],
         "runner": RUNNER.as_posix(),
+        "runner_command": "bash " + RUNNER.as_posix(),
         "claims_production_ready": False,
     }
     _write_artifact(payload)
-    return False, "staging runtime proof requires direct server runner execution: scripts/staging/run_staging_runtime_proof.sh"
+    return False, "staging runtime proof requires direct server runner execution: bash scripts/staging/run_staging_runtime_proof.sh"
 
 
 __all__ = ["run"]
