@@ -15,28 +15,25 @@ def test_production_boot_gate_is_registered() -> None:
         "postgres-contract",
         "postgres-migrations",
         "postgres-live",
+        "container-runtime",
         "production-boot",
     ]
     assert callable(handler_for_step("postgres-contract"))
     assert callable(handler_for_step("postgres-migrations"))
     assert callable(handler_for_step("postgres-live"))
+    assert callable(handler_for_step("container-runtime"))
     assert callable(handler_for_step("production-boot"))
 
 
-def test_release_plans_include_postgres_contract_migrations_live_and_production_boot_before_release_artifacts() -> None:
+def test_release_plans_include_container_runtime_before_production_boot_and_release_artifacts() -> None:
     release_steps = [step.name for step in plan_for_gate("release").steps]
     prerelease_steps = [step.name for step in plan_for_gate("pre-release").steps]
 
-    assert "postgres-contract" in release_steps
-    assert "postgres-migrations" in release_steps
-    assert "postgres-live" in release_steps
-    assert "production-boot" in release_steps
-    assert "postgres-contract" in prerelease_steps
-    assert "postgres-migrations" in prerelease_steps
-    assert "postgres-live" in prerelease_steps
-    assert "production-boot" in prerelease_steps
-    assert release_steps.index("postgres-contract") < release_steps.index("postgres-migrations") < release_steps.index("postgres-live") < release_steps.index("production-boot") < release_steps.index("verify-release")
-    assert prerelease_steps.index("postgres-contract") < prerelease_steps.index("postgres-migrations") < prerelease_steps.index("postgres-live") < prerelease_steps.index("production-boot") < prerelease_steps.index("verify-release")
+    for step in ("postgres-contract", "postgres-migrations", "postgres-live", "container-runtime", "production-boot"):
+        assert step in release_steps
+        assert step in prerelease_steps
+    assert release_steps.index("postgres-contract") < release_steps.index("postgres-migrations") < release_steps.index("postgres-live") < release_steps.index("container-runtime") < release_steps.index("production-boot") < release_steps.index("verify-release")
+    assert prerelease_steps.index("postgres-contract") < prerelease_steps.index("postgres-migrations") < prerelease_steps.index("postgres-live") < prerelease_steps.index("container-runtime") < prerelease_steps.index("production-boot") < prerelease_steps.index("verify-release")
 
 
 def test_cli_accepts_production_boot_gate() -> None:
