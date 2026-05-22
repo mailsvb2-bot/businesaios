@@ -24,9 +24,10 @@ def test_staging_runner_contains_required_real_proof_steps() -> None:
 
     assert text.startswith("#!/usr/bin/env bash")
     assert "DATABASE_URL is required" in text
-    assert "run_gate postgres-contract" in text
     assert "run_gate postgres-migrations" in text
+    assert "run_gate postgres-contract" in text
     assert "run_gate postgres-live" in text
+    assert text.index("run_gate postgres-migrations") < text.index("run_gate postgres-contract") < text.index("run_gate postgres-live")
     assert "docker build" in text
     assert "docker run" in text
     assert "probe_url /readyz" in text
