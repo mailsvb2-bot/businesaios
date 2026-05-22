@@ -35,7 +35,7 @@ def test_staging_runner_contains_required_real_proof_steps() -> None:
     assert "run_gate container-runtime" in text
     assert "run_gate production-boot" in text
     assert "staging_runtime_proof.json" in text
-    assert "claims_production_ready": not in text
+    assert "claims_production_ready" in text
 
 
 def _isolate_artifacts(monkeypatch, tmp_path: Path) -> Path:
