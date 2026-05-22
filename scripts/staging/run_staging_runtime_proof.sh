@@ -4,10 +4,25 @@ set -Eeuo pipefail
 ROOT_DIR="${ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 cd "$ROOT_DIR"
 
+PYTHON_BIN="${PYTHON_BIN:-$ROOT_DIR/.venv/bin/python}"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  echo "Python interpreter not found or not executable: $PYTHON_BIN" >&2
+  echo "Create/install the project venv first, then run: .venv/bin/pip install -r requirements.txt" >&2
+  exit 2
+fi
+
 if [[ -z "${DATABASE_URL:-}" ]]; then
   echo "DATABASE_URL is required for real staging proof" >&2
   exit 2
 fi
+
+"$PYTHON_BIN" - <<'PY'
+import importlib.util
+import sys
+if importlib.util.find_spec("psycopg") is None:
+    print("psycopg is required for real staging proof; run: .venv/bin/pip install -r requirements.txt", file=sys.stderr)
+    raise SystemExit(2)
+PY
 
 IMAGE="${BAIOS_STAGING_IMAGE:-businesaios:staging-proof}"
 CONTAINER="${BAIOS_STAGING_CONTAINER:-businesaios-staging-proof}"
@@ -26,7 +41,7 @@ trap cleanup EXIT
 
 run_gate() {
   local gate="$1"
-  python -m scripts.ci.cli --gate "$gate"
+  "$PYTHON_BIN" -m scripts.ci.cli --gate "$gate"
 }
 
 export APP_PROFILE=api
@@ -65,7 +80,7 @@ docker run -d \
 
 probe_url() {
   local path="$1"
-  HEALTH_URL="http://${HOST}:${HOST_PORT}${path}" HEALTHCHECK_REQUIRE_READY=1 python scripts/healthcheck.py >/dev/null
+  HEALTH_URL="http://${HOST}:${HOST_PORT}${path}" HEALTHCHECK_REQUIRE_READY=1 "$PYTHON_BIN" scripts/healthcheck.py >/dev/null
 }
 
 wait_for_readyz() {
@@ -95,7 +110,7 @@ export CONTAINER_READINESS_HEALTHCHECK_OK=1
 run_gate container-runtime
 run_gate production-boot
 
-python - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 from __future__ import annotations
 
 import json
