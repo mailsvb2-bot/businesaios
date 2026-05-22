@@ -36,7 +36,7 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 IMAGE="${BAIOS_STAGING_IMAGE:-businesaios:staging-proof}"
-PYTHON_BASE_IMAGE="${BAIOS_PYTHON_BASE_IMAGE:-python:3.12-slim}"
+PYTHON_BASE_IMAGE="${BAIOS_PYTHON_BASE_IMAGE:-businesaios/python-runtime-base:3.12-slim}"
 CONTAINER="${BAIOS_STAGING_CONTAINER:-businesaios-staging-proof}"
 HOST="${BAIOS_STAGING_HOST:-127.0.0.1}"
 HOST_PORT="${BAIOS_STAGING_PORT:-18000}"
@@ -45,6 +45,16 @@ TIMEOUT_SECONDS="${BAIOS_STAGING_TIMEOUT_SECONDS:-120}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts/ci}"
 
 mkdir -p "$ARTIFACT_DIR"
+
+if ! docker image inspect "$PYTHON_BASE_IMAGE" >/dev/null 2>&1; then
+  echo "Required local base image is missing: $PYTHON_BASE_IMAGE" >&2
+  echo "Staging proof does not pull base images implicitly." >&2
+  echo "Prepare it explicitly, for example:" >&2
+  echo "  docker pull python:3.12-slim" >&2
+  echo "  docker tag python:3.12-slim $PYTHON_BASE_IMAGE" >&2
+  echo "or load/tag a vetted private mirror image before running this proof." >&2
+  exit 2
+fi
 
 cleanup() {
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
@@ -71,7 +81,7 @@ run_gate postgres-migrations
 run_gate postgres-contract
 run_gate postgres-live
 
-docker build --build-arg PYTHON_BASE_IMAGE="$PYTHON_BASE_IMAGE" -t "$IMAGE" .
+docker build --pull=false --build-arg PYTHON_BASE_IMAGE="$PYTHON_BASE_IMAGE" -t "$IMAGE" .
 cleanup
 
 docker run -d \
@@ -126,12 +136,15 @@ run_gate production-boot
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 artifact_dir = Path("artifacts/ci")
 summary = {
     "artifact": "staging_runtime_proof",
     "status": "ready",
+    "base_image": os.environ.get("BAIOS_PYTHON_BASE_IMAGE", "businesaios/python-runtime-base:3.12-slim"),
+    "base_image_pull_policy": "never_during_staging_proof",
     "postgres_contract": json.loads((artifact_dir / "postgres_contract.json").read_text(encoding="utf-8")),
     "postgres_migrations": json.loads((artifact_dir / "postgres_migrations.json").read_text(encoding="utf-8")),
     "postgres_live": json.loads((artifact_dir / "postgres_live.json").read_text(encoding="utf-8")),
