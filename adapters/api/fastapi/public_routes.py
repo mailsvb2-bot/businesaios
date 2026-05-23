@@ -241,4 +241,4 @@ def register_public_api_routes(
         return _cta_status_response(service.status(intake_id))
 
     if analytics_handlers is not None:
-        register_analytics_routes(router=router, analytics_handlers=analytics_handlers, enforce_public_security=enforce_public_security)
+        register_analytics_routes(router=router, analytics_handlers=analytics_handlers, security_guard=security_guard)
