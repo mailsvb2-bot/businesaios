@@ -146,3 +146,67 @@ def test_runtime_manifest_loader_is_not_stale_boot_dependency() -> None:
         if "runtime_manifest_loader" in text or "RUNTIME_BOOT_MANIFEST" in text:
             suspicious.append(path.relative_to(root).as_posix())
     assert suspicious == []
+
+
+def test_action_api_transition_invokes_application_service_without_decisioncore_method_drift() -> None:
+    from fastapi.testclient import TestClient
+    from entrypoints.api.fastapi_app_factory import create_fastapi_app
+
+    class ApplicationService:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        def startup_audit_events(self) -> tuple[dict[str, str], ...]:
+            return ({"status": "ok"},)
+
+        def execute_action(self, *, action, request_context=None, idempotency_key=None, action_id=None, tenant_id=None):
+            self.calls.append(
+                {
+                    "action_type": action.action_type,
+                    "payload": dict(action.payload),
+                    "idempotency_key": idempotency_key,
+                    "action_id": action_id,
+                    "tenant_id": tenant_id,
+                }
+            )
+            return {
+                "status": "executed",
+                "action_type": action.action_type,
+                "reason": None,
+                "details": {"decision_path": "application_service_execute_action"},
+                "capability_view": {"decision_core_direct_method_required": False},
+            }
+
+    service = ApplicationService()
+    client = TestClient(create_fastapi_app(application_service=service))
+
+    response = client.post(
+        "/actions/execute",
+        headers={"x-idempotency-key": "idem-1", "x-action-id": "act-1", "x-tenant-id": "tenant-1"},
+        json={"action_type": "noop@v1", "payload": {"value": 1}},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["status"] == "executed"
+    assert payload["action_type"] == "noop@v1"
+    assert payload["details"]["decision_path"] == "application_service_execute_action"
+    assert service.calls == [
+        {
+            "action_type": "noop@v1",
+            "payload": {"value": 1},
+            "idempotency_key": "idem-1",
+            "action_id": "act-1",
+            "tenant_id": "tenant-1",
+        }
+    ]
+
+
+def test_readiness_projection_remains_adapter_only_boundary() -> None:
+    text = Path("adapters/api/fastapi/router_adapter.py").read_text(encoding="utf-8")
+
+    assert "not a second runtime assembly path" in text
+    assert "not an alternate execution" in text
+    projection_body = text.split("def _project_runtime_registry_to_readiness_orchestrator", 1)[1].split("def _resolve_runtime_orchestrator", 1)[0]
+    forbidden_terms = ("DecisionCore", "decide_and_execute", ".execute_action(", "ActionDispatcher")
+    assert all(term not in projection_body for term in forbidden_terms)
