@@ -15,5 +15,6 @@ __pycache__
 *.tar
 *.tar.gz
 runtime/data
-release
+release/*
+!release/manifest.json
 artifacts

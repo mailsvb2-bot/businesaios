@@ -44,6 +44,13 @@ runtime_state/
 run_smoke.sh
 status_server.py
 
+# Local staging/operator secrets: never commit
+.env
+.env.*.local
+secrets/local/
+*.secret
+*.secrets
+
 # Local runtime state
 /data/runtime/
 data/runtime/queue/*.sqlite3
@@ -80,4 +87,3 @@ data/tenancy/*.sqlite3
 data/tenancy/*.db
 data/tenancy/*.db-journal
 data/tenancy/*.sqlite3-journal
-.env

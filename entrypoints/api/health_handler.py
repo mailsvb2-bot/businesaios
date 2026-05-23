@@ -36,6 +36,26 @@ class HealthHandler:
             details=dict(report['details']),
         )
 
+    def storage(self) -> HealthResponse:
+        events = self._events()
+        report = self._report(events=events)
+        return HealthResponse(
+            status='ready' if self._is_storage_ready(report, events=events) else 'degraded',
+            startup_audit_events=list(events),
+            checks=list(report['checks']),
+            details={**dict(report['details']), 'surface': 'storagez'},
+        )
+
+    def execution(self) -> HealthResponse:
+        events = self._events()
+        report = self._report(events=events)
+        return HealthResponse(
+            status='ready' if self._is_execution_ready(report, events=events) else 'degraded',
+            startup_audit_events=list(events),
+            checks=list(report['checks']),
+            details={**dict(report['details']), 'surface': 'executionz'},
+        )
+
     def _events(self) -> tuple[str, ...]:
         producer = getattr(self.application_service, 'startup_audit_events', None)
         if callable(producer):
@@ -103,4 +123,24 @@ class HealthHandler:
         runtime_readiness = dict(report['details']).get('runtime_readiness')
         if isinstance(runtime_readiness, dict):
             return bool(runtime_readiness.get('ready', False))
+        return True
+
+    def _is_storage_ready(self, report: dict[str, object], *, events: tuple[str, ...]) -> bool:
+        if not self._is_ready(report, events=events):
+            return False
+        runtime_readiness = dict(report['details']).get('runtime_readiness')
+        if isinstance(runtime_readiness, dict):
+            components = runtime_readiness.get('components')
+            if isinstance(components, dict):
+                return all(bool(item) for item in components.values()) if components else True
+        return True
+
+    def _is_execution_ready(self, report: dict[str, object], *, events: tuple[str, ...]) -> bool:
+        if not self._is_ready(report, events=events):
+            return False
+        runtime_readiness = dict(report['details']).get('runtime_readiness')
+        if isinstance(runtime_readiness, dict):
+            services = runtime_readiness.get('services')
+            if isinstance(services, dict):
+                return all(bool(item) for item in services.values()) if services else True
         return True

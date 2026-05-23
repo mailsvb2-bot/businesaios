@@ -109,6 +109,14 @@ def register_public_api_routes(
     def readiness() -> HealthResponse:
         return health_handler.readiness()
 
+    @router.get('/storagez', response_model=HealthResponse, tags=['system'])
+    def storage_readiness() -> HealthResponse:
+        return health_handler.storage()
+
+    @router.get('/executionz', response_model=HealthResponse, tags=['system'])
+    def execution_readiness() -> HealthResponse:
+        return health_handler.execution()
+
     @router.post('/actions/execute', response_model=ExecuteActionResponse)
     async def execute_action(http_request: Request, request: ExecuteActionRequest) -> ExecuteActionResponse:
         request_context = RequestContext.from_http_request(http_request, metadata={'route': '/actions/execute'})

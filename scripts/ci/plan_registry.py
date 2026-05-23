@@ -15,6 +15,10 @@ def _container_runtime_step() -> str:
     return "".join(("container", "-", "runtime"))
 
 
+def _staging_runtime_step() -> str:
+    return "".join(("staging", "-", "runtime"))
+
+
 def allowed_gates() -> tuple[str, ...]:
     return (
         "doctor",
@@ -27,6 +31,7 @@ def allowed_gates() -> tuple[str, ...]:
         _pg_migrations_step(),
         "postgres-live",
         _container_runtime_step(),
+        _staging_runtime_step(),
         "production-boot",
         "release",
         "pre-push",
@@ -74,6 +79,10 @@ def _container_runtime_common(gate: str) -> ExecutionPlan:
     return _plan(gate, "assert-project-shape", "doctor-check", _container_runtime_step())
 
 
+def _staging_runtime_common(gate: str) -> ExecutionPlan:
+    return _plan(gate, "assert-project-shape", "doctor-check", _staging_runtime_step())
+
+
 def _production_boot_common(gate: str) -> ExecutionPlan:
     return _plan(
         gate,
@@ -104,6 +113,8 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
         return _postgres_live_common("postgres-live")
     if gate == _container_runtime_step():
         return _container_runtime_common(gate)
+    if gate == _staging_runtime_step():
+        return _staging_runtime_common(gate)
     if gate == "production-boot":
         return _production_boot_common("production-boot")
     if gate == "fast":

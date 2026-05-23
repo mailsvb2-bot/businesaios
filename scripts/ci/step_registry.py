@@ -56,6 +56,7 @@ def _lazy_handler(name: str) -> StepHandler | None:
     known_steps = {
         "-".join(("postgres", "migrations")): ("postgres", "migrations"),
         "-".join(("container", "runtime")): ("container", "runtime"),
+        "-".join(("staging", "runtime")): ("staging", "runtime"),
     }
     parts = known_steps.get(name)
     if parts is None:
