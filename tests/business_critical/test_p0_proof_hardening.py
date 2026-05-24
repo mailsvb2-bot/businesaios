@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -104,12 +103,17 @@ def test_ci_summary_xml_is_not_code_coverage(tmp_path: Path) -> None:
 
 def test_runtime_boot_manifest_owner_is_importable_and_non_empty() -> None:
     from bootstrap.runtime_boot_manifest import RUNTIME_BOOT_MANIFEST
+    from runtime.manifest_entry import RuntimeManifestEntry
 
     assert isinstance(RUNTIME_BOOT_MANIFEST, tuple)
     assert RUNTIME_BOOT_MANIFEST
     for item in RUNTIME_BOOT_MANIFEST:
-        assert isinstance(item, dict)
-        assert item
+        assert isinstance(item, RuntimeManifestEntry)
+        assert item.step_name
+        assert item.module_path
+        assert item.callable_name
+        assert item.service_name
+        assert item.service_type
 
 
 def test_boot_runtime_manifest_alias_resolves_to_canonical_owner() -> None:
