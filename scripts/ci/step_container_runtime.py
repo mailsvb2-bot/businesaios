@@ -9,6 +9,14 @@ from scripts.ci.paths import repo_root
 
 
 EVIDENCE_NAME = "container_runtime_evidence.json"
+ENV_FLAG_NAMES = [
+    "CONTAINER_IMAGE_BUILT",
+    "CONTAINER_STARTED",
+    "CONTAINER_READYZ_OK",
+    "CONTAINER_STORAGEZ_OK",
+    "CONTAINER_EXECUTIONZ_OK",
+    "CONTAINER_READINESS_HEALTHCHECK_OK",
+]
 
 
 def _artifact_path(name: str) -> Path:
@@ -21,14 +29,16 @@ def _write_artifact(payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
+def _truthy_env(name: str) -> bool:
+    return str(os.getenv(name) or "").strip().lower() in {"1", "true", "yes", "required", "enabled"}
+
+
 def _declared() -> bool:
-    return str(os.getenv("CONTAINER_RUNTIME_PROOF_REQUIRED") or os.getenv("CONTAINER_RUNTIME_ENABLED") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "required",
-        "enabled",
-    }
+    return _truthy_env("CONTAINER_RUNTIME_PROOF_REQUIRED") or _truthy_env("CONTAINER_RUNTIME_ENABLED")
+
+
+def _evidence_required() -> bool:
+    return _truthy_env("CONTAINER_RUNTIME_EVIDENCE_REQUIRED")
 
 
 def _read_evidence() -> dict[str, object] | None:
@@ -63,7 +73,24 @@ def _blocked_payload(*, violations: list[str], evidence: dict[str, object] | Non
     }
     if evidence is not None:
         payload["evidence"] = evidence
+    if "env_flags_do_not_prove_real_container_runtime" in violations:
+        payload["ignored_env_flags"] = list(ENV_FLAG_NAMES)
     return payload
+
+
+def _advisory_payload() -> dict[str, object]:
+    return {
+        "artifact": "container_runtime",
+        "status": "advisory_only",
+        "warnings": ["container_runtime_not_declared"],
+        "image_built": False,
+        "container_started": False,
+        "readyz_ok": False,
+        "storagez_ok": False,
+        "executionz_ok": False,
+        "uses_readiness_healthcheck": False,
+        "claims_production_ready": False,
+    }
 
 
 def run() -> tuple[bool, str]:
@@ -87,38 +114,19 @@ def run() -> tuple[bool, str]:
             return False, "container runtime blocked: " + ",".join(payload["violations"])
         return True, "container runtime ready from evidence: artifacts/ci/container_runtime.json"
 
-    if not _declared():
-        payload = {
-            "artifact": "container_runtime",
-            "status": "advisory_only",
-            "warnings": ["container_runtime_not_declared"],
-            "image_built": False,
-            "container_started": False,
-            "readyz_ok": False,
-            "storagez_ok": False,
-            "executionz_ok": False,
-            "uses_readiness_healthcheck": False,
-            "claims_production_ready": False,
-        }
+    if _evidence_required() or _declared():
+        payload = _blocked_payload(
+            violations=[
+                "container_runtime_evidence_required",
+                "env_flags_do_not_prove_real_container_runtime",
+            ]
+        )
         _write_artifact(payload)
-        return True, "container runtime artifact written: artifacts/ci/container_runtime.json status=advisory_only"
+        return False, "container runtime blocked: container_runtime_evidence_required"
 
-    payload = _blocked_payload(
-        violations=[
-            "container_runtime_evidence_required",
-            "env_flags_do_not_prove_real_container_runtime",
-        ]
-    )
-    payload["ignored_env_flags"] = [
-        "CONTAINER_IMAGE_BUILT",
-        "CONTAINER_STARTED",
-        "CONTAINER_READYZ_OK",
-        "CONTAINER_STORAGEZ_OK",
-        "CONTAINER_EXECUTIONZ_OK",
-        "CONTAINER_READINESS_HEALTHCHECK_OK",
-    ]
+    payload = _advisory_payload()
     _write_artifact(payload)
-    return False, "container runtime blocked: container_runtime_evidence_required"
+    return True, "container runtime artifact written: artifacts/ci/container_runtime.json status=advisory_only"
 
 
 __all__ = ["run"]
