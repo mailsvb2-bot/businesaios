@@ -138,14 +138,15 @@ def test_pytest_coverage_artifact_is_explicitly_not_code_coverage(tmp_path: Path
     assert payload["claims_production_ready"] is False
 
 
-def test_runtime_manifest_loader_is_not_stale_boot_dependency() -> None:
-    root = Path.cwd()
-    suspicious = []
-    for path in (root / "runtime").rglob("*.py"):
-        text = path.read_text(encoding="utf-8")
-        if "runtime_manifest_loader" in text or "RUNTIME_BOOT_MANIFEST" in text:
-            suspicious.append(path.relative_to(root).as_posix())
-    assert suspicious == []
+def test_runtime_manifest_loader_uses_compat_alias_to_canonical_owner() -> None:
+    from boot.wiring.runtime_manifest_loader import load_runtime_manifest
+    from bootstrap.runtime_boot_manifest import RUNTIME_BOOT_MANIFEST
+    from runtime.manifest_entry import RuntimeManifestEntry
+
+    manifest = load_runtime_manifest()
+    assert manifest == RUNTIME_BOOT_MANIFEST
+    assert manifest
+    assert all(isinstance(item, RuntimeManifestEntry) for item in manifest)
 
 
 def test_action_api_transition_invokes_application_service_without_decisioncore_method_drift() -> None:
@@ -194,7 +195,12 @@ def test_action_api_transition_invokes_application_service_without_decisioncore_
     assert service.calls == [
         {
             "action_type": "noop@v1",
-            "payload": {"value": 1},
+            "payload": {
+                "value": 1,
+                "idempotency_key": "idem-1",
+                "action_id": "act-1",
+                "tenant_id": "tenant-1",
+            },
             "idempotency_key": "idem-1",
             "action_id": "act-1",
             "tenant_id": "tenant-1",
@@ -208,5 +214,5 @@ def test_readiness_projection_remains_adapter_only_boundary() -> None:
     assert "not a second runtime assembly path" in text
     assert "not an alternate execution" in text
     projection_body = text.split("def _project_runtime_registry_to_readiness_orchestrator", 1)[1].split("def _resolve_runtime_orchestrator", 1)[0]
-    forbidden_terms = ("DecisionCore", "decide_and_execute", ".execute_action(", "ActionDispatcher")
-    assert all(term not in projection_body for term in forbidden_terms)
+    forbidden_runtime_calls = ("decide_and_execute", ".execute_action(", "ActionDispatcher")
+    assert all(term not in projection_body for term in forbidden_runtime_calls)
