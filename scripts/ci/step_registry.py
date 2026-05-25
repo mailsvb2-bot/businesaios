@@ -10,6 +10,7 @@ from scripts.ci.step_async_test_contract import run as run_async_test_contract
 from scripts.ci.step_build_artifact import run as run_build_artifact
 from scripts.ci.step_business_critical_tests import run as run_business_critical_tests
 from scripts.ci.step_canon_audit import run as run_canon_audit
+from scripts.ci.step_code_coverage import run as run_code_coverage
 from scripts.ci.step_demo_e2e_smoke import run as run_demo_e2e_smoke
 from scripts.ci.step_dependency_lock import run as run_dependency_lock
 from scripts.ci.step_import_smoke import run as run_import_smoke
@@ -42,6 +43,7 @@ _REGISTRY: dict[str, StepHandler] = {
     _step_ids.unit_tests(): run_unit_tests,
     _step_ids.integration_tests(): run_integration_tests,
     _step_ids.business_critical_tests(): run_business_critical_tests,
+    _step_ids.code_coverage(): run_code_coverage,
     _step_ids.rust_safety_core(): run_rust_safety_core,
     _step_ids.rust_supply_chain(): run_rust_supply_chain,
     _step_ids.postgres_contract(): run_postgres_contract,
