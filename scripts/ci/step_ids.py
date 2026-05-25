@@ -9,6 +9,7 @@ def project_shape() -> str: return _s('assert','-project','-shape')
 def dependency_lock() -> str: return _s('dependency','-lock')
 def doctor() -> str: return _s('doctor','-check')
 def import_smoke() -> str: return _s('import','-smoke')
+def boot_smoke() -> str: return _s('boot','-smoke')
 def demo_e2e_smoke() -> str: return _s('demo','-e2e','-smoke')
 def quality() -> str: return _s('quality','-check')
 def canon_audit() -> str: return _s('canon','-audit')
@@ -30,14 +31,14 @@ def build_artifact() -> str: return _s('build','-artifact')
 
 def all_step_names() -> tuple[str, ...]:
     return (
-        project_shape(), dependency_lock(), doctor(), import_smoke(), demo_e2e_smoke(), quality(),
+        project_shape(), dependency_lock(), doctor(), import_smoke(), boot_smoke(), demo_e2e_smoke(), quality(),
         canon_audit(), architecture_bypass_scan(), async_test_contract(), lock_tests(), unit_tests(), integration_tests(),
         business_critical_tests(), code_coverage(), rust_safety_core(), rust_supply_chain(), postgres_contract(), postgres_live(), production_boot(), verify_release(), build_artifact(),
     )
 
 
 __all__ = [
-    'project_shape', 'dependency_lock', 'doctor', 'import_smoke', 'demo_e2e_smoke', 'quality',
+    'project_shape', 'dependency_lock', 'doctor', 'import_smoke', 'boot_smoke', 'demo_e2e_smoke', 'quality',
     'canon_audit', 'architecture_bypass_scan', 'async_test_contract', 'lock_tests', 'unit_tests', 'integration_tests',
     'business_critical_tests', 'code_coverage', 'rust_safety_core', 'rust_supply_chain', 'postgres_contract', 'postgres_live', 'production_boot', 'verify_release', 'build_artifact', 'all_step_names',
 ]
