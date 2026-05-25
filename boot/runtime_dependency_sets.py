@@ -1,61 +1,38 @@
 from __future__ import annotations
 
-"""Canonical runtime dependency set catalog.
+"""Compatibility shell for canonical runtime dependency sets.
 
-This module is a boot catalog, not a runtime assembly path. It exists so
-registration owners can declare dependencies without embedding dependency
-knowledge in service constructors.
+The canonical owner is ``bootstrap.runtime_dependency_sets``. This module keeps
+legacy ``boot.*`` imports working without creating a second dependency catalog.
 """
 
-from typing import Final
+CANON_BOOT_RUNTIME_DEPENDENCY_SETS_COMPAT_SHELL = True
+CANON_BOOT_RUNTIME_DEPENDENCY_SETS_NO_RUNTIME_ASSEMBLY = True
 
-from runtime.service_names import RuntimeServiceName
-
-CANON_RUNTIME_DEPENDENCY_SET_CATALOG_OWNER: Final[bool] = True
-
-OBSERVABILITY_DEPS: Final[tuple[str, ...]] = ()
-RISK_ENGINE_DEPS: Final[tuple[str, ...]] = ()
-REWARD_GUARD_DEPS: Final[tuple[str, ...]] = ()
-SIMULATION_GATE_DEPS: Final[tuple[str, ...]] = ()
-KILL_SWITCH_DEPS: Final[tuple[str, ...]] = ()
-ACTION_BUDGET_DEPS: Final[tuple[str, ...]] = ()
-ACTION_EXECUTOR_DEPS: Final[tuple[str, ...]] = ()
-
-GOVERNANCE_CHAIN_DEPS: Final[tuple[str, ...]] = (
-    RuntimeServiceName.RISK_ENGINE,
-    RuntimeServiceName.REWARD_GUARD,
-    RuntimeServiceName.SIMULATION_GATE,
-    RuntimeServiceName.KILL_SWITCH,
-    RuntimeServiceName.ACTION_BUDGET,
+from bootstrap.runtime_dependency_sets import (  # noqa: F401
+    ACTION_BUDGET_DEPS,
+    AUTONOMY_ADVISOR_DEPS,
+    CREATIVE_INTELLIGENCE_DEPS,
+    DECISION_CORE_DEPS,
+    DECISION_GATEWAY_DEPS,
+    DECISION_INPUT_SERVICE_DEPS,
+    GOVERNANCE_CHAIN_DEPS,
+    OBSERVABILITY_ONLY,
+    RUNTIME_PACKET_PROVIDER_DEPS,
+    WORLD_STATE_INTEGRATION_DEPS,
 )
-DECISION_CORE_DEPS: Final[tuple[str, ...]] = (
-    RuntimeServiceName.GOVERNANCE_CHAIN,
-    RuntimeServiceName.ACTION_EXECUTOR,
-)
-
-RUNTIME_DEPENDENCY_SETS: Final[dict[str, tuple[str, ...]]] = {
-    RuntimeServiceName.OBSERVABILITY: OBSERVABILITY_DEPS,
-    RuntimeServiceName.RISK_ENGINE: RISK_ENGINE_DEPS,
-    RuntimeServiceName.REWARD_GUARD: REWARD_GUARD_DEPS,
-    RuntimeServiceName.SIMULATION_GATE: SIMULATION_GATE_DEPS,
-    RuntimeServiceName.KILL_SWITCH: KILL_SWITCH_DEPS,
-    RuntimeServiceName.ACTION_BUDGET: ACTION_BUDGET_DEPS,
-    RuntimeServiceName.GOVERNANCE_CHAIN: GOVERNANCE_CHAIN_DEPS,
-    RuntimeServiceName.ACTION_EXECUTOR: ACTION_EXECUTOR_DEPS,
-    RuntimeServiceName.DECISION_CORE: DECISION_CORE_DEPS,
-}
-
 
 __all__ = [
     "ACTION_BUDGET_DEPS",
-    "ACTION_EXECUTOR_DEPS",
-    "CANON_RUNTIME_DEPENDENCY_SET_CATALOG_OWNER",
+    "AUTONOMY_ADVISOR_DEPS",
+    "CANON_BOOT_RUNTIME_DEPENDENCY_SETS_COMPAT_SHELL",
+    "CANON_BOOT_RUNTIME_DEPENDENCY_SETS_NO_RUNTIME_ASSEMBLY",
+    "CREATIVE_INTELLIGENCE_DEPS",
     "DECISION_CORE_DEPS",
+    "DECISION_GATEWAY_DEPS",
+    "DECISION_INPUT_SERVICE_DEPS",
     "GOVERNANCE_CHAIN_DEPS",
-    "KILL_SWITCH_DEPS",
-    "OBSERVABILITY_DEPS",
-    "REWARD_GUARD_DEPS",
-    "RISK_ENGINE_DEPS",
-    "RUNTIME_DEPENDENCY_SETS",
-    "SIMULATION_GATE_DEPS",
+    "OBSERVABILITY_ONLY",
+    "RUNTIME_PACKET_PROVIDER_DEPS",
+    "WORLD_STATE_INTEGRATION_DEPS",
 ]
