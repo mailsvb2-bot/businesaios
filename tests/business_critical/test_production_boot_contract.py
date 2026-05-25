@@ -67,11 +67,12 @@ def test_assert_production_boot_ready_blocks_unready_production() -> None:
         assert_production_boot_ready(probe)
 
 
-def test_production_boot_step_writes_non_prod_advisory_artifact(monkeypatch) -> None:
+def test_production_boot_step_writes_non_prod_advisory_contract_artifact(monkeypatch) -> None:
     monkeypatch.setenv("ENV", "ci")
     monkeypatch.setenv("APP_PROFILE", "api")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("POSTGRES_RUNTIME_ENABLED", raising=False)
+    monkeypatch.delenv("REAL_RUNTIME_BOOT_EVIDENCE_REQUIRED", raising=False)
     artifact = Path("artifacts/ci/production_boot.json")
     if artifact.exists():
         artifact.unlink()
@@ -80,7 +81,9 @@ def test_production_boot_step_writes_non_prod_advisory_artifact(monkeypatch) -> 
     payload = json.loads(artifact.read_text(encoding="utf-8"))
 
     assert ok is True, message
-    assert payload["artifact"] == "production_boot"
+    assert payload["artifact"] == "production_boot_contract"
+    assert payload["proof_kind"] == "contract_aggregation_not_process_boot"
+    assert payload["claims_real_runtime_boot"] is False
     assert payload["status"] == "advisory_only"
     assert payload["production_profile"] is False
     assert payload["production_boot_contract_satisfied"] is False
