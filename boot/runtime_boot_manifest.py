@@ -1,34 +1,24 @@
 from __future__ import annotations
 
-"""Canonical runtime boot manifest catalog.
+"""Compatibility shell for the canonical runtime boot manifest owner.
 
-This file is metadata only. It does not build services and does not create a
-second runtime path; runtime/bootstrap/runtime_builder.py remains the internal
-assembly owner.
+The canonical owner is ``bootstrap.runtime_boot_manifest``. This module exists
+only so legacy ``boot.*`` imports resolve to the same owner instead of breaking
+sovereign boot after cleanup/collapse waves. It must not build services and must
+not define an independent manifest catalog.
 """
 
-from typing import Final
+CANON_BOOT_RUNTIME_BOOT_MANIFEST_COMPAT_SHELL = True
+CANON_BOOT_RUNTIME_BOOT_MANIFEST_NO_RUNTIME_ASSEMBLY = True
 
-from boot.runtime_service_specs import RUNTIME_SERVICE_SPECS
-from runtime.manifest_entry import RuntimeManifestEntry
-
-CANON_RUNTIME_BOOT_MANIFEST_CATALOG_OWNER: Final[bool] = True
-CANON_RUNTIME_BOOT_MANIFEST_METADATA_ONLY: Final[bool] = True
-
-RUNTIME_BOOT_MANIFEST: Final[tuple[RuntimeManifestEntry, ...]] = tuple(
-    RuntimeManifestEntry(
-        step_name=spec.registration_callable,
-        module_path="boot.registrations",
-        callable_name=spec.registration_callable,
-        service_name=spec.service_name,
-        service_type=spec.service_type,
-        dependencies=tuple(spec.dependencies),
-    )
-    for spec in RUNTIME_SERVICE_SPECS
+from bootstrap.runtime_boot_manifest import (  # noqa: F401
+    CANON_RUNTIME_BOOT_MANIFEST_FINAL_OWNER,
+    RUNTIME_BOOT_MANIFEST,
 )
 
 __all__ = [
-    "CANON_RUNTIME_BOOT_MANIFEST_CATALOG_OWNER",
-    "CANON_RUNTIME_BOOT_MANIFEST_METADATA_ONLY",
+    "CANON_BOOT_RUNTIME_BOOT_MANIFEST_COMPAT_SHELL",
+    "CANON_BOOT_RUNTIME_BOOT_MANIFEST_NO_RUNTIME_ASSEMBLY",
+    "CANON_RUNTIME_BOOT_MANIFEST_FINAL_OWNER",
     "RUNTIME_BOOT_MANIFEST",
 ]
