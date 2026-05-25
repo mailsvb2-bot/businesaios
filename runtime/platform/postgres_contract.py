@@ -13,16 +13,21 @@ class PostgresContractStatus(str, Enum):
     ADVISORY_ONLY = "advisory_only"
 
 
-REQUIRED_SCHEMA_OBJECTS = (
-    "events",
-    "runtime_outbox",
-    "payment_outbox",
-    "decision_archive",
-    "evidence_archive",
-    "runtime_snapshots",
-    "execution_ledger",
-    "recovery_queue",
-)
+# Logical runtime storage requirements. Each tuple accepts either the canonical
+# contract table name or a real adapter table name. This prevents production
+# readiness checks from drifting away from the actual Postgres adapters.
+REQUIRED_SCHEMA_OBJECT_ALIASES: Mapping[str, tuple[str, ...]] = {
+    "events": ("events",),
+    "runtime_outbox": ("runtime_outbox", "outbox"),
+    "payment_outbox": ("payment_outbox",),
+    "decision_archive": ("decision_archive",),
+    "evidence_archive": ("evidence_archive",),
+    "runtime_snapshots": ("runtime_snapshots", "snapshots"),
+    "execution_ledger": ("execution_ledger", "executed", "executed_chain"),
+    "recovery_queue": ("recovery_queue",),
+}
+
+REQUIRED_SCHEMA_OBJECTS = tuple(REQUIRED_SCHEMA_OBJECT_ALIASES)
 
 REQUIRED_MIGRATIONS = (
     "events_v1",
@@ -66,6 +71,26 @@ def _missing(required: tuple[str, ...], present: tuple[str, ...]) -> list[str]:
     return [item for item in required if item not in present_set]
 
 
+def _missing_logical_schema(present: tuple[str, ...]) -> list[str]:
+    present_set = set(present)
+    missing: list[str] = []
+    for logical_name, aliases in REQUIRED_SCHEMA_OBJECT_ALIASES.items():
+        if not any(alias in present_set for alias in aliases):
+            missing.append(logical_name)
+    return missing
+
+
+def _schema_alias_status(present: tuple[str, ...]) -> dict[str, object]:
+    present_set = set(present)
+    return {
+        logical_name: {
+            "accepted": [alias for alias in aliases if alias in present_set],
+            "aliases": list(aliases),
+        }
+        for logical_name, aliases in REQUIRED_SCHEMA_OBJECT_ALIASES.items()
+    }
+
+
 def evaluate_postgres_contract(proof: PostgresRuntimeProof) -> dict[str, object]:
     violations: list[str] = []
     warnings: list[str] = []
@@ -80,7 +105,7 @@ def evaluate_postgres_contract(proof: PostgresRuntimeProof) -> dict[str, object]
             violations.append("psycopg_runtime_required")
         if not proof.live_probe_ok:
             violations.append("postgres_live_probe_required")
-        missing_schema = _missing(REQUIRED_SCHEMA_OBJECTS, proof.schema_objects_present)
+        missing_schema = _missing_logical_schema(proof.schema_objects_present)
         missing_migrations = _missing(REQUIRED_MIGRATIONS, proof.migrations_applied)
         if missing_schema:
             violations.append("postgres_schema_objects_missing:" + ",".join(missing_schema))
@@ -108,6 +133,8 @@ def evaluate_postgres_contract(proof: PostgresRuntimeProof) -> dict[str, object]
         "live_probe_ok": proof.live_probe_ok,
         "schema_objects_present": list(proof.schema_objects_present),
         "required_schema_objects": list(REQUIRED_SCHEMA_OBJECTS),
+        "required_schema_object_aliases": {key: list(value) for key, value in REQUIRED_SCHEMA_OBJECT_ALIASES.items()},
+        "schema_alias_status": _schema_alias_status(proof.schema_objects_present),
         "migrations_applied": list(proof.migrations_applied),
         "required_migrations": list(REQUIRED_MIGRATIONS),
         "event_store_roundtrip_ok": proof.event_store_roundtrip_ok,
@@ -124,6 +151,7 @@ __all__ = [
     "PostgresContractStatus",
     "PostgresRuntimeProof",
     "REQUIRED_MIGRATIONS",
+    "REQUIRED_SCHEMA_OBJECT_ALIASES",
     "REQUIRED_SCHEMA_OBJECTS",
     "evaluate_postgres_contract",
 ]
