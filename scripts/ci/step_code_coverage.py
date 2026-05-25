@@ -1,0 +1,133 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from scripts.ci.paths import coverage_dir, repo_root
+from scripts.ci.subprocess_io import run_command
+
+
+MIN_TOTAL_COVERAGE = 70.0
+COVERAGE_TARGETS = (
+    "tests/unit",
+    "tests/core",
+    "tests/security",
+    "tests/growth",
+    "tests/growth_strategy",
+    "tests/autopilot",
+    "tests/ads_autopilot",
+    "tests/core/product",
+    "tests/core/experiments",
+    "tests/integration",
+    "tests/runtime",
+    "tests/interfaces",
+    "tests/business_critical",
+)
+
+
+def _coverage_paths() -> dict[str, Path]:
+    root = coverage_dir()
+    return {
+        "json": root / "coverage.json",
+        "xml": root / "coverage.xml",
+        "html": root / "html",
+        "summary": root / "coverage_summary.json",
+    }
+
+
+def _write_summary(payload: dict[str, object]) -> None:
+    path = _coverage_paths()["summary"]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+def _coverage_available() -> bool:
+    outcome = run_command(["python", "-c", "import coverage; print(coverage.__version__)"], timeout=20)
+    return outcome.returncode == 0
+
+
+def run() -> tuple[bool, str]:
+    paths = _coverage_paths()
+    if not _coverage_available():
+        payload = {
+            "artifact": "code_coverage",
+            "status": "blocked",
+            "coverage_kind": "coverage.py",
+            "violations": ["coverage_py_required"],
+            "claims_code_coverage": False,
+            "claims_production_ready": False,
+        }
+        _write_summary(payload)
+        return False, "coverage.py is required for code coverage gate"
+
+    erase = run_command(["python", "-m", "coverage", "erase"], timeout=30)
+    if erase.returncode != 0:
+        _write_summary({"artifact": "code_coverage", "status": "blocked", "violations": ["coverage_erase_failed"], "claims_code_coverage": False, "claims_production_ready": False})
+        return False, "coverage erase failed"
+
+    run_cov = run_command(
+        [
+            "python",
+            "-m",
+            "coverage",
+            "run",
+            "--branch",
+            "--source=.",
+            "-m",
+            "pytest",
+            "-q",
+            *COVERAGE_TARGETS,
+            "-m",
+            "not slow and not gate",
+        ],
+        timeout=600,
+    )
+    if run_cov.returncode != 0:
+        payload = {
+            "artifact": "code_coverage",
+            "status": "blocked",
+            "coverage_kind": "coverage.py",
+            "violations": ["coverage_pytest_failed"],
+            "targets": list(COVERAGE_TARGETS),
+            "claims_code_coverage": True,
+            "claims_production_ready": False,
+        }
+        _write_summary(payload)
+        return False, "coverage pytest run failed"
+
+    json_outcome = run_command(["python", "-m", "coverage", "json", "-o", str(paths["json"])], timeout=60)
+    xml_outcome = run_command(["python", "-m", "coverage", "xml", "-o", str(paths["xml"])], timeout=60)
+    html_outcome = run_command(["python", "-m", "coverage", "html", "-d", str(paths["html"])], timeout=120)
+    report_outcome = run_command(["python", "-m", "coverage", "report", "--fail-under", str(MIN_TOTAL_COVERAGE)], timeout=60)
+
+    coverage_payload = json.loads(paths["json"].read_text(encoding="utf-8")) if paths["json"].exists() else {}
+    total = dict(coverage_payload.get("totals") or {})
+    percent = float(total.get("percent_covered", 0.0))
+    status = "ready" if report_outcome.returncode == 0 else "blocked"
+    violations = [] if status == "ready" else ["coverage_below_threshold"]
+    if xml_outcome.returncode != 0:
+        violations.append("coverage_xml_failed")
+    if html_outcome.returncode != 0:
+        violations.append("coverage_html_failed")
+    payload = {
+        "artifact": "code_coverage",
+        "status": status if not violations else "blocked",
+        "coverage_kind": "coverage.py",
+        "line_percent_covered": percent,
+        "branch_coverage_enabled": True,
+        "minimum_total_coverage": MIN_TOTAL_COVERAGE,
+        "targets": list(COVERAGE_TARGETS),
+        "json_artifact": str(paths["json"].relative_to(repo_root())),
+        "xml_artifact": str(paths["xml"].relative_to(repo_root())),
+        "html_artifact": str(paths["html"].relative_to(repo_root())),
+        "violations": violations,
+        "claims_code_coverage": True,
+        "claims_production_ready": False,
+    }
+    _write_summary(payload)
+    if payload["status"] != "ready":
+        return False, f"coverage.py gate failed: percent={percent:.2f} minimum={MIN_TOTAL_COVERAGE:.2f} violations={violations}"
+    return True, f"coverage.py gate passed: percent={percent:.2f} minimum={MIN_TOTAL_COVERAGE:.2f}"
+
+
+__all__ = ["run"]
