@@ -39,11 +39,15 @@ DECISION_GATEWAY_DEPS: Final[tuple[str, ...]] = get_runtime_service_spec(
 GOVERNANCE_CHAIN_DEPS: Final[tuple[str, ...]] = get_runtime_service_spec(
     RuntimeServiceName.GOVERNANCE_CHAIN,
 ).dependencies
+ACTION_BUDGET_DEPS: Final[tuple[str, ...]] = get_runtime_service_spec(
+    RuntimeServiceName.ACTION_BUDGET,
+).dependencies
 DECISION_CORE_DEPS: Final[tuple[str, ...]] = get_runtime_service_spec(
     RuntimeServiceName.DECISION_CORE,
 ).dependencies
 
 __all__ = [
+    'ACTION_BUDGET_DEPS',
     'AUTONOMY_ADVISOR_DEPS',
     'CREATIVE_INTELLIGENCE_DEPS',
     'DECISION_CORE_DEPS',
