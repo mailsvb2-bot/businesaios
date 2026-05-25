@@ -252,6 +252,7 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     headless_handlers = handler_bundle.headless_handlers
     governance_handlers = GovernanceRouteHandlers()
     business_memory_handlers = handler_bundle.business_memory_handlers
+    client_outcome_handlers = handler_bundle.client_outcome_handlers
     governance_advanced_handlers = GovernanceAdvancedRouteHandlers()
 
     tenant_registry = dependency_container.tenant_registry if dependency_container is not None else build_default_tenant_registry()
@@ -284,7 +285,19 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     analytics_ops_handlers = AnalyticsOpsRouteHandlers(event_store=telemetry_event_store, snapshot_db_path=analytics_snapshot_db_path, queue_bridge=queue_bridge) if telemetry_event_store is not None else None
     analytics_signed_export_handlers = AnalyticsSignedExportRouteHandlers(event_store=telemetry_event_store, manifest_chain_db_path=analytics_manifest_chain_db_path, export_root=analytics_export_root) if telemetry_event_store is not None else None
 
-    register_public_api_routes(router=router, dependency_container=dependency_container, health_handler=health_handler, handlers=handlers, headless_handlers=headless_handlers, governance_handlers=governance_handlers, business_memory_handlers=business_memory_handlers, governance_advanced_handlers=governance_advanced_handlers, security_guard=security_bundle.public_surface_guard, analytics_handlers=analytics_handlers)
+    register_public_api_routes(
+        router=router,
+        dependency_container=dependency_container,
+        health_handler=health_handler,
+        handlers=handlers,
+        headless_handlers=headless_handlers,
+        governance_handlers=governance_handlers,
+        business_memory_handlers=business_memory_handlers,
+        governance_advanced_handlers=governance_advanced_handlers,
+        security_guard=security_bundle.public_surface_guard,
+        analytics_handlers=analytics_handlers,
+        client_outcome_handlers=client_outcome_handlers,
+    )
     register_control_plane_routes(router=router, auth_bundle=auth_bundle, authz_bundle=authz_bundle, tenant_guard=tenant_guard, rate_limit_bundle=rate_limit_bundle, audit_handlers=audit_handlers, approval_handlers=approval_handlers, admin_handlers=admin_handlers, connector_admin_handlers=connector_admin_handlers, provider_admin_handlers=provider_admin_handlers, metrics_handlers=metrics_handlers, webhook_handlers=webhook_handlers, queue_ops_handlers=queue_ops_handlers, security_guard=security_bundle.control_plane_guard, analytics_ops_handlers=analytics_ops_handlers, analytics_signed_export_handlers=analytics_signed_export_handlers)
     register_provider_truth_matrix_routes(router=router)
     register_network_side_effects_routes(router=router)

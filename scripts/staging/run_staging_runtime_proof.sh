@@ -124,15 +124,86 @@ wait_for_readyz
 probe_url /storagez
 probe_url /executionz
 
+"$PYTHON_BIN" - <<'PY'
+from __future__ import annotations
+
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+
+artifact_dir = Path("artifacts/ci")
+base_image = os.environ.get("BAIOS_PYTHON_BASE_IMAGE", "businesaios/python-runtime-base:3.12-slim")
+payload = {
+    "artifact": "container_runtime_evidence",
+    "status": "ready",
+    "evidence_kind": "real_container_runtime_probe",
+    "created_at": datetime.now(timezone.utc).isoformat(),
+    "image": os.environ.get("BAIOS_STAGING_IMAGE", "businesaios:staging-proof"),
+    "base_image": base_image,
+    "base_image_pull_policy": "never_during_staging_proof",
+    "container_name": os.environ.get("BAIOS_STAGING_CONTAINER", "businesaios-staging-proof"),
+    "image_built": True,
+    "container_started": True,
+    "readyz_ok": True,
+    "storagez_ok": True,
+    "executionz_ok": True,
+    "uses_readiness_healthcheck": True,
+    "probe_urls": ["/readyz", "/storagez", "/executionz"],
+    "claims_production_ready": False,
+}
+(artifact_dir / "container_runtime_evidence.json").write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+PY
+
 export CONTAINER_RUNTIME_PROOF_REQUIRED=1
-export CONTAINER_IMAGE_BUILT=1
-export CONTAINER_STARTED=1
-export CONTAINER_READYZ_OK=1
-export CONTAINER_STORAGEZ_OK=1
-export CONTAINER_EXECUTIONZ_OK=1
-export CONTAINER_READINESS_HEALTHCHECK_OK=1
+export CONTAINER_RUNTIME_EVIDENCE_REQUIRED=1
+export REAL_RUNTIME_BOOT_EVIDENCE_REQUIRED=1
 
 run_gate container-runtime
+
+"$PYTHON_BIN" - <<'PY'
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+artifact_dir = Path("artifacts/ci")
+container_runtime = json.loads((artifact_dir / "container_runtime.json").read_text(encoding="utf-8"))
+postgres_contract = json.loads((artifact_dir / "postgres_contract.json").read_text(encoding="utf-8"))
+postgres_migrations = json.loads((artifact_dir / "postgres_migrations.json").read_text(encoding="utf-8"))
+postgres_live = json.loads((artifact_dir / "postgres_live.json").read_text(encoding="utf-8"))
+payload = {
+    "artifact": "real_runtime_boot_evidence",
+    "status": "ready",
+    "evidence_kind": "real_staging_runtime_boot_probe",
+    "created_at": datetime.now(timezone.utc).isoformat(),
+    "postgres_contract_ready": postgres_contract.get("status") == "ready",
+    "postgres_migrations_ready": postgres_migrations.get("status") == "ready",
+    "postgres_live_ready": postgres_live.get("status") == "ready",
+    "container_runtime_ready": container_runtime.get("status") == "ready",
+    "readyz_ok": container_runtime.get("readyz_ok") is True,
+    "storagez_ok": container_runtime.get("storagez_ok") is True,
+    "executionz_ok": container_runtime.get("executionz_ok") is True,
+    "claims_production_ready": False,
+}
+required = (
+    "postgres_contract_ready",
+    "postgres_migrations_ready",
+    "postgres_live_ready",
+    "container_runtime_ready",
+    "readyz_ok",
+    "storagez_ok",
+    "executionz_ok",
+)
+violations = [f"{name}_required" for name in required if payload.get(name) is not True]
+if violations:
+    payload["status"] = "blocked"
+    payload["violations"] = violations
+(artifact_dir / "real_runtime_boot_evidence.json").write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+raise SystemExit(0 if payload["status"] == "ready" else 1)
+PY
+
 run_gate production-boot
 
 "$PYTHON_BIN" - <<'PY'
@@ -149,6 +220,8 @@ summary = {
     "base_image": os.environ.get("BAIOS_PYTHON_BASE_IMAGE", "businesaios/python-runtime-base:3.12-slim"),
     "base_image_pull_policy": "never_during_staging_proof",
     "release_manifest": json.loads(Path("release/manifest.json").read_text(encoding="utf-8")),
+    "container_runtime_evidence": json.loads((artifact_dir / "container_runtime_evidence.json").read_text(encoding="utf-8")),
+    "real_runtime_boot_evidence": json.loads((artifact_dir / "real_runtime_boot_evidence.json").read_text(encoding="utf-8")),
     "postgres_contract": json.loads((artifact_dir / "postgres_contract.json").read_text(encoding="utf-8")),
     "postgres_migrations": json.loads((artifact_dir / "postgres_migrations.json").read_text(encoding="utf-8")),
     "postgres_live": json.loads((artifact_dir / "postgres_live.json").read_text(encoding="utf-8")),
@@ -156,7 +229,14 @@ summary = {
     "production_boot": json.loads((artifact_dir / "production_boot.json").read_text(encoding="utf-8")),
     "claims_production_ready": False,
 }
-required_ready = ("postgres_contract", "postgres_migrations", "postgres_live", "container_runtime")
+required_ready = (
+    "postgres_contract",
+    "postgres_migrations",
+    "postgres_live",
+    "container_runtime",
+    "container_runtime_evidence",
+    "real_runtime_boot_evidence",
+)
 blocked = [name for name in required_ready if summary[name].get("status") != "ready"]
 if blocked:
     summary["status"] = "blocked"

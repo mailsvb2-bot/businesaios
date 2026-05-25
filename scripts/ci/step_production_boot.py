@@ -8,6 +8,9 @@ from runtime.production_boot_contract import ProductionBootProbe, evaluate_produ
 from scripts.ci.paths import repo_root
 
 
+REAL_BOOT_EVIDENCE_NAME = "real_runtime_boot_evidence.json"
+
+
 def _write_artifact(payload: dict[str, object]) -> None:
     path = repo_root() / "artifacts" / "ci" / "production_boot.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -26,6 +29,10 @@ def _read_artifact(root: Path, name: str) -> dict[str, object]:
     return dict(payload)
 
 
+def _evidence_required() -> bool:
+    return str(os.getenv("REAL_RUNTIME_BOOT_EVIDENCE_REQUIRED") or "").strip().lower() in {"1", "true", "yes", "required"}
+
+
 def run() -> tuple[bool, str]:
     root = repo_root()
     proof_env = dict(os.environ)
@@ -33,14 +40,31 @@ def run() -> tuple[bool, str]:
     proof_env.setdefault("APP_PROFILE", "api")
     probe = ProductionBootProbe.from_env(proof_env)
     report = evaluate_production_boot(probe)
+    report["artifact"] = "production_boot_contract"
+    report["proof_kind"] = "contract_aggregation_not_process_boot"
+    report["claims_real_runtime_boot"] = False
     postgres_report = _read_artifact(root, "postgres_contract.json")
     postgres_migrations = _read_artifact(root, "postgres_migrations.json")
     postgres_live = _read_artifact(root, "postgres_live.json")
     container_runtime = _read_artifact(root, "container_runtime.json")
+    real_boot_evidence = _read_artifact(root, REAL_BOOT_EVIDENCE_NAME)
     report["postgres_contract"] = postgres_report
     report["postgres_migrations"] = postgres_migrations
     report["postgres_live"] = postgres_live
     report["container_runtime"] = container_runtime
+    report["real_runtime_boot_evidence"] = real_boot_evidence
+
+    if real_boot_evidence.get("status") == "ready":
+        report["claims_real_runtime_boot"] = True
+        report["real_runtime_boot_evidence_source"] = REAL_BOOT_EVIDENCE_NAME
+    elif _evidence_required():
+        report.setdefault("violations", [])
+        violations = list(report["violations"])
+        violations.append("real_runtime_boot_evidence_required")
+        report["violations"] = violations
+        report["status"] = "blocked"
+        report["production_boot_contract_satisfied"] = False
+
     if report["production_profile"] is True:
         extra_violations: list[str] = []
         if postgres_report.get("status") != "ready":
@@ -51,19 +75,22 @@ def run() -> tuple[bool, str]:
             extra_violations.append("postgres_live_not_ready")
         if container_runtime.get("status") != "ready":
             extra_violations.append("container_runtime_not_ready")
+        if _evidence_required() and real_boot_evidence.get("status") != "ready":
+            extra_violations.append("real_runtime_boot_evidence_not_ready")
         if extra_violations:
             report.setdefault("violations", [])
             violations = list(report["violations"])
-            violations.extend(extra_violations)
+            violations.extend(item for item in extra_violations if item not in violations)
             report["violations"] = violations
             report["status"] = "blocked"
             report["production_boot_contract_satisfied"] = False
     _write_artifact(report)
     if report["production_profile"] is True and report["status"] == "blocked":
-        return False, "production boot blocked: " + ",".join(report["violations"])
+        return False, "production boot contract blocked: " + ",".join(report["violations"])
     return True, (
-        "production boot proof artifact written: artifacts/ci/production_boot.json "
+        "production boot contract artifact written: artifacts/ci/production_boot.json "
         f"status={report['status']} production_profile={report['production_profile']} "
+        f"claims_real_runtime_boot={report['claims_real_runtime_boot']} "
         f"claims_production_ready={report['claims_production_ready']}"
     )
 

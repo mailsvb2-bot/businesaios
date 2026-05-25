@@ -9,6 +9,30 @@ from scripts.ci.step_container_runtime import run as run_container_runtime
 from scripts.ci.step_registry import handler_for_step
 
 
+def _write_ready_evidence(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "artifact": "container_runtime_evidence",
+                "status": "ready",
+                "evidence_kind": "real_container_runtime_probe",
+                "image_built": True,
+                "container_started": True,
+                "readyz_ok": True,
+                "storagez_ok": True,
+                "executionz_ok": True,
+                "uses_readiness_healthcheck": True,
+                "base_image": "businesaios/python-runtime-base:3.12-slim",
+                "base_image_pull_policy": "never_during_staging_proof",
+                "claims_production_ready": False,
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+
 def test_container_runtime_gate_is_registered_and_release_ordered() -> None:
     assert callable(handler_for_step("container-runtime"))
     assert build_parser().parse_args(["--gate", "container-runtime"]).gate == "container-runtime"
@@ -26,9 +50,13 @@ def test_container_runtime_gate_is_registered_and_release_ordered() -> None:
 def test_container_runtime_is_advisory_when_not_declared(monkeypatch) -> None:
     monkeypatch.delenv("CONTAINER_RUNTIME_PROOF_REQUIRED", raising=False)
     monkeypatch.delenv("CONTAINER_RUNTIME_ENABLED", raising=False)
+    monkeypatch.delenv("CONTAINER_RUNTIME_EVIDENCE_REQUIRED", raising=False)
     artifact = Path("artifacts/ci/container_runtime.json")
+    evidence = Path("artifacts/ci/container_runtime_evidence.json")
     if artifact.exists():
         artifact.unlink()
+    if evidence.exists():
+        evidence.unlink()
 
     ok, message = run_container_runtime()
     payload = json.loads(artifact.read_text(encoding="utf-8"))
@@ -40,27 +68,7 @@ def test_container_runtime_is_advisory_when_not_declared(monkeypatch) -> None:
     assert "container_runtime_not_declared" in payload["warnings"]
 
 
-def test_container_runtime_is_fail_closed_when_declared_incomplete(monkeypatch) -> None:
-    monkeypatch.setenv("CONTAINER_RUNTIME_PROOF_REQUIRED", "1")
-    monkeypatch.setenv("CONTAINER_IMAGE_BUILT", "1")
-    monkeypatch.setenv("CONTAINER_STARTED", "1")
-    monkeypatch.setenv("CONTAINER_READYZ_OK", "1")
-    monkeypatch.delenv("CONTAINER_STORAGEZ_OK", raising=False)
-    monkeypatch.delenv("CONTAINER_EXECUTIONZ_OK", raising=False)
-    monkeypatch.delenv("CONTAINER_READINESS_HEALTHCHECK_OK", raising=False)
-
-    ok, message = run_container_runtime()
-    payload = json.loads(Path("artifacts/ci/container_runtime.json").read_text(encoding="utf-8"))
-
-    assert ok is False
-    assert "storagez_required" in message
-    assert payload["status"] == "blocked"
-    assert "executionz_required" in payload["violations"]
-    assert "readiness_healthcheck_required" in payload["violations"]
-    assert payload["claims_production_ready"] is False
-
-
-def test_container_runtime_ready_when_all_declared_checks_pass(monkeypatch) -> None:
+def test_container_runtime_is_fail_closed_when_declared_without_evidence(monkeypatch) -> None:
     monkeypatch.setenv("CONTAINER_RUNTIME_PROOF_REQUIRED", "1")
     monkeypatch.setenv("CONTAINER_IMAGE_BUILT", "1")
     monkeypatch.setenv("CONTAINER_STARTED", "1")
@@ -68,6 +76,26 @@ def test_container_runtime_ready_when_all_declared_checks_pass(monkeypatch) -> N
     monkeypatch.setenv("CONTAINER_STORAGEZ_OK", "1")
     monkeypatch.setenv("CONTAINER_EXECUTIONZ_OK", "1")
     monkeypatch.setenv("CONTAINER_READINESS_HEALTHCHECK_OK", "1")
+    evidence = Path("artifacts/ci/container_runtime_evidence.json")
+    if evidence.exists():
+        evidence.unlink()
+
+    ok, message = run_container_runtime()
+    payload = json.loads(Path("artifacts/ci/container_runtime.json").read_text(encoding="utf-8"))
+
+    assert ok is False
+    assert "container_runtime_evidence_required" in message
+    assert payload["status"] == "blocked"
+    assert "container_runtime_evidence_required" in payload["violations"]
+    assert "env_flags_do_not_prove_real_container_runtime" in payload["violations"]
+    assert "CONTAINER_IMAGE_BUILT" in payload["ignored_env_flags"]
+    assert payload["claims_production_ready"] is False
+
+
+def test_container_runtime_ready_when_evidence_passes(monkeypatch) -> None:
+    monkeypatch.setenv("CONTAINER_RUNTIME_PROOF_REQUIRED", "1")
+    evidence = Path("artifacts/ci/container_runtime_evidence.json")
+    _write_ready_evidence(evidence)
 
     ok, message = run_container_runtime()
     payload = json.loads(Path("artifacts/ci/container_runtime.json").read_text(encoding="utf-8"))
@@ -75,4 +103,6 @@ def test_container_runtime_ready_when_all_declared_checks_pass(monkeypatch) -> N
     assert ok is True, message
     assert payload["status"] == "ready"
     assert payload["violations"] == []
+    assert payload["evidence_source"] == "container_runtime_evidence.json"
+    assert payload["evidence_kind"] == "real_container_runtime_probe"
     assert payload["claims_production_ready"] is False
