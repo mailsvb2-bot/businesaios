@@ -84,7 +84,7 @@ def test_learning_job_uses_feedback_guards():
         trainer=_Trainer(),
         validator=_Validator(),
         rollout=_Rollout(),
-        decision_core=_DecisionService(),
+        decision_core=_DecisionCore(),
         executor=_Executor(),
         event_store=_EventStore(),
     )
