@@ -66,6 +66,34 @@ def _remove_empty_dirs(path: Path, *, stop_at: Path) -> None:
         pass
 
 
+def _ci_demo_env() -> dict[str, str]:
+    """Return an explicit sqlite-only demo environment.
+
+    Server deployments may keep POSTGRES_DSN/DATABASE_URL in .env. python-dotenv
+    does not override existing environment keys, so setting empty values here
+    prevents local CI demo smoke from accidentally entering the production-like
+    Postgres path while preserving the runtime/wiring fail-closed guard.
+    """
+    return {
+        "RUN_MODE": "demo",
+        "DEMO_E2E_SMOKE": "1",
+        "APP_ENV": "ci",
+        "ENV": "ci",
+        "TENANT_ID": "ci-demo-tenant",
+        "SYSTEM_TZ": "Europe/Amsterdam",
+        "CI_STEP_TIMEOUT_SECONDS": "180",
+        "DATA_DIR": str(_CI_DEMO_DATA_DIR),
+        "BUSINESAIOS_TENANCY_DATA_DIR": str(_CI_DEMO_TENANCY_DIR),
+        "BUSINESAIOS_TENANT_REGISTRY_PATH": str(_CI_DEMO_TENANCY_DIR / "tenant_registry.json"),
+        "BUSINESAIOS_TENANT_POLICY_STORE_PATH": str(_CI_DEMO_TENANCY_DIR / "tenant_policies.json"),
+        "STORAGE_BACKEND": "sqlite",
+        "METRO_DB_ENGINE": "sqlite",
+        "POSTGRES_DSN": "",
+        "DATABASE_URL": "",
+        "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE": "",
+    }
+
+
 def run() -> tuple[bool, str]:
     try:
         cleanup_ci_runtime_state()
@@ -73,19 +101,7 @@ def run() -> tuple[bool, str]:
         _CI_DEMO_DATA_DIR.mkdir(parents=True, exist_ok=True)
         outcome = run_command(
             ["python", "main.py"],
-            env={
-                "RUN_MODE": "demo",
-                "DEMO_E2E_SMOKE": "1",
-                "APP_ENV": "ci",
-                "ENV": "ci",
-                "TENANT_ID": "ci-demo-tenant",
-                "SYSTEM_TZ": "Europe/Amsterdam",
-                "CI_STEP_TIMEOUT_SECONDS": "180",
-                "DATA_DIR": str(_CI_DEMO_DATA_DIR),
-                "BUSINESAIOS_TENANCY_DATA_DIR": str(_CI_DEMO_TENANCY_DIR),
-                "BUSINESAIOS_TENANT_REGISTRY_PATH": str(_CI_DEMO_TENANCY_DIR / "tenant_registry.json"),
-                "BUSINESAIOS_TENANT_POLICY_STORE_PATH": str(_CI_DEMO_TENANCY_DIR / "tenant_policies.json"),
-            },
+            env=_ci_demo_env(),
             timeout=180,
         )
     finally:
