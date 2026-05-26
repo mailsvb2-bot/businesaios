@@ -94,6 +94,7 @@ def _production_boot_common(gate: str) -> ExecutionPlan:
         _pg_migrations_step(),
         "postgres-live",
         _container_runtime_step(),
+        _staging_runtime_step(),
         "production-boot",
     )
 
@@ -187,6 +188,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             _pg_migrations_step(),
             "postgres-live",
             _container_runtime_step(),
+            _staging_runtime_step(),
             "production-boot",
             "verify-release",
             "build-artifact",
@@ -228,6 +230,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             _pg_migrations_step(),
             "postgres-live",
             _container_runtime_step(),
+            _staging_runtime_step(),
             "production-boot",
             "verify-release",
         )
