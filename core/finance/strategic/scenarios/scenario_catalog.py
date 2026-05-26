@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from core.finance.strategic.scenarios.scenario_catalog_data import scenario_definitions
+from core.finance.strategic.types import Scenario
 
 
 class ScenarioCatalog:
