@@ -7,9 +7,11 @@ from scripts.ci import step_ids as _step_ids
 from scripts.ci.doctor import run_doctor
 from scripts.ci.step_architecture_bypass_scan import run as run_architecture_bypass_scan
 from scripts.ci.step_async_test_contract import run as run_async_test_contract
+from scripts.ci.step_boot_smoke import run as run_boot_smoke
 from scripts.ci.step_build_artifact import run as run_build_artifact
 from scripts.ci.step_business_critical_tests import run as run_business_critical_tests
 from scripts.ci.step_canon_audit import run as run_canon_audit
+from scripts.ci.step_code_coverage import run as run_code_coverage
 from scripts.ci.step_demo_e2e_smoke import run as run_demo_e2e_smoke
 from scripts.ci.step_dependency_lock import run as run_dependency_lock
 from scripts.ci.step_import_smoke import run as run_import_smoke
@@ -33,6 +35,7 @@ _REGISTRY: dict[str, StepHandler] = {
     _step_ids.dependency_lock(): run_dependency_lock,
     _step_ids.doctor(): run_doctor,
     _step_ids.import_smoke(): run_import_smoke,
+    _step_ids.boot_smoke(): run_boot_smoke,
     _step_ids.demo_e2e_smoke(): run_demo_e2e_smoke,
     _step_ids.quality(): run_quality,
     _step_ids.canon_audit(): run_canon_audit,
@@ -42,6 +45,7 @@ _REGISTRY: dict[str, StepHandler] = {
     _step_ids.unit_tests(): run_unit_tests,
     _step_ids.integration_tests(): run_integration_tests,
     _step_ids.business_critical_tests(): run_business_critical_tests,
+    _step_ids.code_coverage(): run_code_coverage,
     _step_ids.rust_safety_core(): run_rust_safety_core,
     _step_ids.rust_supply_chain(): run_rust_supply_chain,
     _step_ids.postgres_contract(): run_postgres_contract,

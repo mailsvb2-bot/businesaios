@@ -293,6 +293,9 @@ RUNTIME_BOOT_SERVICE_SPEC_BY_NAME: Final[dict[str, RuntimeServiceSpec]] = {
 RUNTIME_BOOT_SERVICE_SPEC_BY_CALLABLE: Final[dict[str, RuntimeServiceSpec]] = {
     spec.callable_name: spec for spec in RUNTIME_BOOT_SERVICE_SPECS
 }
+RUNTIME_SERVICE_SPECS: Final[tuple[RuntimeServiceSpec, ...]] = RUNTIME_BOOT_SERVICE_SPECS
+RUNTIME_SERVICE_SPEC_BY_NAME: Final[dict[str, RuntimeServiceSpec]] = RUNTIME_BOOT_SERVICE_SPEC_BY_NAME
+RUNTIME_SERVICE_SPEC_BY_CALLABLE: Final[dict[str, RuntimeServiceSpec]] = RUNTIME_BOOT_SERVICE_SPEC_BY_CALLABLE
 CATALOG_BACKED_RUNTIME_SERVICES: Final[tuple[str, ...]] = tuple(
     spec.service_name
     for spec in RUNTIME_BOOT_SERVICE_SPECS
@@ -354,6 +357,9 @@ __all__ = [
     "RUNTIME_BOOT_SERVICE_SPECS",
     "RUNTIME_BOOT_SERVICE_SPEC_BY_CALLABLE",
     "RUNTIME_BOOT_SERVICE_SPEC_BY_NAME",
+    "RUNTIME_SERVICE_SPECS",
+    "RUNTIME_SERVICE_SPEC_BY_CALLABLE",
+    "RUNTIME_SERVICE_SPEC_BY_NAME",
     "RuntimeServiceSpec",
     "SINGLETON_RUNTIME_CALLABLES",
     "build_registration_compat_exports",

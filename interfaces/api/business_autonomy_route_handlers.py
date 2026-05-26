@@ -150,17 +150,22 @@ class BusinessAutonomyRouteHandlers:
         service = self.stack.get("guarded_service")
         if service is None:
             service = build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
-        trust_policy = getattr(service, "_trust_policy", None)
-        registry = getattr(trust_policy, "_trust_registry", None)
-        snapshot = registry.get(business_id) if registry is not None else None
+        snapshot = self._trust_snapshot_from_service(service=service, business_id=business_id)
         if snapshot is None or getattr(snapshot, "business_id", None) != business_id:
             service = build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
-            trust_policy = getattr(service, "_trust_policy", None)
-            registry = getattr(trust_policy, "_trust_registry", None)
-            snapshot = registry.get(business_id) if registry is not None else None
+            snapshot = self._trust_snapshot_from_service(service=service, business_id=business_id)
         if snapshot is None:
             return {"business_id": business_id, "trust_tier": "unknown", "score": 0.0, "reasons": []}
         return {"business_id": snapshot.business_id, "trust_tier": snapshot.trust_tier.value, "score": snapshot.score, "reasons": list(snapshot.reasons), "metadata": dict(snapshot.metadata or {})}
+
+    @staticmethod
+    def _trust_snapshot_from_service(*, service: object, business_id: str):
+        trust_policy = getattr(service, "_trust_policy", None)
+        registry = getattr(trust_policy, "_trust_registry", None)
+        try:
+            return registry.get(business_id) if registry is not None else None
+        except Exception:
+            return None
 
 
 def build_business_autonomy_route_handlers(*, stack: Mapping[str, Any] | None = None) -> BusinessAutonomyRouteHandlers:

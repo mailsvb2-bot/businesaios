@@ -1,0 +1,40 @@
+from __future__ import annotations
+
+"""Compatibility shell for canonical runtime dependency sets.
+
+The canonical owner is ``bootstrap.runtime_dependency_sets``. This module keeps
+legacy ``boot.*`` imports working without creating a second dependency catalog.
+"""
+
+CANON_BOOT_RUNTIME_DEPENDENCY_SETS_COMPAT_SHELL = True
+CANON_BOOT_RUNTIME_DEPENDENCY_SETS_NO_RUNTIME_ASSEMBLY = True
+
+from bootstrap.runtime_dependency_sets import (  # noqa: F401
+    ACTION_BUDGET_DEPS,
+    AUTONOMY_ADVISOR_DEPS,
+    CREATIVE_INTELLIGENCE_DEPS,
+    DECISION_CORE_DEPS,
+    DECISION_GATEWAY_DEPS,
+    DECISION_INPUT_SERVICE_DEPS,
+    GOVERNANCE_CHAIN_DEPS,
+    OBSERVABILITY_ONLY,
+    RUNTIME_DEPENDENCY_SETS,
+    RUNTIME_PACKET_PROVIDER_DEPS,
+    WORLD_STATE_INTEGRATION_DEPS,
+)
+
+__all__ = [
+    "ACTION_BUDGET_DEPS",
+    "AUTONOMY_ADVISOR_DEPS",
+    "CANON_BOOT_RUNTIME_DEPENDENCY_SETS_COMPAT_SHELL",
+    "CANON_BOOT_RUNTIME_DEPENDENCY_SETS_NO_RUNTIME_ASSEMBLY",
+    "CREATIVE_INTELLIGENCE_DEPS",
+    "DECISION_CORE_DEPS",
+    "DECISION_GATEWAY_DEPS",
+    "DECISION_INPUT_SERVICE_DEPS",
+    "GOVERNANCE_CHAIN_DEPS",
+    "OBSERVABILITY_ONLY",
+    "RUNTIME_DEPENDENCY_SETS",
+    "RUNTIME_PACKET_PROVIDER_DEPS",
+    "WORLD_STATE_INTEGRATION_DEPS",
+]
