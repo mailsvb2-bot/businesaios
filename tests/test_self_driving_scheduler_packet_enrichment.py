@@ -70,7 +70,7 @@ class _Provider:
 def test_self_driving_scheduler_accepts_optional_packet_provider() -> None:
     res = tick_once(
         learning_system=_Learning(),
-        decision_core=_DecisionService(),
+        decision_core=_DecisionCore(),
         executor=_Executor(),
         decision_input_provider=_Provider(),
     )
