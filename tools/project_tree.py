@@ -20,10 +20,12 @@ CANON_PROJECT_TREE_TOOL_NO_DECISION_LOGIC = True
 
 DEFAULT_EXCLUDE_NAMES = frozenset(
     {
+        ".coverage",
         ".git",
         ".mypy_cache",
         ".pytest_cache",
         ".ruff_cache",
+        ".runtime",
         ".venv",
         "__pycache__",
         "artifacts",
@@ -31,6 +33,7 @@ DEFAULT_EXCLUDE_NAMES = frozenset(
         "dist",
         "htmlcov",
         "node_modules",
+        "runtime_state",
         "target",
     }
 )
@@ -43,7 +46,9 @@ DEFAULT_EXCLUDE_SUFFIXES = (
     ".sqlite3",
 )
 DEFAULT_EXCLUDE_PATH_PATTERNS = (
+    ".env*",
     "data/business_autonomy/*",
+    "runtime/data/business_autonomy/*",
     "runtime/data/security/*",
     "security/process_owner_security_audit.jsonl",
 )
