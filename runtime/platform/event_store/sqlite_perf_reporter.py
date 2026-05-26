@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-
-from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
+
+from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 
 
 STAGES = ("router", "decide_total", "execute_total", "telegram_api")
@@ -174,5 +174,5 @@ def render_report(*, interactions: List[Interaction], top_n: int = 15) -> str:
 
 
 def default_paths_from_env(data_dir: Optional[str] = None) -> Tuple[str, str]:
-    dd = data_dir or str(env_path("DATA_DIR", os.path.join("runtime", "entrypoints", "data"))).strip()
+    dd = (data_dir or os.getenv("DATA_DIR") or os.path.join("runtime", "entrypoints", "data")).strip()
     return os.path.join(dd, "events.db"), os.path.join(dd, "snapshots.db")
