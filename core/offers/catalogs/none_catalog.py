@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from core.offers.offer_types import OfferCatalog, OfferEligibility, OfferRender
+from core.offers.offer_types import OfferCatalog, OfferEligibility, OfferRender, OfferSummary
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,7 @@ class NoneOfferCatalogV1(OfferCatalog):
 
     id: str = "offer_catalog_none@v1"
 
-    def list_offers(self) -> list["OfferSummary"]:
+    def list_offers(self) -> list[OfferSummary]:
         # Empty catalog.
         return []
 
