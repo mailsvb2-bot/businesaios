@@ -50,11 +50,10 @@ def build_default_registry() -> ActionSchemaRegistry:
     reg = ActionSchemaRegistry(_base_specs())
     try:
         from runtime.boot.actions_registry import all_actions
+
         for name in sorted(all_actions()):
             if name not in reg.names():
                 reg.register(name, {"type": "object", "additionalProperties": True})
     except Exception as exc:
-        if event_log is not None and hasattr(event_log, "emit"):
-            event_log.emit(event_type="schema_registry_missing@v1", source="schema_registry", user_id="-", decision_id="-", correlation_id="-", payload={"action": str(action), "error": exc.__class__.__name__})
         raise RuntimeError(f"SCHEMA_REGISTRY_LOOKUP_FAILED:{exc.__class__.__name__}") from exc
     return reg
