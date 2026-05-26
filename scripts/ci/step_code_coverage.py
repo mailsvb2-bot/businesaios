@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from scripts.ci.paths import coverage_dir, repo_root
-from scripts.ci.subprocess_io import run_command
+from scripts.ci.subprocess_io import PYTEST_REQUIRED_PLUGINS, run_command
 
 
 MIN_TOTAL_COVERAGE = 70.0
@@ -25,7 +24,7 @@ COVERAGE_TARGETS = (
 )
 
 
-def _coverage_paths() -> dict[str, Path]:
+def _coverage_paths():
     root = coverage_dir()
     return {
         "json": root / "coverage.json",
@@ -44,6 +43,13 @@ def _write_summary(payload: dict[str, object]) -> None:
 def _coverage_available() -> bool:
     outcome = run_command(["python", "-c", "import coverage; print(coverage.__version__)"], timeout=20)
     return outcome.returncode == 0
+
+
+def _pytest_plugin_args() -> list[str]:
+    plugin_args: list[str] = []
+    for plugin in PYTEST_REQUIRED_PLUGINS:
+        plugin_args.extend(["-p", plugin])
+    return plugin_args
 
 
 def run() -> tuple[bool, str]:
@@ -75,11 +81,13 @@ def run() -> tuple[bool, str]:
             "--source=.",
             "-m",
             "pytest",
+            *_pytest_plugin_args(),
             "-q",
             *COVERAGE_TARGETS,
             "-m",
             "not slow and not gate",
         ],
+        env={"PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "PYTHONNOUSERSITE": "1"},
         timeout=600,
     )
     if run_cov.returncode != 0:
