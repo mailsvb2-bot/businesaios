@@ -10,6 +10,7 @@ invariant: the sovereign ``DecisionCore`` class still lives only in
 from core.ai.decision_core import DecisionCore
 from core.decision_core_contract import CANONICAL_DECISION_CORE_IMPORT_PATH
 
+CANON_DECISION_CORE_IMPORT_PATH = CANONICAL_DECISION_CORE_IMPORT_PATH
 CANON_DECISION_CORE_PUBLIC_API = True
 
 __all__ = ["CANON_DECISION_CORE_IMPORT_PATH", "CANON_DECISION_CORE_PUBLIC_API", "DecisionCore"]
