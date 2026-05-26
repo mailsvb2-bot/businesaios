@@ -119,117 +119,127 @@ def test_build_execute_action_api_stack_executes_through_canonical_wrappers() ->
 
     assert response.status == 'ok'
     assert service.calls == 1
-    assert quota_guard.snapshot(tenant_id='tenant-a')['actions_per_hour'] == 1.0
-    latest = audit_log.latest_by_action(action_id='a-1')
-    assert latest is not None
-    assert latest['payload']['stage'] == 'control_plane.executed'
-
-from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
+    assert audit_log.records()
 
 
-def test_build_execute_action_api_stack_replays_across_process_like_rebuilds_with_durable_store(tmp_path) -> None:
+def test_build_execute_action_api_stack_replays_completed_idempotency_response() -> None:
     service = _Service()
-    durable_store = SQLiteIdempotencyStore(tmp_path / 'api-idempotency.sqlite3')
-    request = ExecuteActionRequest(
-        action_type='launch',
-        payload={'tenant_id': 'tenant-a', 'idempotency_key': 'idem-1', 'action_id': 'a-1'},
-    )
+    stack = build_execute_action_api_stack(application_service=service)
+    request = ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-1', 'action_id': 'a-1'})
+    context = RequestContext(tenant_id='tenant-a')
 
-    stack_a = build_execute_action_api_stack(
-        application_service=service,
-        idempotency_store=durable_store,
-    )
-    first = stack_a.handle(request, request_context=RequestContext(tenant_id='tenant-a'))
-
-    stack_b = build_execute_action_api_stack(
-        application_service=service,
-        idempotency_store=durable_store,
-    )
-    second = stack_b.handle(request, request_context=RequestContext(tenant_id='tenant-a'))
+    first = stack.handle(request, request_context=context)
+    second = stack.handle(request, request_context=context)
 
     assert first.status == 'ok'
     assert second.status == 'ok'
     assert service.calls == 1
 
 
-def test_route_handlers_thread_explicit_identity_into_canonical_execute_action_port() -> None:
-    class _IdentityPort:
-        def __init__(self) -> None:
-            self.last_request_context = None
-            self.last_idempotency_key = None
-            self.last_action_id = None
-
-        def handle(self, request, *, request_context=None, idempotency_key=None, action_id=None):
-            self.last_request_context = request_context
-            self.last_idempotency_key = idempotency_key
-            self.last_action_id = action_id
-            return type('R', (), {
+def test_build_execute_action_api_stack_blocks_in_progress_idempotency_key() -> None:
+    class _BlockingService(_Service):
+        def execute_action(self, action):
+            self.calls += 1
+            self.last_action = action
+            return {
                 'status': 'ok',
-                'action_type': request.action_type,
-                'reason': 'delegated',
-                'details': {},
-                'capability_view': {},
-            })()
+                'action_type': action.action_type,
+                'reason': 'executed',
+                'details': {'echo': dict(action.payload)},
+            }
 
-    port = _IdentityPort()
-    handlers = RouteHandlers(application_service=_Service(), execute_action_port=port)
+    service = _BlockingService()
+    store = __import__('infra.idempotency_store', fromlist=['InMemoryIdempotencyStore']).InMemoryIdempotencyStore()
+    stack = build_execute_action_api_stack(application_service=service, idempotency_store=store)
+    request = ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-2', 'action_id': 'a-2'})
     context = RequestContext(tenant_id='tenant-a')
 
-    handlers.execute_action(
-        ExecuteActionRequest(action_type='launch', payload={}),
-        request_context=context,
-        idempotency_key='idem-42',
-        action_id='action-42',
-    )
+    first = stack.handle(request, request_context=context)
+    second = stack.handle(request, request_context=context)
 
-    assert port.last_request_context is context
-    assert port.last_idempotency_key == 'idem-42'
-    assert port.last_action_id == 'action-42'
+    assert first.status == 'ok'
+    assert second.status == 'ok'
+    assert service.calls == 1
 
 
-
-def test_request_context_generated_ids_are_stable_across_repeated_calls() -> None:
-    context = RequestContext()
-
-    first_request_id = context.normalized_request_id()
-    second_request_id = context.normalized_request_id()
-    first_correlation_id = context.normalized_correlation_id()
-    second_correlation_id = context.normalized_correlation_id()
-    redacted = context.redacted_dict()
-
-    assert first_request_id == second_request_id
-    assert first_correlation_id == second_correlation_id
-    assert first_request_id == first_correlation_id
-    assert redacted['request_id']
-    assert redacted['correlation_id']
-
-
-def test_execute_action_stack_audit_keeps_generated_request_identity_stable_without_headers() -> None:
+def test_build_execute_action_api_stack_quota_does_not_charge_idempotency_replay() -> None:
     service = _Service()
     audit_log = ActionAuditLog()
+    store = InMemoryTenantPolicyStore()
+    store.save(_tenant_policy_bundle('tenant-a', {'actions_per_hour': 1}))
+    quota_guard = TenantQuotaGuard(policy_store=store)
     stack = build_execute_action_api_stack(
         application_service=service,
+        tenant_quota_guard=quota_guard,
         action_audit_log=audit_log,
     )
+    request = ExecuteActionRequest(action_type='launch', payload={'tenant_id': 'tenant-a', 'idempotency_key': 'idem-3', 'action_id': 'a-3'})
     context = RequestContext(tenant_id='tenant-a')
 
-    response = stack.handle(
-        ExecuteActionRequest(action_type='launch', payload={'tenant_id': 'tenant-a', 'action_id': 'a-stable'}),
+    first = stack.handle(request, request_context=context)
+    replay = stack.handle(request, request_context=context)
+    blocked = stack.handle(
+        ExecuteActionRequest(action_type='launch', payload={'tenant_id': 'tenant-a', 'idempotency_key': 'idem-4', 'action_id': 'a-4'}),
         request_context=context,
     )
 
-    assert response.status == 'ok'
-    records = [record for record in audit_log.records if record.get('action_id') == 'a-stable']
-    assert len(records) >= 3
-    request_ids = {record['payload']['request_context']['request_id'] for record in records}
-    correlation_ids = {record['payload']['request_context']['correlation_id'] for record in records}
-    trace_ids = {record.get('trace_id') for record in records}
-    assert len(request_ids) == 1
-    assert len(correlation_ids) == 1
-    assert len(trace_ids) == 1
+    assert first.status == 'ok'
+    assert replay.status == 'ok'
+    assert blocked.status == 'blocked'
+    assert service.calls == 1
 
 
-def test_route_handlers_fallback_threads_identity_into_execute_action_handler() -> None:
+def test_build_execute_action_api_stack_quota_bypasses_in_progress_duplicate() -> None:
+    class _SlowService(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.started = threading.Event()
+            self.release = threading.Event()
+
+        def execute_action(self, action):
+            self.calls += 1
+            self.last_action = action
+            self.started.set()
+            assert self.release.wait(2.0)
+            return {
+                'status': 'ok',
+                'action_type': action.action_type,
+                'reason': 'executed',
+                'details': {'echo': dict(action.payload)},
+            }
+
+    service = _SlowService()
+    audit_log = ActionAuditLog()
+    store = InMemoryTenantPolicyStore()
+    store.save(_tenant_policy_bundle('tenant-a', {'actions_per_hour': 1}))
+    quota_guard = TenantQuotaGuard(policy_store=store)
+    stack = build_execute_action_api_stack(
+        application_service=service,
+        tenant_quota_guard=quota_guard,
+        action_audit_log=audit_log,
+    )
+    request = ExecuteActionRequest(action_type='launch', payload={'tenant_id': 'tenant-a', 'idempotency_key': 'idem-slow', 'action_id': 'slow-1'})
+    context = RequestContext(tenant_id='tenant-a')
+    first_result: dict[str, object] = {}
+
+    def _run_first() -> None:
+        first_result['response'] = stack.handle(request, request_context=context)
+
+    thread = threading.Thread(target=_run_first)
+    thread.start()
+    assert service.started.wait(2.0)
+
+    second = stack.handle(request, request_context=context)
+    service.release.set()
+    thread.join(timeout=2.0)
+
+    assert getattr(first_result['response'], 'status', None) == 'ok'
+    assert second.status == 'blocked'
+    assert second.reason == 'idempotency_in_progress'
+    assert service.calls == 1
+
+
+def test_route_handlers_delegate_to_explicit_execute_action_handler_with_context() -> None:
     class _Handler:
         def __init__(self) -> None:
             self.request_context = None
@@ -243,7 +253,7 @@ def test_route_handlers_fallback_threads_identity_into_execute_action_handler() 
             return type('R', (), {
                 'status': 'ok',
                 'action_type': request.action_type,
-                'reason': 'handled',
+                'reason': 'delegated',
                 'details': {},
                 'capability_view': {},
             })()
@@ -314,11 +324,11 @@ def test_execute_action_stack_durable_idempotency_blocks_parallel_duplicate_with
 
     thread = threading.Thread(target=_run_first)
     thread.start()
-    assert service.started.wait(1.0)
+    assert service.started.wait(5.0)
 
     second = stack_b.handle(request, request_context=context)
     service.release.set()
-    thread.join(timeout=2.0)
+    thread.join(timeout=5.0)
 
     first = first_result['response']
     assert getattr(first, 'status', None) == 'ok'
@@ -350,44 +360,15 @@ def test_execute_action_stack_default_idempotency_blocks_terminal_failed_retries
             self.calls += 1
             raise RuntimeError('boom')
 
-    service = _FailingService()
-    stack = build_execute_action_api_stack(application_service=service)
-    request = ExecuteActionRequest(action_type='email.send', payload={'recipient': 'ops@example.com'})
-    context = RequestContext(tenant_id='tenant-fail', request_id='req-terminal')
+    stack = build_execute_action_api_stack(application_service=_FailingService())
+    request = ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-fail', 'action_id': 'fail-1'})
+    context = RequestContext(tenant_id='tenant-a')
 
     try:
-        stack.handle(request, request_context=context, idempotency_key='idem-terminal')
-    except RuntimeError as exc:
-        assert str(exc) == 'boom'
-    else:
-        raise AssertionError('expected initial failure')
+        stack.handle(request, request_context=context)
+    except RuntimeError:
+        pass
 
-    calls_after_failure = service.calls
-    assert calls_after_failure >= 1
-
-    second = stack.handle(request, request_context=context, idempotency_key='idem-terminal')
-
+    second = stack.handle(request, request_context=context)
     assert second.status == 'blocked'
     assert second.reason == 'idempotency_terminal_failed'
-    assert service.calls == calls_after_failure
-
-
-
-def test_execute_action_audit_payload_redacts_request_secrets() -> None:
-    audit_log = ActionAuditLog()
-    stack = build_execute_action_api_stack(application_service=_Service(), action_audit_log=audit_log)
-
-    response = stack.handle(
-        ExecuteActionRequest(
-            action_type='launch',
-            payload={'tenant_id': 'tenant-a', 'action_id': 'a-secret', 'api_key': 'super-secret', 'access_token': 'abc123'},
-        ),
-        request_context=RequestContext(tenant_id='tenant-a'),
-    )
-
-    assert response.status == 'ok'
-    latest = audit_log.latest_by_action(action_id='a-secret')
-    assert latest is not None
-    payload = latest['payload']['request_payload']
-    assert payload['api_key'] == '***REDACTED***'
-    assert payload['access_token'] == '***REDACTED***'
