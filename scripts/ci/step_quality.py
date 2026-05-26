@@ -4,10 +4,11 @@ import ast
 import importlib.util
 import os
 from pathlib import Path
+import sys
 
 from scripts.ci.config import project_shape_config
 from scripts.ci.paths import repo_root
-from scripts.ci.subprocess_io import run_python
+from scripts.ci.subprocess_io import run_command
 
 
 def _iter_python_files(path: Path):
@@ -68,11 +69,11 @@ def _ruff_check() -> tuple[bool, str]:
             return False, "ruff unavailable while BAIOS_REQUIRE_QUALITY_TOOLS is enabled"
         return True, "ruff unavailable in environment; skipped by non-release contract"
 
-    args = ["-m", "ruff", "check", *(str(target) for target in targets)]
+    args = [sys.executable, "-m", "ruff", "check", *(str(target) for target in targets)]
     if config.exists():
         args.extend(["--config", str(config)])
 
-    outcome = run_python(args, timeout=180)
+    outcome = run_command(args, env={"PYTHONNOUSERSITE": "1"}, timeout=180)
     if outcome.returncode != 0:
         return False, "ruff check failed"
 
