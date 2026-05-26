@@ -77,9 +77,7 @@ def test_execute_action_with_guards_uses_normalized_request_id_when_request_cont
         retry_policy=__import__('infra.retry_policy', fromlist=['RetryPolicy']).RetryPolicy(
             spec=__import__('infra.retry_models', fromlist=['RetryPolicySpec']).RetryPolicySpec(max_attempts=1, delay_seconds=0.0)
         ),
-        idempotency=__import__('infra.idempotency', fromlist=['IdempotencyExecutor']).IdempotencyExecutor(
-            store=__import__('infra.idempotency_store', fromlist=['InMemoryIdempotencyStore']).InMemoryIdempotencyStore()
-        ),
+        idempotency=__import__('infra.idempotency_store', fromlist=['InMemoryIdempotencyStore']).InMemoryIdempotencyStore(),
     )
 
     response = wrapper.handle(
@@ -119,7 +117,7 @@ def test_build_execute_action_api_stack_executes_through_canonical_wrappers() ->
 
     assert response.status == 'ok'
     assert service.calls == 1
-    assert audit_log.records()
+    assert audit_log.records
 
 
 def test_build_execute_action_api_stack_replays_completed_idempotency_response() -> None:
