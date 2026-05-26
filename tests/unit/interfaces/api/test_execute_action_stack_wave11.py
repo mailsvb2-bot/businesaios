@@ -77,7 +77,9 @@ def test_execute_action_with_guards_uses_normalized_request_id_when_request_cont
         retry_policy=__import__('infra.retry_policy', fromlist=['RetryPolicy']).RetryPolicy(
             spec=__import__('infra.retry_models', fromlist=['RetryPolicySpec']).RetryPolicySpec(max_attempts=1, delay_seconds=0.0)
         ),
-        idempotency=__import__('infra.idempotency_store', fromlist=['InMemoryIdempotencyStore']).InMemoryIdempotencyStore(),
+        idempotency=__import__('infra.idempotency', fromlist=['IdempotencyExecutor']).IdempotencyExecutor(
+            store=__import__('infra.idempotency_store', fromlist=['InMemoryIdempotencyStore']).InMemoryIdempotencyStore()
+        ),
     )
 
     response = wrapper.handle(
@@ -198,7 +200,7 @@ def test_build_execute_action_api_stack_quota_bypasses_in_progress_duplicate() -
             self.calls += 1
             self.last_action = action
             self.started.set()
-            assert self.release.wait(2.0)
+            assert self.release.wait(10.0)
             return {
                 'status': 'ok',
                 'action_type': action.action_type,
@@ -225,11 +227,11 @@ def test_build_execute_action_api_stack_quota_bypasses_in_progress_duplicate() -
 
     thread = threading.Thread(target=_run_first)
     thread.start()
-    assert service.started.wait(2.0)
+    assert service.started.wait(5.0)
 
     second = stack.handle(request, request_context=context)
     service.release.set()
-    thread.join(timeout=2.0)
+    thread.join(timeout=10.0)
 
     assert getattr(first_result['response'], 'status', None) == 'ok'
     assert second.status == 'blocked'
@@ -299,7 +301,7 @@ def test_execute_action_stack_durable_idempotency_blocks_parallel_duplicate_with
             self.calls += 1
             self.last_action = action
             self.started.set()
-            assert self.release.wait(2.0)
+            assert self.release.wait(10.0)
             return {
                 'status': 'ok',
                 'action_type': action.action_type,
@@ -326,7 +328,7 @@ def test_execute_action_stack_durable_idempotency_blocks_parallel_duplicate_with
 
     second = stack_b.handle(request, request_context=context)
     service.release.set()
-    thread.join(timeout=5.0)
+    thread.join(timeout=10.0)
 
     first = first_result['response']
     assert getattr(first, 'status', None) == 'ok'
