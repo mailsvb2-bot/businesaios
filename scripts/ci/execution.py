@@ -23,6 +23,7 @@ _PRODUCTION_PROOF_ENV_KEYS = (
     "CONTAINER_RUNTIME_EVIDENCE_REQUIRED",
     "REAL_RUNTIME_BOOT_EVIDENCE_REQUIRED",
     "PRODUCTION_BOOT_PROOF_REQUIRED",
+    "STAGING_RUNTIME_PROOF_REQUIRED",
 )
 
 
@@ -34,7 +35,7 @@ def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
     release_gate = gate in {"release", "pre-release"}
     if step_name == "quality-check" and release_gate:
         os.environ[quality_key] = "release"
-    if release_gate and step_name in {"postgres-live", "container-runtime", "production-boot"}:
+    if release_gate and step_name in {"postgres-live", "container-runtime", "production-boot", "staging-runtime"}:
         for key in _PRODUCTION_PROOF_ENV_KEYS:
             os.environ[key] = "1"
     try:
