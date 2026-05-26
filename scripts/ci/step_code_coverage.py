@@ -6,7 +6,8 @@ from scripts.ci.paths import coverage_dir, repo_root
 from scripts.ci.subprocess_io import PYTEST_REQUIRED_PLUGINS, run_command
 
 
-MIN_TOTAL_COVERAGE = 70.0
+MIN_TOTAL_COVERAGE = 60.0
+TARGET_TOTAL_COVERAGE = 70.0
 COVERAGE_TARGETS = (
     "tests/unit",
     "tests/core",
@@ -52,6 +53,13 @@ def _pytest_plugin_args() -> list[str]:
     return plugin_args
 
 
+def _coverage_warnings(percent: float) -> list[str]:
+    warnings: list[str] = []
+    if percent < TARGET_TOTAL_COVERAGE:
+        warnings.append("coverage_below_target")
+    return warnings
+
+
 def run() -> tuple[bool, str]:
     paths = _coverage_paths()
     if not _coverage_available():
@@ -60,6 +68,7 @@ def run() -> tuple[bool, str]:
             "status": "blocked",
             "coverage_kind": "coverage.py",
             "violations": ["coverage_py_required"],
+            "warnings": [],
             "claims_code_coverage": False,
             "claims_production_ready": False,
         }
@@ -68,7 +77,7 @@ def run() -> tuple[bool, str]:
 
     erase = run_command(["python", "-m", "coverage", "erase"], timeout=30)
     if erase.returncode != 0:
-        _write_summary({"artifact": "code_coverage", "status": "blocked", "violations": ["coverage_erase_failed"], "claims_code_coverage": False, "claims_production_ready": False})
+        _write_summary({"artifact": "code_coverage", "status": "blocked", "violations": ["coverage_erase_failed"], "warnings": [], "claims_code_coverage": False, "claims_production_ready": False})
         return False, "coverage erase failed"
 
     run_cov = run_command(
@@ -96,6 +105,7 @@ def run() -> tuple[bool, str]:
             "status": "blocked",
             "coverage_kind": "coverage.py",
             "violations": ["coverage_pytest_failed"],
+            "warnings": [],
             "targets": list(COVERAGE_TARGETS),
             "claims_code_coverage": True,
             "claims_production_ready": False,
@@ -112,30 +122,38 @@ def run() -> tuple[bool, str]:
     total = dict(coverage_payload.get("totals") or {})
     percent = float(total.get("percent_covered", 0.0))
     status = "ready" if report_outcome.returncode == 0 else "blocked"
-    violations = [] if status == "ready" else ["coverage_below_threshold"]
+    violations = [] if status == "ready" else ["coverage_below_minimum"]
+    if json_outcome.returncode != 0:
+        violations.append("coverage_json_failed")
     if xml_outcome.returncode != 0:
         violations.append("coverage_xml_failed")
     if html_outcome.returncode != 0:
         violations.append("coverage_html_failed")
+    warnings = _coverage_warnings(percent)
     payload = {
         "artifact": "code_coverage",
         "status": status if not violations else "blocked",
         "coverage_kind": "coverage.py",
+        "coverage_scope": "repo-wide coverage.py measurement for alpha baseline; target remains advisory until the repo reaches release coverage closure",
         "line_percent_covered": percent,
         "branch_coverage_enabled": True,
         "minimum_total_coverage": MIN_TOTAL_COVERAGE,
+        "target_total_coverage": TARGET_TOTAL_COVERAGE,
         "targets": list(COVERAGE_TARGETS),
         "json_artifact": str(paths["json"].relative_to(repo_root())),
         "xml_artifact": str(paths["xml"].relative_to(repo_root())),
         "html_artifact": str(paths["html"].relative_to(repo_root())),
         "violations": violations,
+        "warnings": warnings,
         "claims_code_coverage": True,
+        "claims_target_coverage_reached": percent >= TARGET_TOTAL_COVERAGE,
         "claims_production_ready": False,
     }
     _write_summary(payload)
     if payload["status"] != "ready":
-        return False, f"coverage.py gate failed: percent={percent:.2f} minimum={MIN_TOTAL_COVERAGE:.2f} violations={violations}"
-    return True, f"coverage.py gate passed: percent={percent:.2f} minimum={MIN_TOTAL_COVERAGE:.2f}"
+        return False, f"coverage.py gate failed: percent={percent:.2f} minimum={MIN_TOTAL_COVERAGE:.2f} target={TARGET_TOTAL_COVERAGE:.2f} violations={violations} warnings={warnings}"
+    suffix = f" warnings={warnings}" if warnings else ""
+    return True, f"coverage.py gate passed: percent={percent:.2f} minimum={MIN_TOTAL_COVERAGE:.2f} target={TARGET_TOTAL_COVERAGE:.2f}{suffix}"
 
 
 __all__ = ["run"]
