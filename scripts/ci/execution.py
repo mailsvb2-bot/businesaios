@@ -9,7 +9,7 @@ from scripts.ci.coverage_report import write_coverage_stub_xml
 from scripts.ci.goal import optimization_goal
 from scripts.ci.junit_report import write_junit_xml
 from scripts.ci.paths import coverage_dir, execution_dir, junit_dir, reports_dir
-from scripts.ci.plan_registry import plan_for_gate
+from scripts.ci.plan_registry import plan_for_gate, requires_release_proof_environment
 from scripts.ci.reports import write_report
 from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state
 from scripts.ci.step_registry import handler_for_step
@@ -17,7 +17,7 @@ from scripts.ci.summary import write_failure_summary
 from scripts.ci.timing import measure_time
 
 
-_PRODUCTION_PROOF_ENV_KEYS = (
+_PROOF_ENV_KEYS = (
     "POSTGRES_LIVE_PROOF_REQUIRED",
     "CONTAINER_RUNTIME_PROOF_REQUIRED",
     "CONTAINER_RUNTIME_EVIDENCE_REQUIRED",
@@ -31,12 +31,11 @@ _PRODUCTION_PROOF_ENV_KEYS = (
 def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
     quality_key = "BAIOS_REQUIRE_QUALITY_TOOLS"
     previous_quality = os.environ.get(quality_key)
-    previous_proof = {key: os.environ.get(key) for key in _PRODUCTION_PROOF_ENV_KEYS}
-    release_gate = gate in {"release", "pre-release"}
-    if step_name == "quality-check" and release_gate:
+    previous_proof = {key: os.environ.get(key) for key in _PROOF_ENV_KEYS}
+    if step_name == "quality-check" and gate in {"release", "pre-release"}:
         os.environ[quality_key] = "release"
-    if release_gate and step_name in {"postgres-live", "container-runtime", "production-boot", "staging-runtime"}:
-        for key in _PRODUCTION_PROOF_ENV_KEYS:
+    if requires_release_proof_environment(gate=gate, step_name=step_name):
+        for key in _PROOF_ENV_KEYS:
             os.environ[key] = "1"
     try:
         yield
