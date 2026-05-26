@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Tuple
 
-from core.offers.offer_types import OfferCatalog, OfferEligibility, OfferRender
+from core.offers.offer_types import OfferCatalog, OfferEligibility, OfferRender, OfferSummary
 from core.observability.silent import swallow
 
 CATALOG_ID: str = "retention_legacy"
@@ -50,9 +50,7 @@ class LegacyOfferCatalogV1(OfferCatalog):
 
     id: str = "offer_catalog_legacy@v1"
 
-    def list_offers(self) -> list["OfferSummary"]:
-        from core.offers.offer_types import OfferSummary
-
+    def list_offers(self) -> list[OfferSummary]:
         out: list[OfferSummary] = []
         for oid in sorted(OFFERS.keys()):
             offer = OFFERS.get(oid)
