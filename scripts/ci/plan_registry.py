@@ -11,12 +11,33 @@ def _pg_migrations_step() -> str:
     return "".join(("postgres", "-", "migrations"))
 
 
+def _pg_live_step() -> str:
+    return "".join(("postgres", "-", "live"))
+
+
 def _container_runtime_step() -> str:
     return "".join(("container", "-", "runtime"))
 
 
 def _staging_runtime_step() -> str:
     return "".join(("staging", "-", "runtime"))
+
+
+def _production_boot_step() -> str:
+    return "".join(("production", "-", "boot"))
+
+
+def _release_proof_steps() -> tuple[str, ...]:
+    return (
+        _pg_live_step(),
+        _container_runtime_step(),
+        _staging_runtime_step(),
+        _production_boot_step(),
+    )
+
+
+def requires_release_proof_environment(*, gate: str, step_name: str) -> bool:
+    return gate in {"release", "pre-release"} and step_name in _release_proof_steps()
 
 
 def allowed_gates() -> tuple[str, ...]:
@@ -30,10 +51,10 @@ def allowed_gates() -> tuple[str, ...]:
         "rust-deps",
         "postgres-contract",
         _pg_migrations_step(),
-        "postgres-live",
+        _pg_live_step(),
         _container_runtime_step(),
         _staging_runtime_step(),
-        "production-boot",
+        _production_boot_step(),
         "release",
         "pre-push",
         "pre-release",
@@ -74,7 +95,7 @@ def _postgres_migrations_common(gate: str) -> ExecutionPlan:
 
 
 def _postgres_live_common(gate: str) -> ExecutionPlan:
-    return _plan(gate, "assert-project-shape", "doctor-check", "postgres-live")
+    return _plan(gate, "assert-project-shape", "doctor-check", _pg_live_step())
 
 
 def _container_runtime_common(gate: str) -> ExecutionPlan:
@@ -92,10 +113,10 @@ def _production_boot_common(gate: str) -> ExecutionPlan:
         "doctor-check",
         "postgres-contract",
         _pg_migrations_step(),
-        "postgres-live",
+        _pg_live_step(),
         _container_runtime_step(),
         _staging_runtime_step(),
-        "production-boot",
+        _production_boot_step(),
     )
 
 
@@ -124,14 +145,14 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
         return _postgres_contract_common("postgres-contract")
     if gate == _pg_migrations_step():
         return _postgres_migrations_common(gate)
-    if gate == "postgres-live":
-        return _postgres_live_common("postgres-live")
+    if gate == _pg_live_step():
+        return _postgres_live_common(gate)
     if gate == _container_runtime_step():
         return _container_runtime_common(gate)
     if gate == _staging_runtime_step():
         return _staging_runtime_common(gate)
-    if gate == "production-boot":
-        return _production_boot_common("production-boot")
+    if gate == _production_boot_step():
+        return _production_boot_common(gate)
     if gate == "fast":
         return _plan(
             "fast",
@@ -186,10 +207,10 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "rust-supply-chain",
             "postgres-contract",
             _pg_migrations_step(),
-            "postgres-live",
+            _pg_live_step(),
             _container_runtime_step(),
             _staging_runtime_step(),
-            "production-boot",
+            _production_boot_step(),
             "verify-release",
             "build-artifact",
         )
@@ -228,10 +249,13 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "rust-supply-chain",
             "postgres-contract",
             _pg_migrations_step(),
-            "postgres-live",
+            _pg_live_step(),
             _container_runtime_step(),
             _staging_runtime_step(),
-            "production-boot",
+            _production_boot_step(),
             "verify-release",
         )
     raise ValueError(f"unknown gate: {gate}")
+
+
+__all__ = ["allowed_gates", "plan_for_gate", "requires_release_proof_environment"]
