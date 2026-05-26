@@ -20,6 +20,7 @@ from execution.business_operating_memory import project_business_memory_contract
 
 
 CANON_HEADLESS_AUTONOMY_LOOP = True
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -251,11 +252,11 @@ class AutonomyLoop:
                 "steps_count": len(steps),
             },
         )
-        if guard is not None and hasattr(guard, 'mark_completed'):
+        if guard is not None and hasattr(guard, "mark_completed"):
             try:
                 guard.mark_completed(key=fingerprint, result_ref=trace.run_id, result_digest=trace.trace_id)
             except Exception as mark_exc:
-                logger.warning('autonomy_loop_mark_completed_failed', exc_info=mark_exc)
+                logger.warning("autonomy_loop_mark_completed_failed", exc_info=mark_exc)
         return AutonomyLoopResult(
             completed=completed,
             stop_reason=stop_reason,
@@ -288,30 +289,9 @@ class AutonomyLoop:
                 attempt_index=attempt_index,
                 envelope=decision.envelope,
                 explanation=decision.explanation,
-                executable_action=decision.executable_action,
-                autonomy_decision=decision.autonomy_decision,
                 result=result,
+                memory_context=dict(getattr(state, "memory_context", {}) or {}),
             )
             if not should_retry:
                 return step
             attempt_index += 1
-
-    @staticmethod
-    def _build_recent_action_summary(*, step: Any) -> dict[str, Any]:
-        feedback = dict(getattr(step, "feedback", {}) or {})
-        budget = dict(feedback.get(ACTION_BUDGET_KEY) or {})
-        cost = dict(budget.get("cost") or {})
-        return {
-            "action_type": str(getattr(step, "action", "") or ""),
-            "status": str(getattr(step, "status", "") or ""),
-            "executed": bool(getattr(step, "executed", False)),
-            "verified": bool(getattr(step, "verified", False)),
-            "operator_required": bool(getattr(step, "operator_required", False)),
-            "outbound_count": int(cost.get("outbound_count") or 0),
-            "publication_count": int(cost.get("publication_count") or 0),
-            "irreversible_count": int(cost.get("irreversible_count") or 0),
-            "budget_change_amount": float(cost.get("budget_change_amount") or 0.0),
-        }
-
-
-__all__ = ["CANON_HEADLESS_AUTONOMY_LOOP", "AutonomyLoop", "AutonomyLoopResult"]
