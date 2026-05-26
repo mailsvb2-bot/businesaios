@@ -17,19 +17,38 @@ from scripts.ci.summary import write_failure_summary
 from scripts.ci.timing import measure_time
 
 
+_PRODUCTION_PROOF_ENV_KEYS = (
+    "POSTGRES_LIVE_PROOF_REQUIRED",
+    "CONTAINER_RUNTIME_PROOF_REQUIRED",
+    "CONTAINER_RUNTIME_EVIDENCE_REQUIRED",
+    "REAL_RUNTIME_BOOT_EVIDENCE_REQUIRED",
+    "PRODUCTION_BOOT_PROOF_REQUIRED",
+)
+
+
 @contextmanager
 def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
-    key = "BAIOS_REQUIRE_QUALITY_TOOLS"
-    previous = os.environ.get(key)
-    if step_name == "quality-check" and gate in {"release", "pre-release"}:
-        os.environ[key] = "release"
+    quality_key = "BAIOS_REQUIRE_QUALITY_TOOLS"
+    previous_quality = os.environ.get(quality_key)
+    previous_proof = {key: os.environ.get(key) for key in _PRODUCTION_PROOF_ENV_KEYS}
+    release_gate = gate in {"release", "pre-release"}
+    if step_name == "quality-check" and release_gate:
+        os.environ[quality_key] = "release"
+    if release_gate and step_name in {"postgres-live", "container-runtime", "production-boot"}:
+        for key in _PRODUCTION_PROOF_ENV_KEYS:
+            os.environ[key] = "1"
     try:
         yield
     finally:
-        if previous is None:
-            os.environ.pop(key, None)
+        if previous_quality is None:
+            os.environ.pop(quality_key, None)
         else:
-            os.environ[key] = previous
+            os.environ[quality_key] = previous_quality
+        for key, value in previous_proof.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def _mutable_cleanup_result(*, name: str, duration_ms: int, removed: list[str]) -> StepResult:
