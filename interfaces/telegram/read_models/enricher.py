@@ -13,20 +13,21 @@ This module is READ-ONLY:
 - It must not call network
 """
 
-import time
 import logging
-from core.observability.errors import log_exception_throttled
+import os
+import time
 from typing import Any, Dict, Optional
 
-from runtime.platform.config.feature_flags import FeatureFlags
+from core.observability.errors import log_exception_throttled
 from core.observability.perf import AutoAccelerator, rolling_latency_summary
-from kernel.world_state import WorldStateV1
-from interfaces.telegram.read_models.admin_access import is_superadmin, resolve_admin_metrics, load_admin_metrics
+from interfaces.telegram.read_models.admin_access import is_superadmin, load_admin_metrics, resolve_admin_metrics
 from interfaces.telegram.read_models.cache_window import CacheWindow as _CacheEntry, is_cache_fresh
 from interfaces.telegram.read_models.components.pricing import load_pricing_suggestions  # compatibility anchor
 from interfaces.telegram.read_models.components.profile import load_user_profile  # compatibility anchor
 from interfaces.telegram.read_models.user_bundle import load_user_bundle
 from interfaces.telegram.read_models.world_state_runtime import build_world_state_for_chat
+from kernel.world_state import WorldStateV1
+from runtime.platform.config.feature_flags import FeatureFlags
 
 
 def _now_ms() -> int:
@@ -48,7 +49,6 @@ class TelegramReadModelEnricher:
     def _latest_event_ts(self) -> int:
         try:
             if hasattr(self._event_store, "latest_event"):
-                # tenant-aware event store may require tenant_id.
                 try:
                     ev = self._event_store.latest_event(tenant_id=self._tenant_id)  # type: ignore[attr-defined]
                 except TypeError:
@@ -70,7 +70,7 @@ class TelegramReadModelEnricher:
                 payload={"reason": reason, "error": error},
             )
         except Exception as exc:
-            log_exception_throttled(log, 'telegram_read_model_bandit_warning_emit_failed', exc)
+            log_exception_throttled(log, "telegram_read_model_bandit_warning_emit_failed", exc)
 
     def enrich_user(self, *, chat_id: str) -> Dict[str, Any]:
         """Return a dict of user enrichment fields for WorldState.user.
@@ -86,7 +86,7 @@ class TelegramReadModelEnricher:
                 ttl = self._accelerator.recommend_ttl_ms(latency_summary=rolling_latency_summary(top_n=3) or {})
                 self._ttl_ms = int(ttl)
         except Exception as exc:
-            log_exception_throttled(log, 'telegram_read_model_auto_accelerator_failed', exc)
+            log_exception_throttled(log, "telegram_read_model_auto_accelerator_failed", exc)
         latest_ts = self._latest_event_ts()
         key = str(chat_id)
         cached = self._user_cache.get(key)
@@ -100,7 +100,7 @@ class TelegramReadModelEnricher:
             event_warning=lambda reason, error: self._emit_warning(user_id=str(chat_id), reason=reason, error=error),
         )
 
-        marketing_seed = str(env_str("MARKETING_SEED", "1") or "1").strip() or "1"
+        marketing_seed = str(os.getenv("MARKETING_SEED", "1") or "1").strip() or "1"
         is_super = is_superadmin(key)
         is_admin = bool(is_super) or ("admin" in {str(r) for r in bundle["roles"]})
         admin_metrics = resolve_admin_metrics(
@@ -149,38 +149,24 @@ class TelegramReadModelEnricher:
         Delegates to the single canonical entry point:
         latest_events(...) -> build_world_state_from_events(...) -> compat overlays.
         """
-
-        # NOTE: For Telegram runtime, overlays are derived from TelegramContext.
-        # This method is retained for backward-compat callers that already computed
-        # overlays (session/meta/product/economy).
-        # It uses a minimal dummy context-free path by directly feeding overlays into reducers.
-        # Prefer build_world_state_for_telegram(...) in new code.
         return build_world_state_for_chat(
             event_store=self._event_store,
+            chat_id=chat_id,
             tenant_id=self._tenant_id,
-            chat_id=str(chat_id),
-            session=(session or {}),
-            meta=(meta or {}),
-            product=(product or {}),
-            economy=(economy or {}),
-            entitlements=(entitlements or {}),
-            limit=int(limit),
+            session=session,
+            meta=meta,
+            product=product,
+            economy=economy,
+            entitlements=entitlements,
+            limit=limit,
         )
 
     def enrich_admin_metrics(self) -> Dict[str, Any]:
-        """Compute admin metrics with a short cache window."""
         now_ms = _now_ms()
-        try:
-            if FeatureFlags.is_enabled("AUTO_ACCELERATOR"):
-                ttl = self._accelerator.recommend_ttl_ms(latency_summary=rolling_latency_summary(top_n=3) or {})
-                self._ttl_ms = int(ttl)
-        except Exception as exc:
-            log_exception_throttled(log, 'telegram_read_model_auto_accelerator_failed', exc)
-        latest_ts = self._latest_event_ts()
         cached = self._admin_cache
-        if is_cache_fresh(cached=cached, latest_ts=latest_ts, now_ms=now_ms, ttl_ms=self._ttl_ms):
+        latest_ts = self._latest_event_ts()
+        if is_cache_fresh(cached=cached, latest_ts=latest_ts, now_ms=now_ms, ttl_ms=max(500, self._ttl_ms)):
             return dict(cached.value)
-
-        out = load_admin_metrics(self._event_store, tenant_id=str(self._tenant_id))
-        self._admin_cache = _CacheEntry(value=out, latest_event_ts=latest_ts, computed_at_ms=now_ms)
-        return dict(out)
+        value = load_admin_metrics(event_store=self._event_store, tenant_id=self._tenant_id)
+        self._admin_cache = _CacheEntry(value=value, latest_event_ts=latest_ts, computed_at_ms=now_ms)
+        return dict(value)
