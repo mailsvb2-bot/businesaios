@@ -5,24 +5,13 @@ This module is INTERNAL to runtime/_internal.
 No API changes to EffectsPort.
 """
 
-from typing import Any, Dict, Optional, Tuple
-
-import os
-import time
-import json
-from decimal import Decimal
-
-import logging
+from typing import Any, Dict, Optional
 
 from runtime._internal.effect_types import EffectActionType
-from runtime.observability.telemetry import telegram_api_span
 from runtime.security.runtime_asserts import assert_called_from_executor
 
-from runtime.observability.error_handling import swallow
-from runtime.observability.error_handling import exception_throttled
 from runtime._internal.effects_actions.telegram.startup import telegram_self_check_effect
 from runtime._internal.effects_actions.telegram.messaging import send_message_effect
-from runtime._internal.effects_actions.telegram.runtime_mode import is_telegram_mode
 from runtime._internal.effects_actions.telegram.media import send_audio_effect
 from runtime._internal.effects_actions.telegram_actions_callbacks import (
     answer_callback_internal_effect,
@@ -35,11 +24,13 @@ from runtime._internal.effects_actions.telegram_actions_transport import (
     send_message_transport_effect,
 )
 
+
 class TelegramEffectsMixin:
     def telegram_self_check(self, *, token: str | None = None) -> dict:
         from runtime._internal.router_support import execute_effect_action_sync
 
         return execute_effect_action_sync(self, EffectActionType.TELEGRAM_SELF_CHECK, {"token": token})
+
     def send_message(
         self,
         *,
@@ -73,6 +64,28 @@ class TelegramEffectsMixin:
             critical=critical,
             channel_policy=channel_policy,
         )
+
+    def _telegram_send_message(
+        self,
+        *,
+        chat_id: str,
+        text: str,
+        reply_markup: Optional[Dict[str, Any]] = None,
+        priority: Any = "normal",
+        critical: bool = True,
+    ) -> tuple[bool, dict[str, Any]]:
+        return send_message_transport_effect(
+            self,
+            chat_id=str(chat_id),
+            text=str(text),
+            reply_markup=reply_markup,
+            priority=priority,
+            critical=bool(critical),
+        )
+
+    def _telegram_send_chat_action(self, *, chat_id: str, action: str = "typing") -> None:
+        return send_chat_action_effect(self, chat_id=str(chat_id), action=str(action or "typing"))
+
     def _telegram_answer_callback(
         self,
         callback_query_id: str,
