@@ -14,6 +14,7 @@ from decimal import Decimal
 
 import logging
 
+from runtime._internal.effect_types import EffectActionType
 from runtime.observability.telemetry import telegram_api_span
 from runtime.security.runtime_asserts import assert_called_from_executor
 
@@ -92,102 +93,20 @@ class TelegramEffectsMixin:
             show_alert=show_alert,
         )
 
-    def answer_callback_query(
-        self,
-        *,
-        decision_id: str,
-        correlation_id: str,
-        user_id: str,
-        callback_query_id: str,
-        text: str | None = None,
-        show_alert: bool = False,
-    ) -> Any:
-        return answer_callback_public_effect(
-            self,
-            decision_id=str(decision_id),
-            correlation_id=str(correlation_id),
-            user_id=str(user_id),
-            callback_query_id=str(callback_query_id),
-            text=text,
-            show_alert=show_alert,
-        )
+    def answer_callback(self, *, callback_query_id: str, text: str | None = None, show_alert: bool = False, **kwargs) -> dict:
+        return answer_callback_public_effect(self, callback_query_id=callback_query_id, text=text, show_alert=show_alert, **kwargs)
 
-    def send_audio(
-        self,
-        *,
-        decision_id: str,
-        correlation_id: str,
-        user_id: str,
-        path: str,
-        kind: str = "voice",
-        caption: str | None = None,
-        callback_query_id: Optional[str] = None,
-        channel: str = "telegram",
-    ) -> Any:
-        return send_audio_effect(
-            self,
-            decision_id=str(decision_id),
-            correlation_id=str(correlation_id),
-            user_id=str(user_id),
-            path=str(path),
-            kind=str(kind or "voice"),
-            caption=caption,
-            channel=str(channel or "telegram"),
-        )
+    def poll_telegram_updates(self, *, token: str, offset: int | None = None, timeout: int = 30, limit: int = 100) -> dict:
+        return poll_telegram_updates_effect(self, token=token, offset=offset, timeout=timeout, limit=limit)
 
-    def poll_telegram_updates(self, *, offset: int | None = None, timeout_s: int = 30, limit: int = 50) -> Any:
-        from runtime._internal.router_support import execute_effect_action_sync
+    def send_audio(self, *args, **kwargs) -> Any:
+        return send_audio_effect(self, *args, **kwargs)
 
-        return execute_effect_action_sync(
-            self,
-            EffectActionType.TELEGRAM_POLL_UPDATES,
-            {
-                "offset": offset,
-                "timeout_s": int(timeout_s),
-                "limit": int(limit),
-                "startup_checked": bool(getattr(self, "_telegram_startup_checked", False)),
-                "webhook_cleared": bool(getattr(self, "_telegram_webhook_cleared", False)),
-            },
-        )
+    def send_message_transport(self, *args, **kwargs) -> Any:
+        return send_message_transport_effect(self, *args, **kwargs)
 
-    def _telegram_send_chat_action(self, *, chat_id: str, action: str = "typing") -> None:
-        return send_chat_action_effect(self, chat_id=str(chat_id), action=str(action or "typing"))
+    def send_audio_transport(self, *args, **kwargs) -> Any:
+        return send_audio_transport_effect(self, *args, **kwargs)
 
-    def _telegram_send_message(
-        self,
-        *,
-        chat_id: str,
-        text: str,
-        reply_markup: Optional[Dict[str, Any]] = None,
-        priority: Any = "normal",
-        critical: bool = True,
-        channel_policy: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[bool, Dict[str, Any]]:
-        return send_message_transport_effect(
-            self,
-            chat_id=str(chat_id),
-            text=str(text),
-            reply_markup=reply_markup,
-            priority=priority,
-            critical=bool(critical),
-        )
-
-    def _telegram_send_audio(
-        self,
-        *,
-        chat_id: str,
-        audio_url: str,
-        caption: str | None = None,
-        priority: Any = "normal",
-        critical: bool = True,
-        channel_policy: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[bool, Dict[str, Any]]:
-        return send_audio_transport_effect(
-            self,
-            chat_id=str(chat_id),
-            audio_url=str(audio_url),
-            caption=caption,
-            priority=priority,
-            critical=bool(critical),
-        )
-
+    def send_chat_action(self, *args, **kwargs) -> Any:
+        return send_chat_action_effect(self, *args, **kwargs)
