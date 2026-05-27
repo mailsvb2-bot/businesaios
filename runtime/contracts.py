@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -10,5 +10,5 @@ class RuntimeService(Protocol):
 
 @runtime_checkable
 class RuntimeRegistrable(Protocol):
-    def register(self, registry: "RuntimeRegistry") -> "RegistrationResult":
+    def register(self, registry: Any) -> Any:
         ...
