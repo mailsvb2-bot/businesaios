@@ -1,23 +1,21 @@
 from __future__ import annotations
 
 import logging
-
-from execution.runtime_keys import ACTION_BUDGET_KEY
 from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 from application.autonomy.autonomy_decision_step import AutonomyDecisionStep
 from application.autonomy.autonomy_execution_step import AutonomyExecutionStep
 from application.autonomy.autonomy_feedback_step import AutonomyFeedbackStep
-from execution.safe_self_driving import SafeSelfDrivingPolicy
 from application.autonomy.autonomy_memory_step import AutonomyMemoryStep
 from application.autonomy.autonomy_recovery_semantics import classify_recovery_semantics
 from application.autonomy.autonomy_state_assembly import AutonomyStateAssembly
 from application.autonomy.autonomy_stop_policy import AutonomyStopPolicy
+from execution.business_operating_memory import project_business_memory_contract_bundle
 from execution.headless_request_fingerprint import build_headless_request_fingerprint
 from execution.headless_trace import HeadlessTrace
-from execution.business_operating_memory import project_business_memory_contract_bundle
-
+from execution.runtime_keys import ACTION_BUDGET_KEY
+from execution.safe_self_driving import SafeSelfDrivingPolicy
 
 CANON_HEADLESS_AUTONOMY_LOOP = True
 logger = logging.getLogger(__name__)
