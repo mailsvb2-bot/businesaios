@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from runtime.security.runtime_asserts import assert_called_from_executor
@@ -20,8 +21,6 @@ def reconcile_payments_effect(
     if effects.ledger is None:
         return True
     try:
-        from datetime import datetime, timedelta
-
         now = datetime.now(timezone.utc)
         window_start = now - timedelta(minutes=int(window_min))
         start_ms = int(window_start.timestamp() * 1000)
@@ -140,26 +139,20 @@ def reconcile_payment_effect(
         payload={"external_id": ext_id, "status": status, "notification_id": notification_id, "event": event, "user_id_hint": (str(user_id_hint) if user_id_hint else None)},
     )
 
-    envelope_id, user_id = resolve_created_payment_context(effects=effects, external_id=ext_id)
-
-    if status in SUCCESS_STATUSES:
-        mark_ledger_terminal(effects=effects, envelope_id=envelope_id, terminal_status="succeeded")
-        effects.event_log.emit(
-            event_type="payment_succeeded",
-            source="payments",
-            user_id=str(user_id),
-            decision_id=str(decision_id),
-            correlation_id=str(correlation_id),
-            payload={"external_id": ext_id, "status": status, "notification_id": notification_id, "event": event},
-        )
-    elif status in FAILED_STATUSES:
-        mark_ledger_terminal(effects=effects, envelope_id=envelope_id, terminal_status="failed")
-        effects.event_log.emit(
-            event_type="payment_failed",
-            source="payments",
-            user_id=str(user_id),
-            decision_id=str(decision_id),
-            correlation_id=str(correlation_id),
-            payload={"external_id": ext_id, "status": status, "notification_id": notification_id, "event": event},
-        )
+    ctx = resolve_created_payment_context(effects=effects, external_id=ext_id)
+    uid = str(user_id_hint or ctx.get("user_id") or "system")
+    terminal = "succeeded" if status in SUCCESS_STATUSES else ("failed" if status in FAILED_STATUSES else "pending")
+    if terminal == "pending":
+        return True
+    if not try_mark_terminal_outbox(effects=effects, external_id=ext_id, terminal_status=terminal):
+        return True
+    mark_ledger_terminal(effects=effects, envelope_id=str(ctx.get("envelope_id") or ""), terminal_status=terminal)
+    effects.event_log.emit(
+        event_type=("payment_succeeded" if terminal == "succeeded" else "payment_failed"),
+        source="payments",
+        user_id=uid,
+        decision_id=str(decision_id),
+        correlation_id=str(correlation_id),
+        payload={"external_id": ext_id, "status": status},
+    )
     return True
