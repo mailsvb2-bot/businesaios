@@ -5,6 +5,7 @@ This module is INTERNAL to runtime/_internal.
 No API changes to EffectsPort.
 """
 
+from runtime._internal.effect_types import EffectActionType
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 from runtime.observability.error_handling import swallow
