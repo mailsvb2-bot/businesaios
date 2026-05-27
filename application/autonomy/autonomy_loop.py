@@ -289,8 +289,9 @@ class AutonomyLoop:
                 attempt_index=attempt_index,
                 envelope=decision.envelope,
                 explanation=decision.explanation,
+                executable_action=decision.executable_action,
+                autonomy_decision=decision.autonomy_decision,
                 result=result,
-                memory_context=dict(getattr(state, "memory_context", {}) or {}),
             )
             if not should_retry:
                 return step
