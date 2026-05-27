@@ -31,7 +31,7 @@ def _record_recovery_trace(*, executor, env, stage: str, **fields: object) -> No
     try:
         method(trace_name="runtime_recovery", stage=stage, generated_at_ms=generated_at_ms, **payload)
     except Exception:
-        logger.debug('runtime_recovery: trace emission failed', exc_info=True)
+        logger.debug("runtime_recovery: trace emission failed", exc_info=True)
 
 
 def _reliability_call(reliability, operation: str, fn) -> None:
@@ -40,7 +40,7 @@ def _reliability_call(reliability, operation: str, fn) -> None:
     try:
         fn()
     except Exception:
-        logger.warning('runtime_recovery: reliability operation failed: %s', operation, exc_info=True)
+        logger.warning("runtime_recovery: reliability operation failed: %s", operation, exc_info=True)
 
 
 def has_proof_event(*, event_log, decision_id: str, action: str, warn) -> bool:
@@ -58,7 +58,7 @@ def execute_recovery_flow(*, executor, env, outbox, guard, event_log, executor_c
     reliability = getattr(executor, "_reliability", None)
     _reliability_call(
         reliability,
-        'append_checkpoint:recovery',
+        "append_checkpoint:recovery",
         lambda: reliability.append_checkpoint(
             env,
             stage="recovery",
@@ -79,7 +79,7 @@ def execute_recovery_flow(*, executor, env, outbox, guard, event_log, executor_c
     if recovered is not None:
         _reliability_call(
             reliability,
-            'append_checkpoint:completed',
+            "append_checkpoint:completed",
             lambda: reliability.append_checkpoint(
                 env,
                 stage="completed",
@@ -87,7 +87,7 @@ def execute_recovery_flow(*, executor, env, outbox, guard, event_log, executor_c
                 payload={"recovery": "finalized_if_already_executed"},
             ),
         )
-        _reliability_call(reliability, 'mark_completed', lambda: reliability.mark_completed(env))
+        _reliability_call(reliability, "mark_completed", lambda: reliability.mark_completed(env))
         _record_recovery_trace(executor=executor, env=env, stage="already_executed")
         return recovered
     if has_proof_event(
@@ -115,22 +115,23 @@ def execute_recovery_flow(*, executor, env, outbox, guard, event_log, executor_c
         result = run_with_bound_execution_context(
             env=env,
             executor_context_cm=executor_context_cm,
-            context_name='RuntimeExecutor.execute_recovery',
+            context_name="RuntimeExecutor.execute_recovery",
             run=lambda: executor._dispatch(env, depth=0, enqueue=False),
         )
         _record_recovery_trace(executor=executor, env=env, stage="resumed", ok=1 if getattr(result, "ok", False) else 0)
         return result
     except Exception as exc:
-        _reliability_call(reliability, 'mark_failed', lambda: reliability.mark_failed(env, reason=f'recovery_dispatch:{type(exc).__name__}'))
+        exc_name = type(exc).__name__
+        _reliability_call(reliability, "mark_failed", lambda: reliability.mark_failed(env, reason=f"recovery_dispatch:{exc_name}"))
         _reliability_call(
             reliability,
-            'append_checkpoint:failed',
+            "append_checkpoint:failed",
             lambda: reliability.append_checkpoint(
                 env,
-                stage='failed',
-                checkpoint_id=f'failed:{env.decision.decision_id}',
-                payload={'recovery': 'dispatch_failed', 'reason': type(exc).__name__},
+                stage="failed",
+                checkpoint_id=f"failed:{env.decision.decision_id}",
+                payload={"recovery": "dispatch_failed", "reason": exc_name},
             ),
         )
-        _record_recovery_trace(executor=executor, env=env, stage="failed", error=type(exc).__name__)
+        _record_recovery_trace(executor=executor, env=env, stage="failed", error=exc_name)
         raise
