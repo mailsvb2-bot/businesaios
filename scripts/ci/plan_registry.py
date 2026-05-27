@@ -115,7 +115,6 @@ def _production_boot_common(gate: str) -> ExecutionPlan:
         _pg_migrations_step(),
         _pg_live_step(),
         _container_runtime_step(),
-        _staging_runtime_step(),
         _production_boot_step(),
     )
 
@@ -256,6 +255,3 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "verify-release",
         )
     raise ValueError(f"unknown gate: {gate}")
-
-
-__all__ = ["allowed_gates", "plan_for_gate", "requires_release_proof_environment"]
