@@ -12,12 +12,24 @@ Invariants:
 - no network imports.
 """
 
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List
 
-from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import build_system_world_state
 from core.observability.silent import swallow
+from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import build_system_world_state
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return bool(default)
+    return str(raw).strip().lower() in {"1", "true", "yes", "on", "enabled"}
+
+
+def _env_str(name: str, default: str) -> str:
+    return str(os.getenv(name, default) or default)
 
 
 @dataclass
@@ -52,7 +64,6 @@ class OfferOutcomeLoop:
         - success (captured/succeeded) wins over failure
         - otherwise failure if a payment_failed is observed
         """
-        # 1) Success wins
         for et in ("payment_captured", "payment_succeeded"):
             for ev in self._iter(start_ms=shown_at_ms, end_ms=end_ms, event_type=et) or []:
                 try:
@@ -61,7 +72,6 @@ class OfferOutcomeLoop:
                 except Exception:
                     continue
 
-        # 2) Failure (best-effort)
         for et in ("payment_failed",):
             for ev in self._iter(start_ms=shown_at_ms, end_ms=end_ms, event_type=et) or []:
                 try:
@@ -73,7 +83,7 @@ class OfferOutcomeLoop:
         return None
 
     def tick(self) -> None:
-        if not env_bool("OFFER_OUTCOME_EMIT_ENABLED", True):
+        if not _env_bool("OFFER_OUTCOME_EMIT_ENABLED", True):
             return
 
         now_ms = self._now_ms()
@@ -83,7 +93,6 @@ class OfferOutcomeLoop:
 
         start_ms = max(0, now_ms - int(self._cfg.lookback_ms))
 
-        # 1) Collect shown offers
         shown: List[Dict[str, Any]] = []
         for ev in self._iter(start_ms=start_ms, end_ms=now_ms, event_type="offer_shown") or []:
             if not isinstance(ev, dict):
@@ -93,7 +102,6 @@ class OfferOutcomeLoop:
         if not shown:
             return
 
-        # 2) Collect already emitted outcomes by shown_event_id
         done: set[str] = set()
         for ev in self._iter(start_ms=start_ms, end_ms=now_ms, event_type="offer_outcome") or []:
             if not isinstance(ev, dict):
@@ -104,7 +112,6 @@ class OfferOutcomeLoop:
                 done.add(sid)
 
         emits = 0
-        # Oldest first to avoid starvation
         shown.sort(key=lambda e: int(e.get("timestamp_ms") or 0))
 
         for ev in shown:
@@ -124,8 +131,8 @@ class OfferOutcomeLoop:
                 continue
 
             status = self._payment_status_after(user_id=user_id, shown_at_ms=ts, end_ms=now_ms)
-            paid = (status == "paid")
-            failed = (status == "failed")
+            paid = status == "paid"
+            failed = status == "failed"
             timed_out = (now_ms - ts) >= int(self._cfg.timeout_ms)
 
             if (not paid) and (not failed) and (not timed_out):
@@ -138,7 +145,6 @@ class OfferOutcomeLoop:
                 "price_rub": price_rub,
                 "shown_at_ms": ts,
                 "decided_at_ms": now_ms,
-                # Conversion latency from offer impression to observed outcome.
                 "conversion_latency_ms": int(max(0, now_ms - ts)),
                 "success": bool(paid),
                 "reason": ("paid" if paid else ("payment_failed" if failed else "timeout")),
@@ -149,13 +155,13 @@ class OfferOutcomeLoop:
 
                 job = with_retention_telemetry(job, user_id=user_id)
             except Exception:
-                swallow(__name__, 'interfaces/telegram/runtime_loops/offer_outcome.py')
+                swallow(__name__, "interfaces/telegram/runtime_loops/offer_outcome.py")
 
             try:
                 ws = build_system_world_state(
                     purpose="offer_outcome_emit",
                     meta={"job": job},
-                    user_timezone=env_str("SYSTEM_TZ", "Europe/Amsterdam"),
+                    user_timezone=_env_str("SYSTEM_TZ", "Europe/Amsterdam"),
                     now_ms=now_ms,
                 )
                 env = self._decide(ws)
@@ -163,5 +169,4 @@ class OfferOutcomeLoop:
                 emits += 1
                 done.add(shown_event_id)
             except Exception:
-                # best-effort
                 continue
