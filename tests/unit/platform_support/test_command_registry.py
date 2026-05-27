@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from runtime.platform.support.command_registry import normalize_command_name, require_known_command
 from runtime.platform.support.cli.registry import CLI_COMMANDS
+from runtime.platform.support.command_registry import normalize_command_name, require_known_command
 from runtime.platform.support.scripts.registry import SCRIPT_COMMANDS
 
 

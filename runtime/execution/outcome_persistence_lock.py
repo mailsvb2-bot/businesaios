@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from runtime.execution.executor_commit import _decision_tenant_id, build_delivery_metadata, mark_delivered, move_to_dead_letter
 from runtime.execution.executor_audit import emit_decision_executed
+from runtime.execution.executor_commit import (
+    _decision_tenant_id,
+    build_delivery_metadata,
+    mark_delivered,
+    move_to_dead_letter,
+)
 
 CANON_RUNTIME_OUTCOME_PERSISTENCE_LOCK_OWNER = True
 CANON_RUNTIME_OUTCOME_PERSISTENCE_SINGLE_STATE_UPDATE = True

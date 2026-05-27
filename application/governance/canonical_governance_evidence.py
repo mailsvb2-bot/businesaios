@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from execution.canonical_persistence_vocabulary import canonical_run_persistence_vocabulary
-from execution.business_operating_memory import project_business_memory_governance_summary
 from application.effects.effect_outcome_vocabulary import normalize_outcome_status
-
+from execution.business_operating_memory import project_business_memory_governance_summary
+from execution.canonical_persistence_vocabulary import canonical_run_persistence_vocabulary
 
 CANON_GOVERNANCE_EVIDENCE_CONTRACT = True
 

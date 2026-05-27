@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from interfaces.common.registry_capability_contract import build_registry_entry
 
-
 CONNECTORS = {
     "call_tracking": build_registry_entry(
         name="call_tracking",

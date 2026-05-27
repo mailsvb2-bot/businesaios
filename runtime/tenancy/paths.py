@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from runtime.tenancy import require_tenant_id
 from pathlib import Path
+
+from runtime.tenancy import require_tenant_id
 
 
 @dataclass(frozen=True)

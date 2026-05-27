@@ -6,7 +6,6 @@ from runtime.platform.business_memory.models import BusinessMemoryRecord
 from runtime.platform.business_memory.second_brain_boundary import sanitize_business_memory_payload
 from runtime.platform.business_memory.semantics import infer_memory_status
 
-
 CANON_BUSINESS_MEMORY_PROJECTIONS = True
 
 

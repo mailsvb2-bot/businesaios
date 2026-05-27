@@ -1,6 +1,8 @@
 from __future__ import annotations
-from observability.platform.telemetry.event_store import InMemoryEventStore
+
 from core.growth.ads_reco_cache import AdsRecommendationCache
+from observability.platform.telemetry.event_store import InMemoryEventStore
+
 
 def test_cache_fp_invalidation():
     es = InMemoryEventStore()

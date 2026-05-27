@@ -8,8 +8,8 @@ from core.ai_ceo.intent import build_intent, build_intent_from_session_args
 from core.ai_ceo.ledger import GrowthSnapshotV1
 from core.ai_ceo.planner import build_ceo_plan
 from core.ai_ceo.safety import AutonomyPolicyV1
-from core.llm.contracts import LLMMessage, LLMRequest
 from core.llm import build_yandexgpt_client
+from core.llm.contracts import LLMMessage, LLMRequest
 from interfaces.ads.google_ads_connector import GoogleAdsConfig, GoogleAdsConnector
 from interfaces.ads.oauth_helper import OAuthAppConfig
 

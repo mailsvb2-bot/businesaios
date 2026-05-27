@@ -13,7 +13,6 @@ from typing import Any, Dict
 
 from runtime.platform.utils.canonical import canonical_json_bytes
 
-
 GENESIS = "GENESIS"
 
 

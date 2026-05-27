@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from observability.decision_trace_store import InMemoryDecisionTraceStore
 from observability.distributed_trace_context import build_trace_context, extract_trace_context, inject_trace_headers
 from observability.execution_span import execution_span
-from observability.execution_trace_contract import DecisionTraceEvent, EffectDisposition, RuntimeEffectTraceEvent, TraceStage
+from observability.execution_trace_contract import (
+    DecisionTraceEvent,
+    EffectDisposition,
+    RuntimeEffectTraceEvent,
+    TraceStage,
+)
 from observability.execution_trace_store import InMemoryExecutionTraceStore
-from observability.decision_trace_store import InMemoryDecisionTraceStore
 from observability.runtime_effect_trace_store import InMemoryRuntimeEffectTraceStore
 from observability.runtime_trace_graph import RuntimeTraceGraphBuilder
 

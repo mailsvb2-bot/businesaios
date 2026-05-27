@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """User state projection helpers for SqliteEventStore.
 
 Incrementally maintains a realtime per-user state snapshot

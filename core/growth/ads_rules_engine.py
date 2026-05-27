@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import List, Optional
 
+from config.ads_aggregates_policy import DEFAULT_ADS_AGGREGATES_POLICY
 from config.ads_rules_policy import DEFAULT_ADS_RULES_POLICY, AdsRulesPolicy
 from core.growth.ads_aggregates import AdsAggregates
-from config.ads_aggregates_policy import DEFAULT_ADS_AGGREGATES_POLICY
-from core.growth.recommendations import AdsRecommendation, AdsObjectRef
+from core.growth.recommendations import AdsObjectRef, AdsRecommendation
 
 
 @dataclass(frozen=True)

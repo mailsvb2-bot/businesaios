@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 def apply_price_constraints(price_constraints: dict[str, object], pricing_state: dict[str, object]) -> dict[str, object]:
     result = dict(pricing_state)
     result["max_band"] = price_constraints.get("max_band", result.get("max_band", "standard"))

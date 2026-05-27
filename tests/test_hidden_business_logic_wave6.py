@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from config.economics_evaluation_policy import LTVCACEvaluatorPolicy, MarginBuilderPolicy
 from core.economics.builders.margin_builder import MarginBuilder
-from core.economics.enums import EconomicsSignalStatus, MarginHealthStatus
+from core.economics.enums import BudgetPressureLevel, EconomicsSignalStatus, MarginHealthStatus
 from core.economics.evaluators.ltv_cac_evaluator import LTVCACEvaluator
 from core.economics.policies.spend_cap_policy import SpendCapPolicy
 from core.economics.types import BudgetEnvelope, CACSnapshot, CostSignal, LTVSnapshot, RevenueSignal, SpendSignal
-from core.economics.enums import BudgetPressureLevel
 
 
 def test_margin_builder_honors_policy_thresholds() -> None:

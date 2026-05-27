@@ -5,7 +5,6 @@ import json
 from scripts.ci.paths import coverage_dir, repo_root
 from scripts.ci.subprocess_io import PYTEST_REQUIRED_PLUGINS, run_command
 
-
 MIN_TOTAL_COVERAGE = 60.0
 TARGET_TOTAL_COVERAGE = 70.0
 COVERAGE_TARGETS = (

@@ -8,7 +8,6 @@ from typing import Any, Dict
 from runtime.growth import GrowthStrategyService
 from runtime.ports.effects import EffectsPort
 
-
 ACTION_NAME = "growth_strategy_backlog@v1"
 
 

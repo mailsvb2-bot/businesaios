@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from runtime.messaging_policy_alert_subscriptions.notification_text_parts import context_line, detail_line, headline, metric_line
+from runtime.messaging_policy_alert_subscriptions.notification_text_parts import (
+    context_line,
+    detail_line,
+    headline,
+    metric_line,
+)
 
 
 def build_alert_notification_text(*, alert_item, tenant_id: str, affected_user_id: str, date_from: str, date_to: str) -> str:

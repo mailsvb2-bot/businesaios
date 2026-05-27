@@ -18,9 +18,9 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable
 
-from core.observability.structured_logging import log_exception_throttled
-from core.events.read_call import call_latest_events, call_iter_events
+from core.events.read_call import call_iter_events, call_latest_events
 from core.growth.spend_ledger_event_store import EventStoreSpendLedger
+from core.observability.structured_logging import log_exception_throttled
 
 
 def _day_start_ms(ts_ms: int) -> int:

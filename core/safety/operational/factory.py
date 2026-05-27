@@ -18,7 +18,6 @@ from core.safety.operational.persistent_operational_budget_ledger import (
 from core.safety.operational.ports import OperationalBudgetLedgerPort
 from core.safety.operational.tenant_policy_provider import TenantOperationalBudgetPolicyProvider
 
-
 CANON_OPERATIONAL_FACTORY = True
 
 

@@ -6,7 +6,6 @@ from pathlib import Path
 
 from core.safety.operational.operational_budget_policy import OperationalBudgetPolicy
 
-
 CANON_TENANT_OPERATIONAL_POLICY_PROVIDER = True
 
 

@@ -5,9 +5,9 @@ CANON_THIN_HANDLER = True
 
 from typing import Any, Dict
 
+from runtime.ads import bind_runtime_state, policy_store
 from runtime.ports.effects import EffectsPort
 from runtime.tenancy import as_tenant_id
-from runtime.ads import bind_runtime_state, policy_store
 
 ACTION_NAME = "ads_rl_report@v1"
 

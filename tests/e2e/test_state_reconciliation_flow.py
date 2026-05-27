@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import pytest
+
 from tests.e2e._headless_harness import ScenarioStep, build_harness, make_request, seed_goal_plan
 
 pytestmark = [pytest.mark.integration, pytest.mark.e2e]

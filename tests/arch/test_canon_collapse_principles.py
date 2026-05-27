@@ -45,7 +45,7 @@ def test_metrics_do_not_grow():
     baseline_path = PROJECT_ROOT / "canon" / "metrics_baseline.json"
     assert baseline_path.exists()
 
-    with open(baseline_path, "r", encoding="utf-8") as f:
+    with open(baseline_path, encoding="utf-8") as f:
         baseline = json.load(f)
 
     current = _count_metrics()

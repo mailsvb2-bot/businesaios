@@ -6,7 +6,6 @@ import subprocess
 
 from scripts.ci.paths import repo_root
 
-
 ALLOWED_DIRECT_DEPENDENCIES = {"serde", "serde_json"}
 ALLOWED_LOCK_PACKAGES = {
     "businessaios_safety_core",

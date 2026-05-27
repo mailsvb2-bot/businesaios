@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Protocol, Mapping, Any
+
+from typing import Any, Mapping, Protocol
 
 RUNTIME_CONFIG_CONTRACT_VERSION = "RCC-CONTRACT-V1"
 

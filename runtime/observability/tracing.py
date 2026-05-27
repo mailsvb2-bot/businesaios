@@ -12,9 +12,8 @@ import contextvars
 from contextlib import contextmanager
 from typing import Any, Iterator
 
-from runtime.observability.perf import Span, emit_sla_violation
 from runtime.observability.error_handling import swallow
-
+from runtime.observability.perf import Span, emit_sla_violation
 
 _current_correlation_key: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "current_correlation_key",

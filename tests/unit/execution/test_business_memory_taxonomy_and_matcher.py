@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 from execution.business_memory_matcher import BusinessMemoryMatcher
 from execution.business_memory_taxonomy import BusinessMemoryTaxonomy
 from execution.business_operating_memory import FileBusinessOperatingMemoryStore
+
 
 def test_business_memory_taxonomy_normalizes_failure_and_outcomes() -> None:
     taxonomy = BusinessMemoryTaxonomy()

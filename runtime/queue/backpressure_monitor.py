@@ -13,11 +13,10 @@ from runtime.queue.queue_alerts import QueueAlert
 from runtime.queue.queue_observability import QueueObservabilityRegistry
 from runtime.queue.tenant_fair_scheduler import (
     TenantFairAllocation,
-    TenantFairScheduleReport,
     TenantFairScheduler,
+    TenantFairScheduleReport,
     TenantQueuePressure,
 )
-
 
 CANON_RUNTIME_QUEUE_BACKPRESSURE_MONITOR = True
 

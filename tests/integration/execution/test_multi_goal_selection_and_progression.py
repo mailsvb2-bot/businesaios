@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-
 mg_mod = pytest.importorskip("execution.multi_goal_planner")
 
 MultiGoalPlannerService = mg_mod.MultiGoalPlannerService

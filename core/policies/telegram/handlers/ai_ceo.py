@@ -12,10 +12,10 @@ Routing contract:
 
 from typing import Any, Dict, Optional
 
-from core.ai_ceo import autonomy_from_env, build_plan, render_plan_text, read_growth_snapshot
+from core.ai_ceo import autonomy_from_env, build_plan, read_growth_snapshot, render_plan_text
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose, propose_message
-from core.ux.callbacks import CB_CEO_MENU, CB_CEO_RUN, CB_CEO_PLAN
+from core.ux.callbacks import CB_CEO_MENU, CB_CEO_PLAN, CB_CEO_RUN
 from core.ux.telegram_keyboards import kb_ai_ceo_menu
 
 

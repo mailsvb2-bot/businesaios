@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List
 
 from core.pricing.rl.guard import PricingSelectionContext
-from core.scorers.pricing import choose_candidate as select_candidate
 from core.pricing.rl.scoring import score_candidates
+from core.scorers.pricing import choose_candidate as select_candidate
 
 Json = Dict[str, Any]
 

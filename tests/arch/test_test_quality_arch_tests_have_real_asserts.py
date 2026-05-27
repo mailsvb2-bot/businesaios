@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from tests.arch._canon_test_quality_guard import arch_test_files, assertion_count, exempt, parse_arch_test
 
+
 def test_test_quality_arch_tests_have_real_asserts() -> None:
     offenders=[]
     for path in arch_test_files():

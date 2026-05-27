@@ -6,7 +6,6 @@ from typing import Any, Callable, Dict
 
 from core.llm.contracts import LLMClient, LLMRequest, LLMResponse, LLMUsage
 
-
 GigaChatTransport = Callable[[str, str, Dict[str, Any], int], Dict[str, Any]]
 
 

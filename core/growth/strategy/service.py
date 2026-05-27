@@ -4,6 +4,8 @@ import time
 import uuid
 from typing import Any, Optional, Tuple
 
+from config.strategic_growth_policy import DEFAULT_GROWTH_STRATEGY_SERVICE_POLICY, GrowthStrategyServicePolicy
+
 from .backlog_store import (
     append_experiment,
     append_hypothesis,
@@ -16,7 +18,6 @@ from .backlog_store import (
 from .contracts import ExperimentSpecV1, GrowthGoalV1, GrowthHypothesisV1, GrowthSignalV1, StrategyPlanV1
 from .llm_generator import generate_hypotheses
 from .scoring import rank_hypotheses, score_hypothesis
-from config.strategic_growth_policy import DEFAULT_GROWTH_STRATEGY_SERVICE_POLICY, GrowthStrategyServicePolicy
 from .signals import build_signals
 
 

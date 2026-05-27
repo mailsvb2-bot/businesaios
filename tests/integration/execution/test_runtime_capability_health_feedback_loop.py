@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-
 ch_mod = pytest.importorskip("execution.capability_health_scoring")
 planner_mod = pytest.importorskip("execution.capability_aware_planning")
 

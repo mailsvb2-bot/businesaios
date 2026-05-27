@@ -3,11 +3,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 from typing import Any
 
-from contracts import executable_action as executable_action_contract
 from application.autonomy.autonomy_tiers import evaluate_autonomy_tier
 from application.headless.decision_gateway import issue_headless_decision
+from contracts import executable_action as executable_action_contract
 from execution.headless_trace import HeadlessTrace
-
 
 CANON_AUTONOMY_DECISION_STEP = True
 

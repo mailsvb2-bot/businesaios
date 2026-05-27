@@ -14,7 +14,6 @@ from core.safety.operational.operational_budget_guard import (
 )
 from core.safety.operational.ports import OperationalBudgetLedgerPort
 
-
 CANON_OPERATIONAL_BUDGET_SERVICE = True
 
 

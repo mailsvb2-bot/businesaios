@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Ad creative generator — deterministic fallback + LLM-powered upgrade.
 
 Architecture:

@@ -4,7 +4,6 @@ from typing import Dict, Iterable, Tuple
 
 from runtime.modules.module_protocol import RuntimeModule
 
-
 CANON_RUNTIME_MODULE_REGISTRY_OWNER = True
 
 

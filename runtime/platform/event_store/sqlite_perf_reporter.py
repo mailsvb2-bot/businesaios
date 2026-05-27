@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 
-
 STAGES = ("router", "decide_total", "execute_total", "telegram_api")
 
 

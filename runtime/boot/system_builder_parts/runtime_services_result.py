@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 CANON_BOOT_WIRING_ONLY = True
 
 from dataclasses import dataclass, fields

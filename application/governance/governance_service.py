@@ -4,13 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from execution.baseline_history import FileBaselineHistoryStore
-from execution.baseline_manager import FileBaselineStore
-from execution.baseline_rollback import BaselineRollbackManager, FileBaselineRollbackStore
-from execution.baseline_selector import BaselineSelector
-from application.memory.business_memory_query import BusinessMemoryQueryService
-from application.memory.business_operating_memory import project_business_memory_governance_summary
-from application.memory.business_memory_governance import BusinessMemoryGovernanceGate
+from application.evidence.evidence_roundtrip import EvidenceRoundtripVerifier
 from application.governance.canonical_governance_decision import (
     canonical_baseline_selection_decision,
     canonical_promotion_decision,
@@ -18,18 +12,27 @@ from application.governance.canonical_governance_decision import (
 )
 from application.governance.canonical_governance_evidence import canonical_governance_evidence
 from application.governance.canonical_governance_timeline import canonical_governance_timeline
-from application.governance.canonical_scenario_governance import canonical_scenario_catalog_entry, canonical_scenario_selection_outcome
+from application.governance.canonical_scenario_governance import (
+    canonical_scenario_catalog_entry,
+    canonical_scenario_selection_outcome,
+)
+from application.memory.business_memory_governance import BusinessMemoryGovernanceGate
 from application.memory.business_memory_promotion import BusinessMemoryPromotionHelper
+from application.memory.business_memory_query import BusinessMemoryQueryService
 from application.memory.business_operating_memory import (
     BusinessMemoryCompactor,
     BusinessMemoryPolicy,
     FileBusinessOperatingMemoryStore,
+    project_business_memory_governance_summary,
 )
+from execution.baseline_history import FileBaselineHistoryStore
+from execution.baseline_manager import FileBaselineStore
+from execution.baseline_rollback import BaselineRollbackManager, FileBaselineRollbackStore
+from execution.baseline_selector import BaselineSelector
 from execution.drift_audit_report import DriftAuditReportBuilder
 from execution.drift_detector import DriftDetector
 from execution.drift_history_joiner import DriftHistoryJoiner
 from execution.drift_trend_tracker import DriftTrendTracker
-from application.evidence.evidence_roundtrip import EvidenceRoundtripVerifier
 from execution.headless_ledger import FileHeadlessLedger
 from execution.headless_paths import build_headless_runtime_paths
 from execution.promotion_gate import PromotionGate

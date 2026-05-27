@@ -1,4 +1,4 @@
-from core.offers.selection_policy import clamp_band, choose_band, choose_slot
+from core.offers.selection_policy import choose_band, choose_slot, clamp_band
 
 
 def test_offer_selection_policy_prefers_audio_reengagement_and_premium_band():

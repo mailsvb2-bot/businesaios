@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from app.web.components.capability_diagnostics_card import CapabilityDiagnosticsCard
 from app.web.pages.admin import AdminPage
 from app.web.pages.runtime_alerts import RuntimeAlertsPage
-from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 from observability.slo_contract import SLIKind, SLOComparator, SLODefinition
+from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 from reliability.execution_reconciliation import ReconciliationReport
 from reliability.recovery_orchestrator import RecoveryPlan
 

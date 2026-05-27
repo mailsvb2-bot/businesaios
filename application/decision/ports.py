@@ -9,7 +9,6 @@ ownership between core and runtime.
 
 from typing import Protocol
 
-
 DecisionExecutionPortProtocol = type("DecisionExecutionPortProtocol", (Protocol,), {})
 ObservabilityPortProtocol = type("ObservabilityPortProtocol", (Protocol,), {})
 

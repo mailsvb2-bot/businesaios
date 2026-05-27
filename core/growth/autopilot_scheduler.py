@@ -3,8 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from core.growth.job_lock_eventstore import EventStoreJobLock
 from core.growth.autopilot_engine import AutopilotEngine
+from core.growth.job_lock_eventstore import EventStoreJobLock
+
 
 @dataclass(frozen=True)
 class AutopilotTarget:

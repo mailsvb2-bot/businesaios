@@ -4,7 +4,6 @@ from pathlib import Path
 
 from crm import public_api
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CRM_PACKAGE_ROOT = REPO_ROOT / 'crm'
 

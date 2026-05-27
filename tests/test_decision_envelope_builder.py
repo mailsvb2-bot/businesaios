@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from application.decision_input.decision_envelope_builder import build_decision_envelope
 from contracts.decisioning.recommendation_packet_contract import RecommendationPacketContract
 from contracts.decisioning.world_state_contract import WorldStateContract
-from application.decision_input.decision_envelope_builder import build_decision_envelope
 
 
 def test_decision_envelope_builder_extracts_features() -> None:

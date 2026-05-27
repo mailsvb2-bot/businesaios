@@ -5,18 +5,20 @@ CANON_BOOT_WIRING_ONLY = True
 from dataclasses import dataclass
 from typing import Any
 
-from runtime.world_state import WorldStateV1
 from runtime.ai_ceo import (
     AutonomyPolicyV1,
     GrowthSnapshotV1,
     build_intent,
-    build_plan as build_ai_ceo_plan,
     build_session_args,
     normalize_objective,
     parse_horizon_days,
     read_growth_snapshot,
 )
+from runtime.ai_ceo import (
+    build_plan as build_ai_ceo_plan,
+)
 from runtime.tenancy import normalize_tenant_id_or_unknown
+from runtime.world_state import WorldStateV1
 
 
 @dataclass(frozen=True)

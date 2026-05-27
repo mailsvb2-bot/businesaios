@@ -3,8 +3,8 @@ from __future__ import annotations
 from application.business_autonomy.provider_catalog import provider_map
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
-from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
+from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 from security.secret_vault import InMemorySecretVault
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+
 class CheckpointingStep:
     def save_if_needed(self, manager, state, metric: float):
         return manager.maybe_save(state=state, metric=metric)

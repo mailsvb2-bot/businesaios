@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-
 CANON_AUTONOMY_RECOVERY_SEMANTICS = True
 
 _SAFE_DENIAL_STATUSES = {"blocked_by_policy", "approval_required", "operator_required"}

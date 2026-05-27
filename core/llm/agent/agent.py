@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Protocol
 
-from core.llm.contracts import LLMMessage, LLMRequest
 from core.llm.agent.contracts import LLMTaskContext, LLMTaskResult
 from core.llm.agent.parse import extract_json_block
 from core.llm.agent.prompts import build_system_prompt, build_user_prompt
 from core.llm.agent.tasks import TaskType
+from core.llm.contracts import LLMMessage, LLMRequest
 
 
 class LLMGatewayLike(Protocol):

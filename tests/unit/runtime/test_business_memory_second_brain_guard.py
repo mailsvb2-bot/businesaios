@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from execution.business_memory_query import BusinessMemoryQueryService
 from application.headless.feedback import SimpleHeadlessFeedbackReader
+from execution.business_memory_query import BusinessMemoryQueryService
 from execution.business_operating_memory import FileBusinessOperatingMemoryStore
 from runtime.platform.business_memory.second_brain_boundary import sanitize_business_memory_payload
 

@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from typing import Dict
 
 from core.causal.estimators.base import CausalEstimator
-from core.causal.estimators.diff_in_means import DiffInMeansEstimator
 from core.causal.estimators.diff_in_diff import DiffInDiffEstimator
+from core.causal.estimators.diff_in_means import DiffInMeansEstimator
+from core.causal.estimators.doubly_robust import DoublyRobustEstimator
 from core.causal.estimators.ipw import IPWEstimator
 from core.causal.estimators.stratified import StratifiedEstimator
-from core.causal.estimators.doubly_robust import DoublyRobustEstimator
 
 
 @dataclass(frozen=True)

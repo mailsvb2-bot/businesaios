@@ -4,7 +4,6 @@ from pathlib import Path
 
 from core.security.release_manifest import load_manifest
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 

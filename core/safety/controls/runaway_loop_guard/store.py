@@ -7,8 +7,8 @@ from typing import Protocol
 
 from runtime.platform.safety_runaway_loop_store import (
     CANON_PLATFORM_SAFETY_RUNAWAY_LOOP_STORE,
-    PlatformSqliteRunawayLoopStore,
     SCHEMA_VERSION,
+    PlatformSqliteRunawayLoopStore,
 )
 
 CANON_SAFETY_RUNAWAY_LOOP_STORE = True

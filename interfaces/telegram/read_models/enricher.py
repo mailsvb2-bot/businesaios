@@ -21,7 +21,8 @@ from typing import Any, Dict, Optional
 from core.observability.errors import log_exception_throttled
 from core.observability.perf import AutoAccelerator, rolling_latency_summary
 from interfaces.telegram.read_models.admin_access import is_superadmin, load_admin_metrics, resolve_admin_metrics
-from interfaces.telegram.read_models.cache_window import CacheWindow as _CacheEntry, is_cache_fresh
+from interfaces.telegram.read_models.cache_window import CacheWindow as _CacheEntry
+from interfaces.telegram.read_models.cache_window import is_cache_fresh
 from interfaces.telegram.read_models.components.pricing import load_pricing_suggestions  # compatibility anchor
 from interfaces.telegram.read_models.components.profile import load_user_profile  # compatibility anchor
 from interfaces.telegram.read_models.user_bundle import load_user_bundle

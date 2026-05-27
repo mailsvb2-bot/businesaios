@@ -6,7 +6,14 @@ from typing import Any, Dict, Mapping, Optional
 
 from core.observability.structured_logging import log_exception_throttled
 
-from .schema import Diagnostics, BudgetChoice, budget_choice_to_minor, HasClientsChoice, parse_int_from_text, rub_to_minor
+from .schema import (
+    BudgetChoice,
+    Diagnostics,
+    HasClientsChoice,
+    budget_choice_to_minor,
+    parse_int_from_text,
+    rub_to_minor,
+)
 from .state_machine_support import (
     build_ads_connect_keyboard,
     build_budget_keyboard,

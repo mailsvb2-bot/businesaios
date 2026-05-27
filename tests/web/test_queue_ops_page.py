@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import SimpleNamespace
 from datetime import datetime
+from types import SimpleNamespace
 
 from app.web.components.queue_health_card import QueueHealthCard
 from app.web.components.queue_remediation_audit_card import QueueRemediationAuditCard

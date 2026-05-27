@@ -61,4 +61,10 @@ def __getattr__(name: str) -> Any:  # pragma: no cover
         return PostgresEventStore
     raise AttributeError(name)
 
-from contracts.event_store import EventStore, EventStoreReader, EventStoreWriter, iter_events_strict, supports_event_store
+from contracts.event_store import (
+    EventStore,
+    EventStoreReader,
+    EventStoreWriter,
+    iter_events_strict,
+    supports_event_store,
+)

@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from execution.canonical_governance_evidence import canonical_governance_evidence
 from application.memory.business_operating_memory import project_business_memory_governance_summary
-
+from execution.canonical_governance_evidence import canonical_governance_evidence
 
 CANON_BUSINESS_MEMORY_PROMOTION = True
 

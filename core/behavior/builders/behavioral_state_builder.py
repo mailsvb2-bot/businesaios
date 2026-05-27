@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -7,14 +8,13 @@ from core.behavior.adapters.decisioncore_adapter import build_decisioncore_behav
 from core.behavior.assemblers.org_field_assembler import assemble_org_field
 from core.behavior.assemblers.person_field_assembler import assemble_person_field
 from core.behavior.builders.base_spinor_factory import spinor_from_scores
+from core.behavior.contracts.micro_spinor import MicroSpinor
 from core.behavior.contracts.person_field import PersonField
 from core.behavior.math.complex4 import Complex4
 from core.behavior.observables.org_observables import compute_org_observables
 from core.behavior.operators.dirac_operator_service import DiracOperatorService
 from core.behavior.operators.operator_context_resolver import resolve_operator_runtime_context
 from core.behavior.operators.operator_denials import PolicyDenials
-from core.behavior.contracts.micro_spinor import MicroSpinor
-from datetime import UTC, datetime
 
 
 def build_behavioral_state(

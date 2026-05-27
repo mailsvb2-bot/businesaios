@@ -9,12 +9,14 @@ from execution.market_intelligence_scheduler_service import MarketIntelligenceSc
 from execution.market_intelligence_scheduler_supervisor import MarketIntelligenceSchedulerSupervisor
 from reliability.distributed_lock import DistributedLock, build_distributed_lock
 from runtime.executor_runtime_support import RuntimeExecutorRecoverySupport
-from runtime.market_intelligence_runtime_registry_bridge import attach_market_intelligence_runtime_to_registry, MarketIntelligenceRuntimeAttachmentReport
+from runtime.managed_runtime_plane import ManagedRuntimePlane
+from runtime.market_intelligence_runtime_registry_bridge import (
+    MarketIntelligenceRuntimeAttachmentReport,
+    attach_market_intelligence_runtime_to_registry,
+)
 from runtime.market_intelligence_runtime_support import build_market_intelligence_runtime_support
 from runtime.runtime_observability import RuntimeObservability
-from runtime.managed_runtime_plane import ManagedRuntimePlane
 from runtime.service_names import RuntimeServiceName
-
 
 CANON_BOOT_WIRING_ONLY = True
 CANON_MARKET_INTELLIGENCE_BOOT = True

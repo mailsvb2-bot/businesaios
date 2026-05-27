@@ -4,7 +4,6 @@ from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose
 from core.ux.telegram_keyboards import kb_back_main, kb_staff_menu
 
-
 ROLE_PERM_COMMANDS = {"/role_add", "/role_del", "/perm_add", "/perm_del"}
 
 

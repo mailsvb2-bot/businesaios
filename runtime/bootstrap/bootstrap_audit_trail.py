@@ -1,14 +1,17 @@
 from __future__ import annotations
+
 import json
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
+
 from runtime.bootstrap.bootstrap_contract import (
     BootstrapAuditEvent,
     BootstrapEnvironment,
     BootstrapStatus,
 )
+
 
 def _audit_path(env: BootstrapEnvironment) -> Path:
     return env.runtime_dir / "bootstrap" / "audit_trail.jsonl"

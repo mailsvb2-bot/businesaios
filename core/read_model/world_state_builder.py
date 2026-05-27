@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 from typing import Any, Dict
 
-from kernel.world_state import WorldStateV1
 from core.read_model.reducers import reduce_event
+from kernel.world_state import WorldStateV1
 
 
 def build_world_state_from_events(

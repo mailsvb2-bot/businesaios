@@ -1,10 +1,10 @@
+from core.autopilot.onboarding.schema import Diagnostics
 from core.autopilot.onboarding.state_machine import (
     OnboardingSession,
     OnboardingStep,
     advance_with_callback,
     session_to_settings,
 )
-from core.autopilot.onboarding.schema import Diagnostics
 
 
 def test_ads_connect_selection_is_persisted_in_session() -> None:

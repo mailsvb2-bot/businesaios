@@ -11,8 +11,8 @@ from config.pricing_retention_policy import (
 from config.retention_arms_policy import RetentionArmsPolicy
 from core.pricing.off_policy import ips_estimate_for_price
 from core.pricing.stop_loss import StopLossConfig, should_apply_price
-from core.retention.arms import choose_arm_event_sourced
 from core.retention import engine as engine_mod
+from core.retention.arms import choose_arm_event_sourced
 from core.retention.engine import RetentionDayDecision, RetentionEngine
 from core.retention.engine_support import (
     build_sandbox_suppressed_decision,

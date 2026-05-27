@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from reliability.execution_checkpoint_store import ExecutionCheckpoint, InMemoryExecutionCheckpointStore, JsonlExecutionCheckpointStore
+from reliability.execution_checkpoint_store import (
+    ExecutionCheckpoint,
+    InMemoryExecutionCheckpointStore,
+    JsonlExecutionCheckpointStore,
+)
 
 
 def test_execution_checkpoint_store_enforces_monotonic_sequence_and_stage_order(tmp_path) -> None:

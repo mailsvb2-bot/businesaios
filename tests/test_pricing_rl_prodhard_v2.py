@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
-
-from core.pricing.rl_picker import RLPricingConfig, choose_price_rub
 from core.pricing.logging import emit_pricing_decision
-from ml.pricing_dataset import build_pricing_dataset
-from ml.pricing_trainer import train_tabular_policy, target_propensity_from_tabular
+from core.pricing.rl_picker import RLPricingConfig, choose_price_rub
 from ml.ope import evaluate_ips_snips
+from ml.pricing_dataset import build_pricing_dataset
+from ml.pricing_trainer import target_propensity_from_tabular, train_tabular_policy
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 def _ev(*, tenant_id: str, event_type: str, ts: int, user_id: str, payload: dict):

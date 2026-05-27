@@ -1,8 +1,17 @@
 from __future__ import annotations
 
-from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessGoalEnvelope, IntegrationMode, PolicyConstraint
+from application.business_autonomy.contracts import (
+    BusinessExecutionRequest,
+    BusinessGoalEnvelope,
+    IntegrationMode,
+    PolicyConstraint,
+)
 from application.business_autonomy.guards import BusinessBlastRadiusGuard, BusinessBudgetGuard
-from application.business_autonomy.safety_core import SafetyRuntimePolicy, build_safety_core_admin_surface, validate_budget
+from application.business_autonomy.safety_core import (
+    SafetyRuntimePolicy,
+    build_safety_core_admin_surface,
+    validate_budget,
+)
 from interfaces.api.business_autonomy_route_handlers import build_business_autonomy_route_handlers
 
 

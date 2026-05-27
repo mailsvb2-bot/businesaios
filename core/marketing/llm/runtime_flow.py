@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.marketing.llm_telemetry import append_event_sync, emit_trace_async, emit_trace_sync
 from core.telemetry.event_types import (
     LLM_BUDGET_BLOCKED,
     LLM_CIRCUIT_OPEN,
@@ -9,7 +10,6 @@ from core.telemetry.event_types import (
     LLM_SKIPPED,
 )
 from core.telemetry.event_writer import TelemetryContext, append_event
-from core.marketing.llm_telemetry import append_event_sync, emit_trace_async, emit_trace_sync
 
 
 async def emit_circuit_open_async(*, event_store: Any, ctx: TelemetryContext, provider: str, model: str) -> None:

@@ -6,10 +6,10 @@ from typing import Optional
 from core.autopilot.stop_loss import StopLossState
 from core.observability.throttled_logger import exception_throttled
 from core.policies.telegram.context import TelegramCtx
-from core.policies.telegram.helpers import ProposedAction
-from core.policies.telegram.handlers.autopilot_parts.shared import get_session
-from core.policies.telegram.handlers.autopilot_parts.menu_and_dashboards import handle_menu_or_dashboard
 from core.policies.telegram.handlers.autopilot_parts.flow import handle_flow
+from core.policies.telegram.handlers.autopilot_parts.menu_and_dashboards import handle_menu_or_dashboard
+from core.policies.telegram.handlers.autopilot_parts.shared import get_session
+from core.policies.telegram.helpers import ProposedAction
 
 logger = logging.getLogger(__name__)
 

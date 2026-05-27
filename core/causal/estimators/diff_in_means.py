@@ -7,7 +7,6 @@ from core.causal.estimators.base import CausalEstimator, EstimatorResult, _count
 from core.causal.math_utils import mean, stderr_of_mean
 from core.causal.types import CausalDataset, EffectEstimate
 
-
 Json = Dict[str, Any]
 
 

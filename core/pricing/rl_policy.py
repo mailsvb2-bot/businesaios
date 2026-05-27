@@ -10,8 +10,8 @@ This module provides a tiny, dependency-free policy object for callers/tests
 that expect a 'choose_action' shape.
 """
 
-from typing import Any, Sequence
 import random
+from typing import Any, Sequence
 
 
 class RLPricePolicy:

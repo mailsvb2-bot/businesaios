@@ -47,6 +47,7 @@ def test_inmemory_operator_override_store_roundtrip() -> None:
 
 
 from datetime import timedelta
+
 from execution.operator_override_contract import utc_now
 
 

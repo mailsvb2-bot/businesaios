@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from runtime.platform.config import env_access, env_flags
 from runtime.boot import env as runtime_env
+from runtime.platform.config import env_access, env_flags
 
 
 def test_env_helpers_share_single_runtime_behavior() -> None:

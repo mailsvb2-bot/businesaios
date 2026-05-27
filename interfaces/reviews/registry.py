@@ -1,6 +1,5 @@
 from interfaces.common.registry_capability_contract import build_registry_entry
 
-
 CONNECTORS = {
     "google_reviews": build_registry_entry(
         name="google_reviews",

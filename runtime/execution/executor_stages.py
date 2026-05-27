@@ -3,18 +3,18 @@ from __future__ import annotations
 from typing import Any
 
 from governance.time_scale import TimeScale
-from runtime.execution.executor_core import assert_timescale_allowed, enforce_safe_mode, load_world
 from runtime.execution.dispatcher import effect_succeeded
+from runtime.execution.execution_contract_lock import commit_verified_execution, verify_execution_contract
 from runtime.execution.executor_audit import emit_deployment_proposed, emit_effect_window, emit_reward_observed
 from runtime.execution.executor_commit import _decision_tenant_id, build_delivery_metadata, claim_or_skip, enqueue_once
-from runtime.execution.execution_contract_lock import commit_verified_execution, verify_execution_contract
-from runtime.observability.telemetry import correlation_key_scope
-from runtime.execution.world_model_pin_runtime import check_and_emit_world_model_pin
-from runtime.observability.tracing import span_with_sla
-from runtime.security.product_action_gate import review_action
-from runtime.security.capability_gate import set_effect_capability, clear_effect_capability
-from runtime.execution.operational_budget_runtime import review_operational_budget
+from runtime.execution.executor_core import assert_timescale_allowed, enforce_safe_mode, load_world
 from runtime.execution.governance_runtime import review_governance_execution
+from runtime.execution.operational_budget_runtime import review_operational_budget
+from runtime.execution.world_model_pin_runtime import check_and_emit_world_model_pin
+from runtime.observability.telemetry import correlation_key_scope
+from runtime.observability.tracing import span_with_sla
+from runtime.security.capability_gate import clear_effect_capability, set_effect_capability
+from runtime.security.product_action_gate import review_action
 
 
 def _checkpoint(*, executor: Any, env: Any, stage: str, payload: dict[str, Any] | None = None) -> None:

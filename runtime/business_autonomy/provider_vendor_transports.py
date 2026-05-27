@@ -3,11 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from security.secret_vault import SecretVault
-
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
+from security.secret_vault import SecretVault
 
 CANON_PROVIDER_VENDOR_TRANSPORTS = True
 

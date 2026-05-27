@@ -11,7 +11,6 @@ from observability.execution_trace_contract import (
 from observability.execution_trace_store import InMemoryExecutionTraceStore
 from observability.runtime_effect_trace_store import InMemoryRuntimeEffectTraceStore
 
-
 TENANT_A = "tenant-a"
 TENANT_B = "tenant-b"
 

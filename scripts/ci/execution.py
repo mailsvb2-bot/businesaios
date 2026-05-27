@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-from contextlib import contextmanager
 from collections.abc import Iterator
+from contextlib import contextmanager
 
 from scripts.ci.contracts import ExecutionReport, ExecutionRequest, StepResult
 from scripts.ci.coverage_report import write_coverage_stub_xml
@@ -15,7 +15,6 @@ from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state
 from scripts.ci.step_registry import handler_for_step
 from scripts.ci.summary import write_failure_summary
 from scripts.ci.timing import measure_time
-
 
 _PROOF_ENV_KEYS = (
     "POSTGRES_LIVE_PROOF_REQUIRED",

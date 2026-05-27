@@ -11,15 +11,14 @@ import logging
 import sqlite3
 from typing import Optional
 
-from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from observability.platform.observability.silent import swallow
-
-from runtime.platform.event_store.sqlite_helpers import MAX_I64, _exclusive_end_ms, _row_to_event
-from runtime.platform.event_store.sqlite_schema import backfill_legacy_tenant_ids, init_schema
 from runtime.platform.event_store.sqlite_event_store_query_api import SqliteEventStoreQueryApi
 from runtime.platform.event_store.sqlite_event_store_retention_api import SqliteEventStoreRetentionApi
 from runtime.platform.event_store.sqlite_event_store_settings_api import SqliteEventStoreSettingsApi
 from runtime.platform.event_store.sqlite_event_store_write_api import SqliteEventStoreWriteApi
+from runtime.platform.event_store.sqlite_helpers import MAX_I64, _exclusive_end_ms, _row_to_event
+from runtime.platform.event_store.sqlite_schema import backfill_legacy_tenant_ids, init_schema
+from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 
 logger = logging.getLogger(__name__)
 

@@ -10,7 +10,6 @@ from uuid import uuid4
 from governance.persistence_codec import atomic_write_json, read_json_or_default
 from runtime.execution.region_ownership_plane import RegionRoute, RegionStatePort
 
-
 CANON_BUSINESS_AUTONOMY_DISTRIBUTED_STATE = True
 
 

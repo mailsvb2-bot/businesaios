@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import json
+from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
-from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
+from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 from runtime.handler_loader import import_internal_attr
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault

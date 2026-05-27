@@ -4,6 +4,7 @@ import threading
 
 import pytest
 
+from entrypoints.api.request_context import RequestContext
 from infra.feature_flag_store import InMemoryFeatureFlagStore
 from infra.feature_flags import FeatureFlags
 from infra.idempotency import IdempotencyExecutor
@@ -16,7 +17,6 @@ from infra.runtime_guardrails import RuntimeGuardrails
 from interfaces.api.action_models import ExecuteActionRequest, ExecuteActionResponse
 from interfaces.api.execute_action_with_control_plane import ExecuteActionWithControlPlane
 from interfaces.api.execute_action_with_guards import ExecuteActionWithGuards
-from entrypoints.api.request_context import RequestContext
 from observability.action_audit_log import ActionAuditLog
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope

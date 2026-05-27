@@ -7,7 +7,6 @@ from typing import Any, Dict, Iterable, Optional
 
 from core.events.log import EventLog
 
-
 _POLICY_UPDATE_PROPOSED = "policy_update_proposed@v1"
 _POLICY_UPDATE_APPROVED = "policy_update_approved@v1"
 _POLICY_UPDATE_APPLIED = "policy_update_applied@v1"

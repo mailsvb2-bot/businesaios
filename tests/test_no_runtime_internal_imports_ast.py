@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 # Only these files may import runtime._internal.*
 ALLOWLIST = {
     "runtime/executor.py",

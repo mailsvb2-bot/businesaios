@@ -5,8 +5,7 @@ CANON_ADS_AUTOPILOT_EXECUTION_THIN_BOUNDARY = True
 CANON_ADS_AUTOPILOT_EXECUTION_SHARED_OWNER = True
 # build_decision_execution_service(
 
-from runtime.decisioning import DecisionCommand
-from runtime.decisioning import RecommendationSet
+from runtime.decisioning import DecisionCommand, RecommendationSet
 from runtime.execution.decision_execution_service import (
     DecisionExecutionService,
     build_bound_decision_execution_service,

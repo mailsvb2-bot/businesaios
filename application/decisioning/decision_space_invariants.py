@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Iterable
 
-
 FORBIDDEN_CAPABILITIES_OUTSIDE_CORE = (
     "choose",
     "select_best",

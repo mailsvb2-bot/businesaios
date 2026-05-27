@@ -10,10 +10,10 @@ Why separate module:
 
 from typing import Dict, Optional
 
-from core.tenancy.normalization import normalize_tenant_id_or_unknown
-from core.offers.offer_callbacks import parse_offer_callback, outcome_event_type
+from core.offers.offer_callbacks import outcome_event_type, parse_offer_callback
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction
+from core.tenancy.normalization import normalize_tenant_id_or_unknown
 from core.ux.telegram_keyboards import kb_main
 
 

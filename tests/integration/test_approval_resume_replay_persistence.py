@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from app.web.pages.approvals import ApprovalsPage
 from contracts.action_impact_contract import ActionCategory
 from execution.approval_execution_gate import build_execution_subject_fingerprint
 from execution.approval_policy_engine import ApprovalPolicyEngine
@@ -28,7 +29,6 @@ from governance.tenant_policy_overrides import TenantPolicyOverrideRegistry
 from interfaces.api.approval_route_handlers import ApprovalRouteHandlers
 from runtime.execution.governance_runtime import GovernanceExecutionBlocked, review_governance_execution
 from runtime.execution.operational_budget_runtime import build_action_execution_context
-from app.web.pages.approvals import ApprovalsPage
 
 
 class _Events:

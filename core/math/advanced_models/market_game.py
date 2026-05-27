@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Callable, Sequence
 
+
 def best_response_price(
     *,
     candidate_prices: Sequence[float],

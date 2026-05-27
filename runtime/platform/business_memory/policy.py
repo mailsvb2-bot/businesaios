@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 CANON_BUSINESS_MEMORY_POLICY = True
 
 

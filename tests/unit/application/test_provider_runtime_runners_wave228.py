@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from application.business_autonomy.provider_catalog import provider_map
+from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
 from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
-from reliability.idempotency_store import InMemoryIdempotencyStore
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
 
@@ -38,11 +38,18 @@ def test_live_sync_runtime_is_dry_run_ready_but_fail_closed_without_transport():
 
 
 def test_provider_admin_status_contains_live_runner_and_replay_guard(tmp_path):
-    from application.business_autonomy.business_connector_framework import ConnectorOnboardingService, StaticTrustOnboarding
+    from application.business_autonomy.business_connector_framework import (
+        ConnectorOnboardingService,
+        StaticTrustOnboarding,
+    )
     from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
     from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
     from application.business_autonomy.provider_admin_service import ProviderAdminService
-    from runtime.business_autonomy.bootstrap import StaticGovernanceEnablement, StaticPersistenceSurface, _build_typed_channel_registry
+    from runtime.business_autonomy.bootstrap import (
+        StaticGovernanceEnablement,
+        StaticPersistenceSurface,
+        _build_typed_channel_registry,
+    )
     from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore, FileRegionRouteState
     from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
     from security.connector_secret_scope import ConnectorSecretScope

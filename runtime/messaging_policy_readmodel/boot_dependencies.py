@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from runtime.messaging_policy_readmodel.inmemory_store import InMemoryMessagingPolicySnapshotStore
 from runtime.messaging_policy_readmodel.projector import MessagingPolicyProjector
-from runtime.messaging_policy_readmodel.repository import MessagingPolicySnapshotRepository
-from runtime.messaging_policy_readmodel.rebuild_service import MessagingPolicyRebuildService
 from runtime.messaging_policy_readmodel.read_service import MessagingPolicyReadService
+from runtime.messaging_policy_readmodel.rebuild_service import MessagingPolicyRebuildService
+from runtime.messaging_policy_readmodel.repository import MessagingPolicySnapshotRepository
 
 
 def build_messaging_policy_read_services(*, event_store):

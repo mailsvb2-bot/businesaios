@@ -11,18 +11,17 @@ It must never mutate queue execution state or become a second decision path.
 """
 
 import importlib
-from dataclasses import dataclass
-from datetime import timedelta
-from datetime import datetime
-from pathlib import Path
 import os
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
+
 sqlite3 = importlib.import_module("sqlite3")
 from threading import RLock
 
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_slo import QueueSLOReport
-
 
 CANON_RUNTIME_QUEUE_METRICS_ROLLUP_SQLITE = True
 

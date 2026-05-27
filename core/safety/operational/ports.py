@@ -4,7 +4,6 @@ from typing import Protocol
 
 from core.safety.operational.operational_budget_ledger import OperationalBudgetCounters
 
-
 CANON_OPERATIONAL_PORTS = True
 
 

@@ -5,7 +5,10 @@ from datetime import datetime, timezone
 from entrypoints.api.client_outcome_route_handlers import build_client_outcome_route_handlers
 from lock.economic_truth_lock import validate_no_economic_truth_bypass
 from runtime.economic_core.client_outcome_bridge import build_client_outcome_truth_snapshot
-from runtime.export.client_outcome_export import export_client_outcome_truth_snapshot, verify_client_outcome_truth_export
+from runtime.export.client_outcome_export import (
+    export_client_outcome_truth_snapshot,
+    verify_client_outcome_truth_export,
+)
 
 
 def test_client_outcome_truth_snapshot_and_export_are_deterministic() -> None:

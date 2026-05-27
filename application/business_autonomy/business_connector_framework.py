@@ -6,7 +6,10 @@ from typing import Any, Mapping, Protocol, Sequence
 from application.business_autonomy.channel_adapter_registry import TypedChannelAdapterRegistry
 from application.business_autonomy.channel_contracts import ChannelCapabilityDescriptor, ChannelKind
 from application.business_autonomy.contracts import BusinessCapability, CapabilityKind
-from application.business_autonomy.distributed_capability_trust_registry import BusinessRegistryRecord, DistributedBusinessRegistry
+from application.business_autonomy.distributed_capability_trust_registry import (
+    BusinessRegistryRecord,
+    DistributedBusinessRegistry,
+)
 from application.business_autonomy.non_ai_onboarding_mode import NonAiModeResolver
 from application.business_autonomy.onboarding_contract import (
     BusinessOnboardingRequest,
@@ -15,7 +18,6 @@ from application.business_autonomy.onboarding_contract import (
     OnboardingStage,
 )
 from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
-
 
 CANON_BUSINESS_CONNECTOR_FRAMEWORK = True
 
@@ -67,7 +69,7 @@ class CapabilitySemanticsMapper:
         descriptors: Sequence[ChannelCapabilityDescriptor],
     ) -> tuple[BusinessCapability, ...]:
         resolved: dict[CapabilityKind, BusinessCapability] = {}
-        for kind in self._CHANNEL_DEFAULTS.get(channel_kind, ()): 
+        for kind in self._CHANNEL_DEFAULTS.get(channel_kind, ()):
             resolved[kind] = BusinessCapability(kind=kind, enabled=True, confidence=0.55, notes=f"channel_default:{channel_kind.value}")
         for descriptor in descriptors:
             descriptor.validate()

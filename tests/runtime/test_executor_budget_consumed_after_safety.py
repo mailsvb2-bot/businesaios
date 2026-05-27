@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 
 from core.ai.decision import Decision
-from runtime.executor import RuntimeExecutor
-from runtime.execution.executor_result import ExecutionResult
 from runtime.decision import DecisionEnvelope
+from runtime.execution.executor_result import ExecutionResult
+from runtime.executor import RuntimeExecutor
 
 
 class _Guard:

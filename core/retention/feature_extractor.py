@@ -4,12 +4,12 @@ import json
 import time
 from typing import Dict, Optional
 
-from core.retention.feature_registry import ensure_complete
-from core.retention.ports import RetentionStore
-from core.retention.feature_extractors.shared import DayWindow, day_key_from_ms, day_window_utc
+from core.retention.feature_extractors.activity import apply_activity_features
 from core.retention.feature_extractors.audio import apply_audio_features
 from core.retention.feature_extractors.mood import apply_mood_features, mood10_to_bucket
-from core.retention.feature_extractors.activity import apply_activity_features
+from core.retention.feature_extractors.shared import DayWindow, day_key_from_ms, day_window_utc
+from core.retention.feature_registry import ensure_complete
+from core.retention.ports import RetentionStore
 
 
 def compute_features_for_day(

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from app.web.pages.approvals import ApprovalsPage
 from governance.approval_store import InMemoryApprovalStore
-from interfaces.api.approval_route_handlers import ApprovalRouteHandlers
 from governance.rbac_contract import RoleId
+from interfaces.api.approval_route_handlers import ApprovalRouteHandlers
 
 
 def test_approvals_page_reports_execution_summary() -> None:

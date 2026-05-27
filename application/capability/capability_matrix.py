@@ -3,8 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from application.capability.action_capability_matrix import ActionCapability, build_action_capability_matrix, get_action_capability
-
+from application.capability.action_capability_matrix import (
+    ActionCapability,
+    build_action_capability_matrix,
+    get_action_capability,
+)
 
 CANON_CAPABILITY_MATRIX = True
 

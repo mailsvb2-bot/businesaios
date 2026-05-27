@@ -5,7 +5,6 @@ from pathlib import Path
 from tests.arch.scanners.config_literal_scanner import suspicious_config_lines
 from tests.arch.scanners.python_file_loader import read_text
 
-
 TARGET_FILES = (
     "runtime/integration/world_state_integration_service.py",
     "runtime/integration/fallback_policy.py",

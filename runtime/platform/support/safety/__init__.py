@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+
 class Constraints:
     def valid_probability(self, value: float) -> bool:
         return 0.0 <= value <= 1.0

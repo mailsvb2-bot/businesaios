@@ -4,9 +4,9 @@ from core.autopilot.pricing import recommend_price_minor
 from core.autopilot.resolver import resolve_autopilot_contract
 from core.autopilot.stop_loss import build_stop_loss_plan
 from core.autopilot.tasks import build_tasks_from_diagnostics, serialize_tasks
-from core.tenancy.normalization import normalize_tenant_id_or_unknown
 from core.policies.telegram.handlers.autopilot_parts.menu_and_dashboards import stop_loss_verdict
 from core.policies.telegram.helpers import propose
+from core.tenancy.normalization import normalize_tenant_id_or_unknown
 from core.ux.telegram_keyboards import kb_autopilot_menu
 
 AUTOPILOT_RUN_STARTED_V1 = "autopilot_run_started@v1"

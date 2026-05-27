@@ -19,7 +19,6 @@ from runtime.state.state_contract import (
 )
 from runtime.state.state_freshness_policy import StateFreshnessPolicy
 
-
 CANON_STATE_SYNTHESIS_ENGINE = True
 STATE_SYNTHESIS_DOES_NOT_OWN_DECISIONS = True
 

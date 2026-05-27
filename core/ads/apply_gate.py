@@ -14,7 +14,6 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional
 
-
 ADS_APPLY_SETTING_KEY = "ads:apply_enabled"
 ADS_APPLY_ENABLED_SINCE_MS_KEY = "ads:apply_enabled_since_ms"
 

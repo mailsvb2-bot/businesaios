@@ -43,7 +43,9 @@ def test_webhook_verifier_rejects_future_timestamp_when_present() -> None:
     record = provider.issue_key(key_id='wh-v2', purpose=KeyPurpose.WEBHOOK_VERIFICATION, tenant_id='t1', connector_id='crm')
     verifier = WebhookSignatureVerifier(key_provider=provider, require_timestamp=True, allow_future_skew_seconds=5)
     body = b'{"ok":true}'
-    import base64, hashlib, hmac
+    import base64
+    import hashlib
+    import hmac
     sig = base64.b64encode(hmac.new(record.secret_bytes, body, hashlib.sha256).digest()).decode('ascii')
     future = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
     result = verifier.verify(

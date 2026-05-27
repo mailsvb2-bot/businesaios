@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import pytest
 
+from runtime.application._ports_impl import DecisionExecutionPort
 from runtime.application.decision_transition_lock import (
     DecisionTransitionLockError,
     execute_locked_transition_action,
     resolve_transition_execute_callable,
     validate_no_raw_decision_helpers,
 )
-from runtime.application._ports_impl import DecisionExecutionPort
 
 
 class _CompatOwner:

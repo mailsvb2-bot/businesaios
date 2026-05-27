@@ -63,7 +63,9 @@ def test_request_signer_and_webhook_verifier() -> None:
     verifier = WebhookSignatureVerifier(key_provider=provider)
     body = b'{"ok":true}'
     key = provider.get_active_for(purpose=KeyPurpose.WEBHOOK_VERIFICATION, tenant_id='t1', connector_id='crm')
-    import base64, hashlib, hmac
+    import base64
+    import hashlib
+    import hmac
     sig = base64.b64encode(hmac.new(key.secret_bytes, body, hashlib.sha256).digest()).decode('ascii')
     result = verifier.verify(headers={'X-Signature': sig}, body=body, tenant_id='t1', connector_id='crm')
     assert result.verified is True

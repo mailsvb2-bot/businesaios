@@ -15,9 +15,9 @@ from runtime.messaging_policy.policy_plan import PolicyPlan
 from runtime.messaging_policy.policy_request import PolicyRequest
 from runtime.messaging_policy.read_models import parse_delivery_snapshot, parse_unanswered_snapshot
 from runtime.messaging_policy.resolver import MessagingPolicyResolver
-from runtime.messaging_preferences.load_preference import load_channel_preference
 from runtime.messaging_policy_events.execute_with_events import execute_policy_plan_with_events
 from runtime.messaging_policy_events.runtime_bridge import build_policy_event_recorder_from_runtime
+from runtime.messaging_preferences.load_preference import load_channel_preference
 
 
 def _apply_capability_routing(self, *, ordered_channels: tuple[str, ...], disciplined_policy: dict) -> PolicyPlan:

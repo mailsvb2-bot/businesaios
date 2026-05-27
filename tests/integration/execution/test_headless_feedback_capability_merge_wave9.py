@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from application.headless.feedback import SimpleHeadlessFeedbackReader
 from contracts.action_result import ActionResult
 from contracts.executable_action import ExecutableAction
-from application.headless.feedback import SimpleHeadlessFeedbackReader
 from runtime.execution.executor_result import ExecutionResult
 
 

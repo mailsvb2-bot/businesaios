@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from interfaces.web.settings.messaging_preferences.html_page import build_page
 from interfaces.web.common.http_response import HttpResponse
+from interfaces.web.settings.messaging_preferences.html_page import build_page
 
 
 class HtmlController:

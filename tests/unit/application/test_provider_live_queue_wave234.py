@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
 from application.business_autonomy.provider_admin_service import ProviderAdminService
 from application.business_autonomy.provider_catalog import provider_map
-from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
-from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore
+from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import InMemorySecretVault
 

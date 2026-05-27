@@ -17,7 +17,11 @@ from application.business_autonomy.guards import BusinessBlastRadiusGuard, Busin
 from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingMode
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
 from application.business_autonomy.policy import BusinessAutonomyPolicy
-from application.business_autonomy.registry import BusinessAdapterRegistry, BusinessCapabilityRegistry, RegisteredBusinessCapabilities
+from application.business_autonomy.registry import (
+    BusinessAdapterRegistry,
+    BusinessCapabilityRegistry,
+    RegisteredBusinessCapabilities,
+)
 
 
 @dataclass(frozen=True)

@@ -1,7 +1,10 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, Dict, Optional
+
+
 @dataclass(frozen=True)
 class OAuthConnectRequest:
     tenant_id: str

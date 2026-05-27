@@ -4,8 +4,8 @@ This package intentionally provides only gating/guardrail infrastructure.
 It must never become a second decision center.
 """
 
-from .kill_switch import KillSwitch, KillSwitchState
 from .blast_radius import BlastRadiusPolicy, allow_action
+from .kill_switch import KillSwitch, KillSwitchState
 from .operational import (
     ActionClassifier,
     ActionCostModel,

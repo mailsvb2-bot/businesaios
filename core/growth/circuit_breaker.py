@@ -12,8 +12,8 @@ State is in-memory (per process). In multi-node deployments, this should be
 backed by event_store aggregation or a shared store.
 """
 
-from dataclasses import dataclass
 import time
+from dataclasses import dataclass
 from typing import Dict
 
 

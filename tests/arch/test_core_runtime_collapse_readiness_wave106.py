@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from canon.collapse_readiness import CORE_RUNTIME_COLLAPSED_SURFACES, CORE_RUNTIME_COLLAPSE_READY_SURFACES
+from canon.collapse_readiness import CORE_RUNTIME_COLLAPSE_READY_SURFACES, CORE_RUNTIME_COLLAPSED_SURFACES
 
 ROOT = Path(__file__).resolve().parents[2]
 

@@ -1,8 +1,8 @@
 from contracts.action_result import ActionResult
-from execution.decision_execution_bridge import DecisionToExecutionFlow as CanonicalDecisionToExecutionFlow
-from execution.decision_execution_bridge import DecisionToExecutionFlow as FlowDecisionToExecutionFlow
 from core.contracts.decision_result import DecisionResult
 from core.contracts.decision_trace import DecisionTrace
+from execution.decision_execution_bridge import DecisionToExecutionFlow as CanonicalDecisionToExecutionFlow
+from execution.decision_execution_bridge import DecisionToExecutionFlow as FlowDecisionToExecutionFlow
 
 
 class _StubExecutionPipeline:

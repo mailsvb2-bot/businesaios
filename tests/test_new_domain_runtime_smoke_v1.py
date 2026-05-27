@@ -5,13 +5,11 @@ from datetime import datetime, timedelta, timezone
 from core.economics.contracts import UnitEconomicsSnapshot
 from core.finance.builders.cashflow_builder import build_cashflow_snapshot
 from core.governance.contracts import AuditRecord
-from runtime.human_governance import build_runtime_review_case
 from core.knowledge.enums import SourceKind
 from core.knowledge.types import LessonDraft, MemoryRetrieval, TagSet
 from core.learning_loop.types import LearningBatch
 from core.product.contracts import ProductFeature
 from core.simulation.contracts import ScenarioOutcome
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.boot.knowledge_boot import build_knowledge_services
 from runtime.handlers.economics_explain import handle_economics_explain
 from runtime.handlers.finance_explain import handle_finance_explain
@@ -20,6 +18,8 @@ from runtime.handlers.human_governance_explain import handle_human_governance_ex
 from runtime.handlers.learning_loop_build import handle_learning_loop_build
 from runtime.handlers.product_build import handle_product_build
 from runtime.handlers.simulation_explain import handle_simulation_explain
+from runtime.human_governance import build_runtime_review_case
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 def test_product_runtime_smoke() -> None:

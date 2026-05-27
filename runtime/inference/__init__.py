@@ -19,14 +19,6 @@ from runtime.inference.distributed import (
     DistributedInferenceNodeSelectionPolicy,
     DistributedNetworkUsage,
 )
-from runtime.inference.provisioning import (
-    InferenceCapacityManager,
-    InferenceCapacityState,
-    InferenceCapacityStateStore,
-    InferenceCapacityTransitionJournal,
-    InferenceCapacityTransitionRecord,
-    InferenceUpgradeCooldownTracker,
-)
 from runtime.inference.providers import (
     CPUFallbackProvider,
     DedicatedGPUProvider,
@@ -40,6 +32,14 @@ from runtime.inference.providers import (
     ProviderRateLimitGuard,
     ProviderRetryAdapter,
     RetryPolicy,
+)
+from runtime.inference.provisioning import (
+    InferenceCapacityManager,
+    InferenceCapacityState,
+    InferenceCapacityStateStore,
+    InferenceCapacityTransitionJournal,
+    InferenceCapacityTransitionRecord,
+    InferenceUpgradeCooldownTracker,
 )
 
 CANON_RUNTIME_INFERENCE_NAMESPACE = True

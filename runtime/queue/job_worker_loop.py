@@ -6,15 +6,14 @@ This layer repeatedly invokes the canonical worker tick.
 It is intentionally operational-only and must not add planning logic.
 """
 
+import time
 from dataclasses import dataclass
 from datetime import datetime
-import time
 
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.job_stop_token import JobStopToken
 from runtime.queue.job_worker import JobWorker, WorkerTickReport
 from runtime.queue.queue_observability import QueueObservabilityRegistry
-
 
 CANON_RUNTIME_QUEUE_WORKER_LOOP = True
 

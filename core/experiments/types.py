@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Mapping, Optional
 
 from config.experiments_defaults import DEFAULT_EXPERIMENT_DEFAULTS
-
 from core.experiments.enums import (
     ExperimentStatus,
     MetricDirection,

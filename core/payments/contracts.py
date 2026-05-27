@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-
 # Canonical contract for payment_created.payload.external_id
 #
 # - MUST be present and non-empty.

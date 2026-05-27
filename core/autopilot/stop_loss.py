@@ -12,7 +12,6 @@ from typing import Any, Dict, Mapping, Optional
 
 from core.autopilot.guardrails import GuardrailVerdict
 
-
 STOP_LOSS_SETTING_KEY = "autopilot:stop_loss"
 
 

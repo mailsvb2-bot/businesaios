@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = ROOT / "execution" / "business_memory_policy.py"
 COMPACTOR_PATH = ROOT / "execution" / "business_memory_compactor.py"

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from runtime.tenancy import normalize_tenant_scope
 from runtime.messaging_policy_alert_subscriptions.match_service import AlertSubscriptionMatchService
 from runtime.messaging_policy_alert_subscriptions.notification_planner import AlertNotificationPlanner
 from runtime.messaging_policy_alert_subscriptions.notifier import MessagingPolicyAlertNotifier
 from runtime.messaging_policy_alert_subscriptions.subscription_loader import load_alert_subscriptions
+from runtime.tenancy import normalize_tenant_scope
 
 
 class MessagingPolicyAlertSubscriptionService:

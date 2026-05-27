@@ -1,26 +1,29 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, Union
 
-import logging
-
+from config.env_flags import env_bool, env_path
 from config.yaml_loader_shared import load_yaml
-
-from core.offers.offer_types import OfferCatalog
+from core.observability.silent import swallow
+from core.offers.catalog_identity import (
+    LEGACY_OFFER_CATALOG_ID,
+    NONE_OFFER_CATALOG_ID,
+    catalog_registry_key,
+    normalize_catalog_id,
+)
+from core.offers.catalogs.none_catalog import NoneOfferCatalogV1
 
 # IMPORTANT:
 # Keep imports here offers-only. Do NOT import retention engines/adapters.
 from core.offers.catalogs.retention_catalog import LegacyOfferCatalogV1
-from core.offers.catalogs.none_catalog import NoneOfferCatalogV1
 from core.offers.catalogs.yaml_catalog import YamlOfferCatalogV1
 from core.offers.catalogs.yaml_catalog_loader import YamlOfferCatalogLoaderV1
 from core.offers.catalogs.yaml_schema import validate_yaml_offer_catalog_spec
-from core.offers.catalog_identity import LEGACY_OFFER_CATALOG_ID, NONE_OFFER_CATALOG_ID, catalog_registry_key, normalize_catalog_id
+from core.offers.offer_types import OfferCatalog
 from core.offers.yaml_offer_catalog_loader import YamlOfferCatalogLoader  # legacy loader (kept)
-from core.observability.silent import swallow
-from config.env_flags import env_bool, env_path
 
 log = logging.getLogger("core.offers")
 

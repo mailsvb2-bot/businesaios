@@ -1,5 +1,6 @@
 """BUSINESAIOS canon package."""
 
+from .authority_registry import CANONICAL_AUTHORITY_OWNERS, CanonAuthority
 from .canon_ai_enforcer import EnforcerReport, Violation, run_enforcer
 from .canon_change_policy import (
     CHANGE_POLICY_FORBIDDEN_PATTERNS,
@@ -13,6 +14,35 @@ from .canon_repo_cleaner import JUNK_EXTENSIONS, JUNK_PATTERNS, is_junk, scan_re
 from .canon_report_requirements import REPORT_REQUIREMENTS, required_report_sections
 from .canon_rules import CANON_RULES, CANON_VERSION, FORBIDDEN_ARCHITECTURE_DEFECTS, verify_canon_loaded
 from .canon_simplification_manifest import CANON_SIMPLIFICATION_MANIFEST, iter_manifest
+from .canon_world_model_integrity import (
+    REQUIRED_WORLD_MODEL_CANON_FILES,
+    REQUIRED_WORLD_MODEL_CANON_STRINGS,
+    WORLD_MODEL_CANON_VERSION,
+    scan_world_model_canon_contract,
+)
+from .canon_world_model_integrity import (
+    findings_as_dicts as world_model_findings_as_dicts,
+)
+from .domain_fs import (
+    ALLOWED_SUBDIRS,
+    BOOT_WIRING_LINE_LIMIT,
+    CANON_DOMAIN_MARKER,
+    DOMAIN_FILE_SYSTEM_VERSION,
+    FORBIDDEN_FILENAME_STEMS,
+    FORBIDDEN_ROLE_NAMES,
+    REQUIRED_ROOT_FILES,
+    STRATEGIC_DOMAIN_NAMES,
+    THIN_HANDLER_LINE_LIMIT,
+    scan_boot_wiring_only,
+    scan_canon_domain_file_system,
+    scan_thin_runtime_handlers,
+)
+from .domain_fs import (
+    findings_as_dicts as domain_fs_findings_as_dicts,
+)
+from .module_manifests import DEFAULT_CANON_MODULE_MANIFESTS, CanonModuleManifest, CanonModuleRole
+from .route_spec import CANONICAL_EXECUTION_PATH, CANONICAL_ROUTE_OWNERS
+from .sealed_effect_policy import EFFECT_LITERAL_MARKERS, FORBIDDEN_EXTERNAL_EFFECT_LIBRARIES, SEALED_EFFECT_PREFIXES
 from .simplification_constitution import (
     ALL_CANON_INVARIANTS,
     CANON_SIMPLIFICATION_CONSTITUTION_VERSION,
@@ -31,33 +61,7 @@ from .simplification_contracts import (
     evaluate_simplification,
     must_fail_closed_when_scope_missing,
 )
-from .canon_world_model_integrity import (
-    REQUIRED_WORLD_MODEL_CANON_FILES,
-    REQUIRED_WORLD_MODEL_CANON_STRINGS,
-    WORLD_MODEL_CANON_VERSION,
-    findings_as_dicts as world_model_findings_as_dicts,
-    scan_world_model_canon_contract,
-)
-from .authority_registry import CANONICAL_AUTHORITY_OWNERS, CanonAuthority
-from .module_manifests import DEFAULT_CANON_MODULE_MANIFESTS, CanonModuleManifest, CanonModuleRole
-from .route_spec import CANONICAL_EXECUTION_PATH, CANONICAL_ROUTE_OWNERS
-from .sealed_effect_policy import EFFECT_LITERAL_MARKERS, FORBIDDEN_EXTERNAL_EFFECT_LIBRARIES, SEALED_EFFECT_PREFIXES
 from .trace_contracts import CANONICAL_TRACE_STAGES
-from .domain_fs import (
-    ALLOWED_SUBDIRS,
-    BOOT_WIRING_LINE_LIMIT,
-    CANON_DOMAIN_MARKER,
-    DOMAIN_FILE_SYSTEM_VERSION,
-    FORBIDDEN_FILENAME_STEMS,
-    FORBIDDEN_ROLE_NAMES,
-    REQUIRED_ROOT_FILES,
-    STRATEGIC_DOMAIN_NAMES,
-    THIN_HANDLER_LINE_LIMIT,
-    findings_as_dicts as domain_fs_findings_as_dicts,
-    scan_boot_wiring_only,
-    scan_canon_domain_file_system,
-    scan_thin_runtime_handlers,
-)
 
 # Preserve the original package-level helper name for existing world-model users.
 findings_as_dicts = world_model_findings_as_dicts

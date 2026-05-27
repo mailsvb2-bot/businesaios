@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-from entrypoints.api.analytics_models import AnalyticsMaterializeRequest, AnalyticsQueueMaterializeRequest, AnalyticsSnapshotReadRequest, AnalyticsSnapshotWriteRequest
+from application.analytics.fleet_queue_job_bridge import AnalyticsFleetQueueJobBridge
+from entrypoints.api.analytics_models import (
+    AnalyticsMaterializeRequest,
+    AnalyticsQueueMaterializeRequest,
+    AnalyticsSnapshotReadRequest,
+    AnalyticsSnapshotWriteRequest,
+)
 from entrypoints.api.analytics_ops_route_handlers import AnalyticsOpsRouteHandlers
 from entrypoints.api.analytics_route_handlers import AnalyticsRouteHandlers
-from application.analytics.fleet_queue_job_bridge import AnalyticsFleetQueueJobBridge
 from runtime.queue.job_dispatcher import JobDispatcher
 from runtime.queue.job_store import InMemoryJobStore
 

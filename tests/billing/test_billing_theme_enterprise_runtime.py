@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-import pytest
 from datetime import datetime, timedelta, timezone
 
-from billing.credit_balance import InMemoryCreditBalanceStore
+import pytest
+
 from billing.commercial_cycle_contract import DunningAction, SubscriptionLifecycleStatus, utc_now
+from billing.credit_balance import InMemoryCreditBalanceStore
 from billing.dunning_orchestrator import DunningOrchestrator, InMemoryDunningScheduleStore
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
 from billing.ledger_event import LedgerEntry, LedgerPosting
@@ -544,7 +545,7 @@ def test_payment_collection_replay_detects_provider_mismatch() -> None:
     first = PaymentCollectionOrchestrator(provider=_Provider(), result_store=store)
     _, result = first.collect(invoice=invoice, idempotency_key='idem-provider')
     assert result.successful is True
-    
+
     @dataclass(frozen=True)
     class _OtherProvider(PaymentProviderContract):
         def provider_name(self) -> str:

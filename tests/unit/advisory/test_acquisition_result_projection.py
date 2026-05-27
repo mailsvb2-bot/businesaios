@@ -3,8 +3,8 @@ from __future__ import annotations
 from acquisition.feasibility_solver import AcquisitionFeasibilityRequest, FeasibilitySolver
 from acquisition.funnel_model import FunnelStage
 from advisory import (
-    AcquisitionExplanation,
     CANON_ADVISORY_ACQUISITION_RESULT_PROJECTION,
+    AcquisitionExplanation,
     explain_acquisition_result,
 )
 

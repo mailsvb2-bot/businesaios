@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Tuple
 
-from core.offers.offer_types import OfferCatalog, OfferEligibility, OfferRender, OfferSummary
 from core.observability.silent import swallow
+from core.offers.offer_types import OfferCatalog, OfferEligibility, OfferRender, OfferSummary
 
 CATALOG_ID: str = "retention_legacy"
 

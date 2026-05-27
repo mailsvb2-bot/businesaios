@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # CANON_META_PACK: this helper belongs to the canonical meta-pack entry layer.
 # CANON_MASTER_LAYER: meta-pack is part of the repository-wide constitutional stack.
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -46,7 +45,7 @@ def _strip_comment(line: str) -> str:
 
 def _unquote(value: str) -> str:
     value = value.strip()
-    if len(value) >= 2 and (((value[0] == '"' and value[-1] == '"') or (value[0] == "'" and value[-1] == "'"))):
+    if len(value) >= 2 and ((value[0] == '"' and value[-1] == '"') or (value[0] == "'" and value[-1] == "'")):
         return value[1:-1]
     return value
 

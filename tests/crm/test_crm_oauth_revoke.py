@@ -1,6 +1,6 @@
 from crm.providers.common.crm_credentials import CrmAccessToken
-from crm.providers.common.crm_oauth_token_store import InMemoryCrmOAuthTokenStore
 from crm.providers.common.crm_oauth_service import CrmOAuthProviderConfig, CrmOAuthService
+from crm.providers.common.crm_oauth_token_store import InMemoryCrmOAuthTokenStore
 
 
 class _UnusedClient:

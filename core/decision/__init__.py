@@ -8,9 +8,9 @@ submodules such as ``core.decision.ai_decision_trace`` does not create a package
 initialization cycle.
 """
 
+import sys
 from importlib import import_module
 from typing import Any
-import sys
 
 from canon.public_api_alias import install_public_api_alias
 

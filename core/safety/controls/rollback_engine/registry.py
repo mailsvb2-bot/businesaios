@@ -6,7 +6,6 @@ from typing import Callable, Protocol
 from ..action_context import SafetyActionContext
 from .models import RollbackPlan
 
-
 RollbackBuilder = Callable[[SafetyActionContext], RollbackPlan]
 
 

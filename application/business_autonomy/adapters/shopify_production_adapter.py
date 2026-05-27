@@ -4,7 +4,12 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from application.business_autonomy.adapters._base import BaseStaticChannelAdapter, StaticCapabilityBundle
-from application.business_autonomy.channel_contracts import ChannelCapabilityDescriptor, ChannelExecutionEnvelope, ChannelIdentity, ChannelKind
+from application.business_autonomy.channel_contracts import (
+    ChannelCapabilityDescriptor,
+    ChannelExecutionEnvelope,
+    ChannelIdentity,
+    ChannelKind,
+)
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult, ExecutionVerdict
 from runtime.business_autonomy.provider_transport_bindings import provider_endpoint_url
 

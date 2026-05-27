@@ -11,10 +11,10 @@ for known-but-unimplemented commands. Operators may opt into fail-closed entry
 surfaces by setting ``BUSINESAIOS_PLATFORM_SUPPORT_STRICT_ENTRYPOINTS=1``.
 """
 
-from dataclasses import dataclass
-from typing import Callable, Mapping
 import os
 import sys
+from dataclasses import dataclass
+from typing import Callable, Mapping
 
 from runtime.platform.support.command_audit import build_command_audit_record, emit_command_audit
 

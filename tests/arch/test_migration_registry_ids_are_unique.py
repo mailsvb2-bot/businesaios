@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from tests.arch._canon_migration_registry_guard import load_registry
+
 
 def test_migration_registry_ids_are_unique() -> None:
     seen = set()

@@ -27,8 +27,8 @@ def _clean_build_artifacts(root: str = ".") -> None:
 
     This is intentionally aggressive for hermetic test runs.
     """
-    from pathlib import Path
     import shutil
+    from pathlib import Path
 
     r = Path(root).resolve()
 
@@ -64,12 +64,10 @@ def _clean_build_artifacts(root: str = ".") -> None:
             swallow(__name__, 'scripts/run_tests_clean.py')
 
 
+import compileall
 import warnings
-import compileall
 
-import compileall
 from core.observability.silent import swallow
-
 
 
 def main() -> int:

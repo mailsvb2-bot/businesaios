@@ -5,9 +5,8 @@ CANON_RUNTIME_SCHEDULER_DEPLOY_FLOW_NO_RAW_DECISION_ISSUE = True
 
 
 from runtime.observability.error_handling import swallow
-from runtime.scheduler_parts.decision_request import request_scheduler_decision_execution
 from runtime.scheduler_helpers import build_system_world_state, cleanup_rollout
-
+from runtime.scheduler_parts.decision_request import request_scheduler_decision_execution
 from runtime.scheduler_parts.result import LearningJobResult
 
 

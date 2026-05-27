@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 
+
 def _decode(value: str) -> str:
     return base64.b64decode(value.encode("ascii")).decode("utf-8")
 

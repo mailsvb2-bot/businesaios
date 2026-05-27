@@ -3,11 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from execution.action_budget_engine import ActionBudgetEngine
 from application.autonomy.autonomy_tiers import evaluate_autonomy_tier
+from execution.action_budget_engine import ActionBudgetEngine
 from execution.blast_radius_guard import BlastRadiusGuard
 from execution.operational_budget import BudgetWindowUsage, OperationalBudget, OperationalBudgetGuard
-
 
 CANON_CAPABILITY_EXECUTION_VERDICT = True
 

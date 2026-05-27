@@ -1,6 +1,12 @@
 from __future__ import annotations
+
 import pytest
-from tests.e2e._assertions import assert_feedback_contract_shape, assert_report_ledger_snapshot_consistency, assert_step_report_consistency
+
+from tests.e2e._assertions import (
+    assert_feedback_contract_shape,
+    assert_report_ledger_snapshot_consistency,
+    assert_step_report_consistency,
+)
 from tests.e2e._headless_harness import ScenarioStep, build_harness, make_request
 
 pytestmark = [pytest.mark.integration, pytest.mark.e2e]

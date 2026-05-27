@@ -7,7 +7,6 @@ from core.offers.engine import OfferEngine
 from core.policies.sales.sales_keyboards import sales_main_kb
 from core.policies.telegram.helpers import ProposedAction, propose, propose_message
 
-
 _OFFER_ENGINE: OfferEngine | None = None
 
 

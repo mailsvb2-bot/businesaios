@@ -19,8 +19,8 @@ Security:
 
 import logging
 import os
-from pathlib import Path
 from dataclasses import replace
+from pathlib import Path
 from typing import Any, Mapping
 
 from application.autonomy.autonomy_safety_bundle import AutonomySafetyBundle
@@ -28,62 +28,98 @@ from application.evidence.evidence_verifier import EvidenceVerifier
 from execution.action_budget_engine import ActionBudgetEngine
 from execution.blast_radius_guard import BlastRadiusGuard
 from execution.bounded_autonomy import BoundedAutonomyGuard
-from observability.decision_trace_store import NullDecisionTraceStore
-from tenancy.tenant_runtime_isolation import TenantRuntimeIsolation
-
 from governance.constitution import Constitution
-from governance.time_scale import TimeScale
 from governance.economic_layer import EconomicAutonomyLayer
-
+from governance.time_scale import TimeScale
+from observability.decision_trace_store import NullDecisionTraceStore
 from runtime.decision import DecisionEnvelope
-from runtime.execution.executor_result import ExecutionResult
-from runtime.handlers import ActionHandlerRegistry
+from runtime.enforcement.world_model_pin_guard import (
+    enforce_world_model_pin_or_raise as _executor_world_model_pin_guard_contract,
+)
+from runtime.execution import executor_effect_delivery as _executor_effect_delivery
+from runtime.execution.correlation import extract_correlation_key
+from runtime.execution.executor_audit import emit_effect_window as _executor_audit_helper
+from runtime.execution.executor_bindings import apply_executor_state
 from runtime.execution.executor_commit import _decision_tenant_id, get_delivery_info
+from runtime.execution.executor_core import enforce_safe_mode as _executor_core_helper
+from runtime.execution.executor_observability import (
+    append_decision_trace as append_executor_decision_trace,
+)
+from runtime.execution.executor_observability import (
+    record_action_audit as record_executor_action_audit,
+)
+from runtime.execution.executor_observability import (
+    record_connector_runtime_event as record_executor_connector_runtime_event,
+)
+from runtime.execution.executor_observability import (
+    record_inference_budget_burn as record_executor_inference_budget_burn,
+)
+from runtime.execution.executor_observability import (
+    record_inference_runtime_event as record_executor_inference_runtime_event,
+)
+from runtime.execution.executor_recovery import finalize_if_already_executed as _executor_recovery_helper
+from runtime.execution.executor_reliability import apply_reliability_gate as executor_apply_reliability_gate
+from runtime.execution.executor_result import ExecutionResult
 from runtime.execution.executor_state import RuntimeExecutorInfra
+from runtime.execution.executor_trace_runtime import (
+    execute_with_trace as executor_execute_with_trace,
+)
+from runtime.execution.executor_trace_runtime import (
+    trace_context_for_env as executor_trace_context_for_env,
+)
+from runtime.executor_api_support import (
+    _deny_autonomy_execution as executor_api_deny_autonomy_execution,
+)
+from runtime.executor_api_support import (
+    _dispatch as executor_api_dispatch,
+)
+from runtime.executor_api_support import (
+    _enforce_runtime_budget_and_blast_radius as executor_api_enforce_runtime_budget_and_blast_radius,
+)
+from runtime.executor_api_support import (
+    _ensure_tenant_runtime_contracts as executor_api_ensure_tenant_runtime_contracts,
+)
+from runtime.executor_api_support import (
+    _tenant_runtime_context as executor_api_tenant_runtime_context,
+)
+from runtime.executor_api_support import (
+    assert_called_from_executor,
+    execute_core_flow,
+    executor_context,
+    preflight_and_verify,
+)
+from runtime.executor_api_support import (
+    campaign_or_heartbeat_recovery_leader as executor_api_campaign_or_heartbeat_recovery_leader,
+)
+from runtime.executor_api_support import (
+    campaign_or_heartbeat_scheduler_leader as executor_api_campaign_or_heartbeat_scheduler_leader,
+)
+from runtime.executor_api_support import (
+    campaign_recovery_leader as executor_api_campaign_recovery_leader,
+)
+from runtime.executor_api_support import (
+    campaign_scheduler_leader as executor_api_campaign_scheduler_leader,
+)
+from runtime.executor_api_support import (
+    enqueue_runtime_job as executor_api_enqueue_runtime_job,
+)
+from runtime.executor_api_support import (
+    run_queue_tick as executor_api_run_queue_tick,
+)
+from runtime.executor_api_support import (
+    run_queue_tick_as_leader as executor_api_run_queue_tick_as_leader,
+)
+from runtime.executor_recovery_flow import execute_recovery_flow, has_proof_event
 from runtime.executor_runtime_support import (
     build_executor_queue_support,
     build_executor_state,
     emit_throttled_executor_warning,
 )
-from runtime.execution.executor_bindings import apply_executor_state
-from runtime.execution.executor_observability import (
-    append_decision_trace as append_executor_decision_trace,
-    record_action_audit as record_executor_action_audit,
-    record_connector_runtime_event as record_executor_connector_runtime_event,
-    record_inference_runtime_event as record_executor_inference_runtime_event,
-    record_inference_budget_burn as record_executor_inference_budget_burn,
+from runtime.handlers import ActionHandlerRegistry
+from runtime.world_model import (
+    extract_pinned_world_model_meta_from_payload as _executor_world_model_pin_extract_contract,
 )
-from runtime.execution.executor_audit import emit_effect_window as _executor_audit_helper
-from runtime.execution.executor_core import enforce_safe_mode as _executor_core_helper
-from runtime.execution.executor_recovery import finalize_if_already_executed as _executor_recovery_helper
-from runtime.execution.executor_reliability import apply_reliability_gate as executor_apply_reliability_gate
-from runtime.world_model import extract_pinned_world_model_meta_from_payload as _executor_world_model_pin_extract_contract
-from runtime.enforcement.world_model_pin_guard import enforce_world_model_pin_or_raise as _executor_world_model_pin_guard_contract
-from runtime.executor_recovery_flow import execute_recovery_flow, has_proof_event
-from runtime.execution.executor_trace_runtime import (
-    execute_with_trace as executor_execute_with_trace,
-    trace_context_for_env as executor_trace_context_for_env,
-)
-from runtime.executor_api_support import (
-    _deny_autonomy_execution as executor_api_deny_autonomy_execution,
-    _dispatch as executor_api_dispatch,
-    _enforce_runtime_budget_and_blast_radius as executor_api_enforce_runtime_budget_and_blast_radius,
-    _ensure_tenant_runtime_contracts as executor_api_ensure_tenant_runtime_contracts,
-    _tenant_runtime_context as executor_api_tenant_runtime_context,
-    assert_called_from_executor,
-    campaign_or_heartbeat_recovery_leader as executor_api_campaign_or_heartbeat_recovery_leader,
-    campaign_or_heartbeat_scheduler_leader as executor_api_campaign_or_heartbeat_scheduler_leader,
-    campaign_recovery_leader as executor_api_campaign_recovery_leader,
-    campaign_scheduler_leader as executor_api_campaign_scheduler_leader,
-    enqueue_runtime_job as executor_api_enqueue_runtime_job,
-    execute_core_flow,
-    executor_context,
-    preflight_and_verify,
-    run_queue_tick as executor_api_run_queue_tick,
-    run_queue_tick_as_leader as executor_api_run_queue_tick_as_leader,
-)
-from runtime.execution import executor_effect_delivery as _executor_effect_delivery
-from runtime.execution.correlation import extract_correlation_key
+from tenancy.tenant_runtime_isolation import TenantRuntimeIsolation
 
 CANON_RUNTIME_EXECUTION_GATEWAY = True
 _EXECUTOR_SPLIT_HELPERS = (

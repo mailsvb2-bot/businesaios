@@ -17,9 +17,8 @@ from core.finance.strategic.scenarios.scenario_comparator import ScenarioCompara
 from core.finance.strategic.scenarios.scenario_dimensions import EnterpriseScenarioInputs
 from core.finance.strategic.scenarios.scenario_feasibility_checker import ScenarioFeasibilityChecker
 from core.finance.strategic.scenarios.scenario_ranker import ScenarioRanker
-from core.finance.strategic.types import FinancialInput, ForecastSnapshot, Scenario
 from core.finance.strategic.services.advisory_policy_types import StrategicFinanceAdvice
-
+from core.finance.strategic.types import FinancialInput, ForecastSnapshot, Scenario
 
 
 class StrategicFinanceAdvisoryPolicy:

@@ -3,16 +3,16 @@ from __future__ import annotations
 import importlib
 
 from boot.factories import FACTORY_COMPAT_EXPORTS, FACTORY_OWNER_MODULE
-from boot.runtime_service_specs import (
-    CATALOG_BACKED_RUNTIME_CALLABLES,
-    SINGLETON_RUNTIME_CALLABLES,
-    build_registration_compat_exports,
-)
 from boot.registrations import (
     CATALOG_OWNER_MODULE,
     REGISTRATION_CATALOG_COMPAT_EXPORTS,
     REGISTRATION_COMPAT_EXPORTS,
     SINGLETON_OWNER_MODULE,
+)
+from boot.runtime_service_specs import (
+    CATALOG_BACKED_RUNTIME_CALLABLES,
+    SINGLETON_RUNTIME_CALLABLES,
+    build_registration_compat_exports,
 )
 
 

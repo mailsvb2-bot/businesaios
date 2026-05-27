@@ -5,7 +5,6 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from execution.error_family_classifier import ErrorFamilyClassifier
 
-
 CANON_FAILURE_PATTERN_DETECTOR = True
 FAILURE_PATTERN_SCHEMA_VERSION = 1
 

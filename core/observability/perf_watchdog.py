@@ -6,8 +6,9 @@ import json
 import time
 from typing import Any, Dict
 
-from core.observability.perf_watchdog_math import p95 as p95_value
 from config.env_flags import env_int
+from core.observability.perf_span import sla_budget_ms
+from core.observability.perf_watchdog_math import p95 as p95_value
 from core.observability.perf_watchdog_state import (
     LAST_EMITTED_OFFENDERS,
     LAST_WATCHDOG_MS,
@@ -16,7 +17,6 @@ from core.observability.perf_watchdog_state import (
     ROLLING_CK_TO_BTN,
     ROLLING_MAX_SAMPLES,
 )
-from core.observability.perf_span import sla_budget_ms
 from core.observability.silent import swallow
 
 

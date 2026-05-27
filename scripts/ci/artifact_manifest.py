@@ -11,7 +11,6 @@ if str(ROOT) not in sys.path:
 from core.security.release_runtime_surface import iter_runtime_release_files
 
 
-
 def iter_project_files(root: Path):
     yield from iter_runtime_release_files(root)
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from tests.arch._canon_arch_audit_index import absolute_path
 
 REQUIRED_NEW_FILES = (

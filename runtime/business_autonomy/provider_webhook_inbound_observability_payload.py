@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-
 CANON_PROVIDER_WEBHOOK_INBOUND_OBSERVABILITY_PAYLOAD = True
 
 

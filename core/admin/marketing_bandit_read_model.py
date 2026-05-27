@@ -37,8 +37,8 @@ Output:
 from typing import Any, Dict
 
 from config.marketing_bandit_policy import DEFAULT_MARKETING_BANDIT_POLICY, MarketingBanditPolicy
-from core.read_model.cache import global_cache, watermark_for
 from core.admin.marketing_bandit_read_model_support import resolve_window_bounds
+from core.read_model.cache import global_cache, watermark_for
 
 
 def marketing_bandit_stats(

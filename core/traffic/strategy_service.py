@@ -17,8 +17,8 @@ from core.traffic.audience_selector import AudienceSelector
 from core.traffic.bid_manager import BidManager
 from core.traffic.budget_allocator import BudgetAllocator
 from core.traffic.campaign_factory import CampaignFactory
-from core.traffic.creative_generator import CreativeGenerator
 from core.traffic.contracts import TrafficCreative, TrafficPlan
+from core.traffic.creative_generator import CreativeGenerator
 
 
 @dataclass(frozen=True)

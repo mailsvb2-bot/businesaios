@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from application.business_autonomy.delayed_outcome_bridge import BusinessAutonomyDelayedOutcomeBridge, DelayedOutcomeSweepResult
+from application.business_autonomy.delayed_outcome_bridge import (
+    BusinessAutonomyDelayedOutcomeBridge,
+    DelayedOutcomeSweepResult,
+)
 
 
 @dataclass(frozen=True)

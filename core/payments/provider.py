@@ -8,7 +8,7 @@ SECURITY:
 """
 
 from dataclasses import dataclass
-from typing import Protocol, Optional, Dict, Any
+from typing import Any, Dict, Optional, Protocol
 
 
 class PaymentProviderPort(Protocol):

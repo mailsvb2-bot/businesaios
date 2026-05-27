@@ -9,7 +9,6 @@ from runtime.state.state_contract import (
     UNKNOWN_VALUE_KIND,
 )
 
-
 CANON_STATE_UNKNOWN_SEMANTICS = True
 
 

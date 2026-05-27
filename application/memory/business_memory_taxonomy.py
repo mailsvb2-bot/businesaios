@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
+
 CANON_BUSINESS_MEMORY_TAXONOMY = True
 
 def _text(value: object) -> str:

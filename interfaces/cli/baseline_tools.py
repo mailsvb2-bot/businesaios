@@ -10,7 +10,6 @@ from execution.headless_ledger import FileHeadlessLedger
 from execution.promotion_gate import PromotionGate
 from execution.run_selector import RunSelector
 
-
 CANON_HEADLESS_BASELINE_CLI = True
 
 

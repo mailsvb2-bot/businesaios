@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 NEW_SURFACES = {
     'security/governance_journal.py',
     'security/security_drill_schedule_store.py',

@@ -1,7 +1,8 @@
 """AI economy core namespace with lightweight package import."""
 from __future__ import annotations
-from typing import Any
+
 import importlib
+from typing import Any
 
 CANON_CORE_AI_NAMESPACE = True
 _COMPAT_ALIAS_MAP = {

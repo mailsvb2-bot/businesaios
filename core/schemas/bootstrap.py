@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from .registry import SchemaRegistry
 from .base import SchemaId
-from .event_schemas import UserTransitEventV1
-from .worldstate_schema import WorldStateSchemaV1
 from .decision_schema import DecisionEnvelopeV1
+from .event_schemas import UserTransitEventV1
+from .registry import SchemaRegistry
+from .worldstate_schema import WorldStateSchemaV1
 
 
 def build_schema_registry() -> SchemaRegistry:

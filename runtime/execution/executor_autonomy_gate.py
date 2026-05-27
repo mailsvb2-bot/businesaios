@@ -5,16 +5,15 @@ from types import SimpleNamespace
 from typing import Any, Mapping
 
 from core.tenancy.normalization import require_tenant_id
-from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetGuard
-from tenancy.tenant_policy_store import ensure_tenant_policy_bundle
-from tenancy.tenant_registry import ensure_tenant_record
-
 from runtime.decision import DecisionEnvelope
 from runtime.execution.executor_autonomy_policy import (
     DEFAULT_RUNTIME_AUTONOMY_GATE_POLICY,
     extract_runtime_autonomy_cost_envelope,
     has_runtime_autonomy_contract,
 )
+from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetGuard
+from tenancy.tenant_policy_store import ensure_tenant_policy_bundle
+from tenancy.tenant_registry import ensure_tenant_record
 
 
 def ensure_tenant_runtime_contracts(*, executor: Any, tenant_id: str) -> None:

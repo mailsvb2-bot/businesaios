@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from runtime.service_names import RuntimeServiceName
-
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Set, Tuple, Type, Union
+
+from runtime.service_names import RuntimeServiceName
 
 
 @dataclass(frozen=True)

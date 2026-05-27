@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from schemas.action_schema import REQUIRED_FIELDS as ACTION_REQUIRED_FIELDS, validate as validate_action
+from schemas.action_schema import REQUIRED_FIELDS as ACTION_REQUIRED_FIELDS
+from schemas.action_schema import validate as validate_action
 from schemas.business_live_state_schema import BUSINESS_LIVE_STATE_SCHEMA
 from schemas.helpers import required_fields_schema, validate_required_fields
 

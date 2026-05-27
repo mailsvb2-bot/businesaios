@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import Any, Iterable, Mapping
 
 from economics.contracts import TruthFragment
-from runtime.export.client_outcome_export import export_client_outcome_truth_snapshot, verify_client_outcome_truth_export
+from runtime.export.client_outcome_export import (
+    export_client_outcome_truth_snapshot,
+    verify_client_outcome_truth_export,
+)
 
 CANON_RUNTIME_ECONOMIC_CORE_AUDIT_PROVENANCE_BRIDGE = True
 

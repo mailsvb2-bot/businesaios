@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, Callable
 
 # runtime.observability remains the canonical runtime observability surface.
-
 from governance.time_scale import TimeScale
 from runtime.execution.correlation import extract_correlation_key
 from runtime.execution.entrypoint_context import run_with_bound_execution_context

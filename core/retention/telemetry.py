@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict
 
-from core.observability.silent import swallow
 from config.env_flags import env_str
+from core.observability.silent import swallow
 
 
 def _read_text_best_effort(path: Path) -> str:
@@ -37,7 +37,7 @@ def with_retention_telemetry(payload: Dict[str, Any], *, user_id: str) -> Dict[s
     Safe-by-default: never raises, never mutates caller payload.
     """
     try:
-        from core.retention.sandbox import retention_sandbox_enabled, retention_is_allowed
+        from core.retention.sandbox import retention_is_allowed, retention_sandbox_enabled
 
         sandbox_on = bool(retention_sandbox_enabled())
         allowed = bool(retention_is_allowed(user_id))

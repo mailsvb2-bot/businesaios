@@ -11,7 +11,6 @@ from typing import Any, Optional
 
 from observability.platform.observability.silent import swallow as _swallow
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 MAX_I64 = 2**63 - 1

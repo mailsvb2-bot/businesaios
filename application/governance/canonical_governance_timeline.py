@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from application.governance.canonical_governance_evidence import canonical_governance_evidence
 from application.effects.effect_outcome_vocabulary import normalize_outcome_status
-
+from application.governance.canonical_governance_evidence import canonical_governance_evidence
 
 CANON_GOVERNANCE_TIMELINE_CONTRACT = True
 

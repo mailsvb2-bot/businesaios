@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from pathlib import Path
+
 from runtime.canonical_surface_manifest import (
     ALLOWED_BOOTSTRAP_COMPAT_IMPORTERS,
     ALLOWED_EFFECT_DOMAIN_ENTRYPOINTS,
@@ -13,6 +15,7 @@ from runtime.canonical_surface_manifest import (
     EVIDENCE_ONLY_ROUTE_HELPERS,
     LEGACY_BOOTSTRAP_COMPAT_MODULES,
 )
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 def _iter_py_files() -> list[Path]:
     excluded_parts = {

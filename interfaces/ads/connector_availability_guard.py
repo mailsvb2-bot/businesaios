@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Mapping
 
-
 DEMO_CONNECTOR_REASON = 'connector_not_bundled'
 
 

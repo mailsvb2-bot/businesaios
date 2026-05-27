@@ -12,9 +12,15 @@ All network I/O is executed via runtime.effects -> sealed runtime/_internal.
 
 from typing import Any, Optional
 
+from runtime.llm import (
+    LLMAgent,
+    LLMAgentConfig,
+    build_runtime_llm_client,
+    normalize_provider,
+    resolve_runtime_llm_settings,
+)
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_bool, env_float, env_int, env_str
-from runtime.llm import LLMAgent, LLMAgentConfig, build_runtime_llm_client, normalize_provider, resolve_runtime_llm_settings
 
 
 def _setting_or_env(settings: Any, name: str, default: str = "") -> str:

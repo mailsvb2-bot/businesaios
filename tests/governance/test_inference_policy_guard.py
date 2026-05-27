@@ -1,5 +1,5 @@
-from execution.inference_policy_guard import InferencePolicyEnvelope, InferencePolicyGuard
 from execution.inference_capacity_contract import InferenceCapacityTier
+from execution.inference_policy_guard import InferencePolicyEnvelope, InferencePolicyGuard
 
 
 def test_inference_policy_guard_blocks_disabled_distributed_network():

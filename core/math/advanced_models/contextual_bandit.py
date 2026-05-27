@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Mapping, Sequence
 import math
 import random
+from dataclasses import dataclass, field
+from typing import Dict, List, Mapping, Sequence
 
 from .common import require_non_empty
+
 
 def _feature_vector(context: Mapping[str, float], keys: Sequence[str]) -> List[float]:
     return [float(context.get(k, 0.0)) for k in keys]

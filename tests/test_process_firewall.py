@@ -1,10 +1,10 @@
 import pytest
 
 from runtime.firewall.process_guard import (
+    ProcessCapabilityError,
+    clear_effect_capability,
     require_effect_capability,
     set_effect_capability,
-    clear_effect_capability,
-    ProcessCapabilityError,
 )
 
 

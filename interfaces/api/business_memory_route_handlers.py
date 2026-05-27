@@ -4,17 +4,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from execution.headless_boot import build_headless_runtime
 from entrypoints.api.business_memory_models import (
     BusinessMemoryGetRequest,
-    BusinessMemoryRecentRunsRequest,
     BusinessMemoryPatternsResponse,
+    BusinessMemoryRecentRunsRequest,
     BusinessMemoryRecentRunsResponse,
     BusinessMemoryResponse,
     BusinessMemorySummaryRequest,
     BusinessMemorySummaryResponse,
 )
 from entrypoints.api.headless_runtime_provider import HeadlessRuntimeProvider, build_headless_runtime_provider
+from execution.headless_boot import build_headless_runtime
 
 CANON_API_BUSINESS_MEMORY_ROUTE_HANDLERS_COMPAT = True
 CANON_API_BUSINESS_MEMORY_ROUTE_HANDLERS_FINAL_OWNER = "entrypoints.api.business_memory_route_handlers"

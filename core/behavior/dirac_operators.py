@@ -10,8 +10,8 @@ from core.behavior.dirac_operator_keys import required_operator_keys
 from core.behavior.dirac_operator_math import apply_diag_impulse, clamp, clamp01, mix
 from core.behavior.dirac_operator_params import is_operator_allowed, resolve_operator_params
 from core.behavior.impulse_contract import impulse_for_event
-from core.retention.event_types import normalize_event_type
 from core.observability.silent import swallow
+from core.retention.event_types import normalize_event_type
 
 
 @dataclass(frozen=True)

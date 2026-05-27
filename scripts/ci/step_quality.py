@@ -4,8 +4,8 @@ import ast
 import importlib.util
 import json
 import os
-from pathlib import Path
 import sys
+from pathlib import Path
 
 from scripts.ci.config import project_shape_config
 from scripts.ci.paths import repo_root

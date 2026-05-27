@@ -4,9 +4,9 @@ from typing import Any, Dict, Tuple
 
 import yaml
 
-from runtime.tenancy import require_tenant_id
-from runtime.platform.config.yaml_loader import load_yaml
 from runtime._internal.effects_actions.offer_patch_helpers import append_line, resolve_catalog_path
+from runtime.platform.config.yaml_loader import load_yaml
+from runtime.tenancy import require_tenant_id
 
 
 def resolve_offer_catalog(*, tenant_id: str, product: str, env: str) -> tuple[str, Any]:

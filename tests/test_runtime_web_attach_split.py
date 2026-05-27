@@ -1,3 +1,4 @@
+from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 from runtime.boot.settings.messaging_settings_gateway import build_messaging_settings_gateway
 from runtime.boot.web.runtime_web_attach import (
     RuntimeWebAttachmentState,
@@ -7,7 +8,6 @@ from runtime.boot.web.runtime_web_attach import (
 )
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.runtime_infra import RuntimeInfra
-from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 
 
 class _Executor:

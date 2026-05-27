@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 FILES = [
     'interfaces/web/settings/alert_subscriptions_integration/page_controller.py',
     'interfaces/web/settings/alert_subscriptions_integration/route_bundle.py',

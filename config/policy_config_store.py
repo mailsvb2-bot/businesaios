@@ -14,7 +14,6 @@ from config.config_versioning import ConfigVersion, ConfigVersioning, utc_now
 from core.tenancy.normalization import normalize_tenant_id
 from governance.persistence_codec import atomic_write_json, read_json_or_default, to_jsonable
 
-
 CANON_POLICY_CONFIG_STORE = True
 
 _POLICY_NAMESPACE = "policy_config"

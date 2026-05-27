@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from runtime.tenancy import normalize_tenant_id
 from runtime.messaging.outbound_message import OutboundMessage
+from runtime.tenancy import normalize_tenant_id
 
 
 def resolve_tenant_id(*, tenant_id: str | None, track_payload: dict | None) -> str:

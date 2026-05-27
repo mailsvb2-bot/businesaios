@@ -1,4 +1,4 @@
-from formal.regression_gate import replay_runtime_decision, replay_cases_from_corpus, run_replay_suite
+from formal.regression_gate import replay_cases_from_corpus, replay_runtime_decision, run_replay_suite
 
 
 def test_replay_harness_matches_runtime_trace_corpus_wave31() -> None:

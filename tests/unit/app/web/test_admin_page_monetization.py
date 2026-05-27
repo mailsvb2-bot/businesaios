@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from app.web.pages.admin import AdminPage
-from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 from observability.slo_contract import SLIKind
+from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 
 
 def _registry() -> TenantMetricsRegistry:

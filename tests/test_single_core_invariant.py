@@ -1,6 +1,5 @@
 import pathlib
 
-
 FORBIDDEN = [
     "core/decision/envelope.py",
     "runtime/purity",

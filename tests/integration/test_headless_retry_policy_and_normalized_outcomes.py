@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.ai.decision import Decision, DecisionEnvelope
 from application.effects.effect_journal import FileEffectJournal
-from execution.goal_score import GoalScoreEngine
-from execution.headless_contract import GoalExecutionRequest, HeadlessExecutionContract
 from application.headless.feedback import SimpleHeadlessFeedbackReader
 from application.headless.goal_mapper import HeadlessGoalStateMapper
+from application.headless.stop_policy import HeadlessStopPolicy
+from application.learning.retry_taxonomy import RetryTaxonomy
+from core.ai.decision import Decision, DecisionEnvelope
+from execution.goal_score import GoalScoreEngine
+from execution.headless_contract import GoalExecutionRequest, HeadlessExecutionContract
 from execution.headless_ledger import FileHeadlessLedger
 from execution.headless_state_store import FileHeadlessStateStore
-from application.headless.stop_policy import HeadlessStopPolicy
 from execution.idempotency_guard import FileIdempotencyGuard
 from execution.outcome_normalizer import OutcomeNormalizer
 from execution.policy_explainer import PolicyExplainer
-from application.learning.retry_taxonomy import RetryTaxonomy
 from runtime.execution.executor_result import ExecutionResult
 
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from boot.bootstrap_config_surface import build_bootstrap_config_surface
-from boot.system_boot_surface import build_system_boot_surface
 from boot.http_boot_surface import build_http_boot_surface
+from boot.system_boot_surface import build_system_boot_surface
 from interfaces.api.fastapi_dependencies import FastAPIDependencyContainer
 from observability.metrics import InMemoryMetrics
 

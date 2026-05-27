@@ -3,9 +3,9 @@ from __future__ import annotations
 import time
 import uuid
 
-from runtime.tenancy import normalize_tenant_scope
 from runtime.messaging_policy_events.event_record import MessagingPolicyEventRecord
 from runtime.messaging_policy_trace.iso_time import safe_parse_iso_to_epoch_ms
+from runtime.tenancy import normalize_tenant_scope
 
 
 def build_event(

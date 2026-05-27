@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Mapping, Sequence
 
+
 def one_step_graph_score(
     node_features: Mapping[str, Sequence[float]],
     adjacency: Mapping[str, Sequence[str]],

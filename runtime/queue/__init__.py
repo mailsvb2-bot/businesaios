@@ -25,8 +25,8 @@ from runtime.queue._public_api_core import (
     JanitorHandle,
     JanitorLoopReport,
     JobDeadLetterStore,
-    JobDispatchRequest,
     JobDispatcher,
+    JobDispatchRequest,
     JobJanitorLoop,
     JobJanitorSupervisor,
     JobLease,
@@ -50,8 +50,8 @@ from runtime.queue._public_api_core import (
     JobWorkerSupervisor,
     LeaseHeartbeatReport,
     LeaseLostError,
-    PersistentJobStore,
     PersistentJobDeadLetterStore,
+    PersistentJobStore,
     QueueBackpressureReport,
     QueueJanitorReport,
     RateLimitGuard,
@@ -63,8 +63,8 @@ from runtime.queue._public_api_core import (
     StoreTenantPressureReader,
     TenantBackpressureStatus,
     TenantFairAllocation,
-    TenantFairScheduleReport,
     TenantFairScheduler,
+    TenantFairScheduleReport,
     TenantPressureReader,
     TenantQueuePressure,
     ThrottleDecision,
@@ -78,7 +78,6 @@ from runtime.queue._public_api_core import (
     normalize_capability_key,
     resolve_capability_key,
 )
-
 from runtime.queue._public_api_observability import (
     CANON_RUNTIME_QUEUE_JANITOR_HISTORY_SQLITE,
     CANON_RUNTIME_QUEUE_REMEDIATION_ANALYTICS,

@@ -8,7 +8,6 @@ from runtime.inference.provisioning.capacity_state_store import InferenceCapacit
 from runtime.inference.provisioning.capacity_transition_journal import InferenceCapacityTransitionJournal
 from runtime.inference.provisioning.upgrade_cooldown_tracker import InferenceUpgradeCooldownTracker
 
-
 CANON_RUNTIME_INFERENCE_CAPACITY_MANAGER = True
 
 

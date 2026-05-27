@@ -6,10 +6,9 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from core.events.log import EventLog
 
-from .contracts import AdsRLAction, AdsRLState, AdsRLSuggestion
 from .contextual_bandit_policy import ArmStat, action_key
+from .contracts import AdsRLAction, AdsRLState, AdsRLSuggestion
 from .reward import RewardBreakdown
-
 
 Json = Dict[str, Any]
 

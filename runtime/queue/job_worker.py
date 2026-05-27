@@ -7,20 +7,19 @@ It must not decide business intent on its own.
 """
 
 from contextlib import contextmanager
-from core.tenancy.normalization import require_tenant_id
 from dataclasses import dataclass
 from datetime import datetime
 from threading import Event, Thread
 from typing import Any, Callable, Iterator, Mapping
 
+from core.tenancy.normalization import require_tenant_id
 from runtime.queue.job_contract import JobRecord, JobResult, normalize_now
 from runtime.queue.job_dead_letter_store import DeadLetterRecord, JobDeadLetterStore
+from runtime.queue.job_fencing import build_process_scoped_worker_id
 from runtime.queue.job_lease_manager import JobLeaseManager
 from runtime.queue.job_retry_policy import JobRetryPolicy
 from runtime.queue.job_scheduler import JobScheduler
-from runtime.queue.job_fencing import build_process_scoped_worker_id
 from runtime.queue.job_store import JobStore
-
 
 CANON_RUNTIME_QUEUE_WORKER = True
 

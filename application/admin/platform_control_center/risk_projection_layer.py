@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from application.admin.platform_control_center.support import BLOCK_EXCLUDE, RiskRecommendation, SEVERITY_ORDER, SUSPICIOUS_NAME_HINTS
+from application.admin.platform_control_center.support import (
+    BLOCK_EXCLUDE,
+    SEVERITY_ORDER,
+    SUSPICIOUS_NAME_HINTS,
+    RiskRecommendation,
+)
 
 CANON_PLATFORM_CONTROL_CENTER_RISK_PROJECTION_LAYER = True
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from interfaces.market_intelligence.app_store_family import AppStoreFamilyConnector
 
-
 CANON_APPLE_APP_STORE_CONNECTOR = True
 
 

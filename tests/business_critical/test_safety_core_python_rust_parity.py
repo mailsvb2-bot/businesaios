@@ -9,7 +9,6 @@ import pytest
 
 from application.business_autonomy.safety_core import evaluate_golden_case
 
-
 FIXTURE_PATH = Path("safety_fixtures/businessaios_safety_core_golden.json")
 CRATE_MANIFEST = Path("rust/businessaios_safety_core/Cargo.toml")
 

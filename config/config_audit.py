@@ -13,7 +13,6 @@ from typing import Mapping
 
 from governance.persistence_codec import ensure_parent_dir, to_jsonable
 
-
 CANON_CONFIG_AUDIT = True
 
 

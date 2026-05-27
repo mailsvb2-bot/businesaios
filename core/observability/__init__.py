@@ -1,7 +1,8 @@
 """Core-domain observability helpers with lazy public exports."""
 from __future__ import annotations
-from typing import Any
+
 import importlib
+from typing import Any
 
 CANON_COMPAT_SHIM = True
 CANON_CORE_OBSERVABILITY_PUBLIC_API = True

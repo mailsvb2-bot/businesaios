@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from runtime.guard import RuntimeGuard
 from runtime.admin_state_support import perform_admin_toggle
+from runtime.guard import RuntimeGuard
 
 
 class _Verifier:

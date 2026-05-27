@@ -14,7 +14,6 @@ from runtime.queue.job_contract import JobState, normalize_now
 from runtime.queue.job_store_backend import JobStoreBackend
 from runtime.queue.queue_observability import QueueObservabilityRegistry
 
-
 CANON_RUNTIME_QUEUE_SLO = True
 
 

@@ -10,9 +10,9 @@ It must remain strictly operational and must never mutate queue execution state
 or introduce a second decision path.
 """
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
-import json
 
 from runtime.platform.postgres_port import PostgresPort
 from runtime.queue.job_contract import normalize_now

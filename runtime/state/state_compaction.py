@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from runtime.state.state_contract import StateFieldRecord, StateSynthesizedSnapshot
 
-
 CANON_STATE_COMPACTION = True
 
 

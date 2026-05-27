@@ -7,8 +7,8 @@ from typing import Any, Mapping, Protocol
 from uuid import uuid4
 
 from application.business_autonomy.provider_runtime_contract import ProviderScheduledSyncResult
-from runtime.business_autonomy.provider_retry_policy import ProviderRetryPolicy
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore
+from runtime.business_autonomy.provider_retry_policy import ProviderRetryPolicy
 
 CANON_PROVIDER_SYNC_SCHEDULER = True
 

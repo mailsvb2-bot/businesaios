@@ -5,6 +5,7 @@ from typing import Any, Dict, Iterable, Optional, Protocol
 
 from core.growth.ads_config_fingerprint import ads_config_fingerprint
 
+
 class EventStore(Protocol):
     def append(self, *, tenant_id: str, user_id: Optional[str], event_type: str, payload: Dict[str, Any]) -> None: ...
     def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 50) -> Iterable[Dict[str, Any]]: ...

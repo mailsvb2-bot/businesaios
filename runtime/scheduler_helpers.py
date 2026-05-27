@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from runtime.world_state import WorldStateV1
+from ml.policy_promotion_guard import EvaluationSnapshot
 from runtime.observability.error_handling import warning_throttled
 from runtime.tenancy import current_tenant_id
-from ml.policy_promotion_guard import EvaluationSnapshot
+from runtime.world_state import WorldStateV1
 
 log = logging.getLogger(__name__)
 

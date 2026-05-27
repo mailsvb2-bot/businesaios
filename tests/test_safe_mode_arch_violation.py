@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 
+
 def test_multi_decisioncore_triggers_safe_mode_and_exit():
     ai = importlib.import_module("core.ai")
     DecisionCore = importlib.import_module("core.ai.decision_core").DecisionCore

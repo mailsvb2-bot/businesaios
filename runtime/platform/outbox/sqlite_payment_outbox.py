@@ -3,14 +3,13 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-
-from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
-from runtime.platform.config.env_flags import env_int
 import time
 import uuid
 from typing import Any, Dict, List, Optional
-from observability.platform.observability.silent import swallow
 
+from observability.platform.observability.silent import swallow
+from runtime.platform.config.env_flags import env_int
+from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 
 DDL = """
 PRAGMA journal_mode=WAL;

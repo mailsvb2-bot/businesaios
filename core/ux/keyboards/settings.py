@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from core.ux.callbacks import CB_MENU_MAIN
+
 from .common import mk
 
 

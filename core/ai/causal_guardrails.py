@@ -23,7 +23,6 @@ from config.causal_guardrails_policy import (
     CausalGuardrailsPolicy,
 )
 
-
 Json = Dict[str, Any]
 
 

@@ -15,7 +15,6 @@ from interfaces.common.connector_health import ConnectorHealth
 from interfaces.common.connector_maturity import ConnectorMaturity
 from interfaces.common.connector_result import ConnectorResult
 
-
 CANON_MARKET_INTELLIGENCE_BASE = True
 
 _OPERATION_MAP = {

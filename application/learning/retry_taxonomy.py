@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 CANON_HEADLESS_RETRY_TAXONOMY = True

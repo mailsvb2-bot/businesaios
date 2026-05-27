@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """TelegramOutboundQueue — priority-based async outbound with self-heal.
 
 Architecture (each file = single responsibility):
@@ -17,23 +18,23 @@ import queue
 import threading
 from typing import Any, Callable, Dict, Optional
 
-from interfaces.telegram.outbound.rate_limit import TokenBucket
-from interfaces.telegram.outbound.outbound_types import OutboundTask, PriorityArg
-from interfaces.telegram.outbound.outbound_metrics import OutboundMetricsCollector
-from interfaces.telegram.outbound.outbound_self_heal import SelfHealController, SelfHealConfig
-from interfaces.telegram.outbound.outbound_self_heal_config import build_self_heal_config
-from interfaces.telegram.outbound.outbound_priority import OutboundPriorityMixin
-from interfaces.telegram.outbound.outbound_enqueue_api import OutboundEnqueueApiMixin
-from interfaces.telegram.outbound.outbound_worker import OutboundWorkerMixin
 from interfaces.telegram.outbound.outbound_alerter import OutboundAlerterMixin
 from interfaces.telegram.outbound.outbound_backpressure import put_task
+from interfaces.telegram.outbound.outbound_enqueue_api import OutboundEnqueueApiMixin
 from interfaces.telegram.outbound.outbound_lifecycle import start_worker, stop_worker
+from interfaces.telegram.outbound.outbound_metrics import OutboundMetricsCollector
+from interfaces.telegram.outbound.outbound_priority import OutboundPriorityMixin
 from interfaces.telegram.outbound.outbound_queue_support import (
     build_queue_item,
     build_queue_metrics_snapshot,
     enqueue_with_warning,
     unwrap_queue_call,
 )
+from interfaces.telegram.outbound.outbound_self_heal import SelfHealConfig, SelfHealController
+from interfaces.telegram.outbound.outbound_self_heal_config import build_self_heal_config
+from interfaces.telegram.outbound.outbound_types import OutboundTask, PriorityArg
+from interfaces.telegram.outbound.outbound_worker import OutboundWorkerMixin
+from interfaces.telegram.outbound.rate_limit import TokenBucket
 
 __all__ = ["TelegramOutboundQueue", "OutboundTask", "PriorityArg"]
 

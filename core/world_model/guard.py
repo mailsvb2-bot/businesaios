@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from core.world_model.contracts import FORBIDDEN_DECISION_KEYS
+from core.world_model.errors import WorldModelIntegrityError
 from core.world_model.guards.build_input_guard import BuildInputGuard
 from core.world_model.guards.incomplete_state_guard import IncompleteStateGuard
 from core.world_model.guards.stale_signal_guard import StaleSignalGuard
 from core.world_model.guards.world_model_integrity_guard import WorldModelIntegrityGuard
-from core.world_model.contracts import FORBIDDEN_DECISION_KEYS
-from core.world_model.errors import WorldModelIntegrityError
-from core.world_model.types import BusinessState, CompletenessReport, FreshnessReport, WorldModelBuildInput, WorldSnapshot
+from core.world_model.types import (
+    BusinessState,
+    CompletenessReport,
+    FreshnessReport,
+    WorldModelBuildInput,
+    WorldSnapshot,
+)
 
 
 class DecisionSurfaceGuard:

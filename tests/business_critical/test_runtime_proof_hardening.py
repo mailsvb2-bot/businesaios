@@ -151,6 +151,7 @@ def test_runtime_manifest_loader_uses_compat_alias_to_canonical_owner() -> None:
 
 def test_action_api_transition_invokes_application_service_without_decisioncore_method_drift() -> None:
     from fastapi.testclient import TestClient
+
     from entrypoints.api.fastapi_app_factory import create_fastapi_app
 
     class ApplicationService:

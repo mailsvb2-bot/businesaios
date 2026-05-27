@@ -17,7 +17,6 @@ from contracts.behavior_graph import Edge, GraphSnapshot, Neighbor, Node, PathSt
 from observability.platform.observability.silent import swallow
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 
-
 CANON_BEHAVIOR_GRAPH_SQLITE_OWNER = True
 
 

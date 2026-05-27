@@ -18,8 +18,8 @@ import hashlib
 from typing import Any, Dict, List
 
 from config.admin_marketing_policy import DEFAULT_ADMIN_MARKETING_POLICY, AdminMarketingPolicy
-from core.economics.types import EconomicState
 from core.economics.brain import EconomicBrain
+from core.economics.types import EconomicState
 
 
 def _stable_choice(key: str, options: List[str]) -> str:

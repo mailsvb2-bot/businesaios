@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from core.ux.callbacks import CB_MENU_MAIN, CB_SUB_MENU, CB_GIFT_CREATE, CB_GIFT_MENU
+from core.ux.callbacks import CB_GIFT_CREATE, CB_GIFT_MENU, CB_MENU_MAIN, CB_SUB_MENU
+
 from .common import mk
 
 

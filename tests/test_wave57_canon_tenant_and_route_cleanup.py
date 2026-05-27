@@ -4,9 +4,9 @@ import pytest
 
 from core.tenancy.normalization import normalize_tenant_id, require_tenant_id
 from runtime.handlers.pricing_select import handle_pricing_select
+from runtime.jobs.ads_autopilot_tick import ads_autopilot_tick
 from runtime.messaging.inbound_message import InboundMessage
 from runtime.messaging.router import UnifiedConversationRouter
-from runtime.jobs.ads_autopilot_tick import ads_autopilot_tick
 
 
 class _Effects:

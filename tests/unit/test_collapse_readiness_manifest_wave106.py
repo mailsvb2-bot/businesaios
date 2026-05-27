@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from canon.collapse_readiness import (
-    CORE_RUNTIME_COLLAPSED_SURFACES,
     CORE_RUNTIME_COLLAPSE_READY_SURFACES,
+    CORE_RUNTIME_COLLAPSED_SURFACES,
 )
 
 

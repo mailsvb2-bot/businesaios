@@ -1,11 +1,10 @@
-from pathlib import Path
 import re
+from pathlib import Path
 
 import pytest
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessGoalEnvelope, IntegrationMode
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
-
 
 TARGETS = (
     Path('application/business_autonomy/operationalization.py'),

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from demand_capture.demand_capture_service import DemandCaptureService
 from intent.client_intent_builder import ClientIntentBuilder
+from matching.match_engine import MatchEngine
 from supply_directory.business_directory import BusinessDirectory
 from supply_state.business_live_state_builder import BusinessLiveStateBuilder
-from matching.match_engine import MatchEngine
+
 
 def test_request_to_match_flow():
     request = DemandCaptureService().capture({"text":"need service near me", "channel":"website", "customer_id":"c1"})

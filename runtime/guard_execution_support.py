@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from runtime.platform.config.env_flags import env_str
-
 from runtime.enforcement.idempotency_gate import emit_ledger_executed, mark_execution_once
 from runtime.guard_helpers import verify_production_envelope
 from runtime.guard_init_support import require_production_mode
 from runtime.guard_production import enforce_survival_gate
 from runtime.guard_protocols import MAX_REPLAY_MS, SUPPORTED_ENVELOPE_VERSION
+from runtime.platform.config.env_flags import env_str
 
 
 def verify_production_runtime(*, guard: Any, env: Any) -> None:

@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from runtime.monetization import RevenueAdvisoryService
-from runtime.monetization import RevenuePaywallVariantInput
-from runtime.monetization import RevenuePlanInput
-from runtime.monetization import RevenuePricePointInput
-from runtime.monetization import RevenueSnapshotInput
+from runtime.monetization import (
+    RevenueAdvisoryService,
+    RevenuePaywallVariantInput,
+    RevenuePlanInput,
+    RevenuePricePointInput,
+    RevenueSnapshotInput,
+)
 
 
 def test_revenue_advisory_service_builds_runtime_summary() -> None:

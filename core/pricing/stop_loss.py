@@ -13,7 +13,8 @@ from config.pricing_retention_policy import (
     PricingStopLossPolicy,
 )
 from core.pricing.stop_loss_parts.config import StopLossConfig
-from core.pricing.stop_loss_parts.cooldown import cooldown_state, now_ms as current_time_ms
+from core.pricing.stop_loss_parts.cooldown import cooldown_state
+from core.pricing.stop_loss_parts.cooldown import now_ms as current_time_ms
 from core.pricing.stop_loss_parts.metrics import (
     collect_payments_index,
     collect_trials,

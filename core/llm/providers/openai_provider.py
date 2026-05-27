@@ -7,8 +7,6 @@ from typing import Any, Callable, Dict, Optional
 from ..contracts import LLMClient, LLMRequest, LLMResponse, LLMUsage
 from ..redaction import safe_metadata
 
-
-
 OpenAICompatTransport = Callable[[str, str, Dict[str, Any], int], Dict[str, Any]]
 
 

@@ -32,8 +32,8 @@ def load_pricing_suggestions(event_store: Any, *, tenant_id: str) -> Dict[str, A
     if pricing_suggestions:
         return pricing_suggestions
     try:
-        from core.plans import active_plans
         from core.admin.ai_pricing import suggest_price_for_plan
+        from core.plans import active_plans
         for p in list(active_plans())[:20]:
             try:
                 pid = int(p.get("plan_id") or 0)

@@ -77,7 +77,18 @@ __all__ = [
 
 
 from typing import Protocol, Sequence
-from ..types import Lesson, LessonQuery, OutcomeFact, Pattern, MemoryRetrieval, StrategyMemoryEntry, LessonDraft, PatternDraft, MemoryLink
+
+from ..types import (
+    Lesson,
+    LessonDraft,
+    LessonQuery,
+    MemoryLink,
+    MemoryRetrieval,
+    OutcomeFact,
+    Pattern,
+    PatternDraft,
+    StrategyMemoryEntry,
+)
 
 
 class KnowledgeReadPort(Protocol):

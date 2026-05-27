@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Tuple
 
-from core.retention.event_types import normalize_event_type, is_known
+from core.retention.event_types import is_known, normalize_event_type
 
 
 @dataclass(frozen=True)

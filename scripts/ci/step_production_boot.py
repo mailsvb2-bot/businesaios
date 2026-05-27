@@ -7,7 +7,6 @@ from pathlib import Path
 from runtime.production_boot_contract import ProductionBootProbe, evaluate_production_boot
 from scripts.ci.paths import repo_root
 
-
 REAL_BOOT_EVIDENCE_NAME = "real_runtime_boot_evidence.json"
 
 

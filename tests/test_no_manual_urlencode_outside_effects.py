@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 EFFECTS_IMPL = (REPO_ROOT / "runtime" / "_internal" / "_effects_impl.py").resolve()
 HTTP_CLIENT = (REPO_ROOT / "runtime" / "_internal" / "effects_clients" / "http_client.py").resolve()

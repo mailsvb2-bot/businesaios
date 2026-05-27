@@ -4,7 +4,6 @@ from collections import deque
 from dataclasses import dataclass, field
 from statistics import fmean
 
-
 CANON_SAFETY_ANOMALY_DETECTOR = True
 
 

@@ -11,7 +11,6 @@ Strict tenant contract:
 
 from typing import Any, Dict, Iterable, List, Set
 
-
 ROLE_ADMIN = "admin"
 ROLE_MARKETING = "marketing"
 

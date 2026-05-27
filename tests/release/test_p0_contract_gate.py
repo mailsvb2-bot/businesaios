@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 from scripts.ci.p0_contract_gate import run_p0_contract_gate
 

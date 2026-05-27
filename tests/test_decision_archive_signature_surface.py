@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from core.ai.decision import Decision
-from kernel.decision_crypto import signed_envelope_from_decision
 from core.security.keyring import Keyring
+from kernel.decision_crypto import signed_envelope_from_decision
 from observability.platform.decision_archive.sqlite_decision_archive import SqliteDecisionArchive
 
 

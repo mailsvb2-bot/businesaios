@@ -1,5 +1,5 @@
-from pathlib import Path
 import re
+from pathlib import Path
 
 
 def test_single_decision_envelope_definition():

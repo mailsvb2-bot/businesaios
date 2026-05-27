@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..builders.lesson_builder import LessonBuilder
-from ..contracts import LessonRepository, LessonWriter as LessonWriterContract
+from ..contracts import LessonRepository
+from ..contracts import LessonWriter as LessonWriterContract
 from ..types import Lesson, LessonDraft
 
 

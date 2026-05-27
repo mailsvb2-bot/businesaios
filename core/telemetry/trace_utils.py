@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import time
 import secrets
+import time
 
 
 def now_ms() -> int:

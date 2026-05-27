@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 FORBIDDEN_TOKENS = (
     'DecisionCore(',
     'class DecisionCore',

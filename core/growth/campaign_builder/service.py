@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from contracts.autopilot_contract import AutopilotContract
-
 from core.autopilot.resolver import resolve_autopilot_contract
 from core.traffic.strategy_service import TrafficStrategyService
 

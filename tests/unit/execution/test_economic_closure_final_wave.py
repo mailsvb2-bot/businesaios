@@ -8,8 +8,8 @@ import pytest
 from execution.economic_audit_bundle import EconomicAuditBundleService
 from execution.economic_bundle_quarantine_store import InMemoryEconomicBundleQuarantineStore
 from execution.economic_lineage_lock import EconomicLineageLockBuilder
-from execution.economic_state_monotonicity import EconomicStateMonotonicityGuard
 from execution.economic_multi_backend_reconciliation import EconomicMultiBackendReconciliationBuilder
+from execution.economic_state_monotonicity import EconomicStateMonotonicityGuard
 
 
 def _scope(profile_name: str = 'standard') -> dict[str, str]:

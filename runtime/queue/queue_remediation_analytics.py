@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-from core.tenancy.normalization import require_tenant_id
 from typing import Protocol
 
-from runtime.queue.queue_remediation_audit_sqlite import QueueRemediationExecutionAuditEntry, QueueRemediationPlanAuditEntry
+from core.tenancy.normalization import require_tenant_id
+from runtime.queue.queue_remediation_audit_sqlite import (
+    QueueRemediationExecutionAuditEntry,
+    QueueRemediationPlanAuditEntry,
+)
 from runtime.queue.queue_remediation_route_history_sqlite import QueueRemediationRouteHistoryEntry
 
 CANON_RUNTIME_QUEUE_REMEDIATION_ANALYTICS = True

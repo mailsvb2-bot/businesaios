@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.policies.telegram.helpers import ProposedAction, propose_message
 from core.policies.retention.retention_keyboards import retention_main_kb
+from core.policies.telegram.helpers import ProposedAction, propose_message
 
 
 @dataclass

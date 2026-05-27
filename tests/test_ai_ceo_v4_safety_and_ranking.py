@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.ai.action_ranking import rank_proposals
 from application.decision_policy.safety import gate_decision_action
+from core.ai.action_ranking import rank_proposals
 
 
 @dataclass

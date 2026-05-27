@@ -12,7 +12,6 @@ from dataclasses import dataclass
 
 from runtime.queue.job_contract import JobPriority, JobRecord
 
-
 CANON_RUNTIME_QUEUE_JOB_VISIBILITY_TIMEOUT = True
 
 

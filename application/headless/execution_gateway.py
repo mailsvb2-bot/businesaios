@@ -11,7 +11,6 @@ from runtime.execution.execution_path_lock import (
     validate_execution_gateway_path,
 )
 
-
 CANON_HEADLESS_EXECUTION_GATEWAY_SINGLE_PATH = True
 CANON_HEADLESS_EXECUTION_GATEWAY_NO_DECISION_LOGIC = True
 CANON_HEADLESS_EXECUTION_GATEWAY_EXECUTION_OWNER = True

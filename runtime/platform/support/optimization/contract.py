@@ -9,11 +9,11 @@ CANON_COMPAT_SHIM = True
 CANON_EXTERNAL_ABI_ONLY = True
 
 from runtime.platform.support.optimization.contracts import (
-    CANONICAL_OPTIMIZATION_PUBLIC_MODULE,
     CANON_PLATFORM_OPTIMIZATION_PUBLIC_API,
+    CANONICAL_OPTIMIZATION_PUBLIC_MODULE,
     COMPAT_OPTIMIZATION_DECISION_MODULE,
-    OptimizationGate,
     SOVEREIGN_DECISION_CORE,
+    OptimizationGate,
 )
 
 __all__ = [

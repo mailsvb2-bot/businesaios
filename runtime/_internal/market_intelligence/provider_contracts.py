@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Mapping
 
-
 CANON_MARKET_INTELLIGENCE_PROVIDER_CONTRACTS = True
 
 

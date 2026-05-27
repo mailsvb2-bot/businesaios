@@ -8,7 +8,6 @@ from typing import Any, Dict
 from runtime.growth import GrowthStrategyService
 from runtime.ports.effects import EffectsPort
 
-
 ACTION_NAME_ACCEPT = "growth_strategy_accept@v1"
 ACTION_NAME_REJECT = "growth_strategy_reject@v1"
 

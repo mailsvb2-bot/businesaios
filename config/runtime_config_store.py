@@ -15,7 +15,6 @@ from config.environment_matrix import normalize_environment_name
 from core.tenancy.normalization import normalize_tenant_id
 from governance.persistence_codec import atomic_write_json, read_json_or_default, to_jsonable
 
-
 CANON_RUNTIME_CONFIG_STORE = True
 
 _RUNTIME_NAMESPACE = "runtime_config"

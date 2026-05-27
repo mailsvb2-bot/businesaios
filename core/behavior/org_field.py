@@ -5,12 +5,11 @@ from __future__ import annotations
 We treat an org/account as a *field* of role-states.
 """
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from typing import Dict, Tuple
 
 from core.behavior.dirac_behavior import Complex4, DiracBehaviorModel
-
 
 ROLE_WEIGHTS: Dict[str, float] = {
     "lead": 1.0,

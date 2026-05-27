@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-
 CANON_EFFECT_OUTCOME_VOCABULARY = True
 
 _VERIFIED_ALIASES = {

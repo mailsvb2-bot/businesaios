@@ -5,6 +5,7 @@ from typing import Dict, Protocol
 
 from runtime.platform.support.contracts.rollout import RolloutResult
 
+
 class RolloutCollector(Protocol):
     def collect(self) -> RolloutResult:
         ...

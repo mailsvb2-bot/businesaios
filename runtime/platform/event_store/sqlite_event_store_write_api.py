@@ -4,8 +4,8 @@ import json
 import sqlite3
 from typing import Optional
 
-from runtime.platform.event_store.append_contract import normalize_append_event
 import runtime.platform.event_store.sqlite_write_helpers as _wh
+from runtime.platform.event_store.append_contract import normalize_append_event
 
 
 class SqliteEventStoreWriteApi:

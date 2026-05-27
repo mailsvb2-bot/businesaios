@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from execution.business_operating_memory import BusinessMemoryCompactor, BusinessMemoryPolicy, FileBusinessOperatingMemoryStore
+from execution.business_operating_memory import (
+    BusinessMemoryCompactor,
+    BusinessMemoryPolicy,
+    FileBusinessOperatingMemoryStore,
+)
 
 
 def test_business_memory_compacts_low_confidence_noise(tmp_path) -> None:

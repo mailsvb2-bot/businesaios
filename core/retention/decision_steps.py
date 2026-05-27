@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-
 from typing import Any, Dict, List, Tuple
 
 from core.retention.offer_steps import render_offer_payload, should_allow_offer

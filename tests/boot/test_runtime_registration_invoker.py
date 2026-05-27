@@ -4,8 +4,8 @@ import pytest
 
 from boot.wiring.runtime_registration_invoker import RuntimeRegistrationInvoker
 from runtime.manifest_entry import RuntimeManifestEntry
-from runtime.registry import RuntimeRegistry
 from runtime.registration_result import RegistrationResult
+from runtime.registry import RuntimeRegistry
 from runtime.service_names import RuntimeServiceName
 from runtime.service_types import RuntimeServiceType
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 """Canonical runtime composition root for sovereign bootstrap."""
 
 from dataclasses import dataclass
+
 from runtime.bootstrap.bootstrap_contract import (
     BootstrapArtifacts,
     BootstrapAttestationPolicy,

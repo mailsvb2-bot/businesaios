@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from runtime.tenancy import normalize_tenant_scope
 from runtime.messaging_policy_alerts.detector import MessagingPolicyAlertDetector
+from runtime.tenancy import normalize_tenant_scope
 
 
 class MessagingPolicyAlertService:

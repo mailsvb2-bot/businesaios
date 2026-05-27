@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Sequence
-import math
+
 
 def require_non_empty(name: str, values: Sequence[object]) -> None:
     if not values:

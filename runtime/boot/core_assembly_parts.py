@@ -5,9 +5,16 @@ CANON_BOOT_WIRING_ONLY = True
 
 from typing import Any, Optional, Tuple
 
-from runtime.boot import EconomicBrain, EconomicReward, GrowthPolicy, LTVEstimator, LearningSystem, PricingPolicy, RewardEngine
-
 from learning.registry import ArtifactRegistry
+from runtime.boot import (
+    EconomicBrain,
+    EconomicReward,
+    GrowthPolicy,
+    LearningSystem,
+    LTVEstimator,
+    PricingPolicy,
+    RewardEngine,
+)
 
 
 def build_economic_brain() -> EconomicBrain:

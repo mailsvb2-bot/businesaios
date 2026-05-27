@@ -5,6 +5,7 @@ from typing import Any, Mapping, Sequence
 
 from runtime.platform.support.optimization.promotion_decision import PromotionDecision
 
+
 @dataclass(frozen=True)
 class Action:
     name: str

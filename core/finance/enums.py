@@ -1,4 +1,6 @@
 from enum import Enum
+
+
 class PaymentStatus(str, Enum):
     PENDING = "pending"
     SETTLED = "settled"

@@ -11,10 +11,10 @@ from runtime.integration.fallback_policy import FallbackPolicy
 from runtime.integration.world_state_packet_support import (
     build_advisory_notes,
     build_reward_signal_from_world_view,
-    empty_creative_snapshot,
     emit_world_state_materialized_trace,
     emit_world_state_observed_trace,
     emit_world_state_packet_metrics,
+    empty_creative_snapshot,
     materialize_world_state_packet,
     resolve_world_state_inputs,
 )

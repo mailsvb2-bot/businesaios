@@ -6,6 +6,7 @@ from typing import Any
 
 from runtime.platform.support.schemas.schema_catalog import is_valid_payload
 
+
 def valid_checkpoint(payload: dict[str, Any]) -> bool:
     return is_valid_payload("checkpoint", payload)
 

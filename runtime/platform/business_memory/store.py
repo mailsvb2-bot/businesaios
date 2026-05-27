@@ -6,7 +6,6 @@ from pathlib import Path
 
 from runtime.platform.business_memory.models import BusinessMemoryRecord
 
-
 CANON_BUSINESS_MEMORY_STORE = True
 
 

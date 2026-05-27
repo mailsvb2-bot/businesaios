@@ -10,7 +10,6 @@ from typing import Any, Mapping
 
 from governance.persistence_codec import to_jsonable
 
-
 CANON_CONFIG_VERSIONING = True
 
 

@@ -5,7 +5,6 @@ from typing import Any
 
 from contracts.action_impact_contract import ActionExecutionContext
 
-
 CANON_RUNTIME_OPERATIONAL_BUDGET_GATE = True
 
 

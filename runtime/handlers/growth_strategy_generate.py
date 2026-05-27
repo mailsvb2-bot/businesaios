@@ -5,10 +5,8 @@ CANON_THIN_HANDLER = True
 
 from typing import Any, Dict
 
-from runtime.growth import GrowthGoalV1
-from runtime.growth import GrowthStrategyService
+from runtime.growth import GrowthGoalV1, GrowthStrategyService
 from runtime.ports.effects import EffectsPort
-
 
 ACTION_NAME = "growth_strategy_generate@v1"
 

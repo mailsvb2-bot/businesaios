@@ -12,7 +12,12 @@ from core.policies.telegram.handlers.autopilot import handle_autopilot
 from core.policies.telegram.handlers.gift import handle_gift
 from core.policies.telegram.handlers.growth_strategy import handle_growth_strategy
 from core.policies.telegram.handlers.offer_outcome import handle_offer_outcome
-from core.policies.telegram.helpers import ProposedAction, build_legacy_prices, choose_marketing_variant, propose_message
+from core.policies.telegram.helpers import (
+    ProposedAction,
+    build_legacy_prices,
+    choose_marketing_variant,
+    propose_message,
+)
 from core.policies.telegram.routes.command_routes import handle_command_routes
 from core.policies.telegram.routes.marketing_routes import handle_marketing_routes
 from core.policies.telegram.routes.settings_routes import handle_settings_routes

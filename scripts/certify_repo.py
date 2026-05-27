@@ -32,7 +32,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from canon.canon_ai_enforcer import run_enforcer
-
 from scripts.certify_helpers import (
     TRUTHY,
     CertificationReport,
@@ -41,8 +40,6 @@ from scripts.certify_helpers import (
     detect_policy_divergence_signals,
     find_network_imports_outside_sealed,
 )
-
-
 
 
 def prune_generated_release_artifacts(root: Path) -> None:

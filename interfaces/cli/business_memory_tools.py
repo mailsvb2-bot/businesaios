@@ -5,7 +5,6 @@ import json
 
 from execution.headless_boot import build_headless_runtime
 
-
 CANON_HEADLESS_BUSINESS_MEMORY_CLI = True
 
 

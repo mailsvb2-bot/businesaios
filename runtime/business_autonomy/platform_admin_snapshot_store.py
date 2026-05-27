@@ -6,7 +6,6 @@ from typing import Any, Mapping
 
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore
 
-
 CANON_PLATFORM_ADMIN_SNAPSHOT_STORE = True
 
 

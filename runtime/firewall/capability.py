@@ -1,6 +1,7 @@
 import secrets
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class EffectCapability:
     token: str

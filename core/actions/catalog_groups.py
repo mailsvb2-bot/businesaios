@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Dict
 
-from core.ai.schema_registry import DecisionSchema
 from core.actions.names import ACTION_AI_CEO_PLAN_V1
+from core.ai.schema_registry import DecisionSchema
 
 from .catalog_entry import CatalogEntry
 

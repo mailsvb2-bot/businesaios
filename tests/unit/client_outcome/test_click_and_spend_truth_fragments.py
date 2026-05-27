@@ -1,6 +1,15 @@
 from __future__ import annotations
 
-from click_economics.public_api import build_click_billable_fact_contract_from_client_outcome, build_click_billing_collection_preview_from_client_outcome, build_click_billing_execution_record_from_client_outcome, build_click_billing_handoff_payload_from_client_outcome, build_click_billing_invoice_preview_from_client_outcome, build_click_billing_provider_dispatch_from_client_outcome, build_click_billing_settlement_record_from_client_outcome, build_click_commercial_fact_from_client_outcome
+from click_economics.public_api import (
+    build_click_billable_fact_contract_from_client_outcome,
+    build_click_billing_collection_preview_from_client_outcome,
+    build_click_billing_execution_record_from_client_outcome,
+    build_click_billing_handoff_payload_from_client_outcome,
+    build_click_billing_invoice_preview_from_client_outcome,
+    build_click_billing_provider_dispatch_from_client_outcome,
+    build_click_billing_settlement_record_from_client_outcome,
+    build_click_commercial_fact_from_client_outcome,
+)
 from runtime.economic_core.click_economics_bridge import (
     build_click_economics_truth_fragment,
     build_click_economics_truth_snapshot_from_client_outcome,
@@ -9,8 +18,16 @@ from runtime.economic_core.spend_bridge import (
     build_spend_truth_fragment,
     build_spend_truth_snapshot_from_client_outcome,
 )
-from spend.public_api import build_spend_external_ingress_batch_from_client_outcome, build_spend_external_ingress_runtime_request_from_client_outcome, build_spend_fact_from_client_outcome, build_spend_ingress_envelope_from_client_outcome, build_spend_ingress_manifest_from_client_outcome, build_spend_manifest_from_client_outcome, build_spend_source_ingress_record_from_client_outcome
 from runtime.executor import build_click_provider_dispatch_execution_contract, build_spend_runtime_execution_contract
+from spend.public_api import (
+    build_spend_external_ingress_batch_from_client_outcome,
+    build_spend_external_ingress_runtime_request_from_client_outcome,
+    build_spend_fact_from_client_outcome,
+    build_spend_ingress_envelope_from_client_outcome,
+    build_spend_ingress_manifest_from_client_outcome,
+    build_spend_manifest_from_client_outcome,
+    build_spend_source_ingress_record_from_client_outcome,
+)
 
 
 def test_click_economics_owner_fact_and_fragment_project_existing_click_provenance_without_new_revenue_truth() -> None:

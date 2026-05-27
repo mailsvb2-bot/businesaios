@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Sealed payment effect actions mixin.
 
 Thin orchestration only; business details live in focused helper modules.
@@ -6,11 +7,6 @@ Thin orchestration only; business details live in focused helper modules.
 
 from typing import Any, Dict, Optional, Tuple
 
-from runtime._internal.effects_actions.payments.yookassa import (
-    start_webhook_server,
-    yookassa_create_payment,
-    yookassa_get_payment_status,
-)
 from runtime._internal.effects_actions.payments.access import grant_access_effect
 from runtime._internal.effects_actions.payments.reconciliation import (
     reconcile_payment_effect,
@@ -19,6 +15,11 @@ from runtime._internal.effects_actions.payments.reconciliation import (
 from runtime._internal.effects_actions.payments.selection import (
     capture_payment_effect,
     select_tariff_effect,
+)
+from runtime._internal.effects_actions.payments.yookassa import (
+    start_webhook_server,
+    yookassa_create_payment,
+    yookassa_get_payment_status,
 )
 
 

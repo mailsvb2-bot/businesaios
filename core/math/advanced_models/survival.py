@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import List, Sequence
-import math
+
 
 @dataclass(frozen=True)
 class KaplanMeierPoint:

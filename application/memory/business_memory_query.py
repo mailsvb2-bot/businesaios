@@ -9,7 +9,6 @@ from application.memory.business_operating_memory import (
     project_business_memory_contract_bundle,
 )
 
-
 CANON_BUSINESS_MEMORY_QUERY = True
 
 

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import sqlite3
-
-from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 import time
 
-from runtime.platform.utils.hash_chain import entry_hash, GENESIS
-from runtime.platform.utils.canonical import payload_hash
 from observability.platform.observability.silent import swallow
+from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
+from runtime.platform.utils.canonical import payload_hash
+from runtime.platform.utils.hash_chain import GENESIS, entry_hash
 
 
 class SqliteLedger:

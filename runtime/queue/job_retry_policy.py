@@ -12,7 +12,6 @@ from typing import Iterable
 
 from runtime.queue.job_contract import JobRecord
 
-
 CANON_RUNTIME_QUEUE_RETRY_POLICY = True
 
 

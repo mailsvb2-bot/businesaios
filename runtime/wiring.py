@@ -159,11 +159,11 @@ def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageCon
     if storage.backend == "postgres":
         assert storage.postgres_dsn
         from observability.platform.decision_archive.postgres_decision_archive import PostgresDecisionArchive
+        from observability.platform.snapshot_store.postgres_snapshot_store import PostgresSnapshotStore
         from runtime.platform.event_store.postgres_event_store import PostgresEventStore
         from runtime.platform.ledger.postgres_ledger import PostgresLedger
         from runtime.platform.outbox.postgres_outbox import PostgresOutbox
         from runtime.platform.outbox.postgres_payment_outbox import PostgresPaymentOutbox
-        from observability.platform.snapshot_store.postgres_snapshot_store import PostgresSnapshotStore
 
         if not bool(getattr(storage, "postgres_event_store_enabled", False)):
             raise RuntimeError("POSTGRES_EVENT_STORE_REQUIRES_EXPLICIT_ENABLEMENT")
@@ -176,11 +176,11 @@ def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageCon
         return event_store, ledger, snapshot_store, decision_archive, outbox, payment_outbox
 
     from observability.platform.decision_archive.sqlite_decision_archive import SqliteDecisionArchive
+    from observability.platform.snapshot_store.sqlite_snapshot_store import SqliteSnapshotStore
     from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
     from runtime.platform.ledger.sqlite_ledger import SqliteLedger
     from runtime.platform.outbox.sqlite_outbox import SqliteOutbox
     from runtime.platform.outbox.sqlite_payment_outbox import SqlitePaymentOutbox
-    from observability.platform.snapshot_store.sqlite_snapshot_store import SqliteSnapshotStore
 
     event_store = stack.enter_context(SqliteEventStore(_sqlite_path("EVENTS_SQLITE_PATH", base_dir=base_dir, filename="events.db")))
     ledger = stack.enter_context(SqliteLedger(_sqlite_path("LEDGER_SQLITE_PATH", base_dir=base_dir, filename="ledger.db")))

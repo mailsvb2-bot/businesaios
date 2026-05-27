@@ -7,7 +7,6 @@ from threading import RLock
 from core.tenancy.normalization import require_tenant_id
 from runtime.queue.job_contract import normalize_now, utc_now
 
-
 CANON_RUNTIME_QUEUE_RATE_LIMIT_GUARD = True
 
 

@@ -24,9 +24,8 @@ from runtime.boot import (
     TrafficStrategyService,
     TrafficToAdsSpec,
 )
-
-from runtime.platform.config.env_flags import env_bool, env_float, env_str
 from runtime.llm import resolve_runtime_llm_settings
+from runtime.platform.config.env_flags import env_bool, env_float, env_str
 
 logger = logging.getLogger(__name__)
 

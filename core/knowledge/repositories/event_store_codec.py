@@ -5,7 +5,6 @@ from typing import Any, Iterable, Mapping
 
 from contracts.event_store import EventRecord, EventStoreReader, EventStoreWriter, iter_events_strict
 
-
 KNOWLEDGE_STREAM_USER_ID = "knowledge"
 LESSON_EVENT_TYPE = "knowledge.lesson.saved.v1"
 PATTERN_EVENT_TYPE = "knowledge.pattern.saved.v1"

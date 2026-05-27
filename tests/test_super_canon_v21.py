@@ -7,9 +7,9 @@ from canon import (
     CANON_RULES,
     CANON_VERSION,
     REPORT_REQUIREMENTS,
+    REQUIRED_WORLD_MODEL_CANON_FILES,
     WORK_PROTOCOL,
     WORLD_MODEL_CANON_VERSION,
-    REQUIRED_WORLD_MODEL_CANON_FILES,
     scan_world_model_canon_contract,
     verify_canon_loaded,
 )

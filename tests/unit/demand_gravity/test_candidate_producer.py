@@ -12,7 +12,10 @@ from runtime.demand_gravity import (
     DemandSignalKind,
     build_demand_gravity_admin_view,
 )
-from runtime.demand_gravity.no_second_brain import DemandGravitySecondBrainViolation, assert_payload_has_no_decision_fields
+from runtime.demand_gravity.no_second_brain import (
+    DemandGravitySecondBrainViolation,
+    assert_payload_has_no_decision_fields,
+)
 
 
 def _signal(

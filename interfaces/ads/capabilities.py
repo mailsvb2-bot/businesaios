@@ -5,7 +5,6 @@ from typing import Any, Mapping
 
 from interfaces.common.connector_capabilities import ConnectorCapabilities
 
-
 CANON_ADS_CAPABILITIES = True
 
 

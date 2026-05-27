@@ -1,7 +1,7 @@
-from execution.channel_roi_memory import ChannelROIMemory
-from execution.pre_action_economic_forecast import PreActionEconomicForecastBuilder
-from execution.portfolio_allocator import PortfolioAllocator
 from execution.capital_rebalancer import CapitalRebalancer
+from execution.channel_roi_memory import ChannelROIMemory
+from execution.portfolio_allocator import PortfolioAllocator
+from execution.pre_action_economic_forecast import PreActionEconomicForecastBuilder
 
 
 def test_pre_action_forecast_uses_channel_memory() -> None:

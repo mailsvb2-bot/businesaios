@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 from threading import RLock
 
-from runtime.platform.config.env_flags import env_bool, env_path, env_str
 from runtime.observability.error_handling import swallow
+from runtime.platform.config.env_flags import env_bool, env_path, env_str
 
 try:  # pragma: no cover
     import ctypes  # type: ignore

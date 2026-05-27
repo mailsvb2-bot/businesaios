@@ -4,7 +4,12 @@ from datetime import datetime, timedelta, timezone
 
 from runtime.queue.queue_remediation_analytics import QueueRemediationAnalyticsService
 from runtime.queue.queue_remediation_audit_sqlite import SqliteQueueRemediationAuditStore
-from runtime.queue.queue_remediation_hooks import QueueRemediationCoordinator, QueueRemediationExecutionReport, QueueRemediationPlan, QueueRemediationHook
+from runtime.queue.queue_remediation_hooks import (
+    QueueRemediationCoordinator,
+    QueueRemediationExecutionReport,
+    QueueRemediationHook,
+    QueueRemediationPlan,
+)
 from runtime.queue.queue_remediation_route_history_sqlite import SqliteQueueRemediationRouteHistoryStore
 
 
@@ -88,9 +93,14 @@ def test_queue_remediation_analytics_exposes_status_source_and_offer_gaps(tmp_pa
 
 def test_queue_remediation_analytics_execution_rate_uses_executed_count(tmp_path):
     from datetime import datetime, timezone
+
     from runtime.queue.queue_remediation_analytics import QueueRemediationAnalyticsService
     from runtime.queue.queue_remediation_audit_sqlite import SqliteQueueRemediationAuditStore
-    from runtime.queue.queue_remediation_hooks import QueueRemediationExecutionReport, QueueRemediationHook, QueueRemediationPlan
+    from runtime.queue.queue_remediation_hooks import (
+        QueueRemediationExecutionReport,
+        QueueRemediationHook,
+        QueueRemediationPlan,
+    )
 
     store = SqliteQueueRemediationAuditStore(path=tmp_path / 'audit.sqlite3')
     generated_at = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)

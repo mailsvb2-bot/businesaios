@@ -6,8 +6,8 @@ from typing import Protocol
 
 from runtime.platform.safety_approval_repository import (
     CANON_PLATFORM_SAFETY_APPROVAL_REPOSITORY,
-    PlatformSqliteApprovalRepository,
     SCHEMA_VERSION,
+    PlatformSqliteApprovalRepository,
 )
 
 from .models import ApprovalTicket, ApprovalWorkflowState

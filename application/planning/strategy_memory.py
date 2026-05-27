@@ -7,7 +7,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
-
 CANON_STRATEGY_MEMORY = True
 STRATEGY_MEMORY_SCHEMA_VERSION = 1
 _ALLOWED_HORIZONS = frozenset({"day", "week", "month", "quarter"})

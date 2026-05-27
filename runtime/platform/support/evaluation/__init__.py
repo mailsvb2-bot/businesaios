@@ -7,6 +7,7 @@ from typing import Dict, Iterable, Mapping, Protocol
 
 from runtime.platform.support.contracts.evaluation import EvaluationResult
 
+
 class BaselineComparator:
     def compare(self, baseline: float, candidate: float) -> dict[str, float]:
         return {

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from runtime.observability.error_handling import swallow
 from runtime._internal.effects_domains.admin_pricing_effects import (
     apply_pricing_change_effect,
     build_pricing_change_payload,
@@ -11,6 +10,7 @@ from runtime._internal.effects_domains.admin_pricing_effects import (
     reject_pricing_change_effect,
     request_pricing_change_effect,
 )
+from runtime.observability.error_handling import swallow
 
 
 def answer_callback_if_needed(owner: Any, *, channel: str, callback_query_id: Optional[str]) -> None:

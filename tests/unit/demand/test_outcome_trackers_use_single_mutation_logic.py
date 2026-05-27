@@ -1,8 +1,10 @@
-from lead_outcomes import LeadContactTracker
-from lead_outcomes import LeadConversionTracker
-from lead_outcomes import LeadOutcomeRegistry
-from lead_outcomes import LeadRevenueTracker
-from lead_outcomes import LeadStatusTracker
+from lead_outcomes import (
+    LeadContactTracker,
+    LeadConversionTracker,
+    LeadOutcomeRegistry,
+    LeadRevenueTracker,
+    LeadStatusTracker,
+)
 
 
 def test_trackers_accumulate_fields_without_overwriting_existing_row() -> None:

@@ -2,9 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.observability.perf import Span, emit_sla_violation
-from core.observability.throttled_logger import exception_throttled
-from application.decision_state.state_enrichment import enrich_state_with_world_model, extract_product_metadata
+from application.decision_runtime.emission import (
+    archive_envelope as archive_envelope_safe,
+)
+from application.decision_runtime.emission import (
+    emit_decision_issued,
+    emit_trace,
+    emit_world_model_pinned,
+)
 from application.decision_runtime.flow import build_archive_envelope, build_envelope, build_payload
 from application.decision_runtime.runtime import (
     apply_state_constraints,
@@ -13,12 +18,9 @@ from application.decision_runtime.runtime import (
     select_and_propose,
     validate_and_gate_action,
 )
-from application.decision_runtime.emission import (
-    archive_envelope as archive_envelope_safe,
-    emit_decision_issued,
-    emit_trace,
-    emit_world_model_pinned,
-)
+from application.decision_state.state_enrichment import enrich_state_with_world_model, extract_product_metadata
+from core.observability.perf import Span, emit_sla_violation
+from core.observability.throttled_logger import exception_throttled
 
 
 def run_decision(*, core: Any, state: Any, envelope_version: int, logger: Any) -> Any:

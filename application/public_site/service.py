@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from application.public_site.landing_content import PUBLIC_SITE_SECTION_ORDER, build_landing_payload, build_public_capabilities_payload
+from application.public_site.landing_content import (
+    PUBLIC_SITE_SECTION_ORDER,
+    build_landing_payload,
+    build_public_capabilities_payload,
+)
 from interfaces.web.public_site.landing_manifest import PUBLIC_SITE_MANIFEST
 
 CANON_PUBLIC_SITE_SERVICE = True

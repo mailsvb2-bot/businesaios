@@ -3,7 +3,6 @@ from __future__ import annotations
 from execution.inference_provider_contract import InferenceRequest
 from runtime.inference.distributed.node_registry import DistributedInferenceNode
 
-
 CANON_RUNTIME_DISTRIBUTED_NETWORK_TRANSPORT = True
 
 

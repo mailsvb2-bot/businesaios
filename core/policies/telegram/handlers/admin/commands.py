@@ -10,7 +10,6 @@ from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction
 from core.ux.telegram_keyboards import kb_back_main, kb_staff_menu
 
-
 ADMIN_COMMANDS = {"/admin", "/demo_stats", "/funnel", "/retention", "/latency", "/causal"}
 
 

@@ -6,8 +6,9 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Mapping
 
-from .enums import ExpenseCategory, PaymentStatus, PayoutStatus, FinanceSnapshotStatus
+from .enums import ExpenseCategory, FinanceSnapshotStatus, PaymentStatus, PayoutStatus
 from .ids import FinanceSnapshotId
+
 
 @dataclass(frozen=True)
 class RevenueRecord:

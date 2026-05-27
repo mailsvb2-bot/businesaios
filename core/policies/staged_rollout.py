@@ -10,10 +10,10 @@ and must pass RuntimeGuard + DecisionLedger + RuntimeExecutor.
 """
 
 from dataclasses import dataclass
-
-from config.staged_rollout_policy import DEFAULT_STAGED_ROLLOUT_POLICY, StagedRolloutPolicy
 from enum import Enum
 from typing import Any, Dict, Iterable, Protocol
+
+from config.staged_rollout_policy import DEFAULT_STAGED_ROLLOUT_POLICY, StagedRolloutPolicy
 
 
 class RolloutStage(str, Enum):

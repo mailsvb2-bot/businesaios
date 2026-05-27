@@ -5,7 +5,14 @@ from core.economics.enums import GuardSeverity
 from core.economics.guards.advisory_boundary_guard import AdvisoryBoundaryGuard
 from core.economics.guards.currency_consistency_guard import CurrencyConsistencyGuard
 from core.economics.guards.signal_period_guard import SignalPeriodGuard
-from core.economics.types import CashflowSignal, CostSignal, CustomerValueSignal, EconomicsReadModel, RevenueSignal, SpendSignal
+from core.economics.types import (
+    CashflowSignal,
+    CostSignal,
+    CustomerValueSignal,
+    EconomicsReadModel,
+    RevenueSignal,
+    SpendSignal,
+)
 
 
 def _read_model() -> EconomicsReadModel:

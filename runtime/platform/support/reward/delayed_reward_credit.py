@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class DelayedRewardCredit:
     def assign(self, rewards: list[float], gamma: float = 0.99) -> list[float]:
         output = [0.0 for _ in rewards]

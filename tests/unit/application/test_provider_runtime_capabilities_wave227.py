@@ -5,14 +5,18 @@ import hashlib
 import hmac
 
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService, StaticTrustOnboarding
+from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
 from application.business_autonomy.provider_admin_service import ProviderAdminService
 from application.business_autonomy.provider_catalog import provider_map
-from runtime.business_autonomy.bootstrap import StaticGovernanceEnablement, StaticPersistenceSurface, _build_typed_channel_registry
+from runtime.business_autonomy.bootstrap import (
+    StaticGovernanceEnablement,
+    StaticPersistenceSurface,
+    _build_typed_channel_registry,
+)
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore, FileRegionRouteState
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
-from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import InMemorySecretVault
 

@@ -1,6 +1,6 @@
-from core.tenancy.tenant import current_tenant_id
 from core.ai.world_state import WorldStateV1
 from core.policies.telegram_policies import UnifiedTelegramPolicyV3
+from core.tenancy.tenant import current_tenant_id
 
 
 def _state_for_cb(cb: str) -> WorldStateV1:

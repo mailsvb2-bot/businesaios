@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from runtime._internal.effect_router import EffectRouter
 from runtime._internal.effect_payloads import normalize_effect_payload, payload_contract_fields
+from runtime._internal.effect_router import EffectRouter
 from runtime._internal.effect_types import EffectActionType
 from runtime._internal.http_transport import DisabledNetworkTransport
 

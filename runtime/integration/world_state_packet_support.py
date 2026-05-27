@@ -9,6 +9,10 @@ and do not contain alternate runtime wiring.
 
 from typing import Mapping
 
+from core.world_state.packet_enrichment import (
+    build_advisory_notes,
+    build_reward_signal_from_world_view,
+)
 from runtime.advisory.autonomy_advisory_packet import AutonomyAdvisoryPacket
 from runtime.creative import (
     CreativeIntelligenceSnapshot,
@@ -17,8 +21,8 @@ from runtime.creative import (
     IncrementalitySnapshot,
 )
 from runtime.integration.fallback_policy import (
-    FallbackPolicy,
     TEST_FALLBACK_POLICY,
+    FallbackPolicy,
     apply_world_view_with_policy,
 )
 from runtime.integration.input_resolution import (
@@ -41,10 +45,6 @@ from runtime.world_state import (
     WorldStateHistoryService,
     assemble_world_state,
     build_recommendation_packet,
-)
-from core.world_state.packet_enrichment import (
-    build_advisory_notes,
-    build_reward_signal_from_world_view,
 )
 
 

@@ -9,12 +9,12 @@ parse -> dedupe -> rate limit -> enrich -> worldstate -> decide -> execute
 import time
 from typing import Any, Dict
 
+from core.behavior.behavioral_state_builder import BehavioralStateBuilder
 from core.observability.perf import Span
-from interfaces.telegram.pipeline.rate_limit import TTLSeenSet, PerChatTokenBucket
-from interfaces.telegram.read_models.enricher import TelegramReadModelEnricher
 from interfaces.telegram.parsing.telegram_context import build_context
 from interfaces.telegram.pipeline.ingress_dedupe import is_duplicate
 from interfaces.telegram.pipeline.ingress_warning import emit_ingress_warning
+from interfaces.telegram.pipeline.rate_limit import PerChatTokenBucket, TTLSeenSet
 from interfaces.telegram.pipeline.update_helpers import (
     build_button_key,
     build_worldstate_with_overlays,
@@ -22,7 +22,7 @@ from interfaces.telegram.pipeline.update_helpers import (
     resolve_product_context,
     run_decision_and_execution,
 )
-from core.behavior.behavioral_state_builder import BehavioralStateBuilder
+from interfaces.telegram.read_models.enricher import TelegramReadModelEnricher
 from products.product_resolver import new_resolver_from_env
 from runtime.platform.config.env_flags import env_float
 

@@ -7,7 +7,6 @@ from pathlib import Path
 from scripts.ci.paths import repo_root
 from scripts.ci.subprocess_io import PYTEST_REQUIRED_PLUGINS, run_command
 
-
 _TEST_DIRS = ("tests",)
 
 

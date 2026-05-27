@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-
 CANON_CAPABILITY_HEALTH_POLICY = True
 
 

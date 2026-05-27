@@ -15,8 +15,11 @@ core.ads.apply.* modules.
 """
 
 from dataclasses import dataclass
-from core.ads.apply_engine_helpers import AdsApplyPort
+
+from core.ads.apply.contract import AdsApplyRequest, AdsApplyResult
+from core.ads.apply.limits import AdsApplyLimits
 from core.ads.apply_engine_execution import build_dry_run_result, perform_apply_flow
+from core.ads.apply_engine_helpers import AdsApplyPort
 from core.ads.apply_engine_prechecks import (
     build_duplicate_result,
     check_kill_switch,
@@ -24,14 +27,10 @@ from core.ads.apply_engine_prechecks import (
     evaluate_gate_and_feedback,
 )
 from core.ads.apply_gate import AdsApplyState, assert_ads_apply_allowed
-from core.ads.apply.contract import AdsApplyRequest, AdsApplyResult
-from core.ads.apply.limits import AdsApplyLimits
-from core.api.idempotency import IdempotencyStore
 from core.ads.hardening.kill_switch import AdsKillSwitch
 from core.ads.hardening.rate_limiter import AdsRateLimiter
-
+from core.api.idempotency import IdempotencyStore
 from core.governance.guards.feedback_loop_guard import FeedbackLoopGuard
-
 
 __all__ = ["AdsApplyEngine", "AdsApplyEnv", "AdsApplyPort"]
 

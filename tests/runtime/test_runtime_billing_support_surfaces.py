@@ -3,7 +3,7 @@ from __future__ import annotations
 from observability.slo_contract import SLIKind
 from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 from runtime.monetization import MonetizationPlan, MonetizationService, TaxContext, UsageInvoiceRequest
-from runtime.queue import InMemoryJobStore, JobDispatchRequest, JobDispatcher
+from runtime.queue import InMemoryJobStore, JobDispatcher, JobDispatchRequest
 from tenancy.tenant_billing_scope import BillingMode, TenantBillingScope
 from tenancy.tenant_quota_guard import QuotaDimension, TenantQuotaGuard
 

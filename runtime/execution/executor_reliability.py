@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from runtime.execution.executor_result import ExecutionResult
 from reliability.idempotency_contract import IdempotencyResolution
+from runtime.execution.executor_result import ExecutionResult
 
 
 def apply_reliability_gate(*, executor, env) -> ExecutionResult | None:

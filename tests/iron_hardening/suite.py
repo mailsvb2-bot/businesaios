@@ -12,7 +12,6 @@ import ast
 import pathlib
 from datetime import datetime, timezone
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
@@ -301,6 +300,7 @@ def test_iron_32_idempotence_key_stable():
 
 def test_iron_33_idempotence_key_rejects_empty():
     import pytest
+
     from core.payments.provider import idempotence_key_for_order
 
     with pytest.raises(ValueError):

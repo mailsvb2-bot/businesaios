@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from contracts.event_store import iter_events_strict
 from threading import Lock
 from typing import Any, Optional
 
+from contracts.event_store import iter_events_strict
 from core.events.log import EventLog
-
 
 _MATURITY_EVENT_TYPE = "ads_attribution_maturity_snapshot@v1"
 _MATURITY_SOURCE = "ads_rl"
@@ -111,7 +110,7 @@ class AttributionMaturityGate:
 def _maturity_from_event(event: Any, *, tenant_id: str, decision_id: str) -> Optional[DecisionMaturity]:
     if not isinstance(event, dict):
         return None
-    ev_decision_id = str((event.get("decision_id") or (event.get("payload") or {}).get("decision_id") or ""))
+    ev_decision_id = str(event.get("decision_id") or (event.get("payload") or {}).get("decision_id") or "")
     if ev_decision_id != str(decision_id):
         return None
     payload = event.get("payload") or {}

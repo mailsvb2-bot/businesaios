@@ -3,7 +3,6 @@ from __future__ import annotations
 from runtime.boot.finance_boot import build_finance_job_orchestrator, build_finance_runtime
 from tests.test_finance_canon_integration_v27 import _snapshot
 
-
 RAW = {
     'tenant_id': 'tenant-live',
     'correlation_id': 'corr-live',

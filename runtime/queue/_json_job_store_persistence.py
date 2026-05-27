@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from pathlib import Path
 import os
+from pathlib import Path
 
 from governance.persistence_codec import atomic_write_json, from_dataclass, read_json_or_default, to_jsonable
 from runtime.queue._inmemory_job_store_ops import ClaimTokenMap, DedupeMap, JobMap
 from runtime.queue.job_contract import JobRecord
-
 
 CANON_RUNTIME_QUEUE_JSON_JOB_STORE_PERSISTENCE = True
 

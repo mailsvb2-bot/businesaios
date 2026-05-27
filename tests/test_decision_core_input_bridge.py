@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from application.decisioning.decision_core_input_bridge import build_decision_core_enrichment
 from contracts.decisioning.decision_envelope_contract import DecisionEnvelopeContract
 from contracts.decisioning.decision_input_contract import DecisionInputContract
-from application.decisioning.decision_core_input_bridge import build_decision_core_enrichment
 
 
 def test_decision_core_input_bridge_builds_safe_payload() -> None:

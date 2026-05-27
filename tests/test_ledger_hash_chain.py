@@ -5,9 +5,9 @@ from pathlib import Path
 
 from core.ai.decision import Decision, DecisionEnvelope
 from core.utils.canonical import payload_hash
+from core.utils.hash_chain import GENESIS, entry_hash
 from runtime.inmemory_ledger import InMemoryLedger
 from runtime.platform.ledger.sqlite_ledger import SqliteLedger
-from core.utils.hash_chain import entry_hash, GENESIS
 
 
 def _mk_env(decision_id: str, *, action: str = "send_message@v1") -> DecisionEnvelope:

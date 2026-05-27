@@ -7,7 +7,6 @@ from pathlib import Path
 from runtime.platform.container_runtime_contract import ContainerRuntimeProbe, evaluate_container_runtime
 from scripts.ci.paths import repo_root
 
-
 EVIDENCE_NAME = "container_runtime_evidence.json"
 ENV_FLAG_NAMES = [
     "CONTAINER_IMAGE_BUILT",

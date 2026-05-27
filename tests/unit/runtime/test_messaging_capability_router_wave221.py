@@ -1,4 +1,9 @@
-from runtime.messaging_capability import ChannelHealth, ChannelHealthRegistry, MessagingCapabilityRouter, parse_capability_requirement
+from runtime.messaging_capability import (
+    ChannelHealth,
+    ChannelHealthRegistry,
+    MessagingCapabilityRouter,
+    parse_capability_requirement,
+)
 
 
 def test_capability_router_filters_by_required_capabilities_preserving_order():

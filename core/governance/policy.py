@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from config.governance_review_policy import GovernanceReviewPolicy
+
 from .contracts import AuditRecord
 
 

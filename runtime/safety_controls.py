@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from runtime.safety import SafetyActionContext, ControlDecision, ControlStatus
 from bootstrap.safety_control_boot import build_safety_control_runtime
 from core.safety.controls.action_identity import canonical_action_id, canonical_breaker_key
 from core.safety.controls.observability.event_store import SafetyEvent
+from runtime.safety import ControlDecision, ControlStatus, SafetyActionContext
 
 
 def _payload_dict(payload: Any) -> dict[str, Any]:

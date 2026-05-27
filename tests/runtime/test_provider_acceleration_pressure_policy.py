@@ -1,5 +1,5 @@
-from execution.inference_capacity_contract import InferenceCapacityTier
 from execution.inference_acceleration_contract import InferenceAccelerationProfile, InferenceMemoryTransferPlan
+from execution.inference_capacity_contract import InferenceCapacityTier
 from execution.inference_provider_contract import InferenceProviderHealth
 from runtime.inference.providers.provider_acceleration_pressure_policy import ProviderAccelerationPressurePolicy
 

@@ -21,8 +21,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Tuple
 
 from config.behavior_impulse_policy import (
-    BehaviorImpulsePolicy,
     DEFAULT_IMPULSE_BOUNDS_POLICY,
+    BehaviorImpulsePolicy,
 )
 from core.retention.event_types import normalize_event_type
 

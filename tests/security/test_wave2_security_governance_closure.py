@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from security.security_approval_gate import SecurityApprovalGate
-from security.signed_operator_approval import SignedOperatorApprovalStore
-from security.security_incident_registry import SQLiteSecurityIncidentRegistry
-from security.token_revocation_store import SQLiteTokenRevocationStore
-from security.security_quarantine_registry import SQLiteSecurityQuarantineRegistry
-from security.security_audit_chain import SQLiteSecurityAuditChain
-from security.security_governance_orchestrator import SecurityGovernanceOrchestrator
 from security.kms_provider_inmemory import InMemoryKMSProvider
 from security.kms_provider_registry import KMSProviderRegistry
+from security.security_approval_gate import SecurityApprovalGate
+from security.security_audit_chain import SQLiteSecurityAuditChain
+from security.security_governance_orchestrator import SecurityGovernanceOrchestrator
+from security.security_incident_registry import SQLiteSecurityIncidentRegistry
+from security.security_quarantine_registry import SQLiteSecurityQuarantineRegistry
+from security.signed_operator_approval import SignedOperatorApprovalStore
+from security.token_revocation_store import SQLiteTokenRevocationStore
 
 
 def test_security_governance_high_risk_requires_signed_approval(tmp_path: Path) -> None:

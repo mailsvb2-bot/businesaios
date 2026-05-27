@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from runtime.public_api_alias import install_public_api_alias
+
 """Canonical runtime surface for LLM contracts and provider factory helpers."""
 
 from typing import Callable, Dict, Optional
@@ -159,7 +160,7 @@ def build_runtime_llm_client(
 
 
 __all__ = [
-    'CANON_RUNTIME_LLM_NAMESPACE', 
+    'CANON_RUNTIME_LLM_NAMESPACE',
     "LLMClient",
     "LLMMessage",
     "LLMRequest",

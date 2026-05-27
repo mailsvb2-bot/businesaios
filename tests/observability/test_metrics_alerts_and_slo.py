@@ -8,7 +8,6 @@ from observability.sli_collector import SLICollector
 from observability.slo_contract import SLIKind, SLOComparator, SLODefinition
 from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry, utc_now
 
-
 TENANT_ID = "tenant-a"
 
 

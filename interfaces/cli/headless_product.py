@@ -5,11 +5,10 @@ import json
 from dataclasses import asdict
 
 from application.capability.action_capability_matrix import build_action_capability_matrix_payload
-from execution.headless_boot import build_headless_runtime
 from application.headless.models import CEOParticipation, GoalExecutionRequest
-from interfaces.common.connector_registry_matrix import build_connector_registry_matrix_payload
 from examples.real_headless_scenarios import build_named_scenario, scenario_names
-
+from execution.headless_boot import build_headless_runtime
+from interfaces.common.connector_registry_matrix import build_connector_registry_matrix_payload
 
 CANON_HEADLESS_CLI = True
 

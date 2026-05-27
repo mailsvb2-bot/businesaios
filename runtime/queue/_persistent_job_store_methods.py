@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from runtime.queue._json_job_store_persistence import (
+    flush_json_job_store_state,
+    load_json_job_store_state,
+    runtime_queue_store_path,
+)
 from runtime.queue._persistent_job_store_support import maybe_flush, wrap_flush
-from runtime.queue._json_job_store_persistence import flush_json_job_store_state, load_json_job_store_state, runtime_queue_store_path
 
 
 def get_path(self) -> Path:

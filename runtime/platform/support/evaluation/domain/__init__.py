@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from runtime.platform.support.contracts.evaluation import EvaluationResult
 
+
 class BusinessKPIEval:
     def evaluate(self, candidate_id: str, payload) -> EvaluationResult:
         kpi = float(payload.get("business_kpi", 0.0))

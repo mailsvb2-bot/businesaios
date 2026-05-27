@@ -7,14 +7,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from runtime.events import EventLog
 from runtime.boot.canonical.event_emit import emit as _canonical_emit
+from runtime.events import EventLog
 from runtime.platform.config.env_flags import env_bool as _canon_env_bool
 from runtime.platform.config.env_flags import env_csv as _canon_env_csv
 from runtime.platform.config.env_flags import env_float as _canon_env_float
 from runtime.platform.config.env_flags import env_int as _canon_env_int
 from runtime.platform.config.env_flags import env_str as _canon_env_str
-
 
 # ── env parsing ───────────────────────────────────────────────────────────────
 

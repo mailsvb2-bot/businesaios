@@ -3,7 +3,8 @@ from __future__ import annotations
 import pytest
 
 from runtime.platform.event_store.postgres_event_store import PostgresEventStore, describe_declared_absence
-from runtime.platform.event_store.postgres_event_store_part1 import describe_declared_absence as describe_part1, raise_if_used
+from runtime.platform.event_store.postgres_event_store_part1 import describe_declared_absence as describe_part1
+from runtime.platform.event_store.postgres_event_store_part1 import raise_if_used
 
 
 def test_postgres_placeholder_describes_itself() -> None:

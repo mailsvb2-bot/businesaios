@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from runtime.platform.support.contracts.evaluation import EvaluationResult
 
+
 def _doubly_robust(
     rewards: list[float],
     ratios: list[float],

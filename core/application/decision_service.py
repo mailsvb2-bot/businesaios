@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from application.decision.decision_service import (
-    DecisionApplicationService as _CanonicalDecisionApplicationService,
-    DecisionService as _CanonicalDecisionService,
     NON_SOVEREIGN_ENGINE_ROLE,
+)
+from application.decision.decision_service import (
+    DecisionApplicationService as _CanonicalDecisionApplicationService,
+)
+from application.decision.decision_service import (
+    DecisionService as _CanonicalDecisionService,
 )
 
 

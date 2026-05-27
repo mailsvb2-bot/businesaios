@@ -11,26 +11,25 @@ Event type in log_types.
 """
 from __future__ import annotations
 
+import logging
 import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import asdict
 from typing import Any, Dict, Optional
 
+from config.env_flags import env_bool, env_str
+from core.events.log_append import normalize_legacy_event
 from core.events.log_emit import normalize_and_validate_event_type
 from core.events.log_metrics import EventLogMetrics
-from core.events.log_append import normalize_legacy_event
+from core.events.log_observability import build_system_error_payload, commit_store_if_supported, log_commit_failure
 from core.events.log_queries import get_events as _get_events_impl
 from core.events.log_queries import has_event as _has_event_impl
 from core.events.log_queries import iter_events as _iter_events_impl
-import logging
-
-from core.observability.silent import swallow
-from config.env_flags import env_bool, env_str
 from core.events.log_scope import ensure_ctx_matches_event_log
 from core.events.log_store import append_event_dict
 from core.events.log_types import Event
-from core.events.log_observability import build_system_error_payload, commit_store_if_supported, log_commit_failure
+from core.observability.silent import swallow
 from core.tenancy.scope import TenantScope
 
 _event_log = logging.getLogger(__name__)

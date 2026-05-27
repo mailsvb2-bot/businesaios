@@ -1,7 +1,7 @@
 from execution.action_catalog import get_action_spec
 from execution.effectors.catalog import build_effector
-from execution.evidence.router import build_evidence_router
 from execution.effectors.result import EffectorResult
+from execution.evidence.router import build_evidence_router
 from interfaces.common.connector_registry_matrix import build_connector_registry_matrix_payload
 
 

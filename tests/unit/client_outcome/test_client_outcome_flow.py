@@ -6,7 +6,12 @@ from lead_outcomes import OutcomeVerifier
 from lead_outcomes.client_attribution_policy import ClientAttributionPolicy
 from lead_outcomes.client_eligibility_policy import ClientEligibilityPolicy
 from lead_outcomes.client_fraud_policy import ClientFraudPolicy
-from lead_outcomes.client_outcome_contract import ClientOutcomeOrder, ClientOutcomePackage, ClientProofEvent, OutcomeLead
+from lead_outcomes.client_outcome_contract import (
+    ClientOutcomeOrder,
+    ClientOutcomePackage,
+    ClientProofEvent,
+    OutcomeLead,
+)
 from lead_outcomes.client_outcome_registry import ClientOutcomeRegistry
 from lead_outcomes.client_outcome_service import ClientOutcomeService
 from lead_outcomes.client_verification_service import ClientVerificationService

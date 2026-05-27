@@ -10,8 +10,8 @@ from core.growth.strategy.llm_generator import generate_hypotheses
 from core.llm.contracts import LLMResponse
 from core.traffic.creative_generator import LLMCreativeGenerator
 from core.traffic.strategy_service import TrafficStrategyService
-from runtime.llm_completion_support import read_provider_and_model
 from runtime.handlers.ads_apply_execute import _best_effort_route_ids
+from runtime.llm_completion_support import read_provider_and_model
 
 
 class _SyncCreativeGateway:

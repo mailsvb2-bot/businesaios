@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
-from application.business_autonomy.channel_contracts import ChannelExecutionEnvelope, ChannelIdentity, ChannelKind, TypedChannelAdapter
+from application.business_autonomy.channel_contracts import (
+    ChannelExecutionEnvelope,
+    ChannelIdentity,
+    ChannelKind,
+    TypedChannelAdapter,
+)
 from application.business_autonomy.contracts import (
     BusinessCapability,
     BusinessExecutionRequest,

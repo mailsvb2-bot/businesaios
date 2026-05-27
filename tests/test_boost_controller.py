@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from core.ux.boost_controller import BoostController
 from core.contracts.revenue_sprint import RevenueSprintConfig
+from core.ux.boost_controller import BoostController
 
 
 class MemKV:

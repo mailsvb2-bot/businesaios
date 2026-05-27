@@ -139,6 +139,7 @@ def test_fastapi_execute_action_replay_does_not_fail_when_quota_is_exhausted_aft
 
 
 from fastapi import FastAPI
+
 from observability.action_audit_log import ActionAuditLog
 from observability.decision_audit_log import DecisionAuditLog
 

@@ -37,7 +37,7 @@ from runtime.finance.job_spec import FinanceJobSpec
 CANON_RUNTIME_FINANCE_PUBLIC_API = True
 
 __all__ = [
-    'CANON_RUNTIME_FINANCE_NAMESPACE', 
+    'CANON_RUNTIME_FINANCE_NAMESPACE',
     "AllocationRecommended",
     "AllocationRepository",
     "AssumptionAuditLog",

@@ -1,8 +1,10 @@
-from core.admin.read_models.traffic import users_today
 from core.admin.read_models.pricing import pricing_change_requests
-from core.retention.engine import RetentionEngine
+from core.admin.read_models.traffic import users_today
 from core.retention.decision_adapter import RetentionDecisionAdapter
-from runtime.boot.web.messaging_policy_alert_subscription_service import build_messaging_policy_alert_subscription_service
+from core.retention.engine import RetentionEngine
+from runtime.boot.web.messaging_policy_alert_subscription_service import (
+    build_messaging_policy_alert_subscription_service,
+)
 
 
 class _Store:

@@ -7,6 +7,7 @@ from typing import Protocol
 
 from runtime.platform.support.contracts.observation import Observation
 
+
 class ServingRuntime(Protocol):
     def predict(self, observation: Observation):
         ...

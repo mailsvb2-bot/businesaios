@@ -1,10 +1,10 @@
 
 from __future__ import annotations
 
-from runtime.messaging.router import UnifiedConversationRouter
+from interfaces.web.chat_widget.widget_inbound_normalizer import normalize_widget_inbound
 from runtime.messaging.inbound_owner_lock import assert_inbound_owner
 from runtime.messaging.inbound_to_world_state import map_inbound_to_world_state
-from interfaces.web.chat_widget.widget_inbound_normalizer import normalize_widget_inbound
+from runtime.messaging.router import UnifiedConversationRouter
 
 
 class WebChatAPIHandlers:

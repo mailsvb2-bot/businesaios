@@ -12,7 +12,6 @@ from runtime.finance import (
     AssumptionRegistry,
     AssumptionResolver,
     BoardSummaryBuilder,
-    build_economics_snapshot_adapter,
     DecisionAuditRepository,
     EconomicsSnapshotToFinancialInputAdapter,
     FinancialInput,
@@ -24,6 +23,7 @@ from runtime.finance import (
     StrategicFinanceAdvisoryPolicy,
     StrategicFinanceDecision,
     StrategicFinanceService,
+    build_economics_snapshot_adapter,
     build_strategic_finance_service,
 )
 from runtime.finance.event_publisher import FinanceEventPublisher

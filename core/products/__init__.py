@@ -10,17 +10,15 @@ This package intentionally exposes only compatibility helpers and aliases.
 NON_CANON_COMPAT_NAMESPACE = True
 CANON_TRANSITION_SURFACE = True
 
-from typing import Any
-
 import sys
 from importlib import import_module
+from typing import Any
 
 from contracts.product_contract import *  # noqa: F401,F403
 from contracts.product_contract import ProductContract
 from core.offers.offer_catalog_resolver import OfferCatalogKey, OfferCatalogResolver
 from core.offers.offer_types import OfferCatalog
 from core.tenancy.normalization import require_tenant_id
-
 
 CANON_COMPAT_SHIM = True
 

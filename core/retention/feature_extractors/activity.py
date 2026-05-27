@@ -11,7 +11,6 @@ from config.scoring_behavior_policy import (
 
 from .shared import day_key_from_ms, pct
 
-
 SESSION_GAP_MS = DEFAULT_RETENTION_ACTIVITY_POLICY.session_gap_ms
 
 

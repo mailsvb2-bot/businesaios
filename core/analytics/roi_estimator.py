@@ -49,6 +49,6 @@ class SimpleROIEstimator:
         elif action == "double_winner":
             uplift = float(policy.double_winner_uplift_pct)
 
-        uplift = max(float(), min(float(self.max_uplift_pct), float(uplift)))
+        uplift = max(0.0, min(float(self.max_uplift_pct), float(uplift)))
         delta = float(baseline_revenue) * uplift
         return ROIEstimate(expected_uplift_pct=uplift, expected_delta_revenue=delta, confidence=float(conf))

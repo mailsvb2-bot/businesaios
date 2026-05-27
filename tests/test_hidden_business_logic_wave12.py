@@ -9,7 +9,8 @@ from config.decision_safety_policy import (
     RiskScorerPolicy,
     SafetyProfilePolicy,
 )
-from config.economics_domain_policy import CapitalAllocationPolicy as EconCapitalAllocationPolicy, LTVEstimatorPolicy
+from config.economics_domain_policy import CapitalAllocationPolicy as EconCapitalAllocationPolicy
+from config.economics_domain_policy import LTVEstimatorPolicy
 from core.economics.brain import LTVEstimator
 from core.economics.capital_allocation_engine import CapitalAllocationEngine, CapitalState, WorldState
 from core.math.economics import cac

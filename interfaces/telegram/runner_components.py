@@ -8,14 +8,14 @@ from __future__ import annotations
 from typing import Any
 
 from core.tenancy.tenant import current_tenant_id
-from interfaces.telegram.pipeline.poller import TelegramPoller, PollerConfig
+from interfaces.telegram.pipeline.poller import PollerConfig, TelegramPoller
 from interfaces.telegram.pipeline.update_processor import TelegramUpdateProcessor
 from interfaces.telegram.read_models.enricher import TelegramReadModelEnricher
+from interfaces.telegram.runner_helpers import env_hours, env_int, env_ms
 from interfaces.telegram.runtime_loops.ml_loop import MLLearningLoop, MLLooopConfig
 from interfaces.telegram.runtime_loops.offer_outcome import OfferOutcomeConfig, OfferOutcomeLoop
 from interfaces.telegram.runtime_loops.payment_jobs import PaymentJobsConfig, PaymentJobsLoop
 from interfaces.telegram.runtime_loops.reconcile import PaymentsReconcileLoop, ReconcileConfig
-from interfaces.telegram.runner_helpers import env_hours, env_int, env_ms
 from products.product_loader import load_product_from_env
 
 

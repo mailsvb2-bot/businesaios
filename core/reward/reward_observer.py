@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from application.decisioning.candidate_observations import CandidateObservationSet
-from kernel.decisioning.candidate_types import CandidateObservation
 from core.reward.contracts import RewardObservationContext
+from kernel.decisioning.candidate_types import CandidateObservation
 
 
 class RewardObserver:

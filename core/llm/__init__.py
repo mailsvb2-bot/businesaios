@@ -6,15 +6,6 @@ Design goals:
 - Network access is routed through the sealed runtime effects layer.
 """
 
-from .contracts import (
-    LLMClient,
-    LLMMessage,
-    LLMRequest,
-    LLMResponse,
-    LLMUsage,
-)
-
-from .templated import TemplatedLLM
 from .api import (
     AnthropicClient,
     AnthropicTransport,
@@ -32,6 +23,14 @@ from .api import (
     build_openai_compat,
     build_yandexgpt_client,
 )
+from .contracts import (
+    LLMClient,
+    LLMMessage,
+    LLMRequest,
+    LLMResponse,
+    LLMUsage,
+)
+from .templated import TemplatedLLM
 
 __all__ = [
     'LLMClient',

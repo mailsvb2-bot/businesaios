@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Final, Iterable, Tuple
 
-
 CANON_SIMPLIFICATION_CONSTITUTION_VERSION: Final[str] = "1.0"
 
 
@@ -162,7 +161,7 @@ SIMPLIFICATION_RULES: Final[Tuple[SimplificationRule, ...]] = (
         title="One real logic layer, one thin boundary adapter",
         description=(
             "After simplification the target area should converge toward one layer with real logic and one thin "
-            "boundary adapter. Neighboring layers that only relay the same payload must not remain." 
+            "boundary adapter. Neighboring layers that only relay the same payload must not remain."
         ),
     ),
     SimplificationRule(

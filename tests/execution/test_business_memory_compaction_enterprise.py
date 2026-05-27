@@ -4,7 +4,12 @@ import json
 
 from execution.business_memory_compactor import BusinessMemoryCompactor
 from execution.business_memory_policy import BusinessMemoryPolicy
-from execution.business_operating_memory import BusinessOperatingMemory, FileBusinessOperatingMemoryStore, project_business_memory_contract_bundle, project_business_memory_governance_summary
+from execution.business_operating_memory import (
+    BusinessOperatingMemory,
+    FileBusinessOperatingMemoryStore,
+    project_business_memory_contract_bundle,
+    project_business_memory_governance_summary,
+)
 from execution.business_operating_memory_types import BusinessMemoryRunRecord, PatternEvidence, SignalMemoryRecord
 from execution.world_state_updater import WorldStateUpdate, WorldStateUpdater
 from runtime._internal.effect_types import EffectActionType
@@ -635,6 +640,7 @@ def test_business_memory_query_recurring_pattern_surfaces_use_canonical_state_pr
 
 def test_headless_feedback_reader_uses_canonical_business_memory_before_step() -> None:
     from types import SimpleNamespace
+
     from application.headless.feedback import SimpleHeadlessFeedbackReader
     from execution.headless_contract import GoalExecutionRequest
 

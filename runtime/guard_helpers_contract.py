@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-
 RUNTIME_GUARD_HELPERS_CONTRACT_VERSION = "RGH-CONTRACT-V1"
 
 

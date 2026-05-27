@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from canon.canon_ai_enforcer import run_enforcer
-from core.llm.contracts import LLMRequest
 from core.ads.hardening.circuit_breaker import AdsCircuitBreaker
 from core.causal.builders.event_store_builder import EventCausalBuilder
 from core.knowledge.mappers.lesson_deduplicator import LessonDeduplicator
+from core.llm.contracts import LLMRequest
 from core.llm.providers.anthropic import build_anthropic
 from core.strategic_horizon.engine import StrategicMode
 from core.strategic_horizon.vector_math import select_horizon
-
 
 TARGET_PATHS = {
     "core/economics/types.py",

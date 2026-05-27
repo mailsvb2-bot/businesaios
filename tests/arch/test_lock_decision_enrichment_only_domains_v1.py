@@ -4,7 +4,6 @@ from pathlib import Path
 
 from canon.domain_fs import scan_canon_domain_file_system
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 

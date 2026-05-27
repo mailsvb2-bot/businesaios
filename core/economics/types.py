@@ -4,10 +4,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from config.economics_domain_policy import DEFAULT_ECONOMICS_MATH_POLICY, DEFAULT_ECONOMICS_SIGNAL_DEFAULTS
+
 from .enums import BudgetPressureLevel, EconomicsSignalStatus, MarginHealthStatus, PaybackRiskLevel
 from .guard import GuardTrigger
 from .ids import EconomicsSnapshotId
-from config.economics_domain_policy import DEFAULT_ECONOMICS_SIGNAL_DEFAULTS, DEFAULT_ECONOMICS_MATH_POLICY
 
 
 @dataclass(frozen=True)

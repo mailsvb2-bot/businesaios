@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 from datetime import datetime, timezone
 from math import exp
 from typing import Dict, List
+
 from core.growth.attribution_models import AttributionModel, Touchpoint
+
 
 def compute_weights(tps: List[Touchpoint], model: AttributionModel) -> Dict[int, float]:
     if not tps:

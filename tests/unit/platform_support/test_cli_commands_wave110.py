@@ -4,12 +4,12 @@ import json
 from pathlib import Path
 
 from runtime.platform.support.cli._main_stub import cli_main
-from runtime.platform.support.data.dataset_writer import DatasetWriter
 from runtime.platform.support.contracts.action import Action
 from runtime.platform.support.contracts.observation import Observation
 from runtime.platform.support.contracts.reward import Reward
 from runtime.platform.support.contracts.trajectory import Trajectory
 from runtime.platform.support.contracts.transition import Transition
+from runtime.platform.support.data.dataset_writer import DatasetWriter
 
 
 def test_cli_main_datasets_reads_local_dataset(tmp_path, capsys, monkeypatch) -> None:

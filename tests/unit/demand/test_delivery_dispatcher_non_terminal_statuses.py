@@ -1,7 +1,7 @@
 from contracts.demand import ClientRequest
 from contracts.matching.routing_decision import RoutingDecision
-from lead_outcomes import LeadOutcomeRegistry
 from demand_os.outcome_recorder import DemandOutcomeRecorder
+from lead_outcomes import LeadOutcomeRegistry
 from routing_execution.lead_delivery_dispatcher import LeadDeliveryDispatcher
 
 

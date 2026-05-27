@@ -5,7 +5,6 @@ from typing import Any
 
 from application.autonomy.autonomy_tiers import ALLOWED_AUTONOMY_TIERS
 
-
 CANON_HEADLESS_MODELS = True
 
 

@@ -15,6 +15,6 @@ __all__ = [
     "MessagingCapabilityTelemetryUpdater",
 ]
 
-from runtime.messaging_capability.runtime_telemetry import resolve_capability_telemetry_updater
 from runtime.messaging_capability.outcome_signal import classify_delivery_outcome_signal
+from runtime.messaging_capability.runtime_telemetry import resolve_capability_telemetry_updater
 from runtime.messaging_capability.telemetry_updater import MessagingCapabilityTelemetryUpdater

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
 import hashlib
 import json
+from datetime import datetime
 from typing import Any
 
 from runtime.queue.job_contract import JobLease, JobRecord, JobState, normalize_now
-
 
 CANON_RUNTIME_QUEUE_SQLITE_JOB_STORE_CODEC = True
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Tiny shared helpers for sqlite event store modules."""
 
 import json

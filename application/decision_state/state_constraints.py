@@ -4,9 +4,12 @@ import logging
 from dataclasses import replace
 from typing import Any, Dict
 
-from config.decision_state_constraints_policy import DEFAULT_DECISION_STATE_CONSTRAINTS_POLICY, DecisionStateConstraintsPolicy
-from core.ai.causal_guardrails import assess_causal_evidence
 from application.decision_policy.pricing import allowed_price_band, merge_price_constraints
+from config.decision_state_constraints_policy import (
+    DEFAULT_DECISION_STATE_CONSTRAINTS_POLICY,
+    DecisionStateConstraintsPolicy,
+)
+from core.ai.causal_guardrails import assess_causal_evidence
 from core.observability.throttled_logger import exception_throttled
 
 logger = logging.getLogger(__name__)

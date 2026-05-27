@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import timedelta
 from pathlib import Path
 
+from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_metrics_rollup_sqlite import SqliteQueueMetricsRollupStore
 from runtime.queue.queue_slo import QueueSLOReport
-from runtime.queue.job_contract import normalize_now
 
 
 def test_queue_metrics_rollup_store_records_and_summarizes_samples(tmp_path: Path) -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+
 class EscalationPolicy:
     def escalate(self, risk_level: str) -> bool:
         return risk_level in {"high", "critical"}

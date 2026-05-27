@@ -27,7 +27,12 @@ from core.knowledge.readers.strategy_memory_reader import StrategyMemoryReader
 from core.knowledge.repositories.lesson_repository import EventStoreLessonRepository
 from core.knowledge.repositories.memory_link_repository import EventStoreMemoryLinkRepository
 from core.knowledge.repositories.pattern_repository import EventStorePatternRepository
-from core.knowledge.service import KnowledgeCommandService, KnowledgeExplainService, KnowledgeQueryService, KnowledgeService
+from core.knowledge.service import (
+    KnowledgeCommandService,
+    KnowledgeExplainService,
+    KnowledgeQueryService,
+    KnowledgeService,
+)
 from core.knowledge.types import Lesson, LessonDraft, MemoryRetrieval
 from core.knowledge.writers.lesson_writer import LessonWriter
 from core.knowledge.writers.memory_link_writer import MemoryLinkWriter
@@ -36,7 +41,7 @@ from core.knowledge.writers.pattern_writer import PatternWriter
 CANON_RUNTIME_KNOWLEDGE_PUBLIC_API = True
 
 __all__ = [
-    'CANON_RUNTIME_KNOWLEDGE_NAMESPACE', 
+    'CANON_RUNTIME_KNOWLEDGE_NAMESPACE',
     'BusinessCaseBuilder', 'CampaignOutcomeLessonDraftMapper', 'CANON_RUNTIME_KNOWLEDGE_PUBLIC_API',
     'EventStoreLessonRepository', 'EventStoreMemoryLinkRepository', 'EventStorePatternRepository',
     'ExperimentOutcomeLessonDraftMapper', 'IncidentLessonDraftMapper', 'KnowledgeCommandService',

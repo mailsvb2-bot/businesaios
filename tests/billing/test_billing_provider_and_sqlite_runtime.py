@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import pytest
 from datetime import datetime, timezone
 from pathlib import Path
+
+import pytest
 
 from billing.commercial_cycle_contract import CommercialCollectionResult, utc_now
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService

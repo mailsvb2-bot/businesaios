@@ -74,6 +74,7 @@ class OptimizerIdentity:
 
 from runtime.platform.support.optimization.promotion_decision import PromotionDecision
 
+
 @dataclass(frozen=True)
 class RollbackDecision:
     candidate_id: str

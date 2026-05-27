@@ -11,18 +11,18 @@ from application.decision_state.world_model_metadata import (
     extract_world_model_metadata,
 )
 from application.decision_state.world_model_replay import replay_state_against_world_model
-from runtime.public_api_alias import install_public_api_alias
 from core.world_model.contracts import WorldSnapshot, WorldSnapshotBuilderPort, WorldSnapshotRequest
 from core.world_model.explainers.world_snapshot_explainer import WorldSnapshotExplainer, explain_world_snapshot
 from core.world_model.repositories.snapshot_repository import InMemorySnapshotRepository
 from core.world_model.service import WorldModelService
 from core.world_model.types import WorldModelBuildInput, WorldModelBuildResult
+from runtime.public_api_alias import install_public_api_alias
 from runtime.world_model.contract import RUNTIME_WORLD_MODEL_PUBLIC_API, WORLD_MODEL_CANON
 
 CANON_RUNTIME_WORLD_MODEL_PUBLIC_API = True
 
 __all__ = [
-    'CANON_RUNTIME_WORLD_MODEL_NAMESPACE', 
+    'CANON_RUNTIME_WORLD_MODEL_NAMESPACE',
     "replay_state_against_world_model",
     "CANON_RUNTIME_WORLD_MODEL_PUBLIC_API",
     "InMemorySnapshotRepository",

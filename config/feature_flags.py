@@ -9,7 +9,6 @@ from config.environment_matrix import normalize_environment_name
 from core.tenancy.normalization import normalize_tenant_id
 from tenancy.tenant_feature_flags import TenantFeatureFlags
 
-
 CANON_CONFIG_FEATURE_FLAGS = True
 
 

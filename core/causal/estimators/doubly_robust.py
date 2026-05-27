@@ -4,13 +4,13 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 from config.final_hidden_logic_policy import DEFAULT_DOUBLY_ROBUST_POLICY
-from core.causal.estimators.base import CausalEstimator, EstimatorResult, _counts
+
 # FIX: use shared propensity utility (was duplicated from ipw.py)
-from core.causal.estimators._propensity import stratum_key, fit_stratified_propensity
+from core.causal.estimators._propensity import fit_stratified_propensity, stratum_key
+from core.causal.estimators.base import CausalEstimator, EstimatorResult, _counts
 from core.causal.feature_encoding import FeatureEncoder
 from core.causal.math_utils import clip, dot, linear_regression_fit
 from core.causal.types import CausalDataset, EffectEstimate
-
 
 Json = Dict[str, Any]
 

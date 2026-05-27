@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from tests.test_finance_canon_integration_v27 import _snapshot
 from runtime.boot.finance_boot import build_finance_runtime
+from tests.test_finance_canon_integration_v27 import _snapshot
 
 
 def test_strategic_finance_runtime_flow_persists_runtime_artifacts() -> None:

@@ -11,11 +11,12 @@ It is evidence only and must never mutate queue execution state.
 """
 
 import importlib
+import json
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-import json
-import os
+
 sqlite3 = importlib.import_module("sqlite3")
 from threading import RLock
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from core.product.enums import ProposalMode
-from core.product.types import GuardVerdict, PRODUCT_MODULE_ISSUER
+from core.product.types import PRODUCT_MODULE_ISSUER, GuardVerdict
 
 
 class ProposalBoundaryGuard:

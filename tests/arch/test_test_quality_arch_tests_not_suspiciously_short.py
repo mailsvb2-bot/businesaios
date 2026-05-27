@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from tests.arch._canon_test_quality_guard import arch_test_files, exempt, parse_arch_test, suspiciously_short
 
+
 def test_test_quality_arch_tests_not_suspiciously_short() -> None:
     offenders=[]
     for path in arch_test_files():

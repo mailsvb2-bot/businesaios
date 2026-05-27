@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from contracts.supply import BusinessLiveState
-from contracts.supply import BusinessSupplyProfile
+from contracts.supply import BusinessLiveState, BusinessSupplyProfile
 from demand_capture.demand_capture_service import DemandCaptureService
 from demand_os.demand_os_service import DemandOperatingSystemService
 from intent.client_intent_builder import ClientIntentBuilder

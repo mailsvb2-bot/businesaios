@@ -4,10 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from core.tenancy.normalization import require_tenant_id
 from application.business_autonomy.provider_admin_contract import ProviderActivationStatus
+from core.tenancy.normalization import require_tenant_id
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore
-
 
 CANON_PROVIDER_ACTIVATION_STORE = True
 

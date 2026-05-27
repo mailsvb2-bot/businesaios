@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, Tuple
 
-from core.offers.engine import OfferEngine
 from core.observability.throttled_logger import exception_throttled
+from core.offers.engine import OfferEngine
 
 
 def cap_price_by_band(*, product: dict, price_rub: int, max_band: str | None) -> int:

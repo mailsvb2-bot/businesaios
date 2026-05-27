@@ -1,7 +1,9 @@
-from runtime.boot.web.messaging_policy_service_graph import build_messaging_policy_alert_service
-from runtime.boot.web.messaging_policy_service_graph import build_messaging_policy_dashboard_service
-from runtime.boot.web.messaging_policy_service_graph import build_messaging_policy_service_graph
-from runtime.boot.web.messaging_policy_service_graph import build_messaging_policy_trace_search_service
+from runtime.boot.web.messaging_policy_service_graph import (
+    build_messaging_policy_alert_service,
+    build_messaging_policy_dashboard_service,
+    build_messaging_policy_service_graph,
+    build_messaging_policy_trace_search_service,
+)
 from runtime.messaging_policy_events.inmemory_event_store import InMemoryMessagingPolicyEventStore
 
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 import time
 from typing import Any, Mapping
 
+from runtime._internal.effects_actions.telegram.transport import telegram_send_audio_transport
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
-from runtime._internal.effects_actions.telegram.transport import telegram_send_audio_transport
 
 
 def _mark_accepted(state: Any, *, audio_id: str, meta: Mapping[str, Any], user_id: str) -> None:

@@ -7,7 +7,6 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 from config.final_hidden_logic_policy import DEFAULT_CAUSAL_BUILDER_POLICY
 from core.causal.types import CausalDataset, CausalRow
 
-
 Json = Dict[str, Any]
 
 

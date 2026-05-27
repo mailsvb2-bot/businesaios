@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from runtime.boot.actions_registry import SPECS, INLINE_ALLOWLIST, all_actions
+from runtime.boot.actions_registry import INLINE_ALLOWLIST, SPECS, all_actions
 from runtime.boot.registration_manifest import registered_action_names
-
 
 
 @pytest.mark.lock
@@ -19,8 +18,8 @@ def test_no_unregistered_handlers_register_calls_anywhere():
     """Forbid introducing a new runtime-action without updating the canonical registry."""
     expected = all_actions()
     offenders: list[str] = []
-    from pathlib import Path
     import re
+    from pathlib import Path
     for p in Path("runtime").rglob("*.py"):
         txt = p.read_text(encoding="utf-8")
         for a in re.findall(r'handlers\.register\(\s*"([^"]+)"', txt):

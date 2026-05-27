@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from runtime.security.runtime_asserts import assert_called_from_executor
 from runtime._internal.effects_actions.payments.reconciliation_support import (
     FAILED_STATUSES,
     SUCCESS_STATUSES,
@@ -12,6 +11,7 @@ from runtime._internal.effects_actions.payments.reconciliation_support import (
     resolve_created_payment_context,
     try_mark_terminal_outbox,
 )
+from runtime.security.runtime_asserts import assert_called_from_executor
 
 
 def reconcile_payments_effect(

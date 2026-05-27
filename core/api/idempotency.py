@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import time
 import hashlib
+import time
 from dataclasses import dataclass
-from typing import Protocol, Optional, Dict, Any
+from typing import Any, Dict, Optional, Protocol
 
 from core.tenancy.scope import TenantId
 

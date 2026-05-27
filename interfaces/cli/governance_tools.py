@@ -5,7 +5,6 @@ import json
 
 from application.governance.governance_service import GovernanceService
 
-
 CANON_HEADLESS_GOVERNANCE_CLI = True
 
 

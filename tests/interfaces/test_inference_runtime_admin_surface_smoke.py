@@ -1,14 +1,20 @@
+from entrypoints.api import (
+    InferenceAdminRouteHandlers as EntrypointInferenceAdminRouteHandlers,
+)
+from entrypoints.api import (
+    InferenceCapacityRouteHandlers as EntrypointInferenceCapacityRouteHandlers,
+)
+from entrypoints.api import (
+    InferenceProviderRouteHandlers as EntrypointInferenceProviderRouteHandlers,
+)
+from entrypoints.api import (
+    InferenceRuntimeAdminRouteHandlers as EntrypointInferenceRuntimeAdminRouteHandlers,
+)
 from interfaces.api import (
     InferenceAdminRouteHandlers,
     InferenceCapacityRouteHandlers,
     InferenceProviderRouteHandlers,
     InferenceRuntimeAdminRouteHandlers,
-)
-from entrypoints.api import (
-    InferenceAdminRouteHandlers as EntrypointInferenceAdminRouteHandlers,
-    InferenceCapacityRouteHandlers as EntrypointInferenceCapacityRouteHandlers,
-    InferenceProviderRouteHandlers as EntrypointInferenceProviderRouteHandlers,
-    InferenceRuntimeAdminRouteHandlers as EntrypointInferenceRuntimeAdminRouteHandlers,
 )
 
 

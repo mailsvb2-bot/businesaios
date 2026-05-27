@@ -4,13 +4,15 @@ import json
 from datetime import datetime, timezone
 
 from execution.revenue_os_runtime import RevenueOSRuntime
-from runtime.monetization import RevenueAdvisoryService
-from runtime.monetization import RevenuePaywallVariantInput
-from runtime.monetization import RevenuePlanInput
-from runtime.monetization import RevenuePricePointInput
-from runtime.monetization import RevenueSnapshotInput
-from runtime.monetization import build_revenue_advisory_store_wiring
-from runtime.monetization import persist_revenue_advisory_envelope
+from runtime.monetization import (
+    RevenueAdvisoryService,
+    RevenuePaywallVariantInput,
+    RevenuePlanInput,
+    RevenuePricePointInput,
+    RevenueSnapshotInput,
+    build_revenue_advisory_store_wiring,
+    persist_revenue_advisory_envelope,
+)
 
 
 def _inputs():

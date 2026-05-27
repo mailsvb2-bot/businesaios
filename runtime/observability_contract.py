@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Protocol, Any
+
+from typing import Any, Protocol
 
 RUNTIME_OBSERVABILITY_CONTRACT_VERSION = "ROC-CONTRACT-V1"
 

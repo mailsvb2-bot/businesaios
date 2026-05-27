@@ -6,14 +6,28 @@ from pathlib import Path
 import pytest
 
 from billing.chargeback_orchestrator import ChargebackCase
-from billing.commercial_cycle_contract import BillingCycleWindow, SubscriptionCommercialEnvelope, SubscriptionLifecycleStatus
+from billing.commercial_cycle_contract import (
+    BillingCycleWindow,
+    SubscriptionCommercialEnvelope,
+    SubscriptionLifecycleStatus,
+)
 from billing.dunning_orchestrator import DunningOrchestrator
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope
 from billing.ledger_event import LedgerEntry, LedgerPosting
 from billing.reconciliation_service import BillingReconciliationService
 from billing.recovery_store import SqliteChargebackStore, SqliteRefundStore
 from billing.refund_orchestrator import RefundResult
-from billing.scheduler import DunningRetryJob, InMemoryBillingJobLeaseStore, InMemoryBillingJobRunStore, InvoiceIssueJob, ReconciliationJob, RenewalJob, SqliteBillingJobLeaseStore, SqliteBillingJobRunStore, create_job_lease
+from billing.scheduler import (
+    DunningRetryJob,
+    InMemoryBillingJobLeaseStore,
+    InMemoryBillingJobRunStore,
+    InvoiceIssueJob,
+    ReconciliationJob,
+    RenewalJob,
+    SqliteBillingJobLeaseStore,
+    SqliteBillingJobRunStore,
+    create_job_lease,
+)
 from billing.sqlite_store import SqliteLedgerStore
 from billing.usage_rollup import UsageRollup
 
@@ -226,9 +240,9 @@ def test_job_lease_store_can_renew_fenced_lease() -> None:
 
 
 def test_refund_and_chargeback_stamp_lineage_metadata(tmp_path: Path) -> None:
-    from billing.refund_orchestrator import RefundOrchestrator
     from billing.chargeback_orchestrator import ChargebackOrchestrator
     from billing.payment_provider_contract import PaymentProviderContract
+    from billing.refund_orchestrator import RefundOrchestrator
     from runtime.monetization import MonetizationService
 
     class _RefundProvider(PaymentProviderContract):

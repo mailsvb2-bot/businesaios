@@ -7,7 +7,6 @@ from economics.contracts import TruthFragment
 from runtime.economic_core.assembler import assemble_truth_fragments
 from runtime.economic_core.snapshot_facade import build_snapshot_from_fragments
 
-
 CANON_RUNTIME_ECONOMIC_CORE_ADMIN_READ_SERVICE = True
 
 

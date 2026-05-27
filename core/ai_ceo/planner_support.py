@@ -5,12 +5,13 @@ from dataclasses import replace
 from typing import Any, Dict, Iterable, List
 
 from core._safe_logging import log_fallback
-from kernel.world_state import WorldStateV1
 from core.ai_ceo.contracts import CEOIntentV1, CEOPlanStepV1, CEOPlanV1
 from core.ai_ceo.intent import build_intent_from_session_args
-from core.ai_ceo.ledger import GrowthSnapshotV1, to_dict as snapshot_to_dict
+from core.ai_ceo.ledger import GrowthSnapshotV1
+from core.ai_ceo.ledger import to_dict as snapshot_to_dict
 from core.ai_ceo.safety import AutonomyPolicyV1, check_step_allowed
 from core.ai_ceo.scoring import rank_steps
+from kernel.world_state import WorldStateV1
 
 logger = logging.getLogger(__name__)
 

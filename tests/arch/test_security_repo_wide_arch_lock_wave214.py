@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 ROOT = Path('.')
 ALLOWED_SECRET_VAULT_IMPORTERS = {
     'security/__init__.py',

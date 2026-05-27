@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import Any, Protocol
 
 RUNTIME_GUARD_CONTRACT_VERSION = "RGC-CONTRACT-V1"

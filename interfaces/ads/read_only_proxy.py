@@ -4,7 +4,15 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, Dict, Iterable, Optional, Sequence
 
-from .base import AdsPlatform, Campaign, ConnectedAccount, MetricPoint, OAuthAuthorizeURL, AdsReadConnector, AdsWriteConnector
+from .base import (
+    AdsPlatform,
+    AdsReadConnector,
+    AdsWriteConnector,
+    Campaign,
+    ConnectedAccount,
+    MetricPoint,
+    OAuthAuthorizeURL,
+)
 
 
 @dataclass

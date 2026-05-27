@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 TARGET = ROOT / 'runtime/business_autonomy/provider_webhook_inbound_result_summary.py'
 

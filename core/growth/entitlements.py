@@ -6,6 +6,7 @@ from typing import Optional, Protocol
 from config.growth_entitlements_policy import DEFAULT_GROWTH_ENTITLEMENTS_POLICY, GrowthEntitlementsPolicy
 from core.ads.policy import AdsEntitlements, AdsMode, AutopilotLimits
 
+
 @dataclass(frozen=True)
 class DailyLimits:
     max_spend_total: float = DEFAULT_GROWTH_ENTITLEMENTS_POLICY.default_max_spend_total

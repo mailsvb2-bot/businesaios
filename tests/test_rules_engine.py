@@ -1,7 +1,9 @@
 from __future__ import annotations
-from observability.platform.telemetry.event_store import InMemoryEventStore
+
 from core.growth.ads_aggregates import AdsAggregates
 from core.growth.ads_rules_engine import RulesBasedRecommendationEngine, RuleTargets
+from observability.platform.telemetry.event_store import InMemoryEventStore
+
 
 def test_rules_engine_stop_loss():
     es = InMemoryEventStore()

@@ -1,8 +1,8 @@
 import pytest
 
-from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessGoalEnvelope, IntegrationMode
 from application.planning.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
+from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
 
 
 @pytest.mark.asyncio

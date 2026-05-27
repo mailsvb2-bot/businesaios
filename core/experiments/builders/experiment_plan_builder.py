@@ -5,9 +5,9 @@ from typing import Dict, Iterable, List, Tuple
 from core.experiments.builders.metric_set_builder import MetricSetBuilder
 from core.experiments.builders.variant_builder import VariantBuilder
 from core.experiments.enums import ExperimentStatus, MetricDirection, VariantRole
+from core.experiments.guards.plan_guard import ExperimentPlanGuard
 from core.experiments.ids import new_experiment_id
 from core.experiments.types import Experiment, ExperimentPlan
-from core.experiments.guards.plan_guard import ExperimentPlanGuard
 
 
 class ExperimentPlanBuilder:

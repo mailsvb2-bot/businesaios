@@ -9,7 +9,6 @@ from core.safety.operational.factory import (
 )
 from core.safety.operational.tenant_policy_provider import TenantOperationalBudgetPolicyProvider
 
-
 CANON_OPERATIONAL_RUNTIME_BOOTSTRAP = True
 
 

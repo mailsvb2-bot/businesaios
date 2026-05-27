@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import time
-import contextvars
 from typing import Any, Dict, Optional
 
 from core.observability.errors import log_exception_throttled

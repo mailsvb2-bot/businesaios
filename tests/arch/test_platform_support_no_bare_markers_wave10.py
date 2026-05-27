@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 
 def test_platform_support_has_no_bare_marker_lines() -> None:

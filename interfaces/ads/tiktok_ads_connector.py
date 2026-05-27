@@ -1,10 +1,19 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any, Mapping
+
 from interfaces.common.connector_result import ConnectorResult
-from interfaces.common.connector_support import build_invalid_payload_result, build_not_configured_result, normalize_operation
+from interfaces.common.connector_support import (
+    build_invalid_payload_result,
+    build_not_configured_result,
+    normalize_operation,
+)
+
 from .connector_oauth_helpers import disconnect_tokens_compat, resolve_oauth_scope
 from .connector_read_surface import fetch_metrics_with_token, list_campaigns_with_token
+
+
 @dataclass(frozen=True)
 class TiktokAdsConnector:
     configured: bool = False

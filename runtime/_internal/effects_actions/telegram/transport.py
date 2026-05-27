@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple
 
-from runtime._internal.router_support import execute_effect_action_sync
 from runtime._internal.effect_types import EffectActionType
+from runtime._internal.router_support import execute_effect_action_sync
 
 
 def telegram_send_chat_action(effects: Any, *, chat_id: str, action: str = "typing") -> None:

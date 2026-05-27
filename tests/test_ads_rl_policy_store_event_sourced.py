@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from core.ads.rl.policy_store import PolicyStore
-from core.ads.rl.runtime_state import policy_store, bind_runtime_state
+from core.ads.rl.runtime_state import bind_runtime_state, policy_store
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 def test_policy_store_persists_snapshots_in_event_store() -> None:

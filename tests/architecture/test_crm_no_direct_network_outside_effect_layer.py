@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 FORBIDDEN = ('requests.', 'httpx.', 'aiohttp.', 'urllib.request', 'socket.')
 
 

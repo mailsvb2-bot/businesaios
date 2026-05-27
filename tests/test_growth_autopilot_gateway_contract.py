@@ -1,5 +1,5 @@
-from core.growth.autopilot_engine import AutopilotEngine
 from core.growth.autopilot_config import AutopilotRunConfig
+from core.growth.autopilot_engine import AutopilotEngine
 
 
 class _Sink:

@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from observability.delivery_metrics import DeliveryObservabilityMetrics
-from reliability.outbox_backend import OutboxBackendHealth, OutboxBackendMode, OutboxDeliveryReceipt, OutboxDeliveryStatus
+from reliability.outbox_backend import (
+    OutboxBackendHealth,
+    OutboxBackendMode,
+    OutboxDeliveryReceipt,
+    OutboxDeliveryStatus,
+)
 from reliability.outbox_delivery_worker import OutboxDeliveryWorker
 from reliability.outbox_store import InMemoryOutboxStore, OutboxMessage, OutboxState
 

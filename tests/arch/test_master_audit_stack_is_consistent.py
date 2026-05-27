@@ -1,5 +1,14 @@
 from __future__ import annotations
-from tests.arch._canon_master_audit_guard import manifest_has_required_pack_ids, master_checklist_exists, master_checklist_has_markers, meta_core_files_have_master_visibility, required_files_exist, snapshot
+
+from tests.arch._canon_master_audit_guard import (
+    manifest_has_required_pack_ids,
+    master_checklist_exists,
+    master_checklist_has_markers,
+    meta_core_files_have_master_visibility,
+    required_files_exist,
+    snapshot,
+)
+
 
 def test_master_audit_stack_is_consistent() -> None:
     missing_files = required_files_exist()

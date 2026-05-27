@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from runtime.platform.config.feature_flags import FeatureFlags
 from core.telemetry.behavior_read_model import behavior_snapshot
 from interfaces.telegram.read_models.components.pricing import load_pricing_suggestions
 from interfaces.telegram.read_models.components.profile import load_user_profile
+from runtime.platform.config.feature_flags import FeatureFlags
 
 
 def load_user_bundle(*, event_store: Any, tenant_id: str, user_id: str, event_warning: Any) -> dict[str, Any]:
@@ -33,7 +33,7 @@ def load_user_bundle(*, event_store: Any, tenant_id: str, user_id: str, event_wa
     settings, city, tariff, moods = load_user_profile(event_store, tenant_id=str(tenant_id), user_id=str(user_id))
 
     try:
-        from core.admin.roles_read_model import roles_for_user, perms_for_user
+        from core.admin.roles_read_model import perms_for_user, roles_for_user
         roles = sorted(list(roles_for_user(event_store, tenant_id=str(tenant_id), user_id=str(user_id))))
         perms = sorted(list(perms_for_user(event_store, tenant_id=str(tenant_id), user_id=str(user_id))))
     except Exception:
@@ -70,7 +70,7 @@ def load_user_bundle(*, event_store: Any, tenant_id: str, user_id: str, event_wa
         behavior = {}
 
     try:
-        from core.autopilot.read_model import today_business_metrics, recent_autopilot_actions
+        from core.autopilot.read_model import recent_autopilot_actions, today_business_metrics
         autopilot_dashboard = {
             "today": today_business_metrics(event_store, tenant_id=str(tenant_id)),
             "actions_7d": recent_autopilot_actions(event_store, tenant_id=str(tenant_id), days=7),

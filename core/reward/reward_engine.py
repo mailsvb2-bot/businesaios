@@ -14,11 +14,11 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from core.actions.proof_registry import ACTION_PROOF_EVENT
 from core.ai.snapshot_store import SnapshotStore
 from core.economics.brain import EconomicBrain
-from core.reward.delayed import eligible as _delayed_eligible
-from core.actions.proof_registry import ACTION_PROOF_EVENT
 from core.observability.silent import swallow
+from core.reward.delayed import eligible as _delayed_eligible
 from core.reward.observe_flow import observe_governed_reward, shape_fallback_reward
 
 

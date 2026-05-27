@@ -1,7 +1,6 @@
 import re
 from pathlib import Path
 
-
 PATTERNS = [
     re.compile(r"sk-[A-Za-z0-9]{20,}"),
     re.compile(r"ya\.[A-Za-z0-9_\-]{20,}"),

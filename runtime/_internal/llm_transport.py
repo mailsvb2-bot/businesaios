@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 from typing import Any, Dict
+
+from runtime._internal.http_transport import sync_post_json
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_str
-from runtime._internal.http_transport import sync_post_json
+
 
 def _raise_for_transport_failure(*, provider: str, url: str, response) -> None:
     status = int(getattr(response, 'status', 0) or 0)

@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 import json
 from dataclasses import asdict
 from pathlib import Path
+
 from runtime.bootstrap.bootstrap_contract import BootstrapAttestation, BootstrapEnvironment
+
 
 def _journal_path(env: BootstrapEnvironment) -> Path:
     return env.runtime_dir / "bootstrap" / "attestation_journal.jsonl"

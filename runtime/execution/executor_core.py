@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from governance.time_scale import TimeScale, TIME_SCALE_RULES, assert_action_allowed
+from governance.time_scale import TIME_SCALE_RULES, TimeScale, assert_action_allowed
 
 
 def enforce_safe_mode(*, action: str) -> None:

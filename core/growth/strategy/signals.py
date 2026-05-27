@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from core.actions.names import ACTION_ADS_APPLY_EXECUTE_V1
-
-import time
 import logging
+import time
 from typing import Any, Dict, Iterable
 
-from core.growth.today_ledger import build_today_kpi
-
 from config.strategic_growth_policy import DEFAULT_GROWTH_SIGNALS_POLICY, GrowthSignalsPolicy
-from .contracts import GrowthSignalV1
+from core.actions.names import ACTION_ADS_APPLY_EXECUTE_V1
+from core.growth.today_ledger import build_today_kpi
 from core.observability.errors import log_exception_throttled
+
+from .contracts import GrowthSignalV1
 
 log = logging.getLogger(__name__)
 

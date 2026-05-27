@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import timedelta
 import time
+from datetime import timedelta
 
 from execution.operator_override_contract import (
     OperatorOverrideDecision,

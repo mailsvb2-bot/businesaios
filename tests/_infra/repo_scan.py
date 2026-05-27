@@ -5,7 +5,6 @@ import re
 from dataclasses import dataclass
 from typing import Iterable, Iterator, Pattern
 
-
 # Small infra primitive:
 # - repo-wide scanning by line regex
 # - no AST magic, no “god objects”, no coupling to project internals

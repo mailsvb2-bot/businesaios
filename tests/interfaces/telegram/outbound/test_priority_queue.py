@@ -1,5 +1,5 @@
-import time
 import threading
+import time
 
 from interfaces.telegram.outbound.outbound_queue import TelegramOutboundQueue
 
@@ -97,6 +97,7 @@ def test_priorityqueue_marketing_is_best_effort_and_drops_on_full():
 
 
 import pytest
+
 from interfaces.telegram.outbound.outbound_queue import OutboundTask
 
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from .base import AdsConnectorError
+from .connector_shared import resolve_secret_required
 from .oauth_helper import OAuthAppConfig
 from .ports import SecretVault
-from .connector_shared import resolve_secret_required
 
 
 def resolve_oauth_client_id(

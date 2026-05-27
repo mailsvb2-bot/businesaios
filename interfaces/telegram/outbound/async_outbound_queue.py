@@ -4,11 +4,11 @@ import asyncio
 import itertools
 import logging
 import time
-from core.ratelimit.token_bucket import AsyncTokenBucket
-from core.observability.errors import log_exception_throttled
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, Optional
 
+from core.observability.errors import log_exception_throttled
+from core.ratelimit.token_bucket import AsyncTokenBucket
 
 log = logging.getLogger(__name__)
 

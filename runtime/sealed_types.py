@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class SealedType:
     """
     Base class for runtime-critical sealed types.

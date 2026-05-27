@@ -9,7 +9,6 @@ from runtime.wiring import (
     storage_live_smoke_status,
 )
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 

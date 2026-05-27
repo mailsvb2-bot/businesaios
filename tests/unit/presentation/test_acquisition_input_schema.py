@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from presentation import (
+    CANON_PRESENTATION_ACQUISITION_INPUT_SCHEMA,
     AcquisitionInputField,
     AcquisitionInputSchema,
-    CANON_PRESENTATION_ACQUISITION_INPUT_SCHEMA,
     acquisition_input_schema,
 )
 

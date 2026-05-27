@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 def filter_candidates_by_behavior_constraints(
     candidates: list[dict[str, object]],
     offer_constraints: dict[str, object],

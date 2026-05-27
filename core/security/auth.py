@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, Optional, Dict, Any, Iterable
+from typing import Any, Dict, Iterable, Optional, Protocol
 
 from core.tenancy.scope import TenantId
 

@@ -1,4 +1,8 @@
-from routing_execution.delivery_status import delivered_at_ms_for_status, normalize_delivery_status, persisted_delivery_status
+from routing_execution.delivery_status import (
+    delivered_at_ms_for_status,
+    normalize_delivery_status,
+    persisted_delivery_status,
+)
 
 
 def test_normalize_delivery_status_preserves_intermediate_and_duplicate() -> None:

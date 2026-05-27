@@ -6,7 +6,6 @@ from typing import Mapping
 from contracts.action_impact_contract import CostSource
 from core.safety.operational.action_spec import ActionCostPolicy
 
-
 CANON_OPERATIONAL_ACTION_COST_MODEL = True
 
 

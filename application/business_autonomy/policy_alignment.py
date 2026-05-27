@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from application.capability.capability_execution_verdict import CapabilityExecutionVerdictBuilder
 from application.business_autonomy.contracts import BusinessExecutionRequest
+from application.capability.capability_execution_verdict import CapabilityExecutionVerdictBuilder
 
 
 @dataclass(frozen=True)

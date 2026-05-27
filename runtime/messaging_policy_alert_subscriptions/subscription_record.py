@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from runtime.tenancy import normalize_tenant_id
 from runtime.messaging_policy_alert_subscriptions.subscription_channel import normalize_subscription_channel
 from runtime.messaging_policy_alert_subscriptions.subscription_level import normalize_min_level
+from runtime.tenancy import normalize_tenant_id
 
 
 @dataclass(frozen=True)

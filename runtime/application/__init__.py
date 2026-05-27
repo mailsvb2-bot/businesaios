@@ -13,19 +13,16 @@ import importlib
 import sys
 from typing import Any
 
-from runtime.public_api_alias import install_public_api_alias
-
-
 from application.decision.action_dispatcher import ActionDispatcher
 from application.decision.action_errors import (
-    ActionExecutionRejectedError,
     CANON_CORE_DECISION_ACTION_ERRORS,
+    ActionExecutionRejectedError,
     DecisionApplicationError,
     InvalidActionError,
 )
 from application.decision.action_result import (
-    ActionExecutionResult,
     CANON_CORE_DECISION_ACTION_RESULT,
+    ActionExecutionResult,
 )
 from application.decision.action_result_presenter import (
     CANON_CORE_DECISION_ACTION_RESULT_PRESENTER,
@@ -36,9 +33,11 @@ from application.decision.decision_service import DecisionApplicationService
 from application.decision.ports import DecisionExecutionPortProtocol, ObservabilityPortProtocol
 from core.decision.ai_decision_trace import (
     CANON_AI_DECISION_TRACE,
-    DecisionTrace as AIDecisionTrace,
     TraceBuilder,
     TraceStep,
+)
+from core.decision.ai_decision_trace import (
+    DecisionTrace as AIDecisionTrace,
 )
 from core.decision.runtime_decision_trace import RuntimeDecisionTrace
 from runtime.application.contracts import (
@@ -57,6 +56,7 @@ from runtime.application.contracts import (
 )
 from runtime.application.crm_contracts import RuntimeCrmContracts
 from runtime.application.crm_service import RuntimeCrmService
+from runtime.public_api_alias import install_public_api_alias
 
 CANON_COMPAT_SHIM = True
 CANON_RUNTIME_APPLICATION_NAMESPACE = True

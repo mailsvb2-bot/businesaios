@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from core.world_model.builders.service_support import (
+    WorldModelSnapshotSupport,
+    WorldModelStateAssembler,
+    _NoopPublisher,
+)
 from core.world_model.builders.world_snapshot_builder import WorldSnapshotBuilder
 from core.world_model.contracts import (
     CampaignReader,
@@ -25,12 +30,13 @@ from core.world_model.readers.messaging_reader import DefaultMessagingReader
 from core.world_model.readers.product_reader import DefaultProductReader
 from core.world_model.readers.revenue_reader import DefaultRevenueReader
 from core.world_model.repositories.snapshot_repository import InMemorySnapshotRepository
-from core.world_model.builders.service_support import (
-    _NoopPublisher,
-    WorldModelSnapshotSupport,
-    WorldModelStateAssembler,
+from core.world_model.types import (
+    ReaderBundle,
+    WorldModelBuildInput,
+    WorldModelBuildResult,
+    WorldSnapshot,
+    WorldSnapshotRequest,
 )
-from core.world_model.types import ReaderBundle, WorldModelBuildInput, WorldModelBuildResult, WorldSnapshot, WorldSnapshotRequest
 
 
 class WorldModelService(WorldSnapshotBuilderPort):

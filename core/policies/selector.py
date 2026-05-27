@@ -6,11 +6,10 @@ Routing-only selection of which policy reference should be used for a given
 state. This module must not compute actions or execute effects.
 """
 
-from typing import Optional
 import logging
+from typing import Optional
 
 from config.decision_safety_policy import DEFAULT_POLICY_SELECTOR_POLICY, PolicySelectorPolicy
-
 from core.observability.errors import log_exception_throttled
 from core.policies.canary import CanaryPolicyResolver
 from core.policies.types import RolloutConfig

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from entrypoints.api.request_context import RequestContext
 from interfaces.api.action_models import ExecuteActionRequest
 from interfaces.api.execute_action_handler import ExecuteActionHandler
-from entrypoints.api.request_context import RequestContext
 
 
 class _MinimalService:

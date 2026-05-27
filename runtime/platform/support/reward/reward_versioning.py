@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class RewardVersioning:
     def __init__(self) -> None:
         self._version = 0

@@ -12,7 +12,6 @@ from typing import Any, Mapping
 
 from runtime.observability.tracing import correlation_key_scope, span_with_sla
 
-
 CANON_RUNTIME_TELEMETRY_OWNER = True
 
 

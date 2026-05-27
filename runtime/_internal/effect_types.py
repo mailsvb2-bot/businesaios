@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 from enum import StrEnum
 from typing import Any
+
+
 class EffectActionType(StrEnum):
     TELEGRAM_SEND_MESSAGE = "telegram.send_message"
     TELEGRAM_SEND_AUDIO = "telegram.send_audio"

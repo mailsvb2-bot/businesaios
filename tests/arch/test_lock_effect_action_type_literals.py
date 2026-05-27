@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-
 _ALLOWED = {
     "runtime/_internal/effect_types.py",
     "runtime/_internal/effect_router.py",

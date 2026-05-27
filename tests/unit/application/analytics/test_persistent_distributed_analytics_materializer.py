@@ -3,7 +3,9 @@ from __future__ import annotations
 from application.analytics.analytics_materializer import AnalyticsMaterializer
 from application.analytics.analytics_snapshot_service import AnalyticsSnapshotService
 from application.analytics.distributed_analytics_materializer_lock import PersistentAnalyticsMaterializerLock
-from application.analytics.persistent_distributed_analytics_materializer import PersistentDistributedAnalyticsMaterializer
+from application.analytics.persistent_distributed_analytics_materializer import (
+    PersistentDistributedAnalyticsMaterializer,
+)
 from observability.analytics_snapshot_store import SqliteAnalyticsSnapshotStore
 from reliability.distributed_lock import InMemoryDistributedLock
 

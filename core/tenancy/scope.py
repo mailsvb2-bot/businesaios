@@ -5,7 +5,6 @@ from typing import NewType
 
 from config.env_flags import env_str
 
-
 TenantId = NewType("TenantId", str)
 
 

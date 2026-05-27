@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from importlib import import_module
 from types import SimpleNamespace
 
-from importlib import import_module
 from runtime.executor import executor_context
 
 

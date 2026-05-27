@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, Protocol
 
 
-
-
 class EventAppendProtocol(Protocol):
     def append(self, event: dict[str, Any]) -> object: ...
 

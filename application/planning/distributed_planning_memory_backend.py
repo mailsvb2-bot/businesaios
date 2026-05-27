@@ -6,7 +6,6 @@ from typing import Any, Mapping, Protocol
 
 from core.tenancy.normalization import require_tenant_id
 
-
 CANON_DISTRIBUTED_PLANNING_MEMORY_BACKEND = True
 
 

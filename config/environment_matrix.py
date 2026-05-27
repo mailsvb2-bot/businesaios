@@ -5,7 +5,6 @@ CANON_COMPAT_SHIM = True
 from dataclasses import dataclass, field
 from typing import Mapping
 
-
 CANON_ENVIRONMENT_MATRIX = True
 
 _ENVIRONMENT_ALIASES = {

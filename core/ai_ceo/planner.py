@@ -5,19 +5,20 @@ from __future__ import annotations
 DecisionCore remains the single issuer. AI CEO only assembles a reviewable plan.
 """
 
-from kernel.world_state import WorldStateV1
 from core.ai_ceo.contracts import CEOIntentV1, CEOPlanV1
-from core.ai_ceo.ledger import GrowthSnapshotV1, to_dict as snapshot_to_dict
+from core.ai_ceo.ledger import GrowthSnapshotV1
+from core.ai_ceo.ledger import to_dict as snapshot_to_dict
 from core.ai_ceo.planner_support import (
-    apply_policy_and_rank,  # lock/test marker: planner remains aligned with shared policy surface
     CEOContextReader,
     CEOPlanBuilder,
+    apply_policy_and_rank,  # lock/test marker: planner remains aligned with shared policy surface
     build_plan_summary,
     build_plan_targets,
     render_plan_text,
 )
 from core.ai_ceo.safety import AutonomyPolicyV1
 from core.ai_ceo.scoring import rank_steps  # compatibility export for resilience tests
+from kernel.world_state import WorldStateV1
 
 
 def build_ceo_plan(

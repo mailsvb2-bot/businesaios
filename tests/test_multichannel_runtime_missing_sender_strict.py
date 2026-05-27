@@ -1,4 +1,5 @@
 import asyncio
+
 import pytest
 
 from interfaces.messaging_runtime.bootstrap import build_multichannel_runtime_app

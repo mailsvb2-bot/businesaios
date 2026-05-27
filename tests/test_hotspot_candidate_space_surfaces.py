@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from core.scorers.bandit import EpsilonGreedyBandit, score_bandit_arms, choose_bandit_arm
 from core.growth.ads.creative.bandit import CreativeArm, CreativeThompsonBandit
+from core.scorers.bandit import EpsilonGreedyBandit, choose_bandit_arm, score_bandit_arms
 
 
 def test_growth_optimizer_exposes_score_surface() -> None:

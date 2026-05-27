@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from runtime._internal.effects_clients import telegram_client as tg_mod
 from runtime._internal.effects_clients.telegram_client import TelegramClient
-from runtime.platform.delivery_state import DeliveryState, RECOVERY_PHASE
+from runtime.platform.delivery_state import RECOVERY_PHASE, DeliveryState
 
 
 class _Queue:

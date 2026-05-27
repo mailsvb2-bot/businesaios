@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
+
 from application.memory.business_operating_memory_types import BusinessMemoryRunRecord, BusinessOperatingMemoryLike
+
 CANON_BUSINESS_MEMORY_MATCHER = True
 
 def _text(value: object) -> str:

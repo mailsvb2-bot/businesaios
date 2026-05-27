@@ -4,9 +4,9 @@ import hashlib
 from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
+from config.env_flags import env_int
 from core.safety.blast_radius import BlastRadiusPolicy, allow_action
 from runtime.safety_controls import evaluate_runtime_action_controls, first_blocking_decision, record_allowed_action
-from config.env_flags import env_int
 
 
 @dataclass(frozen=True)

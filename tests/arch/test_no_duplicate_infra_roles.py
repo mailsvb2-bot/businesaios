@@ -5,7 +5,6 @@ from collections import defaultdict
 from tests.arch.scanners.name_fragment_scanner import find_class_names
 from tests.arch.scanners.python_file_loader import iter_python_files, read_text
 
-
 ROLE_MARKERS = (
     "PacketProvider",
     "DecisionGateway",

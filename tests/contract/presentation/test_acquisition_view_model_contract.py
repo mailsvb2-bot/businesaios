@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from acquisition import evaluate_acquisition_payload
 from presentation import (
+    CANON_PRESENTATION_ACQUISITION_VIEW_MODEL,
     AcquisitionRecommendationView,
     AcquisitionViewModel,
-    CANON_PRESENTATION_ACQUISITION_VIEW_MODEL,
     build_acquisition_view_model,
 )
 

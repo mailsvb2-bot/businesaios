@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from config.yaml_loader_shared import load_yaml as _shared_load_yaml, load_yaml_optional as _shared_load_yaml_optional, YamlLoadResult
+from config.yaml_loader_shared import YamlLoadResult
+from config.yaml_loader_shared import load_yaml as _shared_load_yaml
+from config.yaml_loader_shared import load_yaml_optional as _shared_load_yaml_optional
 
 
 def _read(value: str | Path) -> str:

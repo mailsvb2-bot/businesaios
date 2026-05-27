@@ -27,9 +27,10 @@ TEST_FALLBACK_POLICY = FallbackPolicy(
 )
 
 
-from runtime.state import apply_synthesized_world_view
-from runtime.market.market_snapshot import MarketSnapshot
 from typing import Mapping
+
+from runtime.market.market_snapshot import MarketSnapshot
+from runtime.state import apply_synthesized_world_view
 
 
 def apply_world_view_with_policy(

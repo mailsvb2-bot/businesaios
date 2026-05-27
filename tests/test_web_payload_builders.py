@@ -3,8 +3,7 @@ from __future__ import annotations
 import pytest
 
 from app.web.components import AutopilotButton
-from app.web.pages import Autopilot
-from app.web.pages import Dashboard
+from app.web.pages import Autopilot, Dashboard
 from app.web.payload_builder import KindedPayloadBuilder
 
 

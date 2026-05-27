@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Mapping
 
-
 CANON_BUSINESS_AUTONOMY_SAFETY_CORE_WRAPPER = True
 SAFETY_CORE_GOLDEN_FIXTURE_VERSION = "businessaios_safety_core_golden.v1"
 RUST_SAFETY_CORE_MSRV = "1.75.0"

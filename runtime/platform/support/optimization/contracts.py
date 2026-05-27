@@ -8,11 +8,11 @@ owner is the package root. Keep this file as a thin, explicit re-export layer.
 """
 
 from . import (
-    CANONICAL_OPTIMIZATION_PUBLIC_MODULE,
     CANON_PLATFORM_OPTIMIZATION_PUBLIC_API,
+    CANONICAL_OPTIMIZATION_PUBLIC_MODULE,
     COMPAT_OPTIMIZATION_DECISION_MODULE,
-    OptimizationGate,
     SOVEREIGN_DECISION_CORE,
+    OptimizationGate,
 )
 
 __all__ = [

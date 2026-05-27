@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Sequence
 
-from ..contracts import LessonRepository, PatternRepository, StrategyMemoryReader as StrategyMemoryReaderContract
+from ..contracts import LessonRepository, PatternRepository
+from ..contracts import StrategyMemoryReader as StrategyMemoryReaderContract
 from ..enums import KnowledgeKind
 from ..evaluators.lesson_relevance_evaluator import LessonRelevanceEvaluator
 from ..types import MemoryRetrieval, Pattern, StrategyMemoryEntry

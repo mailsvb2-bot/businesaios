@@ -19,9 +19,8 @@ from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import Iterator, Optional
 
-from core.tenancy.scope import as_tenant_id, TenantId
+from core.tenancy.scope import TenantId, as_tenant_id
 from core.tenancy.tenant import current_tenant_id
-
 
 _tenant_var: ContextVar[Optional[TenantId]] = ContextVar("tenant_id", default=None)
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from tenancy.tenant_admission_coordinator import LeaseStoreAdmissionBackend
 from tenancy.tenant_runtime_invariant_checks import TenantRuntimeInvariantChecks
-from tenancy.tenant_runtime_reconciliation import TenantRuntimeReconciler
 from tenancy.tenant_runtime_lease_store import InMemoryTenantRuntimeLeaseStore, utc_now
+from tenancy.tenant_runtime_reconciliation import TenantRuntimeReconciler
 
 
 class DummyAdmissionBackend(LeaseStoreAdmissionBackend):

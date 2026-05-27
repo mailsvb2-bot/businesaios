@@ -11,7 +11,6 @@ It must not become a second decision engine and must not add pre-decision busine
 from dataclasses import dataclass
 from typing import Any, Callable
 
-
 CANON_DECISION_PATH_LOCK_SINGLE_OWNER = True
 CANON_DECISION_PATH_LOCK_FAIL_CLOSED = True
 CANON_DECISION_PATH_LOCK_NO_DECISION_LOGIC = True

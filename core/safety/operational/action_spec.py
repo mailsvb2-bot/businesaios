@@ -5,7 +5,6 @@ from typing import Mapping
 
 from contracts.action_impact_contract import ActionCategory
 
-
 CANON_OPERATIONAL_ACTION_SPEC = True
 
 

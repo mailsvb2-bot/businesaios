@@ -5,6 +5,8 @@ from typing import Any
 
 from core.behavior.operator_policy_catalogs.model import (
     OperatorPolicyCatalog as CompatOperatorPolicyCatalog,
+)
+from core.behavior.operator_policy_catalogs.model import (
     OperatorPolicyRule as CompatOperatorPolicyRule,
 )
 from core.behavior.operator_policy_catalogs.models import OperatorPolicyCatalog

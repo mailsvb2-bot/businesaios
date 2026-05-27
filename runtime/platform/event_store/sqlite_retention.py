@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Retention-SaaS helpers for SqliteEventStore.
 
 Bandit arms, daily feature snapshots, and distributed job locks.
@@ -6,6 +7,7 @@ Extracted from sqlite_event_store.py.
 """
 
 import sqlite3
+
 from observability.platform.observability.silent import swallow
 
 

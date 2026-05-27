@@ -1,9 +1,9 @@
+from application.headless.models import GoalExecutionStep
 from execution.canonical_run_artifacts import (
     canonical_goal_execution_report,
     canonical_goal_execution_step,
     canonical_report_builder_input,
 )
-from application.headless.models import GoalExecutionStep
 from execution.report_builder import ReportBuilder
 
 

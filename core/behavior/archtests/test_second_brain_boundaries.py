@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 def assert_behavior_module_boundaries(module_exports: set[str]) -> None:
     forbidden = {
         "execute_action",

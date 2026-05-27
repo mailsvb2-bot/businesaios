@@ -4,7 +4,6 @@ from contracts.platforms.market_intelligence_provider_catalog import PROVIDER_FA
 from interfaces.common.registry_capability_contract import build_registry_entry
 from interfaces.market_intelligence.provider_factory import provider_supported
 
-
 CANON_MARKET_INTELLIGENCE_REGISTRY = True
 
 _READ_ONLY_ACTIONS = {

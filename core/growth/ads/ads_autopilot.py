@@ -7,7 +7,6 @@ from core.ads.ads_service import AdsService
 from core.growth.ads.creative import CreativePipeline, CreativePipelineConfig
 from core.llm.agent import LLMAgent, LLMTaskContext, TaskType
 
-
 Json = Dict[str, Any]
 
 

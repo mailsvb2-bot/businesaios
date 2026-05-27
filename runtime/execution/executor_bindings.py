@@ -8,7 +8,6 @@ mechanical state-to-attribute wiring lives on a single canonical path.
 
 from typing import Any
 
-
 CANON_RUNTIME_EXECUTOR_BINDINGS = True
 
 

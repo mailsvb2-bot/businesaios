@@ -7,7 +7,6 @@ from runtime.state.state_freshness_policy import StateFreshnessPolicy
 from runtime.state.state_provenance import merge_evidence_refs, provenance_hash
 from runtime.state.state_unknown_semantics import classify_value_kind, normalize_unknown
 
-
 CANON_STATE_CONFLICT_RESOLVER = True
 
 

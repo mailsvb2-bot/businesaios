@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pathlib
 
-
 LEGACY = {
     "runtime_execution.py",
     "state_and_envelope.py",

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from runtime.queue.job_contract import JobState
 from runtime.queue._sqlite_job_store_db import transition_terminal
 from runtime.queue._sqlite_job_store_runtime import purge_terminal_jobs_sqlite
+from runtime.queue.job_contract import JobState
 from runtime.queue.queue_store_policy import DEFAULT_QUEUE_STORE_POLICY
 
 

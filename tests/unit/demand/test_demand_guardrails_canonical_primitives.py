@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
+
 from demand_guardrails.customer_fit_guard import CustomerFitGuard
 from demand_guardrails.demand_decision_guard import DemandDecisionGuard
 from demand_guardrails.fraud_pattern_guard import FraudPatternGuard
 from demand_guardrails.no_monopoly_guard import NoMonopolyGuard
 from demand_guardrails.rollback_guard import RollbackGuard
 from demand_guardrails.routing_risk_guard import RoutingRiskGuard
-from pathlib import Path
-from types import SimpleNamespace
 
 
 class _LiveState:

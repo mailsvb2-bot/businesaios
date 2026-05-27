@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from uuid import uuid4
+
 
 def new_learning_run_id() -> str:
     return f"learning_run_{uuid4().hex}"

@@ -6,7 +6,6 @@ from application.headless.models import GoalExecutionStep
 from execution.headless_trace import HeadlessTrace
 from runtime.platform.business_memory.second_brain_boundary import sanitize_business_memory_payload
 
-
 CANON_AUTONOMY_MEMORY_STEP = True
 
 

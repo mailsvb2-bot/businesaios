@@ -6,7 +6,6 @@ from typing import Any, Mapping
 
 from application.admin.platform_control_center.remediation_workflow_assembler import RemediationWorkflowAssembler
 
-
 CANON_PLATFORM_CONTROL_CENTER_SERVICE = True
 PLATFORM_ADMIN_RUNTIME_MODE = "read_only_advisory"
 

@@ -4,10 +4,11 @@ CANON_NON_DECISION_MODULE = True
 
 from dataclasses import dataclass
 
-from kernel.decisioning.decision_types import RecommendationSet
-from core.economics.capital_allocation_engine import CapitalAllocationEngine, CapitalPlan as AllocationPlan, CapitalState, WorldState
+from core.economics.capital_allocation_engine import CapitalAllocationEngine, CapitalState, WorldState
+from core.economics.capital_allocation_engine import CapitalPlan as AllocationPlan
 from core.economics.contracts import CapitalScenarioBuilderPort, EconomicsContext
 from core.economics.recommendation_policy import ensure_economics_recommendations
+from kernel.decisioning.decision_types import RecommendationSet
 
 
 class CapitalEngine:

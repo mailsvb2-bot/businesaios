@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 
+
 def test_telegram_boot_modules_import() -> None:
     modules = [
         "runtime.bootstrap",

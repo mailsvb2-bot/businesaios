@@ -4,14 +4,19 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
-from application.business_autonomy.contracts import BusinessExecutionEvidence, BusinessExecutionResult, ExecutionVerdict, BusinessGoalEnvelope
+from application.business_autonomy.contracts import (
+    BusinessExecutionEvidence,
+    BusinessExecutionResult,
+    BusinessGoalEnvelope,
+    ExecutionVerdict,
+)
 from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from application.business_autonomy.registry import RegisteredBusinessCapabilities
 from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
 from application.planning.distributed_planning_memory_backend import DistributedPlanningMemoryBackend
 from governance.control_plane_audit_log import GovernanceAuditEvent
-from storage.evidence_store import EvidenceRecord
 from storage.distributed_evidence_audit_backend import DistributedEvidenceStore, DistributedGovernanceAuditLog
+from storage.evidence_store import EvidenceRecord
 
 
 @dataclass(frozen=True)

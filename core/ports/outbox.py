@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol, Iterable
+from typing import Iterable, Protocol
 
 
 class OutboxPort(Protocol):

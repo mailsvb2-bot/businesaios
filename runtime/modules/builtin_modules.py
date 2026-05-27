@@ -5,7 +5,6 @@ from typing import Any, Mapping, Tuple
 from runtime.modules.decision_service_contract import build_decision_service_descriptor
 from runtime.modules.module_protocol import ModuleWiringContext, ProductRuntimeView
 
-
 CANON_RUNTIME_MODULE_CATALOG_OWNER = True
 DEFAULT_RUNTIME_MODULE_IDS: Tuple[str, ...] = (
     "ring",

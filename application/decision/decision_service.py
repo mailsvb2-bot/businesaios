@@ -3,24 +3,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from application.decision.action_dispatcher import ActionDispatcher
-from application.decision.ports import DecisionExecutionPortProtocol, ObservabilityPortProtocol
-from core.constraints.decision import DecisionConstraints
-from kernel.decision_reason import DecisionReason
-from kernel.decision_rejection import DecisionRejection
-from kernel.decision_request import DecisionRequest
-from kernel.decision_result import DecisionResult
-from kernel.decision_space import DecisionSpace
 from application.decision.decision_contract import (
     NON_SOVEREIGN_ENGINE_ROLE,
     build_executable_action,
     canonical_request,
     start_trace,
 )
-from core.policy.decision_space_narrowing_audit import DecisionSpaceNarrowingAudit
+from application.decision.ports import DecisionExecutionPortProtocol, ObservabilityPortProtocol
+from core.constraints.decision import DecisionConstraints
 from core.policy.decision_history import DecisionHistory
 from core.policy.decision_publisher import DecisionPublisher
+from core.policy.decision_space_narrowing_audit import DecisionSpaceNarrowingAudit
 from core.policy.decision_validator import DecisionValidator
 from core.scorers.selector import DecisionSelector
+from kernel.decision_reason import DecisionReason
+from kernel.decision_rejection import DecisionRejection
+from kernel.decision_request import DecisionRequest
+from kernel.decision_result import DecisionResult
+from kernel.decision_space import DecisionSpace
 
 CANON_NON_SOVEREIGN_DECISION_SERVICE = True
 CANON_DECISION_SERVICE_SELECTION_ONLY = True

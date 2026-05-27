@@ -1,9 +1,18 @@
 import pytest
 
+from application.business_autonomy.contracts import (
+    BusinessExecutionRequest,
+    BusinessGoalEnvelope,
+    IntegrationMode,
+    PolicyConstraint,
+)
+from application.business_autonomy.persistence import (
+    PersistentBusinessCapabilityRegistry,
+    PersistentBusinessPlanningMemorySink,
+    PersistentBusinessTrustRegistry,
+)
 from interfaces.api.business_autonomy_route_handlers import build_business_autonomy_route_handlers
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
-from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessGoalEnvelope, IntegrationMode, PolicyConstraint
-from application.business_autonomy.persistence import PersistentBusinessCapabilityRegistry, PersistentBusinessTrustRegistry, PersistentBusinessPlanningMemorySink
 
 
 def test_persistent_capability_and_trust_registries_roundtrip(tmp_path, monkeypatch):

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from runtime.creative import CreativeIntelligenceSnapshot
-from runtime.explainability import assert_non_decision_payload, build_creative_reasons, to_lines
+from config.decision_safety_policy import DEFAULT_AUTONOMY_ADVISORY_POLICY
 from runtime.advisory.action_phase import HOLD, LAUNCH, REALLOCATE, SCALE, SELECT, STOP
 from runtime.advisory.autonomy_advisory_packet import AutonomyAdvisoryPacket
+from runtime.creative import CreativeIntelligenceSnapshot
+from runtime.explainability import assert_non_decision_payload, build_creative_reasons, to_lines
 from runtime.market.market_snapshot import MarketSnapshot
 from runtime.runtime_observability import RuntimeObservability
-from config.decision_safety_policy import DEFAULT_AUTONOMY_ADVISORY_POLICY
 
 
 def _phase_for(snapshot: CreativeIntelligenceSnapshot) -> str:

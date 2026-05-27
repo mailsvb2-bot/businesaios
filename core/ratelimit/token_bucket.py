@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import time
 import asyncio
+import time
 from dataclasses import dataclass
-from typing import Protocol, Optional, Dict, Tuple
+from typing import Dict, Optional, Protocol, Tuple
 
 from config.token_bucket_policy import (
     DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS,

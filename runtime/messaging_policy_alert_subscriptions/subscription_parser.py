@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from runtime.tenancy import normalize_tenant_scope
 from runtime.messaging_policy_alert_subscriptions.subscription_record import AlertSubscriptionRecord
+from runtime.tenancy import normalize_tenant_scope
 
 
 def parse_subscription(value: dict | None, *, tenant_id: str) -> AlertSubscriptionRecord | None:

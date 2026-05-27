@@ -6,7 +6,6 @@ from typing import Any, Generic, TypeVar
 from config.world_model_defaults import DEFAULT_WORLD_MODEL_DEFAULTS
 from core.world_model.enums import ReaderKind, SignalFreshness, SnapshotStatus
 
-
 T = TypeVar("T")
 
 

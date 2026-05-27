@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from tests.arch._canon_exception_registry_guard import load_registry
+
 
 def test_exception_registry_entries_are_complete() -> None:
     for item in load_registry():

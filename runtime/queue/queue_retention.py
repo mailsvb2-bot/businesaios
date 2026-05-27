@@ -14,7 +14,6 @@ from datetime import datetime, timedelta
 from runtime.queue.job_contract import JobState, normalize_now
 from runtime.queue.job_store_backend import JobStoreBackend
 
-
 CANON_RUNTIME_QUEUE_RETENTION = True
 
 

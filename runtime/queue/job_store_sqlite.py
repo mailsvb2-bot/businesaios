@@ -10,11 +10,17 @@ Infrastructure only:
 - never a second brain
 """
 
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-import threading
 
 from core.tenancy.normalization import require_tenant_id
+from runtime.queue import _sqlite_job_store_terminal_methods as _sqlite_job_store_terminal_methods
+from runtime.queue._sqlite_job_store_claims import (
+    reap_expired_claims_sqlite,
+    release_claim_sqlite,
+    reschedule_claimed_job_sqlite,
+)
 from runtime.queue._sqlite_job_store_codec import (
     from_iso_datetime,
     iso_datetime,
@@ -23,13 +29,6 @@ from runtime.queue._sqlite_job_store_codec import (
     row_to_job,
     serialize_tags,
     write_full_row,
-)
-from runtime.queue._sqlite_job_store_runtime import (
-    require_dedupe_key as _require_dedupe_key,
-    require_job_id as _require_job_id,
-    require_owner_id as _require_owner_id,
-    require_queue_name as _require_queue_name,
-    runtime_queue_sqlite_store_path,
 )
 from runtime.queue._sqlite_job_store_db import (
     TERMINAL_REPLACEABLE_DEDUPE_STATES,
@@ -40,16 +39,24 @@ from runtime.queue._sqlite_job_store_db import (
     require_transitionable,
     sqlite_job_store_tx,
 )
-from runtime.queue._sqlite_job_store_claims import (
-    reap_expired_claims_sqlite,
-    release_claim_sqlite,
-    reschedule_claimed_job_sqlite,
+from runtime.queue._sqlite_job_store_runtime import (
+    require_dedupe_key as _require_dedupe_key,
+)
+from runtime.queue._sqlite_job_store_runtime import (
+    require_job_id as _require_job_id,
+)
+from runtime.queue._sqlite_job_store_runtime import (
+    require_owner_id as _require_owner_id,
+)
+from runtime.queue._sqlite_job_store_runtime import (
+    require_queue_name as _require_queue_name,
+)
+from runtime.queue._sqlite_job_store_runtime import (
+    runtime_queue_sqlite_store_path,
 )
 from runtime.queue.job_contract import JobRecord, JobState, normalize_now
 from runtime.queue.job_fencing import validate_fencing_token
 from runtime.queue.queue_store_policy import DEFAULT_QUEUE_STORE_POLICY
-from runtime.queue import _sqlite_job_store_terminal_methods as _sqlite_job_store_terminal_methods
-
 
 CANON_RUNTIME_QUEUE_JOB_STORE_SQLITE = True
 

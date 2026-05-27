@@ -3,7 +3,9 @@ from __future__ import annotations
 CANON_THIN_HANDLER = True
 
 from dataclasses import dataclass
+
 from runtime.learning_loop import LearningLoopService
+
 
 @dataclass(slots=True)
 class LearningLoopRunHandler:

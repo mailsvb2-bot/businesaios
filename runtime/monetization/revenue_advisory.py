@@ -3,11 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
-from advisory.revenue_os import PaywallVariant
-from advisory.revenue_os import PricePoint
-from advisory.revenue_os import RevenueOSFacade
-from advisory.revenue_os import RevenueSnapshot
-from advisory.revenue_os import SubscriptionPlan
+from advisory.revenue_os import PaywallVariant, PricePoint, RevenueOSFacade, RevenueSnapshot, SubscriptionPlan
 from runtime.monetization.contracts import utc_now
 from runtime.monetization.revenue_advisory_contracts import (
     RevenueActionMappingSurface,

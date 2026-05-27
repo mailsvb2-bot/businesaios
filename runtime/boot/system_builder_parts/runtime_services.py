@@ -4,7 +4,11 @@ CANON_BOOT_WIRING_ONLY = True
 
 from pathlib import Path
 
-from bootstrap.assembly_runtime import build_event_log_and_bindings, resolve_tenant_and_pricing, validate_payments_webhook_prod_strict
+from bootstrap.assembly_runtime import (
+    build_event_log_and_bindings,
+    resolve_tenant_and_pricing,
+    validate_payments_webhook_prod_strict,
+)
 from bootstrap.boot_observability import emit_boot_completed
 from bootstrap.boot_phases import (
     boot_phase_30_durable_stores,

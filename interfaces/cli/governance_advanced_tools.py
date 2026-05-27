@@ -1,6 +1,10 @@
 from __future__ import annotations
-import argparse, json
+
+import argparse
+import json
+
 from application.governance.governance_service import GovernanceService
+
 CANON_HEADLESS_GOVERNANCE_ADVANCED_CLI = True
 
 def _parser() -> argparse.ArgumentParser:

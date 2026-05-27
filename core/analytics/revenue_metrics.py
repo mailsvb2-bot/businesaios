@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, date
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, Protocol
 
 from config.revenue_metrics_policy import DEFAULT_REVENUE_METRICS_POLICY, RevenueMetricsPolicy
-from core.contracts.event_types import OFFER_SHOWN, OFFER_CLICKED, PURCHASE_SUCCESS, PURCHASE_FAILED
+from core.contracts.event_types import OFFER_CLICKED, OFFER_SHOWN, PURCHASE_FAILED, PURCHASE_SUCCESS
 
 
 class EventStore(Protocol):

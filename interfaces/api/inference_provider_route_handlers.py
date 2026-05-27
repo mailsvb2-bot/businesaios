@@ -5,7 +5,6 @@ from typing import Any
 
 from runtime.inference.providers.provider_health_monitor import InferenceProviderHealthMonitor
 
-
 CANON_API_INFERENCE_PROVIDER_ROUTE_HANDLERS = True
 
 

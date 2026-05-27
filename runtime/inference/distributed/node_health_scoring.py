@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from runtime.inference.distributed.node_registry import DistributedInferenceNode
 
-
 CANON_RUNTIME_DISTRIBUTED_NODE_HEALTH_SCORING = True
 
 

@@ -5,7 +5,6 @@ from time import time
 
 from execution.inference_capacity_contract import InferenceCapacityTier
 
-
 CANON_RUNTIME_INFERENCE_CAPACITY_STATE_STORE = True
 
 

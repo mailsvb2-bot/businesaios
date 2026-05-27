@@ -6,8 +6,8 @@ CANON_BOOT_WIRING_ONLY = True
 
 from typing import Any
 
-from core.ai.decision_core import DecisionCore
 from bootstrap.world_model_boot_check import build_and_verify_default_world_model
+from core.ai.decision_core import DecisionCore
 
 
 def build_world_model(*, event_log: Any) -> object:

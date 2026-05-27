@@ -8,7 +8,6 @@ from interfaces.common.auth_session import AuthSession
 from interfaces.common.connector_capabilities import ConnectorCapabilities
 from interfaces.common.connector_maturity import ConnectorMaturity
 from interfaces.common.connector_result import ConnectorResult
-from interfaces.common.rate_limit_guard import RateLimitGuard
 from interfaces.common.connector_support import (
     build_health,
     build_invalid_payload_result,
@@ -17,6 +16,7 @@ from interfaces.common.connector_support import (
     normalize_operation,
     normalize_payload,
 )
+from interfaces.common.rate_limit_guard import RateLimitGuard
 from runtime.business_autonomy.provider_transport_bindings import provider_endpoint_url
 
 from ._write_stage import raise_write_stage_disabled
@@ -29,11 +29,18 @@ from .base import (
     MetricPoint,
     OAuthAuthorizeURL,
 )
-from .oauth.authorize_builder import OAuthAuthorizeParams, build_authorize_url
-from .oauth_helper import OAuthAppConfig
-from .oauth_runtime_helpers import resolve_pending_account_id, resolve_runtime_oauth_value
-from .oauth_state import build_state
-from .ports import SecretVault
+from .connector_exchange_support import extract_access_token, persist_connected_account
+from .connector_oauth_helpers import (
+    disconnect_tokens_compat,
+    resolve_oauth_client_id,
+    resolve_oauth_client_secret,
+    resolve_oauth_scope,
+)
+from .connector_read_specs_support import CampaignReadSpec, MetricReadSpec
+from .connector_read_surface import (
+    fetch_metrics_with_token,
+    list_campaigns_with_token,
+)
 from .connector_shared import (
     http_post_compat,
     pending_account_id_from_raw,
@@ -41,22 +48,15 @@ from .connector_shared import (
     tokens_get_access_token_compat,
     tokens_put_compat,
 )
-from .connector_oauth_helpers import (
-    disconnect_tokens_compat,
-    resolve_oauth_client_id,
-    resolve_oauth_client_secret,
-    resolve_oauth_scope,
-)
-from .connector_exchange_support import extract_access_token, persist_connected_account
-from .connector_read_specs_support import CampaignReadSpec, MetricReadSpec
-from .connector_read_surface import (
-    fetch_metrics_with_token,
-    list_campaigns_with_token,
-)
 from .connector_spec_adapter_support import (
     provider_fetch_metrics_from_spec_adapter,
     provider_list_campaigns_from_spec_adapter,
 )
+from .oauth.authorize_builder import OAuthAuthorizeParams, build_authorize_url
+from .oauth_helper import OAuthAppConfig
+from .oauth_runtime_helpers import resolve_pending_account_id, resolve_runtime_oauth_value
+from .oauth_state import build_state
+from .ports import SecretVault
 
 
 def _google_ads_endpoint(endpoint_key: str) -> str:

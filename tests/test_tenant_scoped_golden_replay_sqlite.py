@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
-from tools.tenant_scoped_golden_replay import pick_user_and_window, extract_trace, replay_trace
+from tools.tenant_scoped_golden_replay import extract_trace, pick_user_and_window, replay_trace
 
 
 def _sha256_json(obj) -> str:

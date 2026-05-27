@@ -16,7 +16,6 @@ from typing import Iterable
 from core.tenancy.normalization import require_tenant_id
 from runtime.queue.job_contract import normalize_now
 
-
 CANON_RUNTIME_QUEUE_TENANT_FAIR_SCHEDULER = True
 
 

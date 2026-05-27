@@ -1,6 +1,4 @@
-from contracts.demand import ClientIntent
-from contracts.demand import ClientRequest
-from contracts.demand import DemandFlowBundle
+from contracts.demand import ClientIntent, ClientRequest, DemandFlowBundle
 from contracts.matching.match_bundle import MatchBundle
 from contracts.matching.routing_decision import RoutingDecision
 

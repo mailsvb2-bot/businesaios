@@ -1,10 +1,14 @@
 from __future__ import annotations
+
 import atexit
 from dataclasses import dataclass
 from pathlib import Path
+
 from runtime.bootstrap.bootstrap_contract import BootstrapFailureCode
 from runtime.bootstrap.bootstrap_failfast import BootstrapLockError
 from runtime.firewall.singleton_lock import SingletonLock
+
+
 @dataclass
 class BootstrapLockHandle:
     path: Path

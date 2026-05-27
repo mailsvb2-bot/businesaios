@@ -1,6 +1,6 @@
+from application.business_autonomy.channel_contracts import ChannelIdentity
 from application.business_autonomy.provider_catalog import PROVIDERS
 from runtime.business_autonomy.bootstrap import _build_typed_channel_registry
-from application.business_autonomy.channel_contracts import ChannelIdentity
 
 
 def test_provider_catalog_business_onboarding_adapters_are_registered():

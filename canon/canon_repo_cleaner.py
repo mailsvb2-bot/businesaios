@@ -1,6 +1,5 @@
 import os
 
-
 JUNK_PATTERNS = [
     "__pycache__",
     ".pytest_cache",

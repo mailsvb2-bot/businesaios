@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from core.entitlements.read_model import compute_entitlements
 from core.events.read_call import call_latest_event
+from core.growth.ads.rl.contracts import AdsRLOptSpec
+from core.growth.ads.rl.observer import observe_tick_once
 from core.payments.read_model import latest_payment_status
 from core.read_model.cache import watermark_for
 from core.users.read_model import selected_product, selected_tariff, user_settings
-from core.growth.ads.rl.observer import observe_tick_once
-from core.growth.ads.rl.contracts import AdsRLOptSpec
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 

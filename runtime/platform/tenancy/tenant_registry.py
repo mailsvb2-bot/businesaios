@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Protocol
 
+
 class EventStore(Protocol):
     def append(self, *, tenant_id: str, user_id: Optional[str], event_type: str, payload: Dict[str, Any]) -> None: ...
     def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 5000) -> Iterable[Dict[str, Any]]: ...

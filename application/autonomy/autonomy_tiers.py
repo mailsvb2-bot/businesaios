@@ -5,7 +5,6 @@ from typing import Any
 
 from execution.action_catalog import classify_action_type, normalize_action_type
 
-
 CANON_HEADLESS_AUTONOMY_TIERS = True
 
 ALLOWED_AUTONOMY_TIERS: tuple[str, ...] = (

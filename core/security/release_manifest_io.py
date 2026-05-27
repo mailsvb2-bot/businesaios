@@ -6,7 +6,6 @@ from typing import Iterable
 
 from core.security.release_runtime_surface import is_runtime_release_excluded
 
-
 INCLUDE_SUFFIXES = {
     '.py',
     '.txt',

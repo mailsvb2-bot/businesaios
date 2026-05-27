@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from runtime.decisioning import CandidateCollection
-from runtime.decisioning import CandidateEnvelope
-from runtime.ml import MlScoringContext
-from runtime.ml import MlService
+from runtime.decisioning import CandidateCollection, CandidateEnvelope
+from runtime.ml import MlScoringContext, MlService
 
 CANON_THIN_HANDLER = True
 

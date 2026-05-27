@@ -19,38 +19,85 @@ from application.memory.business_operating_memory_types import (
     PatternEvidence,
     SignalMemoryRecord,
 )
-from execution.canonical_persistence_vocabulary import canonical_memory_record
 from execution.business_memory_projection import (
     project_business_memory_contract_bundle as _project_business_memory_contract_bundle_owner,
+)
+from execution.business_memory_projection import (
     project_business_memory_evidence as _project_business_memory_evidence_owner,
+)
+from execution.business_memory_projection import (
     project_business_memory_feedback_snapshot as _project_business_memory_feedback_snapshot_owner,
+)
+from execution.business_memory_projection import (
     project_business_memory_governance_summary as _project_business_memory_governance_summary_owner,
+)
+from execution.business_memory_projection import (
     project_business_memory_meta_payloads as _project_business_memory_meta_payloads_owner,
+)
+from execution.business_memory_projection import (
     project_business_memory_patterns as _project_business_memory_patterns_owner,
+)
+from execution.business_memory_projection import (
     project_business_memory_profile as _project_business_memory_profile_owner,
+)
+from execution.business_memory_projection import (
     project_business_memory_recent_runs as _project_business_memory_recent_runs_owner,
+)
+from execution.business_memory_projection import (
     project_business_memory_state_context as _project_business_memory_state_context_owner,
+)
+from execution.business_memory_projection import (
     project_business_memory_summary as _project_business_memory_summary_owner,
 )
-
 from execution.business_memory_store_support import (
     BUSINESS_MEMORY_SCHEMA_VERSION,
+)
+from execution.business_memory_store_support import (
     anti_pattern_from_row as _anti_pattern_from_row_owner,
+)
+from execution.business_memory_store_support import (
     dedupe as _dedupe_owner,
+)
+from execution.business_memory_store_support import (
     dedupe_recent_runs as _dedupe_recent_runs_owner,
+)
+from execution.business_memory_store_support import (
     migrate_business_memory_payload as _migrate_business_memory_payload_owner,
+)
+from execution.business_memory_store_support import (
     normalize_pattern_rows as _normalize_pattern_rows_owner,
+)
+from execution.business_memory_store_support import (
     pattern_from_row as _pattern_from_row_owner,
+)
+from execution.business_memory_store_support import (
     run_record_from_row as _run_record_from_row_owner,
+)
+from execution.business_memory_store_support import (
     safe_float as _safe_float_owner,
+)
+from execution.business_memory_store_support import (
     safe_int as _safe_int_owner,
+)
+from execution.business_memory_store_support import (
     safe_key as _safe_key_owner,
+)
+from execution.business_memory_store_support import (
     safe_mapping as _safe_mapping_owner,
+)
+from execution.business_memory_store_support import (
     safe_rows as _safe_rows_owner,
+)
+from execution.business_memory_store_support import (
     signal_record_from_row as _signal_record_from_row_owner,
+)
+from execution.business_memory_store_support import (
     text as _text_owner,
+)
+from execution.business_memory_store_support import (
     trend_from_row as _trend_from_row_owner,
 )
+from execution.canonical_persistence_vocabulary import canonical_memory_record
 
 CANON_PERSISTENT_BUSINESS_OPERATING_MEMORY = True
 

@@ -4,11 +4,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping, Protocol, Sequence
 
-from core.tenancy.normalization import require_tenant_id
 from application.business_autonomy.contracts import BusinessCapability, CapabilityKind
 from application.business_autonomy.registry import RegisteredBusinessCapabilities
 from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
-
+from core.tenancy.normalization import require_tenant_id
 
 CANON_DISTRIBUTED_BUSINESS_REGISTRY = True
 

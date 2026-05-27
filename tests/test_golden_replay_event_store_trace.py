@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import time
 
-from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 from core.behavior.behavioral_state_builder import BehavioralStateBuilder
+from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
 
 def _stable_hash(obj) -> str:

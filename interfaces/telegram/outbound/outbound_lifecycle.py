@@ -4,8 +4,8 @@ import threading
 import time
 from typing import Any
 
-from interfaces.telegram.outbound.outbound_types import OutboundTask
 from core.observability.silent import swallow
+from interfaces.telegram.outbound.outbound_types import OutboundTask
 
 
 def ensure_queue_active(queue_obj: Any) -> None:

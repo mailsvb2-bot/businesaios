@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from runtime.tenancy import normalize_tenant_id, UNKNOWN_TENANT_ID
 from runtime.firewall.process_guard import require_effect_capability
+from runtime.tenancy import UNKNOWN_TENANT_ID, normalize_tenant_id
 
 
 class EffectsPort(ABC):

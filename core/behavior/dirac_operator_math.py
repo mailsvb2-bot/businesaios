@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from core.behavior.complex4 import Complex4, EPS
+from core.behavior.complex4 import EPS, Complex4
 
 
 def clamp01(x: float) -> float:

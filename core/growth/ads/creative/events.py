@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Any, Dict
 
 from .models import CreativeSelection
 

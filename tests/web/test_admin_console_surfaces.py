@@ -10,8 +10,8 @@ from app.web.components.security_events_card import SecurityEventsCard
 from app.web.pages.admin import AdminPage
 from app.web.pages.approvals import ApprovalsPage
 from app.web.pages.connector_admin import ConnectorAdminPage
-from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 from observability.slo_contract import SLIKind, SLOComparator, SLODefinition
+from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 
 
 @dataclass(frozen=True)

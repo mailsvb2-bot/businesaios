@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+
 def test_requirements_lock_exists():
     root = Path(__file__).resolve().parents[1]
     lock = root / "requirements.lock.txt"

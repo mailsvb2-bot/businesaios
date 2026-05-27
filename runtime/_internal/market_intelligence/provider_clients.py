@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import hashlib
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -12,7 +12,6 @@ from runtime._internal.market_intelligence.pagination import PageCursor, PageRes
 from runtime._internal.market_intelligence.provider_runtime import ProviderRuntimeError, ProviderRuntimeFactory
 from runtime._internal.market_intelligence.recovery import MarketIntelligenceRecoveryController
 from runtime._internal.market_intelligence.state_store import SqliteMarketIntelligenceStateStore, SyncCheckpoint
-
 
 CANON_MARKET_INTELLIGENCE_PROVIDER_CLIENT = True
 _MAX_TOTAL_LIMIT = 5000

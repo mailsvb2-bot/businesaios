@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from runtime.recovery import recover_pending
 from runtime.execution.reliability_runtime import _OutboxAdapter
-from runtime.queue import InMemoryJobStore, JobDispatchRequest, JobDispatcher
+from runtime.queue import InMemoryJobStore, JobDispatcher, JobDispatchRequest
+from runtime.recovery import recover_pending
 
 
 class _Archive:

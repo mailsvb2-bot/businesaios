@@ -14,7 +14,6 @@ from config.config_versioning import ConfigVersion, ConfigVersioning, utc_now
 from core.tenancy.normalization import require_tenant_id
 from governance.persistence_codec import atomic_write_json, read_json_or_default, to_jsonable
 
-
 CANON_TENANT_CONFIG_STORE = True
 
 _TENANT_NAMESPACE = "tenant_config"

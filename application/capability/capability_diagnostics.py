@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from application.capability.capability_fallback_contract import CapabilityFallbackDecision
-from config.risk_evaluation_policy import DEFAULT_CAPABILITY_DIAGNOSTICS_POLICY
 from application.capability.capability_matrix import CapabilityRecord
-
+from config.risk_evaluation_policy import DEFAULT_CAPABILITY_DIAGNOSTICS_POLICY
 
 CANON_CAPABILITY_DIAGNOSTICS = True
 

@@ -4,7 +4,7 @@ import pytest
 
 from security.governance_journal import GovernanceJournalEvent, SQLiteGovernanceJournal
 from security.reencryption_job_store import ReencryptionJob, SQLiteReencryptionJobStore
-from security.security_drill_schedule_store import SQLiteSecurityDrillScheduleStore, SecurityDrillSchedule
+from security.security_drill_schedule_store import SecurityDrillSchedule, SQLiteSecurityDrillScheduleStore
 
 
 def test_storage_level_tenant_filters_do_not_leak_cross_tenant_rows(tmp_path) -> None:

@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
-from ..contracts import LessonReader as LessonReaderContract, LessonRepository
+from ..contracts import LessonReader as LessonReaderContract
+from ..contracts import LessonRepository
 from ..types import Lesson, LessonQuery
 
 

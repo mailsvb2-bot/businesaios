@@ -15,15 +15,15 @@ from bootstrap.health_server import start_health_server
 from bootstrap.runtime_boot import build_runtime_orchestrator
 from core.ai.decision import Decision
 from entrypoints.api.action_models import ExecuteActionRequest
-from entrypoints.api.fastapi_app_factory import create_fastapi_app
-from kernel.decision_crypto import sign_decision
 from entrypoints.api.api_key_policy import PersistentApiKeyStore
+from entrypoints.api.fastapi_app_factory import create_fastapi_app
 from governance.rbac_contract import RoleId
-from tenancy.tenant_contract import TenantRecord, TenantPlan, TenantStatus
-from tenancy.tenant_registry import PersistentTenantRegistry
+from kernel.decision_crypto import sign_decision
 from runtime.enforcement.idempotency_gate import mark_execution_once
 from runtime.wiring import build_durable_stores, resolve_storage_config
 from scripts.ci.http_probe_io import fetch_text
+from tenancy.tenant_contract import TenantPlan, TenantRecord, TenantStatus
+from tenancy.tenant_registry import PersistentTenantRegistry
 
 
 class _SQLiteCursorWrapper:

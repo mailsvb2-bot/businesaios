@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 
 from runtime._internal.effect_types import EffectActionType
-from runtime._internal.router_support import execute_effect_action_sync
 from runtime._internal.http_transport import DisabledNetworkTransport
+from runtime._internal.router_support import execute_effect_action_sync
 
 
 class _EffectsStub:

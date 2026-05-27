@@ -2,14 +2,15 @@ from __future__ import annotations
 
 """Canonical package owner for policy support surfaces."""
 
+import json
 from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
-import json
 from typing import Any, Mapping, Protocol
 
 from core.ai.policy_registry import PolicyRegistry
 from runtime.platform.support.contracts.action import Action
 from runtime.platform.support.contracts.observation import Observation
+
 
 class Policy(Protocol):
     def act(self, observation: Observation) -> Action:

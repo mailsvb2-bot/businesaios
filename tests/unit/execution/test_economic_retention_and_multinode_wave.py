@@ -87,9 +87,10 @@ def test_economic_multi_backend_reconciliation_detects_inconsistent_node() -> No
     assert recon['inconsistent_node_ids'] == ['node-b']
 
 
-from execution.economic_export_manifest import manifest_payload_for_digest
-from hashlib import sha256
 import json
+from hashlib import sha256
+
+from execution.economic_export_manifest import manifest_payload_for_digest
 
 
 def test_economic_audit_bundle_recomputes_manifest_digest_after_retention_application() -> None:

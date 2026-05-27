@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from .channel_loader import load_bindings
-from .registry import ChannelRegistry
 from .config import load_runtime_config
 from .defaults import default_compose_view
 from .outbound.ack_reconciliation import ProviderAckReconciliationService
@@ -12,6 +11,7 @@ from .outbound.queue_service import DurableOutboundQueueService
 from .outbound.retry_policy import DeliveryRetryPolicy
 from .outbound.stores import DeadLetterStore, DeliveryAttemptStore, DurableOutboundQueueStore
 from .pipeline import MessagingRuntimePipeline
+from .registry import ChannelRegistry
 from .runner import ChannelRuntimeRunner
 from .state.checkpoints import ConversationCheckpointService
 from .state.guards import InboundIdempotencyGuard

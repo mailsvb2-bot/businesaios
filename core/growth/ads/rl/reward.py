@@ -5,7 +5,7 @@ from typing import Any, Dict, Literal, Tuple
 
 from config.ads_rl_policy import DEFAULT_ADS_RL_REWARD_POLICY, AdsRLRewardPolicy
 
-from .contracts import AdsRLState, AdsRLOptSpec
+from .contracts import AdsRLOptSpec, AdsRLState
 
 
 @dataclass(frozen=True)

@@ -6,15 +6,14 @@ CANON_BOOT_WIRING_ONLY = True
 
 from typing import Any
 
-from governance.economic_layer import EconomicAutonomyLayer
 from bootstrap.decision_core_contract import RuntimeDecisionCorePort
-from runtime.execution.executor_state import build_executor_runtime_infra_from_runtime_infra
-from runtime.executor import RuntimeExecutor
-from runtime.execution.executor_state import RuntimeExecutorInfra
-from runtime.guard import RuntimeGuard
-from runtime.safety import resolve_operational_safety_runtime
-from runtime.recovery import recover_pending
 from bootstrap.governance_execution_boot import build_default_governance_execution_guard
+from governance.economic_layer import EconomicAutonomyLayer
+from runtime.execution.executor_state import RuntimeExecutorInfra, build_executor_runtime_infra_from_runtime_infra
+from runtime.executor import RuntimeExecutor
+from runtime.guard import RuntimeGuard
+from runtime.recovery import recover_pending
+from runtime.safety import resolve_operational_safety_runtime
 
 
 def build_runtime_infra(*, runtime_infra, delivery_state, telegram_outbound_queue, **_unused):

@@ -2,18 +2,16 @@ from __future__ import annotations
 
 """Sealed transport: Telegram Bot API client."""
 
+import inspect
 import time
 from dataclasses import dataclass
-import inspect
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 
-from runtime.platform.delivery_state import ACCEPTED_PHASE, FINALIZED_PHASE, RECOVERY_PHASE
-
+from runtime._internal.http_transport import HttpTransport, build_http_transport
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_bool, env_str
-from runtime._internal.http_transport import HttpTransport, build_http_transport
-from .http_client import http_json
-from ._telegram_delivery_support import delivery_key as build_delivery_key, payload_digest as build_payload_digest, stable_json
+from runtime.platform.delivery_state import ACCEPTED_PHASE, FINALIZED_PHASE, RECOVERY_PHASE
+
 from ._telegram_delivery_state import (
     accepted_receipt_stale,
     delivery_metadata,
@@ -21,9 +19,15 @@ from ._telegram_delivery_state import (
     mark_transport_accepted,
     mark_transport_delivered,
     receipt_phase,
-    recover_inflight_accepted_receipts as recover_inflight_receipts,
     recover_stale_receipt,
 )
+from ._telegram_delivery_state import (
+    recover_inflight_accepted_receipts as recover_inflight_receipts,
+)
+from ._telegram_delivery_support import delivery_key as build_delivery_key
+from ._telegram_delivery_support import payload_digest as build_payload_digest
+from ._telegram_delivery_support import stable_json
+from .http_client import http_json
 
 
 def telegram_api_base() -> str:
@@ -208,7 +212,7 @@ class TelegramClient:
                 external_id = None
                 if isinstance(result.get("result"), Mapping):
                     external_id = result.get("result", {}).get("message_id")
-                mark_transport_delivered(self.delivery_state, 
+                mark_transport_delivered(self.delivery_state,
                     delivery_key=str(delivery_key),
                     external_id=None if external_id is None else str(external_id),
                     payload_digest=str(payload_digest),
@@ -344,13 +348,13 @@ class TelegramClient:
                 if queued:
                     existing_phase = receipt_phase(existing, default=ACCEPTED_PHASE) if existing is not None else None
                     if existing_phase == ACCEPTED_PHASE:
-                        recover_stale_receipt(self.delivery_state, 
+                        recover_stale_receipt(self.delivery_state,
                             delivery_key=delivery_key,
                             payload_digest=payload_digest,
                             metadata={**accepted_metadata, "delivery_phase": RECOVERY_PHASE},
                         )
                     else:
-                        mark_transport_accepted(self.delivery_state, 
+                        mark_transport_accepted(self.delivery_state,
                             delivery_key=delivery_key,
                             payload_digest=payload_digest,
                             metadata=accepted_metadata,
@@ -458,13 +462,13 @@ class TelegramClient:
                 if queued:
                     existing_phase = receipt_phase(existing, default=ACCEPTED_PHASE) if existing is not None else None
                     if existing_phase == ACCEPTED_PHASE:
-                        recover_stale_receipt(self.delivery_state, 
+                        recover_stale_receipt(self.delivery_state,
                             delivery_key=delivery_key,
                             payload_digest=payload_digest,
                             metadata={**accepted_metadata, "delivery_phase": RECOVERY_PHASE},
                         )
                     else:
-                        mark_transport_accepted(self.delivery_state, 
+                        mark_transport_accepted(self.delivery_state,
                             delivery_key=delivery_key,
                             payload_digest=payload_digest,
                             metadata=accepted_metadata,

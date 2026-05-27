@@ -3,7 +3,6 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-
 CRATE_DIR = Path("rust/businessaios_safety_core")
 
 

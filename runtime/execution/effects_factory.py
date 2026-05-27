@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 from typing import Any
+
 from runtime.firewall.capability import issue_capability
 from runtime.ports.effects import EffectsPort
 from runtime.security.capability_gate import GuardedEffectsPort
+
 
 class _NoopDeliveryState:
     def is_delivered(self, message_id: str) -> bool: return False

@@ -14,7 +14,6 @@ This prevents "alternative paths" where a future change bypasses reducers.
 import ast
 import pathlib
 
-
 ALLOWED_CONSTRUCTORS = {
     "interfaces/telegram/runtime/telegram_runtime_worldstate_builder.py",
 }

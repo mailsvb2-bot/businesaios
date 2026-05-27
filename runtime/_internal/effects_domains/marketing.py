@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from runtime.security.runtime_asserts import assert_called_from_executor
 from runtime.observability.error_handling import swallow
+from runtime.security.runtime_asserts import assert_called_from_executor
 
 
 class MarketingEffectsMixin:

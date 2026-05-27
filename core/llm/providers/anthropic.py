@@ -7,7 +7,6 @@ from typing import Any, Callable, Dict
 from config.final_hidden_logic_policy import DEFAULT_ANTHROPIC_PROVIDER_POLICY
 from core.llm.contracts import LLMClient, LLMMessage, LLMRequest, LLMResponse, LLMUsage
 
-
 AnthropicTransport = Callable[[str, str, Dict[str, Any], int], Dict[str, Any]]
 
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from application.decisioning.decision_output_guard import assert_non_decision_payload
 from core.creative_intelligence.budget_policy import build_budget_advice
 from core.creative_intelligence.models import CreativeIntelligenceSnapshot
-from application.decisioning.decision_output_guard import assert_non_decision_payload
 from kernel.decisioning.decision_types import RecommendationSet
 
 

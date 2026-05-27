@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from boot.registrations.simple_singletons import RewardGuard as RuntimeRewardGuard, RiskEngine, SimulationGate
+from boot.registrations.simple_singletons import RewardGuard as RuntimeRewardGuard
+from boot.registrations.simple_singletons import RiskEngine, SimulationGate
 from guardrails.action_budget_guard import ActionBudgetGuard
 from guardrails.circuit_breaker import CircuitBreaker
 from guardrails.daily_action_limit_guard import DailyActionLimitGuard

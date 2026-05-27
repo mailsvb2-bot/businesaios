@@ -3,7 +3,6 @@ from __future__ import annotations
 from application.business_autonomy.channel_contracts import ChannelKind
 from application.business_autonomy.provider_admin_contract import ProviderDefinition, ProviderSecretField
 
-
 CANON_PROVIDER_CATALOG = True
 
 

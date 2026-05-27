@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
-import os
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult
 from application.planning.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
-
 
 _CANON_PLANNING_HORIZON_PRIORITY = {
     'now': 100,

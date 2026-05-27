@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from core.tenancy.normalization import normalize_tenant_id_or_unknown
-from core.autopilot.resolver import resolve_autopilot_contract
-from core.autopilot.read_model import business_metrics_window
 from core.autopilot.guardrails import evaluate_stop_loss, evaluate_stop_loss_window
+from core.autopilot.read_model import business_metrics_window
+from core.autopilot.resolver import resolve_autopilot_contract
 from core.autopilot.stop_loss import build_stop_loss_plan
-from core.ux.callbacks import (
-    CB_AUTOPILOT_MENU,
-    CB_AUTOPILOT_DASHBOARD_TODAY,
-    CB_AUTOPILOT_DASHBOARD_AUTOPILOT,
-    CB_AUTOPILOT_DASHBOARD_TASKS,
-    CB_AUTOPILOT_CLEAR_STOP_LOSS,
-)
-from core.ux.telegram_keyboards import kb_autopilot_menu
 from core.policies.telegram.handlers.autopilot_parts.shared import pm
 from core.policies.telegram.helpers import ProposedAction, propose
+from core.tenancy.normalization import normalize_tenant_id_or_unknown
+from core.ux.callbacks import (
+    CB_AUTOPILOT_CLEAR_STOP_LOSS,
+    CB_AUTOPILOT_DASHBOARD_AUTOPILOT,
+    CB_AUTOPILOT_DASHBOARD_TASKS,
+    CB_AUTOPILOT_DASHBOARD_TODAY,
+    CB_AUTOPILOT_MENU,
+)
+from core.ux.telegram_keyboards import kb_autopilot_menu
 
 
 def stop_loss_verdict(ctx, *, contract, logger) -> Any:

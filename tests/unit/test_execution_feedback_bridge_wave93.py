@@ -1,6 +1,6 @@
 from contracts.action_result import ActionResult
-from orchestration.execution_feedback_bridge import ExecutionToFeedbackFlow as FlowExecutionToFeedbackFlow
 from orchestration.execution_feedback_bridge import ExecutionToFeedbackFlow as CanonicalExecutionToFeedbackFlow
+from orchestration.execution_feedback_bridge import ExecutionToFeedbackFlow as FlowExecutionToFeedbackFlow
 
 
 class _StubFeedbackPipeline:

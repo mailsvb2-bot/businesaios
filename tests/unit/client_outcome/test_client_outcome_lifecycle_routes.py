@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 from adapters.api.fastapi.public_routes import register_public_api_routes
 from entrypoints.api.api_handler_bundle import build_api_handler_bundle
-from entrypoints.api.health_handler import HealthHandler
 from entrypoints.api.economic_route_handlers import build_economic_route_handlers
+from entrypoints.api.health_handler import HealthHandler
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
 

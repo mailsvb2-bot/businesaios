@@ -6,11 +6,10 @@ CANON_BOOT_WIRING_ONLY = True
 import logging
 from typing import Any
 
-from runtime.events import EventLog
-from runtime.observability import log_exception_throttled
 from runtime.boot.boot_helpers import _emit_system_event, _env, _env_bool, _env_csv_tuple, _env_float, _env_int
 from runtime.boot.outbound_constructor import build_with_supported_kwargs
-
+from runtime.events import EventLog
+from runtime.observability import log_exception_throttled
 
 LOGGER = logging.getLogger(__name__)
 

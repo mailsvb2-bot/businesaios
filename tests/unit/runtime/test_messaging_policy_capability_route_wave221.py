@@ -1,5 +1,5 @@
-from runtime.messaging.outbound_message import OutboundMessage
 from runtime._internal.effects_actions.telegram.messaging_parts.policy import execute_with_policy
+from runtime.messaging.outbound_message import OutboundMessage
 from runtime.messaging_capability import ChannelHealth, ChannelHealthRegistry
 
 

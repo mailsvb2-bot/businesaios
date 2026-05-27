@@ -1,6 +1,6 @@
-from runtime.runtime_infra import RuntimeInfra
-from runtime.executor_infra import RuntimeExecutorInfra
 from runtime.boot.system_builder_parts.runtime_services_result import RuntimeServicesResult
+from runtime.executor_infra import RuntimeExecutorInfra
+from runtime.runtime_infra import RuntimeInfra
 
 
 def test_runtime_infra_aliases_are_canonical():

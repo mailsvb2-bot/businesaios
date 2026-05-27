@@ -16,7 +16,7 @@ from core.governance.types import PolicyState
 CANON_RUNTIME_GOVERNANCE_PUBLIC_API = True
 
 __all__ = [
-    'CANON_RUNTIME_GOVERNANCE_NAMESPACE', 
+    'CANON_RUNTIME_GOVERNANCE_NAMESPACE',
     "ActuationRegistry",
     "AuditRecord",
     "RestrictionProposal",

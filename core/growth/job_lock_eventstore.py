@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Iterable, Optional, Protocol
+
 
 class EventStore(Protocol):
     def append(self, *, tenant_id: str, user_id: Optional[str], event_type: str, payload: Dict) -> None: ...

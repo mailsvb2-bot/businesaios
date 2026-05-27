@@ -124,6 +124,7 @@ def score_target_actions(
 
 from application.decisioning.candidate_space import build_candidate_space
 
+
 def advisory_candidate_scores(*, steps, target_action_keys):
     scores = score_target_actions(steps=steps, target_action_keys=target_action_keys)
     return build_candidate_space(

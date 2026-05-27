@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from contextlib import contextmanager, suppress
 import importlib
+from contextlib import contextmanager, suppress
+from dataclasses import replace
 from pathlib import Path
 
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from runtime.queue._sqlite_job_store_codec import row_to_job, write_full_row
-from dataclasses import replace
-
 from runtime.queue.job_contract import JobRecord, JobState, normalize_now
 from runtime.queue.job_fencing import validate_fencing_token
 

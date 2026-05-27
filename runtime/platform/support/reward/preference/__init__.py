@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 
+
 class EvaluatorBridge:
     def bridge(self, score: float) -> dict[str, float]:
         return {"preference_score": score}

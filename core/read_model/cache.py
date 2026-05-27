@@ -14,7 +14,6 @@ from config.read_model_cache_policy import (
 )
 from core.events.read_model_support import best_effort_latest_event
 
-
 T = TypeVar("T")
 
 

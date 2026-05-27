@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from growth.budget_engine import BudgetEngine
 from growth.campaign_engine import CampaignEngine
+from growth.core.growth_engine import CANON_GROWTH_CHANNEL_FEATURE_KEYS, GrowthEngine
 from growth.creative_engine import CreativeEngine
 from growth.engine_base import GrowthEngineSurface
-from growth.core.growth_engine import CANON_GROWTH_CHANNEL_FEATURE_KEYS, GrowthEngine
 
 
 def test_growth_engines_share_common_surface_base() -> None:

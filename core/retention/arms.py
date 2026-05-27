@@ -10,8 +10,10 @@ from core.retention.config.ai_limits import LIMITS, is_allowed_arm
 from core.retention.config.offer_catalog import OFFERS
 from core.retention.config.pricing_ladder import (
     WINDOWS,
-    base_price_for_arm as ladder_base_price_for_arm,
     window_for_arm,
+)
+from core.retention.config.pricing_ladder import (
+    base_price_for_arm as ladder_base_price_for_arm,
 )
 from core.retention.ports import RetentionStore
 

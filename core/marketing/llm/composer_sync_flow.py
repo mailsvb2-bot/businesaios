@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from core.marketing.async_runner import run_awaitable_sync
 from core.marketing.llm.cache_keys import build_cache_key
 from core.marketing.llm.compose_context import build_compose_context
 from core.marketing.llm.flow import build_request, finalize_text, start_request
@@ -11,7 +12,6 @@ from core.marketing.llm.runtime_flow import (
     emit_trace_cache_hit_sync,
 )
 from core.marketing.llm.skip_flow import append_dedupe_skip_sync, emit_dedupe_skip_sync
-from core.marketing.async_runner import run_awaitable_sync
 from core.marketing.llm_guardrails import err_code
 from core.marketing.llm_telemetry import emit_trace_sync
 from core.telemetry.trace_utils import now_ms

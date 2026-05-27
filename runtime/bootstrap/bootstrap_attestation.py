@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
+
 from runtime.bootstrap.bootstrap_contract import (
     BOOTSTRAP_CONTRACT_VERSION,
     BootstrapArtifacts,
@@ -11,6 +13,8 @@ from runtime.bootstrap.bootstrap_contract import (
     BootstrapEnvironment,
 )
 from runtime.bootstrap.startup_validator import validate_attestation_alignment
+
+
 def _sha256_file(path: Path) -> str | None:
     if not path.exists() or not path.is_file():
         return None

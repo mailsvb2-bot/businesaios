@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import hashlib
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
-
-from core.llm.contracts import LLMClient, LLMMessage, LLMRequest
-from core.llm.templated import TemplatedLLM
 
 # Canonical integration points (avoid provider coupling / multiple truths).
 from core.ads.ads_service import AdsPlan, AdsService
 from core.llm.agent import LLMAgent, LLMTaskContext, TaskType
+from core.llm.contracts import LLMClient, LLMMessage, LLMRequest
+from core.llm.templated import TemplatedLLM
 
-from .models import CreativeCandidate, CreativeSelection, CreativeGuardrails
 from .guardrails import validate_creative
+from .models import CreativeCandidate, CreativeGuardrails, CreativeSelection
 from .prompting import CreativeBrief, build_messages
 
 

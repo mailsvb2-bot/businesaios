@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 def apply_soft_backoff_preset(world_state: dict[str, object]) -> dict[str, object]:
     result = dict(world_state)
     behavior = dict(result.get("behavior", {}))

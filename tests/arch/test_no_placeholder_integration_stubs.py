@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from tests.arch.scanners.python_file_loader import read_text
 
-
 PLACEHOLDER_WORDS = (
     "todo",
     "stub",

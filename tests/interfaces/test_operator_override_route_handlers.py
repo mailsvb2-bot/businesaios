@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import pytest
 from datetime import timedelta
+
+import pytest
 
 from execution.operator_override_contract import OperatorOverrideResolution
 from execution.operator_override_store import InMemoryOperatorOverrideStore
@@ -188,9 +189,9 @@ def test_operator_override_listing_reports_history_lifecycle_without_cross_tenan
     assert tenant_b['summary']['lifecycle_counts']['requested'] == 1
 
 
+from governance.approval_contract import ApprovalOutcome
 from governance.approval_store import InMemoryApprovalStore
 from governance.control_plane_audit_log import PersistentGovernanceAuditLog
-from governance.approval_contract import ApprovalOutcome
 
 
 def test_route_handlers_expose_tenant_audit_summary_without_cross_tenant_leak(tmp_path) -> None:

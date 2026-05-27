@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from time import time
 
-
 CANON_RUNTIME_INFERENCE_UPGRADE_COOLDOWN_TRACKER = True
 
 

@@ -19,12 +19,11 @@ from runtime.queue.job_contract import JobRecord, JobState, normalize_now
 from runtime.queue.job_lease_manager import JobLeaseManager
 from runtime.queue.job_store import JobStore
 from runtime.queue.tenant_fair_scheduler import (
-    TenantFairScheduleReport,
     TenantFairScheduler,
+    TenantFairScheduleReport,
     TenantQueuePressure,
 )
 from runtime.queue.throttle_policy import ThrottlePolicy
-
 
 CANON_RUNTIME_QUEUE_SCHEDULER = True
 

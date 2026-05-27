@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import random
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-import hashlib
-import random
 from core.observability.silent import swallow
 
 

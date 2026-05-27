@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-from core.growth.campaign_builder.service import AutopilotCampaignBuilder
 from core.economics.objective import normalize_objective
+from core.growth.campaign_builder.service import AutopilotCampaignBuilder
 
 Json = Dict[str, Any]
 

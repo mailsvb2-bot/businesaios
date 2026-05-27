@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Audience interest selector.
 
 AudienceSelector — pure, sync, keyword-heuristic (domain default, no I/O).

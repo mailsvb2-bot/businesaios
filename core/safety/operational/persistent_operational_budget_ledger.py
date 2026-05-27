@@ -9,7 +9,6 @@ from threading import RLock
 
 from core.safety.operational.operational_budget_ledger import OperationalBudgetCounters
 
-
 CANON_PERSISTENT_OPERATIONAL_BUDGET_LEDGER = True
 
 

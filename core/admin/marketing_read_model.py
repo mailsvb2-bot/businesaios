@@ -14,7 +14,6 @@ from typing import Any, Dict
 
 from core.read_model.cache import global_cache, watermark_for
 
-
 DEFAULTS: Dict[str, Dict[str, str]] = {
     "menu_main": {
         "a": "BusinesAIOS Workspace: переобучение нервной системы через ритм повседневности.\n\nГлавное меню — выбери, что сейчас нужно:",

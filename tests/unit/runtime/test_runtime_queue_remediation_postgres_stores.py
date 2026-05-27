@@ -4,7 +4,11 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from runtime.queue.queue_remediation_audit_postgres import PostgresQueueRemediationAuditStore
-from runtime.queue.queue_remediation_hooks import QueueRemediationExecutionReport, QueueRemediationHook, QueueRemediationPlan
+from runtime.queue.queue_remediation_hooks import (
+    QueueRemediationExecutionReport,
+    QueueRemediationHook,
+    QueueRemediationPlan,
+)
 from runtime.queue.queue_remediation_route_history_postgres import PostgresQueueRemediationRouteHistoryStore
 
 

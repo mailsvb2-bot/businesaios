@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from tests.arch._canon_domain_registry_guard import domain_info_list, missing_required_files
 
+
 def test_domain_registry_canonical_domains_have_required_core_files() -> None:
     offenders: list[str] = []
     for domain in domain_info_list():

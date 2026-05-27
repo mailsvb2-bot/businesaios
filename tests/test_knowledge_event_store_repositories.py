@@ -12,7 +12,6 @@ from core.knowledge.types import LessonDraft, MemoryLink, PatternDraft, TagSet
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
-
 def test_event_store_repositories_roundtrip() -> None:
     store = MemoryEventStore()
     tenant_id = "tenant-a"

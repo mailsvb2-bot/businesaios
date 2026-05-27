@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from observability.audit_event_schema import AuditCategory, AuditEventRecord, AuditSeverity
 from observability.audit_export_service import AuditExportService
-from observability.incident_signal_store import InMemoryIncidentSignalStore, IncidentSignalRecord, IncidentStatus
-
+from observability.incident_signal_store import IncidentSignalRecord, IncidentStatus, InMemoryIncidentSignalStore
 
 TENANT_ID = "tenant-a"
 

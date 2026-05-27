@@ -15,7 +15,6 @@ from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_observability import QueueObservabilityRegistry
 from runtime.queue.queue_slo import QueueSLOEvaluator, QueueSLOReport
 
-
 CANON_RUNTIME_QUEUE_ALERTS = True
 
 

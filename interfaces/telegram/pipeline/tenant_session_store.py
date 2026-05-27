@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
-from core.tenancy.scope import as_tenant_id, TenantId
+from core.tenancy.scope import TenantId, as_tenant_id
 
 
 @dataclass

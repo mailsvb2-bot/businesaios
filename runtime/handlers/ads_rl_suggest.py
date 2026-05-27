@@ -6,12 +6,10 @@ CANON_THIN_HANDLER = True
 import logging
 from typing import Any, Dict
 
+from runtime.ads import RLSuggester, bind_runtime_state, policy_store
+from runtime.governance import PolicyUpdateGate, PolicyUpdateGateError, ProfitMetricsService
 from runtime.ports.effects import EffectsPort
 from runtime.tenancy import as_tenant_id
-
-from runtime.governance import ProfitMetricsService, PolicyUpdateGate, PolicyUpdateGateError
-
-from runtime.ads import RLSuggester, bind_runtime_state, policy_store
 
 logger = logging.getLogger(__name__)
 

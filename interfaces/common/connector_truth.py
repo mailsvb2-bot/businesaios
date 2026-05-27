@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from execution.runtime_keys import OBSERVABILITY_KEY
-
 from interfaces.common.connector_capabilities import ConnectorCapabilities
 from interfaces.common.connector_maturity import ConnectorMaturity
 from interfaces.common.connector_support import LIVE_MODE, STUB_MODE

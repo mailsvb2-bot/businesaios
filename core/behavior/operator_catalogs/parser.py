@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from core.behavior.operator_catalogs.models import catalog_from_raw, OperatorCatalog
+from core.behavior.operator_catalogs.models import OperatorCatalog, catalog_from_raw
 
 
 def parse_operator_catalog(data: Mapping[str, Any]) -> OperatorCatalog:

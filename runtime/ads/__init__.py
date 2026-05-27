@@ -35,7 +35,7 @@ from core.growth.event_sink import EventLogSink
 from core.growth.spend_ledger_event_store import EventStoreSpendLedger
 
 __all__ = [
-    'CANON_RUNTIME_ADS_NAMESPACE', 
+    'CANON_RUNTIME_ADS_NAMESPACE',
     "AdsApplyEngine",
     "AdsApplyEnv",
     "AdsApplyLimits",

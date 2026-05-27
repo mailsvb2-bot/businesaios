@@ -3,20 +3,19 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any, Iterable, Mapping
 
-from contracts.action_impact_contract import ActionImpact, ActionCategory
-from governance.rbac_contract import ActorContext, RoleId
-from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest
+from contracts.action_impact_contract import ActionCategory, ActionImpact
 from execution.approval_execution_gate import ApprovalExecutionGate
-from execution.operator_override_store import build_default_operator_override_store
 from execution.approval_policy_engine import ApprovalPolicyEngine
+from execution.operator_override_store import build_default_operator_override_store
+from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest
 from governance.approval_store import PersistentApprovalStore
 from governance.approval_workflow import ApprovalWorkflow
 from governance.change_control_policy import ChangeControlPolicy
 from governance.control_plane_audit_log import PersistentGovernanceAuditLog
+from governance.rbac_contract import ActorContext, RoleId
 from governance.tenant_policy_overrides import PersistentTenantPolicyOverrideRegistry
-
-from runtime.execution.operational_budget_runtime import build_action_execution_context
 from runtime.execution.governance_runtime_support import _append_governance_audit, _governance_audit_log
+from runtime.execution.operational_budget_runtime import build_action_execution_context
 
 CANON_RUNTIME_GOVERNANCE_EXECUTION_GATE = True
 

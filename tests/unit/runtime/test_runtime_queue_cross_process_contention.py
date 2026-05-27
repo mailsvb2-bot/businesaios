@@ -7,7 +7,6 @@ from pathlib import Path
 from runtime.queue.job_contract import JobDispatchRequest, utc_now
 from runtime.queue.job_store_sqlite import SqliteJobStore
 
-
 CTX = get_context("fork")
 
 

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from dataclasses import asdict, dataclass, is_dataclass
 import gzip
 import json
+from collections.abc import Iterable
+from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
 from typing import Any, Protocol, TypeVar
 
@@ -12,6 +12,7 @@ from runtime.platform.support.contracts.observation import Observation
 from runtime.platform.support.contracts.reward import Reward
 from runtime.platform.support.contracts.trajectory import Trajectory
 from runtime.platform.support.contracts.transition import Transition
+
 
 def compress(data: bytes) -> bytes:
     return gzip.compress(data)

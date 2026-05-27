@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from runtime.enforcement import WorldModelPin, WorldModelPinCheckResult
-from runtime.world_model import extract_world_model_metadata
 from runtime.platform.config.env_flags import env_bool
+from runtime.world_model import extract_world_model_metadata
 
 
 class WorldModelPinMismatchError(RuntimeError):

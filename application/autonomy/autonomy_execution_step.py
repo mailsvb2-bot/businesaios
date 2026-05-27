@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from execution.runtime_keys import ACTION_BUDGET_KEY
 from dataclasses import replace
 from typing import Any
 
-from kernel.decision_crypto import envelope_has_required_signature_fields, signed_envelope_from_decision
 from application.headless.execution_gateway import execute_headless_envelope
+from execution.runtime_keys import ACTION_BUDGET_KEY
+from kernel.decision_crypto import envelope_has_required_signature_fields, signed_envelope_from_decision
 from runtime.execution.executor_result import ExecutionResult
-
 
 CANON_AUTONOMY_EXECUTION_STEP = True
 CANON_AUTONOMY_EXECUTION_STEP_GATEWAY_EXECUTION_OWNER = True

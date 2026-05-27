@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from interfaces.api.health_handler import HealthHandler
 from deployment.migration_guard import MigrationGuard, MigrationGuardError
 from deployment.readiness_checks import build_default_readiness_registry
 from deployment.release_audit import ReleaseAuditService
 from deployment.version_manifest import VersionManifestBuilder
+from interfaces.api.health_handler import HealthHandler
 from runtime.runtime_orchestrator import RuntimeOrchestrator
 from shared.registry import ComponentRegistry, ServiceRegistry
-from storage.migration_registry import MigrationRegistry, Migration
+from storage.migration_registry import Migration, MigrationRegistry
 
 
 class _Executor:

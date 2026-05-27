@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 NEW_SURFACES = {
     'security/aws_kms_adapter.py',
     'security/gcp_kms_adapter.py',

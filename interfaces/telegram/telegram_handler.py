@@ -8,8 +8,8 @@ from interfaces.telegram.telegram_action_models import (
     TelegramIncomingMessage,
     TelegramOutgoingMessage,
 )
-from runtime.messaging.inbound_message import InboundMessage
 from runtime.messaging.inbound_entrypoint import handle_inbound_message
+from runtime.messaging.inbound_message import InboundMessage
 
 
 @dataclass(frozen=True)

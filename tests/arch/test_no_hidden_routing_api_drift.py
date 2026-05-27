@@ -6,7 +6,6 @@ from tests.arch.rules.forbidden_name_fragments import FORBIDDEN_DECISION_FRAGMEN
 from tests.arch.scanners.name_fragment_scanner import find_function_names
 from tests.arch.scanners.python_file_loader import read_text
 
-
 TARGET_FILES = (
     "runtime/integration/runtime_packet_provider.py",
     "runtime/decision_input/runtime_state_enrichment.py",

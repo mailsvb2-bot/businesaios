@@ -3,8 +3,8 @@ from __future__ import annotations
 from core.growth.ads.creative.pipeline import generate_candidates
 from core.llm.contracts import LLMMessage, LLMRequest, LLMResponse
 from core.llm.templated import TemplatedLLM
-from runtime.llm_provider_factory import resolve_runtime_llm_settings
 from runtime.llm_completion_support import read_provider_and_model
+from runtime.llm_provider_factory import resolve_runtime_llm_settings
 
 
 class _CanonicalCreativeLLM:

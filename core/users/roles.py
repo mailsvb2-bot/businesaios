@@ -12,7 +12,7 @@ This is intentionally dumb and explicit.
 """
 
 from dataclasses import dataclass
-from typing import Mapping, Any, Literal
+from typing import Any, Literal, Mapping
 
 UserRole = Literal["owner", "marketer", "operator"]
 

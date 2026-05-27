@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from execution.business_operating_memory import project_business_memory_contract_bundle, project_business_memory_meta_payloads
+from execution.business_operating_memory import (
+    project_business_memory_contract_bundle,
+    project_business_memory_meta_payloads,
+)
 from execution.headless_trace import HeadlessTrace
-
 
 CANON_AUTONOMY_STATE_ASSEMBLY = True
 

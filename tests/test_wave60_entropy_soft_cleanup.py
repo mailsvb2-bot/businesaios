@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from core.tenancy.normalization import normalize_tenant_id_or_unknown, UNKNOWN_TENANT_ID
+from core.policies.telegram.handlers.offer_outcome import handle_offer_outcome
+from core.tenancy.normalization import UNKNOWN_TENANT_ID, normalize_tenant_id_or_unknown
+from runtime.firewall.effect_port import GuardedEffects
 from runtime.handlers_messaging import _resolve_tenant_id
 from runtime.telegram_message_factory import resolve_tenant_id as resolve_message_factory_tenant_id
-from runtime.firewall.effect_port import GuardedEffects
-from core.policies.telegram.handlers.offer_outcome import handle_offer_outcome
 
 
 def test_normalize_tenant_id_or_unknown_collapses_placeholder_values():

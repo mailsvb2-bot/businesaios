@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Outbound queue data types.
 
 Extracted from outbound_queue.py to eliminate god-module.

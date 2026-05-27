@@ -5,7 +5,6 @@ from typing import Tuple
 
 from .models import CreativeCandidate, CreativeGuardrails
 
-
 _RE_EXCESSIVE_PUNCT = re.compile(r"([!?])\1\1+")
 
 

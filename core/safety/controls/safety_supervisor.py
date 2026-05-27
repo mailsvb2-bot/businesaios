@@ -9,7 +9,6 @@ from .policy_trust_chain import PolicyTrustChain
 from .rollback_verifier import RollbackVerifier
 from .safety_slo import DEFAULT_SAFETY_SLO, SafetySLO
 
-
 CANON_SAFETY_SUPERVISOR = True
 
 

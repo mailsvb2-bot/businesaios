@@ -3,7 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from ..types import BudgetEnvelope, BudgetAllocationAdvice, EconomicAction, EconomicState, RiskBudgetAdvice, SpendCapAdvice
+from ..types import (
+    BudgetAllocationAdvice,
+    BudgetEnvelope,
+    EconomicAction,
+    EconomicState,
+    RiskBudgetAdvice,
+    SpendCapAdvice,
+)
 from .budget_allocation_policy import BudgetAllocationPolicy
 from .risk_budget_policy import RiskBudgetPolicy
 from .spend_cap_policy import SpendCapPolicy

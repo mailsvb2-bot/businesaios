@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict, Iterable
 
 from core.observability.throttled_logger import exception_throttled
+
 from .shared import safe_json
 
 logger = logging.getLogger(__name__)

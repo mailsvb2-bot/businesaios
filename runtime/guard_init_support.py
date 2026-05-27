@@ -3,8 +3,8 @@ from __future__ import annotations
 from threading import Lock
 from typing import Any
 
-from runtime.time import SystemClock
 from runtime.platform.config.env_flags import env_str
+from runtime.time import SystemClock
 
 
 def init_reference_mode(*, guard: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> None:
@@ -27,10 +27,10 @@ def init_reference_mode(*, guard: Any, args: tuple[Any, ...], kwargs: dict[str, 
 
 def init_production_mode(*, guard: Any, args: tuple[Any, ...], kwargs: dict[str, Any], build_action_contract_runtime: Any, rate_limiter_factory: Any) -> None:
     keyring, ledger, schema_registry = args[0], args[1], args[2]
-    event_log = kwargs.get("event_log", None)
+    event_log = kwargs.get("event_log")
     ttl_skew_ms = int(kwargs.get("ttl_skew_ms", 0))
-    clock = kwargs.get("clock", None)
-    survival_controller = kwargs.get("survival_controller", kwargs.get("survival", None))
+    clock = kwargs.get("clock")
+    survival_controller = kwargs.get("survival_controller", kwargs.get("survival"))
     default_issuer = env_str("BUSINESAIOS_ISSUER_ID", "businesaios-core").strip() or "businesaios-core"
     expected_issuer_id = str(kwargs.get("expected_issuer_id", default_issuer) or default_issuer).strip() or default_issuer
 

@@ -9,7 +9,6 @@ from lock.economic_sealed_execution_lock import (
     FORBIDDEN_SECOND_BRAIN_MARKERS,
 )
 
-
 _GATEWAY_IMPORT_PATTERNS = (
     'from runtime.executor import build_click_provider_dispatch_execution_contract',
     'from runtime.executor import build_spend_runtime_execution_contract',

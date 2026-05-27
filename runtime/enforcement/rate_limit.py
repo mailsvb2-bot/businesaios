@@ -11,6 +11,7 @@ This module is intentionally small and deterministic.
 
 from dataclasses import dataclass
 
+from runtime.boot.actions_registry import ActionSpecV1
 from runtime.ratelimit import (
     MemoryRateLimitStore,
     RateLimitKey,
@@ -18,8 +19,6 @@ from runtime.ratelimit import (
     TokenBucketLimiter,
 )
 from runtime.tenancy import TenantId
-
-from runtime.boot.actions_registry import ActionSpecV1
 
 
 @dataclass(frozen=True)

@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from pathlib import Path
+
 
 def _split_markers(block: str) -> tuple[str, str]:
     lines = [line.strip() for line in block.splitlines() if line.strip()]

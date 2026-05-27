@@ -6,8 +6,8 @@ from typing import Protocol
 
 from runtime.platform.safety_circuit_breaker_store import (
     CANON_PLATFORM_SAFETY_CIRCUIT_BREAKER_STORE,
-    PlatformSqliteCircuitBreakerStore,
     SCHEMA_VERSION,
+    PlatformSqliteCircuitBreakerStore,
 )
 
 from .models import CircuitBreakerState

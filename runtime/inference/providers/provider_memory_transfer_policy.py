@@ -4,7 +4,6 @@ from execution.inference_acceleration_contract import InferenceMemoryTransferPla
 from execution.inference_provider_contract import InferenceProvider
 from runtime.inference.providers.provider_acceleration_profile import InferenceProviderAccelerationProfileCatalog
 
-
 CANON_RUNTIME_INFERENCE_PROVIDER_MEMORY_TRANSFER_POLICY = True
 
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Worker loop internals for TelegramOutboundQueue.
 
 Responsibility:

@@ -1,5 +1,5 @@
-from orchestration.closed_loop_growth_orchestrator import ClosedLoopGrowthFlow as FlowClosedLoopGrowthFlow
 from orchestration.closed_loop_growth_orchestrator import ClosedLoopGrowthFlow as CanonicalClosedLoopGrowthFlow
+from orchestration.closed_loop_growth_orchestrator import ClosedLoopGrowthFlow as FlowClosedLoopGrowthFlow
 
 
 class _OpportunityPipeline:

@@ -5,7 +5,6 @@ from pathlib import Path
 from canon.runtime_forbidden_raw_access import FORBIDDEN_RUNTIME_RAW_ACCESS_PATTERNS
 from canon.runtime_risk_zones import RUNTIME_RISK_ZONE_PATH_FRAGMENTS
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 

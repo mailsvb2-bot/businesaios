@@ -1,16 +1,15 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from threading import RLock
 from typing import Protocol
-import os
 
 from core.tenancy.normalization import require_tenant_id
 from governance.persistence_codec import atomic_write_json, from_dataclass, read_json_or_default, to_jsonable
-from runtime.queue.job_contract import JobRecord, MAX_ERROR_LENGTH, normalize_now, utc_now
-
+from runtime.queue.job_contract import MAX_ERROR_LENGTH, JobRecord, normalize_now, utc_now
 
 CANON_RUNTIME_QUEUE_DEAD_LETTER_STORE = True
 

@@ -13,7 +13,6 @@ from typing import Any, Dict, Iterable, List, Sequence
 
 from .sqlite_helpers import _exclusive_end_ms, _row_to_event
 
-
 EVENT_COLUMNS = (
     "event_id,tenant_id,user_id,source,event_type,timestamp_ms,decision_id,correlation_id,payload_json"
 )

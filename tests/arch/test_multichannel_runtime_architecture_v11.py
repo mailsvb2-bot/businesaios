@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 FORBIDDEN = [
     "decide_price(",
     "select_growth_strategy(",

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from core.creative_intelligence.models import CreativeIntelligenceSnapshot
 from config.reward_bridge_policy import DEFAULT_IMMEDIATE_REWARD_POLICY, RewardBridgePolicy
+from core.creative_intelligence.models import CreativeIntelligenceSnapshot
 
 
 def build_immediate_reward(

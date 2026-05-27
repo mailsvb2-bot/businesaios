@@ -1,6 +1,6 @@
-from interfaces.llm import TemplatedLLM
 from core.growth.ads.creative import generate_candidates, select_creative
 from core.growth.ads.creative.models import CreativeGuardrails
+from interfaces.llm import TemplatedLLM
 
 
 def test_generate_and_select_smoke():

@@ -17,7 +17,6 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from core.causal.api import estimate_causal_effect
 from core.causal.types import CausalDataset, CausalQuery, CausalRow, EffectEstimate
 
-
 Json = Dict[str, Any]
 
 

@@ -11,7 +11,6 @@ from contracts.behavior_graph import GraphSnapshot
 from runtime.behavior import BehaviorGraphStore, build_behavior_graph_from_events
 from runtime.tenancy import require_tenant_id
 
-
 logger = logging.getLogger(__name__)
 
 def _scope_from_payload(p: dict) -> str:

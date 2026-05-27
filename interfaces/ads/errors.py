@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Optional
+
 
 class AdsConnectorError(RuntimeError):
     """Base connector error."""

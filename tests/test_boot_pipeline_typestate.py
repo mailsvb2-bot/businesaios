@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from runtime.platform.identity.entitlements import InMemoryEntitlementsProvider, InMemoryIdentityProvider
 from runtime.boot.system_builder import SystemBuilder
+from runtime.platform.identity.entitlements import InMemoryEntitlementsProvider, InMemoryIdentityProvider
 
 
 def test_pipeline_allowed_wires_services() -> None:

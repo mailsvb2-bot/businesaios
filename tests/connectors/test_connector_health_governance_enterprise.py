@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 
+from connectors.platform.connector_capability_contract import ConnectorCapabilityDescriptor, ConnectorMaturity
 from connectors.platform.connector_circuit_breaker import BreakerState, CircuitBreakerRule, ConnectorCircuitBreaker
 from connectors.platform.connector_contract import ConnectorRequest, ConnectorVerificationRequest
 from connectors.platform.connector_failover_router import ConnectorFailoverRouter
@@ -13,7 +14,6 @@ from connectors.platform.connector_retry_policy import ConnectorRetryPolicy
 from connectors.platform.connector_version_registry import ConnectorVersionRecord, ConnectorVersionRegistry
 from interfaces.common.connector_health import ConnectorHealth
 from interfaces.common.connector_result import ConnectorResult
-from connectors.platform.connector_capability_contract import ConnectorCapabilityDescriptor, ConnectorMaturity
 
 
 @dataclass

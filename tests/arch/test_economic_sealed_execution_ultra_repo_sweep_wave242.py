@@ -9,7 +9,6 @@ from lock.economic_sealed_execution_lock import (
     SEALED_EXECUTION_ROUTE_PATHS,
 )
 
-
 _HELPER_MARKERS = (
     'build_click_provider_dispatch_execution_contract',
     'build_spend_runtime_execution_contract',

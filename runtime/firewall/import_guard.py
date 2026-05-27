@@ -1,13 +1,13 @@
 import builtins
 import contextlib
 import contextvars
-import inspect
 import importlib.abc
+import inspect
 import sys
 from types import FrameType
 from typing import Optional
-from runtime.observability.error_handling import swallow
 
+from runtime.observability.error_handling import swallow
 
 # Modules that are considered "real-world integrations" and must be reachable ONLY via
 # runtime.executor -> (private effects impl) (hermetic runtime law).

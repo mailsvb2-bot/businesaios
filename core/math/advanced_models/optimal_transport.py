@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Sequence, Tuple
 
+
 @dataclass(frozen=True)
 class TransportResult:
     allocation: List[List[float]]

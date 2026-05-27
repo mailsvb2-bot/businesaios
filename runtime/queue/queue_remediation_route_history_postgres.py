@@ -2,9 +2,9 @@ from __future__ import annotations
 
 """Postgres-backed route history for queue remediation surfaces."""
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
-import json
 
 from runtime.platform.postgres_port import PostgresPort
 from runtime.queue.job_contract import normalize_now

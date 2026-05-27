@@ -6,10 +6,9 @@ Complex numbers are represented as separate real/imag tuples for speed
 and deterministic serialization.
 """
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 from typing import Tuple
-
 
 EPS = 1e-9
 

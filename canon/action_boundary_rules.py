@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 FORBIDDEN_ACTION_BOUNDARY_KEYS: tuple[str, ...] = (
     "action_space",
     "candidate_ids",

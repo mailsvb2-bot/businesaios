@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from datetime import date
+
 from tests.arch._canon_migration_registry_guard import load_registry
 
 OPEN_STATUSES = {"planned", "active", "blocked"}

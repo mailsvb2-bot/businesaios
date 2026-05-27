@@ -15,11 +15,11 @@ Rules:
 import time
 from typing import Any, Dict, List, Optional
 
-from kernel.world_state import WorldStateV1
 from core.read_model.world_state_builder import build_world_state_from_events
 from interfaces.telegram.parsing.telegram_context import TelegramContext
 from interfaces.telegram.runtime.worldstate_causal import apply_causal_overlay
 from interfaces.telegram.runtime.worldstate_overlays import build_overlays_from_context, finalize_world_state
+from kernel.world_state import WorldStateV1
 
 
 def make_minimal_context_for_chat(*, chat_id: str, user_id: str | None = None) -> TelegramContext:

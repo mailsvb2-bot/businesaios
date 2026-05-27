@@ -10,7 +10,12 @@ connector call sites.
 from typing import Any, Dict, Sequence
 
 from .base import AdsObjectRef, AdsPlatform, Campaign, MetricPoint
-from .connector_mapping_support import parse_metric_day, parse_optional_budget, resolve_first_nonempty, resolve_first_present
+from .connector_mapping_support import (
+    parse_metric_day,
+    parse_optional_budget,
+    resolve_first_nonempty,
+    resolve_first_present,
+)
 from .connector_shared import as_float, as_int, as_optional_float, as_optional_int, safe_ratio
 
 

@@ -25,7 +25,7 @@ def build_runtime_review_case(subject_id: str, reason: str) -> ReviewCase:
 
 
 __all__ = [
-    'CANON_RUNTIME_HUMAN_GOVERNANCE_NAMESPACE', 
+    'CANON_RUNTIME_HUMAN_GOVERNANCE_NAMESPACE',
     'CANON_RUNTIME_HUMAN_GOVERNANCE_PUBLIC_API',
     'ReviewCase',
     'build_runtime_review_case',

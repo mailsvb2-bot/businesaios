@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from runtime.ads import AutopilotTarget
 from runtime.tenancy import normalize_tenant_id
+
 
 async def ads_autopilot_tick(sys) -> None:
     scheduler = getattr(sys, "autopilot_scheduler", None)

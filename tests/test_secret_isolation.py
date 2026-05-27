@@ -1,6 +1,5 @@
 import pathlib
 
-
 FORBIDDEN_IMPORT = "infra.secrets"
 
 

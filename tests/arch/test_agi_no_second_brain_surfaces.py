@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 FORBIDDEN_SURFACES = (
     "core/ai/agi_decision_core.py",
     "core/decision/agi_decision_core.py",

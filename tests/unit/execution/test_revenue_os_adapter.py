@@ -3,7 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from execution.revenue_os_adapter import RevenueOSAdapter
-from runtime.monetization import RevenuePaywallVariantInput, RevenuePlanInput, RevenuePricePointInput, RevenueSnapshotInput
+from runtime.monetization import (
+    RevenuePaywallVariantInput,
+    RevenuePlanInput,
+    RevenuePricePointInput,
+    RevenueSnapshotInput,
+)
 
 
 def _snapshot(**overrides):

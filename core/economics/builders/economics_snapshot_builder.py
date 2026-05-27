@@ -4,7 +4,17 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 
 from ..ids import EconomicsSnapshotId
-from ..types import BudgetEnvelope, CACSnapshot, EconomicsEvaluation, EconomicsReadModel, EconomicsSnapshot, LTVSnapshot, MarginSnapshot, PaybackSnapshot, UnitEconomics
+from ..types import (
+    BudgetEnvelope,
+    CACSnapshot,
+    EconomicsEvaluation,
+    EconomicsReadModel,
+    EconomicsSnapshot,
+    LTVSnapshot,
+    MarginSnapshot,
+    PaybackSnapshot,
+    UnitEconomics,
+)
 from .explanation_builder import EconomicsExplanationBuilder
 
 

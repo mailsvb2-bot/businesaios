@@ -1,24 +1,24 @@
 import math
 
 from core.math import (
+    UCB1,
     HistorySignals,
+    ThompsonBernoulli,
     bayes,
+    cac,
     entropy,
-    sigmoid,
+    fit_alpha_mle,
+    little_law,
     logit,
     ltv,
-    cac,
-    unit_profit,
-    little_law,
     mm1_wait_time,
     pagerank,
-    UCB1,
-    ThompsonBernoulli,
+    pareto_top_share,
+    purchase_prob_from_history,
+    sigmoid,
+    unit_profit,
     z_test_proportions,
     z_to_pvalue_2sided,
-    pareto_top_share,
-    fit_alpha_mle,
-    purchase_prob_from_history,
 )
 
 

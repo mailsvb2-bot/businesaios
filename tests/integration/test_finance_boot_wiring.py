@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from runtime.boot.finance_boot import StrategicFinanceRuntime, build_finance_runtime, register_finance_events, register_finance_jobs
+from runtime.boot.finance_boot import (
+    StrategicFinanceRuntime,
+    build_finance_runtime,
+    register_finance_events,
+    register_finance_jobs,
+)
 
 
 def test_finance_boot_wiring_uses_single_runtime_singleton() -> None:

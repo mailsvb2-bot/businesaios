@@ -9,8 +9,9 @@ This script is deterministic and safe to run locally.
 """
 
 import argparse
-from pathlib import Path
 import sys
+from pathlib import Path
+
 sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[1]

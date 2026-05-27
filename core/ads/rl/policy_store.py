@@ -7,7 +7,6 @@ from typing import Any, Optional
 
 from core.events.log import EventLog
 
-
 _POLICY_EVENT_TYPE = "ads_rl_policy_snapshot@v1"
 _POLICY_SOURCE = "ads_rl"
 _POLICY_ID_DEFAULT = "ads.rl.policy.v1"

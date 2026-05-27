@@ -3,17 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from core.llm.budget import BudgetCaps
 from config.marketing_llm_policy import DEFAULT_MARKETING_LLM_POLICY, MarketingLLMPolicy
+from core.llm.budget import BudgetCaps
 from core.llm.circuit import CircuitConfig
 from core.llm.contracts import LLMClient
 from core.llm.sampling import DebugSampling
 from core.marketing.async_runner import run_awaitable_sync
 from core.marketing.llm.composer_runtime import build_composer_runtime
 from core.marketing.llm.service import compose_marketing_text_async, compose_marketing_text_sync
-from core.marketing.llm_text_policy import validate_marketing_text as _validate_marketing_text
 from core.marketing.llm_prompt_builder import MarketingLLMInputs
 from core.marketing.llm_telemetry import emit_trace_async, maybe_emit_alert
+from core.marketing.llm_text_policy import validate_marketing_text as _validate_marketing_text
 
 validate_marketing_text = _validate_marketing_text
 

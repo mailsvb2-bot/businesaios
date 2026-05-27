@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict, Hashable, Sequence
 import random
+from typing import Dict, Hashable, Sequence
 
 State = Hashable
 Action = Hashable

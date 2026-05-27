@@ -15,9 +15,8 @@ Actual deployment/rollback is executed ONLY via RuntimeExecutor after a Decision
 """
 
 import time
-
 from dataclasses import dataclass
-from typing import Dict, Iterable, Optional, Any
+from typing import Any, Dict, Iterable, Optional
 
 from config.final_hidden_logic_policy import DEFAULT_LEARNING_SYSTEM_POLICY
 from kernel.world_state import WorldStateV1

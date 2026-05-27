@@ -24,8 +24,8 @@ offers:
         encoding="utf-8",
     )
 
-    from core.offers.yaml_offer_catalog_loader import YamlOfferCatalogLoader
     from core.offers.catalogs.yaml_catalog import YamlOfferCatalogV1
+    from core.offers.yaml_offer_catalog_loader import YamlOfferCatalogLoader
 
     spec = YamlOfferCatalogLoader(base_dir=tmp_path).load_all()["tcat_v1"]
     cat = YamlOfferCatalogV1.from_spec(spec)
@@ -57,10 +57,10 @@ offers:
         encoding="utf-8",
     )
 
-    from core.offers.yaml_offer_catalog_loader import YamlOfferCatalogLoader
     from core.offers.catalog_registry import OfferCatalogRegistry
     from core.offers.catalogs.yaml_catalog import YamlOfferCatalogV1
     from core.offers.engine import OfferEngine
+    from core.offers.yaml_offer_catalog_loader import YamlOfferCatalogLoader
 
     spec = YamlOfferCatalogLoader(base_dir=tmp_path).load_all()["tcat_v1"]
     reg = OfferCatalogRegistry(_by_id={"tcat_v1": YamlOfferCatalogV1.from_spec(spec)})

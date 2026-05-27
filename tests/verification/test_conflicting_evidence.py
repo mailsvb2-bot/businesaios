@@ -1,5 +1,9 @@
+from execution.verification.verification_engine import (
+    VerificationEngine,
+    connector_snapshot_evidence,
+    execution_receipt_evidence,
+)
 from runtime._internal.effect_types import EffectActionType
-from execution.verification.verification_engine import VerificationEngine, connector_snapshot_evidence, execution_receipt_evidence
 
 
 def test_conflicting_authoritative_evidence_is_terminal() -> None:

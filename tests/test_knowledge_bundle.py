@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 from core.knowledge.enums import SourceKind
 from core.knowledge.types import LessonDraft, MemoryRetrieval, TagSet
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.boot.knowledge_boot import build_knowledge_services
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 def test_knowledge_bundle_records_and_retrieves() -> None:

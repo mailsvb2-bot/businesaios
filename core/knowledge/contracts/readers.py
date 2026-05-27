@@ -6,9 +6,9 @@ from typing import Protocol, Sequence
 from ..types import (
     Lesson,
     LessonQuery,
+    MemoryRetrieval,
     OutcomeFact,
     Pattern,
-    MemoryRetrieval,
     StrategyMemoryEntry,
 )
 

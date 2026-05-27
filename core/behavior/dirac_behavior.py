@@ -19,7 +19,7 @@ Complex numbers are stored as (re, im) for speed and determinism.
 import math
 from typing import Any, Dict, Iterable, Mapping, Tuple
 
-from core.behavior.complex4 import Complex4, EPS
+from core.behavior.complex4 import EPS, Complex4
 from core.behavior.dirac_operators import apply_event_operator
 from core.observability.silent import swallow
 

@@ -4,10 +4,11 @@ from pathlib import Path
 
 from demand_capture.demand_capture_service import DemandCaptureService
 from intent.client_intent_builder import ClientIntentBuilder
-from supply_directory.business_directory import BusinessDirectory
-from supply_state.business_live_state_builder import BusinessLiveStateBuilder
 from matching.match_engine import MatchEngine
 from routing.demand_router import DemandRouter
+from supply_directory.business_directory import BusinessDirectory
+from supply_state.business_live_state_builder import BusinessLiveStateBuilder
+
 
 def test_demand_router():
     request = DemandCaptureService().capture({"text":"premium service", "channel":"website", "customer_id":"c1"})

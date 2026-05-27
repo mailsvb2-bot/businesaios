@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict
+
 from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import build_world_state_for_telegram
 
 

@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 SCAN_ROOTS = ['crm', 'runtime', 'decision_integrations/crm']
 
 

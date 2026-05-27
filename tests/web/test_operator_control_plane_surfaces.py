@@ -9,13 +9,17 @@ from app.web.components.recovery_panel import RecoveryPanel
 from app.web.components.run_control_panel import RunControlPanel
 from app.web.pages.admin import AdminPage
 from app.web.pages.runtime_alerts import RuntimeAlertsPage
-from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 from observability.slo_contract import SLIKind, SLOComparator, SLODefinition
+from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 from reliability.execution_reconciliation import ReconciliationReport
 from reliability.outbox_store import OutboxMessage, OutboxState
 from reliability.recovery_orchestrator import RecoveryPlan, TransportRecoveryResult
 from tenancy.tenant_contract import TenantQuotaCheck
-from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetVerdict, TenantExecutionUsage, TenantRuntimeLimitCheck
+from tenancy.tenant_execution_budget_guard import (
+    TenantExecutionBudgetVerdict,
+    TenantExecutionUsage,
+    TenantRuntimeLimitCheck,
+)
 
 
 @dataclass(frozen=True)

@@ -17,9 +17,10 @@ No side-effects on import.
 
 import hashlib
 import json
-from pathlib import Path
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any, Dict
+
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_path, env_str
 
@@ -64,7 +65,7 @@ def get_pricing_version() -> str:
     override_path = str(env_path("PRICING_VERSION_OVERRIDE_PATH", "data/pricing_version_override.txt")).strip()
     if override_path:
         try:
-            txt = open(override_path, "r", encoding="utf-8").read().strip()
+            txt = open(override_path, encoding="utf-8").read().strip()
             if txt:
                 return txt
         except Exception:
@@ -90,7 +91,7 @@ def enforce_pricing_versioning_or_raise(*, pricing_config: Any, production_stric
     prev = None
     if Path(path).exists():
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 prev = json.load(f)
         except Exception:
             prev = None

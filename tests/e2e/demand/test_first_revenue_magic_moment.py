@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from demand_product.first_revenue_detector import FirstRevenueDetector
 
+
 def test_first_revenue_magic_moment():
     assert FirstRevenueDetector().detect({"first_revenue_seen": False, "revenue": 10.0}) is True
 
@@ -16,8 +17,8 @@ def test_demand_seo_location_page_generator_preserves_city_contract():
     assert page["spec"]["kind"] == "location_page_spec"
 
 
-from demand_seo.service_page_generator import ServicePageGenerator
 from demand_seo.rank_tracking import RankTracking
+from demand_seo.service_page_generator import ServicePageGenerator
 
 
 def test_demand_seo_service_page_generator_preserves_category_contract():

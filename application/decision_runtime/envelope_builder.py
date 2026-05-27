@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from core.ai.decision import Decision, DecisionEnvelope
-from kernel.decision_crypto import signed_envelope_from_decision
 from core.utils.canonical import sha256_hex
+from kernel.decision_crypto import signed_envelope_from_decision
 
 
 @dataclass(frozen=True)

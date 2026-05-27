@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from application.public_site.cta_intake import CTALandingIntakeService
 from adapters.api.fastapi.public_routes import _cta_status_response, _cta_submit_response
+from application.public_site.cta_intake import CTALandingIntakeService
 
 
 def test_cta_submit_records_read_only_admin_visibility(tmp_path):

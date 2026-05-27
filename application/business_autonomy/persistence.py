@@ -6,16 +6,20 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 from uuid import uuid4
 
-from governance.control_plane_audit_log import GovernanceAuditEvent, PersistentGovernanceAuditLog
-from reliability.idempotency_contract import IdempotencyResolution
-from reliability.idempotency_scope import build_idempotency_key
-from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
-from storage.evidence_store import EvidenceRecord, SqliteEvidenceStore
-from storage.sqlite_fallback import SqliteSessionFactory
-
-from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest, ApprovalStatus
-from governance.approval_store import build_default_approval_store
-from governance.rbac_contract import RoleId
+from application.business_autonomy.contracts import (
+    BusinessCapability,
+    BusinessExecutionEvidence,
+    BusinessExecutionResult,
+    BusinessGoalEnvelope,
+    CapabilityKind,
+    ExecutionVerdict,
+    PolicyConstraint,
+)
+from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
+from application.planning.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
+from application.planning.long_horizon_planner import LongHorizonPlanner
+from application.planning.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
+from application.planning.strategy_memory import FileStrategyMemoryStore, StrategyMemoryService
 from execution.operator_override_contract import (
     OperatorOverrideDecision,
     OperatorOverrideRecord,
@@ -25,16 +29,16 @@ from execution.operator_override_contract import (
     build_operator_override_subject_fingerprint,
 )
 from execution.operator_override_store import build_default_operator_override_store
+from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest, ApprovalStatus
+from governance.approval_store import build_default_approval_store
+from governance.control_plane_audit_log import GovernanceAuditEvent, PersistentGovernanceAuditLog
 from governance.persistence_codec import atomic_write_json, read_json_or_default, to_jsonable
-from application.business_autonomy.contracts import BusinessCapability, BusinessGoalEnvelope, CapabilityKind, PolicyConstraint
-from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
-from application.planning.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
-from application.planning.strategy_memory import FileStrategyMemoryStore, StrategyMemoryService
-from application.planning.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
-from application.planning.long_horizon_planner import LongHorizonPlanner
-
-from application.business_autonomy.contracts import BusinessExecutionEvidence, BusinessExecutionResult, ExecutionVerdict
-
+from governance.rbac_contract import RoleId
+from reliability.idempotency_contract import IdempotencyResolution
+from reliability.idempotency_scope import build_idempotency_key
+from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
+from storage.evidence_store import EvidenceRecord, SqliteEvidenceStore
+from storage.sqlite_fallback import SqliteSessionFactory
 
 BUSINESS_AUTONOMY_OWNER_ID = "business_autonomy"
 
@@ -393,7 +397,8 @@ class PersistentBusinessApprovalGate:
         self._store = store or build_default_approval_store()
 
     def evaluate(self, *, request, requires_approval: bool):
-        from application.business_autonomy.guards import ApprovalDecision as GateDecision, ApprovalStatus as GateStatus
+        from application.business_autonomy.guards import ApprovalDecision as GateDecision
+        from application.business_autonomy.guards import ApprovalStatus as GateStatus
         explicit_constraint_requires_approval = any(
             item.name == "require_human_approval" and bool(item.value) is True
             for item in request.envelope.constraints
@@ -450,7 +455,8 @@ class PersistentBusinessOperatorOverridePolicy:
         self._store = store or build_default_operator_override_store()
 
     def evaluate(self, request):
-        from application.business_autonomy.guards import OperatorOverrideDecision as GateDecision, OperatorOverrideMode
+        from application.business_autonomy.guards import OperatorOverrideDecision as GateDecision
+        from application.business_autonomy.guards import OperatorOverrideMode
         metadata = dict(request.envelope.metadata)
         override_id = metadata.get("override_id")
         if override_id:

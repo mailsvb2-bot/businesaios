@@ -1,5 +1,5 @@
-from observability.demand import emit_demand_events as emit_demand_event
 from observability.demand import emit_delivery_events as emit_delivery_event
+from observability.demand import emit_demand_events as emit_demand_event
 
 
 class _Log(list):

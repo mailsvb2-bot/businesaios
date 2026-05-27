@@ -10,7 +10,6 @@ from typing import Any, Mapping
 from application.capability.capability_health_policy import CapabilityHealthPolicy
 from application.capability.capability_matrix import CapabilityMatrix
 
-
 CANON_CAPABILITY_HEALTH_SCORING = True
 CAPABILITY_HEALTH_SCHEMA_VERSION = 2
 

@@ -8,14 +8,13 @@ Operational only:
 - workers must execute an injected canonical runner.
 """
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-import json
 from typing import Any, Mapping
 
 from core.tenancy.normalization import require_tenant_id
-
 
 CANON_RUNTIME_QUEUE_CONTRACT = True
 

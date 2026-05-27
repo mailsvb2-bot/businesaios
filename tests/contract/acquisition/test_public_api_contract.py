@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from acquisition.feasibility_solver import AcquisitionFeasibilityRequest, AcquisitionFeasibilityResult, FeasibilitySolver
+from acquisition.feasibility_solver import (
+    AcquisitionFeasibilityRequest,
+    AcquisitionFeasibilityResult,
+    FeasibilitySolver,
+)
 from acquisition.funnel_model import FunnelStage
 from acquisition.public_api import create_acquisition_public_api, evaluate_acquisition_plan
 

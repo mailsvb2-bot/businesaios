@@ -4,7 +4,6 @@ import importlib
 
 import pytest
 
-
 PROJECT_BOUNDARY_MODULES = (
     "execution.evidence.base",
     "execution.evidence.result",

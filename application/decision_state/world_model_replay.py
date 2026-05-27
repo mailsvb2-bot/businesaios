@@ -7,8 +7,8 @@ from application.decision_state.state_enrichment import (
     apply_price_constraints,
     enrich_state_with_world_model,
 )
-from core.decision.ai_decision_trace import TraceBuilder
 from application.decision_state.world_model_metadata import extract_world_model_metadata
+from core.decision.ai_decision_trace import TraceBuilder
 
 
 def replay_state_against_world_model(

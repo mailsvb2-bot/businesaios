@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Mapping
 
 if TYPE_CHECKING:  # pragma: no cover
     from contracts.action_result import ActionResult
@@ -32,8 +32,11 @@ class HeadlessClosedLoopService:
         self._orchestrator = orchestrator
 
     def enrich(self, *, request: Any, state: Any, executable_action: ExecutableAction, action_result: ActionResult, execution_result: Any, autonomy_decision: Any, feedback: Mapping[str, Any]) -> HeadlessClosedLoopArtifacts:
+        from application.effects.effect_verification_bridge import (
+            extract_router_result_from_feedback,
+            normalize_feedback_contract,
+        )
         from execution.closed_loop_orchestrator import ClosedLoopCycleInput
-        from application.effects.effect_verification_bridge import extract_router_result_from_feedback, normalize_feedback_contract
 
         original = dict(feedback or {})
         normalized = normalize_feedback_contract(feedback)
@@ -55,8 +58,8 @@ class HeadlessClosedLoopService:
 
     @staticmethod
     def _build_action_payload(*, request: Any, executable_action: ExecutableAction, autonomy_decision: Any) -> dict[str, Any]:
-        from execution.action_verification_policy import determine_external_confirmation_mode
         from execution.action_catalog import get_action_spec
+        from execution.action_verification_policy import determine_external_confirmation_mode
 
         payload = dict(executable_action.payload or {})
         action_class = str(getattr(autonomy_decision, "action_class", "") or "").strip()
@@ -74,7 +77,12 @@ class HeadlessClosedLoopService:
 
     @staticmethod
     def _merge_feedback(feedback: dict[str, Any], cycle_result: ClosedLoopCycleResult, *, original_feedback: Mapping[str, Any] | None = None) -> dict[str, Any]:
-        from application.effects.canonical_execution_feedback import canonical_execution_feedback, canonical_headless_step_artifact, canonical_persisted_outcome, canonical_world_state_row
+        from application.effects.canonical_execution_feedback import (
+            canonical_execution_feedback,
+            canonical_headless_step_artifact,
+            canonical_persisted_outcome,
+            canonical_world_state_row,
+        )
 
         verification = dict(cycle_result.verification_result.get("verification") or {})
         feedback["verified"] = bool(cycle_result.verification_result.get("verified", feedback.get("verified", False)))

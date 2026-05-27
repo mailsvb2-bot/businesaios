@@ -5,7 +5,15 @@ from datetime import datetime, timezone
 import pytest
 
 from reliability.distributed_lock import LockLease
-from reliability.distributed_lock_backend import LockBackendRecord, build_expires_at, datetime_to_epoch_ms, ensure_aware, epoch_ms_to_datetime, normalize_lock_inputs, safe_sql_identifier
+from reliability.distributed_lock_backend import (
+    LockBackendRecord,
+    build_expires_at,
+    datetime_to_epoch_ms,
+    ensure_aware,
+    epoch_ms_to_datetime,
+    normalize_lock_inputs,
+    safe_sql_identifier,
+)
 
 UTC = timezone.utc
 

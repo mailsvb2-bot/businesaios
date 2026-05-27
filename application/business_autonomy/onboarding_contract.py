@@ -4,8 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Mapping
 
-from core.tenancy.normalization import require_tenant_id
 from application.business_autonomy.channel_contracts import ChannelIdentity, ChannelKind
+from core.tenancy.normalization import require_tenant_id
 
 
 class OnboardingStage(str, Enum):

@@ -5,9 +5,12 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from application.capability.capability_health_policy import CapabilityHealthPolicy
-from application.capability.capability_health_scoring import CapabilityHealthCounters, CapabilityHealthSnapshot, FileCapabilityHealthStore
+from application.capability.capability_health_scoring import (
+    CapabilityHealthCounters,
+    CapabilityHealthSnapshot,
+    FileCapabilityHealthStore,
+)
 from application.capability.capability_matrix import CapabilityMatrix
-
 
 CANON_CAPABILITY_HEALTH_REGISTRY = True
 

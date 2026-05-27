@@ -5,16 +5,16 @@ from datetime import timedelta
 import pytest
 from fastapi import HTTPException
 
-from governance.rbac_contract import Permission, RoleId
-from entrypoints.api.api_key_policy import ApiKeyPolicy, InMemoryApiKeyStore
-from entrypoints.api.auth_contract import RequestAuthentication
 from adapters.api.fastapi.auth_dependencies import CompositeAuthPolicy
+from entrypoints.api.api_key_policy import ApiKeyPolicy, InMemoryApiKeyStore
+from entrypoints.api.auth_contract import AuthPrincipal, RequestAuthentication
 from entrypoints.api.authz_dependencies import AuthzDependencyBundle
 from entrypoints.api.jwt_policy import JwtClaims, JwtPolicy
 from entrypoints.api.rate_limit_dependencies import RateLimitDependencyBundle
 from entrypoints.api.request_context import RequestContext
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 from entrypoints.api.tenant_route_guards import TenantRouteGuard
+from governance.rbac_contract import Permission, RoleId
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope
 from tenancy.tenant_connector_scope import TenantConnectorScope
@@ -25,8 +25,6 @@ from tenancy.tenant_policy_store import InMemoryTenantPolicyStore, TenantPolicyB
 from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_registry import InMemoryTenantRegistry
 from tenancy.tenant_runtime_limits import TenantRuntimeLimits
-from entrypoints.api.auth_contract import AuthPrincipal
-from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 
 
 def _security_guard():

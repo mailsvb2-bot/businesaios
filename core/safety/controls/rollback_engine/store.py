@@ -6,8 +6,8 @@ from typing import Protocol
 
 from runtime.platform.safety_rollback_store import (
     CANON_PLATFORM_SAFETY_ROLLBACK_STORE,
-    PlatformSqliteRollbackPlanStore,
     SCHEMA_VERSION,
+    PlatformSqliteRollbackPlanStore,
 )
 
 from .models import RollbackExecutionState, RollbackPlan, RollbackReceipt, RollbackReconciliationState

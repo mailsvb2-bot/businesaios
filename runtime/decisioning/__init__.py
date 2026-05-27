@@ -7,8 +7,8 @@ shapes, but must not fork selection logic.
 """
 
 from runtime.decisioning.contract import (
-    CANONICAL_ROUTE,
     CANON_RUNTIME_DECISIONING_CONTRACT,
+    CANONICAL_ROUTE,
     EXPECTED_ISSUER_ID,
     CandidateCollection,
     CandidateEnvelope,

@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-from kernel.decisioning.route_contract import CANONICAL_ROUTE, DecisionRoute, DecisionRouteViolation, canonical_runtime_route
 from interfaces.ads._write_stage import raise_write_stage_disabled
 from interfaces.messaging._shared.delivery_mapper import map_delivery_result
 from interfaces.messaging._shared.outbound_sender import send_outbound
 from interfaces.messaging._shared.provider_config import ProviderConfig
+from kernel.decisioning.route_contract import (
+    CANONICAL_ROUTE,
+    DecisionRoute,
+    DecisionRouteViolation,
+    canonical_runtime_route,
+)
 from runtime.messaging.outbound_message import OutboundMessage
 
 

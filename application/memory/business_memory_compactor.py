@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from typing import Iterable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 from application.memory.business_memory_policy import BusinessMemoryPolicy
 from application.memory.business_operating_memory_types import (

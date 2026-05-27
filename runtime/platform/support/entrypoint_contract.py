@@ -12,7 +12,6 @@ from typing import Callable, Iterable, Mapping
 from runtime.platform.support._command_surface import run_named_command
 from runtime.platform.support.command_registry import require_known_command
 
-
 ImplementationMap = Mapping[str, Callable[[], int]]
 
 

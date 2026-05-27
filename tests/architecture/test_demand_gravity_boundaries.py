@@ -5,7 +5,6 @@ from pathlib import Path
 
 from runtime.demand_gravity.public_api import __all__ as public_symbols
 
-
 FORBIDDEN_NAMES = {
     "approve",
     "bid",

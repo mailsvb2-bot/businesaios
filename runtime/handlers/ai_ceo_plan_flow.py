@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any, Dict
+
 from runtime.actions import ACTION_AI_CEO_PLAN_V1
 from runtime.decisioning import DecisionRoute, DecisionRouteViolation, extract_strict_route_from_envelope
 

@@ -1,5 +1,5 @@
-from security.governance_owner_factory import build_security_governance_infrastructure
 from security.governance_journal import GovernanceJournalEvent
+from security.governance_owner_factory import build_security_governance_infrastructure
 from security.reencryption_job_store import ReencryptionJob
 from security.security_drill_schedule_store import SecurityDrillSchedule
 

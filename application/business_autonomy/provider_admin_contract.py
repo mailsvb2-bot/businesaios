@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from core.tenancy.normalization import require_tenant_id
 from application.business_autonomy.channel_contracts import ChannelKind
-
+from core.tenancy.normalization import require_tenant_id
 
 CANON_PROVIDER_ADMIN_CONTRACT = True
 

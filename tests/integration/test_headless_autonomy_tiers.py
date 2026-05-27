@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from core.ai.decision import Decision, DecisionEnvelope
-from execution.headless_contract import GoalExecutionRequest, HeadlessExecutionContract
 from application.headless.feedback import SimpleHeadlessFeedbackReader
 from application.headless.goal_mapper import HeadlessGoalStateMapper
 from application.headless.stop_policy import HeadlessStopPolicy
+from core.ai.decision import Decision, DecisionEnvelope
+from execution.headless_contract import GoalExecutionRequest, HeadlessExecutionContract
 from execution.operator_handoff import FileOperatorHandoffStore
 from runtime.execution.executor_result import ExecutionResult
 

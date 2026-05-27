@@ -19,8 +19,8 @@ def build_retention_adapter(
     base: str,
     stack: ExitStack,
 ):
-    from core.retention.decision_adapter import RetentionDecisionAdapter
     from core.offers.engine import OfferEngine
+    from core.retention.decision_adapter import RetentionDecisionAdapter
 
     if not FeatureFlags.RETENTION:
         return None

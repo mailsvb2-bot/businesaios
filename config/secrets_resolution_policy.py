@@ -7,7 +7,6 @@ from typing import Mapping, Protocol
 
 from security.secret_contract import SecretRef
 
-
 CANON_SECRETS_RESOLUTION_POLICY = True
 
 _SECRET_REF_PREFIX = "secret://"

@@ -10,7 +10,6 @@ from runtime.execution.execution_path_lock import (
     validate_and_lock_execution_path,
 )
 
-
 CANON_RUNTIME_DECISION_EXECUTION_SERVICE_OWNER = True
 CANON_RUNTIME_DECISION_EXECUTION_RUN_OWNER = True
 CANON_RUNTIME_DECISION_EXECUTION_BOUND_SERVICE_OWNER = True

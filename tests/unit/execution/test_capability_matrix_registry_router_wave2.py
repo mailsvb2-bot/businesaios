@@ -4,9 +4,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from execution.capability_health_registry import CapabilityHealthRegistry
+from execution.capability_health_scoring import FileCapabilityHealthStore
 from execution.capability_matrix import CapabilityMatrix
 from execution.capability_router import ExecutionCapabilityRouter
-from execution.capability_health_scoring import FileCapabilityHealthStore
 
 
 @dataclass(frozen=True)

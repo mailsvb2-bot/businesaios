@@ -3,7 +3,6 @@ from __future__ import annotations
 from runtime.inference.distributed.node_health_scoring import DistributedInferenceNodeHealthScoring
 from runtime.inference.distributed.node_registry import DistributedInferenceNode
 
-
 CANON_RUNTIME_DISTRIBUTED_NODE_SELECTION_POLICY = True
 
 

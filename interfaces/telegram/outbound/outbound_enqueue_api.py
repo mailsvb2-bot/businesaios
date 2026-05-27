@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Typed enqueue helpers and legacy compatibility wrappers.
 
 Responsibility:

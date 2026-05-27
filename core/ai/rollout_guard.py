@@ -12,7 +12,7 @@ from config.rollout_guard_policy import RolloutGuardPolicy
 
 @dataclass(frozen=True)
 class RolloutMetrics:
-    error_rate: float = float()
+    error_rate: float = 0.0
 
 
 def rollout_percentage(metrics: RolloutMetrics, *, policy: RolloutGuardPolicy | None = None) -> int:

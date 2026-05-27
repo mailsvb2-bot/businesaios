@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 ALLOWED_PRODUCT_MAGIC_MOMENT_FILES = {
     "__init__.py",
     "first_lead_detector.py",

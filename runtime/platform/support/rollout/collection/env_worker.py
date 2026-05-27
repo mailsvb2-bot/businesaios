@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class EnvWorker:
     def __init__(self, env) -> None:
         self._env = env

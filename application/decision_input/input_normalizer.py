@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from application.decision_input.input_bundle import InputBundle
 
 

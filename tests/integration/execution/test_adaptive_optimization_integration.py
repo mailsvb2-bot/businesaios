@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from execution.headless_contract import HeadlessExecutionContract
 from application.headless.models import GoalExecutionRequest
+from execution.headless_contract import HeadlessExecutionContract
 from runtime.execution.executor_result import ExecutionResult
 
 opt_mod = pytest.importorskip('execution.optimization')

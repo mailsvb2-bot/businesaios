@@ -15,7 +15,6 @@ from runtime.decision_path_lock import (
     resolve_decision_issue_callable,
 )
 
-
 CANON_HEADLESS_DECISION_GATEWAY_SINGLE_PATH = True
 CANON_HEADLESS_DECISION_GATEWAY_NO_RAW_DECISION_LOGIC = True
 CANON_HEADLESS_DECISION_GATEWAY_ISSUE_OWNER = True

@@ -1,5 +1,5 @@
-from runtime.messaging_policy_alert_subscriptions.subscription_record import AlertSubscriptionRecord
 from runtime.messaging_policy_alert_subscriptions.subscription_matcher import subscription_matches
+from runtime.messaging_policy_alert_subscriptions.subscription_record import AlertSubscriptionRecord
 from runtime.messaging_policy_alerts.alert_item import MessagingPolicyAlertItem
 
 

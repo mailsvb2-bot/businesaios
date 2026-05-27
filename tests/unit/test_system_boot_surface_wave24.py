@@ -1,6 +1,6 @@
-from boot.system_boot_surface import build_system_boot_surface
 from boot.app_boot import boot_application
 from boot.http_boot import boot_http_app
+from boot.system_boot_surface import build_system_boot_surface
 
 
 def test_system_boot_surface_builds_app_and_http_from_single_owner() -> None:

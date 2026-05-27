@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from core.ux.telegram_keyboards import (
+    kb_ads_apply_pending,
     kb_ai_ceo_menu,
     kb_autopilot_menu,
     kb_back_main,
@@ -19,7 +20,6 @@ from core.ux.telegram_keyboards import (
     kb_sub,
     kb_tariffs,
     kb_weather,
-    kb_ads_apply_pending,
 )
 
 __all__ = [

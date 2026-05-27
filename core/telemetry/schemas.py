@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Dict
 
 from config.telemetry_event_policy import DEFAULT_TELEMETRY_EVENT_POLICY
-from typing import Any, Dict
 
 
 @dataclass(frozen=True)

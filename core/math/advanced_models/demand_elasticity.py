@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 def point_price_elasticity(
     *,
     demand_derivative_wrt_price: float,

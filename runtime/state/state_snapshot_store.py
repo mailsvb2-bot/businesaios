@@ -12,7 +12,6 @@ from runtime.state.state_contract import (
     StateSynthesizedSnapshot,
 )
 
-
 CANON_STATE_SNAPSHOT_STORE = True
 
 

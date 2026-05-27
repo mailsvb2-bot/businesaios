@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, Tuple, Protocol, Any, Optional
-
 import time
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional, Protocol, Tuple
 
 from config.llm_budget_policy import DEFAULT_LLM_BUDGET_POLICY, LLMBudgetPolicy
 from core.telemetry.event_types import LLM_COMPLETED

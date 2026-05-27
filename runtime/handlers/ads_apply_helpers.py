@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from runtime.ads import AdsApplyRequest, AdsApplyState, AdsCommand, AdsPlan, DECISION_EXECUTED, IdempotencyKey
+from runtime.ads import DECISION_EXECUTED, AdsApplyRequest, AdsApplyState, AdsCommand, AdsPlan, IdempotencyKey
 from runtime.tenancy import as_tenant_id
 
 

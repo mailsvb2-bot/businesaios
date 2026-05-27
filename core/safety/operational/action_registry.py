@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import execution.action_catalog as _action_catalog
 from contracts.action_impact_contract import ActionCategory
 from core.safety.operational.action_spec import ActionCostPolicy, ActionOperationalSpec
-import execution.action_catalog as _action_catalog
-
 
 CANON_OPERATIONAL_ACTION_REGISTRY = True
 

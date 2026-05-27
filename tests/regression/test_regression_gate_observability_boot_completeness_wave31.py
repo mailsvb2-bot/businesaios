@@ -5,7 +5,6 @@ from boot.runtime_boot import build_runtime_orchestrator
 from formal.regression_gate.observability_contract import REQUIRED_OBSERVABILITY_KEYS, runtime_observability_snapshot
 
 
-
 def test_boot_and_runtime_observability_surfaces_are_complete() -> None:
     boot_payload = load_observability()
     runtime_orchestrator = build_runtime_orchestrator()

@@ -1,6 +1,5 @@
-from runtime.queue import InMemoryJobStore, JobDispatcher
-
 from billing.scheduler.queue_bridge import BillingQueueJobSpec, build_billing_job_request, dispatch_billing_job
+from runtime.queue import InMemoryJobStore, JobDispatcher
 
 
 def test_build_billing_job_request_stamps_scope_and_lineage() -> None:

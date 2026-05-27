@@ -1,8 +1,12 @@
 from __future__ import annotations
+
 from typing import Dict, Tuple
+
 from runtime._internal.http_transport import HttpTransport
 from runtime.observability.error_handling import swallow
+
 from .http_client import http_json
+
 
 def open_meteo_weather(city: str, *, transport: HttpTransport | None = None) -> Tuple[bool, str, Dict[str, object]]:
     try:

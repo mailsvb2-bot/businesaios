@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 PRIVATE IMPLEMENTATION of EffectsPort.
 SECURITY / ARCHITECTURE:
@@ -12,38 +13,42 @@ PAYMENTS NOTE:
 """
 from dataclasses import dataclass
 from typing import Any, Dict
+
 from runtime._internal.llm_transport import (
     llm_generate_anthropic,
     llm_generate_gigachat,
     llm_generate_openai_compat,
     llm_generate_yandexgpt,
 )
+from runtime.effects.telegram_effects import classify_startup
+from runtime.observability.error_handling import swallow
 from runtime.observability.telemetry import telegram_api_span
 from runtime.observability.tracing import get_correlation_key
-from runtime.observability.error_handling import swallow
-from runtime.effects.telegram_effects import classify_startup
+from runtime.platform.delivery_state import DeliveryState
 from runtime.ports.effects import EffectsPort
 from runtime.security.runtime_asserts import assert_called_from_executor
-from .effects_domains.user_state import UserStateEffectsMixin
-from .effects_domains.tracking import TrackingEffectsMixin
-from .effects_domains.admin_state import AdminStateEffectsMixin
-from .effects_domains.marketing import MarketingEffectsMixin
-from .effects_domains.evolution import EvolutionEffectsMixin
-from .effects_actions.telegram_actions import TelegramEffectsMixin
-from .effects_actions.weather_actions import WeatherEffectsMixin
-from .effects_actions.payments_actions import PaymentsEffectsMixin
+
+from .effect_router import EffectRouter
 from .effects_actions.llm_actions import LLMEffectsMixin
 from .effects_actions.offer_patch_actions import OfferPatchEffectsMixin
+from .effects_actions.payments_actions import PaymentsEffectsMixin
 from .effects_actions.policy_actions import PolicyEffectsMixin
-from runtime.platform.delivery_state import DeliveryState
+from .effects_actions.telegram_actions import TelegramEffectsMixin
+from .effects_actions.weather_actions import WeatherEffectsMixin
+from .effects_core import initialize_effects_runtime_state, throttled_emit_error
+from .effects_domains.admin_state import AdminStateEffectsMixin
+from .effects_domains.evolution import EvolutionEffectsMixin
+from .effects_domains.marketing import MarketingEffectsMixin
+from .effects_domains.tracking import TrackingEffectsMixin
+from .effects_domains.user_state import UserStateEffectsMixin
 from .effects_servers import (
     start_health_server_in_thread,
     start_yookassa_webhook_server_in_thread,
 )
 from .effects_transport import HTTPResponse, http_get, http_post, url_with_params
-from .effects_core import initialize_effects_runtime_state, throttled_emit_error
-from .effect_router import EffectRouter
 from .http_transport import HttpTransport, build_http_transport
+
+
 def _telegram_api_base() -> str:
     from runtime.platform.config.env_flags import env_str
     return env_str("TELEGRAM_API_BASE", "https://api.telegram.org").strip().rstrip("/")

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict
 
-from .contracts import TrafficCampaignSpec, TrafficObjective, TrafficBudget, TrafficAudience, TrafficCreative
+from .contracts import TrafficAudience, TrafficBudget, TrafficCampaignSpec, TrafficCreative, TrafficObjective
 
 
 @dataclass(frozen=True)

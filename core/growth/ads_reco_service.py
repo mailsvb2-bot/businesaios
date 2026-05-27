@@ -6,6 +6,7 @@ from core.growth.ads_config_fingerprint import ads_config_fingerprint
 from core.growth.ads_reco_cache import AdsRecommendationCache
 from core.growth.recommendations import AdsRecommendation
 
+
 class AdsRecoService:
     def __init__(self, *, engine: Any, cache: AdsRecommendationCache, entitlements_provider: Any):
         self._engine = engine

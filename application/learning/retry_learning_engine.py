@@ -3,10 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from execution.error_family_classifier import ErrorFamilyClassifier
-from application.learning.failure_pattern_detector import FailureEvent, FailurePattern, FailurePatternDetector, FailurePatternReport
+from application.learning.failure_pattern_detector import (
+    FailureEvent,
+    FailurePattern,
+    FailurePatternDetector,
+    FailurePatternReport,
+)
 from application.learning.retry_learning_store import RetryLearningSnapshot, RetryLearningStore
-
+from execution.error_family_classifier import ErrorFamilyClassifier
 
 CANON_RETRY_LEARNING_ENGINE = True
 RETRY_LEARNING_SCHEMA_VERSION = 1

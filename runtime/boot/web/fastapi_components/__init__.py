@@ -4,14 +4,29 @@ _PUBLIC_API_MODULE = False
 CANON_FASTAPI_COMPONENTS_COLLAPSED_OWNER = True
 CANON_BOOT_WIRING_ONLY = True
 
-from interfaces.web.debug.messaging_policy_alerts.fastapi_adapter import register_fastapi_routes as _register_alert_routes
-from interfaces.web.debug.messaging_policy_dashboard.fastapi_adapter import register_fastapi_routes as _register_dashboard_routes
-from interfaces.web.debug.messaging_policy_observability_nav.fastapi_adapter import register_fastapi_routes as _register_nav_routes
-from interfaces.web.debug.messaging_policy_snapshot.fastapi_adapter import register_fastapi_routes as _register_snapshot_routes
-from interfaces.web.debug.messaging_policy_trace_search.fastapi_adapter import register_fastapi_routes as _register_trace_routes
-from interfaces.web.settings.alert_subscriptions_integration.fastapi_adapter import register_fastapi_routes as _register_alert_subscriptions_routes
-from interfaces.web.settings.messaging_preferences_integration.fastapi_adapter import register_fastapi_routes as _register_preferences_routes
+from interfaces.web.debug.messaging_policy_alerts.fastapi_adapter import (
+    register_fastapi_routes as _register_alert_routes,
+)
+from interfaces.web.debug.messaging_policy_dashboard.fastapi_adapter import (
+    register_fastapi_routes as _register_dashboard_routes,
+)
+from interfaces.web.debug.messaging_policy_observability_nav.fastapi_adapter import (
+    register_fastapi_routes as _register_nav_routes,
+)
+from interfaces.web.debug.messaging_policy_snapshot.fastapi_adapter import (
+    register_fastapi_routes as _register_snapshot_routes,
+)
+from interfaces.web.debug.messaging_policy_trace_search.fastapi_adapter import (
+    register_fastapi_routes as _register_trace_routes,
+)
+from interfaces.web.settings.alert_subscriptions_integration.fastapi_adapter import (
+    register_fastapi_routes as _register_alert_subscriptions_routes,
+)
+from interfaces.web.settings.messaging_preferences_integration.fastapi_adapter import (
+    register_fastapi_routes as _register_preferences_routes,
+)
 from runtime.boot.web.framework_boot import boot_with_bundle
+from runtime.boot.web.messaging_policy_service_graph import build_messaging_policy_service_graph
 from runtime.boot.web.runtime_web_service_builders import (
     build_alert_subscriptions_bundle,
     build_messaging_policy_alerts_bundle,
@@ -21,7 +36,6 @@ from runtime.boot.web.runtime_web_service_builders import (
     build_messaging_policy_trace_search_bundle,
     build_messaging_preferences_bundle,
 )
-from runtime.boot.web.messaging_policy_service_graph import build_messaging_policy_service_graph
 
 
 def boot_alert_subscriptions(*, app, project_root, settings_gateway) -> None:

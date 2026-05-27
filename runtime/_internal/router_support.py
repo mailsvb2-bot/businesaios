@@ -1,11 +1,14 @@
 from __future__ import annotations
+
 import asyncio
 from concurrent.futures import Future
 from threading import Thread
 from typing import Any, TypeVar
+
 from runtime._internal.effect_router import EffectRouter
 from runtime._internal.effect_types import EffectActionType, require_effect_action_type
 from runtime._internal.http_transport import build_http_transport
+
 T = TypeVar("T")
 def get_effect_router(effects: Any | None) -> EffectRouter:
     if effects is not None:

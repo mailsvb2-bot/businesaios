@@ -13,9 +13,9 @@ Rules:
 """
 from __future__ import annotations
 
+from .loader import load_operator_policy_catalog
 from .model import OperatorPolicyCatalog, OperatorPolicyContext, OperatorPolicyRule
 from .resolver import OperatorPolicyCatalogResolver
-from .loader import load_operator_policy_catalog
 
 __all__ = [
     "OperatorPolicyCatalog",

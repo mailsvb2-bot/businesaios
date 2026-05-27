@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 
 from scripts.ci.paths import reports_dir
 
-
 REQUIRED_HTTP_PATHS = ("/readyz", "/storagez", "/executionz")
 
 
@@ -81,11 +80,11 @@ def _dependency_set_summary(dependency_sets: object) -> dict[str, object]:
 def run() -> tuple[bool, str]:
     _prepare_boot_smoke_env()
     try:
-        from bootstrap.system_boot_surface import build_system_boot_surface
-        from bootstrap.http_boot_surface import build_http_boot_surface
         from boot.runtime_boot_manifest import RUNTIME_BOOT_MANIFEST
         from boot.runtime_dependency_sets import RUNTIME_DEPENDENCY_SETS
         from boot.runtime_service_specs import RUNTIME_SERVICE_SPECS
+        from bootstrap.http_boot_surface import build_http_boot_surface
+        from bootstrap.system_boot_surface import build_system_boot_surface
 
         system_surface = build_system_boot_surface()
         http_surface = build_http_boot_surface(system_surface=system_surface)

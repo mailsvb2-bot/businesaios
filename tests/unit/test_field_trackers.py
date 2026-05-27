@@ -1,6 +1,4 @@
-from lead_outcomes import LeadOutcomeRegistry
-from lead_outcomes import LeadRevenueTracker
-from lead_outcomes import LeadStatusTracker
+from lead_outcomes import LeadOutcomeRegistry, LeadRevenueTracker, LeadStatusTracker
 
 
 def test_field_trackers_use_shared_mutation_path() -> None:

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from contracts.demand import ClientIntent
-from contracts.supply import BusinessLiveState
-from contracts.supply import BusinessSupplyProfile
+from contracts.supply import BusinessLiveState, BusinessSupplyProfile
 from demand_gravity.demand_gravity_model import DemandGravityModel
 
 

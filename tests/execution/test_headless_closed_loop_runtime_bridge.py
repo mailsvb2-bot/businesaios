@@ -1,9 +1,12 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
+
+from application.headless.closed_loop import HeadlessClosedLoopService
 from contracts.action_result import ActionResult
 from contracts.executable_action import ExecutableAction
 from execution.closed_loop_orchestrator import ClosedLoopOrchestrator
-from application.headless.closed_loop import HeadlessClosedLoopService
+
 
 @dataclass
 class _Request: tenant_id: str = "tenant-1"; business_id: str = "biz-1"; autonomy_tier: str = "supervised"

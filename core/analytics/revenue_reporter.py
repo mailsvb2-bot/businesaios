@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Protocol, Any
+from typing import Any, Protocol
 
 from config.revenue_report_policy import DEFAULT_REVENUE_REPORT_POLICY, RevenueReportPolicy
-from core.contracts.revenue_report import RevenueReport
-from core.analytics.revenue_metrics import EventStore, make_yesterday_window, aggregate_revenue_metrics
+from core.analytics.revenue_metrics import EventStore, aggregate_revenue_metrics, make_yesterday_window
 from core.analytics.roi_estimator import SimpleROIEstimator
+from core.contracts.revenue_report import RevenueReport
 
 
 class OfferAutopilot(Protocol):

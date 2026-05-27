@@ -7,19 +7,20 @@ from typing import Any, Dict, List
 from core.users.roles import UserRoleInfo
 from core.ux.callbacks import (
     CB_ADMIN_MENU,
+    CB_ADS_APPLY_MENU,
+    CB_AUTOPILOT_DASHBOARD_TODAY,
+    CB_AUTOPILOT_MENU,
     CB_DEMO,
+    CB_GIFT_MENU,
+    CB_GROWTH_MENU,
     CB_MENU_MAIN,
     CB_SETTINGS_MENU,
     CB_SETTINGS_STATE,
     CB_SHARE_MENU,
-    CB_GIFT_MENU,
     CB_SUB_MENU,
     CB_WEATHER_SHOW,
-    CB_AUTOPILOT_MENU,
-    CB_AUTOPILOT_DASHBOARD_TODAY,
-    CB_GROWTH_MENU,
-    CB_ADS_APPLY_MENU,
 )
+
 from .common import mk
 
 

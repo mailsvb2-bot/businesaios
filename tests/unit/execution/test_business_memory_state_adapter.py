@@ -1,6 +1,6 @@
-from execution.business_memory_state_adapter import BusinessMemoryStateAdapter
 from application.headless.goal_mapper import HeadlessGoalStateMapper
 from application.headless.models import GoalExecutionRequest
+from execution.business_memory_state_adapter import BusinessMemoryStateAdapter
 
 
 def test_business_memory_state_adapter_projects_evidence_only_context() -> None:

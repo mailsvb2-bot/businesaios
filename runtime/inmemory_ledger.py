@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import threading
-from typing import Optional, Any, Dict
+from typing import Any, Dict, Optional
 
 from runtime.ledger import GENESIS, entry_hash, payload_hash
-
 
 
 class InMemoryLedger:

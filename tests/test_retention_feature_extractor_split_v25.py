@@ -1,6 +1,6 @@
+from core.retention.feature_extractors.activity import apply_activity_features
 from core.retention.feature_extractors.audio import apply_audio_features
 from core.retention.feature_extractors.mood import mood10_to_bucket
-from core.retention.feature_extractors.activity import apply_activity_features
 
 
 class _Store:

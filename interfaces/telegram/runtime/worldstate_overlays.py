@@ -4,8 +4,8 @@ import time
 from dataclasses import dataclass, replace
 from typing import Any, Dict, Optional
 
-from kernel.world_state import WorldStateV1
 from interfaces.telegram.parsing.telegram_context import TelegramContext, extract_telegram_user_id
+from kernel.world_state import WorldStateV1
 
 
 @dataclass(frozen=True)

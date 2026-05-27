@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-
 CANON_STATE_SYNTHESIS_CONTRACT = True
 STATE_SYNTHESIS_SCHEMA_VERSION = "state_synthesis@v1"
 UNKNOWN_VALUE_KIND = "unknown"

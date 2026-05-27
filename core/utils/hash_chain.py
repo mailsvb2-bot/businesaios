@@ -6,7 +6,6 @@ from typing import Any, Dict
 
 from core.utils.canonical import canonical_json_bytes
 
-
 GENESIS = "GENESIS"
 
 

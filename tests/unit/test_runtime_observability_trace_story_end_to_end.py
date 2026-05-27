@@ -3,9 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from runtime.audit_log import RuntimeAuditLog
-from runtime.runtime_observability import RuntimeObservability
 from runtime.execution.executor_trace_runtime import _record_runtime_trace_story
 from runtime.executor_recovery_flow import _record_recovery_trace
+from runtime.runtime_observability import RuntimeObservability
 
 
 def test_runtime_execution_trace_story_records_execution_event() -> None:

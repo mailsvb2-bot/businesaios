@@ -123,9 +123,8 @@ __all__ = sorted(_COMPAT_ALIAS_MAP) + [
 ]
 
 
+from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 from interfaces.api.inference_admin_route_handlers import InferenceAdminRouteHandlers
 from interfaces.api.inference_capacity_route_handlers import InferenceCapacityRouteHandlers
 from interfaces.api.inference_provider_route_handlers import InferenceProviderRouteHandlers
 from interfaces.api.inference_runtime_admin_route_handlers import InferenceRuntimeAdminRouteHandlers
-
-from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle

@@ -6,7 +6,6 @@ from typing import Any
 
 from runtime.state.state_contract import StateEvidenceRef, StateObservation
 
-
 CANON_STATE_PROVENANCE = True
 
 

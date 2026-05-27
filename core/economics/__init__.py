@@ -1,7 +1,9 @@
 """Canonical economics namespace with lazy public exports."""
 from __future__ import annotations
-from typing import Any
+
 import importlib
+from typing import Any
+
 _EXPORT_MAP = {
     "EconomicBrain": "core.economics.brain",
     "EconomicReward": "core.economics.brain",
