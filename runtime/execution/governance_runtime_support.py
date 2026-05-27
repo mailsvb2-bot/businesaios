@@ -119,183 +119,123 @@ def _materialize_operator_override_approval(*, guard: Any, ctx: Any, impact: Act
                 metadata={
                     'approval_source': 'operator_override',
                     'operator_override_id': operator_override.request.override_id,
-                    'resolution': decision.resolution.value,
                 },
             ),
         )
     return approval_id
 
-def _apply_approval_workflow_resolution(*, workflow: Any, approval_decision: ApprovalDecision) -> Any:
-    resolver = getattr(workflow, 'decide')
-    return resolver(approval_decision)
+def _apply_approval_workflow_resolution(*, workflow: ApprovalWorkflow, approval_decision: ApprovalDecision) -> None:
+    workflow.resolve(approval_decision)
 
-def _gate_metadata(*, payload: dict[str, Any], meta: dict[str, Any], env: Any, impact: ActionImpact) -> dict[str, object]:
-    tags = payload.get('tags', meta.get('tags'))
-    if isinstance(tags, (list, tuple, set, frozenset)):
-        normalized_tags = [str(item).strip() for item in tags if str(item).strip()]
-    elif tags is None:
-        normalized_tags = []
-    else:
-        normalized_tags = [str(tags).strip()] if str(tags).strip() else []
+def _gate_metadata(*, payload: dict[str, Any], meta: dict[str, Any], impact: ActionImpact) -> dict[str, Any]:
+    approval_policy = _safe_dict(payload.get('approval_policy')) or _safe_dict(meta.get('approval_policy'))
     return {
-        'decision_id': str(env.decision.decision_id or '').strip(),
-        'actor_id': str(meta.get('actor_id') or payload.get('actor_id') or payload.get('user_id') or meta.get('user_id') or 'system').strip(),
-        'requires_manual_review': bool(payload.get('requires_human_approval') or meta.get('requires_human_approval')),
-        'tags': normalized_tags,
+        'approval_policy': approval_policy,
+        'approval_required': bool(payload.get('requires_human_approval') or meta.get('requires_human_approval')),
+        'external_confirmation_mode': str(payload.get('external_confirmation_mode') or meta.get('external_confirmation_mode') or '').strip(),
         'impact_category': impact.category.value,
+        'impact_risk_score': int(impact.risk_score),
     }
 
-def _build_approval_output(*, verdict: Any) -> dict[str, object]:
-    metadata = _safe_dict(getattr(verdict, 'metadata', {}))
-    payload: dict[str, object] = {
-        'approval_id': getattr(verdict, 'approval_id', None),
-        'subject_fingerprint': getattr(verdict, 'subject_fingerprint', None),
-        'status': str(getattr(verdict, 'status', '') or '') or None,
-        'reason': str(getattr(verdict, 'reason', '') or '') or None,
-        'approval_required': bool(getattr(verdict, 'approval_required', False)),
-        'operator_required': bool(getattr(verdict, 'operator_required', False)),
-        'manual_override_used': bool(metadata.get('manual_override_used', getattr(verdict, 'used_operator_override', False))),
-        'manual_override_allowed': bool(_safe_dict(getattr(verdict, 'policy', {})).get('manual_override_allowed', False)),
-        'handoff': _safe_dict(getattr(verdict, 'handoff', {})) or None,
-        'expires_at': metadata.get('expires_at'),
-        'approval_request_fingerprint': metadata.get('approval_request_fingerprint'),
+def _build_approval_output(*, approval_id: str, reason: str, impact: ActionImpact, metadata: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'status': 'approval_required',
+        'approval_id': approval_id,
+        'reason': reason,
+        'impact': asdict(impact),
+        'metadata': dict(metadata),
     }
-    return {key: value for key, value in payload.items() if value not in ('', None, False) or key in {'approval_required', 'operator_required', 'manual_override_used', 'manual_override_allowed'}}
 
-def _build_resume_governance_hint(*, ctx: Any, approval_id: str | None, gate_verdict: Any | None, operator_override_id: str | None) -> dict[str, object]:
-    hint = {
-        'resume_stage': 'governance_approval',
-        'execution_id': str(getattr(ctx, 'execution_id', '') or '').strip() or None,
-        'approval_id': approval_id or getattr(gate_verdict, 'approval_id', None),
-        'operator_override_id': operator_override_id,
-        'subject_fingerprint': getattr(gate_verdict, 'subject_fingerprint', None) if gate_verdict is not None else None,
-        'reason': getattr(gate_verdict, 'reason', None) if gate_verdict is not None else None,
-    }
-    return {k: v for k, v in hint.items() if v not in ('', None)}
+def _build_resume_governance_hint(*, approval_id: str, override_id: str | None = None) -> dict[str, Any]:
+    hint = {'approval_id': approval_id, 'resume_required': True}
+    if override_id:
+        hint['operator_override_id'] = override_id
+    return hint
 
-def _emit_resume_event(*, executor: Any, guard: Any, env: Any, ctx: Any, actor: Any, event_type: str, resume: dict[str, object], extra: dict[str, object] | None = None) -> None:
-    payload = {
-        'tenant_id': ctx.tenant_id,
-        'action_name': getattr(ctx, 'action_name', None),
-        'resume': dict(resume),
-        **dict(extra or {}),
-    }
-    if getattr(executor, '_events', None) is not None:
-        executor._events.emit(
-            event_type=event_type,
-            source='runtime.execution.governance_runtime',
-            user_id=str(getattr(ctx, 'user_id', None) or getattr(actor, 'actor_id', None) or 'system'),
-            decision_id=str(env.decision.decision_id),
-            correlation_id=str(env.decision.correlation_id),
-            payload=payload,
-        )
-    _append_governance_audit(
-        executor=executor,
-        guard=guard,
-        tenant_id=ctx.tenant_id,
-        event_type=event_type,
-        payload={
-            'decision_id': str(env.decision.decision_id),
-            'correlation_id': str(env.decision.correlation_id),
-            **payload,
-        },
-    )
-
-def _governance_audit_log(executor: Any, guard: Any) -> Any:
-    gate = getattr(executor, '_approval_execution_gate', None)
-    for owner in (gate, guard):
-        audit_log = getattr(owner, '_audit_log', None)
-        if audit_log is not None:
-            return audit_log
-    return None
-
-def _append_governance_audit(*, executor: Any, guard: Any, tenant_id: str, event_type: str, payload: Mapping[str, object]) -> None:
-    audit_log = _governance_audit_log(executor, guard)
-    if audit_log is None or not hasattr(audit_log, 'append'):
+def _emit_resume_event(*, executor: Any, env: Any, approval_id: str, override_id: str | None = None) -> None:
+    events = getattr(executor, '_events', None)
+    if events is None or not hasattr(events, 'emit'):
         return
-    audit_log.append(
-        GovernanceAuditEvent(
-            event_type=str(event_type or 'governance_event'),
-            tenant_id=str(tenant_id or '').strip(),
-            payload=dict(payload),
+    try:
+        events.emit(
+            event_type='governance_execution_paused',
+            source='governance',
+            user_id=str(getattr(getattr(env, 'decision', None), 'user_id', 'system') or 'system'),
+            decision_id=str(getattr(getattr(env, 'decision', None), 'decision_id', '') or ''),
+            correlation_id=str(getattr(getattr(env, 'decision', None), 'correlation_id', '') or ''),
+            payload={'approval_id': approval_id, 'operator_override_id': override_id},
         )
-    )
+    except Exception:
+        return
 
-def _should_enforce(*, payload: dict[str, Any], meta: dict[str, Any]) -> bool:
-    if bool(meta.get('governance_enforce')) or bool(payload.get('governance_enforce')):
+def _governance_audit_log(executor: Any) -> PersistentGovernanceAuditLog:
+    audit_log = getattr(executor, '_governance_audit_log', None)
+    if audit_log is None:
+        audit_log = PersistentGovernanceAuditLog()
+        setattr(executor, '_governance_audit_log', audit_log)
+    return audit_log
+
+def _append_governance_audit(*, executor: Any, event: GovernanceAuditEvent) -> None:
+    try:
+        _governance_audit_log(executor).append(event)
+    except Exception:
+        return
+
+def _should_enforce(*, executor: Any, payload: dict[str, Any], meta: dict[str, Any], impact: ActionImpact) -> bool:
+    if getattr(executor, '_governance_execution_guard', None) is not None:
         return True
-    role_values = payload.get('role_ids', meta.get('role_ids'))
-    return bool(_normalize_roles(role_values))
+    return _approval_gate_enabled(payload=payload, meta=meta, impact=impact)
 
-def _build_actor(*, payload: dict[str, Any], meta: dict[str, Any], tenant_id: str) -> ActorContext:
-    actor_id = str(
-        meta.get('actor_id')
-        or payload.get('actor_id')
-        or payload.get('user_id')
-        or meta.get('user_id')
-        or 'system'
-    ).strip()
-    role_ids = _normalize_roles(payload.get('role_ids', meta.get('role_ids')))
-    return ActorContext(
-        actor_id=actor_id,
-        tenant_id=tenant_id,
-        role_ids=role_ids,
-        is_service=actor_id == 'system',
-        attributes={'source': 'runtime.execution.governance_runtime'},
-    )
+def _build_actor(*, payload: dict[str, Any], meta: dict[str, Any]) -> ActorContext:
+    actor_id = str(payload.get('actor_id') or meta.get('actor_id') or payload.get('user_id') or meta.get('user_id') or 'system')
+    roles = _normalize_roles(payload.get('roles') or meta.get('roles') or ('owner',))
+    return ActorContext(actor_id=actor_id, roles=roles)
 
-def _normalize_roles(value: Any) -> frozenset[RoleId]:
-    values: Iterable[Any]
-    if isinstance(value, (list, tuple, set, frozenset)):
-        values = value
-    elif value is None:
-        values = ()
+def _normalize_roles(value: object) -> tuple[RoleId, ...]:
+    if isinstance(value, (list, tuple, set)):
+        raw = tuple(str(item) for item in value)
     else:
-        values = (value,)
-    normalized: set[RoleId] = set()
-    for item in values:
-        raw = str(getattr(item, 'value', item) or '').strip()
-        if not raw:
+        raw = (str(value or 'owner'),)
+    result: list[RoleId] = []
+    for item in raw:
+        token = str(item or '').strip()
+        if not token:
             continue
         try:
-            normalized.add(RoleId(raw))
+            result.append(RoleId(token))
         except ValueError:
             continue
-    return frozenset(normalized)
+    return tuple(result or (RoleId.OWNER,))
 
-def _build_impact(*, ctx: Any, payload: dict[str, Any], meta: dict[str, Any]) -> ActionImpact:
-    raw_category = str(payload.get('action_category') or meta.get('action_category') or '').strip()
-    try:
-        category = ActionCategory(raw_category) if raw_category else _infer_category(ctx.action_name)
-    except ValueError:
-        category = ActionCategory.UNKNOWN
-    impact = ActionImpact(
-        action_name=ctx.action_name,
+def _build_impact(*, action_name: str, payload: dict[str, Any], meta: dict[str, Any]) -> ActionImpact:
+    budget_delta = _normalize_non_negative_int(payload.get('budget_delta_cents') or meta.get('budget_delta_cents'))
+    external_write = bool(payload.get('external_write') or meta.get('external_write') or payload.get('provider') or meta.get('provider'))
+    requires_human = bool(payload.get('requires_human_approval') or meta.get('requires_human_approval'))
+    category = _infer_category(action_name)
+    return build_action_execution_context(
+        action_name=action_name,
         category=category,
-        cost_minor=_normalize_non_negative_int(payload.get('cost_minor'), meta.get('cost_minor')),
-        publication_count=_normalize_non_negative_int(payload.get('publication_count'), meta.get('publication_count')),
-        outbound_count=_normalize_non_negative_int(payload.get('outbound_count'), meta.get('outbound_count')),
-        strategic_change_count=_normalize_non_negative_int(payload.get('strategic_change_count'), meta.get('strategic_change_count')),
-        rollback_event_count=_normalize_non_negative_int(payload.get('rollback_event_count'), meta.get('rollback_event_count')),
-        requires_human_approval=bool(payload.get('requires_human_approval') or meta.get('requires_human_approval')),
+        budget_delta_cents=budget_delta,
+        external_write=external_write,
+        requires_human=requires_human,
     )
-    impact.validate()
-    return impact
 
-def _normalize_non_negative_int(primary: Any, fallback: Any) -> int:
-    value = primary if primary not in (None, "") else fallback
+def _normalize_non_negative_int(value: object) -> int:
     try:
         return max(0, int(value or 0))
     except (TypeError, ValueError):
         return 0
 
 def _infer_category(action_name: str) -> ActionCategory:
-    action = str(action_name or '').strip().lower()
+    action = str(action_name or '').lower()
     hints = {
-        'read': ActionCategory.SAFE_READ,
-        'get': ActionCategory.SAFE_READ,
-        'list': ActionCategory.SAFE_READ,
-        'fetch': ActionCategory.SAFE_READ,
+        'refund': ActionCategory.FINANCIAL_REVERSAL,
+        'reverse': ActionCategory.FINANCIAL_REVERSAL,
+        'payment': ActionCategory.FINANCIAL_WRITE,
+        'charge': ActionCategory.FINANCIAL_WRITE,
+        'transfer': ActionCategory.FINANCIAL_WRITE,
+        'ad': ActionCategory.AD_SPEND,
+        'campaign': ActionCategory.AD_SPEND,
         'publish': ActionCategory.PUBLICATION,
         'post': ActionCategory.PUBLICATION,
         'send': ActionCategory.OUTBOUND,
@@ -321,12 +261,6 @@ def _extract_approval_id(*, payload: dict[str, Any], meta: dict[str, Any]) -> st
     value = payload.get('approval_id') or meta.get('approval_id')
     normalized = str(value or '').strip()
     return normalized or None
-
-__all__ = [
-    'CANON_RUNTIME_GOVERNANCE_EXECUTION_GATE',
-    'GovernanceExecutionBlocked',
-    'review_governance_execution',
-]
 
 __all__ = [
     '_safe_dict',
