@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping
 
+from runtime.advisory.autonomy_advisory_packet import AutonomyAdvisoryPacket
 from runtime.creative import CreativeIntelligenceSnapshot
 from runtime.integration.decision_input_bridge import build_decision_input_packet
 from runtime.integration.decision_input_packet import DecisionInputPacket
@@ -100,7 +101,6 @@ class WorldStateIntegrationService:
             history_service=self.history_service,
         )
         advisory_packet = materialized["advisory_packet"]
-        world_state = materialized["world_state"]
         history_summary = materialized["history_summary"]
         packet = materialized["packet"]
         emit_world_state_packet_metrics(
