@@ -24,6 +24,10 @@ def _text_lower(value: object) -> str:
     return _text(value).lower()
 
 
+def _safe_dict(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    return dict(value or {}) if isinstance(value, Mapping) else {}
+
+
 def _safe_int(value: object, *, default: int = 0) -> int:
     try:
         return int(value)
