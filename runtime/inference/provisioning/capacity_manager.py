@@ -31,11 +31,11 @@ class InferenceCapacityManager:
     def evaluate(self, *, signals: InferenceScalingSignalSnapshot):
         capacity_state = self._state_store.get()
         if capacity_state.frozen:
-            return capacity_state.active_tier, 'capacity frozen by operator'
+            return capacity_state.active_tier, "capacity frozen by operator"
         decision = self._engine.evaluate(current_tier=capacity_state.active_tier, signals=signals)
-        cooldown_key = f'{capacity_state.active_tier.value}:{decision.target_tier.value}:{decision.action.value}'
+        cooldown_key = f"{capacity_state.active_tier.value}:{decision.target_tier.value}:{decision.action.value}"
         if decision.cooldown_seconds and not self._cooldown_tracker.allow(cooldown_key):
-            return state.active_tier, 'cooldown active'
+            return capacity_state.active_tier, "cooldown active"
         if decision.action in (InferenceEscalationAction.ESCALATE, InferenceEscalationAction.DEESCALATE):
             previous_tier = capacity_state.active_tier
             self._state_store.set_tier(decision.target_tier)
