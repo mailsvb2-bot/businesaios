@@ -9,6 +9,10 @@ from core.policies.telegram.handlers.autopilot_parts.menu_and_dashboards import 
 from core.policies.telegram.helpers import propose
 from core.ux.telegram_keyboards import kb_autopilot_menu
 
+AUTOPILOT_RUN_STARTED_V1 = "autopilot_run_started@v1"
+AUTOPILOT_DECISION_V1 = "autopilot_decision@v1"
+AUTOPILOT_STARTED_V1 = "autopilot_started@v1"
+
 
 def build_launch_action(ctx, *, user_id: str, default_price_rub: int, sess: dict, sl, logger):
     tenant_id = normalize_tenant_id_or_unknown(getattr(ctx.state, "tenant_id", None))
