@@ -36,6 +36,7 @@ from governance.time_scale import TimeScale
 from governance.economic_layer import EconomicAutonomyLayer
 
 from runtime.decision import DecisionEnvelope
+from runtime.execution.executor_result import ExecutionResult
 from runtime.handlers import ActionHandlerRegistry
 from runtime.execution.executor_commit import _decision_tenant_id, get_delivery_info
 from runtime.execution.executor_state import RuntimeExecutorInfra
@@ -98,7 +99,6 @@ logger = logging.getLogger(__name__)
 _throttled_exec_warn = emit_throttled_executor_warning
 
 
-
 class RuntimeExecutor:
     def __init__(
         self,
@@ -137,8 +137,8 @@ class RuntimeExecutor:
         queue_retry_policy=None,
         queue_worker_id: str = "runtime-executor",
         tenant_runtime_isolation: TenantRuntimeIsolation | None = None,
-        tenant_execution_budget_guard: TenantExecutionBudgetGuard | None = None,
-        action_audit_log: "ActionAuditLog | None" = None,
+        tenant_execution_budget_guard: Any | None = None,
+        action_audit_log: Any | None = None,
         execution_trace_store=None,
         decision_trace_store=None,
         runtime_effect_trace_store=None,
@@ -182,7 +182,7 @@ class RuntimeExecutor:
         self._runtime_owner_id = str(queue_worker_id or getattr(runtime_infra, 'runtime_owner_id', None) or 'runtime-executor').strip() or 'runtime-executor'
         self._action_audit_log = action_audit_log or getattr(runtime_infra, 'action_audit_log', None)
         self._execution_trace_store = execution_trace_store or getattr(runtime_infra, 'execution_trace_store', None)
-        self._decision_trace_store = decision_trace_store or getattr(runtime_infra, 'decision_trace_store', None) or NullDecisionTraceStore()
+        self._decision_trace_store = getattr(runtime_infra, 'decision_trace_store', None) or decision_trace_store or NullDecisionTraceStore()
         self._runtime_effect_trace_store = runtime_effect_trace_store or getattr(runtime_infra, 'runtime_effect_trace_store', None)
         self._connector_observability = getattr(runtime_infra, 'connector_observability', None)
         self._connector_health_monitor = getattr(runtime_infra, 'connector_health_monitor', None)
@@ -203,7 +203,6 @@ class RuntimeExecutor:
             queue_retry_policy=queue_retry_policy,
             worker_id=str(queue_worker_id or "runtime-executor"),
         )
-
 
     def _rebind_reliability_to_guard_ledger_if_needed(self) -> None:
         runtime_infra = getattr(self, '_runtime_infra', None)
@@ -255,8 +254,6 @@ class RuntimeExecutor:
             payload=payload,
             safe_dict=self._safe_dict,
         )
-
-
 
     def _record_inference_selection_audit(self, *, env: DecisionEnvelope, trace_id: str | None) -> None:
         audit_log = getattr(self, '_action_audit_log', None)
@@ -336,7 +333,7 @@ class RuntimeExecutor:
             safe_dict=self._safe_dict,
         )
 
-    def execute(self, env: DecisionEnvelope) -> "ExecutionResult":
+    def execute(self, env: DecisionEnvelope) -> ExecutionResult:
         return executor_execute_with_trace(executor=self, env=env)
 
     def _extract_ck(self, snapshot_id: str):
@@ -350,7 +347,7 @@ class RuntimeExecutor:
             warn=_throttled_exec_warn,
         )
 
-    def execute_recovery(self, env: DecisionEnvelope) -> "ExecutionResult":
+    def execute_recovery(self, env: DecisionEnvelope) -> ExecutionResult:
         return execute_recovery_flow(
             executor=self,
             env=env,
@@ -361,13 +358,11 @@ class RuntimeExecutor:
             warn=_throttled_exec_warn,
         )
 
-    def _execute(self, env: DecisionEnvelope, *, depth: int, timescale: TimeScale = TimeScale.RUNTIME) -> "ExecutionResult":
+    def _execute(self, env: DecisionEnvelope, *, depth: int, timescale: TimeScale = TimeScale.RUNTIME) -> ExecutionResult:
         return execute_core_flow(executor=self, env=env, depth=depth, timescale=timescale)
 
     def _apply_reliability_gate(self, env: DecisionEnvelope) -> ExecutionResult | None:
         return executor_apply_reliability_gate(executor=self, env=env)
-
-
 
 
 RuntimeExecutor._attach_effect_delivery_metadata = _executor_effect_delivery.attach_effect_delivery_metadata
