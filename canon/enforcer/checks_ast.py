@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import re
 from pathlib import Path
+from typing import Any
 
 from canon.enforcer.ast_semantics import full_attr_name, looks_like_integration_stub
 from canon.enforcer.rules import (
@@ -23,7 +24,7 @@ from canon.enforcer.rules import (
     safe_read_text,
 )
 
-def check_ast_semantics(report: EnforcerReport, root: Path = REPO_ROOT) -> None:
+def check_ast_semantics(report: Any, root: Path = REPO_ROOT) -> None:
     for path in iter_py_files(root):
         rel = path_str(path)
         text = safe_read_text(path)
@@ -183,5 +184,3 @@ def check_ast_semantics(report: EnforcerReport, root: Path = REPO_ROOT) -> None:
                             message=f"Runtime calls decision-like function: {fn}",
                             hint="Runtime must execute typed actions, not decide them.",
                         )
-
-
