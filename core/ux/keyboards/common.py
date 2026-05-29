@@ -5,5 +5,5 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 
-def mk(rows: List[List[Dict[str, str]]]) -> Dict[str, Any]:
+def mk(rows: list[list[dict[str, str]]]) -> dict[str, Any]:
     return {"inline_keyboard": rows}

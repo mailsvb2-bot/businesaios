@@ -5,7 +5,7 @@ CANON_COMPAT_SHIM = True
 import hashlib
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Mapping
 
 from governance.persistence_codec import to_jsonable
@@ -14,7 +14,7 @@ CANON_CONFIG_VERSIONING = True
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _clean_text(value: object, *, field_name: str) -> str:
@@ -58,19 +58,19 @@ class ConfigVersion:
             "fingerprint": self.fingerprint,
             "revision": int(self.revision),
             "parent_fingerprint": self.parent_fingerprint,
-            "created_at": self.created_at.astimezone(timezone.utc).isoformat(),
+            "created_at": self.created_at.astimezone(UTC).isoformat(),
             "created_by": str(self.created_by or "system").strip() or "system",
             "change_reason": str(self.change_reason or "").strip(),
             "labels": {str(k): str(v) for k, v in dict(self.labels).items()},
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object]) -> "ConfigVersion":
+    def from_dict(cls, payload: Mapping[str, object]) -> ConfigVersion:
         item = dict(payload or {})
         created_at_raw = str(item.get("created_at") or "").strip()
         created_at = datetime.fromisoformat(created_at_raw) if created_at_raw else utc_now()
         if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
+            created_at = created_at.replace(tzinfo=UTC)
         version = cls(
             namespace=str(item.get("namespace") or "").strip(),
             entity_id=str(item.get("entity_id") or "").strip(),

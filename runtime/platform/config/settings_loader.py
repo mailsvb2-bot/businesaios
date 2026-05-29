@@ -28,7 +28,7 @@ from runtime.platform.config.env_flags import env_bool as _env_bool
 from runtime.platform.config.env_flags import env_int as _env_int
 from runtime.platform.config.env_flags import env_str as _env_str
 
-_SETTINGS_CACHE: Optional[Settings] = None
+_SETTINGS_CACHE: Settings | None = None
 
 
 def load_settings(*, force_reload: bool = False) -> Settings:

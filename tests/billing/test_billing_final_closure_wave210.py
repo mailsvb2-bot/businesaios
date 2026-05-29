@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 
 import pytest
@@ -66,12 +66,12 @@ def _issued_invoice(*, tenant_id: str, invoice_id: str, total_minor: int, curren
         tax_minor=100,
         total_minor=total_minor,
         status=InvoiceLifecycleStatus.ISSUED,
-        issued_at=datetime(2026, 4, 10, tzinfo=timezone.utc),
+        issued_at=datetime(2026, 4, 10, tzinfo=UTC),
     )
 
 
 def test_multi_worker_contention_blocks_second_worker_until_stale_lease_expires(tmp_path: Path) -> None:
-    observed = datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc)
+    observed = datetime(2026, 4, 10, 12, 0, tzinfo=UTC)
     orchestrator = DunningOrchestrator(metrics=TenantMetricsRegistry())
     orchestrator.open_run(tenant_id='tenant-a', invoice_id='inv-contention', started_at=observed - timedelta(days=10))
 
@@ -117,7 +117,7 @@ def test_multi_worker_contention_blocks_second_worker_until_stale_lease_expires(
 
 
 def test_long_running_renewal_job_renews_lease_before_expiry(monkeypatch) -> None:
-    observed = datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc)
+    observed = datetime(2026, 4, 10, 12, 0, tzinfo=UTC)
     lease_store = _RecordingLeaseStore()
     job = RenewalJob(lease_store=lease_store, lease_ttl=timedelta(minutes=2), worker_id='worker-renew')
     subscriptions = (
@@ -141,7 +141,7 @@ def test_long_running_renewal_job_renews_lease_before_expiry(monkeypatch) -> Non
 
 
 def test_reconciliation_replay_returns_original_report_after_underlying_ledger_changes(tmp_path: Path) -> None:
-    now = datetime(2026, 4, 10, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 10, 12, 0, tzinfo=UTC)
     metrics = TenantMetricsRegistry()
     ledger = SqliteLedgerStore(sqlite_path=str(tmp_path / 'ledger.sqlite3'))
     run_store = SqliteBillingJobRunStore(sqlite_path=str(tmp_path / 'job-runs.sqlite3'))

@@ -57,13 +57,13 @@ class Campaign:
     ref: AdsObjectRef
     name: str
     status: str
-    objective: Optional[str]
-    raw: Dict[str, Any]
+    objective: str | None
+    raw: dict[str, Any]
 
     # Optional normalized fields (connector-specific availability).
     # Keeping them optional preserves backward compatibility while allowing
     # richer UX without reading connector-specific raw payloads.
-    daily_budget: Optional[float] = None
+    daily_budget: float | None = None
 
     @property
     def campaign_id(self) -> str:
@@ -79,13 +79,13 @@ class MetricPoint:
     impressions: int
     clicks: int
     spend: float
-    conversions: Optional[int] = None
-    revenue: Optional[float] = None
-    cpa: Optional[float] = None
-    cpc: Optional[float] = None
-    ctr: Optional[float] = None
-    currency: Optional[str] = None
-    raw: Optional[Dict[str, Any]] = None
+    conversions: int | None = None
+    revenue: float | None = None
+    cpa: float | None = None
+    cpc: float | None = None
+    ctr: float | None = None
+    currency: str | None = None
+    raw: dict[str, Any] | None = None
 
 
 
@@ -109,7 +109,7 @@ class AdsReadConnector(Protocol):
         tenant_id: str,
         account_id: str,
         level: str,
-        object_ids: Optional[Sequence[str]],
+        object_ids: Sequence[str] | None,
         date_from: date,
         date_to: date,
     ) -> Iterable[MetricPoint]: ...
@@ -127,8 +127,8 @@ class AdsWriteConnector(AdsReadConnector, Protocol):
         tenant_id: str,
         account_id: str,
         object_type: str,
-        payload: Dict[str, Any],
-    ) -> Dict[str, Any]: ...
+        payload: dict[str, Any],
+    ) -> dict[str, Any]: ...
 
 
 class AdsConnector(AdsWriteConnector, Protocol):

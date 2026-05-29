@@ -19,7 +19,7 @@ class OPEGate:
         self._min_n = int(min_transitions)
         self._min_avg = int(min_avg_reward_minor)
 
-    def check(self, transitions: List[Transition]) -> OPEReport:
+    def check(self, transitions: list[Transition]) -> OPEReport:
         n = len(transitions)
         if n < self._min_n:
             return OPEReport(ok=False, reason=f"too_few_transitions<{self._min_n}", n=n, avg_reward_minor=0)

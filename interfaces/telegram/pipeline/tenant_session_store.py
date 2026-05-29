@@ -29,7 +29,7 @@ class _Entry:
 class TenantSessionStore:
     def __init__(self, *, ttl_s: int = 3600) -> None:
         self._ttl_ms = int(ttl_s) * 1000
-        self._items: Dict[Tuple[str, str], _Entry] = {}
+        self._items: dict[tuple[str, str], _Entry] = {}
 
     def _gc(self) -> None:
         now = int(time.time() * 1000)
@@ -44,7 +44,7 @@ class TenantSessionStore:
         self._items[(str(chat_id), str(user_id))] = _Entry(tenant_id=tid, expires_at_ms=now + self._ttl_ms)
         return tid
 
-    def get(self, *, chat_id: str, user_id: str) -> Optional[TenantId]:
+    def get(self, *, chat_id: str, user_id: str) -> TenantId | None:
         self._gc()
         e = self._items.get((str(chat_id), str(user_id)))
         return e.tenant_id if e else None

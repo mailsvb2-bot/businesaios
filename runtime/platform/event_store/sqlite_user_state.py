@@ -19,7 +19,7 @@ def get_user_state(
     *,
     tenant_id: str = "default",
     user_id: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     try:
         row = db.execute(
             "SELECT state_json, updated_at_ms FROM user_state WHERE tenant_id=? AND user_id=?",
@@ -43,7 +43,7 @@ def project_user_state(
     user_id: str,
     event_type: str,
     ts: int,
-    payload_obj: Dict[str, Any],
+    payload_obj: dict[str, Any],
 ) -> None:
     """Incrementally update user_state for this event (best-effort, never raises)."""
     if user_id in (None, "", "system"):
@@ -53,7 +53,7 @@ def project_user_state(
             "SELECT state_json FROM user_state WHERE tenant_id=? AND user_id=?",
             (str(tenant_id or "default"), str(user_id)),
         ).fetchone()
-        state: Dict[str, Any] = {}
+        state: dict[str, Any] = {}
         if cur and cur[0]:
             try:
                 state = json.loads(cur[0]) or {}

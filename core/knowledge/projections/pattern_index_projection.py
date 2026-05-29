@@ -15,7 +15,7 @@ class PatternIndexProjection:
     support_count: int
 
     @classmethod
-    def from_pattern(cls, pattern: Pattern) -> "PatternIndexProjection":
+    def from_pattern(cls, pattern: Pattern) -> PatternIndexProjection:
         return cls(
             pattern_id=pattern.pattern_id,
             subject=pattern.subject,
@@ -25,5 +25,5 @@ class PatternIndexProjection:
         )
 
     @classmethod
-    def build_many(cls, patterns: Sequence[Pattern]) -> tuple["PatternIndexProjection", ...]:
+    def build_many(cls, patterns: Sequence[Pattern]) -> tuple[PatternIndexProjection, ...]:
         return tuple(cls.from_pattern(pattern) for pattern in patterns)

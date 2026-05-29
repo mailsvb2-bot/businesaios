@@ -42,15 +42,15 @@ class AsyncTelegramOutboundQueueAdapter:
             maxsize=maxsize,
         )
         self._auto_start = bool(auto_start)
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._thr: Optional[threading.Thread] = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thr: threading.Thread | None = None
         self._stop_evt = threading.Event()
 
         # lightweight metrics
         self._submitted = 0
         self._errors = 0
         self._dropped = 0
-        self._last_err_ms: Dict[str, int] = {}
+        self._last_err_ms: dict[str, int] = {}
 
     def _throttled_err(self, key: str, e: Exception) -> None:
         now_ms = int(time.time() * 1000)
@@ -123,7 +123,7 @@ class AsyncTelegramOutboundQueueAdapter:
         self._thr = None
         self._loop = None
 
-    def metrics_snapshot(self) -> Dict[str, Any]:
+    def metrics_snapshot(self) -> dict[str, Any]:
         return {
             "mode": "async",
             "submitted": int(self._submitted),
@@ -136,9 +136,9 @@ class AsyncTelegramOutboundQueueAdapter:
         self,
         *,
         method: str,
-        chat_id: Optional[int],
+        chat_id: int | None,
         fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
         critical: bool = True,
         priority: int = 50,
         kind: str = "normal",
@@ -186,9 +186,9 @@ class AsyncTelegramOutboundQueueAdapter:
         self,
         *,
         method: str,
-        chat_id: Optional[int],
+        chat_id: int | None,
         fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
         timeout_s: float = 30.0,
         critical: bool = True,
         priority: int = 50,

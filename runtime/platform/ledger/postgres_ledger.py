@@ -21,7 +21,7 @@ class PostgresLedger:
         self._dsn = str(dsn)
         self._port: PostgresPort | None = None
 
-    def __enter__(self) -> "PostgresLedger":
+    def __enter__(self) -> PostgresLedger:
         self._port = PostgresPort(self._dsn, application_name="businesaios-ledger").__enter__()
         self._init_schema()
         return self

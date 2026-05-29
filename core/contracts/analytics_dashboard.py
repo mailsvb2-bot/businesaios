@@ -9,7 +9,7 @@ class DashboardSectionState:
     section_id: str
     state: str
     score: float = 0.0
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -18,7 +18,7 @@ class AnalyticsDashboard:
     window_days: int
     overall_state: str
     overall_score: float
-    sections: Dict[str, DashboardSectionState] = field(default_factory=dict)
+    sections: dict[str, DashboardSectionState] = field(default_factory=dict)
     highlights: tuple[str, ...] = ()
     risks: tuple[str, ...] = ()
     generated_at_ms: int = 0

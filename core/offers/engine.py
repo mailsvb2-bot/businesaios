@@ -99,7 +99,7 @@ class OfferEngine:
     catalogs: OfferCatalogRegistry
 
     @classmethod
-    def default(cls) -> "OfferEngine":
+    def default(cls) -> OfferEngine:
         return OfferEngine(catalogs=default_offer_catalog_registry())
 
     def render_offer(
@@ -112,7 +112,7 @@ class OfferEngine:
         price_rub: int,
         step_key: str,
         seed: str = "1",
-        bandit: Dict[str, Dict[str, float]] | None = None,
+        bandit: dict[str, dict[str, float]] | None = None,
         context: Mapping[str, Any] | None = None,
     ) -> OfferRender:
         prod = dict(product or {})

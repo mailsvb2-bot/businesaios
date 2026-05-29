@@ -8,8 +8,8 @@ from .seasonality import DOWSeasonalityModel
 from .world_model import PricingWorldModel
 
 
-def pricing_world_model_to_dict(m: PricingWorldModel) -> Dict[str, Any]:
-    out: Dict[str, Any] = {"kind": "pricing_world_model@v1"}
+def pricing_world_model_to_dict(m: PricingWorldModel) -> dict[str, Any]:
+    out: dict[str, Any] = {"kind": "pricing_world_model@v1"}
 
     d = m.demand
     if isinstance(d, IsoelasticDemandCurve):
@@ -36,7 +36,7 @@ def pricing_world_model_to_dict(m: PricingWorldModel) -> Dict[str, Any]:
     return out
 
 
-def pricing_world_model_from_dict(d: Dict[str, Any]) -> PricingWorldModel:
+def pricing_world_model_from_dict(d: dict[str, Any]) -> PricingWorldModel:
     d = dict(d or {})
     demand_d = dict(d.get("demand") or {})
     conv_d = dict(d.get("conversion") or {})

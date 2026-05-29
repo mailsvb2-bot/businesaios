@@ -24,7 +24,7 @@ class AdsApplyState:
     since_ms: int = 0
 
     @staticmethod
-    def from_settings(settings: Mapping[str, Any] | None) -> "AdsApplyState":
+    def from_settings(settings: Mapping[str, Any] | None) -> AdsApplyState:
         if not isinstance(settings, Mapping):
             return AdsApplyState(False)
         try:
@@ -35,7 +35,7 @@ class AdsApplyState:
             return AdsApplyState(False)
 
 
-def build_enable_ads_apply_plan(*, user_id: str, callback_query_id: Optional[str] = None) -> Dict[str, Any]:
+def build_enable_ads_apply_plan(*, user_id: str, callback_query_id: str | None = None) -> dict[str, Any]:
     now_ms = int(time.time() * 1000)
     steps = [
         {
@@ -68,7 +68,7 @@ def build_enable_ads_apply_plan(*, user_id: str, callback_query_id: Optional[str
     return {"user_id": str(user_id), "steps": steps}
 
 
-def build_disable_ads_apply_plan(*, user_id: str, callback_query_id: Optional[str] = None) -> Dict[str, Any]:
+def build_disable_ads_apply_plan(*, user_id: str, callback_query_id: str | None = None) -> dict[str, Any]:
     steps = [
         {
             "action": "set_user_setting@v1",
@@ -99,7 +99,7 @@ def assert_ads_apply_allowed(
     planned_daily_budget_minor: int,
     max_changes_per_day: int,
     planned_changes: int,
-) -> Optional[str]:
+) -> str | None:
     """Return error code if NOT allowed, else None.
 
     hard_env_enabled:

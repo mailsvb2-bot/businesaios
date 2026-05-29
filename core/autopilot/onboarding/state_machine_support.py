@@ -43,9 +43,9 @@ def next_session(
     sess,
     stage,
     diag=None,
-    offer_id: Optional[str] = None,
-    channel: Optional[str] = None,
-    ads_platform: Optional[str] = None,
+    offer_id: str | None = None,
+    channel: str | None = None,
+    ads_platform: str | None = None,
     tasks: Any = None,
 ):
     return session_cls(
@@ -66,11 +66,11 @@ def transition(
     sess,
     stage,
     notify_text: str,
-    reply_markup: Optional[dict],
+    reply_markup: dict | None,
     diag=None,
-    offer_id: Optional[str] = None,
-    channel: Optional[str] = None,
-    ads_platform: Optional[str] = None,
+    offer_id: str | None = None,
+    channel: str | None = None,
+    ads_platform: str | None = None,
     tasks: Any = None,
     use_callback_query_id: bool = False,
 ):

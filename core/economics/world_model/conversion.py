@@ -47,10 +47,10 @@ class LogisticConversionModel:
         max_iter: int = 50,
         tol: float = 1e-8,
         l2: float = 1e-6,
-    ) -> "LogisticConversionModel":
-        xs: List[float] = []
-        ys: List[float] = []
-        ns: List[float] = []
+    ) -> LogisticConversionModel:
+        xs: list[float] = []
+        ys: list[float] = []
+        ns: list[float] = []
         for o in observations:
             n = float(o.opportunities)
             if n <= 0:
@@ -75,7 +75,7 @@ class LogisticConversionModel:
             h00 = l2
             h01 = 0.0
             h11 = l2
-            for x, y, n in zip(xs, ys, ns):
+            for x, y, n in zip(xs, ys, ns, strict=False):
                 z = w0 + w1 * x
                 p = _sigmoid(z)
                 # grad = X^T (y - n p)
@@ -128,7 +128,7 @@ class FunnelTransitionModel:
         return float(self.p_add_to_cart) * float(self.p_checkout) * float(self.p_purchase)
 
     @staticmethod
-    def from_counts(*, visits: float, add_to_cart: float, checkouts: float, purchases: float) -> "FunnelTransitionModel":
+    def from_counts(*, visits: float, add_to_cart: float, checkouts: float, purchases: float) -> FunnelTransitionModel:
         v = max(1.0, float(visits))
         a = max(0.0, float(add_to_cart))
         c = max(0.0, float(checkouts))

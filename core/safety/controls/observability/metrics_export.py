@@ -15,7 +15,7 @@ CANON_SAFETY_METRICS_EXPORT = True
 class SafetyMetricsExporter:
     registry: TenantMetricsRegistry
 
-    def record_event(self, event: 'SafetyEvent') -> None:
+    def record_event(self, event: SafetyEvent) -> None:
         labels = {
             'action': str(event.action),
             'stage': str(event.stage),

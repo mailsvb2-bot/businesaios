@@ -20,7 +20,7 @@ class UnansweredSnapshot:
         object.__setattr__(self, "seconds_since_last_user_reply", int(self.seconds_since_last_user_reply or 0))
 
     @staticmethod
-    def from_mapping(value: Mapping[str, Any] | None) -> "UnansweredSnapshot":
+    def from_mapping(value: Mapping[str, Any] | None) -> UnansweredSnapshot:
         if not isinstance(value, Mapping):
             return UnansweredSnapshot()
         return UnansweredSnapshot(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -228,7 +228,7 @@ class BusinessAutonomyFileSurfaceMirror:
     root_dir: Path
 
     @classmethod
-    def from_data_dir(cls) -> "BusinessAutonomyFileSurfaceMirror":
+    def from_data_dir(cls) -> BusinessAutonomyFileSurfaceMirror:
         from os import getenv
         data_dir = Path(str(getenv('DATA_DIR', 'data') or 'data'))
         return cls(root_dir=data_dir / 'business_autonomy')
@@ -271,14 +271,14 @@ class BusinessAutonomyFileSurfaceMirror:
                 'goal_id': result.goal_id,
                 'verdict': result.verdict.value,
                 'metadata': dict(result.metadata or {}),
-                'recorded_at_utc': datetime.now(timezone.utc).isoformat(),
+                'recorded_at_utc': datetime.now(UTC).isoformat(),
             }, sort_keys=True) + '\n')
         return None
 
     def record_execution(self, *, request, result: BusinessExecutionResult) -> None:
         self.root_dir.mkdir(parents=True, exist_ok=True)
         tenant_id = str(request.metadata.get('tenant_id') or result.metadata.get('tenant_id') or 'global')
-        recorded_at = datetime.now(timezone.utc).isoformat()
+        recorded_at = datetime.now(UTC).isoformat()
         row = {
             'tenant_id': tenant_id,
             'business_id': request.business_id,

@@ -30,7 +30,7 @@ class ReleaseManifest:
     schema_version: int
     release_tag: str
     version: str
-    files: Dict[str, str]  # relpath -> sha256
+    files: dict[str, str]  # relpath -> sha256
 
     def to_json(self) -> str:
         obj = {
@@ -44,7 +44,7 @@ class ReleaseManifest:
 
 def generate_manifest(*, root_dir: Path, release_tag: str, version: str) -> ReleaseManifest:
     root = Path(root_dir).resolve()
-    files: List[Tuple[str, str]] = []
+    files: list[tuple[str, str]] = []
     for p in sorted(iter_release_files(root), key=lambda x: x.relative_to(root).as_posix()):
         rel = p.relative_to(root).as_posix()
         files.append((rel, sha256_file(p)))
@@ -76,8 +76,8 @@ def verify_manifest(*, root_dir: Path, manifest_path: Path) -> None:
     if int(m.schema_version) != 1:
         raise RuntimeError("RELEASE_MANIFEST_UNSUPPORTED_SCHEMA")
 
-    missing: List[str] = []
-    mismatched: List[str] = []
+    missing: list[str] = []
+    mismatched: list[str] = []
 
     for rel, expected in sorted(m.files.items()):
         p = root / rel

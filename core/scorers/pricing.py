@@ -6,7 +6,7 @@ import math
 from typing import List
 
 
-def softmax_probs(values: List[float], *, temperature: float) -> List[float]:
+def softmax_probs(values: list[float], *, temperature: float) -> list[float]:
     if not values:
         return []
     t = float(temperature)
@@ -20,7 +20,7 @@ def softmax_probs(values: List[float], *, temperature: float) -> List[float]:
     return [float(x) / float(s) for x in exps]
 
 
-def sample_index(rng, probs: List[float]) -> int:
+def sample_index(rng, probs: list[float]) -> int:
     r = float(rng.random())
     c = 0.0
     for i, p in enumerate(probs):
@@ -30,7 +30,7 @@ def sample_index(rng, probs: List[float]) -> int:
     return int(len(probs) - 1)
 
 
-def choose_probabilities(*, exploration: str, expected_revenue: List[float], epsilon: float, temperature: float) -> List[float]:
+def choose_probabilities(*, exploration: str, expected_revenue: list[float], epsilon: float, temperature: float) -> list[float]:
     mode = str(exploration or "softmax_v1").strip().lower()
     if mode == "epsilon_greedy_v1":
         best_i = max(range(len(expected_revenue)), key=lambda i: expected_revenue[i])

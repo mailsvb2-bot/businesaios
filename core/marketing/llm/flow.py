@@ -16,7 +16,7 @@ def build_request(*, model: str, inp: MarketingLLMInputs):
     return build_marketing_request(model=model, inp=inp)
 
 
-def finalize_text(*, text: str, max_chars: int, forbid: tuple, offer: dict) -> tuple[bool, Optional[str], str]:
+def finalize_text(*, text: str, max_chars: int, forbid: tuple, offer: dict) -> tuple[bool, str | None, str]:
     normalized = normalize_generated_text(text or "")
     ok_text, clean_text, guard_reason = validate_marketing_text(
         text=normalized,

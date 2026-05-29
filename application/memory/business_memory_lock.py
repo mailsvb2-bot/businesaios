@@ -11,7 +11,7 @@ class FileBusinessMemoryLock:
     target_path: Path
     timeout_seconds: float = 5.0
     retry_delay_seconds: float = 0.05
-    def __enter__(self) -> "FileBusinessMemoryLock":
+    def __enter__(self) -> FileBusinessMemoryLock:
         lock_path=self._lock_path(); deadline=time.monotonic()+float(self.timeout_seconds)
         while True:
             try:

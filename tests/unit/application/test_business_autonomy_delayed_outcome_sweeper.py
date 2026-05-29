@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from application.business_autonomy.contracts import (
     BusinessExecutionRequest,
@@ -38,7 +38,7 @@ def test_delayed_outcome_sweeper_quarantines_stale_items(tmp_path) -> None:
     )
     ref = bridge.append_pending(request=request, result=result)
     assert ref is not None
-    sweep = bridge.sweep_expired(now=datetime.now(timezone.utc) + timedelta(days=10))
+    sweep = bridge.sweep_expired(now=datetime.now(UTC) + timedelta(days=10))
     assert sweep.quarantined_count == 1
     state = json.loads((tmp_path / 'delayed_outcome_state.json').read_text(encoding='utf-8'))
     assert state['active'] == {}

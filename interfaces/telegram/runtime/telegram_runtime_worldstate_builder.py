@@ -23,7 +23,7 @@ from kernel.world_state import WorldStateV1
 
 
 def make_minimal_context_for_chat(*, chat_id: str, user_id: str | None = None) -> TelegramContext:
-    raw: Dict[str, Any] = {}
+    raw: dict[str, Any] = {}
     if user_id is not None:
         raw = {"message": {"from": {"id": int(user_id)}, "chat": {"id": str(chat_id)}}}
     return TelegramContext(
@@ -43,10 +43,10 @@ def make_minimal_context_for_chat(*, chat_id: str, user_id: str | None = None) -
 def apply_telegram_overlays(
     ws: WorldStateV1,
     *,
-    user_patch: Optional[Dict[str, Any]] = None,
-    behavior_patch: Optional[Dict[str, Any]] = None,
-    behavioral_state: Optional[Dict[str, Any]] = None,
-    price_constraints: Optional[Dict[str, Any]] = None,
+    user_patch: dict[str, Any] | None = None,
+    behavior_patch: dict[str, Any] | None = None,
+    behavioral_state: dict[str, Any] | None = None,
+    price_constraints: dict[str, Any] | None = None,
 ) -> WorldStateV1:
     u = dict(ws.user or {})
     if isinstance(user_patch, dict) and user_patch:
@@ -85,11 +85,11 @@ def apply_telegram_overlays(
 def build_system_world_state(
     *,
     purpose: str,
-    session: Optional[Dict[str, Any]] = None,
+    session: dict[str, Any] | None = None,
     tenant_id: str | None = None,
-    meta: Optional[Dict[str, Any]] = None,
+    meta: dict[str, Any] | None = None,
     user_timezone: str = "Europe/Amsterdam",
-    now_ms: Optional[int] = None,
+    now_ms: int | None = None,
 ) -> WorldStateV1:
     ts = int(now_ms if now_ms is not None else time.time() * 1000)
     return WorldStateV1(
@@ -105,7 +105,7 @@ def build_system_world_state(
     )
 
 
-def latest_events(*, event_store: Any, tenant_id: str, user_id: str, limit: int = 800) -> List[Dict[str, Any]]:
+def latest_events(*, event_store: Any, tenant_id: str, user_id: str, limit: int = 800) -> list[dict[str, Any]]:
     lim = max(1, min(5000, int(limit)))
     try:
         events = event_store.latest_events(tenant_id=str(tenant_id), user_id=str(user_id), limit=lim)
@@ -122,11 +122,11 @@ def build_world_state_for_telegram(
     ctx: TelegramContext,
     tenant_id: str,
     user_timezone: str = "Europe/Amsterdam",
-    economy: Optional[Dict[str, Any]] = None,
-    entitlements: Optional[Dict[str, Any]] = None,
-    product_context: Optional[Dict[str, Any]] = None,
+    economy: dict[str, Any] | None = None,
+    entitlements: dict[str, Any] | None = None,
+    product_context: dict[str, Any] | None = None,
     limit: int = 800,
-    now_ms: Optional[int] = None,
+    now_ms: int | None = None,
 ) -> WorldStateV1:
     overlays = build_overlays_from_context(
         ctx=ctx,

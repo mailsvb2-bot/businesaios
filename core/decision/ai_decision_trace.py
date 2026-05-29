@@ -16,8 +16,8 @@ from typing import Any, Dict, List, Optional
 @dataclass(frozen=True)
 class TraceStep:
     name: str
-    input: Dict[str, Any]
-    output: Dict[str, Any]
+    input: dict[str, Any]
+    output: dict[str, Any]
     duration_ms: int = 0
 
 
@@ -28,10 +28,10 @@ class DecisionTrace:
     correlation_id: str | None
     user_id: str
     issued_at_ms: int
-    steps: List[TraceStep]
-    meta: Dict[str, Any]
+    steps: list[TraceStep]
+    meta: dict[str, Any]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "trace_id": self.trace_id,
             "decision_id": self.decision_id,
@@ -46,13 +46,13 @@ class DecisionTrace:
 class TraceBuilder:
     """Tiny mutable builder owned by the canonical core decision layer."""
 
-    def __init__(self, *, user_id: str, correlation_id: Optional[str]):
+    def __init__(self, *, user_id: str, correlation_id: str | None):
         self._trace_id = str(uuid.uuid4())
         self._user_id = str(user_id)
         self._correlation_id = str(correlation_id) if correlation_id else None
         self._start_ms = int(time.time() * 1000)
-        self._steps: List[TraceStep] = []
-        self._meta: Dict[str, Any] = {}
+        self._steps: list[TraceStep] = []
+        self._meta: dict[str, Any] = {}
 
     @property
     def trace_id(self) -> str:
@@ -64,10 +64,10 @@ class TraceBuilder:
                 continue
             self._meta[str(k)] = v
 
-    def add_step(self, *, name: str, input: Dict[str, Any], output: Dict[str, Any], duration_ms: int = 0) -> None:
+    def add_step(self, *, name: str, input: dict[str, Any], output: dict[str, Any], duration_ms: int = 0) -> None:
         self._steps.append(TraceStep(name=str(name), input=dict(input or {}), output=dict(output or {}), duration_ms=int(duration_ms or 0)))
 
-    def try_add_step(self, *, name: str, input: Dict[str, Any], output: Dict[str, Any], duration_ms: int = 0) -> None:
+    def try_add_step(self, *, name: str, input: dict[str, Any], output: dict[str, Any], duration_ms: int = 0) -> None:
         """Best-effort step add (never throws).
 
         Trace is an *auxiliary* artifact: DecisionCore must not fail if trace

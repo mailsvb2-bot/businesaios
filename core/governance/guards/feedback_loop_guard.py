@@ -9,8 +9,8 @@ from core.governance.evaluators.profit_metrics import ProfitMetricsService
 @dataclass(frozen=True)
 class GuardDecision:
     allowed: bool
-    code: Optional[str] = None
-    message: Optional[str] = None
+    code: str | None = None
+    message: str | None = None
 
 
 class FeedbackLoopGuard:

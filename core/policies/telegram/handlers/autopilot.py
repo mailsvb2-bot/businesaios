@@ -14,7 +14,7 @@ from core.policies.telegram.helpers import ProposedAction
 logger = logging.getLogger(__name__)
 
 
-def handle_autopilot(ctx: TelegramCtx, *, user_id: str, default_price_rub: int) -> Optional[ProposedAction]:
+def handle_autopilot(ctx: TelegramCtx, *, user_id: str, default_price_rub: int) -> ProposedAction | None:
     """Telegram Autopilot handler.
 
     The original all-in-one handler was split into small dispatch helpers:

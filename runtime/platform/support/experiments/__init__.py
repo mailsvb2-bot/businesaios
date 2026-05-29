@@ -34,7 +34,7 @@ class ExperimentMetadata:
 
 class ExperimentRegistry:
     def __init__(self) -> None:
-        self._items: Dict[str, dict] = {}
+        self._items: dict[str, dict] = {}
 
     def register(self, experiment_id: str, payload: dict) -> None:
         self._items[experiment_id] = dict(payload)
@@ -75,7 +75,7 @@ class TrialAllocator:
 
 class TrialRegistry:
     def __init__(self) -> None:
-        self._trials: Dict[str, dict] = {}
+        self._trials: dict[str, dict] = {}
 
     def register(self, trial_id: str, payload: dict) -> None:
         self._trials[trial_id] = dict(payload)

@@ -28,15 +28,15 @@ def mood10_to_bucket(mood_0_10: float, *, policy: RetentionMoodPolicy | None = N
 
 def apply_mood_features(
     *,
-    vec: Dict[str, float],
-    events: Iterable[Dict[str, Any]],
+    vec: dict[str, float],
+    events: Iterable[dict[str, Any]],
     store: Any,
     tenant_id: str,
     user_id: str,
     policy: RetentionMoodPolicy | None = None,
 ) -> None:
     policy = policy or DEFAULT_RETENTION_MOOD_POLICY
-    moods_today: List[float] = []
+    moods_today: list[float] = []
     for event in events:
         if str(event.get("event_type")) != "mood_logged":
             continue
@@ -52,7 +52,7 @@ def apply_mood_features(
         vec["mood_today"] = float(bucket)
         vec["mood_latest_0_10"] = float(max(float(policy.mood_min), min(moods_today[-1], float(policy.mood_max))))
 
-    last_moods: List[int] = []
+    last_moods: list[int] = []
     for event in store.latest_events(tenant_id=tenant_id, user_id=user_id, event_type="mood_logged", limit=int(policy.latest_events_limit)):
         payload = safe_json(event.get("payload"))
         if "mood" in payload:

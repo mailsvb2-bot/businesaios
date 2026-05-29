@@ -28,7 +28,7 @@ def build_system_prompt(task: TaskType, locale: str) -> str:
 
 
 def build_user_prompt(task: TaskType, ctx: LLMTaskContext) -> str:
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "tenant_id": ctx.tenant_id,
         "user_id": ctx.user_id,
         "product_id": ctx.product_id,

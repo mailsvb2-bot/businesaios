@@ -16,10 +16,10 @@ class ProposedAction:
     """
 
     action: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
-def propose(action: str, payload: Dict[str, Any] | None = None) -> ProposedAction:
+def propose(action: str, payload: dict[str, Any] | None = None) -> ProposedAction:
     return ProposedAction(action=str(action), payload=dict(payload or {}))
 
 
@@ -27,12 +27,12 @@ def propose_message(
     *,
     user_id: str,
     text: str,
-    reply_markup: Optional[dict] = None,
-    callback_query_id: Optional[str] = None,
-    track_event_type: Optional[str] = None,
-    track_payload: Optional[Dict[str, Any]] = None,
+    reply_markup: dict | None = None,
+    callback_query_id: str | None = None,
+    track_event_type: str | None = None,
+    track_payload: dict[str, Any] | None = None,
 ) -> ProposedAction:
-    p: Dict[str, Any] = {"user_id": str(user_id or "anonymous"), "text": str(text)}
+    p: dict[str, Any] = {"user_id": str(user_id or "anonymous"), "text": str(text)}
     if isinstance(callback_query_id, str) and callback_query_id.strip():
         # UX: answerCallbackQuery to stop the spinning loader.
         # This is still a single action (send_message@v1); the transport may
@@ -52,7 +52,7 @@ def choose_marketing_variant(
     user_id: str,
     step_key: str,
     seed: str = "1",
-    bandit: Dict[str, Dict[str, float]] | None = None,
+    bandit: dict[str, dict[str, float]] | None = None,
 ) -> str:
     """Choose A/B for a step.
 
@@ -60,7 +60,7 @@ def choose_marketing_variant(
     If bandit stats are provided, use deterministic Thompson sampling (Beta priors)
     seeded by sha256(seed|user_id|step_key) so retries remain stable.
     """
-    base = f"{seed}|{user_id}|{step_key}".encode("utf-8")
+    base = f"{seed}|{user_id}|{step_key}".encode()
     h = hashlib.sha256(base).digest()
 
     fallback = "a" if (h[0] % 2 == 0) else "b"
@@ -91,7 +91,7 @@ def choose_marketing_variant(
         return fallback
 
 
-def build_legacy_prices(*, default_price_rub: int) -> Dict[str, int]:
+def build_legacy_prices(*, default_price_rub: int) -> dict[str, int]:
     """Best-effort legacy title->price mapping.
 
     Source of truth is the plan catalog (data/plans.json). Hardcoding prices creates drift.
@@ -99,7 +99,7 @@ def build_legacy_prices(*, default_price_rub: int) -> Dict[str, int]:
     try:
         from core.plans import active_plans
 
-        mp: Dict[str, int] = {}
+        mp: dict[str, int] = {}
         for p in active_plans():
             try:
                 title = str(p.get("title") or "").strip()

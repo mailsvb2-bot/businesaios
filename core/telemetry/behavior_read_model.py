@@ -22,8 +22,8 @@ def behavior_snapshot(
     user_id: str,
     limit: int = DEFAULT_BEHAVIOR_TELEMETRY_POLICY.default_limit,
     lookback_days: int = DEFAULT_BEHAVIOR_TELEMETRY_POLICY.default_lookback_days,
-) -> Dict[str, Any]:
-    out: Dict[str, Any] = {
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
         "clicks_total": 0,
         "callbacks_total": 0,
         "messages_total": 0,
@@ -100,9 +100,9 @@ def behavior_snapshot(
         # --- Optional B2B org field aggregation ---
         # If events include payload.actor_role, we aggregate per-role.
         try:
-            psi_by_role: Dict[str, Complex4] = {}
-            anti_by_role: Dict[str, float] = {}
-            buckets: Dict[str, list[dict]] = {}
+            psi_by_role: dict[str, Complex4] = {}
+            anti_by_role: dict[str, float] = {}
+            buckets: dict[str, list[dict]] = {}
             for e in evs_sorted:
                 p = e.get("payload") or {}
                 if not isinstance(p, dict):

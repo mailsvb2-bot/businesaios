@@ -21,8 +21,8 @@ class MarketingEffectsMixin:
         variant_a: str,
         variant_b: str,
         notify_text: str | None = None,
-        notify_reply_markup: Optional[Dict[str, Any]] = None,
-        callback_query_id: Optional[str] = None,
+        notify_reply_markup: dict[str, Any] | None = None,
+        callback_query_id: str | None = None,
         channel: str = "telegram",
     ) -> Any:
         assert_called_from_executor()

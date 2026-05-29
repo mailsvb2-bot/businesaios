@@ -79,7 +79,7 @@ def suggest_price_for_plan(
     start_ms = end_ms - int(lookback_days) * 24 * 3600 * 1000
     window_ms = int(window_hours) * 3600 * 1000
     # Collect selections for this plan.
-    selections: List[Dict[str, Any]] = []
+    selections: list[dict[str, Any]] = []
     it_sel = event_store.iter_events(tenant_id=tid, start_ms=start_ms, end_ms=end_ms, event_type="tariff_selected")
     for ev in it_sel:
         try:
@@ -108,7 +108,7 @@ def suggest_price_for_plan(
         )
 
     # Build a quick lookup of payments per user in the lookback window.
-    payments_by_user: Dict[str, List[int]] = {}
+    payments_by_user: dict[str, list[int]] = {}
     it_pay = event_store.iter_events(tenant_id=tid, start_ms=start_ms, end_ms=end_ms, event_type="payment_captured")
     for ev in it_pay:
         try:
@@ -124,7 +124,7 @@ def suggest_price_for_plan(
         payments_by_user[uid].sort()
 
     # Aggregate trials/successes per observed amount.
-    stats: Dict[int, Tuple[int, int]] = {}  # amount -> (trials, successes)
+    stats: dict[int, tuple[int, int]] = {}  # amount -> (trials, successes)
     succ_total = 0
     for s in selections:
         uid = s["user_id"]

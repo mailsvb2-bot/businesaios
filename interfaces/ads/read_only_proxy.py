@@ -47,7 +47,7 @@ class ReadOnlyAdsConnector(AdsReadConnector):
         tenant_id: str,
         account_id: str,
         level: str,
-        object_ids: Optional[Sequence[str]],
+        object_ids: Sequence[str] | None,
         date_from: date,
         date_to: date,
     ) -> Iterable[MetricPoint]:
@@ -60,5 +60,5 @@ class ReadOnlyAdsConnector(AdsReadConnector):
             date_to=date_to,
         )
 
-    async def create_or_update(self, *, tenant_id: str, account_id: str, object_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_or_update(self, *, tenant_id: str, account_id: str, object_type: str, payload: dict[str, Any]) -> dict[str, Any]:
         raise PermissionError('Direct ads writes are forbidden. Use AdsWriteGateway (guardrails + audit).')

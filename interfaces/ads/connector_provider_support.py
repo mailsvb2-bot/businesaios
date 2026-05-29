@@ -41,7 +41,7 @@ async def provider_metric_rows(
     account_id: str,
     access_token: str,
     level: str,
-    object_ids: Optional[Sequence[str]],
+    object_ids: Sequence[str] | None,
     date_from: date,
     date_to: date,
 ) -> Iterable[dict[str, Any]]:

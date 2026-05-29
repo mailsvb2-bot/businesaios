@@ -8,13 +8,13 @@ from typing import Optional
 class CooldownDecision:
     allowed: bool
     reason: str
-    last_shown_ms: Optional[int] = None
+    last_shown_ms: int | None = None
 
 
 def allow_offer_by_cooldown(
     *,
     now_ms: int,
-    last_shown_ms: Optional[int],
+    last_shown_ms: int | None,
     cooldown_days: int,
 ) -> CooldownDecision:
     if int(cooldown_days) <= 0:

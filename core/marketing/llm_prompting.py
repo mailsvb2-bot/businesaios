@@ -14,8 +14,8 @@ class MarketingLLMInputs:
     user_id: str
     locale: str
     channel: str
-    features: Dict[str, Any]
-    offer: Dict[str, Any]
+    features: dict[str, Any]
+    offer: dict[str, Any]
     last_user_text: str = ""
     correlation_id: str = ""
     message_id: str = ""
@@ -47,7 +47,7 @@ def _prompt_hash(system_prompt: str, user_prompt: str) -> str:
     return h.hexdigest()
 
 
-def build_marketing_messages(inp: MarketingLLMInputs) -> List[LLMMessage]:
+def build_marketing_messages(inp: MarketingLLMInputs) -> list[LLMMessage]:
     red = redact_text(inp.last_user_text or "")
     offer = inp.offer or {}
     f = inp.features or {}

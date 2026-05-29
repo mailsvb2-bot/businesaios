@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from lead_outcomes import OutcomeVerifier
 from lead_outcomes.client_attribution_policy import ClientAttributionPolicy
@@ -18,7 +18,7 @@ from lead_outcomes.client_verification_service import ClientVerificationService
 
 
 def test_billable_verified_new_client_flow() -> None:
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC)
     order = ClientOutcomeOrder(
         order_id='order-1',
         business_id='biz-1',
@@ -80,7 +80,7 @@ def test_billable_verified_new_client_flow() -> None:
 
 
 def test_returning_client_is_rejected() -> None:
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC)
     order = ClientOutcomeOrder(
         order_id='order-2',
         business_id='biz-1',

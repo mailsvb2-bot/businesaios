@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 import pytest
 
@@ -48,10 +48,10 @@ def _paid_invoice() -> CommercialInvoiceEnvelope:
 
 def test_health_registry_is_case_insensitive() -> None:
     registry = PaymentProviderHealthRegistry()
-    registry.mark_failure('DummyGateway', reason='timeout', cooldown_seconds=60, now=datetime(2026, 4, 10, tzinfo=timezone.utc))
+    registry.mark_failure('DummyGateway', reason='timeout', cooldown_seconds=60, now=datetime(2026, 4, 10, tzinfo=UTC))
     assert registry.get('dummygateway').failure_count == 1
-    assert not registry.is_available('DUMMYGATEWAY', now=datetime(2026, 4, 10, 0, 0, 30, tzinfo=timezone.utc))
-    assert registry.is_available('dummygateway', now=datetime(2026, 4, 10, 0, 1, 1, tzinfo=timezone.utc))
+    assert not registry.is_available('DUMMYGATEWAY', now=datetime(2026, 4, 10, 0, 0, 30, tzinfo=UTC))
+    assert registry.is_available('dummygateway', now=datetime(2026, 4, 10, 0, 1, 1, tzinfo=UTC))
 
 
 def test_refund_orchestrator_posts_ledger_and_is_idempotent() -> None:

@@ -11,16 +11,16 @@ from core.product.types_roadmap import PRODUCT_MODULE_ISSUER
 class TierDefinition:
     tier_name: str
     included_features: list[str]
-    seat_limit: Optional[int] = None
-    usage_limit: Optional[int] = None
+    seat_limit: int | None = None
+    usage_limit: int | None = None
 
 
 @dataclass(frozen=True)
 class PackagingChange:
     change_type: PackagingChangeType
     target: str
-    from_value: Optional[str]
-    to_value: Optional[str]
+    from_value: str | None
+    to_value: str | None
     rationale: str
 
 

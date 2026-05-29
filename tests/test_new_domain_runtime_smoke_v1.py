@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from core.economics.contracts import UnitEconomicsSnapshot
 from core.finance.builders.cashflow_builder import build_cashflow_snapshot
@@ -62,7 +62,7 @@ def test_knowledge_explain_runtime_smoke() -> None:
             source_kind=SourceKind.MANUAL,
             source_ref="manual-1",
             tags=TagSet.from_iterable(["topic"]),
-            observed_at=datetime.now(tz=timezone.utc) - timedelta(days=1),
+            observed_at=datetime.now(tz=UTC) - timedelta(days=1),
             created_by="tester",
             evidence_refs=("ev-1",),
         )
@@ -72,7 +72,7 @@ def test_knowledge_explain_runtime_smoke() -> None:
             target_subject="topic",
             task="explain memory",
             tags=TagSet.from_iterable(["topic"]),
-            now=datetime.now(tz=timezone.utc),
+            now=datetime.now(tz=UTC),
         )
     )
     assert "Memory trace explanation" in text

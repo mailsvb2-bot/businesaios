@@ -21,7 +21,7 @@ def choose_arm(
     store: RetentionStore,
     *,
     tenant_id: str,
-    arms: List[Tuple[str, float]],
+    arms: list[tuple[str, float]],
     now_ms: int | None = None,
 ) -> str:
     if not arms:

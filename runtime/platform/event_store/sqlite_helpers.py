@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 MAX_I64 = 2**63 - 1
 
 
-def _exclusive_end_ms(end_ms: Optional[int]) -> int:
+def _exclusive_end_ms(end_ms: int | None) -> int:
     now = int(time.time() * 1000)
     if end_ms is None:
         return min(now + 1, MAX_I64)
@@ -22,7 +22,7 @@ def _exclusive_end_ms(end_ms: Optional[int]) -> int:
     return e + 1
 
 
-def _row_to_event(row) -> Dict[str, Any]:
+def _row_to_event(row) -> dict[str, Any]:
     payload = json.loads(row[8]) if row[8] else {}
     return {
         "event_id": row[0],

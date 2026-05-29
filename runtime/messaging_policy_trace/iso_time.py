@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 
 def parse_iso_to_epoch_ms(value: str) -> int:
@@ -21,4 +21,4 @@ def safe_parse_iso_to_epoch_ms(value: str) -> int:
 def epoch_ms_to_iso(value: int) -> str:
     if int(value or 0) <= 0:
         return ''
-    return datetime.fromtimestamp(int(value) / 1000.0, tz=timezone.utc).isoformat()
+    return datetime.fromtimestamp(int(value) / 1000.0, tz=UTC).isoformat()

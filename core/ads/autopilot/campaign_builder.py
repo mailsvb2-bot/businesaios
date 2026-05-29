@@ -6,7 +6,7 @@ from typing import Any, Dict, List
 from core.economics.objective import normalize_objective
 from core.growth.campaign_builder.service import AutopilotCampaignBuilder
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -24,7 +24,7 @@ class AdsAutopilotCampaignBuilder:
     def __init__(self, builder: AutopilotCampaignBuilder) -> None:
         self._builder = builder
 
-    def build(self, *, objective: str, offer: Json, audience: Json, channels: List[str]) -> BuiltAdsSpec:
+    def build(self, *, objective: str, offer: Json, audience: Json, channels: list[str]) -> BuiltAdsSpec:
         req = {
             "objective": normalize_objective(objective),
             "offer": dict(offer or {}),

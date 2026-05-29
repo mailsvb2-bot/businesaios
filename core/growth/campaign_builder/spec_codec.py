@@ -6,7 +6,7 @@ from typing import Any, Dict
 from core.traffic.ads_spec_builder import AdsSpecBuilder
 from core.traffic.contracts import TrafficPlan
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)

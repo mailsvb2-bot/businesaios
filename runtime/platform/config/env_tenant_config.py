@@ -6,7 +6,7 @@ from runtime.platform.config.env_flags import env_str
 
 
 class EnvTenantConfigStore:
-    def get(self, *, tenant_id: str, key: str) -> Optional[str]:
+    def get(self, *, tenant_id: str, key: str) -> str | None:
         tid = _norm(tenant_id)
         value = env_str(f"TENANT_{tid}__{key}", "")
         return value if value else None

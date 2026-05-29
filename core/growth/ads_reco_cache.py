@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Dict, Iterable, Optional, Protocol
 
 
 class EventStore(Protocol):
-    def append(self, *, tenant_id: str, user_id: Optional[str], event_type: str, payload: Dict[str, Any]) -> None: ...
-    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 2000) -> Iterable[Dict[str, Any]]: ...
+    def append(self, *, tenant_id: str, user_id: str | None, event_type: str, payload: dict[str, Any]) -> None: ...
+    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 2000) -> Iterable[dict[str, Any]]: ...
 
 @dataclass(frozen=True)
 class CachedRecommendation:
     rec_id: str
     expires_at_iso: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 class AdsRecommendationCache:
     EVENT_TYPE = "ads_reco_cached"
@@ -23,8 +23,8 @@ class AdsRecommendationCache:
         self._ttl = int(ttl_minutes)
         self._scan_limit = int(scan_limit)
 
-    def put(self, *, tenant_id: str, user_id: Optional[str], rec_id: str, rec_payload: Dict[str, Any], config_fp: Optional[str]) -> None:
-        now = datetime.now(timezone.utc)
+    def put(self, *, tenant_id: str, user_id: str | None, rec_id: str, rec_payload: dict[str, Any], config_fp: str | None) -> None:
+        now = datetime.now(UTC)
         exp = now + timedelta(minutes=self._ttl)
         self._store.append(
             tenant_id=tenant_id,
@@ -33,8 +33,8 @@ class AdsRecommendationCache:
             payload={"rec_id": rec_id, "expires_at_iso": exp.isoformat(), "config_fp": config_fp, "rec": rec_payload},
         )
 
-    def get(self, *, tenant_id: str, rec_id: str, expected_config_fp: Optional[str]) -> Optional[CachedRecommendation]:
-        now = datetime.now(timezone.utc)
+    def get(self, *, tenant_id: str, rec_id: str, expected_config_fp: str | None) -> CachedRecommendation | None:
+        now = datetime.now(UTC)
         for ev in self._store.latest_events(tenant_id=tenant_id, event_type=self.EVENT_TYPE, limit=self._scan_limit):
             p = ev.get("payload") or {}
             if str(p.get("rec_id")) != rec_id:
@@ -56,5 +56,5 @@ class AdsRecommendationCache:
 def _parse_iso(s: str) -> datetime:
     dt = datetime.fromisoformat(s)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt

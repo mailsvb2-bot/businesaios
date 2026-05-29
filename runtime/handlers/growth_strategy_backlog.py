@@ -11,7 +11,7 @@ from runtime.ports.effects import EffectsPort
 ACTION_NAME = "growth_strategy_backlog@v1"
 
 
-def handle_growth_strategy_backlog(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
+def handle_growth_strategy_backlog(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
     p = payload or {}
     tenant_id = str(p.get("tenant_id") or getattr(env, "tenant_id", "") or "")
     user_id = str(p.get("user_id") or "")

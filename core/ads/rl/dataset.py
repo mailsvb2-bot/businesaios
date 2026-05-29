@@ -6,18 +6,18 @@ from typing import Any, Dict, List, Optional
 
 @dataclass(frozen=True)
 class Transition:
-    state: Dict[str, Any]
-    action: Dict[str, Any]
+    state: dict[str, Any]
+    action: dict[str, Any]
     reward_minor: int
-    meta: Dict[str, Any]
+    meta: dict[str, Any]
 
 
 class DatasetBuilder:
     def __init__(self, *, reward_computer: Any) -> None:
         self._reward = reward_computer
 
-    def build_for_decisions(self, *, tenant_id: str, decision_ids: List[str], lookback_days: int) -> List[Transition]:
-        out: List[Transition] = []
+    def build_for_decisions(self, *, tenant_id: str, decision_ids: list[str], lookback_days: int) -> list[Transition]:
+        out: list[Transition] = []
         for did in decision_ids:
             t = self._reward.transition_for_decision(
                 tenant_id=str(tenant_id),

@@ -32,7 +32,7 @@ def _effective_timeout_s() -> int:
     return 20
 
 
-def read_provider_and_model(*, provider_override: str | None, model_override: str | None = None) -> Tuple[str, str]:
+def read_provider_and_model(*, provider_override: str | None, model_override: str | None = None) -> tuple[str, str]:
     normalized, _base_url, _api_key, effective_model, _anthropic_version = resolve_runtime_llm_settings(
         provider=_effective_provider_name(provider_override),
         model_override=model_override,
@@ -75,7 +75,7 @@ def _client_for(*, provider: str, model: str | None):
         return normalized, effective_model, None, type(exc).__name__
 
 
-def call_marketing_llm(*, provider: str, system: str, user: str, model: str | None) -> Dict[str, Any]:
+def call_marketing_llm(*, provider: str, system: str, user: str, model: str | None) -> dict[str, Any]:
     normalized, effective_model, client, err = _client_for(provider=provider, model=model)
     if client is None:
         return {"ok": False, "error": str(err or "disabled"), "provider": normalized, "model": effective_model}

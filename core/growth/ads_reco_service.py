@@ -13,7 +13,7 @@ class AdsRecoService:
         self._cache = cache
         self._ent = entitlements_provider
 
-    def propose_and_cache(self, *, tenant_id: str, user_id: Optional[str], platform: str, account_id: str) -> List[AdsRecommendation]:
+    def propose_and_cache(self, *, tenant_id: str, user_id: str | None, platform: str, account_id: str) -> list[AdsRecommendation]:
         ent = self._ent.get_ads_entitlements(tenant_id)
         lim = self._ent.get_daily_limits(tenant_id)
         fp = ads_config_fingerprint(ads_entitlements=ent, daily_limits=lim)

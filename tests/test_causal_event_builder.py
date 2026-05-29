@@ -6,7 +6,7 @@ from core.causal.builders.event_store_builder import EventCausalBuilder
 
 
 class FakeEventStore:
-    def __init__(self, events: List[Dict[str, Any]]):
+    def __init__(self, events: list[dict[str, Any]]):
         self._events = list(events)
 
     def iter_events(self, *, tenant_id: str, start_ms: int, end_ms: int, event_type: str) -> Iterable[Mapping[str, Any]]:

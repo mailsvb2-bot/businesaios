@@ -15,7 +15,7 @@ class DecisionSafetyConfig:
     blast_radius_max_per_hour: int
 
     @staticmethod
-    def from_env() -> "DecisionSafetyConfig":
+    def from_env() -> DecisionSafetyConfig:
         return DecisionSafetyConfig(
             high_impact_rollout_pct=env_int("AI_CEO_HIGH_IMPACT_ROLLOUT_PCT", 0, lo=0, hi=100),
             blast_radius_max_per_hour=env_int("AI_CEO_BLAST_RADIUS_MAX_PER_HOUR", 0, lo=0),
@@ -63,7 +63,7 @@ def _legacy_high_impact_gate(*, action: str, tenant_id: str, user_id: str, event
     return True, "ok", {"high_impact": bool(is_high), **dict(dbg)}
 
 
-def gate_decision_action(*, action: str, payload: Dict[str, Any], tenant_id: str, user_id: str, event_log: Any) -> Tuple[bool, str, Dict[str, Any]]:
+def gate_decision_action(*, action: str, payload: dict[str, Any], tenant_id: str, user_id: str, event_log: Any) -> tuple[bool, str, dict[str, Any]]:
     data = dict(payload or {})
     data.setdefault("tenant_id", str(tenant_id))
     data.setdefault("user_id", str(user_id))

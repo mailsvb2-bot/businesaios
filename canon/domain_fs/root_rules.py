@@ -8,8 +8,8 @@ from .domain_discovery import is_transient_path, rel
 from .findings import CanonFsFinding
 
 
-def scan_domain_root(root: Path, domain: Path) -> List[CanonFsFinding]:
-    findings: List[CanonFsFinding] = []
+def scan_domain_root(root: Path, domain: Path) -> list[CanonFsFinding]:
+    findings: list[CanonFsFinding] = []
     names = {p.name for p in domain.iterdir() if not is_transient_path(p)}
     domain_optional = set(DOMAIN_OPTIONAL_ROOT_FILES.get(domain.name, ()))
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Mapping
 
 from application.business_autonomy.contracts import (
@@ -114,7 +114,7 @@ class DistributedBusinessAutonomyEvidenceStore:
     backend: DistributedEvidenceStore
 
     def append_result(self, result: BusinessExecutionResult) -> EvidenceRecord:
-        created_at = datetime.now(timezone.utc)
+        created_at = datetime.now(UTC)
         record = EvidenceRecord(
             evidence_id=f"business-autonomy:{result.execution_id}",
             tenant_id=str(result.metadata.get("tenant_id") or result.business_id or "global"),
@@ -169,7 +169,7 @@ class DistributedBusinessPlanningMemorySink:
             strategy_patch={
                 "goal_family": goal_family,
                 "strategic_signal": "business_autonomy_execution",
-                "last_updated_at": datetime.now(timezone.utc).isoformat(),
+                "last_updated_at": datetime.now(UTC).isoformat(),
             },
             multi_goal_patch={
                 "active_goal_id": str(request.goal_id),

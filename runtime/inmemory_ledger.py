@@ -24,7 +24,7 @@ class InMemoryLedger:
         # Tamper-evident chain entries.
         # We store the exact fields used for hashing so verify_chain() can
         # recompute hashes deterministically.
-        self._chain: list[tuple[str, Dict[str, Any], str]] = []  # (decision_id, fields, entry_hash)
+        self._chain: list[tuple[str, dict[str, Any], str]] = []  # (decision_id, fields, entry_hash)
         self._chain_last: str = GENESIS
         self._lock = threading.Lock()
 
@@ -50,7 +50,7 @@ class InMemoryLedger:
             if decision_id in self._done:
                 return False
             self._done.add(decision_id)
-            fields: Dict[str, Any] = {
+            fields: dict[str, Any] = {
                 "decision_id": decision_id,
                 "action": str(getattr(getattr(env, "decision", env), "action", "")),
                 "payload_hash": str(

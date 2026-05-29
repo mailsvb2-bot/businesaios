@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from runtime.queue.queue_remediation_audit_sqlite import SqliteQueueRemediationAuditStore
 from runtime.queue.queue_remediation_hooks import (
@@ -26,9 +26,9 @@ def test_runtime_queue_remediation_audit_store_records_plan_and_execution(tmp_pa
         janitor_stale_seconds=1,
         leader_stale_seconds=130,
     )
-    plan = coordinator.plan(report=report, alerts=(), now=datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc))
+    plan = coordinator.plan(report=report, alerts=(), now=datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC))
     assert plan.hooks
-    execution = coordinator.execute(tenant_id='tenant-a', queue_name='ops', hook_code='open_queue_history', now=datetime(2026, 1, 1, 0, 1, 0, tzinfo=timezone.utc))
+    execution = coordinator.execute(tenant_id='tenant-a', queue_name='ops', hook_code='open_queue_history', now=datetime(2026, 1, 1, 0, 1, 0, tzinfo=UTC))
     assert execution.executed is False
 
     plans = store.list_plan_entries(tenant_id='tenant-a', queue_name='ops')

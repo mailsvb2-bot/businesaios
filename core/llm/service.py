@@ -13,7 +13,7 @@ from .providers.mock import MockLLMClient
 from .providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
 from .providers.yandexgpt import YandexGPTTransport, build_yandexgpt
 
-OpenAICompatTransport = Callable[[str, str, Dict[str, Any], int], Dict[str, Any]]
+OpenAICompatTransport = Callable[[str, str, dict[str, Any], int], dict[str, Any]]
 
 
 def build_openai_compat_client(
@@ -21,7 +21,7 @@ def build_openai_compat_client(
     base_url: str,
     api_key: str,
     default_model: str | None = None,
-    transport: Optional[OpenAICompatTransport] = None,
+    transport: OpenAICompatTransport | None = None,
     policy: LLMProviderPolicy = DEFAULT_LLM_PROVIDER_POLICY,
 ) -> LLMClient:
     cfg = OpenAICompatConfig(

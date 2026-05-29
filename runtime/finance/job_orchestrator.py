@@ -22,7 +22,7 @@ class FinanceJobOrchestrator:
     def __init__(
         self,
         *,
-        runtime: "StrategicFinanceRuntime",
+        runtime: StrategicFinanceRuntime,
         job_registry: Mapping[str, Callable[[dict], object]],
         job_specs: Mapping[str, FinanceJobSpec],
         event_publisher: FinanceEventPublisher,

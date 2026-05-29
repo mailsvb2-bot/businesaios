@@ -45,7 +45,7 @@ class WorldModel:
         self.ltv_model = ltv_model
 
     @classmethod
-    def from_ltv_model(cls, ltv_model: LTVModel | None = None) -> "WorldModel":
+    def from_ltv_model(cls, ltv_model: LTVModel | None = None) -> WorldModel:
         return cls(ltv_model=ltv_model or LTVModel())
 
     def build(self, user: UserState, *, now: float | None = None) -> LTVWorldState:

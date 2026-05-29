@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from runtime.queue.queue_remediation_audit_postgres import PostgresQueueRemediationAuditStore
 from runtime.queue.queue_remediation_hooks import (
@@ -68,7 +68,7 @@ def test_postgres_queue_remediation_stores_roundtrip(monkeypatch):
     monkeypatch.setattr('runtime.queue.queue_remediation_audit_postgres.PostgresPort', FakePostgresPort)
     monkeypatch.setattr('runtime.queue.queue_remediation_route_history_postgres.PostgresPort', FakePostgresPort)
     FakePostgresPort.shared = _SharedDb()
-    now = datetime(2026, 3, 28, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 3, 28, 12, 0, tzinfo=UTC)
 
     with PostgresQueueRemediationAuditStore('postgres://example') as audit, PostgresQueueRemediationRouteHistoryStore('postgres://example') as routes:
         audit.record_plan(

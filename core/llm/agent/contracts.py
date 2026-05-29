@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)

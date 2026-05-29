@@ -14,15 +14,15 @@ class OAuthConnectRequest:
 @dataclass(frozen=True)
 class OAuthConnectResult:
     authorization_url: str
-    raw: Optional[Dict[str, Any]] = None
+    raw: dict[str, Any] | None = None
 @dataclass(frozen=True)
 class Campaign:
     campaign_id: str
     name: str
     status: str
-    daily_budget: Optional[float] = None
-    objective: Optional[str] = None
-    raw: Optional[Dict[str, Any]] = None
+    daily_budget: float | None = None
+    objective: str | None = None
+    raw: dict[str, Any] | None = None
 @dataclass(frozen=True)
 class MetricsPoint:
     day: date
@@ -31,17 +31,17 @@ class MetricsPoint:
     impressions: int
     clicks: int
     spend: float
-    cpa: Optional[float] = None
-    conversions: Optional[int] = None
-    revenue: Optional[float] = None
-    extra: Optional[Dict[str, Any]] = None
+    cpa: float | None = None
+    conversions: int | None = None
+    revenue: float | None = None
+    extra: dict[str, Any] | None = None
 @dataclass(frozen=True)
 class CreateOrUpdateRequest:
     object_type: str
-    payload: Dict[str, Any]
-    idempotency_key: Optional[str] = None
+    payload: dict[str, Any]
+    idempotency_key: str | None = None
 @dataclass(frozen=True)
 class CreateOrUpdateResponse:
     ok: bool
-    platform_object_id: Optional[str] = None
-    raw: Optional[Dict[str, Any]] = None
+    platform_object_id: str | None = None
+    raw: dict[str, Any] | None = None

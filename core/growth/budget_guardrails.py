@@ -51,12 +51,12 @@ def enforce_daily_budget(*, policy: BudgetPolicy, spend_minor_today: int) -> Bud
 # ---- Ads write guardrails (Stage 2/3) ----
 
 from dataclasses import dataclass as _dc
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Optional, Protocol
 
 
 class EventSink(Protocol):
-    def emit(self, *, tenant_id: str, user_id: Optional[str], event_type: str, payload: dict) -> None: ...
+    def emit(self, *, tenant_id: str, user_id: str | None, event_type: str, payload: dict) -> None: ...
 
 
 @_dc(frozen=True)
@@ -92,7 +92,7 @@ class BudgetGuardrails:
         self._sink = sink
 
     def assert_time_window(self, *, tenant_id: str) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if not (self._limits.change_window_utc_start <= now.hour < self._limits.change_window_utc_end):
             raise PermissionError("Change is outside allowed time window.")
 

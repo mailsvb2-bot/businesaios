@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Dict, Tuple
 
-Graph = Dict[str, Dict[str, float]]
+Graph = dict[str, dict[str, float]]
 
 def _bfs(residual: Graph, source: str, sink: str) -> dict[str, str] | None:
     parent: dict[str, str] = {}
@@ -20,7 +20,7 @@ def _bfs(residual: Graph, source: str, sink: str) -> dict[str, str] | None:
                 queue.append(nb)
     return None
 
-def max_flow_edmonds_karp(graph: Graph, source: str, sink: str) -> Tuple[float, Graph]:
+def max_flow_edmonds_karp(graph: Graph, source: str, sink: str) -> tuple[float, Graph]:
     residual: Graph = {u: dict(vs) for u, vs in graph.items()}
     for u, vs in list(graph.items()):
         residual.setdefault(u, {})

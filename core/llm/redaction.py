@@ -13,11 +13,11 @@ _RE_TOKENLIKE = re.compile(r"\b(sk-[A-Za-z0-9]{10,}|AIza[A-Za-z0-9\-_]{10,})\b")
 @dataclass(frozen=True)
 class RedactionResult:
     text: str
-    mapping: Dict[str, str]
+    mapping: dict[str, str]
 
 
 def redact_text(text: str) -> RedactionResult:
-    mapping: Dict[str, str] = {}
+    mapping: dict[str, str] = {}
 
     def _sub(regex: re.Pattern, label: str, s: str) -> str:
         idx = 0
@@ -39,8 +39,8 @@ def redact_text(text: str) -> RedactionResult:
     return RedactionResult(text=out, mapping=mapping)
 
 
-def safe_metadata(meta: Dict) -> Dict:
-    allow: Dict = {}
+def safe_metadata(meta: dict) -> dict:
+    allow: dict = {}
     for k, v in (meta or {}).items():
         if str(k).lower() in {"user_text", "prompt", "messages", "email", "phone", "card"}:
             continue

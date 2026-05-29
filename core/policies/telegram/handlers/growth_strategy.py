@@ -14,7 +14,7 @@ from core.ux.callbacks import (
 from core.ux.telegram_keyboards import kb_growth_menu
 
 
-def handle_growth_strategy(ctx: TelegramCtx, *, user_id: str) -> Optional[ProposedAction]:
+def handle_growth_strategy(ctx: TelegramCtx, *, user_id: str) -> ProposedAction | None:
     cb = str(ctx.callback_data or "").strip()
 
     if cb == CB_GROWTH_MENU:

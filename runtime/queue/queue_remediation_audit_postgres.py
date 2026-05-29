@@ -32,7 +32,7 @@ class PostgresQueueRemediationAuditStore:
     def __post_init__(self) -> None:
         self._port: PostgresPort | None = None
 
-    def __enter__(self) -> 'PostgresQueueRemediationAuditStore':
+    def __enter__(self) -> PostgresQueueRemediationAuditStore:
         self._port = PostgresPort(self.dsn, application_name=self.application_name).__enter__()
         self._init_schema()
         return self

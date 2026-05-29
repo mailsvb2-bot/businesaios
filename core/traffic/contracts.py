@@ -28,8 +28,8 @@ class TrafficCreative:
 @dataclass(frozen=True)
 class TrafficAudience:
     region: str
-    interests: List[str]
-    raw: Dict[str, Any]
+    interests: list[str]
+    raw: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -39,7 +39,7 @@ class TrafficCampaignSpec:
     budget: TrafficBudget
     audience: TrafficAudience
     creative: TrafficCreative
-    destination: Dict[str, Any]  # e.g. tg bot deep link / landing url
+    destination: dict[str, Any]  # e.g. tg bot deep link / landing url
 
 
 @dataclass(frozen=True)
@@ -52,4 +52,4 @@ class TrafficPlan:
     account_id: str
     campaign: TrafficCampaignSpec
     notes: str = ""
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None

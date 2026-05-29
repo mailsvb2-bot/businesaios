@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from threading import RLock
 from typing import Any, Mapping
@@ -24,7 +24,7 @@ class SafetyEvent:
     control: str = ''
     reason: str = ''
     details: Mapping[str, Any] = field(default_factory=dict)
-    observed_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    observed_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class JsonlSafetyEventStore:

@@ -14,7 +14,7 @@ from typing import Any, Dict
 
 from core.read_model.cache import global_cache, watermark_for
 
-DEFAULTS: Dict[str, Dict[str, str]] = {
+DEFAULTS: dict[str, dict[str, str]] = {
     "menu_main": {
         "a": "BusinesAIOS Workspace: переобучение нервной системы через ритм повседневности.\n\nГлавное меню — выбери, что сейчас нужно:",
         "b": "BusinesAIOS Workspace — мягкая практика через повседневный ритм.\n\nВыбери шаг в меню:",
@@ -26,12 +26,12 @@ DEFAULTS: Dict[str, Dict[str, str]] = {
 }
 
 
-def marketing_variants(event_store: Any, *, tenant_id: str = "default") -> Dict[str, Dict[str, str]]:
+def marketing_variants(event_store: Any, *, tenant_id: str = "default") -> dict[str, dict[str, str]]:
     """Return latest configured variants per step_key."""
     wm = watermark_for(event_store, tenant_id=str(tenant_id), user_id=None, event_types=("marketing_copy_set",))
 
-    def _compute() -> Dict[str, Dict[str, str]]:
-        out: Dict[str, Dict[str, str]] = {k: dict(v) for k, v in DEFAULTS.items()}
+    def _compute() -> dict[str, dict[str, str]]:
+        out: dict[str, dict[str, str]] = {k: dict(v) for k, v in DEFAULTS.items()}
         if event_store is None or not hasattr(event_store, "iter_events"):
             return out
         # We rely on DB ordering; iterate and keep last value.

@@ -108,8 +108,8 @@ class GoogleAdsConnector(AdsConnector):
         *,
         http: Any | None = None,
         tokens: Any | None = None,
-        cfg: Optional[GoogleAdsConfig] = None,
-        vault: Optional[SecretVault] = None,
+        cfg: GoogleAdsConfig | None = None,
+        vault: SecretVault | None = None,
     ) -> None:
         self._http = http
         self._tokens = tokens
@@ -149,9 +149,9 @@ class GoogleAdsConnector(AdsConnector):
         self,
         url: str,
         *,
-        headers: Dict[str, str],
-        data: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        headers: dict[str, str],
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         return await http_post_compat(
             self._http,
             platform=self.platform,
@@ -203,7 +203,7 @@ class GoogleAdsConnector(AdsConnector):
             ),
         )
 
-    def _pending_account_id(self, *, tenant_id: str, raw: Dict[str, Any]) -> str:
+    def _pending_account_id(self, *, tenant_id: str, raw: dict[str, Any]) -> str:
         return resolve_pending_account_id(
             tenant_id=tenant_id,
             raw=raw,
@@ -250,7 +250,7 @@ class GoogleAdsConnector(AdsConnector):
             account_id=account_id,
         )
 
-    def execute(self, operation: str, payload: Dict[str, Any], *, idempotency_key: str | None = None, dry_run: bool = False) -> ConnectorResult:
+    def execute(self, operation: str, payload: dict[str, Any], *, idempotency_key: str | None = None, dry_run: bool = False) -> ConnectorResult:
         if hasattr(self, 'decide'):
             raise RuntimeError('connectors must never expose decide()')
         op = normalize_operation(operation)
@@ -348,7 +348,7 @@ class GoogleAdsConnector(AdsConnector):
         account_id: str,
         access_token: str,
         level: str,
-        object_ids: Optional[Sequence[str]],
+        object_ids: Sequence[str] | None,
         date_from: date,
         date_to: date,
     ) -> Iterable[dict[str, Any]]:
@@ -365,7 +365,7 @@ class GoogleAdsConnector(AdsConnector):
             spec=self._METRIC_SPEC,
         )
 
-    def _campaign_from_row(self, *, account_id: str, row: Dict[str, Any]) -> Campaign:
+    def _campaign_from_row(self, *, account_id: str, row: dict[str, Any]) -> Campaign:
         from .connector_spec_adapter_support import campaign_from_spec_adapter
 
         return campaign_from_spec_adapter(
@@ -380,7 +380,7 @@ class GoogleAdsConnector(AdsConnector):
         *,
         account_id: str,
         level: str,
-        row: Dict[str, Any],
+        row: dict[str, Any],
     ) -> MetricPoint:
         from .connector_spec_adapter_support import metric_from_spec_adapter
 
@@ -407,7 +407,7 @@ class GoogleAdsConnector(AdsConnector):
         tenant_id: str,
         account_id: str,
         level: str,
-        object_ids: Optional[Sequence[str]],
+        object_ids: Sequence[str] | None,
         date_from: date,
         date_to: date,
     ) -> Iterable[MetricPoint]:
@@ -429,8 +429,8 @@ class GoogleAdsConnector(AdsConnector):
         tenant_id: str,
         account_id: str,
         object_type: str,
-        payload: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         raise_write_stage_disabled(
             connector_name='GoogleAdsConnector',
             provider='google_ads',

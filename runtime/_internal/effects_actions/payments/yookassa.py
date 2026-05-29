@@ -10,7 +10,7 @@ from runtime._internal.effects_clients.yookassa_webhook_server import (
 from runtime._internal.router_support import execute_effect_action_sync
 
 
-def yookassa_create_payment(*, effects: Any | None = None, decision_id: str, amount: int, currency: str, user_id: str, metadata: Dict[str, Any] | None = None) -> Tuple[bool, Dict[str, Any]]:
+def yookassa_create_payment(*, effects: Any | None = None, decision_id: str, amount: int, currency: str, user_id: str, metadata: dict[str, Any] | None = None) -> tuple[bool, dict[str, Any]]:
     from core.payments.provider import idempotence_key_for_order
     cur = str(currency or "RUB").upper().strip() or "RUB"
     if cur != "RUB": return False, {"error": "UNSUPPORTED_CURRENCY", "currency": cur}

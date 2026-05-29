@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Mapping
 
@@ -24,7 +24,7 @@ def build_bootstrap_audit_event(
     details: Mapping[str, str] | None = None,
 ) -> BootstrapAuditEvent:
     return BootstrapAuditEvent(
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         status=status,
         code=code,
         message=message,

@@ -14,7 +14,7 @@ def is_superadmin(chat_id: str) -> bool:
         return False
 
 
-def resolve_admin_metrics(*, is_admin: bool, event_store: Any, tenant_id: str, enrich_admin_metrics: Any) -> Dict[str, Any]:
+def resolve_admin_metrics(*, is_admin: bool, event_store: Any, tenant_id: str, enrich_admin_metrics: Any) -> dict[str, Any]:
     if is_admin:
         return enrich_admin_metrics()
     try:

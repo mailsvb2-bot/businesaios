@@ -14,5 +14,5 @@ class AttributionModel(str, Enum):
 @dataclass(frozen=True)
 class Touchpoint:
     ts_iso: str
-    utm: Dict[str, str]
-    ads: Dict[str, str]
+    utm: dict[str, str]
+    ads: dict[str, str]

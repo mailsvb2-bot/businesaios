@@ -68,7 +68,7 @@ class GovernanceService:
     scenario_catalog: FileScenarioBaselineCatalog
 
     @classmethod
-    def build_default(cls, *, root_dir: str | Path | None = None) -> 'GovernanceService':
+    def build_default(cls, *, root_dir: str | Path | None = None) -> GovernanceService:
         paths = build_headless_runtime_paths(root_dir=root_dir)
         history = FileBaselineHistoryStore(root_dir=paths.headless_baseline_history_dir)
         baselines = FileBaselineStore(root_dir=paths.headless_baselines_dir, history_store=history)

@@ -25,7 +25,7 @@ class HashVariantReadModel:
     This is a safe default until a persisted variant assignment read-model is introduced.
     """
 
-    def __init__(self, *, splits: Dict[str, StepSplit] | None = None, tenant_id: str = "default") -> None:
+    def __init__(self, *, splits: dict[str, StepSplit] | None = None, tenant_id: str = "default") -> None:
         self._splits = dict(splits or {})
         self._tenant_id = str(tenant_id or "default")
 
@@ -35,7 +35,7 @@ class HashVariantReadModel:
             return None
         split = self._splits.get(step, StepSplit())
         # Deterministic hash -> [0,1)
-        key = f"{seed}|{step}|{self._tenant_id}|{user_id}".encode("utf-8")
+        key = f"{seed}|{step}|{self._tenant_id}|{user_id}".encode()
         h = hashlib.sha256(key).digest()
         x = int.from_bytes(h[:8], "big") / float(2**64)
         return split.a_id if x < float(split.split_a) else split.b_id

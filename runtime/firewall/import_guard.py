@@ -80,7 +80,7 @@ def _infer_caller_module() -> str:
     # Walk the stack and pick the first "user" frame that is not importlib and not this module.
     # This is more robust than inspect.stack()[2], which can yield "unknown" on some setups.
     try:
-        frame: Optional[FrameType] = sys._getframe(1)
+        frame: FrameType | None = sys._getframe(1)
     except Exception:
         frame = None
 

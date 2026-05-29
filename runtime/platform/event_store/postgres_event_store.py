@@ -100,7 +100,7 @@ class PostgresEventStore:
         self._enabled = bool(enabled)
         self._port: PostgresPort | None = None
 
-    def __enter__(self) -> "PostgresEventStore":
+    def __enter__(self) -> PostgresEventStore:
         if not self._enabled:
             raise_if_used()
         _ensure_psycopg_available()

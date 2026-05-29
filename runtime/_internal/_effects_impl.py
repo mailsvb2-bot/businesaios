@@ -65,14 +65,14 @@ class Effects(UserStateEffectsMixin, TrackingEffectsMixin, AdminStateEffectsMixi
     messaging_policy_read_service: Any | None = None
     http_transport: HttpTransport | None = None
     effect_router: EffectRouter | None = None
-    _last_sent: Dict[str, float] = None  # type: ignore[assignment]
+    _last_sent: dict[str, float] = None  # type: ignore[assignment]
     _fail_count: int = 0
-    _telegram_me: Dict[str, Any] | None = None
+    _telegram_me: dict[str, Any] | None = None
     _telegram_webhook_cleared: bool = False
     _telegram_startup_checked: bool = False
-    _last_err_ms: Dict[str, int] | None = None
-    _audio_delivery_keys: Dict[str, float] | None = None
-    _last_audio_sent_at: Dict[str, float] | None = None
+    _last_err_ms: dict[str, int] | None = None
+    _audio_delivery_keys: dict[str, float] | None = None
+    _last_audio_sent_at: dict[str, float] | None = None
     _audio_lock: Any | None = None
     _min_audio_interval_s: float = 0.7
     def __post_init__(self):
@@ -86,7 +86,7 @@ class Effects(UserStateEffectsMixin, TrackingEffectsMixin, AdminStateEffectsMixi
             if getattr(self.effect_router, "outbound_queue", None) is None:
                 self.effect_router.outbound_queue = self.telegram_outbound_queue
         initialize_effects_runtime_state(self)
-    def _throttled_emit_err(self, key: str, *, event_type: str, payload: Dict[str, Any]) -> None:
+    def _throttled_emit_err(self, key: str, *, event_type: str, payload: dict[str, Any]) -> None:
         throttled_emit_error(
             event_log=self.event_log,
             cache=self._last_err_ms,

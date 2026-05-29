@@ -22,7 +22,7 @@ class TrackingEffectsMixin:
         correlation_id: str | None,
         user_id: str,
         event_type: str,
-        payload: Optional[Dict[str, Any]] = None,
+        payload: dict[str, Any] | None = None,
         source: str = "tracking",
     ) -> Any:
         assert_called_from_executor()

@@ -14,7 +14,7 @@ def _doubly_robust(
     if not rewards:
         return 0.0
     total = 0.0
-    for reward, ratio, q_value, v_value in zip(rewards, ratios, q_values, v_values):
+    for reward, ratio, q_value, v_value in zip(rewards, ratios, q_values, v_values, strict=False):
         total += v_value + ratio * (reward - q_value)
     return total / len(rewards)
 
@@ -27,14 +27,14 @@ class FittedQEvaluation:
 def _importance_sampling(rewards: list[float], ratios: list[float]) -> float:
     if not rewards:
         return 0.0
-    weighted = [reward * ratio for reward, ratio in zip(rewards, ratios)]
+    weighted = [reward * ratio for reward, ratio in zip(rewards, ratios, strict=False)]
     return sum(weighted) / len(weighted)
 
 def _weighted_importance_sampling(rewards: list[float], ratios: list[float]) -> float:
     denominator = sum(ratios)
     if denominator == 0:
         return 0.0
-    numerator = sum(reward * ratio for reward, ratio in zip(rewards, ratios))
+    numerator = sum(reward * ratio for reward, ratio in zip(rewards, ratios, strict=False))
     return numerator / denominator
 
 class OffPolicyEvaluation:

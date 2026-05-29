@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 from core.actions.action_names import ADS_APPLY_EXECUTE_V1
 
-JsonSchema = Dict[str, Any]
+JsonSchema = dict[str, Any]
 
 
 @dataclass(frozen=True)

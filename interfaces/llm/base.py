@@ -13,7 +13,7 @@ class LLMMessage:
 @dataclass(frozen=True)
 class LLMResponse:
     text: str
-    raw: Optional[Dict[str, Any]] = None
+    raw: dict[str, Any] | None = None
 
 
 class LLMClient(Protocol):

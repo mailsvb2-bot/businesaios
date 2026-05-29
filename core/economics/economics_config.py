@@ -25,7 +25,7 @@ class EconomicsConfigV1:
     min_ltv_cac_ratio: float = DEFAULT_ECONOMICS_CORE_POLICY.min_ltv_cac_ratio
 
     @staticmethod
-    def from_dict(d: dict | None, *, policy: EconomicsCorePolicy | None = None) -> "EconomicsConfigV1":
+    def from_dict(d: dict | None, *, policy: EconomicsCorePolicy | None = None) -> EconomicsConfigV1:
         d = d or {}
         policy = policy or DEFAULT_ECONOMICS_CORE_POLICY
         return EconomicsConfigV1(

@@ -32,7 +32,7 @@ def get_user_features_daily(
     tenant_id: str,
     user_id: str,
     day_key: str,
-) -> Optional[str]:
+) -> str | None:
     row = db.execute(
         "SELECT features_json FROM user_features_daily WHERE tenant_id=? AND user_id=? AND day_key=?",
         (str(tenant_id), str(user_id), str(day_key)),

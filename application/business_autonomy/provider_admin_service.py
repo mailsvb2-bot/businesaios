@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Mapping
 
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService
@@ -264,7 +264,7 @@ class ProviderAdminService:
             title=provider.title,
             channel_kind=provider.channel_kind.value,
             secret_fields_bound=tuple(sorted(secret_names)),
-            last_updated_utc=datetime.now(timezone.utc).isoformat(),
+            last_updated_utc=datetime.now(UTC).isoformat(),
             governance_enabled=governance_enabled,
             persistent_surfaces=persistent_surfaces,
             onboarding_ready=onboarding_ready,
@@ -328,7 +328,7 @@ class ProviderAdminService:
             title=current.title,
             channel_kind=current.channel_kind,
             secret_fields_bound=current.secret_fields_bound,
-            last_updated_utc=datetime.now(timezone.utc).isoformat(),
+            last_updated_utc=datetime.now(UTC).isoformat(),
             governance_enabled=current.governance_enabled,
             persistent_surfaces=current.persistent_surfaces,
             onboarding_ready=False,
@@ -379,7 +379,7 @@ class ProviderAdminService:
             title=current.title,
             channel_kind=current.channel_kind,
             secret_fields_bound=current.secret_fields_bound,
-            last_updated_utc=datetime.now(timezone.utc).isoformat(),
+            last_updated_utc=datetime.now(UTC).isoformat(),
             governance_enabled=current.governance_enabled,
             persistent_surfaces=current.persistent_surfaces,
             onboarding_ready=connected and current.onboarding_ready,

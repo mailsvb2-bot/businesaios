@@ -9,11 +9,11 @@ from core.marketing.llm.composer_sync_flow import compose_sync_flow
 from core.marketing.llm_prompt_builder import MarketingLLMInputs
 
 
-async def compose_marketing_text_async(composer, inp: MarketingLLMInputs) -> Optional[str]:
+async def compose_marketing_text_async(composer, inp: MarketingLLMInputs) -> str | None:
     return await compose_async_flow(composer, inp)
 
 
-def compose_marketing_text_sync(composer, inp: MarketingLLMInputs) -> Optional[str]:
+def compose_marketing_text_sync(composer, inp: MarketingLLMInputs) -> str | None:
     return compose_sync_flow(composer, inp)
 
 

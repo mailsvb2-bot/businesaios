@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from decimal import Decimal
 from typing import Mapping
 from uuid import uuid4
@@ -10,7 +10,7 @@ CANON_RUNTIME_MONETIZATION_CONTRACTS = True
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True, slots=True)

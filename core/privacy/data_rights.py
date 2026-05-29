@@ -12,7 +12,7 @@ class DataExportRequest:
     tenant_id: TenantId
     user_id: str
     start_ms: int = 0
-    end_ms: Optional[int] = None
+    end_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,7 @@ class DataDeleteRequest:
 class UserDataSource(Protocol):
     """A user-data source that supports export and/or delete."""
 
-    def export(self, req: DataExportRequest) -> Iterable[Dict[str, Any]]: ...
+    def export(self, req: DataExportRequest) -> Iterable[dict[str, Any]]: ...
 
     def delete(self, req: DataDeleteRequest) -> int: ...
 
@@ -39,20 +39,20 @@ class DataRightsService:
       - this service does orchestration only (no storage details)
     """
 
-    def __init__(self, *, sources: Dict[str, UserDataSource]):
+    def __init__(self, *, sources: dict[str, UserDataSource]):
         self._sources = dict(sources)
 
-    def export_user(self, req: DataExportRequest) -> Dict[str, Any]:
+    def export_user(self, req: DataExportRequest) -> dict[str, Any]:
         uid = (req.user_id or "").strip()
         if not uid:
             raise ValueError("EMPTY_USER_ID")
-        out: Dict[str, Any] = {"tenant_id": str(req.tenant_id), "user_id": uid, "sources": {}}
+        out: dict[str, Any] = {"tenant_id": str(req.tenant_id), "user_id": uid, "sources": {}}
         for name, src in self._sources.items():
             items = list(src.export(req))
             out["sources"][name] = {"count": len(items), "items": items}
         return out
 
-    def delete_user(self, req: DataDeleteRequest) -> Dict[str, Any]:
+    def delete_user(self, req: DataDeleteRequest) -> dict[str, Any]:
         uid = (req.user_id or "").strip()
         if not uid:
             raise ValueError("EMPTY_USER_ID")
@@ -63,7 +63,7 @@ class DataRightsService:
             reason=(req.reason or "user_request").strip()[:100],
             requested_at_ms=at,
         )
-        res: Dict[str, Any] = {"tenant_id": str(req2.tenant_id), "user_id": uid, "deleted": {}}
+        res: dict[str, Any] = {"tenant_id": str(req2.tenant_id), "user_id": uid, "deleted": {}}
         total = 0
         for name, src in self._sources.items():
             n = int(src.delete(req2))

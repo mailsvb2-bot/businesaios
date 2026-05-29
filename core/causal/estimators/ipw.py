@@ -9,14 +9,14 @@ from core.causal.estimators.base import CausalEstimator, EstimatorResult, _count
 from core.causal.math_utils import clip, mean
 from core.causal.types import CausalDataset, EffectEstimate
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)
 class IPWEstimator(CausalEstimator):
     """Inverse propensity weighting using stratified propensity."""
 
-    covariate_names: Tuple[str, ...] = ()
+    covariate_names: tuple[str, ...] = ()
     # Smoothing is useful for very sparse strata, but it introduces bias.
     # We keep it off by default and rely on clip_min/clip_max for stability.
     smoothing: float = 0.0
@@ -29,10 +29,10 @@ class IPWEstimator(CausalEstimator):
         names = tuple(self.covariate_names)
         p = fit_stratified_propensity(dataset, names, smoothing=float(self.smoothing))
 
-        w_t: List[float] = []
-        y_t: List[float] = []
-        w_c: List[float] = []
-        y_c: List[float] = []
+        w_t: list[float] = []
+        y_t: list[float] = []
+        w_c: list[float] = []
+        y_c: list[float] = []
 
         for r in dataset.rows:
             k = stratum_key(r.covariates, names)
@@ -48,13 +48,13 @@ class IPWEstimator(CausalEstimator):
                 w_c.append(w)
                 y_c.append(y)
 
-        def wmean(vals: List[float], weights: List[float]) -> float:
+        def wmean(vals: list[float], weights: list[float]) -> float:
             if not vals:
                 return 0.0
             s = sum(float(w) for w in weights)
             if s <= 0:
                 return 0.0
-            return sum(float(v) * float(w) for v, w in zip(vals, weights)) / s
+            return sum(float(v) * float(w) for v, w in zip(vals, weights, strict=False)) / s
 
         eff = wmean(y_t, w_t) - wmean(y_c, w_c)
         n, nt, nc = _counts(dataset)

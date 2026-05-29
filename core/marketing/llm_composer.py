@@ -54,16 +54,16 @@ class MarketingLLMComposer:
         """
         return self._llm
 
-    async def compose(self, inp: MarketingLLMInputs) -> Optional[str]:
+    async def compose(self, inp: MarketingLLMInputs) -> str | None:
         return await self._compose_async(inp)
 
-    def compose_sync(self, inp: MarketingLLMInputs) -> Optional[str]:
+    def compose_sync(self, inp: MarketingLLMInputs) -> str | None:
         gen_sync = getattr(self._llm, "generate_sync", None)
         if callable(gen_sync):
             return self._compose_sync_via_generate_sync(inp)
         return run_awaitable_sync(self._compose_async(inp))
 
-    async def _compose_async(self, inp: MarketingLLMInputs) -> Optional[str]:
+    async def _compose_async(self, inp: MarketingLLMInputs) -> str | None:
         return await compose_marketing_text_async(self, inp)
 
     async def _maybe_alert(self, inp: MarketingLLMInputs, *, reason: str) -> None:
@@ -94,5 +94,5 @@ class MarketingLLMComposer:
             error_code=f"guardrail:{reason}",
         )
 
-    def _compose_sync_via_generate_sync(self, inp: MarketingLLMInputs) -> Optional[str]:
+    def _compose_sync_via_generate_sync(self, inp: MarketingLLMInputs) -> str | None:
         return compose_marketing_text_sync(self, inp)

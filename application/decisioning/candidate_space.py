@@ -12,8 +12,8 @@ class CandidateScore:
 
 def build_candidate_space(
     *, candidates: Sequence[str], scores: Sequence[float], source: str
-) -> Tuple[CandidateScore, ...]:
+) -> tuple[CandidateScore, ...]:
     out = []
-    for c, s in zip(candidates, scores):
+    for c, s in zip(candidates, scores, strict=False):
         out.append(CandidateScore(candidate=str(c), score=float(s), source=str(source)))
     return tuple(out)

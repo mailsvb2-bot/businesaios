@@ -15,12 +15,12 @@ from config.scoring_behavior_policy import DEFAULT_ACTION_RANKING_POLICY, Action
 @dataclass(frozen=True)
 class RankedProposal:
     action: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     score: float
     reason: str
 
 
-def _get_num(d: Dict[str, Any], key: str) -> float:
+def _get_num(d: dict[str, Any], key: str) -> float:
     try:
         return float(d.get(key))
     except Exception:
@@ -30,9 +30,9 @@ def _get_num(d: Dict[str, Any], key: str) -> float:
 def score_proposal(
     *,
     action: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     policy: ActionRankingPolicy = DEFAULT_ACTION_RANKING_POLICY,
-) -> Tuple[float, str]:
+) -> tuple[float, str]:
     """Prefer proposals that carry explicit evaluation metadata.
 
     Supported optional keys in payload:
@@ -61,8 +61,8 @@ def rank_proposals(
     proposals: Iterable[Any],
     *,
     policy: ActionRankingPolicy = DEFAULT_ACTION_RANKING_POLICY,
-) -> List[RankedProposal]:
-    ranked: List[RankedProposal] = []
+) -> list[RankedProposal]:
+    ranked: list[RankedProposal] = []
     for pr in list(proposals or []):
         try:
             a = str(getattr(pr, "action", ""))

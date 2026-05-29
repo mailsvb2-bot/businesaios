@@ -23,7 +23,7 @@ class ConfigRegistry:
     def settings(self, *, force_reload: bool = False):
         return load_settings(force_reload=force_reload)
 
-    def feature_flags(self) -> Type[FeatureFlags]:
+    def feature_flags(self) -> type[FeatureFlags]:
         return FeatureFlags
 
     def yaml_from_text(self, raw: str) -> Any:

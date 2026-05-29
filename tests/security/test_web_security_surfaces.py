@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from app.web.auth import AuthService
 from app.web.session import SessionStore
@@ -16,7 +16,7 @@ class _BootResult:
 
 
 def test_auth_service_redacts_sensitive_payload() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         'issued_at': (now - timedelta(hours=1)).isoformat(),
         'expires_at': (now + timedelta(hours=23)).isoformat(),

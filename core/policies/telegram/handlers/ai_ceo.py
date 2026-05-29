@@ -19,7 +19,7 @@ from core.ux.callbacks import CB_CEO_MENU, CB_CEO_PLAN, CB_CEO_RUN
 from core.ux.telegram_keyboards import kb_ai_ceo_menu
 
 
-def handle_ai_ceo(ctx: TelegramCtx, *, user_id: str, event_store: Any | None = None) -> Optional[ProposedAction]:
+def handle_ai_ceo(ctx: TelegramCtx, *, user_id: str, event_store: Any | None = None) -> ProposedAction | None:
     # entrypoints: command or callbacks
     if ctx.cmd == "/ceo":
         return _propose_plan(ctx, user_id=user_id, event_store=event_store)

@@ -47,7 +47,7 @@ def stop_loss_verdict(ctx, *, contract, logger) -> Any:
     return evaluate_stop_loss(contract=contract, metrics={"profit_minor_today": m.get("profit_minor"), "cac_minor_today": m.get("cac_minor")})
 
 
-def handle_menu_or_dashboard(ctx, *, user_id: str, sess: dict, sl, logger) -> Optional[ProposedAction]:
+def handle_menu_or_dashboard(ctx, *, user_id: str, sess: dict, sl, logger) -> ProposedAction | None:
     cb = str(ctx.callback_data or "")
 
     if cb == CB_AUTOPILOT_MENU:

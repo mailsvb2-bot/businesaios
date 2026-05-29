@@ -68,7 +68,7 @@ class CapabilityDescriptor:
     notes: tuple[str, ...] = ()
 
     @classmethod
-    def from_action_capability(cls, value: ActionCapability) -> 'CapabilityDescriptor':
+    def from_action_capability(cls, value: ActionCapability) -> CapabilityDescriptor:
         return cls(
             action_type=str(value.action_type),
             capability_key=str(value.action_class),
@@ -131,7 +131,7 @@ class RuntimeCapabilitySnapshot:
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_payload(cls, *, action_type: str, capability_key: str, payload: Mapping[str, Any] | None) -> 'RuntimeCapabilitySnapshot':
+    def from_payload(cls, *, action_type: str, capability_key: str, payload: Mapping[str, Any] | None) -> RuntimeCapabilitySnapshot:
         raw = _safe_dict(payload)
         health_score = max(0.0, min(1.0, _safe_float(raw.get('health_score'), default=1.0)))
         enabled = _safe_bool(raw.get('enabled'), default=True)

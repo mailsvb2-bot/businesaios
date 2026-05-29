@@ -26,7 +26,7 @@ class VariantSelector:
         self._rm = read_model
         self._seed = int(seed)
 
-    def choose_variant(self, *, user_id: str, step: str) -> Optional[VariantChoice]:
+    def choose_variant(self, *, user_id: str, step: str) -> VariantChoice | None:
         vid = self._rm.get_variant(user_id=user_id, step=step, seed=self._seed)
         if not vid:
             return None

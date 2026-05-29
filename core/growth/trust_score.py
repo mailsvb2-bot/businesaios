@@ -7,7 +7,7 @@ from config.growth_trust_policy import DEFAULT_GROWTH_TRUST_POLICY, GrowthTrustP
 
 
 class EventStore(Protocol):
-    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 2000) -> Iterable[Dict[str, Any]]: ...
+    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 2000) -> Iterable[dict[str, Any]]: ...
 
 
 @dataclass

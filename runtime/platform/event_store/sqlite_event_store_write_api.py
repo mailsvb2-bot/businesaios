@@ -11,7 +11,7 @@ from runtime.platform.event_store.append_contract import normalize_append_event
 class SqliteEventStoreWriteApi:
     """Write-path API for SqliteEventStore."""
 
-    _db: Optional[sqlite3.Connection]
+    _db: sqlite3.Connection | None
 
     def append_event(self, event: dict, *, commit: bool = True) -> None:
         assert self._db is not None

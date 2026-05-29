@@ -47,7 +47,7 @@ class OnboardingSession:
     ads_platform: str = ""
     tasks: list[dict] | None = None
 
-    def to_settings(self) -> Dict[str, Any]:
+    def to_settings(self) -> dict[str, Any]:
         return {
             "stage": str(self.stage.value),
             "goal": str(self.goal),
@@ -59,7 +59,7 @@ class OnboardingSession:
         }
 
     @staticmethod
-    def from_settings(d: Mapping[str, Any] | None) -> "OnboardingSession":
+    def from_settings(d: Mapping[str, Any] | None) -> OnboardingSession:
         d = dict(d or {})
         try:
             stage = OnboardingStep(str(d.get("stage") or OnboardingStep.DIAG_WHAT.value))
@@ -80,7 +80,7 @@ class OnboardingSession:
 class OnboardingTransition:
     session: OnboardingSession
     notify_text: str
-    reply_markup: Optional[dict]
+    reply_markup: dict | None
     use_callback_query_id: bool = False
 
 
@@ -93,11 +93,11 @@ def session_from_settings(settings: Mapping[str, Any] | None) -> OnboardingSessi
     return OnboardingSession(stage=OnboardingStep.DIAG_WHAT, goal="profit_7d", diag=Diagnostics(), ads_platform="")
 
 
-def session_to_settings(sess: OnboardingSession) -> Dict[str, Any]:
+def session_to_settings(sess: OnboardingSession) -> dict[str, Any]:
     return {"autopilot:session": sess.to_settings()}
 
 
-def advance_with_text(sess: OnboardingSession, text: str) -> Optional[OnboardingTransition]:
+def advance_with_text(sess: OnboardingSession, text: str) -> OnboardingTransition | None:
     t = (text or "").strip()
     if not t:
         return None
@@ -134,7 +134,7 @@ def advance_with_text(sess: OnboardingSession, text: str) -> Optional[Onboarding
     return None
 
 
-def advance_with_callback(sess: OnboardingSession, callback_data: str) -> Optional[OnboardingTransition]:
+def advance_with_callback(sess: OnboardingSession, callback_data: str) -> OnboardingTransition | None:
     cb = str(callback_data or "")
     d = sess.diag
 

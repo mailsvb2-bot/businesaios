@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from execution.revenue_os_runtime import RevenueOSRuntime
 from runtime.monetization import (
@@ -18,7 +18,7 @@ from runtime.monetization import (
 def _inputs():
     snapshots = (
         RevenueSnapshotInput(
-            observed_at=datetime(2026, 4, 9, tzinfo=timezone.utc),
+            observed_at=datetime(2026, 4, 9, tzinfo=UTC),
             visitors=500,
             trials_started=100,
             conversions=40,

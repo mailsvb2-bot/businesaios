@@ -23,7 +23,7 @@ from config.causal_guardrails_policy import (
     CausalGuardrailsPolicy,
 )
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,7 @@ class CausalGuardrailDecision:
     constraints: Json
 
 
-def _as_float(v: Any) -> Optional[float]:
+def _as_float(v: Any) -> float | None:
     if v is None:
         return None
     try:

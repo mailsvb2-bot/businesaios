@@ -30,7 +30,7 @@ class GrowthGoalV1:
     horizon_days: int = 14
     kpi: str = "profit_minor"
     target_delta_pct: float = 10.0
-    constraints: Tuple[str, ...] = ()
+    constraints: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -48,8 +48,8 @@ class GrowthSignalV1:
     retention_d7_pct: float = 0.0
     conversion_lead_to_purchase_pct: float = 0.0
 
-    top_channels: Tuple[str, ...] = ()
-    notes: Tuple[str, ...] = ()
+    top_channels: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -69,11 +69,11 @@ class GrowthHypothesisV1:
     risk: Literal["low", "medium", "high"] = "medium"
 
     metric: str = "profit_minor"
-    baseline: Optional[float] = None
-    target: Optional[float] = None
+    baseline: float | None = None
+    target: float | None = None
     horizon_days: int = 14
 
-    action_hints: Dict[str, Any] = field(default_factory=dict)
+    action_hints: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -85,7 +85,7 @@ class OpportunityScoreV1:
     confidence: float = 0.0
     ease: float = 0.0
     risk_penalty: float = 0.0
-    rationale: Tuple[str, ...] = ()
+    rationale: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -101,12 +101,12 @@ class ExperimentSpecV1:
     channel: Channel = "organic"
 
     primary_metric: str = "profit_minor"
-    guardrail_metrics: Tuple[str, ...] = ("spend_minor",)
+    guardrail_metrics: tuple[str, ...] = ("spend_minor",)
 
-    steps: Tuple[str, ...] = ()
+    steps: tuple[str, ...] = ()
     duration_days: int = 14
 
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -116,5 +116,5 @@ class StrategyPlanV1:
     created_ms: int = 0
     goal: GrowthGoalV1 = field(default_factory=GrowthGoalV1)
     signals: GrowthSignalV1 = field(default_factory=GrowthSignalV1)
-    top_hypotheses: Tuple[GrowthHypothesisV1, ...] = ()
-    notes: Tuple[str, ...] = ()
+    top_hypotheses: tuple[GrowthHypothesisV1, ...] = ()
+    notes: tuple[str, ...] = ()

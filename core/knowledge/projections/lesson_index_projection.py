@@ -14,9 +14,9 @@ class LessonIndexProjection:
     tags: tuple[str, ...]
 
     @classmethod
-    def from_lesson(cls, lesson: Lesson) -> "LessonIndexProjection":
+    def from_lesson(cls, lesson: Lesson) -> LessonIndexProjection:
         return cls(lesson_id=lesson.lesson_id, subject=lesson.subject, title=lesson.title, tags=lesson.tags.values)
 
     @classmethod
-    def build_many(cls, lessons: Sequence[Lesson]) -> tuple["LessonIndexProjection", ...]:
+    def build_many(cls, lessons: Sequence[Lesson]) -> tuple[LessonIndexProjection, ...]:
         return tuple(cls.from_lesson(lesson) for lesson in lessons)

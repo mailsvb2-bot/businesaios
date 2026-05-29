@@ -18,7 +18,7 @@ def open_ro(path: str) -> sqlite3.Connection:
     return conn
 
 
-def percentile(sorted_vals: List[int], p: float) -> int:
+def percentile(sorted_vals: list[int], p: float) -> int:
     if not sorted_vals:
         return 0
     if p <= 0:
@@ -39,7 +39,7 @@ def percentile(sorted_vals: List[int], p: float) -> int:
 class Interaction:
     correlation_key: str
     label: str
-    totals: Dict[str, int]
+    totals: dict[str, int]
 
 
 def guess_label_from_snapshot_bytes(snapshot_bytes: bytes) -> str:
@@ -69,12 +69,12 @@ def guess_label_from_snapshot_bytes(snapshot_bytes: bytes) -> str:
     return "unknown"
 
 
-def load_interactions(*, events_db: str, snapshots_db: str, since_ms: Optional[int] = None) -> List[Interaction]:
-    ck_to_snapshot: Dict[str, str] = {}
+def load_interactions(*, events_db: str, snapshots_db: str, since_ms: int | None = None) -> list[Interaction]:
+    ck_to_snapshot: dict[str, str] = {}
 
     with open_ro(events_db) as db:
         q = "SELECT payload_json FROM events WHERE event_type='decision_issued'"
-        params: Tuple[Any, ...] = ()
+        params: tuple[Any, ...] = ()
         if since_ms is not None:
             q = "SELECT payload_json FROM events WHERE event_type='decision_issued' AND timestamp_ms>=?"
             params = (int(since_ms),)
@@ -90,7 +90,7 @@ def load_interactions(*, events_db: str, snapshots_db: str, since_ms: Optional[i
             if isinstance(ck, str) and ck.strip() and isinstance(sid, str) and sid.strip():
                 ck_to_snapshot.setdefault(ck.strip(), sid.strip())
 
-    ck_to_label: Dict[str, str] = {}
+    ck_to_label: dict[str, str] = {}
     with open_ro(snapshots_db) as sdb:
         for ck, sid in list(ck_to_snapshot.items()):
             row = sdb.execute("SELECT canonical_bytes FROM snapshots WHERE snapshot_id=?", (sid,)).fetchone()
@@ -98,7 +98,7 @@ def load_interactions(*, events_db: str, snapshots_db: str, since_ms: Optional[i
                 continue
             ck_to_label[ck] = guess_label_from_snapshot_bytes(row[0])
 
-    per_ck: Dict[str, Dict[str, List[int]]] = {}
+    per_ck: dict[str, dict[str, list[int]]] = {}
     with open_ro(events_db) as db:
         q = "SELECT payload_json FROM events WHERE event_type='latency_span'"
         params = ()
@@ -121,10 +121,10 @@ def load_interactions(*, events_db: str, snapshots_db: str, since_ms: Optional[i
                 continue
             per_ck.setdefault(ck, {}).setdefault(stage, []).append(int(dur))
 
-    interactions: List[Interaction] = []
+    interactions: list[Interaction] = []
     for ck, stages in per_ck.items():
         label = ck_to_label.get(ck, "unknown")
-        totals: Dict[str, int] = {}
+        totals: dict[str, int] = {}
         for st in STAGES:
             vals = stages.get(st) or []
             totals[st] = int(sum(vals)) if vals else 0
@@ -132,8 +132,8 @@ def load_interactions(*, events_db: str, snapshots_db: str, since_ms: Optional[i
     return interactions
 
 
-def render_report(*, interactions: List[Interaction], top_n: int = 15) -> str:
-    by_label: Dict[str, List[Interaction]] = {}
+def render_report(*, interactions: list[Interaction], top_n: int = 15) -> str:
+    by_label: dict[str, list[Interaction]] = {}
     for it in interactions:
         by_label.setdefault(it.label, []).append(it)
 
@@ -145,7 +145,7 @@ def render_report(*, interactions: List[Interaction], top_n: int = 15) -> str:
         p90 = percentile(totals, 90)
         p99 = percentile(totals, 99)
 
-        stage_p90: Dict[str, int] = {}
+        stage_p90: dict[str, int] = {}
         for st in STAGES:
             vals = sorted([i.totals.get(st, 0) for i in its])
             stage_p90[st] = percentile(vals, 90)
@@ -172,6 +172,6 @@ def render_report(*, interactions: List[Interaction], top_n: int = 15) -> str:
     return "\n".join(out_lines)
 
 
-def default_paths_from_env(data_dir: Optional[str] = None) -> Tuple[str, str]:
+def default_paths_from_env(data_dir: str | None = None) -> tuple[str, str]:
     dd = (data_dir or os.getenv("DATA_DIR") or os.path.join("runtime", "entrypoints", "data")).strip()
     return os.path.join(dd, "events.db"), os.path.join(dd, "snapshots.db")

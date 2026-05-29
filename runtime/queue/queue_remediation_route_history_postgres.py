@@ -20,7 +20,7 @@ class PostgresQueueRemediationRouteHistoryStore:
     def __post_init__(self) -> None:
         self._port: PostgresPort | None = None
 
-    def __enter__(self) -> 'PostgresQueueRemediationRouteHistoryStore':
+    def __enter__(self) -> PostgresQueueRemediationRouteHistoryStore:
         self._port = PostgresPort(self.dsn, application_name=self.application_name).__enter__()
         self._init_schema()
         return self

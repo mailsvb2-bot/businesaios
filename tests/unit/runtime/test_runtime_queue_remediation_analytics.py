@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from runtime.queue.queue_remediation_analytics import QueueRemediationAnalyticsService
 from runtime.queue.queue_remediation_audit_sqlite import SqliteQueueRemediationAuditStore
@@ -17,7 +17,7 @@ def test_queue_remediation_analytics_summarizes_activity(tmp_path):
     audit = SqliteQueueRemediationAuditStore(tmp_path / 'audit.sqlite3')
     routes = SqliteQueueRemediationRouteHistoryStore(tmp_path / 'routes.sqlite3')
     coordinator = QueueRemediationCoordinator(audit_sink=audit)
-    now = datetime(2026, 3, 28, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 3, 28, 12, 0, tzinfo=UTC)
     plan = QueueRemediationPlan(
         tenant_id='t1',
         queue_name='q1',
@@ -72,7 +72,7 @@ def test_queue_remediation_analytics_summarizes_activity(tmp_path):
 def test_queue_remediation_analytics_exposes_status_source_and_offer_gaps(tmp_path):
     audit = SqliteQueueRemediationAuditStore(tmp_path / 'audit2.sqlite3')
     routes = SqliteQueueRemediationRouteHistoryStore(tmp_path / 'routes2.sqlite3')
-    now = datetime(2026, 3, 28, 14, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 3, 28, 14, 0, tzinfo=UTC)
     audit.record_plan(QueueRemediationPlan(tenant_id='t2', queue_name='q2', generated_at=now, hooks=(
         QueueRemediationHook('t2', 'q2', 'inspect_backpressure', 'Inspect', 'Inspect backlog', 'warning', category='inspection'),
         QueueRemediationHook('t2', 'q2', 'refresh_health_sample', 'Refresh', 'Refresh', 'warning', category='verification'),
@@ -103,7 +103,7 @@ def test_queue_remediation_analytics_execution_rate_uses_executed_count(tmp_path
     )
 
     store = SqliteQueueRemediationAuditStore(path=tmp_path / 'audit.sqlite3')
-    generated_at = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    generated_at = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
     store.record_plan(QueueRemediationPlan(tenant_id='tenant-a', queue_name='ops', hooks=(QueueRemediationHook(tenant_id='tenant-a', queue_name='ops', code='a', label='A', description='A', severity='warning'), QueueRemediationHook(tenant_id='tenant-a', queue_name='ops', code='b', label='B', description='B', severity='warning')), generated_at=generated_at))
     store.record_execution(QueueRemediationExecutionReport(tenant_id='tenant-a', queue_name='ops', hook_code='a', executed=True, reason='done', executed_at=generated_at, category='inspect'))
     store.record_execution(QueueRemediationExecutionReport(tenant_id='tenant-a', queue_name='ops', hook_code='b', executed=False, reason='review', executed_at=generated_at, category='review'))

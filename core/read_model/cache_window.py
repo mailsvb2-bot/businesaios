@@ -21,7 +21,7 @@ class CacheWindow:
     def __post_init__(self) -> None:
         policy = self.policy or DEFAULT_CACHE_WINDOW_POLICY
         self.window_sec = float(self.window_sec if self.window_sec is not None else policy.window_sec)
-        self._cache: Dict[str, Tuple[float, Any]] = {}
+        self._cache: dict[str, tuple[float, Any]] = {}
 
     def get(self, key: str, compute: Callable[[], Any]) -> Any:
         now = time.time()

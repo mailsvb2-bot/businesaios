@@ -11,7 +11,7 @@ class GuardTrigger:
     code: str
     severity: GuardSeverity
     message: str
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_blocking(self) -> bool:

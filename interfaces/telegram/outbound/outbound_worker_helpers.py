@@ -16,7 +16,7 @@ def record_task_metrics(*, metrics: Any, task: OutboundTask, start_exec_ns: int)
 
 def get_or_create_chat_bucket(
     *,
-    per_chat: Dict[int, TokenBucket],
+    per_chat: dict[int, TokenBucket],
     chat_id: int,
     chat_burst: int,
     chat_rps: float,

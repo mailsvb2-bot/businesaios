@@ -39,7 +39,7 @@ class BusinessAutonomyService:
         *,
         adapter_registry: BusinessAdapterRegistry | None = None,
         autonomy_policy: BusinessAutonomyPolicy | None = None,
-        audit_sink: Optional[object] = None,
+        audit_sink: object | None = None,
         channel_registry: TypedChannelAdapterRegistry | None = None,
         blast_radius_guard: BusinessBlastRadiusGuard | None = None,
         budget_guard: BusinessBudgetGuard | None = None,

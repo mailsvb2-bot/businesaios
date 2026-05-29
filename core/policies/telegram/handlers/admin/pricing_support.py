@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 
-def back_markup(callback_data: str) -> Dict[str, List[List[Dict[str, str]]]]:
+def back_markup(callback_data: str) -> dict[str, list[list[dict[str, str]]]]:
     return {"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": str(callback_data)}]]}
 
 
-def pricing_session_payload(*, user_id: str, stage: str, callback_query_id: str | None, back_to: str, **value: Any) -> Dict[str, Any]:
+def pricing_session_payload(*, user_id: str, stage: str, callback_query_id: str | None, back_to: str, **value: Any) -> dict[str, Any]:
     session_value = {"stage": str(stage)}
     session_value.update(value)
     return {
@@ -19,7 +19,7 @@ def pricing_session_payload(*, user_id: str, stage: str, callback_query_id: str 
     }
 
 
-def ai_request_rows(*, plan_id: int, suggested_price: int) -> Dict[str, List[List[Dict[str, str]]]]:
+def ai_request_rows(*, plan_id: int, suggested_price: int) -> dict[str, list[list[dict[str, str]]]]:
     return {
         "inline_keyboard": [
             [{"text": f"📝 Создать request → {int(suggested_price)}₽", "callback_data": f"admin:pricing:ai_request:{int(plan_id)}:{int(suggested_price)}"}],
@@ -28,7 +28,7 @@ def ai_request_rows(*, plan_id: int, suggested_price: int) -> Dict[str, List[Lis
     }
 
 
-def pending_rows(*, request_id: str) -> List[List[Dict[str, str]]]:
+def pending_rows(*, request_id: str) -> list[list[dict[str, str]]]:
     rid = str(request_id)
     return [[
         {"text": f"✅ Approve {rid[:8]}", "callback_data": f"admin:pricing:approve:{rid}"},
@@ -38,7 +38,7 @@ def pending_rows(*, request_id: str) -> List[List[Dict[str, str]]]:
 
 
 
-def pricing_edit_request_payload(*, user_id: str, plan_id: int, callback_query_id: str | None) -> Dict[str, Any]:
+def pricing_edit_request_payload(*, user_id: str, plan_id: int, callback_query_id: str | None) -> dict[str, Any]:
     payload = pricing_session_payload(
         user_id=user_id,
         stage="await_price",
@@ -54,7 +54,7 @@ def pricing_edit_request_payload(*, user_id: str, plan_id: int, callback_query_i
     return payload
 
 
-def pricing_approve_request_payload(*, user_id: str, request_id: str, callback_query_id: str | None) -> Dict[str, Any]:
+def pricing_approve_request_payload(*, user_id: str, request_id: str, callback_query_id: str | None) -> dict[str, Any]:
     rid = str(request_id).strip()
     payload = pricing_session_payload(
         user_id=user_id,
@@ -91,11 +91,11 @@ def parse_ai_request_callback(callback_data: str) -> tuple[int, int] | None:
         return None
 
 
-def pending_requests_view(requests: List[Dict[str, Any]]) -> tuple[str, Dict[str, List[List[Dict[str, str]]]]]:
+def pending_requests_view(requests: list[dict[str, Any]]) -> tuple[str, dict[str, list[list[dict[str, str]]]]]:
     pending = [r for r in requests if str(r.get("status")) == "pending"]
     if not pending:
         return "✅ Нет pending change-request'ов.", back_markup("admin:pricing:menu")
-    rows: List[List[Dict[str, str]]] = []
+    rows: list[list[dict[str, str]]] = []
     lines = ["🕒 Pending pricing change-requests\n"]
     for r in pending[:10]:
         rid = str(r.get("request_id") or "")

@@ -15,7 +15,7 @@ def replay_state_against_world_model(
     *,
     state: Any,
     world_model: Any | None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Canonical replay helper:
     - re-enriches state

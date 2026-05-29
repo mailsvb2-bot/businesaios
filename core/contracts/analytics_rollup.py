@@ -28,6 +28,6 @@ class FleetAnalyticsRollup:
     average_execution_ratio: float = 0.0
     average_blocked_ratio: float = 0.0
     average_latency_p95_ms: float = 0.0
-    top_risk_tenants: Tuple[str, ...] = ()
+    top_risk_tenants: tuple[str, ...] = ()
     generated_at_ms: int = 0
-    metadata: Dict[str, str] = field(default_factory=dict)
+    metadata: dict[str, str] = field(default_factory=dict)

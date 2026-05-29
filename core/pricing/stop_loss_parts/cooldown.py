@@ -15,7 +15,7 @@ def iter_events(
     start_ms: int,
     end_ms: int,
     event_type: str,
-) -> Iterable[Dict[str, Any]]:
+) -> Iterable[dict[str, Any]]:
     it = getattr(event_store, "iter_events", None)
     if not callable(it):
         return ()
@@ -27,11 +27,11 @@ def hours(ms: int) -> float:
 
 
 def compute_burst_count_with_decay(
-    trigger_ts_desc: List[int],
+    trigger_ts_desc: list[int],
     *,
     base_cooldown_hours: int,
     max_cooldown_hours: int,
-) -> Tuple[int, int, List[Dict[str, Any]]]:
+) -> tuple[int, int, list[dict[str, Any]]]:
     base_h = int(max(0, base_cooldown_hours))
     max_h = int(max(0, max_cooldown_hours))
     if base_h <= 0:
@@ -44,8 +44,8 @@ def compute_burst_count_with_decay(
     if not ts:
         return 0, 0, []
 
-    accepted: List[int] = [ts[0]]
-    evidence: List[Dict[str, Any]] = [{"ts_ms": int(ts[0]), "accepted": True, "reason": "newest"}]
+    accepted: list[int] = [ts[0]]
+    evidence: list[dict[str, Any]] = [{"ts_ms": int(ts[0]), "accepted": True, "reason": "newest"}]
     burst = 1
     eff = int(min(base_h, max_h))
 
@@ -84,7 +84,7 @@ def cooldown_state(
     max_cooldown_hours: int,
     backoff_lookback_hours: int,
     decay_enabled: bool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     base_h = int(max(0, base_cooldown_hours))
     max_h = int(max(0, max_cooldown_hours))
     lookback_h = int(max(0, backoff_lookback_hours))
@@ -98,7 +98,7 @@ def cooldown_state(
     start_ms = int(now_ms) - lookback_h * 3600 * 1000
     end_ms = int(now_ms)
     ctx = str(context_key or "").strip()
-    ts_list: List[int] = []
+    ts_list: list[int] = []
     for ev in iter_events(event_store, tenant_id=str(tenant_id), start_ms=int(start_ms), end_ms=int(end_ms), event_type="pricing_stoploss_triggered"):
         try:
             p = ev.get("payload") or {}
@@ -117,7 +117,7 @@ def cooldown_state(
         return {"active": False, "effective_cooldown_hours": 0, "recent_triggers": 0, "last_trigger_ms": None, "burst_count": 0, "decay_enabled": bool(decay_enabled)}
 
     last_ms = int(max(ts_list))
-    evidence: List[Dict[str, Any]] = []
+    evidence: list[dict[str, Any]] = []
     if bool(decay_enabled):
         burst_n, eff, evidence = compute_burst_count_with_decay(sorted(ts_list, reverse=True), base_cooldown_hours=int(base_h), max_cooldown_hours=int(max_h))
     else:

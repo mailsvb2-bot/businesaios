@@ -39,8 +39,8 @@ class HttpTransport:
         self,
         *,
         url: str,
-        headers: Dict[str, str] | None = None,
-        data: Optional[Dict[str, Any]] = None,
+        headers: dict[str, str] | None = None,
+        data: dict[str, Any] | None = None,
         timeout_s: int = 30,
     ) -> HTTPResponse:
         raise NotImplementedError
@@ -49,8 +49,8 @@ class HttpTransport:
         self,
         *,
         url: str,
-        headers: Dict[str, str] | None = None,
-        params: Optional[Dict[str, Any]] = None,
+        headers: dict[str, str] | None = None,
+        params: dict[str, Any] | None = None,
         timeout_s: int = 30,
     ) -> HTTPResponse:
         raise NotImplementedError
@@ -58,7 +58,7 @@ class HttpTransport:
 @dataclass(frozen=True)
 class SyncHTTPResult:
     status: int | None
-    headers: Dict[str, str]
+    headers: dict[str, str]
     json: Any | None
     text: str
     error_kind: str | None = None
@@ -68,7 +68,7 @@ def sync_request(
     *,
     method: str,
     url: str,
-    headers: Dict[str, str] | None = None,
+    headers: dict[str, str] | None = None,
     body: bytes | None = None,
     timeout_s: float = 30,
     opener: Callable[..., object] | None = None,
@@ -159,8 +159,8 @@ class UrllibHttpTransport(HttpTransport):
         self,
         *,
         url: str,
-        headers: Dict[str, str] | None = None,
-        data: Optional[Dict[str, Any]] = None,
+        headers: dict[str, str] | None = None,
+        data: dict[str, Any] | None = None,
         timeout_s: int = 30,
     ) -> HTTPResponse:
         import asyncio
@@ -177,8 +177,8 @@ class UrllibHttpTransport(HttpTransport):
         self,
         *,
         url: str,
-        headers: Dict[str, str] | None = None,
-        params: Optional[Dict[str, Any]] = None,
+        headers: dict[str, str] | None = None,
+        params: dict[str, Any] | None = None,
         timeout_s: int = 30,
     ) -> HTTPResponse:
         import asyncio
@@ -200,14 +200,14 @@ def _normalized_url(url: str) -> str:
         raise ValueError("absolute_http_url_required")
     return _urllib_parse().urlunsplit(parsed)
 
-def url_with_params(*, url: str, params: Dict[str, Any] | None = None) -> str:
+def url_with_params(*, url: str, params: dict[str, Any] | None = None) -> str:
     payload = params if isinstance(params, dict) else {}
     normalized = _normalized_url(str(url))
     if not payload:
         return normalized
     return normalized + ("&" if "?" in normalized else "?") + _urllib_parse().urlencode({k: v for k, v in payload.items() if v is not None})
 
-def form_urlencode(data: Dict[str, Any]) -> bytes:
+def form_urlencode(data: dict[str, Any]) -> bytes:
     """Encode x-www-form-urlencoded payloads inside the sealed HTTP layer.
 
     This keeps urllib usage centralized under runtime/_internal/http_transport.py
@@ -242,7 +242,7 @@ def _response_from_http_error(exc: Exception) -> HTTPResponse:
 def _response_from_network_error(exc: Exception) -> HTTPResponse:
     return HTTPResponse(status=599, json=None, text=str(exc))
 
-def sync_get(*, url: str, headers: Dict[str, str], params: Optional[Dict[str, str]] = None, timeout_s: int = 30) -> HTTPResponse:
+def sync_get(*, url: str, headers: dict[str, str], params: dict[str, str] | None = None, timeout_s: int = 30) -> HTTPResponse:
     try:
         final = url_with_params(url=str(url), params=(params or {}))
         req = _urllib_request().Request(url=final, headers=headers or {}, method="GET")
@@ -253,7 +253,7 @@ def sync_get(*, url: str, headers: Dict[str, str], params: Optional[Dict[str, st
     except (_urllib_error().URLError, OSError, ValueError) as exc:
         return _response_from_network_error(exc)
 
-def sync_post_json(*, url: str, headers: Dict[str, str], data: Optional[Dict[str, Any]] = None, timeout_s: int = 30) -> HTTPResponse:
+def sync_post_json(*, url: str, headers: dict[str, str], data: dict[str, Any] | None = None, timeout_s: int = 30) -> HTTPResponse:
     body = _json.dumps(data or {}, ensure_ascii=False).encode("utf-8")
     hdrs = dict(headers or {})
     if "Content-Type" not in hdrs:
@@ -292,10 +292,10 @@ def build_http_transport(*, allow_network: bool | None = None) -> HttpTransport:
         return UrllibHttpTransport()
     return DisabledNetworkTransport()
 
-async def http_get(*, url: str, headers: Dict[str, str], params: dict | None = None, timeout_s: int = 30, transport: HttpTransport | None = None) -> HTTPResponse:
+async def http_get(*, url: str, headers: dict[str, str], params: dict | None = None, timeout_s: int = 30, transport: HttpTransport | None = None) -> HTTPResponse:
     client = transport or build_http_transport()
     return await client.get_json(url=str(url), headers=dict(headers or {}), params=params, timeout_s=int(timeout_s or 30))
 
-async def http_post(*, url: str, headers: Dict[str, str], data: dict | None = None, timeout_s: int = 30, transport: HttpTransport | None = None) -> HTTPResponse:
+async def http_post(*, url: str, headers: dict[str, str], data: dict | None = None, timeout_s: int = 30, transport: HttpTransport | None = None) -> HTTPResponse:
     client = transport or build_http_transport()
     return await client.post_json(url=str(url), headers=dict(headers or {}), data=data, timeout_s=int(timeout_s or 30))

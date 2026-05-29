@@ -8,7 +8,7 @@ from kernel.decision_result import DecisionResult
 
 @dataclass
 class DecisionHistory:
-    items: List[DecisionResult] = field(default_factory=list)
+    items: list[DecisionResult] = field(default_factory=list)
 
     def append(self, result: DecisionResult) -> None:
         self.items.append(result)

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, Mapping
 
 
-def constraints_from_retention_features(features: Mapping[str, Any]) -> Dict[str, Any]:
+def constraints_from_retention_features(features: Mapping[str, Any]) -> dict[str, Any]:
     """Deterministic translation from retention signals to price constraints.
 
     Higher churn risk lowers the allowed pricing band.

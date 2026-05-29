@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from entrypoints.api.client_outcome_route_handlers import build_client_outcome_route_handlers
 from lock.economic_truth_lock import validate_no_economic_truth_bypass
@@ -13,7 +13,7 @@ from runtime.export.client_outcome_export import (
 
 def test_client_outcome_truth_snapshot_and_export_are_deterministic() -> None:
     handlers = build_client_outcome_route_handlers()
-    now = datetime(2026, 4, 14, 10, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 14, 10, 0, 0, tzinfo=UTC)
     selection = handlers.selection_service.select(
         now=now,
         request=__import__('lead_outcomes.client_outcome_selection_service', fromlist=['ClientOutcomeSelectionInput']).ClientOutcomeSelectionInput(
@@ -90,7 +90,7 @@ def test_admin_view_contains_economic_truth_and_export_widgets() -> None:
     from tests.unit.client_outcome.test_client_outcome_order_amendment_and_reconciliation import _build_client
 
     client = _build_client()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
     response = client.post('/client-outcome/full-cycle', json={
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',

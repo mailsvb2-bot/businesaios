@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 
 def _compute_retention(
-    events: Iterable[Dict[str, Any]],
+    events: Iterable[dict[str, Any]],
     *,
     window_days: int | None = None,
     return_days: int | None = None,
@@ -89,7 +89,7 @@ def _latest_any_events(
     tenant_id: str,
     limit: int,
     policy: GrowthSignalsPolicy = DEFAULT_GROWTH_SIGNALS_POLICY,
-) -> Iterable[Dict[str, Any]]:
+) -> Iterable[dict[str, Any]]:
     latest = getattr(event_store, "latest_events", None)
     if callable(latest):
         try:
@@ -109,7 +109,7 @@ def _latest_any_events(
         )
 
 
-def _latest_events(event_store: Any, *, tenant_id: str, event_type: str, limit: int) -> Iterable[Dict[str, Any]]:
+def _latest_events(event_store: Any, *, tenant_id: str, event_type: str, limit: int) -> Iterable[dict[str, Any]]:
     latest = getattr(event_store, "latest_events", None)
     if callable(latest):
         try:
@@ -119,7 +119,7 @@ def _latest_events(event_store: Any, *, tenant_id: str, event_type: str, limit: 
             return
 
 
-def _count_events_today(events: Iterable[Dict[str, Any]], *, event_type: str) -> int:
+def _count_events_today(events: Iterable[dict[str, Any]], *, event_type: str) -> int:
     now_ms = int(time.time() * 1000)
     day_start = now_ms - (now_ms % DEFAULT_GROWTH_SIGNALS_POLICY.day_ms)
     c = 0
@@ -135,8 +135,8 @@ def _count_events_today(events: Iterable[Dict[str, Any]], *, event_type: str) ->
     return int(c)
 
 
-def _top_channels(events: Iterable[Dict[str, Any]], *, top_n: int) -> Iterable[str]:
-    counts: Dict[str, int] = {}
+def _top_channels(events: Iterable[dict[str, Any]], *, top_n: int) -> Iterable[str]:
+    counts: dict[str, int] = {}
     for e in events:
         try:
             p = dict(e.get("payload") or {})
@@ -151,7 +151,7 @@ def _top_channels(events: Iterable[Dict[str, Any]], *, top_n: int) -> Iterable[s
         yield k
 
 
-def _notes(events: Iterable[Dict[str, Any]]) -> Iterable[str]:
+def _notes(events: Iterable[dict[str, Any]]) -> Iterable[str]:
     if _count(events, ACTION_ADS_APPLY_EXECUTE_V1) > 0:
         yield "ads_apply_used"
     if _count(events, "purchase_completed@v1") == 0:
@@ -162,7 +162,7 @@ def _notes(events: Iterable[Dict[str, Any]]) -> Iterable[str]:
         yield "telegram_active"
 
 
-def _count(events: Iterable[Dict[str, Any]], event_type: str) -> int:
+def _count(events: Iterable[dict[str, Any]], event_type: str) -> int:
     c = 0
     for e in events:
         if str(e.get("event_type") or "") == str(event_type):

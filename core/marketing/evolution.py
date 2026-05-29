@@ -7,7 +7,7 @@ from core.admin.ai_marketing import generate_copy_variants
 from core.tenancy.normalization import normalize_tenant_id_or_unknown
 
 
-def regenerate_marketing_copy(payload: Dict[str, Any]) -> Dict[str, Any]:
+def regenerate_marketing_copy(payload: dict[str, Any]) -> dict[str, Any]:
     """Deterministically regenerate marketing copy variants and persist as events.
 
     This is an EVOLUTION-timescale action:

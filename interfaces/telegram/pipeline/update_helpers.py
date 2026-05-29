@@ -27,7 +27,7 @@ def build_button_key(ctx: Any) -> str | None:
     return None
 
 
-def resolve_product_context(*, resolver: Any, ctx: Any, enrich: Dict[str, Any], fallback: Dict[str, Any]) -> Dict[str, Any]:
+def resolve_product_context(*, resolver: Any, ctx: Any, enrich: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]:
     try:
         resolved = resolver.resolve(
             command=getattr(ctx, "command", None),
@@ -41,7 +41,7 @@ def resolve_product_context(*, resolver: Any, ctx: Any, enrich: Dict[str, Any], 
     return dict(fallback or {})
 
 
-def build_worldstate_with_overlays(*, event_log: Any, ctx: Any, enrich: Dict[str, Any], resolved_product: Dict[str, Any], behavior_builder: BehavioralStateBuilder, now_ms: int) -> Any:
+def build_worldstate_with_overlays(*, event_log: Any, ctx: Any, enrich: dict[str, Any], resolved_product: dict[str, Any], behavior_builder: BehavioralStateBuilder, now_ms: int) -> Any:
     _ = build_economy(enrich=enrich)
     tenant_id = resolve_tenant_for_update(chat_id=str(ctx.chat_id), user_id=str(ctx.chat_id), text=str(ctx.text))
     bind_tenant(tenant_id)

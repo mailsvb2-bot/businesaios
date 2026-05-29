@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 import pytest
 
@@ -24,7 +24,7 @@ def _signal(*, raw: dict[str, object] | None = None, business_id: str = "biz-a")
         business_id=business_id,
         kind=DemandSignalKind.SEARCH_INTENT,
         channel=DemandChannel.GOOGLE_MAPS,
-        observed_at=datetime.now(timezone.utc),
+        observed_at=datetime.now(UTC),
         source_ref="source:1",
         normalized_text="coffee near me",
         confidence=0.8,

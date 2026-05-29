@@ -13,9 +13,9 @@ class Event:
     source: str
     event_type: str
     timestamp_ms: int
-    payload: Dict[str, Any]
-    decision_id: Optional[str]
-    correlation_id: Optional[str]
+    payload: dict[str, Any]
+    decision_id: str | None
+    correlation_id: str | None
 
 
 __all__ = ["Event"]

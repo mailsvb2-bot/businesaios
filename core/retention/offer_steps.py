@@ -45,7 +45,7 @@ def should_allow_offer(*, offer_engine: OfferEngine, cooldown_store: Any, state:
         return True
 
 
-def render_offer_payload(*, offer_engine: OfferEngine, state: Any, tenant_id: str, user_id: str, offer_id: str, price_rub: int, day_key: str, day_index: int, max_band: str | None, default_logger: Any) -> Tuple[str, str, Dict[str, Any], int]:
+def render_offer_payload(*, offer_engine: OfferEngine, state: Any, tenant_id: str, user_id: str, offer_id: str, price_rub: int, day_key: str, day_index: int, max_band: str | None, default_logger: Any) -> tuple[str, str, dict[str, Any], int]:
     try:
         product = getattr(state, "product", None) or {}
     except Exception:

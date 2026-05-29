@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from advisory.revenue_os import PaywallVariant, PricePoint, RevenueOSFacade, RevenueSnapshot, SubscriptionPlan
 
 
 def _snapshot(**overrides):
     base = dict(
-        observed_at=datetime(2026, 4, 8, 8, 0, tzinfo=timezone.utc),
+        observed_at=datetime(2026, 4, 8, 8, 0, tzinfo=UTC),
         visitors=1000,
         trials_started=120,
         conversions=60,

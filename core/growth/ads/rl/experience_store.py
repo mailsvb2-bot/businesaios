@@ -10,7 +10,7 @@ from .contextual_bandit_policy import ArmStat, action_key
 from .contracts import AdsRLAction, AdsRLState, AdsRLSuggestion
 from .reward import RewardBreakdown
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -104,13 +104,13 @@ class AdsRLExperienceStore:
         }
         self._log(tenant_id=str(tenant_id)).append(ev)
 
-    def load_recent_observed(self, *, tenant_id: str, campaign_id: str, limit: int = 500) -> List[RLStep]:
+    def load_recent_observed(self, *, tenant_id: str, campaign_id: str, limit: int = 500) -> list[RLStep]:
         try:
             events = self._es.latest_events(tenant_id=str(tenant_id), event_types=("ads_rl_observed@v1",), limit=int(limit))
         except Exception:
             events = []
 
-        out: List[RLStep] = []
+        out: list[RLStep] = []
         for e in events:
             payload = e.get("payload") or {}
             if str(payload.get("campaign_id") or "") != str(campaign_id):
@@ -135,9 +135,9 @@ class AdsRLExperienceStore:
             )
         return out
 
-    def compute_arm_stats(self, *, tenant_id: str, campaign_id: str, limit: int = 2000) -> Dict[str, ArmStat]:
+    def compute_arm_stats(self, *, tenant_id: str, campaign_id: str, limit: int = 2000) -> dict[str, ArmStat]:
         steps = self.load_recent_observed(tenant_id=str(tenant_id), campaign_id=str(campaign_id), limit=int(limit))
-        stats: Dict[str, ArmStat] = {}
+        stats: dict[str, ArmStat] = {}
         for s in steps:
             if s.reward is None:
                 continue

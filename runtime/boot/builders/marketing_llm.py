@@ -130,7 +130,7 @@ def build_marketing_llm_composer(*, settings: Any, event_store: Any, logger: Any
     return MarketingLLMComposer(llm, cfg, event_store=event_store)
 
 
-def build_marketing_llm_agent(*, settings: Any, event_store: Any, logger: Any) -> Optional[Any]:
+def build_marketing_llm_agent(*, settings: Any, event_store: Any, logger: Any) -> Any | None:
     """Build canonical LLMAgent facade (Variant B).
 
     We reuse the same underlying LLM client wiring as the composer to avoid

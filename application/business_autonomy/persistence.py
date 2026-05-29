@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 from uuid import uuid4
@@ -151,7 +151,7 @@ class PersistentBusinessAutonomyEvidenceStore:
         self._backend = backend or SqliteEvidenceStore(SqliteSessionFactory(business_autonomy_evidence_store_path()))
 
     def append_result(self, result: BusinessExecutionResult) -> EvidenceRecord:
-        created_at = datetime.now(timezone.utc)
+        created_at = datetime.now(UTC)
         payload = {
             "message": result.message,
             "metrics": dict(result.metrics),
@@ -505,7 +505,7 @@ class PersistentBusinessPlanningMemorySink:
             "verified": result.verdict in {ExecutionVerdict.COMPLETED, ExecutionVerdict.SIMULATED},
             "verification_status": result.verdict.value,
             "goal_reached": result.verdict in {ExecutionVerdict.COMPLETED, ExecutionVerdict.SIMULATED},
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "approval_required": any(c.name == "require_human_approval" and bool(c.value) for c in request.constraints),
             "blocked_by_policy": result.verdict is ExecutionVerdict.REJECTED,
             "performance_feedback_learning": {

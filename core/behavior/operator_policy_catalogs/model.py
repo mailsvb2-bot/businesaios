@@ -8,16 +8,16 @@ from typing import Iterable, Mapping, Optional, Set
 class OperatorPolicyContext:
     """Runtime context for policy checks."""
 
-    funnel_stage: Optional[str] = None  # e.g. discovery/consideration/decision/onboarding/retention
-    actor_role: Optional[str] = None    # e.g. decision_maker/champion/user/finance/it
+    funnel_stage: str | None = None  # e.g. discovery/consideration/decision/onboarding/retention
+    actor_role: str | None = None    # e.g. decision_maker/champion/user/finance/it
 
 
 @dataclass(frozen=True)
 class OperatorPolicyRule:
     """Allow/deny sets for a context slice."""
 
-    allow: Set[str] = field(default_factory=set)
-    deny: Set[str] = field(default_factory=set)
+    allow: set[str] = field(default_factory=set)
+    deny: set[str] = field(default_factory=set)
 
     def is_allowed(self, operator_key: str) -> bool:
         if operator_key in self.deny:

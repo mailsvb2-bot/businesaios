@@ -15,11 +15,11 @@ def build_audit_event(
     kind: str,
     plan: Any,
     status: str,
-    detail: Dict[str, Any],
+    detail: dict[str, Any],
     idempotency_key: str,
     reason: str,
-    error_code: Optional[str] = None,
-) -> Dict[str, Any]:
+    error_code: str | None = None,
+) -> dict[str, Any]:
     return {
         "event_type": "ads_apply_audit@v1",
         "timestamp_ms": int(time.time() * 1000),

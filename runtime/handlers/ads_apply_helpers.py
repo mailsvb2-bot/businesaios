@@ -23,7 +23,7 @@ def decode_ads_plan(raw: Any) -> AdsPlan:
     return AdsPlan(commands=commands, notes="decoded")
 
 
-def build_apply_request(payload: Dict[str, Any]) -> tuple[AdsApplyRequest, AdsApplyState, str, str]:
+def build_apply_request(payload: dict[str, Any]) -> tuple[AdsApplyRequest, AdsApplyState, str, str]:
     tenant_id = as_tenant_id(str(payload.get("tenant_id") or ""))
     user_id = str(payload.get("user_id") or "")
     idem_key = str(payload.get("idempotency_key") or "")
@@ -41,7 +41,7 @@ def build_apply_request(payload: Dict[str, Any]) -> tuple[AdsApplyRequest, AdsAp
     return req, AdsApplyState.from_settings(gate_settings), str(tenant_id), user_id
 
 
-def summary_text(*, status: str, detail: Dict[str, Any]) -> str:
+def summary_text(*, status: str, detail: dict[str, Any]) -> str:
     if status == "dry_run":
         return (
             "🧪 Ads Apply: DRY-RUN\n\n"
@@ -60,7 +60,7 @@ def summary_text(*, status: str, detail: Dict[str, Any]) -> str:
     return f"Ads Apply: {status}"
 
 
-def emit_apply_audit(*, effects: Any, payload: Dict[str, Any], user_id: str, audit_event: Dict[str, Any]) -> None:
+def emit_apply_audit(*, effects: Any, payload: dict[str, Any], user_id: str, audit_event: dict[str, Any]) -> None:
     effects.track_event(
         decision_id=str(payload.get("decision_id") or ""),
         correlation_id=str(payload.get("correlation_id") or ""),
@@ -71,7 +71,7 @@ def emit_apply_audit(*, effects: Any, payload: Dict[str, Any], user_id: str, aud
     )
 
 
-def emit_apply_success_governance(*, effects: Any, payload: Dict[str, Any], user_id: str) -> None:
+def emit_apply_success_governance(*, effects: Any, payload: dict[str, Any], user_id: str) -> None:
     effects.track_event(
         decision_id=str(payload.get("decision_id") or ""),
         correlation_id=str(payload.get("correlation_id") or ""),

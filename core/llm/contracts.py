@@ -16,13 +16,13 @@ class LLMMessage:
 class LLMRequest:
     """Canonical request contract for all LLM providers."""
 
-    messages: List[LLMMessage]
+    messages: list[LLMMessage]
     model: str
     temperature: float = 0.4
     top_p: float = 1.0
     max_tokens: int = 450
     timeout_s: float = 20.0
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -36,8 +36,8 @@ class LLMUsage:
 class LLMResponse:
     content: str
     finish_reason: str = "stop"
-    usage: Optional[LLMUsage] = None
-    raw: Optional[Dict[str, Any]] = None
+    usage: LLMUsage | None = None
+    raw: dict[str, Any] | None = None
 
     @property
     def text(self) -> str:

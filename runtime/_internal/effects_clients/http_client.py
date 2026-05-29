@@ -37,11 +37,11 @@ def safe_result(obj: Any) -> Any:
     return str(obj)[:200]
 
 
-def _url_with_params(url: str, params: Dict[str, Any] | None) -> str:
+def _url_with_params(url: str, params: dict[str, Any] | None) -> str:
     return _canonical_url_with_params(url=str(url), params=params)
 
 
-def url_with_params(*, url: str, params: Dict[str, Any] | None = None) -> str:
+def url_with_params(*, url: str, params: dict[str, Any] | None = None) -> str:
     """Backward-compatible export that delegates to canonical transport helper."""
     return _url_with_params(str(url), params)
 
@@ -74,12 +74,12 @@ def _run_coroutine_sync(coro):
 def http_json(
     method: str,
     url: str,
-    params: Dict[str, Any] | None,
+    params: dict[str, Any] | None,
     *,
-    headers: Optional[Dict[str, str]] = None,
+    headers: dict[str, str] | None = None,
     timeout_s: int = 20,
     transport: HttpTransport | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """HTTP JSON helper for runtime effects (single-module policy)."""
     params = params or {}
     headers = headers or {}
@@ -99,7 +99,7 @@ def http_json(
 
     active_transport = transport or build_http_transport()
 
-    async def _call_via_transport() -> Dict[str, Any]:
+    async def _call_via_transport() -> dict[str, Any]:
         if method == 'GET':
             resp = await active_transport.get_json(
                 url=final_url,

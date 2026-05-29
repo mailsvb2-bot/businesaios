@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from application.business_autonomy.delayed_outcome_bridge import BusinessAutonomyDelayedOutcomeBridge
 
@@ -18,7 +18,7 @@ def _bridge(tmp_path):
 
 def test_recover_incomplete_run_marks_interrupted_then_sweeps(tmp_path) -> None:
     bridge = _bridge(tmp_path)
-    stale = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    stale = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     bridge._write_state({
         'active': {
             'out_1': {
@@ -37,7 +37,7 @@ def test_recover_incomplete_run_marks_interrupted_then_sweeps(tmp_path) -> None:
             'run_id': 'sweep_deadbeef',
             'operation': 'sweep',
             'status': 'in_progress',
-            'started_at_utc': datetime.now(timezone.utc).isoformat(),
+            'started_at_utc': datetime.now(UTC).isoformat(),
             'active_before': 1,
             'linked_outcome_ids': ['out_1'],
             'metadata': {'phase': 'mid_sweep'},
@@ -82,7 +82,7 @@ def test_release_and_retry_link_run_ids(tmp_path) -> None:
         'out_1': {
             **state['active'].pop('out_1'),
             'quarantine_reason': 'delayed_outcome_stale',
-            'quarantined_at_utc': datetime.now(timezone.utc).isoformat(),
+            'quarantined_at_utc': datetime.now(UTC).isoformat(),
         }
     }
     bridge._write_state(state)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import Any, Mapping, Protocol
 from uuid import uuid4
@@ -44,7 +44,7 @@ class FileProviderSyncScheduleStore:
     collection: str = 'provider_sync_jobs'
 
     @classmethod
-    def default(cls) -> 'FileProviderSyncScheduleStore':
+    def default(cls) -> FileProviderSyncScheduleStore:
         return cls(FileDistributedDocumentStore(_runtime_root() / 'documents'))
 
     def append(self, job: Mapping[str, Any]) -> dict[str, Any]:
@@ -79,8 +79,8 @@ class ProviderSyncScheduler:
         decision = self.retry_policy.evaluate(provider_key=provider_key, category=category, retryable=retryable)
         if not decision.retryable:
             return ProviderScheduledSyncResult(provider_key=provider_key, operation=operation, scheduled=False, status='retry_rejected', metadata={'category': category, 'attempts': attempts})
-        run_at = datetime.now(timezone.utc) + timedelta(seconds=int(decision.next_delay_seconds or 0))
-        job = self.store.append({'job_id': str(uuid4()), 'provider_key': provider_key, 'operation': operation, 'tenant_id': tenant_id, 'business_id': business_id, 'attempts': attempts, 'run_at': run_at.isoformat(), 'category': category, 'scheduled_at_utc': datetime.now(timezone.utc).isoformat(), 'status': 'scheduled'})
+        run_at = datetime.now(UTC) + timedelta(seconds=int(decision.next_delay_seconds or 0))
+        job = self.store.append({'job_id': str(uuid4()), 'provider_key': provider_key, 'operation': operation, 'tenant_id': tenant_id, 'business_id': business_id, 'attempts': attempts, 'run_at': run_at.isoformat(), 'category': category, 'scheduled_at_utc': datetime.now(UTC).isoformat(), 'status': 'scheduled'})
         return ProviderScheduledSyncResult(provider_key=provider_key, operation=operation, scheduled=True, status='retry_scheduled', metadata={'job': job, 'max_attempts': decision.max_attempts})
 
     def list_jobs(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 50) -> tuple[dict[str, Any], ...]:

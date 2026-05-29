@@ -13,7 +13,7 @@ class BusinessAutonomyDelayedOutcomeSweeper:
     bridge: BusinessAutonomyDelayedOutcomeBridge
 
     @classmethod
-    def default(cls) -> 'BusinessAutonomyDelayedOutcomeSweeper':
+    def default(cls) -> BusinessAutonomyDelayedOutcomeSweeper:
         return cls(bridge=BusinessAutonomyDelayedOutcomeBridge.default())
 
     def sweep(self) -> DelayedOutcomeSweepResult:

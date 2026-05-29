@@ -44,7 +44,7 @@ class PolicyConstraint:
     name: str
     value: Any
     severity: ConstraintSeverity = ConstraintSeverity.HARD
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -52,7 +52,7 @@ class BusinessCapability:
     kind: CapabilityKind
     enabled: bool = True
     confidence: float = 1.0
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 @dataclass(frozen=True)
@@ -86,7 +86,7 @@ class BusinessExecutionResult:
     metrics: Mapping[str, Any] = field(default_factory=dict)
     evidence: Sequence[BusinessExecutionEvidence] = field(default_factory=tuple)
     delegated_to_domain_engine: bool = False
-    adapter_name: Optional[str] = None
+    adapter_name: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
@@ -96,7 +96,7 @@ class BusinessExecutionRequest:
     integration_mode: IntegrationMode
     correlation_id: str = ""
     idempotency_key: str = ""
-    timeout_seconds: Optional[int] = None
+    timeout_seconds: int | None = None
 
     def __post_init__(self) -> None:
         if not self.correlation_id:

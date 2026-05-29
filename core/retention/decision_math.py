@@ -21,7 +21,7 @@ def sigmoid(x: float) -> float:
     return 1.0 / (1.0 + math.exp(-x))
 
 
-def churn_hazard(features: Dict[str, float]) -> float:
+def churn_hazard(features: dict[str, float]) -> float:
     """Probability proxy of churn within the next ~7 days.
 
     Uses a small set of high-signal features; the rest of the 200-dim vector
@@ -51,7 +51,7 @@ def churn_hazard(features: Dict[str, float]) -> float:
     return max(0.0, min(sigmoid(x), 1.0))
 
 
-def readiness(features: Dict[str, float]) -> float:
+def readiness(features: dict[str, float]) -> float:
     """Readiness-to-buy proxy in [0..1]."""
 
     calm = float(features.get("calm_share_d7", 0.0) or 0.0)

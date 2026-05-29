@@ -17,7 +17,7 @@ from core.world_model.types import (
 
 class DecisionSurfaceGuard:
     def validate_mapping(self, *, mapping: dict, surface_name: str) -> None:
-        for key in mapping.keys():
+        for key in mapping:
             lowered = str(key).strip().lower()
             if lowered in FORBIDDEN_DECISION_KEYS:
                 raise WorldModelIntegrityError(

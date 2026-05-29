@@ -67,14 +67,14 @@ class TelegramClient:
         if self.transport is None:
             self.transport = build_http_transport()
 
-    def get_me(self, *, token: str | None = None, timeout_s: int = 20) -> Dict[str, Any]:
+    def get_me(self, *, token: str | None = None, timeout_s: int = 20) -> dict[str, Any]:
         t = (token or _token()).strip()
         if not t:
             raise RuntimeError("TELEGRAM_BOT_TOKEN_MISSING")
         base = f"{telegram_api_base()}/bot{t}"
         return http_json("GET", f"{base}/getMe", None, timeout_s=int(timeout_s or 20), transport=self.transport)
 
-    def get_webhook_info(self, *, token: str | None = None, timeout_s: int = 20) -> Dict[str, Any]:
+    def get_webhook_info(self, *, token: str | None = None, timeout_s: int = 20) -> dict[str, Any]:
         t = (token or _token()).strip()
         if not t:
             raise RuntimeError("TELEGRAM_BOT_TOKEN_MISSING")
@@ -86,7 +86,7 @@ class TelegramClient:
         if not token:
             return
         url = f"{telegram_api_base()}/bot{token}/answerCallbackQuery"
-        payload: Dict[str, Any] = {"callback_query_id": str(callback_query_id), "cache_time": 0}
+        payload: dict[str, Any] = {"callback_query_id": str(callback_query_id), "cache_time": 0}
         if isinstance(text, str) and text.strip():
             payload["text"] = text.strip()
         if bool(show_alert) is True:
@@ -200,11 +200,11 @@ class TelegramClient:
         receipt = recover_stale_receipt(self.delivery_state, delivery_key=delivery_key, payload_digest=payload_digest, metadata=accepted_metadata)
         return dict(receipt or existing) if isinstance(receipt or existing, Mapping) else None
 
-    def _http_post(self, *, url: str, payload: Mapping[str, Any], timeout_s: int) -> Dict[str, Any]:
+    def _http_post(self, *, url: str, payload: Mapping[str, Any], timeout_s: int) -> dict[str, Any]:
         return http_json("POST", url, dict(payload), timeout_s=int(timeout_s or 30), transport=self.transport)
 
-    def _queue_callable(self, *, url: str, payload: Mapping[str, Any], timeout_s: int, delivery_key: str | None = None, payload_digest: str | None = None, delivered_metadata: Mapping[str, Any] | None = None) -> Callable[[], Dict[str, Any]]:
-        def _run() -> Dict[str, Any]:
+    def _queue_callable(self, *, url: str, payload: Mapping[str, Any], timeout_s: int, delivery_key: str | None = None, payload_digest: str | None = None, delivered_metadata: Mapping[str, Any] | None = None) -> Callable[[], dict[str, Any]]:
+        def _run() -> dict[str, Any]:
             out = self._http_post(url=url, payload=payload, timeout_s=timeout_s)
             result = dict(out or {}) if isinstance(out, dict) else {}
             ok = bool(result.get("ok")) if isinstance(result, dict) else True
@@ -257,13 +257,13 @@ class TelegramClient:
         *,
         chat_id: str,
         text: str,
-        reply_markup: Optional[Dict[str, Any]] = None,
+        reply_markup: dict[str, Any] | None = None,
         priority: Any = "normal",
         critical: bool = True,
         timeout_s: int = 30,
-    ) -> Tuple[bool, Dict[str, Any]]:
+    ) -> tuple[bool, dict[str, Any]]:
         token = _token()
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "chat_id": str(chat_id),
             "text": str(text),
             "parse_mode": "HTML",
@@ -387,9 +387,9 @@ class TelegramClient:
         priority: Any = "normal",
         critical: bool = True,
         timeout_s: int = 60,
-    ) -> Tuple[bool, Dict[str, Any]]:
+    ) -> tuple[bool, dict[str, Any]]:
         token = _token()
-        payload: Dict[str, Any] = {"chat_id": str(chat_id), "audio": str(audio_url)}
+        payload: dict[str, Any] = {"chat_id": str(chat_id), "audio": str(audio_url)}
         if isinstance(caption, str) and caption.strip():
             payload["caption"] = caption.strip()
             payload["parse_mode"] = "HTML"

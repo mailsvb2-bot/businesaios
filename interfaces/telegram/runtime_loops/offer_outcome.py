@@ -53,7 +53,7 @@ class OfferOutcomeLoop:
     def _now_ms(self) -> int:
         return int(time.time() * 1000)
 
-    def _iter(self, *, start_ms: int, end_ms: int, event_type: str) -> Iterable[Dict[str, Any]]:
+    def _iter(self, *, start_ms: int, end_ms: int, event_type: str) -> Iterable[dict[str, Any]]:
         """Iterator wrapper around event_store (strict tenant contract)."""
         return self._store.iter_events(tenant_id=self._tenant_id, start_ms=start_ms, end_ms=end_ms, event_type=event_type)
 
@@ -93,7 +93,7 @@ class OfferOutcomeLoop:
 
         start_ms = max(0, now_ms - int(self._cfg.lookback_ms))
 
-        shown: List[Dict[str, Any]] = []
+        shown: list[dict[str, Any]] = []
         for ev in self._iter(start_ms=start_ms, end_ms=now_ms, event_type="offer_shown") or []:
             if not isinstance(ev, dict):
                 continue

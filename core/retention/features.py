@@ -35,9 +35,9 @@ def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 def compute_features(
     *,
-    events_d1: List[Dict[str, Any]],
-    events_d7: List[Dict[str, Any]],
-    events_d30: List[Dict[str, Any]],
+    events_d1: list[dict[str, Any]],
+    events_d7: list[dict[str, Any]],
+    events_d30: list[dict[str, Any]],
     latest_mood: int | None,
     now_ms: int,
 ) -> FeatureVector:

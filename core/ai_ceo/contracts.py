@@ -28,8 +28,8 @@ class CEOIntentV1:
     kind: str = "increase_profit"
     horizon_days: int = 14
     risk_level: str = "low"  # low/medium/high
-    target_profit_delta_minor: Optional[int] = None
-    constraints: Dict[str, Any] = field(default_factory=dict)
+    target_profit_delta_minor: int | None = None
+    constraints: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ class CEOPlanStepV1:
     title: str = ""
     rationale: str = ""
     action: str = "noop@v1"
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
     # Optional safety tags for UI / audit
     tags: Sequence[str] = field(default_factory=tuple)
 
@@ -62,6 +62,6 @@ class CEOPlanV1:
     plan_id: str = ""
     intent: CEOIntentV1 = field(default_factory=CEOIntentV1)
     summary: str = ""
-    steps: List[CEOPlanStepV1] = field(default_factory=list)
-    kpi_before: Dict[str, Any] = field(default_factory=dict)
-    kpi_targets: Dict[str, Any] = field(default_factory=dict)
+    steps: list[CEOPlanStepV1] = field(default_factory=list)
+    kpi_before: dict[str, Any] = field(default_factory=dict)
+    kpi_targets: dict[str, Any] = field(default_factory=dict)

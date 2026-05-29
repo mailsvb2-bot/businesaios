@@ -22,7 +22,7 @@ def handle_gift(
     bot_username: str,
     gift_ttl_sec: int,
     pm: Callable[..., ProposedAction],
-) -> Optional[ProposedAction]:
+) -> ProposedAction | None:
     # Gift deep-link: /start gift_<token>
     if ctx.cmd == "/start" and isinstance(ctx.args, str) and ctx.args.startswith("gift_"):
         token = str(ctx.args[len("gift_") :]).strip()

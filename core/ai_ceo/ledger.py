@@ -42,7 +42,7 @@ def read_growth_snapshot(event_store: Any, *, tenant_id: str) -> GrowthSnapshotV
         return GrowthSnapshotV1()
 
 
-def to_dict(s: GrowthSnapshotV1) -> Dict[str, int]:
+def to_dict(s: GrowthSnapshotV1) -> dict[str, int]:
     return {
         "leads": int(s.leads),
         "spend_minor": int(s.spend_minor),

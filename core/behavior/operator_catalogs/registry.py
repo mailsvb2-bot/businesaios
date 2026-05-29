@@ -13,7 +13,7 @@ class OperatorCatalogRegistry:
     """In-process registry for operator catalogs."""
 
     base_dir: Path
-    _catalogs: Dict[str, OperatorCatalog] = None  # type: ignore[assignment]
+    _catalogs: dict[str, OperatorCatalog] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         self._catalogs = {}
@@ -22,7 +22,7 @@ class OperatorCatalogRegistry:
     def reload(self) -> None:
         loader = YamlOperatorCatalogLoader(base_dir=self.base_dir)
         raws = loader.load_all_raw()
-        cats: Dict[str, OperatorCatalog] = {}
+        cats: dict[str, OperatorCatalog] = {}
         for cid, raw in raws.items():
             try:
                 cats[cid] = catalog_from_raw(raw)
@@ -31,10 +31,10 @@ class OperatorCatalogRegistry:
                 continue
         self._catalogs = cats
 
-    def get(self, catalog_id: str) -> Optional[OperatorCatalog]:
+    def get(self, catalog_id: str) -> OperatorCatalog | None:
         return self._catalogs.get(str(catalog_id or "").strip())
 
-    def as_dict(self) -> Dict[str, Mapping[str, Any]]:
+    def as_dict(self) -> dict[str, Mapping[str, Any]]:
         return {cid: {
             "catalog_id": c.catalog_id,
             "phase_gain": float(c.phase_gain),

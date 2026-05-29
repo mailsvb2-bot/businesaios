@@ -17,36 +17,36 @@ class TelegramCtx:
 
     # session / ingress
     text: str
-    cmd: Optional[str]
+    cmd: str | None
     args: str
     callback_data: str
-    callback_query_id: Optional[str]
+    callback_query_id: str | None
 
     # user
-    settings: Dict[str, Any]
+    settings: dict[str, Any]
     city: str
-    moods: List[Any]
-    admin_metrics: Dict[str, Any]
+    moods: list[Any]
+    admin_metrics: dict[str, Any]
     is_admin: bool
-    roles: List[str]
-    perms: List[str]
+    roles: list[str]
+    perms: list[str]
     is_superadmin: bool
 
     # realtime state / pricing
-    realtime_state: Dict[str, Any]
-    pricing_suggestions: Dict[str, int]
+    realtime_state: dict[str, Any]
+    pricing_suggestions: dict[str, int]
 
     # economy
     full_access: bool
     pay_status: str
-    selected_tariff: Dict[str, Any]
+    selected_tariff: dict[str, Any]
 
     # marketing
-    marketing_variants: Dict[str, Dict[str, str]]
+    marketing_variants: dict[str, dict[str, str]]
     marketing_seed: str
     # marketing uplift stats (bandit priors), read-only
     # {step_key: {"a": {"alpha":..,"beta":..}, "b": {...}}}
-    marketing_bandit: Dict[str, Dict[str, Dict[str, float]]]
+    marketing_bandit: dict[str, dict[str, dict[str, float]]]
 
     # Business Autopilot dashboards (read-only, computed in read-model)
-    autopilot_dashboard: Dict[str, Any] = field(default_factory=dict)
+    autopilot_dashboard: dict[str, Any] = field(default_factory=dict)

@@ -62,7 +62,7 @@ FINANCE_JOB_STARTED = "finance.job_started"
 FINANCE_JOB_COMPLETED = "finance.job_completed"
 
 
-RETENTION_EVENT_TYPES: Set[str] = {
+RETENTION_EVENT_TYPES: set[str] = {
     PAYWALL_OPENED,
     PAYWALL_CLOSED,
     OFFER_SHOWN,
@@ -80,7 +80,7 @@ RETENTION_EVENT_TYPES: Set[str] = {
     MESSAGE_FAILED,
 }
 
-KNOWN_EVENT_TYPES: Set[str] = {
+KNOWN_EVENT_TYPES: set[str] = {
     UI_CLICK,
     PAYWALL_OPENED,
     PAYWALL_CLOSED,
@@ -131,7 +131,7 @@ KNOWN_EVENT_TYPES: Set[str] = {
 }
 
 
-ALIASES: Dict[str, str] = {
+ALIASES: dict[str, str] = {
     "paywall_open": PAYWALL_OPENED,
     "paywall_close": PAYWALL_CLOSED,
     "offer_click_primary": OFFER_CLICKED,

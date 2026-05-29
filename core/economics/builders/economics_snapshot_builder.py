@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from ..ids import EconomicsSnapshotId
 from ..types import (
@@ -40,7 +40,7 @@ class EconomicsSnapshotBuilder:
     ) -> EconomicsSnapshot:
         snapshot = EconomicsSnapshot(
             snapshot_id=EconomicsSnapshotId.new(),
-            built_at=built_at or datetime.now(timezone.utc),
+            built_at=built_at or datetime.now(UTC),
             read_model=read_model,
             unit_economics=unit_economics,
             margin=margin,

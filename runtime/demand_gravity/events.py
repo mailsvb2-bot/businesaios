@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from hashlib import sha256
 from typing import Any, Mapping, Protocol
 
@@ -50,7 +50,7 @@ def _stable_event_id(*parts: str) -> str:
 
 def signal_received_event(signal: DemandSignal, *, correlation_id: str, occurred_at: datetime | None = None) -> DemandGravityEvent:
     validate_demand_signal(signal)
-    occurred = occurred_at or datetime.now(timezone.utc)
+    occurred = occurred_at or datetime.now(UTC)
     payload = {
         "signal_id": signal.signal_id,
         "kind": signal.kind.value,

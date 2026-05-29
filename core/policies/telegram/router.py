@@ -39,7 +39,7 @@ def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", 
     role = UserRoleInfo.from_settings(ctx.settings if isinstance(ctx.settings, dict) else {})
     legacy_prices = build_legacy_prices(default_price_rub=default_price_rub)
 
-    def pm(*, text: str, reply_markup: dict | None = None, track_event_type: str | None = None, track_payload: Dict | None = None) -> ProposedAction:
+    def pm(*, text: str, reply_markup: dict | None = None, track_event_type: str | None = None, track_payload: dict | None = None) -> ProposedAction:
         return propose_message(user_id=user_id, text=text, reply_markup=reply_markup, callback_query_id=ctx.callback_query_id, track_event_type=track_event_type, track_payload=track_payload)
 
     for handler in (

@@ -16,7 +16,7 @@ class RegionSignature:
 @dataclass(frozen=True)
 class MultiRegionSignedPayload:
     payload: bytes
-    signatures: Tuple[RegionSignature, ...]
+    signatures: tuple[RegionSignature, ...]
 
 def _hmac_sha256(secret: bytes, payload: bytes) -> str:
     return hmac.new(secret, payload, hashlib.sha256).hexdigest()
@@ -30,11 +30,11 @@ class RegionSigner:
         return RegionSignature(self.region, _hmac_sha256(self._secret, payload))
 
 class MultiRegionVerifier:
-    def __init__(self, region_secrets: Dict[str, bytes], quorum_ratio: float = 2/3):
+    def __init__(self, region_secrets: dict[str, bytes], quorum_ratio: float = 2/3):
         self._region_secrets = region_secrets
         self._quorum_ratio = quorum_ratio
 
-    def verify_quorum(self, signed: MultiRegionSignedPayload, required_regions: List[str] | None = None) -> bool:
+    def verify_quorum(self, signed: MultiRegionSignedPayload, required_regions: list[str] | None = None) -> bool:
         required = set(required_regions) if required_regions else set(self._region_secrets.keys())
         total = len(required)
         if total == 0:

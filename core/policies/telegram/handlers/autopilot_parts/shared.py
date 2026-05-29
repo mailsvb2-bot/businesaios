@@ -8,7 +8,7 @@ from core.policies.telegram.helpers import ProposedAction, propose, propose_mess
 from core.ux.callbacks import CB_AUTOPILOT_MENU
 
 
-def get_session(ctx: TelegramCtx, logger) -> Dict[str, Any]:
+def get_session(ctx: TelegramCtx, logger) -> dict[str, Any]:
     try:
         if isinstance(ctx.settings, dict):
             return dict(ctx.settings.get("autopilot:session") or {})
@@ -18,7 +18,7 @@ def get_session(ctx: TelegramCtx, logger) -> Dict[str, Any]:
     return {}
 
 
-def set_session(*, user_id: str, sess: Dict[str, Any], notify_text: str, reply_markup: dict, callback_query_id: str | None) -> ProposedAction:
+def set_session(*, user_id: str, sess: dict[str, Any], notify_text: str, reply_markup: dict, callback_query_id: str | None) -> ProposedAction:
     return propose(
         "set_user_setting@v1",
         {
@@ -32,7 +32,7 @@ def set_session(*, user_id: str, sess: Dict[str, Any], notify_text: str, reply_m
     )
 
 
-def pm(*, user_id: str, text: str, reply_markup: dict | None, callback_query_id: str | None, track_event_type: str | None = None, track_payload: Dict | None = None) -> ProposedAction:
+def pm(*, user_id: str, text: str, reply_markup: dict | None, callback_query_id: str | None, track_event_type: str | None = None, track_payload: dict | None = None) -> ProposedAction:
     return propose_message(
         user_id=str(user_id),
         text=text,

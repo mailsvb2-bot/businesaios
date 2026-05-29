@@ -3,12 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)
 class BudgetAllocation:
-    per_campaign_minor: Dict[str, int]
+    per_campaign_minor: dict[str, int]
     notes: str = ""
 
 
@@ -20,7 +20,7 @@ class BudgetAllocator:
     - else equal split
     """
 
-    def allocate(self, *, total_budget_minor: int, campaigns: List[Json]) -> BudgetAllocation:
+    def allocate(self, *, total_budget_minor: int, campaigns: list[Json]) -> BudgetAllocation:
         total = max(int(total_budget_minor or 0), 0)
         if total <= 0 or not campaigns:
             return BudgetAllocation({}, notes="no_budget_or_campaigns")

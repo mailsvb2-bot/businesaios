@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Literal, Tuple
 
 from config.ads_rl_policy import DEFAULT_ADS_RL_OPT_SPEC_POLICY
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 Platform = Literal["meta", "yandex_direct", "vk", "telegram_ads", "unknown"]
 
 
@@ -90,12 +90,12 @@ class AdsRLOptSpec:
     campaign_id: str
 
     # Candidate knobs: supply *finite* sets. The optimizer chooses among them.
-    daily_budgets: List[float]
-    bid_caps: List[float]
-    cpa_targets: List[float]
-    creatives: List[str]
-    audiences: List[str]
-    objectives: List[str]
+    daily_budgets: list[float]
+    bid_caps: list[float]
+    cpa_targets: list[float]
+    creatives: list[str]
+    audiences: list[str]
+    objectives: list[str]
 
     # Reward configuration
     reward_mode: Literal["roas", "profit", "cpa", "cpl"] = DEFAULT_ADS_RL_OPT_SPEC_POLICY.default_reward_mode
@@ -110,7 +110,7 @@ class AdsRLOptSpec:
 
     window_hours: int = DEFAULT_ADS_RL_OPT_SPEC_POLICY.default_window_hours
 
-    def validate(self) -> Tuple[bool, str]:
+    def validate(self) -> tuple[bool, str]:
         policy = DEFAULT_ADS_RL_OPT_SPEC_POLICY
         if not str(self.platform or "").strip():
             return False, "platform_required"
@@ -160,7 +160,7 @@ class AdsRLOptSpec:
         }
 
     @staticmethod
-    def from_json(obj: Json | None) -> "AdsRLOptSpec":
+    def from_json(obj: Json | None) -> AdsRLOptSpec:
         d: Json = obj if isinstance(obj, dict) else {}
         policy = DEFAULT_ADS_RL_OPT_SPEC_POLICY
         return AdsRLOptSpec(

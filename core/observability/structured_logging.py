@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 # Contextvars: safe across async and threads.
 # For observability: bind(correlation_id=..., decision_id=...) in executor context (see runtime/execution/telemetry).
-_ctx: contextvars.ContextVar[Dict[str, Any]] = contextvars.ContextVar("log_ctx", default={})
+_ctx: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar("log_ctx", default={})
 
 
 def bind(**fields: Any):
@@ -28,13 +28,13 @@ def clear():
     _ctx.set({})
 
 
-def snapshot() -> Dict[str, Any]:
+def snapshot() -> dict[str, Any]:
     return dict(_ctx.get() or {})
 
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        base: Dict[str, Any] = {
+        base: dict[str, Any] = {
             "ts_ms": int(time.time() * 1000),
             "level": record.levelname,
             "logger": record.name,

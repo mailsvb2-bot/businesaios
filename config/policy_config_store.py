@@ -52,7 +52,7 @@ class PolicyConfigSnapshot:
         if self.version is not None:
             self.version.validate()
 
-    def normalized(self) -> "PolicyConfigSnapshot":
+    def normalized(self) -> PolicyConfigSnapshot:
         return PolicyConfigSnapshot(
             policy_name=str(self.policy_name).strip(),
             tenant_id=_normalized_optional_tenant_id(self.tenant_id),
@@ -77,7 +77,7 @@ class PolicyConfigSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object]) -> "PolicyConfigSnapshot":
+    def from_dict(cls, payload: Mapping[str, object]) -> PolicyConfigSnapshot:
         item = dict(payload or {})
         version = None
         if isinstance(item.get("version"), Mapping):

@@ -46,9 +46,9 @@ def _read_text(path: Path) -> str:
         return ''
 
 
-def scan_world_model_canon_contract(repo_root: str | Path) -> List[CanonFinding]:
+def scan_world_model_canon_contract(repo_root: str | Path) -> list[CanonFinding]:
     root = Path(repo_root)
-    findings: List[CanonFinding] = []
+    findings: list[CanonFinding] = []
     for rel in REQUIRED_WORLD_MODEL_CANON_FILES:
         if not (root / rel).exists():
             findings.append(CanonFinding(rel, 'missing-world-model-canon-file', 'Required world-model canon file is missing.'))
@@ -68,7 +68,7 @@ def scan_world_model_canon_contract(repo_root: str | Path) -> List[CanonFinding]
     return findings
 
 
-def _check_decision_core(root: Path, findings: List[CanonFinding]) -> None:
+def _check_decision_core(root: Path, findings: list[CanonFinding]) -> None:
     text = _read_text(root / 'core/ai/decision_core.py')
     if not text:
         findings.append(CanonFinding('core/ai/decision_core.py', 'missing-decision-core', 'DecisionCore file missing or unreadable.'))
@@ -78,7 +78,7 @@ def _check_decision_core(root: Path, findings: List[CanonFinding]) -> None:
             findings.append(CanonFinding('core/ai/decision_core.py', 'decision-core-world-model-contract-drift', f'Missing required contract token: {token}'))
 
 
-def _check_executor(root: Path, findings: List[CanonFinding]) -> None:
+def _check_executor(root: Path, findings: list[CanonFinding]) -> None:
     text = _read_text(root / 'runtime/executor.py')
     if not text:
         findings.append(CanonFinding('runtime/executor.py', 'missing-runtime-executor', 'RuntimeExecutor file missing or unreadable.'))
@@ -88,7 +88,7 @@ def _check_executor(root: Path, findings: List[CanonFinding]) -> None:
             findings.append(CanonFinding('runtime/executor.py', 'executor-world-model-pinning-drift', f'Missing required world-model enforcement token: {token}'))
 
 
-def _check_boot(root: Path, findings: List[CanonFinding]) -> None:
+def _check_boot(root: Path, findings: list[CanonFinding]) -> None:
     text = _read_text(root / 'runtime/boot/boot_core_assembly.py')
     if not text:
         findings.append(CanonFinding('runtime/boot/boot_core_assembly.py', 'missing-boot-core-assembly', 'boot_core_assembly.py missing or unreadable.'))
@@ -98,7 +98,7 @@ def _check_boot(root: Path, findings: List[CanonFinding]) -> None:
             findings.append(CanonFinding('runtime/boot/boot_core_assembly.py', 'boot-world-model-integrity-drift', f'Missing required world-model token: {token}'))
 
 
-def _check_forbidden_patterns(root: Path, findings: List[CanonFinding]) -> None:
+def _check_forbidden_patterns(root: Path, findings: list[CanonFinding]) -> None:
     targets = (root / 'core', root / 'runtime', root / 'interfaces', root / 'runtime' / 'platform', root / 'governance')
     excluded = {'world_model_forbidden_paths.py', 'migrate_world_model_to_canonical.py'}
     for base in targets:

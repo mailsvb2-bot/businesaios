@@ -19,7 +19,7 @@ class RevenueReport:
     cr: float
     arpu: float
 
-    top_offer_id: Optional[str] = None
+    top_offer_id: str | None = None
     top_offer_revenue: float = field(default_factory=lambda: float(DEFAULT_REVENUE_CONTRACT_POLICY.zero_revenue))
 
     next_best_action_title: str = field(default_factory=lambda: DEFAULT_REVENUE_CONTRACT_POLICY.empty_title)

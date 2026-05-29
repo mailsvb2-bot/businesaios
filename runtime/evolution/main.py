@@ -39,7 +39,7 @@ def main() -> None:
     worker = build_worker_from_env()
     port = env_int("EVOLUTION_HEALTH_PORT", 8087, lo=0, hi=65535)
 
-    def _state() -> Dict[str, Any]:
+    def _state() -> dict[str, Any]:
         st = worker.state
         return {
             "ok": bool(st.ok),

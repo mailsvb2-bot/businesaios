@@ -129,7 +129,7 @@ def canonicalize_business_memory_payload(
     payload: Mapping[str, Any] | None,
     *,
     policy: BusinessMemoryPolicy | None = None,
-) -> "BusinessOperatingMemory":
+) -> BusinessOperatingMemory:
     from runtime.platform.business_memory.second_brain_boundary import sanitize_business_memory_payload
 
     canonical_policy = policy or BusinessMemoryPolicy()
@@ -390,7 +390,7 @@ class BusinessOperatingMemory:
         return [cls._state_anti_pattern_payload(item) for item in ordered]
 
     @classmethod
-    def empty(cls, *, tenant_id: str, business_id: str) -> "BusinessOperatingMemory":
+    def empty(cls, *, tenant_id: str, business_id: str) -> BusinessOperatingMemory:
         return cls(
             schema_version=BUSINESS_MEMORY_SCHEMA_VERSION,
             tenant_id=_text(tenant_id),
@@ -398,7 +398,7 @@ class BusinessOperatingMemory:
         )
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any], *, policy: BusinessMemoryPolicy | None = None) -> "BusinessOperatingMemory":
+    def from_dict(cls, payload: dict[str, Any], *, policy: BusinessMemoryPolicy | None = None) -> BusinessOperatingMemory:
         canonical_policy = policy or BusinessMemoryPolicy()
         migrated = _migrate_business_memory_payload(payload, policy=canonical_policy)
         raw_last_run = migrated.get("last_run")

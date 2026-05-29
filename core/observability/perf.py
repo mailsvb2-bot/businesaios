@@ -31,7 +31,7 @@ def emit_span(
     decision_id: str | None = None,
     correlation_id: str | None = None,
     correlation_key: str | None = None,
-    extra: Optional[Dict[str, Any]] = None,
+    extra: dict[str, Any] | None = None,
 ) -> None:
     """Emit span and feed rolling tracker."""
     rolling_track(

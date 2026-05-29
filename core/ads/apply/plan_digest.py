@@ -17,7 +17,7 @@ def plan_digest(plan: Any) -> str:
     cmds = getattr(plan, "commands", None)
     if not isinstance(cmds, list):
         return "empty"
-    items: List[Tuple[str, str, str]] = []
+    items: list[tuple[str, str, str]] = []
     for c in cmds:
         try:
             platform = str(getattr(c, "platform", "") or "")

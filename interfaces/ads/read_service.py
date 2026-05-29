@@ -61,7 +61,7 @@ class AdsReadService:
         platform: AdsPlatform,
         account_id: str,
         level: str,
-        object_ids: Optional[Sequence[str]],
+        object_ids: Sequence[str] | None,
         date_from: date,
         date_to: date,
     ) -> Iterable[MetricPoint]:

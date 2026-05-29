@@ -18,7 +18,7 @@ def _resolved_catalog_path(*, base_dir: Path, filename: str) -> Path:
     return path
 
 
-def load_yaml_offer_catalog_spec(*, base_dir: Path, filename: str, strict: bool | None = None) -> Dict[str, Any]:
+def load_yaml_offer_catalog_spec(*, base_dir: Path, filename: str, strict: bool | None = None) -> dict[str, Any]:
     path = _resolved_catalog_path(base_dir=base_dir, filename=filename)
     raw = load_yaml(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -29,8 +29,8 @@ def load_yaml_offer_catalog_spec(*, base_dir: Path, filename: str, strict: bool 
     return dict(raw)
 
 
-def load_all_yaml_offer_catalog_specs(*, base_dir: Path, strict: bool | None = None) -> Dict[str, Dict[str, Any]]:
-    out: Dict[str, Dict[str, Any]] = {}
+def load_all_yaml_offer_catalog_specs(*, base_dir: Path, strict: bool | None = None) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
     base = Path(base_dir)
     strict_mode = False if strict is None else bool(strict)
     if not base.exists() or not base.is_dir():
@@ -62,7 +62,7 @@ class YamlOfferCatalogLoaderV1:
         spec = load_yaml_offer_catalog_spec(base_dir=self.base_dir, filename=filename, strict=strict_mode)
         return YamlOfferCatalogV1.from_spec(spec)
 
-    def load_all(self) -> Dict[str, YamlOfferCatalogV1]:
+    def load_all(self) -> dict[str, YamlOfferCatalogV1]:
         strict_mode = env_bool("OFFER_CATALOGS_STRICT", False) or env_bool("CI", False)
         specs = load_all_yaml_offer_catalog_specs(base_dir=self.base_dir, strict=strict_mode)
         return {catalog_id: YamlOfferCatalogV1.from_spec(spec) for catalog_id, spec in specs.items()}

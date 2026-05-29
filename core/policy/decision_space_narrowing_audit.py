@@ -6,8 +6,8 @@ from typing import Dict, List
 
 @dataclass
 class DecisionSpaceNarrowingAudit:
-    removed_candidates: List[str] = field(default_factory=list)
-    counts_by_reason: Dict[str, int] = field(default_factory=dict)
+    removed_candidates: list[str] = field(default_factory=list)
+    counts_by_reason: dict[str, int] = field(default_factory=dict)
 
     def record(self, action_type: str, why: str) -> None:
         self.removed_candidates.append(f"{action_type}:{why}")

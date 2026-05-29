@@ -30,7 +30,7 @@ class Evaluator(Protocol):
 
 class EvaluationRegistry:
     def __init__(self) -> None:
-        self._items: Dict[str, EvaluationResult] = {}
+        self._items: dict[str, EvaluationResult] = {}
 
     def register(self, result: EvaluationResult) -> None:
         self._items[result.candidate_id] = result

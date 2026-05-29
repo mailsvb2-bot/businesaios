@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from core.behavior.contracts.micro_spinor import MicroSpinor
 from core.behavior.math.complex4 import Complex4
@@ -12,7 +12,7 @@ def build_sequence_spinors(entity_id: str, initial_psi: Complex4, operator_keys:
     psi = initial_psi
     for idx, operator_key in enumerate(operator_keys):
         psi = apply_operator(psi, operator_key)
-        ts = datetime.now(timezone.utc)
+        ts = datetime.now(UTC)
         spinors.append(
             MicroSpinor(
                 spinor_id=f"simulation:{entity_id}:{idx}",

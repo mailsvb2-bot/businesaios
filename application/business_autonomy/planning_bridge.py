@@ -29,7 +29,7 @@ class BusinessAutonomyPlanningBridge:
     store: FileMultiGoalPlannerStore
 
     @classmethod
-    def default(cls) -> 'BusinessAutonomyPlanningBridge':
+    def default(cls) -> BusinessAutonomyPlanningBridge:
         return cls(store=FileMultiGoalPlannerStore(root_dir=business_autonomy_multi_goal_runtime_dir()))
 
     def publish_execution(self, *, request: BusinessExecutionRequest, result: BusinessExecutionResult) -> None:

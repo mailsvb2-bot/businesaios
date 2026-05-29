@@ -63,7 +63,7 @@ class OperatorCatalog:
         object.__setattr__(self, "anti_drain", _clamp(self.anti_drain, DEFAULT_OPERATOR_CATALOG_POLICY.anti_drain_min, DEFAULT_OPERATOR_CATALOG_POLICY.anti_drain_max))
 
         # Clean mapping keys
-        es: Dict[str, float] = {}
+        es: dict[str, float] = {}
         for k, v in dict(self.event_scales or {}).items():
             kk = str(k or "").strip().lower()
             if not kk:
@@ -71,7 +71,7 @@ class OperatorCatalog:
             es[kk] = float(_clamp(float(v), DEFAULT_OPERATOR_CATALOG_POLICY.scale_min, DEFAULT_OPERATOR_CATALOG_POLICY.scale_max))
         object.__setattr__(self, "event_scales", es)
 
-        ds: Dict[str, float] = {}
+        ds: dict[str, float] = {}
         for k, v in dict(self.domain_scales or {}).items():
             kk = str(k or "").strip().lower()
             if not kk:
@@ -79,7 +79,7 @@ class OperatorCatalog:
             ds[kk] = float(_clamp(float(v), DEFAULT_OPERATOR_CATALOG_POLICY.scale_min, DEFAULT_OPERATOR_CATALOG_POLICY.scale_max))
         object.__setattr__(self, "domain_scales", ds)
 
-        cs: Dict[str, float] = {}
+        cs: dict[str, float] = {}
         for k, v in dict(self.channel_scales or {}).items():
             kk = str(k or "").strip().lower()
             if not kk:

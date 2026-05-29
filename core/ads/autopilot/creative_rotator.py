@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)
 class CreativeRotation:
-    enable: List[str]
-    pause: List[str]
+    enable: list[str]
+    pause: list[str]
     notes: str = ""
 
 
@@ -19,9 +19,9 @@ class CreativeRotator:
     If ctr drops below threshold -> pause creative.
     """
 
-    def rotate(self, creatives: List[Json], *, min_ctr_x10000: int = 50) -> CreativeRotation:
-        enable: List[str] = []
-        pause: List[str] = []
+    def rotate(self, creatives: list[Json], *, min_ctr_x10000: int = 50) -> CreativeRotation:
+        enable: list[str] = []
+        pause: list[str] = []
         thr = int(min_ctr_x10000 or 0)
         for c in creatives or []:
             cid = str(c.get("id") or c.get("creative_id") or "")

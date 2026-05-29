@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from application.business_autonomy.delayed_outcome_bridge import BusinessAutonomyDelayedOutcomeBridge
 
@@ -28,10 +28,10 @@ def test_release_quarantined_moves_item_back_to_active(tmp_path) -> None:
                 'tenant_id': 'tenant-a',
                 'business_id': 'biz-a',
                 'goal_id': 'goal-a',
-                'expected_ready_at_utc': (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+                'expected_ready_at_utc': (datetime.now(UTC) - timedelta(days=1)).isoformat(),
                 'metadata': {},
                 'quarantine_reason': 'delayed_outcome_stale',
-                'quarantined_at_utc': datetime.now(timezone.utc).isoformat(),
+                'quarantined_at_utc': datetime.now(UTC).isoformat(),
             }
         },
     })
@@ -44,7 +44,7 @@ def test_release_quarantined_moves_item_back_to_active(tmp_path) -> None:
 
 def test_retry_quarantined_refreshes_expected_ready_at(tmp_path) -> None:
     bridge = _bridge(tmp_path)
-    old = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    old = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     bridge._write_state({
         'active': {},
         'resolved': {},
@@ -58,7 +58,7 @@ def test_retry_quarantined_refreshes_expected_ready_at(tmp_path) -> None:
                 'expected_ready_at_utc': old,
                 'metadata': {'planning_horizon': 'week'},
                 'quarantine_reason': 'delayed_outcome_stale',
-                'quarantined_at_utc': datetime.now(timezone.utc).isoformat(),
+                'quarantined_at_utc': datetime.now(UTC).isoformat(),
             }
         },
     })
@@ -80,10 +80,10 @@ def test_release_writes_admin_action_ledger(tmp_path) -> None:
                 'tenant_id': 'tenant-a',
                 'business_id': 'biz-a',
                 'goal_id': 'goal-a',
-                'expected_ready_at_utc': (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+                'expected_ready_at_utc': (datetime.now(UTC) - timedelta(days=1)).isoformat(),
                 'metadata': {},
                 'quarantine_reason': 'delayed_outcome_stale',
-                'quarantined_at_utc': datetime.now(timezone.utc).isoformat(),
+                'quarantined_at_utc': datetime.now(UTC).isoformat(),
             }
         },
     })

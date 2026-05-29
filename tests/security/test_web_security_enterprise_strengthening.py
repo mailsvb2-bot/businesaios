@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from app.web.auth import AuthService
 from app.web.session import SessionStore
@@ -8,7 +8,7 @@ from security.token_policy import TokenPolicy
 
 
 def test_auth_service_deduplicates_scopes_and_reports_ttl() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = AuthService(token_policy=TokenPolicy(max_ttl_seconds=7200)).authenticate(
         {
             'issued_at': (now - timedelta(minutes=5)).isoformat(),
@@ -24,7 +24,7 @@ def test_auth_service_deduplicates_scopes_and_reports_ttl() -> None:
 
 
 def test_session_store_reports_age_and_idle_diagnostics() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = SessionStore().build(
         {
             'session_id': 's1',

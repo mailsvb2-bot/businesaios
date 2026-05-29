@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Iterable
 
 from core.tenancy.normalization import normalize_tenant_scope
@@ -10,7 +10,7 @@ from core.utils.call_signature import accepts_keyword
 def resolve_now_ms(*, now_ms: int | None) -> int:
     if now_ms is not None:
         return int(now_ms)
-    return int(datetime.now(timezone.utc).timestamp() * 1000)
+    return int(datetime.now(UTC).timestamp() * 1000)
 
 
 def supports_kwarg(fn: Any, kw: str) -> bool:

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 class EventStoreSettingsGateway:
     """Canonical settings gateway backed by the event-store settings service."""
 
-    def __init__(self, *, settings_service: 'SettingsService'):
+    def __init__(self, *, settings_service: SettingsService):
         self._service = settings_service
 
     def get_value(self, *, tenant_id: str, key: str):

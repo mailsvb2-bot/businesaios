@@ -39,14 +39,14 @@ class TelegramEffectsMixin:
         user_id: str,
         text: str,
         tenant_id: str = "",
-        reply_markup: Optional[Dict[str, Any]] = None,
-        callback_query_id: Optional[str] = None,
-        track_event_type: Optional[str] = None,
-        track_payload: Optional[Dict[str, Any]] = None,
+        reply_markup: dict[str, Any] | None = None,
+        callback_query_id: str | None = None,
+        track_event_type: str | None = None,
+        track_payload: dict[str, Any] | None = None,
         channel: str = "telegram",
         priority: Any = "normal",
         critical: bool = True,
-        channel_policy: Optional[Dict[str, Any]] = None,
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any:
         return send_message_effect(
             self,
@@ -70,7 +70,7 @@ class TelegramEffectsMixin:
         *,
         chat_id: str,
         text: str,
-        reply_markup: Optional[Dict[str, Any]] = None,
+        reply_markup: dict[str, Any] | None = None,
         priority: Any = "normal",
         critical: bool = True,
     ) -> tuple[bool, dict[str, Any]]:

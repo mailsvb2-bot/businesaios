@@ -7,7 +7,7 @@ from core.causal.bootstrap import bootstrap_ci
 from core.causal.registry import EstimatorRegistry, default_registry
 from core.causal.types import CausalDataset, CausalQuery, CausalResult, EffectEstimate
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 def _pick_method(query: CausalQuery, dataset: CausalDataset) -> str:

@@ -17,12 +17,12 @@ COMPLEXITY_NODES = (
 )
 
 
-def parse_import_bases(source_text: str) -> Set[str]:
+def parse_import_bases(source_text: str) -> set[str]:
     try:
         tree = ast.parse(source_text)
     except Exception:
         return set()
-    bases: Set[str] = set()
+    bases: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for n in node.names:

@@ -26,7 +26,7 @@ def test_support_scaffold_manifest_entry(relative_path: str) -> None:
 
 
 def test_support_scaffold_manifest_is_unique_and_sorted() -> None:
-    assert SCAFFOLD_CASES == sorted(SCAFFOLD_CASES)
+    assert sorted(SCAFFOLD_CASES) == SCAFFOLD_CASES
     assert len(SCAFFOLD_CASES) == len(set(SCAFFOLD_CASES))
 
 

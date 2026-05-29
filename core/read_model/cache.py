@@ -38,7 +38,7 @@ class _Entry:
 class ReadModelCache:
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._data: Dict[Hashable, _Entry] = {}
+        self._data: dict[Hashable, _Entry] = {}
 
     def get(
         self,
@@ -46,7 +46,7 @@ class ReadModelCache:
         key: Hashable,
         compute: Callable[[], T],
         watermark_ms: int,
-        window_s: Optional[float] = None,
+        window_s: float | None = None,
     ) -> T:
         win = cache_window_s() if window_s is None else float(window_s)
         if win <= 0:
@@ -81,7 +81,7 @@ def watermark_for(
     *,
     tenant_id: str = "default",
     user_id: str | None = None,
-    event_types: Tuple[str, ...] | None = None,
+    event_types: tuple[str, ...] | None = None,
 ) -> int:
     """Best-effort watermark: latest event timestamp for a user (optionally filtered)."""
     if event_store is None:

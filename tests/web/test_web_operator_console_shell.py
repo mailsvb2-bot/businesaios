@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from app.web.app import WebApp
 from app.web.routes import RouteDefinition, Routes
@@ -27,7 +27,7 @@ def test_routes_mark_tenant_required_when_missing_tenant() -> None:
 
 
 def test_web_app_assembles_auth_session_and_routes() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = WebApp().build(
         {
             'tenant_id': 'tenant-1',

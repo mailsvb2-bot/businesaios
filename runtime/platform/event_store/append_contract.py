@@ -19,7 +19,7 @@ class AppendEvent:
     timestamp_ms: int
     decision_id: Any
     correlation_id: Any
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 def normalize_append_event(event: dict | None) -> AppendEvent:

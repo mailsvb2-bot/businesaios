@@ -5,8 +5,8 @@ from typing import Any, Dict
 from runtime.platform.config.feature_flags import FeatureFlags
 
 
-def load_pricing_suggestions(event_store: Any, *, tenant_id: str) -> Dict[str, Any]:
-    pricing_suggestions: Dict[str, Any] = {}
+def load_pricing_suggestions(event_store: Any, *, tenant_id: str) -> dict[str, Any]:
+    pricing_suggestions: dict[str, Any] = {}
     if not FeatureFlags.AUTOPRICING:
         return pricing_suggestions
     try:

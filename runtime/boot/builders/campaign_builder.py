@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 def build_autopilot_campaign_builder(
     *,
-    llm_client: Optional[Any] = None,
+    llm_client: Any | None = None,
 ) -> AutopilotCampaignBuilder:
     """Build AutopilotCampaignBuilder.
 

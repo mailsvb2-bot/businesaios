@@ -25,8 +25,8 @@ class ActionPlan:
     One input -> one plan (no second brain).
     """
 
-    steps: List[Dict[str, Any]]
-    debug: Dict[str, Any]
+    steps: list[dict[str, Any]]
+    debug: dict[str, Any]
 
 
 class RetentionDecisionAdapter:
@@ -48,7 +48,7 @@ class RetentionDecisionAdapter:
         self._offer_engine = offer_engine or OfferEngine.default()
         self._offer_cooldown_store = offer_cooldown_store
 
-    def maybe_decide_offer(self, *, tenant_id: str, user_id: str, context: dict) -> Optional[RetentionDecision]:
+    def maybe_decide_offer(self, *, tenant_id: str, user_id: str, context: dict) -> RetentionDecision | None:
         try:
             ctx = dict(context or {})
             if self._prices and "prices" not in ctx:

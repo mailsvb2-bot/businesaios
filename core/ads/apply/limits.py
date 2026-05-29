@@ -12,7 +12,7 @@ class AdsApplyLimits:
     max_changes_per_day: int = 0
 
 
-def planned_stats(plan: Any) -> Tuple[int, int]:
+def planned_stats(plan: Any) -> tuple[int, int]:
     """Return (planned_daily_budget_minor, planned_changes). Best-effort."""
     cmds = getattr(plan, "commands", None)
     if not isinstance(cmds, list):

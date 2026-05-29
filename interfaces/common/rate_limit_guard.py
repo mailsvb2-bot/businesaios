@@ -4,8 +4,8 @@ from typing import Dict
 
 @dataclass
 class RateLimitGuard:
-    limits: Dict[str, int] = field(default_factory=dict)
-    usage: Dict[str, int] = field(default_factory=dict)
+    limits: dict[str, int] = field(default_factory=dict)
+    usage: dict[str, int] = field(default_factory=dict)
 
     def allow(self, key: str) -> bool:
         limit = self.limits.get(key)

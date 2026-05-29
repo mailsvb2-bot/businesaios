@@ -12,7 +12,7 @@ from .contracts import AdsRLOptSpec, AdsRLState
 class RewardBreakdown:
     reward: float
     mode: str
-    components: Dict[str, float]
+    components: dict[str, float]
 
 
 def compute_reward(*, state: AdsRLState, spec: AdsRLOptSpec, policy: AdsRLRewardPolicy = DEFAULT_ADS_RL_REWARD_POLICY) -> RewardBreakdown:

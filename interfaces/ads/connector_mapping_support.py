@@ -6,7 +6,7 @@ from typing import Any, Dict, Iterable, Optional, Sequence
 from .base import AdsConnectorError
 
 
-def parse_metric_day(*, row: Dict[str, Any], candidate_keys: Sequence[str], connector_name: str) -> date:
+def parse_metric_day(*, row: dict[str, Any], candidate_keys: Sequence[str], connector_name: str) -> date:
     for key in candidate_keys:
         raw = row.get(key)
         if isinstance(raw, date):
@@ -20,7 +20,7 @@ def parse_metric_day(*, row: Dict[str, Any], candidate_keys: Sequence[str], conn
     raise AdsConnectorError(f"{connector_name}: metric row missing valid day")
 
 
-def parse_optional_budget(*values: Any) -> Optional[float]:
+def parse_optional_budget(*values: Any) -> float | None:
     for value in values:
         if value is None:
             continue

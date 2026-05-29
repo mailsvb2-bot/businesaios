@@ -20,7 +20,7 @@ class PostgresPaymentOutbox:
             self._lease_ms = 60000
         self._lease_ms = max(5_000, min(10 * 60_000, int(self._lease_ms)))
 
-    def __enter__(self) -> "PostgresPaymentOutbox":
+    def __enter__(self) -> PostgresPaymentOutbox:
         self._port = PostgresPort(self._dsn, application_name="businesaios-payment-outbox").__enter__()
         self._init_schema()
         return self

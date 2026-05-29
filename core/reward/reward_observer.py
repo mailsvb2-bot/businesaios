@@ -54,9 +54,9 @@ class RewardObserver:
         self,
         *,
         tenant_id: str,
-        metrics: Dict[str, Any],
-        context: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        metrics: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
         revenue = float(metrics.get("revenue", 0.0) or 0.0)
         spend = float(metrics.get("spend", 0.0) or 0.0)
         profit = revenue - spend

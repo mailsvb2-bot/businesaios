@@ -24,7 +24,7 @@ class RLTrainer:
         self._store = store
         self._ope = ope_gate or OPEGate()
 
-    def train(self, *, tenant_id: str, transitions: List[Transition]) -> TrainReport:
+    def train(self, *, tenant_id: str, transitions: list[Transition]) -> TrainReport:
         ope: OPEReport = self._ope.check(transitions)
         if not ope.ok:
             return TrainReport(ok=False, reason="ope_blocked", n=len(transitions), ope_reason=ope.reason, avg_reward_minor=ope.avg_reward_minor)

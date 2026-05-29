@@ -26,8 +26,8 @@ def business_metrics_window(
     days: int = 7,
     lead_event_type: str = "lead_created@v1",
     purchase_event_type: str = "purchase_completed@v1",
-    now_ms: Optional[int] = None,
-) -> List[Dict[str, int]]:
+    now_ms: int | None = None,
+) -> list[dict[str, int]]:
     """Compute a rolling window of daily business metrics (UTC days).
 
     Returns oldest->newest for easier window evaluation.
@@ -39,7 +39,7 @@ def business_metrics_window(
     "second timeline" drift inside one evaluation pass.
     """
 
-    out: List[Dict[str, int]] = []
+    out: list[dict[str, int]] = []
     if event_store is None or not hasattr(event_store, "iter_events"):
         return out
 
@@ -101,8 +101,8 @@ def today_business_metrics(
     tenant_id: str = "default",
     lead_event_type: str = "lead_created@v1",
     purchase_event_type: str = "purchase_completed@v1",
-    now_ms: Optional[int] = None,
-) -> Dict[str, int]:
+    now_ms: int | None = None,
+) -> dict[str, int]:
     """Compute business metrics for today.
 
     This is best-effort: if your product emits only payment events,
@@ -155,8 +155,8 @@ def recent_autopilot_actions(
     *,
     tenant_id: str = "default",
     days: int = 7,
-    now_ms: Optional[int] = None,
-) -> List[Mapping[str, Any]]:
+    now_ms: int | None = None,
+) -> list[Mapping[str, Any]]:
     if event_store is None or not hasattr(event_store, "iter_events"):
         return []
     now_ms_resolved = utc_now_ms(now_ms=now_ms)

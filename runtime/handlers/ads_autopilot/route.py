@@ -24,7 +24,7 @@ class AutopilotRoute:
     issued_action: str
     route: str
 
-def extract_autopilot_route(*, payload: Dict[str, Any], env: Any) -> AutopilotRoute:
+def extract_autopilot_route(*, payload: dict[str, Any], env: Any) -> AutopilotRoute:
     try:
         route = extract_strict_route_from_envelope(payload=payload, env=env)
         route.validate(expected_action=_EXPECTED_ACTION)

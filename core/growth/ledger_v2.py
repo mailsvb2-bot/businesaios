@@ -94,7 +94,7 @@ def _iter_events(
     start_ms: int,
     end_ms: int,
     limit: int = 5000,
-) -> Iterable[Dict[str, Any]]:
+) -> Iterable[dict[str, Any]]:
     it = getattr(event_store, "iter_events", None)
     if callable(it):
         yield from call_iter_events(
@@ -118,7 +118,7 @@ def _iter_events(
             yield e
 
 
-def _event_ts_ms(e: Dict[str, Any]) -> int:
+def _event_ts_ms(e: dict[str, Any]) -> int:
     try:
         return int(e.get("timestamp_ms") or 0)
     except Exception:

@@ -15,7 +15,7 @@ class RegisteredBusinessCapabilities:
 
 class BusinessCapabilityRegistry:
     def __init__(self) -> None:
-        self._items: Dict[str, RegisteredBusinessCapabilities] = {}
+        self._items: dict[str, RegisteredBusinessCapabilities] = {}
 
     def register(self, business_id: str, capabilities: Sequence[BusinessCapability]) -> None:
         self._items[business_id] = RegisteredBusinessCapabilities(
@@ -39,7 +39,7 @@ class BusinessCapabilityRegistry:
 
 class BusinessAdapterRegistry:
     def __init__(self) -> None:
-        self._adapters: Dict[str, ExternalBusinessAdapter] = {}
+        self._adapters: dict[str, ExternalBusinessAdapter] = {}
 
     def register(self, adapter: ExternalBusinessAdapter) -> None:
         if adapter.business_id in self._adapters:

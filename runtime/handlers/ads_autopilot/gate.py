@@ -19,7 +19,7 @@ def _policy_gate(*, event_store: Any | None) -> PolicyUpdateGate:
         return _POLICY_GATE
 
 
-def ensure_autopilot_gate(*, payload: Dict[str, Any], event_store: Any | None, route: Any) -> tuple[str, str | None]:
+def ensure_autopilot_gate(*, payload: dict[str, Any], event_store: Any | None, route: Any) -> tuple[str, str | None]:
     p = payload or {}
     tenant_id = as_tenant_id(str(p.get("tenant_id") or ""))
     gate = _policy_gate(event_store=event_store)

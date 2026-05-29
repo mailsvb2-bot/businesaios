@@ -56,7 +56,7 @@ class BusinessMemoryRecord:
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any] | None, *, business_id: str) -> 'BusinessMemoryRecord':
+    def from_dict(cls, payload: dict[str, Any] | None, *, business_id: str) -> BusinessMemoryRecord:
         data = dict(payload or {})
         return cls(
             business_id=str(data.get('business_id') or business_id),

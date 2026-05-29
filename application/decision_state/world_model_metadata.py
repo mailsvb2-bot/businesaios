@@ -20,14 +20,14 @@ def stable_payload_hash(payload: Mapping[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def extract_world_model_metadata(*, state: Any) -> Dict[str, Any]:
+def extract_world_model_metadata(*, state: Any) -> dict[str, Any]:
     meta = getattr(state, "meta", None)
     meta = dict(meta) if isinstance(meta, dict) else {}
 
     economy = getattr(state, "economy", None)
     economy = dict(economy) if isinstance(economy, dict) else {}
 
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
 
     world_model_name = meta.get("world_model")
     world_model_kind = meta.get("world_model_kind")
@@ -58,9 +58,9 @@ def extract_world_model_metadata(*, state: Any) -> Dict[str, Any]:
 
 def attach_world_model_metadata(
     *,
-    envelope_payload: Dict[str, Any],
+    envelope_payload: dict[str, Any],
     state: Any,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     meta = dict(envelope_payload or {})
     wm = extract_world_model_metadata(state=state)
     if wm:
@@ -68,14 +68,14 @@ def attach_world_model_metadata(
     return meta
 
 
-def summarize_pricing_world_state(*, state: Any) -> Optional[Dict[str, Any]]:
+def summarize_pricing_world_state(*, state: Any) -> dict[str, Any] | None:
     economy = getattr(state, "economy", None)
     economy = dict(economy) if isinstance(economy, dict) else {}
     ws = economy.get("pricing_world_state")
     if not isinstance(ws, dict) or not ws:
         return None
 
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
 
     for key in (
         "expected_profit",
@@ -94,7 +94,7 @@ def summarize_pricing_world_state(*, state: Any) -> Optional[Dict[str, Any]]:
     return out
 
 
-def extract_pinned_world_model_meta_from_payload(payload: Dict[str, Any] | None) -> Dict[str, Any]:
+def extract_pinned_world_model_meta_from_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     payload = dict(payload or {})
 
     wm = payload.get("world_model_meta")

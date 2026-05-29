@@ -21,7 +21,7 @@ class ProductionBootProbe:
     release_quality_tools_required: bool
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str]) -> "ProductionBootProbe":
+    def from_env(cls, env: Mapping[str, str]) -> ProductionBootProbe:
         runtime_env = str(env.get("ENV") or env.get("APP_ENV") or "ci").strip().lower() or "ci"
         profile = str(env.get("APP_PROFILE") or env.get("RUN_MODE") or "api").strip().lower() or "api"
         database_url = str(env.get("DATABASE_URL") or env.get("POSTGRES_DSN") or "").strip()

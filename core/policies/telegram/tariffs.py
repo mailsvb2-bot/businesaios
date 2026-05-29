@@ -11,11 +11,11 @@ from core.ux.telegram_keyboards import kb_back_main, kb_pay_selected, kb_sub, kb
 def propose_show_tariffs(
     *,
     user_id: str,
-    legacy_prices: Dict[str, int],
-    pricing_suggestions: Dict[str, int] | None = None,
-    marketing_variants: Dict[str, Dict[str, str]] | None = None,
+    legacy_prices: dict[str, int],
+    pricing_suggestions: dict[str, int] | None = None,
+    marketing_variants: dict[str, dict[str, str]] | None = None,
     marketing_seed: str = "1",
-    marketing_bandit: Dict[str, Dict[str, Dict[str, float]]] | None = None,
+    marketing_bandit: dict[str, dict[str, dict[str, float]]] | None = None,
 ) -> ProposedAction:
     step = "tariffs_viewed"
     v = choose_marketing_variant(
@@ -66,7 +66,7 @@ def propose_show_tariffs(
         )
 
 
-def parse_sub_buy(cb: str) -> Optional[Tuple[int, Optional[int]]]:
+def parse_sub_buy(cb: str) -> tuple[int, int | None] | None:
     # Format: sub:buy:<plan_id>:<expected_price?>
     parts = (cb or "").split(":")
     if len(parts) < 3 or parts[0] != "sub" or parts[1] != "buy":
@@ -84,7 +84,7 @@ def parse_sub_buy(cb: str) -> Optional[Tuple[int, Optional[int]]]:
     return plan_id, expected
 
 
-def propose_select_tariff(*, user_id: str, plan_id: int, expected_price: Optional[int]) -> ProposedAction:
+def propose_select_tariff(*, user_id: str, plan_id: int, expected_price: int | None) -> ProposedAction:
     """Select a tariff/plan (effect proposal).
 
     IMPORTANT:
@@ -139,13 +139,13 @@ def propose_select_tariff(*, user_id: str, plan_id: int, expected_price: Optiona
     )
 
 
-def propose_pay_selected(*, user_id: str, full_access: bool, selected: Dict[str, Any] | None, default_price_rub: int, legacy_prices: Dict[str, int]) -> ProposedAction:
+def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str, Any] | None, default_price_rub: int, legacy_prices: dict[str, int]) -> ProposedAction:
     if full_access:
         return propose_message(user_id=user_id, text="Полный доступ уже активен ✅", reply_markup=kb_back_main())
 
     selected = dict(selected or {})
     amount_rub: int | None = None
-    meta_note: Dict[str, Any] = {"selected": {}}
+    meta_note: dict[str, Any] = {"selected": {}}
 
     plan_id = selected.get("plan_id")
     expected_price = selected.get("expected_price")

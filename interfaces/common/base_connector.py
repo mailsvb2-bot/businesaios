@@ -74,7 +74,7 @@ class BaseConnector:
     def execute(
         self,
         operation: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         *,
         idempotency_key: str | None = None,
         dry_run: bool = False,
@@ -176,7 +176,7 @@ class BaseConnector:
     def _execute_configured(
         self,
         operation: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         *,
         idempotency_key: str | None = None,
         dry_run: bool = False,
@@ -186,8 +186,8 @@ class BaseConnector:
     def _verify_configured(
         self,
         operation: str,
-        payload: Dict[str, Any],
-        result_payload: Dict[str, Any] | None = None,
+        payload: dict[str, Any],
+        result_payload: dict[str, Any] | None = None,
     ) -> ConnectorResult:
         return ConnectorResult(ok=False, code="verify_not_supported", message=f"{operation} verify is not implemented yet")
 

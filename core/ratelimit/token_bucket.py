@@ -40,16 +40,16 @@ class RateLimitDecision:
 
 
 class RateLimitStore(Protocol):
-    def get_state(self, *, key: str) -> Optional[Tuple[float, float]]: ...
+    def get_state(self, *, key: str) -> tuple[float, float] | None: ...
 
     def set_state(self, *, key: str, tokens: float, updated_at_s: float) -> None: ...
 
 
 class MemoryRateLimitStore:
     def __init__(self):
-        self._m: Dict[str, Tuple[float, float]] = {}
+        self._m: dict[str, tuple[float, float]] = {}
 
-    def get_state(self, *, key: str) -> Optional[Tuple[float, float]]:
+    def get_state(self, *, key: str) -> tuple[float, float] | None:
         return self._m.get(key)
 
     def set_state(self, *, key: str, tokens: float, updated_at_s: float) -> None:
@@ -109,10 +109,10 @@ class SyncTokenBucket:
         *,
         capacity: int,
         refill_per_s: float,
-        tenant_id: 'TenantId | str' = TenantId(DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.transport_tenant_id),
+        tenant_id: TenantId | str = TenantId(DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.transport_tenant_id),
         subject: str = DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.transport_subject,
         bucket: str = DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.default_bucket,
-        store: 'RateLimitStore | None' = None,
+        store: RateLimitStore | None = None,
     ) -> None:
         self._store = store or MemoryRateLimitStore()
         self._limiter = TokenBucketLimiter(self._store)
@@ -123,7 +123,7 @@ class SyncTokenBucket:
         dec = self._limiter.check(key=self._key, policy=self._policy, cost=max(1, int(tokens)))
         return bool(dec.allowed)
 
-    def check(self, tokens: int = 1) -> 'RateLimitDecision':
+    def check(self, tokens: int = 1) -> RateLimitDecision:
         return self._limiter.check(key=self._key, policy=self._policy, cost=max(1, int(tokens)))
 
 
@@ -138,10 +138,10 @@ class AsyncTokenBucket:
         *,
         rps: float,
         burst: int,
-        tenant_id: 'TenantId | str' = TenantId(DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.transport_tenant_id),
+        tenant_id: TenantId | str = TenantId(DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.transport_tenant_id),
         subject: str = DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.transport_subject,
         bucket: str = DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.default_bucket,
-        store: 'RateLimitStore | None' = None,
+        store: RateLimitStore | None = None,
     ) -> None:
         self._sync = SyncTokenBucket(
             capacity=int(burst),

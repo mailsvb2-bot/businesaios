@@ -105,7 +105,7 @@ def _iter_events(
     start_ms: int,
     end_ms: int | None,
     limit: int,
-) -> Iterable[Dict[str, Any]]:
+) -> Iterable[dict[str, Any]]:
     it = getattr(event_store, "iter_events", None)
     if callable(it):
         yield from it(

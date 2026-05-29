@@ -14,7 +14,7 @@ def _read_text_best_effort(path: Path) -> str:
         return ""
 
 
-def _resolve_build_meta() -> Dict[str, str]:
+def _resolve_build_meta() -> dict[str, str]:
     """Best-effort build metadata.
 
     - build_id: env BUILD_ID or RELEASE_TAG file
@@ -23,7 +23,7 @@ def _resolve_build_meta() -> Dict[str, str]:
     root = Path(__file__).resolve().parents[2]
     build_id = env_str("BUILD_ID", "").strip() or _read_text_best_effort(root / "RELEASE_TAG")
     version = env_str("APP_VERSION", "").strip() or _read_text_best_effort(root / "VERSION")
-    out: Dict[str, str] = {}
+    out: dict[str, str] = {}
     if build_id:
         out["build_id"] = build_id
     if version:
@@ -31,7 +31,7 @@ def _resolve_build_meta() -> Dict[str, str]:
     return out
 
 
-def with_retention_telemetry(payload: Dict[str, Any], *, user_id: str) -> Dict[str, Any]:
+def with_retention_telemetry(payload: dict[str, Any], *, user_id: str) -> dict[str, Any]:
     """Adds stable metadata fields for analytics.
 
     Safe-by-default: never raises, never mutates caller payload.

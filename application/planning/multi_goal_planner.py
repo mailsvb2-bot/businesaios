@@ -66,7 +66,7 @@ class GoalQueueItem:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "GoalQueueItem":
+    def from_dict(cls, payload: Mapping[str, Any]) -> GoalQueueItem:
         return cls(
             goal_id=_text(payload.get("goal_id")),
             goal=_text(payload.get("goal")),
@@ -100,7 +100,7 @@ class MultiGoalPlanSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "MultiGoalPlanSnapshot":
+    def from_dict(cls, payload: Mapping[str, Any]) -> MultiGoalPlanSnapshot:
         return cls(
             schema_version=max(1, _safe_int(payload.get("schema_version"), default=MULTI_GOAL_SCHEMA_VERSION)),
             tenant_id=_text(payload.get("tenant_id")),

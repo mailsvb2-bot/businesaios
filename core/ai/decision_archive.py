@@ -10,12 +10,12 @@ from core.ai.decision import DecisionEnvelope
 
 class DecisionArchive(Protocol):
     def put(self, env: DecisionEnvelope) -> None: ...
-    def get(self, decision_id: str) -> Optional[DecisionEnvelope]: ...
+    def get(self, decision_id: str) -> DecisionEnvelope | None: ...
 
 
 @dataclass
 class MemoryDecisionArchive:
-    _store: Dict[str, DecisionEnvelope]
+    _store: dict[str, DecisionEnvelope]
 
     def __init__(self):
         self._store = {}
@@ -23,5 +23,5 @@ class MemoryDecisionArchive:
     def put(self, env: DecisionEnvelope) -> None:
         self._store[str(env.decision.decision_id)] = env
 
-    def get(self, decision_id: str) -> Optional[DecisionEnvelope]:
+    def get(self, decision_id: str) -> DecisionEnvelope | None:
         return self._store.get(str(decision_id))

@@ -67,7 +67,7 @@ def test_ads_service_is_single_source_of_truth() -> None:
         )
 
     # 2) Ensure AdsService class exists only once in repository (excluding tests)
-    hits: List[Tuple[str, int, str]] = []
+    hits: list[tuple[str, int, str]] = []
     for p in _iter_py_files(root):
         if "tests" in p.parts:
             continue
@@ -111,7 +111,7 @@ def test_core_has_no_secondary_ads_ports() -> None:
     # Match exact port surface names only (avoid false positives like build_plan_confirmation_text).
     suspicious_prefixes = {"def build_plan(", "def apply_plan(", "def metrics("}
 
-    hits: List[Tuple[str, int, str]] = []
+    hits: list[tuple[str, int, str]] = []
     for p in _iter_py_files(core_dir):
         if p.resolve() == allowed_file:
             continue
@@ -146,7 +146,7 @@ def test_runtime_platform_does_not_import_core_ads_service() -> None:
     if not pl.exists():
         return
 
-    bad: List[Tuple[str, int, str]] = []
+    bad: list[tuple[str, int, str]] = []
     for p in _iter_py_files(pl):
         text = _read_text(p)
         if not text:

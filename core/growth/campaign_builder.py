@@ -26,7 +26,7 @@ class CampaignSpec:
     region: str = ""
     what: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "tenant_id": self.tenant_id,
             "platform": self.platform,
@@ -38,7 +38,7 @@ class CampaignSpec:
         }
 
 
-def build_ads_write_plan(*, spec: CampaignSpec) -> Dict[str, Any]:
+def build_ads_write_plan(*, spec: CampaignSpec) -> dict[str, Any]:
     """Return AdsWriteGateway plan payload.
 
     Contract:
@@ -75,7 +75,7 @@ def plan_from_onboarding(
     offer_id: str,
     offer_title: str,
     diag: Mapping[str, Any] | None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build a minimal plan from onboarding diagnostics."""
 
     d = dict(diag or {})

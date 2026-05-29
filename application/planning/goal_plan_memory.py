@@ -75,7 +75,7 @@ class GoalPlanSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "GoalPlanSnapshot":
+    def from_dict(cls, payload: Mapping[str, Any]) -> GoalPlanSnapshot:
         completed_steps = []
         for item in payload.get("completed_steps") or []:
             row = _safe_dict(item)

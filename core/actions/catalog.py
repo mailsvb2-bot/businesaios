@@ -15,8 +15,8 @@ from .catalog_entry import CatalogEntry
 from .catalog_groups import build_catalog_groups
 
 
-def build_catalog() -> Dict[str, CatalogEntry]:
-    catalog: Dict[str, CatalogEntry] = {}
+def build_catalog() -> dict[str, CatalogEntry]:
+    catalog: dict[str, CatalogEntry] = {}
     for group in build_catalog_groups():
         overlap = set(catalog) & set(group)
         if overlap:

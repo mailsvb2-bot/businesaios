@@ -52,7 +52,7 @@ class PostgresRuntimeProof:
     recovery_contract_ok: bool
 
     @classmethod
-    def advisory(cls) -> "PostgresRuntimeProof":
+    def advisory(cls) -> PostgresRuntimeProof:
         return cls(
             database_url_present=False,
             postgres_enabled=False,

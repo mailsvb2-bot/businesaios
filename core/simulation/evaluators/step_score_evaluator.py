@@ -7,7 +7,7 @@ from config.scoring_behavior_policy import DEFAULT_ACTION_RANKING_POLICY
 from ..contracts import SimScore
 
 
-def evaluate_step_score(*, action: str, payload: Dict[str, Any], snapshot: Dict[str, Any]) -> SimScore:
+def evaluate_step_score(*, action: str, payload: dict[str, Any], snapshot: dict[str, Any]) -> SimScore:
     p = dict(payload or {})
     exp = float(p.get("expected_profit_delta_minor") or 0.0)
     uplift = float(p.get("uplift") or 0.0)

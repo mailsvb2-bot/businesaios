@@ -37,12 +37,12 @@ def _iter_user_events(event_store: Any, *, tenant_id: str = "default", user_id: 
     return [ev for ev in events if types is None or str(ev.get("event_type") or ev.get("type")) in types]
 
 
-def user_settings(event_store: Any, *, tenant_id: str = "default", user_id: str) -> Dict[str, Any]:
+def user_settings(event_store: Any, *, tenant_id: str = "default", user_id: str) -> dict[str, Any]:
     uid = str(user_id)
     wm = watermark_for(event_store, tenant_id=str(tenant_id), user_id=uid, event_types=("user_setting_set",))
 
-    def _compute() -> Dict[str, Any]:
-        settings: Dict[str, Any] = {}
+    def _compute() -> dict[str, Any]:
+        settings: dict[str, Any] = {}
         evs = best_effort_latest_events(
             event_store=event_store,
             where='core/users/read_model.user_settings',
@@ -85,11 +85,11 @@ def user_city(event_store: Any, *, tenant_id: str = "default", user_id: str, def
     return str(default)
 
 
-def selected_tariff(event_store: Any, *, tenant_id: str = "default", user_id: str) -> Optional[Dict[str, Any]]:
+def selected_tariff(event_store: Any, *, tenant_id: str = "default", user_id: str) -> dict[str, Any] | None:
     uid = str(user_id)
     wm = watermark_for(event_store, tenant_id=str(tenant_id), user_id=uid, event_types=("tariff_selected",))
 
-    def _compute() -> Optional[Dict[str, Any]]:
+    def _compute() -> dict[str, Any] | None:
         last = best_effort_latest_event(
             event_store=event_store,
             where='core/users/read_model.selected_tariff',
@@ -120,12 +120,12 @@ def selected_tariff(event_store: Any, *, tenant_id: str = "default", user_id: st
     return global_cache().get(key=("selected_tariff", uid), compute=_compute, watermark_ms=wm)
 
 
-def mood_last(event_store: Any, *, tenant_id: str = "default", user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+def mood_last(event_store: Any, *, tenant_id: str = "default", user_id: str, limit: int = 10) -> list[dict[str, Any]]:
     uid = str(user_id)
     wm = watermark_for(event_store, tenant_id=str(tenant_id), user_id=uid, event_types=("mood_logged",))
 
-    def _compute() -> List[Dict[str, Any]]:
-        items: List[Dict[str, Any]] = []
+    def _compute() -> list[dict[str, Any]]:
+        items: list[dict[str, Any]] = []
         evs = list(reversed(best_effort_latest_events(
             event_store=event_store,
             where='core/users/read_model.mood_last',
@@ -149,7 +149,7 @@ def mood_last(event_store: Any, *, tenant_id: str = "default", user_id: str, lim
 
 
 
-def selected_product(event_store: Any, *, user_id: str) -> Optional[Dict[str, Any]]:
+def selected_product(event_store: Any, *, user_id: str) -> dict[str, Any] | None:
     """Return last selected product context for user (persisted via events).
 
     Event type: product_selected@v1
@@ -158,7 +158,7 @@ def selected_product(event_store: Any, *, user_id: str) -> Optional[Dict[str, An
     uid = str(user_id)
     wm = watermark_for(event_store, user_id=uid, event_types=("product_selected@v1",))
 
-    def _compute() -> Optional[Dict[str, Any]]:
+    def _compute() -> dict[str, Any] | None:
         last = best_effort_latest_event(
             event_store=event_store,
             where='core/users/read_model.selected_product',
@@ -175,7 +175,7 @@ def selected_product(event_store: Any, *, user_id: str) -> Optional[Dict[str, An
         p = last.get("payload") or {}
         if not isinstance(p, dict):
             return None
-        out: Dict[str, Any] = {**p}
+        out: dict[str, Any] = {**p}
         out["ts"] = last.get("timestamp_ms")
         return out
 

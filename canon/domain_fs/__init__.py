@@ -24,9 +24,9 @@ from .runtime_rules import scan_thin_runtime_handlers
 from .subdir_rules import scan_domain_subdirs
 
 
-def scan_canon_domain_file_system(repo_root: str | Path) -> List[CanonFsFinding]:
+def scan_canon_domain_file_system(repo_root: str | Path) -> list[CanonFsFinding]:
     root = Path(repo_root)
-    findings: List[CanonFsFinding] = []
+    findings: list[CanonFsFinding] = []
 
     for domain in iter_canon_domains(root):
         if domain.name in LEGACY_RELAXED_DOMAINS:

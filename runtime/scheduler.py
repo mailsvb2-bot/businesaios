@@ -77,7 +77,7 @@ class LearningJob:
     def run_once(self) -> LearningJobResult:
         return run_learning_cycle(self)
 
-    def monitor_and_maybe_rollback(self) -> Optional[LearningJobResult]:
+    def monitor_and_maybe_rollback(self) -> LearningJobResult | None:
         st = self._rollout.state()
         if st.status != "rolling" or not st.candidate_policy_id:
             return None

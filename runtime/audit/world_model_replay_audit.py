@@ -8,10 +8,10 @@ from runtime.world_model import extract_pinned_world_model_meta_from_payload, re
 
 def audit_decision_against_current_world_model(
     *,
-    decision_payload: Dict[str, Any],
+    decision_payload: dict[str, Any],
     state: Any,
     world_model: Any | None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     pinned = extract_pinned_world_model_meta_from_payload(decision_payload)
     replay = replay_state_against_world_model(
         state=state,

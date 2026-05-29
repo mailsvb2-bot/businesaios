@@ -13,7 +13,7 @@ from runtime._internal.effects_domains.admin_pricing_effects import (
 from runtime.observability.error_handling import swallow
 
 
-def answer_callback_if_needed(owner: Any, *, channel: str, callback_query_id: Optional[str]) -> None:
+def answer_callback_if_needed(owner: Any, *, channel: str, callback_query_id: str | None) -> None:
     if channel != "telegram" or not isinstance(callback_query_id, str) or not callback_query_id.strip():
         return
     try:
@@ -57,7 +57,7 @@ def emit_admin_notification_event(
     correlation_id: str,
     admin_id: str,
     channel: str,
-    callback_query_id: Optional[str],
+    callback_query_id: str | None,
     text: str,
     error: str = "",
 ) -> None:
@@ -83,9 +83,9 @@ def send_optional_notification(
     decision_id: str,
     correlation_id: str,
     admin_id: str,
-    notify_text: Optional[str],
-    notify_reply_markup: Optional[Dict[str, Any]],
-    callback_query_id: Optional[str],
+    notify_text: str | None,
+    notify_reply_markup: dict[str, Any] | None,
+    callback_query_id: str | None,
     channel: str,
     event_log: Any | None = None,
 ) -> Any:
@@ -141,9 +141,9 @@ def perform_admin_toggle(
     field_name: str,
     field_value: str,
     enabled: bool,
-    notify_text: Optional[str],
-    notify_reply_markup: Optional[Dict[str, Any]],
-    callback_query_id: Optional[str],
+    notify_text: str | None,
+    notify_reply_markup: dict[str, Any] | None,
+    callback_query_id: str | None,
     channel: str,
     event_log: Any,
 ) -> Any:

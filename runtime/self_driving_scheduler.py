@@ -36,7 +36,7 @@ CANON_RUNTIME_SELF_DRIVING_SCHEDULER_REQUEST_HELPER_ONLY = True
 class SchedulerTickResult:
     ok: bool
     status: str
-    decision_id: Optional[str] = None
+    decision_id: str | None = None
 
 
 def tick_once(*, learning_system, decision_core, executor, decision_input_provider=None) -> SchedulerTickResult:

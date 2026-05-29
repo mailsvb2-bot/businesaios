@@ -16,9 +16,9 @@ class PolicyRegistry:
     """
 
     def __init__(self) -> None:
-        self._statuses: Dict[str, PolicyStatus] = {}
-        self._active: Optional[PolicyRef] = None
-        self._canary: Optional[PolicyRef] = None
+        self._statuses: dict[str, PolicyStatus] = {}
+        self._active: PolicyRef | None = None
+        self._canary: PolicyRef | None = None
         self._lock = threading.Lock()
 
     def register_candidate(self, ref: PolicyRef) -> None:
@@ -44,11 +44,11 @@ class PolicyRegistry:
                 self._statuses[self._canary.policy_id] = PolicyStatus.ROLLED_BACK
             self._canary = None
 
-    def active(self) -> Optional[PolicyRef]:
+    def active(self) -> PolicyRef | None:
         return self._active
 
-    def canary(self) -> Optional[PolicyRef]:
+    def canary(self) -> PolicyRef | None:
         return self._canary
 
-    def status(self, policy_id: str) -> Optional[PolicyStatus]:
+    def status(self, policy_id: str) -> PolicyStatus | None:
         return self._statuses.get(policy_id)

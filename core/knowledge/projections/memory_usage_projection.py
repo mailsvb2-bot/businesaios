@@ -16,7 +16,7 @@ class MemoryUsageProjection:
     support_count: int
 
     @classmethod
-    def from_entry(cls, entry: StrategyMemoryEntry) -> "MemoryUsageProjection":
+    def from_entry(cls, entry: StrategyMemoryEntry) -> MemoryUsageProjection:
         return cls(
             entity_id=entry.entity_id,
             kind=entry.kind.value,
@@ -27,5 +27,5 @@ class MemoryUsageProjection:
         )
 
     @classmethod
-    def build_many(cls, entries: Sequence[StrategyMemoryEntry]) -> tuple["MemoryUsageProjection", ...]:
+    def build_many(cls, entries: Sequence[StrategyMemoryEntry]) -> tuple[MemoryUsageProjection, ...]:
         return tuple(cls.from_entry(entry) for entry in entries)

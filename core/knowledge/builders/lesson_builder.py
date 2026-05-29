@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from ..enums import LessonStatus
 from ..errors import KnowledgeValidationError
@@ -31,7 +31,7 @@ class LessonBuilder:
         if draft.observed_at.tzinfo is None:
             raise KnowledgeValidationError("Lesson observed_at must be timezone-aware.")
 
-        created_at = datetime.now(tz=timezone.utc)
+        created_at = datetime.now(tz=UTC)
         if draft.observed_at > created_at:
             raise KnowledgeValidationError("Lesson observed_at cannot be in the future.")
 

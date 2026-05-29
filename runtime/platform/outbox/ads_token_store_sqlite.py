@@ -54,7 +54,7 @@ class SqliteAdsTokenStore(AdsTokenStore):
             )
             conn.commit()
 
-    def get(self, *, tenant_id: str, platform: str, account_id: str) -> Optional[OAuthToken]:
+    def get(self, *, tenant_id: str, platform: str, account_id: str) -> OAuthToken | None:
         self.ensure_schema()
         with self._lock, sqlite3.connect(self._path) as conn:
             cur = conn.execute(

@@ -24,9 +24,9 @@ from core.ux.callbacks import (
 from .common import mk
 
 
-def kb_main(*, is_admin: bool = False, role: UserRoleInfo | None = None) -> Dict[str, Any]:
+def kb_main(*, is_admin: bool = False, role: UserRoleInfo | None = None) -> dict[str, Any]:
     r = (role or UserRoleInfo("owner")).role
-    rows: List[List[Dict[str, str]]] = [
+    rows: list[list[dict[str, str]]] = [
         [
             {"text": "🎧 Демо", "callback_data": CB_DEMO},
             {"text": "🔐 Полный доступ", "callback_data": "full"},
@@ -55,5 +55,5 @@ def kb_main(*, is_admin: bool = False, role: UserRoleInfo | None = None) -> Dict
     return mk(rows)
 
 
-def kb_back_main() -> Dict[str, Any]:
+def kb_back_main() -> dict[str, Any]:
     return mk([[{"text": "⬅️ Назад", "callback_data": CB_MENU_MAIN}]])

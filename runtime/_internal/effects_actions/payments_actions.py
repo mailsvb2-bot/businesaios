@@ -38,7 +38,7 @@ class PaymentsEffectsMixin:
         title: str | None = None,
         expected_price: int | None = None,
         notify_text: str | None = None,
-        notify_reply_markup: Optional[Dict[str, Any]] = None,
+        notify_reply_markup: dict[str, Any] | None = None,
     ) -> Any:
         return select_tariff_effect(
             self,
@@ -65,7 +65,7 @@ class PaymentsEffectsMixin:
         amount: int,
         currency: str,
         provider: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Any:
         return capture_payment_effect(
             self,
@@ -143,8 +143,8 @@ class PaymentsEffectsMixin:
         amount: int,
         currency: str,
         user_id: str,
-        metadata: Dict[str, Any] | None = None,
-    ) -> Tuple[bool, Dict[str, Any]]:
+        metadata: dict[str, Any] | None = None,
+    ) -> tuple[bool, dict[str, Any]]:
         return yookassa_create_payment(
             effects=self,
             decision_id=decision_id,

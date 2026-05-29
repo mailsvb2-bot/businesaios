@@ -8,9 +8,9 @@ from runtime.service_names import RuntimeServiceName
 
 @dataclass(frozen=True)
 class DecisionSchema:
-    required: Set[str]
-    optional: Set[str]
-    field_types: Dict[str, Union[Type[Any], Tuple[Type[Any], ...]]]
+    required: set[str]
+    optional: set[str]
+    field_types: dict[str, type[Any] | tuple[type[Any], ...]]
 
     def validate(self, payload: dict):
         if payload is None:
@@ -70,7 +70,7 @@ class SchemaRegistry:
     """
 
     def __init__(self):
-        self._schemas: Dict[str, Dict[int, DecisionSchema]] = {}
+        self._schemas: dict[str, dict[int, DecisionSchema]] = {}
 
     def register(self, action: str, version: int, schema: DecisionSchema) -> None:
         action = str(action)
@@ -84,7 +84,7 @@ class SchemaRegistry:
             return
         versions[version] = schema
 
-    def validate(self, action: str, payload: dict, *, version: Optional[int] = None) -> int:
+    def validate(self, action: str, payload: dict, *, version: int | None = None) -> int:
         action = str(action)
         if action not in self._schemas:
             raise ValueError("UNKNOWN_ACTION")

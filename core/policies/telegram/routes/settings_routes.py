@@ -9,7 +9,7 @@ from core.ux.callbacks import CB_SETTINGS_MENU, CB_SETTINGS_STATE
 from core.ux.telegram_keyboards import kb_mood_rate, kb_settings_menu, kb_state_menu
 
 
-def handle_settings_routes(ctx: TelegramCtx, *, user_id: str, bot_username: str, pm) -> Optional[ProposedAction]:
+def handle_settings_routes(ctx: TelegramCtx, *, user_id: str, bot_username: str, pm) -> ProposedAction | None:
     if ctx.callback_data == CB_SETTINGS_MENU:
         return pm(
             text=(

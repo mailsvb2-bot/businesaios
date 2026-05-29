@@ -17,13 +17,13 @@ class TaskItem:
     priority: int = 1
 
 
-def build_tasks_from_diagnostics(diag: Mapping[str, Any]) -> List[TaskItem]:
+def build_tasks_from_diagnostics(diag: Mapping[str, Any]) -> list[TaskItem]:
     """Build 1-3 tasks based on the diagnostic answers."""
 
     offer = str(diag.get("offer") or "").strip()
     channel = str(diag.get("channel") or "internal").strip() or "internal"
 
-    tasks: List[TaskItem] = []
+    tasks: list[TaskItem] = []
     # Task 1: make the offer concrete
     if not offer:
         tasks.append(
@@ -57,8 +57,8 @@ def build_tasks_from_diagnostics(diag: Mapping[str, Any]) -> List[TaskItem]:
     return tasks[:3]
 
 
-def serialize_tasks(tasks: List[TaskItem]) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
+def serialize_tasks(tasks: list[TaskItem]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     for t in tasks:
         out.append({"task_id": t.task_id, "title": t.title, "details": t.details, "priority": int(t.priority)})
     return out

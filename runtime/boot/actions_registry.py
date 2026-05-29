@@ -67,7 +67,7 @@ SPECS: _SpecsRegistry = build_specs_registry(
     registry_type=_SpecsRegistry,
 )
 
-INLINE_ALLOWLIST: Set[str] = build_inline_allowlist(names=INLINE_ALLOWLIST_NAMES)
+INLINE_ALLOWLIST: set[str] = build_inline_allowlist(names=INLINE_ALLOWLIST_NAMES)
 
 
 def get_spec(action: str) -> ActionSpecV1:
@@ -77,11 +77,11 @@ def get_spec(action: str) -> ActionSpecV1:
     return SPECS[a]
 
 
-def all_actions() -> Set[str]:
+def all_actions() -> set[str]:
     return set(SPECS.keys())
 
 
-def handler_actions() -> Set[str]:
+def handler_actions() -> set[str]:
     return handler_actions_from(all_actions())
 
 

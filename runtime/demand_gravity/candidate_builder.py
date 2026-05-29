@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from hashlib import sha256
 
 from runtime.demand_gravity.contracts import CandidateWriteMode, DemandCandidate, DemandChannel, DemandSignal
@@ -22,7 +22,7 @@ class DemandSignalCandidateProducer:
             raise ValueError("tenant_id_required")
         if not business_id.strip():
             raise ValueError("business_id_required")
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         grouped: dict[DemandChannel, list[DemandSignal]] = {}
         seen_fingerprints: set[str] = set()
         for signal in signals:

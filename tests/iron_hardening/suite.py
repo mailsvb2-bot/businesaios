@@ -10,7 +10,7 @@ These tests are designed to be:
 
 import ast
 import pathlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -342,7 +342,7 @@ def test_iron_35_reconcile_counts_reconciled_records():
         def get_payment_status(self, *, external_payment_id: str) -> str:
             return self.mapping.get(external_payment_id, "pending")
 
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     es = ES([
         {"event_type": "payment_created", "payload": {"external_id": "p1"}, "decision_id": "d1"},
         {"event_type": "payment_created", "payload": {"external_id": "p2"}, "decision_id": "d2"},
@@ -375,7 +375,7 @@ def test_iron_36_reconcile_skips_missing_ids():
         def get_payment_status(self, *, external_payment_id: str) -> str:
             return "succeeded"
 
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     n = reconcile_pending_payments(now=now, event_store=ES(), ledger=L(), payments=P())
     assert n == 0
 

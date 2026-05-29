@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 class EvolutionJob:
     job_id: str
     job_kind: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     status: str
     created_ms: int
     updated_ms: int
@@ -33,7 +33,7 @@ class EvolutionOutbox:
         self._impl = impl
 
     @staticmethod
-    def from_env() -> "EvolutionOutbox":
+    def from_env() -> EvolutionOutbox:
         from importlib import import_module
 
         module = import_module("runtime.platform.outbox.sqlite_evolution_outbox")
@@ -41,12 +41,12 @@ class EvolutionOutbox:
         impl = SqliteEvolutionOutbox(SqliteEvolutionOutbox.default_path_from_env())
         return EvolutionOutbox(impl)
 
-    def enqueue(self, *, job_kind: str, payload: Optional[Dict[str, Any]] = None, job_id: str | None = None) -> str:
+    def enqueue(self, *, job_kind: str, payload: dict[str, Any] | None = None, job_id: str | None = None) -> str:
         return str(self._impl.enqueue(job_kind=str(job_kind), payload=dict(payload or {}), job_id=job_id))
 
-    def list_pending(self, *, limit: int = 10) -> List[EvolutionJob]:
+    def list_pending(self, *, limit: int = 10) -> list[EvolutionJob]:
         jobs = self._impl.list_pending(limit=int(limit))
-        out: List[EvolutionJob] = []
+        out: list[EvolutionJob] = []
         for j in jobs:
             out.append(
                 EvolutionJob(

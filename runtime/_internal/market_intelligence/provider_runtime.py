@@ -192,7 +192,7 @@ class ProviderRuntimeFactory:
             password = self.secrets.read(auth.basic_password_ref)
             if not username or not password:
                 raise ProviderRuntimeError(ProviderErrorCode.AUTH_REQUIRED.value, 'missing provider basic auth credentials', provider=auth.provider)
-            raw = f'{username}:{password}'.encode('utf-8')
+            raw = f'{username}:{password}'.encode()
             headers['Authorization'] = f"Basic {base64.b64encode(raw).decode('ascii')}"
             return headers
         return headers

@@ -29,7 +29,7 @@ class PlatformControlCenterService:
     repo_root: Path
 
     @classmethod
-    def for_repo(cls, repo_root: str | Path | None = None) -> 'PlatformControlCenterService':
+    def for_repo(cls, repo_root: str | Path | None = None) -> PlatformControlCenterService:
         return cls(repo_root=Path(repo_root or '.').resolve())
 
     def build_overview(self, *, tenant_id: str, business_id: str) -> dict[str, Any]:

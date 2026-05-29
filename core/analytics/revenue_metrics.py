@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, UTC
 from typing import Any, Dict, Iterable, Protocol
 
 from config.revenue_metrics_policy import DEFAULT_REVENUE_METRICS_POLICY, RevenueMetricsPolicy
@@ -16,16 +16,16 @@ def _to_utc_dt(ts: Any, *, policy: RevenueMetricsPolicy = DEFAULT_REVENUE_METRIC
     if ts is None:
         return None
     if isinstance(ts, datetime):
-        return ts.astimezone(timezone.utc)
+        return ts.astimezone(UTC)
     try:
         if isinstance(ts, (int, float)):
             v = float(ts)
             if v > float(policy.epoch_millis_threshold):
-                return datetime.fromtimestamp(v / float(policy.zero_amount + 1000), tz=timezone.utc)
-            return datetime.fromtimestamp(v, tz=timezone.utc)
+                return datetime.fromtimestamp(v / float(policy.zero_amount + 1000), tz=UTC)
+            return datetime.fromtimestamp(v, tz=UTC)
         s = str(ts).replace("Z", "+00:00")
         dt = datetime.fromisoformat(s)
-        return dt.astimezone(timezone.utc)
+        return dt.astimezone(UTC)
     except Exception:
         return None
 
@@ -42,8 +42,8 @@ def make_yesterday_window(
     *,
     policy: RevenueMetricsPolicy = DEFAULT_REVENUE_METRICS_POLICY,
 ) -> RevenueWindow:
-    now_utc = now_utc.astimezone(timezone.utc)
-    end = datetime(now_utc.year, now_utc.month, now_utc.day, tzinfo=timezone.utc)
+    now_utc = now_utc.astimezone(UTC)
+    end = datetime(now_utc.year, now_utc.month, now_utc.day, tzinfo=UTC)
     start = end - timedelta(days=int(policy.window_days))
     return RevenueWindow(day=start.date(), start_utc=start, end_utc=end)
 
@@ -53,10 +53,10 @@ def aggregate_revenue_metrics(
     events: Iterable[dict],
     window: RevenueWindow,
     policy: RevenueMetricsPolicy = DEFAULT_REVENUE_METRICS_POLICY,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     impressions = clicks = ps = pf = 0
     revenue = float(policy.zero_amount)
-    offer_revenue: Dict[str, float] = {}
+    offer_revenue: dict[str, float] = {}
 
     for e in events:
         if not isinstance(e, dict):

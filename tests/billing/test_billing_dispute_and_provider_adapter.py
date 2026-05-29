@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 import pytest
 
@@ -79,14 +79,14 @@ def test_dispute_orchestrator_is_idempotent_and_sqlite_persistent(tmp_path) -> N
         invoice_id='inv-1',
         payload={'duplicate_flag': True, 'attribution_mismatch': True},
         idempotency_key='dsp-1',
-        opened_at=datetime(2026, 4, 10, 10, 0, tzinfo=timezone.utc),
+        opened_at=datetime(2026, 4, 10, 10, 0, tzinfo=UTC),
     )
     replayed = orchestrator.open_case(
         tenant_id='tenant-a',
         invoice_id='inv-1',
         payload={'duplicate_flag': True, 'attribution_mismatch': True},
         idempotency_key='dsp-1',
-        opened_at=datetime(2026, 4, 10, 10, 0, tzinfo=timezone.utc),
+        opened_at=datetime(2026, 4, 10, 10, 0, tzinfo=UTC),
     )
     assert replayed == opened
     assert store.get_by_idempotency(tenant_id='tenant-a', invoice_id='inv-1', idempotency_key='dsp-1') == opened

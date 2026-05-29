@@ -14,7 +14,7 @@ def scope_hint(scope: str) -> str:
     return s or "Тариф"
 
 
-def build_plan_confirmation_text(plan: Dict[str, Any]) -> str:
+def build_plan_confirmation_text(plan: dict[str, Any]) -> str:
     title = str(plan.get("title") or "Тариф").strip()
     scope = scope_hint(str(plan.get("scope") or plan.get("plan_code") or ""))
     days = int(plan.get("days") or 0) if str(plan.get("days") or "").strip() else 0

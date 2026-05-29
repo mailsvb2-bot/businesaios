@@ -7,7 +7,7 @@ from typing import Any, Dict, Mapping
 DEMO_CONNECTOR_REASON = 'connector_not_bundled'
 
 
-def build_demo_connector_metadata(*, platform: str) -> Dict[str, Any]:
+def build_demo_connector_metadata(*, platform: str) -> dict[str, Any]:
     return {
         'connector_mode': 'stub',
         'production_ready': False,
@@ -18,7 +18,7 @@ def build_demo_connector_metadata(*, platform: str) -> Dict[str, Any]:
     }
 
 
-def build_demo_write_error(*, platform: str) -> Dict[str, Any]:
+def build_demo_write_error(*, platform: str) -> dict[str, Any]:
     meta = build_demo_connector_metadata(platform=platform)
     return {
         'ok': False,

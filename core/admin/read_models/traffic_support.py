@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Iterable
 
 from core.admin.read_models.common_support import (
@@ -14,8 +14,8 @@ from core.observability.silent import swallow
 
 
 def start_of_utc_day_ms(*, now_ms: int) -> int:
-    now = datetime.fromtimestamp(int(now_ms) / 1000.0, tz=timezone.utc)
-    start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    now = datetime.fromtimestamp(int(now_ms) / 1000.0, tz=UTC)
+    start = datetime(now.year, now.month, now.day, tzinfo=UTC)
     return int(start.timestamp() * 1000)
 
 

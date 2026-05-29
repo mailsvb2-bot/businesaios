@@ -12,7 +12,7 @@ from runtime.pricing import PricingRouteViolation, PricingSelectionContext
 
 ACTION_NAME = ACTION_PRICING_SELECT_V1
 
-def handle_pricing_select(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, selection_service: Any) -> Any:
+def handle_pricing_select(payload: dict[str, Any], effects: EffectsPort, env: Any, *, selection_service: Any) -> Any:
     p = payload or {}
     try:
         route = extract_strict_route_from_envelope(payload=p, env=env)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from billing.client_outcome_billable_cap_policy import ClientOutcomeBillableCapPolicy
 from billing.client_outcome_invoice_aggregator import ClientOutcomeInvoiceAggregator
@@ -12,7 +12,7 @@ from lead_outcomes.client_outcome_contract import BillableClientRecord, ClientOu
 
 
 def test_client_outcome_revenue_stress_smoke() -> None:
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC)
     order = ClientOutcomeOrder(
         order_id='order-stress',
         tenant_id='tenant-1',

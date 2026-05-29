@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 import pytest
@@ -48,9 +48,9 @@ def test_payment_provider_router_prefers_healthy_matching_currency_provider() ->
         )
     )
     health = PaymentProviderHealthRegistry()
-    health.mark_failure('primary', reason='gateway timeout', cooldown_seconds=300, now=datetime(2026, 4, 9, tzinfo=timezone.utc))
+    health.mark_failure('primary', reason='gateway timeout', cooldown_seconds=300, now=datetime(2026, 4, 9, tzinfo=UTC))
     router = PaymentProviderRouter(registry=registry, health_registry=health)
-    selection = router.select(tenant_id='tenant-a', currency='USD', now=datetime(2026, 4, 9, 0, 1, tzinfo=timezone.utc))
+    selection = router.select(tenant_id='tenant-a', currency='USD', now=datetime(2026, 4, 9, 0, 1, tzinfo=UTC))
     assert selection.provider_name == 'fallback'
 
 
@@ -108,7 +108,7 @@ def test_payment_provider_health_without_cooldown_is_not_available_when_unhealth
     health._statuses['broken'] = __import__('billing.payment_provider_health_registry', fromlist=['ProviderHealthStatus']).ProviderHealthStatus(
         provider_name='broken', healthy=False, cooldown_until=None, failure_count=3, last_failure_reason='downstream hard fail'
     )
-    assert health.is_available('broken', now=datetime(2026, 4, 9, tzinfo=timezone.utc)) is False
+    assert health.is_available('broken', now=datetime(2026, 4, 9, tzinfo=UTC)) is False
 
 
 def test_router_prefers_lower_failure_count_when_priority_ties() -> None:
@@ -119,9 +119,9 @@ def test_router_prefers_lower_failure_count_when_priority_ties() -> None:
         )
     )
     health = PaymentProviderHealthRegistry()
-    health.mark_failure('flaky', reason='timeout', cooldown_seconds=0, now=datetime(2026, 4, 9, tzinfo=timezone.utc))
+    health.mark_failure('flaky', reason='timeout', cooldown_seconds=0, now=datetime(2026, 4, 9, tzinfo=UTC))
     router = PaymentProviderRouter(registry=registry, health_registry=health)
-    selection = router.select(tenant_id='tenant-a', currency='USD', now=datetime(2026, 4, 9, tzinfo=timezone.utc))
+    selection = router.select(tenant_id='tenant-a', currency='USD', now=datetime(2026, 4, 9, tzinfo=UTC))
     assert selection.provider_name == 'stable'
     assert selection.metadata['failure_count'] == 0
 

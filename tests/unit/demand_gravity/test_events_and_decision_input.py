@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 import pytest
 
@@ -25,7 +25,7 @@ def _signal() -> DemandSignal:
         business_id="biz-a",
         kind=DemandSignalKind.SEARCH_INTENT,
         channel=DemandChannel.GOOGLE_MAPS,
-        observed_at=datetime.now(timezone.utc),
+        observed_at=datetime.now(UTC),
         source_ref="source:1",
         normalized_text="coffee near me",
         confidence=0.8,
@@ -110,7 +110,7 @@ def test_event_record_blocks_decision_payloads_recursively() -> None:
         business_id="biz-a",
         correlation_id="corr-1",
         idempotency_key="idem-1",
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=datetime.now(UTC),
         payload={"nested": {"execute_now": True}},
     )
 

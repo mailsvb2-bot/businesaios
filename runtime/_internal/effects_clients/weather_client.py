@@ -8,7 +8,7 @@ from runtime.observability.error_handling import swallow
 from .http_client import http_json
 
 
-def open_meteo_weather(city: str, *, transport: HttpTransport | None = None) -> Tuple[bool, str, Dict[str, object]]:
+def open_meteo_weather(city: str, *, transport: HttpTransport | None = None) -> tuple[bool, str, dict[str, object]]:
     try:
         city = str(city or "").strip()
         if not city: return False, "", {"error": "CITY_MISSING"}

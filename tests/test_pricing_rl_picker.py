@@ -12,11 +12,11 @@ class _Ev:
     tenant_id: str
     user_id: str
     timestamp_ms: int
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 class _FakeStore:
-    def __init__(self, events: List[_Ev]):
+    def __init__(self, events: list[_Ev]):
         self._events = list(events)
 
     def iter_events(
@@ -28,8 +28,8 @@ class _FakeStore:
         user_id: str | None = None,
         event_type: str | None = None,
         limit: int | None = None,
-    ) -> Iterable[Dict[str, Any]]:
-        out: List[Dict[str, Any]] = []
+    ) -> Iterable[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
         for e in self._events:
             if str(e.tenant_id) != str(tenant_id):
                 continue
@@ -84,7 +84,7 @@ def test_pricing_rl_prefers_higher_expected_revenue_when_data_supports() -> None
     now_ms = 2_000_000
     t0 = now_ms - 10_000
 
-    events: List[_Ev] = []
+    events: list[_Ev] = []
     # 10 selections at 14000, 1 success
     for i in range(10):
         uid = f"u{i}"
@@ -165,7 +165,7 @@ def test_pricing_rl_context_key_segments_trials() -> None:
     now_ms = 3_000_000
     t0 = now_ms - 10_000
 
-    events: List[_Ev] = []
+    events: list[_Ev] = []
 
     # Segment A: 16000 converts well.
     for i in range(10):

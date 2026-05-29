@@ -53,7 +53,7 @@ def iter_events(
     end_ms: int | None = None,
     event_type: str | None = None,
     user_id: str | None = None,
-) -> Iterable[Dict[str, Any]]:
+) -> Iterable[dict[str, Any]]:
     rows = _iter_rows(
         db,
         tenant_id=tenant_id,
@@ -72,7 +72,7 @@ def latest_event(
     tenant_id: str = "default",
     user_id: str | None = None,
     event_types: Sequence[str] | None = None,
-) -> Dict[str, Any] | None:
+) -> dict[str, Any] | None:
     if event_types:
         placeholders = ",".join("?" for _ in event_types)
         sql = (
@@ -105,7 +105,7 @@ def latest_events(
     event_type: str | None = None,
     event_types: Sequence[str] | None = None,
     limit: int = 10,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     if event_types:
         placeholders = ",".join("?" for _ in event_types)
         sql = (

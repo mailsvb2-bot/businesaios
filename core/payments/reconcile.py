@@ -20,7 +20,7 @@ class EventStoreLike(Protocol):
         start_ms: int = 0,
         end_ms: int | None = None,
         event_type: str | None = None,
-    ) -> Iterable[Dict[str, Any]]: ...
+    ) -> Iterable[dict[str, Any]]: ...
 
 
 class LedgerEffectMarkPort(Protocol):

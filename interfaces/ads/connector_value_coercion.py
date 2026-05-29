@@ -10,7 +10,7 @@ def as_int(value: Any, *, default: int = 0) -> int:
         return int(default)
 
 
-def as_optional_int(value: Any) -> Optional[int]:
+def as_optional_int(value: Any) -> int | None:
     if value is None:
         return None
     try:
@@ -26,7 +26,7 @@ def as_float(value: Any, *, default: float = 0.0, scale: float = 1.0) -> float:
         return float(default)
 
 
-def as_optional_float(value: Any) -> Optional[float]:
+def as_optional_float(value: Any) -> float | None:
     if value is None:
         return None
     try:
@@ -36,9 +36,9 @@ def as_optional_float(value: Any) -> Optional[float]:
 
 
 def safe_ratio(
-    numerator: Optional[float],
-    denominator: Optional[int],
-) -> Optional[float]:
+    numerator: float | None,
+    denominator: int | None,
+) -> float | None:
     if numerator is None or denominator is None or int(denominator) <= 0:
         return None
     try:

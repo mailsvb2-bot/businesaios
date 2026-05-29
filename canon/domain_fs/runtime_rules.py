@@ -22,9 +22,9 @@ FORBIDDEN_THIN_HANDLER_TOKENS: tuple[str, ...] = (
 )
 
 
-def scan_thin_runtime_handlers(root: Path) -> List[CanonFsFinding]:
+def scan_thin_runtime_handlers(root: Path) -> list[CanonFsFinding]:
     handlers = root / "runtime" / "handlers"
-    findings: List[CanonFsFinding] = []
+    findings: list[CanonFsFinding] = []
 
     if not handlers.exists():
         return findings

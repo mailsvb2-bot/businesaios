@@ -11,10 +11,10 @@ Why here:
 from typing import Any, Dict, List
 
 
-def inline_button(text: str, callback_data: str) -> Dict[str, Any]:
+def inline_button(text: str, callback_data: str) -> dict[str, Any]:
     return {"text": str(text), "callback_data": str(callback_data)}
 
 
-def inline_keyboard(rows: List[List[Dict[str, Any]]]) -> Dict[str, Any]:
+def inline_keyboard(rows: list[list[dict[str, Any]]]) -> dict[str, Any]:
     """Telegram Bot API reply_markup for inline keyboard."""
     return {"inline_keyboard": rows}

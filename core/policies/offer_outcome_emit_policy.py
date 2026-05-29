@@ -18,7 +18,7 @@ class OfferOutcomeEmitPolicyV1:
 
     def propose(self, state: WorldStateV1):
         meta = getattr(state, "meta", None) or {}
-        job: Dict[str, Any] = {}
+        job: dict[str, Any] = {}
         if isinstance(meta, dict):
             j = meta.get("job")
             if isinstance(j, dict):

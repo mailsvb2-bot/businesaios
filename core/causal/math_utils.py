@@ -38,11 +38,11 @@ def sigmoid(z: float) -> float:
 
 @dataclass(frozen=True)
 class LinRegResult:
-    coef: List[float]
-    stderr: List[float] | None = None
+    coef: list[float]
+    stderr: list[float] | None = None
 
 
-def _matmul(A: List[List[float]], B: List[List[float]]) -> List[List[float]]:
+def _matmul(A: list[list[float]], B: list[list[float]]) -> list[list[float]]:
     m = len(A)
     n = len(A[0]) if A else 0
     p = len(B[0]) if B else 0
@@ -55,16 +55,16 @@ def _matmul(A: List[List[float]], B: List[List[float]]) -> List[List[float]]:
     return out
 
 
-def _transpose(A: List[List[float]]) -> List[List[float]]:
+def _transpose(A: list[list[float]]) -> list[list[float]]:
     if not A:
         return []
-    return [list(row) for row in zip(*A)]
+    return [list(row) for row in zip(*A, strict=False)]
 
 
-def _solve_gauss_jordan(M: List[List[float]], b: List[float]) -> List[float]:
+def _solve_gauss_jordan(M: list[list[float]], b: list[float]) -> list[float]:
     # Solve M x = b using Gauss-Jordan elimination.
     n = len(M)
-    A = [list(map(float, row)) + [float(bi)] for row, bi in zip(M, b)]
+    A = [list(map(float, row)) + [float(bi)] for row, bi in zip(M, b, strict=False)]
 
     for col in range(n):
         # pivot
@@ -99,7 +99,7 @@ def _solve_gauss_jordan(M: List[List[float]], b: List[float]) -> List[float]:
     return [A[i][n] for i in range(n)]
 
 
-def linear_regression_fit(X: List[List[float]], y: List[float]) -> LinRegResult:
+def linear_regression_fit(X: list[list[float]], y: list[float]) -> LinRegResult:
     """OLS via normal equations: beta = (X'X)^-1 X'y.
 
     Very small, dependency-free implementation.
@@ -123,7 +123,7 @@ def linear_regression_fit(X: List[List[float]], y: List[float]) -> LinRegResult:
 
 
 def dot(a: Sequence[float], b: Sequence[float]) -> float:
-    return float(sum(float(x) * float(y) for x, y in zip(a, b)))
+    return float(sum(float(x) * float(y) for x, y in zip(a, b, strict=False)))
 
 
 def clip(v: float, lo: float, hi: float) -> float:

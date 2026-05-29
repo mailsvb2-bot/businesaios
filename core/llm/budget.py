@@ -25,8 +25,8 @@ class DailyTokenBudget:
 
     def __init__(self, caps: BudgetCaps) -> None:
         self._caps = caps
-        self._tenant: Dict[Tuple[str, str], int] = {}
-        self._user: Dict[Tuple[str, str, str], int] = {}
+        self._tenant: dict[tuple[str, str], int] = {}
+        self._user: dict[tuple[str, str, str], int] = {}
 
     def _day(self) -> str:
         return day_key_utc()
@@ -59,7 +59,7 @@ class TokenBudget(Protocol):
         ...
 
 
-def _utc_day_bounds_ms(ts_ms: Optional[int] = None) -> tuple[int, int]:
+def _utc_day_bounds_ms(ts_ms: int | None = None) -> tuple[int, int]:
     """Return (start_ms, end_ms_exclusive) for UTC day containing ts_ms."""
     if ts_ms is None:
         ts_ms = int(time.time() * 1000)
@@ -83,7 +83,7 @@ class EventStoreDailyTokenBudget:
         self._caps = caps
         self._ttl = float(cache_ttl_s)
         # cache: (day, tenant, user)->(ts, spent_tenant, spent_user)
-        self._cache: Dict[Tuple[str, str, str], Tuple[float, int, int]] = {}
+        self._cache: dict[tuple[str, str, str], tuple[float, int, int]] = {}
 
     def _day(self) -> str:
         return day_key_utc()

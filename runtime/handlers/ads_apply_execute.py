@@ -35,7 +35,7 @@ ACTION_NAME = "ads_apply_execute@v1"
 
 
 
-def handle_ads_apply_execute(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, engine: AdsApplyEngine | None, event_store: Any | None = None) -> Any:
+def handle_ads_apply_execute(payload: dict[str, Any], effects: EffectsPort, env: Any, *, engine: AdsApplyEngine | None, event_store: Any | None = None) -> Any:
     ActuationRegistry.register(domain="ads.apply", controller_id=ACTION_NAME, source=__file__)
     ActuationRegistry.assert_single_executor(domain="ads.apply")
 

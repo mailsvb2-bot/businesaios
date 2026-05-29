@@ -12,7 +12,7 @@ from runtime.tenancy import as_tenant_id
 ACTION_NAME = "ads_rl_report@v1"
 
 
-def handle_ads_rl_report(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
+def handle_ads_rl_report(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
     p = payload or {}
     bind_runtime_state(event_store=event_store)
     tenant_id = as_tenant_id(str(p.get("tenant_id") or ""))

@@ -17,7 +17,7 @@ def is_strict_world_model_pinning_enabled() -> bool:
 
 def check_world_model_pin(
     *,
-    pinned_meta: Dict[str, Any] | None,
+    pinned_meta: dict[str, Any] | None,
     state: Any,
 ) -> WorldModelPinCheckResult:
     pinned = WorldModelPin.from_payload(pinned_meta)
@@ -67,7 +67,7 @@ def check_world_model_pin(
 
 def enforce_world_model_pin_or_raise(
     *,
-    pinned_meta: Dict[str, Any] | None,
+    pinned_meta: dict[str, Any] | None,
     state: Any,
 ) -> WorldModelPinCheckResult:
     result = check_world_model_pin(
@@ -79,7 +79,7 @@ def enforce_world_model_pin_or_raise(
     return result
 
 
-def _as_str_or_none(value: Any) -> Optional[str]:
+def _as_str_or_none(value: Any) -> str | None:
     if value is None:
         return None
     s = str(value).strip()

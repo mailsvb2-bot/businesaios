@@ -11,7 +11,7 @@ from runtime.ports.effects import EffectsPort
 
 ACTION_NAME = ACTION_REWARD_OBSERVE_V1
 
-def handle_reward_observe(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, observer: Any) -> Any:
+def handle_reward_observe(payload: dict[str, Any], effects: EffectsPort, env: Any, *, observer: Any) -> Any:
     p = payload or {}
     try:
         route = extract_strict_route_from_envelope(payload=p, env=env)

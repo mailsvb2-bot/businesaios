@@ -9,7 +9,7 @@ from core.tenancy.normalization import normalize_tenant_id
 log = logging.getLogger(__name__)
 
 
-def make_telemetry_step(*, decision: Any, user_id: str) -> Dict[str, Any]:
+def make_telemetry_step(*, decision: Any, user_id: str) -> dict[str, Any]:
     return {
         "action": "track_event@v1",
         "user_id": user_id,
@@ -38,7 +38,7 @@ def offer_allowed(*, offer_engine: Any, cooldown_store: Any, state: Any, tenant_
     )
 
 
-def render_offer_step(*, offer_engine: Any, state: Any, decision: Any, user_id: str, max_band: str | None) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def render_offer_step(*, offer_engine: Any, state: Any, decision: Any, user_id: str, max_band: str | None) -> tuple[dict[str, Any], dict[str, Any]]:
     tenant_id = normalize_tenant_id(getattr(state, "tenant_id", None), fallback=str(decision.tenant_id or "").strip())
     offer_text, offer_variant, offer_meta, price_for_render = render_offer_payload(
         offer_engine=offer_engine,

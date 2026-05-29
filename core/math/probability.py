@@ -53,7 +53,7 @@ def purchase_prob_from_history(
     history: HistorySignals,
     *,
     base_rate: float = 0.02,
-    weights: Optional[Dict[str, float]] = None,
+    weights: dict[str, float] | None = None,
 ) -> float:
     """A tiny Bayesian-style heuristic (safe baseline, not a trained model):
       P(buy|user) ≈ clamp( base_rate * Π (1 + w_i * signal_i) )

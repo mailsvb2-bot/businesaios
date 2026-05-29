@@ -30,9 +30,9 @@ class EventStoreSpendLedger:
     policy: SpendLedgerPolicy = DEFAULT_SPEND_LEDGER_POLICY
 
     _cache_until: float = float(0)
-    _cache: Dict[str, float] = None  # type: ignore
+    _cache: dict[str, float] = None  # type: ignore
 
-    def _load_today(self, *, tenant_id: str) -> Dict[str, float]:
+    def _load_today(self, *, tenant_id: str) -> dict[str, float]:
         now_ms = int(time.time() * 1000)
         start_ms = _day_start_ms(now_ms)
 
@@ -48,7 +48,7 @@ class EventStoreSpendLedger:
         except Exception:
             return {"__uncertain__": float(self.policy.uncertainty_marker)}
 
-        totals: Dict[str, float] = {"total": float(self.policy.zero_value)}
+        totals: dict[str, float] = {"total": float(self.policy.zero_value)}
         uncertain = False
         earliest_ts = None
 
@@ -91,7 +91,7 @@ class EventStoreSpendLedger:
             totals["__uncertain__"] = float(self.policy.uncertainty_marker)
         return totals
 
-    def _get_cached(self, *, tenant_id: str) -> Dict[str, float]:
+    def _get_cached(self, *, tenant_id: str) -> dict[str, float]:
         now = time.time()
         if self._cache is not None and now < self._cache_until:
             return self._cache
@@ -174,7 +174,7 @@ class EventStoreSpendLedger:
             return int(self.policy.block_minor_units)
         return int(round(float(total_major) * int(self.policy.major_to_minor_multiplier)))
 
-    def today(self, *, tenant_id: str) -> Dict[str, float]:
+    def today(self, *, tenant_id: str) -> dict[str, float]:
         """Return today's spend totals (major units).
 
         This is a pure read-model derived from ads_metrics_imported events.

@@ -7,7 +7,7 @@ from core.causal.estimators.base import CausalEstimator, EstimatorResult, _count
 from core.causal.math_utils import mean
 from core.causal.types import CausalDataset, EffectEstimate
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -27,10 +27,10 @@ class DiffInDiffEstimator(CausalEstimator):
     def estimate(self, *, dataset: CausalDataset, estimand: str = "ATE") -> EstimatorResult:
         dataset.validate()
 
-        y_tp: List[float] = []  # treated, post
-        y_tpre: List[float] = []
-        y_cp: List[float] = []
-        y_cpre: List[float] = []
+        y_tp: list[float] = []  # treated, post
+        y_tpre: list[float] = []
+        y_cp: list[float] = []
+        y_cpre: list[float] = []
 
         for r in dataset.rows:
             period = str((r.covariates or {}).get(self.period_key) or "")

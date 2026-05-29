@@ -20,10 +20,10 @@ def select_tariff_effect(
     title: str | None = None,
     expected_price: int | None = None,
     notify_text: str | None = None,
-    notify_reply_markup: Optional[Dict[str, Any]] = None,
+    notify_reply_markup: dict[str, Any] | None = None,
 ) -> dict:
     assert_called_from_executor()
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "tariff": str(tariff),
         "days": int(days),
         "period": str(period),
@@ -74,7 +74,7 @@ def capture_payment_effect(
     amount: int,
     currency: str,
     provider: str,
-    metadata: Optional[Dict[str, Any]] = None,
+    metadata: dict[str, Any] | None = None,
 ) -> dict:
     assert_called_from_executor()
     provider_norm = str(provider).lower().strip()

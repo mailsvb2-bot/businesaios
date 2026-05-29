@@ -20,10 +20,10 @@ class StopLossState:
     active: bool
     reason: str = ""
     since_ms: int = 0
-    details: Dict[str, Any] | None = None
+    details: dict[str, Any] | None = None
 
     @staticmethod
-    def from_settings(settings: Mapping[str, Any] | None) -> "StopLossState":
+    def from_settings(settings: Mapping[str, Any] | None) -> StopLossState:
         raw = (settings or {}).get(STOP_LOSS_SETTING_KEY) if isinstance(settings, Mapping) else None
         if not isinstance(raw, dict):
             return StopLossState(False)
@@ -37,8 +37,8 @@ class StopLossState:
         except (TypeError, ValueError):
             return StopLossState(False)
 
-    def to_dict(self) -> Dict[str, Any]:
-        out: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {
             "active": bool(self.active),
             "reason": str(self.reason or ""),
             "since_ms": int(self.since_ms or 0),
@@ -50,7 +50,7 @@ class StopLossState:
 
 
 
-def _format_stop_loss_details(details: Dict[str, Any] | None) -> str:
+def _format_stop_loss_details(details: dict[str, Any] | None) -> str:
     if not isinstance(details, dict) or not details:
         return ""
 
@@ -80,7 +80,7 @@ def _format_stop_loss_details(details: Dict[str, Any] | None) -> str:
             continue
         reason_lines.append(f"• {k}: {details.get(k)}")
     return "\n" + "\n".join(reason_lines) + "\n"
-def build_stop_loss_state_from_verdict(*, verdict: GuardrailVerdict, now_ms: Optional[int] = None) -> StopLossState:
+def build_stop_loss_state_from_verdict(*, verdict: GuardrailVerdict, now_ms: int | None = None) -> StopLossState:
     if verdict.allow:
         return StopLossState(False)
     return StopLossState(
@@ -96,10 +96,10 @@ def build_stop_loss_plan(
     user_id: str,
     verdict: GuardrailVerdict,
     existing: StopLossState,
-    session_patch: Dict[str, Any] | None = None,
+    session_patch: dict[str, Any] | None = None,
     callback_query_id: str | None = None,
     emit_event: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Build an execute_plan@v1 payload to activate stop-loss.
 
     It sets user setting autopilot:stop_loss and optionally patches autopilot:session.
@@ -170,7 +170,7 @@ def build_stop_loss_plan(
     return {"user_id": str(user_id), "steps": steps}
 
 
-def build_clear_stop_loss_plan(*, user_id: str, callback_query_id: str | None = None) -> Dict[str, Any]:
+def build_clear_stop_loss_plan(*, user_id: str, callback_query_id: str | None = None) -> dict[str, Any]:
     steps = [
         {
             "action": "set_user_setting@v1",

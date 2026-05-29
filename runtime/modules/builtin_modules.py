@@ -6,7 +6,7 @@ from runtime.modules.decision_service_contract import build_decision_service_des
 from runtime.modules.module_protocol import ModuleWiringContext, ProductRuntimeView
 
 CANON_RUNTIME_MODULE_CATALOG_OWNER = True
-DEFAULT_RUNTIME_MODULE_IDS: Tuple[str, ...] = (
+DEFAULT_RUNTIME_MODULE_IDS: tuple[str, ...] = (
     "ring",
     "decision_core",
     "retention",
@@ -87,7 +87,7 @@ class TelemetryModule:
         )
 
 
-def build_builtin_runtime_modules() -> Tuple[object, ...]:
+def build_builtin_runtime_modules() -> tuple[object, ...]:
     return (
         RingModule(),
         DecisionCoreModule(),
@@ -97,7 +97,7 @@ def build_builtin_runtime_modules() -> Tuple[object, ...]:
     )
 
 
-def load_builtin_modules() -> Tuple[object, ...]:
+def load_builtin_modules() -> tuple[object, ...]:
     return build_builtin_runtime_modules()
 
 

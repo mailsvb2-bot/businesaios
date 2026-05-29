@@ -17,7 +17,7 @@ class FakeApplyPort:
     def __init__(self) -> None:
         self.calls = 0
 
-    def perform_apply(self, tenant_id: str, plan: Any) -> Dict[str, Any]:
+    def perform_apply(self, tenant_id: str, plan: Any) -> dict[str, Any]:
         self.calls += 1
         if self.calls == 1:
             return {"ok": True, "tenant": tenant_id, "n": len(plan.commands or [])}

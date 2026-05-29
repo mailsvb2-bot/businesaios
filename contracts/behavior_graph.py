@@ -30,7 +30,7 @@ class Node:
     node_type: str
     key: str
     title: str
-    props: Dict[str, Any]
+    props: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ class Edge:
     src: str
     dst: str
     weight: float
-    props: Dict[str, Any]
+    props: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -50,7 +50,7 @@ class GraphSnapshot:
     built_at_ms: int
     nodes: list[Node]
     edges: list[Edge]
-    meta: Dict[str, Any]
+    meta: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -59,12 +59,12 @@ class Neighbor:
     weight: float
     edge_type: str
     edge_id: str
-    props: Dict[str, Any]
+    props: dict[str, Any]
 
 
 @dataclass(frozen=True)
 class PathStep:
     node_id: str
-    via_edge_id: Optional[str]
-    via_edge_type: Optional[str]
+    via_edge_id: str | None
+    via_edge_type: str | None
     weight: float

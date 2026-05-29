@@ -17,7 +17,7 @@ def check_offer_eligibility(
     product: Mapping[str, Any],
     tenant_id: str,
     entitlements: Mapping[str, Any],
-    payment_status: Optional[str],
+    payment_status: str | None,
     offer_id: str,
 ) -> Eligibility:
     # 1) product module flag

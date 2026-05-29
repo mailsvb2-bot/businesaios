@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 from core.api.idempotency import IdempotencyKey
 from core.tenancy.scope import TenantId
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -24,4 +24,4 @@ class AdsApplyRequest:
 class AdsApplyResult:
     status: str  # "dry_run" | "applied" | "skipped" | "duplicate" | "blocked" | "failed"
     detail: Json
-    audit_event: Optional[Json] = None
+    audit_event: Json | None = None

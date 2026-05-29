@@ -22,7 +22,7 @@ def handle_offer_outcome(
     *,
     user_id: str,
     default_price_rub: int,
-) -> Optional[ProposedAction]:
+) -> ProposedAction | None:
     # Only handle our canonical prefix.
     if not (isinstance(ctx.callback_data, str) and ctx.callback_data.startswith("offer:")):
         return None

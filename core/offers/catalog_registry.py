@@ -37,8 +37,8 @@ class OfferCatalogRegistry:
     Supports lazy factories to avoid heavy import-time work and prevent cycles.
     """
 
-    _by_id: Dict[str, Union[OfferCatalog, CatalogFactory]]
-    _cache: Dict[str, OfferCatalog] = field(default_factory=dict)
+    _by_id: dict[str, OfferCatalog | CatalogFactory]
+    _cache: dict[str, OfferCatalog] = field(default_factory=dict)
 
     def register(self, catalog: OfferCatalog) -> None:
         self._by_id[str(catalog.id)] = catalog

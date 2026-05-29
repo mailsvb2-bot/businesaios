@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Protocol
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -13,7 +13,7 @@ class AdsGuardrails:
     apply_enabled: bool = False
 
     max_daily_budget: float = 0.0
-    allowed_platforms: List[str] = field(default_factory=list)
+    allowed_platforms: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ class AdsCommand:
 
 @dataclass(frozen=True)
 class AdsPlan:
-    commands: List[AdsCommand]
+    commands: list[AdsCommand]
     notes: str = ""
 
 

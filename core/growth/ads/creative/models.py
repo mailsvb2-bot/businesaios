@@ -21,7 +21,7 @@ class CreativeGuardrails:
     disallow_medical_claims: bool = True  # keep safe for broad categories
 
     # Optional deny phrases / patterns (lowercased contains)
-    deny_phrases: List[str] = field(default_factory=lambda: ["100% гарантия", "лучший в мире"])
+    deny_phrases: list[str] = field(default_factory=lambda: ["100% гарантия", "лучший в мире"])
 
 
 @dataclass(frozen=True)
@@ -32,12 +32,12 @@ class CreativeCandidate:
     primary_text: str
     description: str = ""
     cta: str = "Learn More"
-    meta: Dict[str, str] = field(default_factory=dict)
+    meta: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class CreativeSelection:
     selected: CreativeCandidate
     reason: str
-    scores: Dict[str, float]
+    scores: dict[str, float]
     guardrails_ok: bool

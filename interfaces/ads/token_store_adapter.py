@@ -17,7 +17,7 @@ class AsyncTokenStoreAdapter:
     def __init__(self, sync_store: Any):
         self._sync = sync_store
 
-    async def put(self, *, tenant_id: str, platform: Any, account_id: str, token: Dict[str, Any]) -> None:
+    async def put(self, *, tenant_id: str, platform: Any, account_id: str, token: dict[str, Any]) -> None:
         t = OAuthToken(
             access_token=str(token.get("access_token") or ""),
             refresh_token=(str(token.get("refresh_token")) if token.get("refresh_token") else None),
@@ -27,7 +27,7 @@ class AsyncTokenStoreAdapter:
         )
         await asyncio.to_thread(self._sync.put, tenant_id=tenant_id, platform=str(getattr(platform, "value", platform)), account_id=account_id, token=t)
 
-    async def get(self, *, tenant_id: str, platform: Any, account_id: str) -> Optional[Dict[str, Any]]:
+    async def get(self, *, tenant_id: str, platform: Any, account_id: str) -> dict[str, Any] | None:
         res = await asyncio.to_thread(self._sync.get, tenant_id=tenant_id, platform=str(getattr(platform, "value", platform)), account_id=account_id)
         if not res:
             return None

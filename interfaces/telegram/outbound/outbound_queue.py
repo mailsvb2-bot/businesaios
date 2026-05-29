@@ -60,7 +60,7 @@ class TelegramOutboundQueue(
         chat_burst: int,
         max_queue: int,
         warn_queue: int,
-        emit_event: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+        emit_event: Callable[[str, dict[str, Any]], None] | None = None,
         log: Any,
         overflow_policy: str = "block",
         auto_start_on_use: bool = True,
@@ -68,21 +68,21 @@ class TelegramOutboundQueue(
         alert_drop_best_effort: bool = True,
         alert_qsize: int = 0,
         alert_min_interval_s: float = 60.0,
-        metrics_logger: Optional[Callable[[str], None]] = None,
+        metrics_logger: Callable[[str], None] | None = None,
         self_heal_enabled: bool = False,
         self_heal_marketing_cooldown_s: float = 60.0,
         self_heal_on_sla: bool = True,
         self_heal_on_qsize: bool = True,
         self_heal_on_drops: bool = False,
         self_heal_purge_enabled: bool = True,
-        self_heal_purge_kinds_blacklist: Optional[tuple[str, ...]] = None,
-        self_heal_purge_kinds_whitelist: Optional[tuple[str, ...]] = None,
+        self_heal_purge_kinds_blacklist: tuple[str, ...] | None = None,
+        self_heal_purge_kinds_whitelist: tuple[str, ...] | None = None,
         self_heal_purge_max_items: int = 10000,
     ) -> None:
         self._global = TokenBucket(capacity=int(global_burst), refill_per_s=float(global_rps))
         self._chat_rps = float(chat_rps)
         self._chat_burst = int(chat_burst)
-        self._per_chat: Dict[int, TokenBucket] = {}
+        self._per_chat: dict[int, TokenBucket] = {}
 
         self._max_queue = max(1, int(max_queue))
         self._slots = threading.BoundedSemaphore(self._max_queue)
@@ -100,7 +100,7 @@ class TelegramOutboundQueue(
             self._overflow = "block"
 
         self._auto_start = bool(auto_start_on_use)
-        self._thr: Optional[threading.Thread] = None
+        self._thr: threading.Thread | None = None
         self._stop = threading.Event()
 
         self._alert_ux_wait_p95_ms = float(alert_ux_wait_p95_ms)
@@ -148,9 +148,9 @@ class TelegramOutboundQueue(
         self,
         *,
         method: str,
-        chat_id: Optional[int],
+        chat_id: int | None,
         fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
         critical: bool = True,
         priority: PriorityArg = 50,
         kind: str = "normal",
@@ -178,9 +178,9 @@ class TelegramOutboundQueue(
         self,
         *,
         method: str,
-        chat_id: Optional[int],
+        chat_id: int | None,
         fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
         timeout_s: float = 30.0,
         critical: bool = True,
         priority: PriorityArg = 50,

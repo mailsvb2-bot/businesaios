@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
@@ -81,7 +81,7 @@ def test_order_can_be_amended_without_creating_new_order() -> None:
 
 def test_reconciliation_surface_reports_consistent_full_cycle() -> None:
     client = _build_client()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
     response = client.post('/client-outcome/full-cycle', json={
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',
@@ -143,7 +143,7 @@ def test_duplicate_amendment_is_idempotent() -> None:
 
 def test_amendment_is_denied_after_billing_started() -> None:
     client = _build_client()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
     response = client.post('/client-outcome/full-cycle', json={
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',
@@ -175,7 +175,7 @@ def test_amendment_is_denied_after_billing_started() -> None:
 
 def test_admin_view_surface_contains_timeline_and_reconciliation_widgets() -> None:
     client = _build_client()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
     response = client.post('/client-outcome/full-cycle', json={
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',
@@ -222,7 +222,7 @@ def test_reconciliation_reports_missing_dispute_stage_when_truth_is_inconsistent
     from entrypoints.api.client_outcome_route_handlers import build_client_outcome_route_handlers
 
     handlers = build_client_outcome_route_handlers()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC)
     handlers.commercial_state_service.store.upsert_state(
         order_id='order-inconsistent',
         lead_id='lead-inconsistent',
@@ -273,7 +273,7 @@ def test_reconciliation_reports_missing_dispute_stage_when_truth_is_inconsistent
 
 def test_admin_view_surface_contains_operator_and_anomaly_widgets() -> None:
     client = _build_client()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
     selected = client.post('/client-outcome/select', json={
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',
@@ -301,7 +301,7 @@ def test_reconciliation_reports_missing_refund_requested_stage_when_refund_truth
     from entrypoints.api.client_outcome_route_handlers import build_client_outcome_route_handlers
 
     handlers = build_client_outcome_route_handlers()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC)
     handlers.commercial_state_service.store.upsert_state(
         order_id='order-refund-inconsistent',
         lead_id='lead-refund-inconsistent',
@@ -343,7 +343,7 @@ def test_reconciliation_reports_missing_refund_requested_stage_when_refund_truth
 
 def test_admin_view_surface_contains_recovery_and_metrics_widgets() -> None:
     client = _build_client()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
     response = client.post('/client-outcome/full-cycle', json={
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',
@@ -390,7 +390,7 @@ def test_reconciliation_endpoint_emits_metrics_for_inconsistent_truth() -> None:
     from entrypoints.api.client_outcome_route_handlers import build_client_outcome_route_handlers
 
     handlers = build_client_outcome_route_handlers()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC)
     handlers.commercial_state_service.store.upsert_state(
         order_id='order-metric-inconsistent',
         lead_id='lead-metric-inconsistent',

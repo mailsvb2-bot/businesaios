@@ -14,7 +14,7 @@ from typing import Any, Dict, Mapping
 PENDING_KEY = "ads:apply_pending_plan"
 
 
-def normalize_plan(plan: Mapping[str, Any] | None) -> Dict[str, Any]:
+def normalize_plan(plan: Mapping[str, Any] | None) -> dict[str, Any]:
     p = dict(plan or {})
     # Drop volatile keys.
     for k in ["created_ms", "nonce"]:

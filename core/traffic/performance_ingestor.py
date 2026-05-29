@@ -12,7 +12,7 @@ class PerformanceIngestor:
     dict-like points (or objects with the same attributes) to remain provider-agnostic.
     """
 
-    def summarize(self, points: Iterable[Any]) -> Dict[str, int]:
+    def summarize(self, points: Iterable[Any]) -> dict[str, int]:
         clicks = 0
         impressions = 0
         spend_minor = 0

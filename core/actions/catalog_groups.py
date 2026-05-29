@@ -16,7 +16,7 @@ def _entry(action: str, version: int, *, required: set[str], optional: set[str],
     )
 
 
-def base_catalog() -> Dict[str, CatalogEntry]:
+def base_catalog() -> dict[str, CatalogEntry]:
     return {
         "noop@v1": _entry("noop@v1", 1, required=set(), optional=set(), field_types={}),
         "poll_telegram_updates@v1": _entry(
@@ -45,7 +45,7 @@ def base_catalog() -> Dict[str, CatalogEntry]:
     }
 
 
-def behavior_graph_catalog() -> Dict[str, CatalogEntry]:
+def behavior_graph_catalog() -> dict[str, CatalogEntry]:
     return {
         "behavior_graph_build@v1": _entry("behavior_graph_build@v1", 1, required=set(), optional={"tenant_id", "user_id", "scope", "start_ms", "end_ms", "max_events", "enable_sequence_edges"}, field_types={"tenant_id": str, "user_id": str, "scope": str, "start_ms": int, "end_ms": int, "max_events": int, "enable_sequence_edges": bool}),
         "behavior_graph_neighbors@v1": _entry("behavior_graph_neighbors@v1", 1, required={"node_id"}, optional={"tenant_id", "user_id", "scope", "direction", "limit", "edge_type"}, field_types={"tenant_id": str, "user_id": str, "scope": str, "node_id": str, "direction": str, "limit": int, "edge_type": str}),
@@ -55,7 +55,7 @@ def behavior_graph_catalog() -> Dict[str, CatalogEntry]:
     }
 
 
-def payments_catalog() -> Dict[str, CatalogEntry]:
+def payments_catalog() -> dict[str, CatalogEntry]:
     return {
         "capture_payment@v1": _entry("capture_payment@v1", 1, required={"user_id", "amount", "currency"}, optional={"provider", "metadata", "expected_amount", "pricing_version"}, field_types={"user_id": str, "amount": int, "currency": str, "provider": str, "metadata": dict, "expected_amount": int, "pricing_version": str}),
         "create_payment_and_send_link@v1": _entry("create_payment_and_send_link@v1", 1, required={"user_id", "amount", "currency"}, optional={"provider", "metadata", "expected_amount", "pricing_version"}, field_types={"user_id": str, "amount": int, "currency": str, "provider": str, "metadata": dict, "expected_amount": int, "pricing_version": str}),
@@ -66,7 +66,7 @@ def payments_catalog() -> Dict[str, CatalogEntry]:
     }
 
 
-def growth_catalog() -> Dict[str, CatalogEntry]:
+def growth_catalog() -> dict[str, CatalogEntry]:
     return {
         "send_marketing_offer@v1": _entry("send_marketing_offer@v1", 1, required={"user_id", "offer"}, optional={"tenant_id", "locale", "channel", "features", "last_user_text", "fallback_text", "reply_markup", "callback_query_id", "track_event_type", "track_payload", "priority", "critical", "best_effort", "channel_policy"}, field_types={"tenant_id": str, "user_id": str, "locale": str, "channel": str, "offer": dict, "features": dict, "last_user_text": str, "fallback_text": str, "reply_markup": dict, "callback_query_id": str, "track_event_type": str, "track_payload": dict, "priority": str, "critical": bool, "best_effort": bool, "channel_policy": dict}),
         "one_click_value@v1": _entry("one_click_value@v1", 1, required={"tenant_id", "user_id", "locale", "channel", "offer"}, optional={"features", "last_user_text", "reply_markup", "callback_query_id", "track_event_type", "track_payload", "fallback_text", "channel_policy"}, field_types={"tenant_id": str, "user_id": str, "locale": str, "channel": str, "offer": dict, "features": dict, "last_user_text": str, "reply_markup": dict, "callback_query_id": str, "track_event_type": str, "track_payload": dict, "fallback_text": str, "channel_policy": dict}),
@@ -79,14 +79,14 @@ def growth_catalog() -> Dict[str, CatalogEntry]:
     }
 
 
-def user_state_catalog() -> Dict[str, CatalogEntry]:
+def user_state_catalog() -> dict[str, CatalogEntry]:
     return {
         "set_user_setting@v1": _entry("set_user_setting@v1", 1, required={"user_id", "key"}, optional={"value", "notify_text", "notify_reply_markup", "callback_query_id"}, field_types={"user_id": str, "key": str, "value": object, "notify_text": str, "notify_reply_markup": dict, "callback_query_id": str}),
         "log_mood@v1": _entry("log_mood@v1", 1, required={"user_id", "score"}, optional={"note", "notify_text", "notify_reply_markup", "callback_query_id"}, field_types={"user_id": str, "score": int, "note": str, "notify_text": str, "notify_reply_markup": dict, "callback_query_id": str}),
     }
 
 
-def governance_catalog() -> Dict[str, CatalogEntry]:
+def governance_catalog() -> dict[str, CatalogEntry]:
     return {
         "deploy_policy@v1": _entry("deploy_policy@v1", 1, required={"candidate_policy_id", "rollout_pct"}, optional=set(), field_types={"candidate_policy_id": str, "rollout_pct": int}),
         "rollback_policy@v1": _entry("rollback_policy@v1", 1, required={"reason"}, optional=set(), field_types={"reason": str}),
@@ -102,7 +102,7 @@ def governance_catalog() -> Dict[str, CatalogEntry]:
     }
 
 
-def build_catalog_groups() -> tuple[Dict[str, CatalogEntry], ...]:
+def build_catalog_groups() -> tuple[dict[str, CatalogEntry], ...]:
     return (
         base_catalog(),
         behavior_graph_catalog(),
@@ -116,19 +116,19 @@ def build_catalog_groups() -> tuple[Dict[str, CatalogEntry], ...]:
 # Canonical compat surfaces for grouped action catalogs
 CANON_ACTION_CATALOG_GROUPS = True
 
-def telegram_actions() -> Dict[str, CatalogEntry]:
+def telegram_actions() -> dict[str, CatalogEntry]:
     return dict(base_catalog())
 
-def payments_actions() -> Dict[str, CatalogEntry]:
+def payments_actions() -> dict[str, CatalogEntry]:
     return dict(payments_catalog())
 
-def growth_actions() -> Dict[str, CatalogEntry]:
+def growth_actions() -> dict[str, CatalogEntry]:
     return dict(growth_catalog())
 
-def ads_actions() -> Dict[str, CatalogEntry]:
+def ads_actions() -> dict[str, CatalogEntry]:
     return dict(growth_catalog())
 
-def admin_actions() -> Dict[str, CatalogEntry]:
+def admin_actions() -> dict[str, CatalogEntry]:
     return dict(governance_catalog())
 
 

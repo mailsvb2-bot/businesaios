@@ -17,7 +17,7 @@ ACTION_NAME = "ads_rl_suggest@v1"
 _SUGGEST_GATE = PolicyUpdateGate(cooldown_ms=10 * 60 * 1000)
 
 
-def handle_ads_rl_suggest(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
+def handle_ads_rl_suggest(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
     p = payload or {}
     bind_runtime_state(event_store=event_store)
     tenant_id = as_tenant_id(str(p.get("tenant_id") or ""))

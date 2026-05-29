@@ -16,7 +16,7 @@ from core.llm import (
 from core.llm.agent.agent import LLMAgent, LLMAgentConfig
 from core.llm.contracts import LLMMessage, LLMRequest
 
-Transport = Callable[[str, str, Dict[str, object], int], Dict[str, object]]
+Transport = Callable[[str, str, dict[str, object], int], dict[str, object]]
 
 _PROVIDER_DEFAULTS = {
     "openai_compat": {
@@ -100,10 +100,10 @@ def build_runtime_llm_client(
     model: str,
     timeout_s: int = 20,
     anthropic_version: str | None = None,
-    openai_transport: Optional[Transport] = None,
-    anthropic_transport: Optional[Transport] = None,
-    gigachat_transport: Optional[Transport] = None,
-    yandexgpt_transport: Optional[Transport] = None,
+    openai_transport: Transport | None = None,
+    anthropic_transport: Transport | None = None,
+    gigachat_transport: Transport | None = None,
+    yandexgpt_transport: Transport | None = None,
 ) -> LLMClient:
     normalized = normalize_provider(provider)
     base = str(base_url or "").strip()

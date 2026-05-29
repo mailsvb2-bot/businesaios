@@ -12,8 +12,8 @@ from application.business_autonomy.safety_core import SafetyRuntimePolicy, valid
 class BudgetGuardDecision:
     allowed: bool
     reason: str
-    budget_limit: Optional[float] = None
-    estimated_cost: Optional[float] = None
+    budget_limit: float | None = None
+    estimated_cost: float | None = None
     safety_verdict: dict[str, object] | None = None
 
 
@@ -50,8 +50,8 @@ class BusinessBudgetGuard:
 class BlastRadiusDecision:
     allowed: bool
     reason: str
-    outbound_limit: Optional[int] = None
-    requested_outbound: Optional[int] = None
+    outbound_limit: int | None = None
+    requested_outbound: int | None = None
     safety_verdict: dict[str, object] | None = None
 
 
@@ -89,7 +89,7 @@ class ApprovalStatus(str, Enum):
 class ApprovalDecision:
     status: ApprovalStatus
     reason: str
-    approver_id: Optional[str] = None
+    approver_id: str | None = None
 
 
 class BusinessApprovalGate:
@@ -117,7 +117,7 @@ class OperatorOverrideMode(str, Enum):
 class OperatorOverrideDecision:
     mode: OperatorOverrideMode
     reason: str
-    operator_id: Optional[str] = None
+    operator_id: str | None = None
 
 
 class BusinessOperatorOverridePolicy:
@@ -151,14 +151,14 @@ class BusinessIdempotencyStore:
         self._items[key] = IdempotencyRecord(key=key, payload=payload)
 
 
-def _extract_float_constraint(request: BusinessExecutionRequest, name: str) -> Optional[float]:
+def _extract_float_constraint(request: BusinessExecutionRequest, name: str) -> float | None:
     for item in request.envelope.constraints:
         if item.name == name:
             return _float_or_none(item.value)
     return None
 
 
-def _extract_int_constraint(request: BusinessExecutionRequest, name: str) -> Optional[int]:
+def _extract_int_constraint(request: BusinessExecutionRequest, name: str) -> int | None:
     for item in request.envelope.constraints:
         if item.name == name:
             return _int_or_none(item.value)
@@ -172,7 +172,7 @@ def _float_or_zero(value: object) -> float:
         return 0.0
 
 
-def _float_or_none(value: object) -> Optional[float]:
+def _float_or_none(value: object) -> float | None:
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -186,7 +186,7 @@ def _int_or_default(value: object, default: int) -> int:
         return default
 
 
-def _int_or_none(value: object) -> Optional[int]:
+def _int_or_none(value: object) -> int | None:
     try:
         return int(value)
     except (TypeError, ValueError):

@@ -8,14 +8,14 @@ Handler = Callable[..., Awaitable[None]]
 @dataclass(frozen=True)
 class CallbackContext:
     tenant_id: str
-    user_id: Optional[str]
+    user_id: str | None
     chat_id: int
     callback_data: str
 
 class CallbackRouter:
     def __init__(self) -> None:
-        self._exact: Dict[str, Handler] = {}
-        self._prefix: list[Tuple[str, Handler]] = []
+        self._exact: dict[str, Handler] = {}
+        self._prefix: list[tuple[str, Handler]] = []
 
     def on(self, key: str, handler: Handler) -> None:
         self._exact[key] = handler

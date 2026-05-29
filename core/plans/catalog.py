@@ -27,7 +27,7 @@ def _catalog_path() -> Path:
     return _repo_root() / "data" / "plans.json"
 
 
-def load_plans() -> List[Dict[str, Any]]:
+def load_plans() -> list[dict[str, Any]]:
     path = _catalog_path()
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -38,8 +38,8 @@ def load_plans() -> List[Dict[str, Any]]:
     return []
 
 
-def active_plans() -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
+def active_plans() -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     for p in load_plans():
         try:
             if not p.get("is_active", True):
@@ -75,7 +75,7 @@ def active_plans() -> List[Dict[str, Any]]:
     return out
 
 
-def plan_by_id(plan_id: int) -> Optional[Dict[str, Any]]:
+def plan_by_id(plan_id: int) -> dict[str, Any] | None:
     try:
         pid = int(plan_id)
     except Exception:
@@ -86,7 +86,7 @@ def plan_by_id(plan_id: int) -> Optional[Dict[str, Any]]:
     return None
 
 
-def get_plan_by_id(plan_id: int) -> Optional[Dict[str, Any]]:
+def get_plan_by_id(plan_id: int) -> dict[str, Any] | None:
     """Return a single active plan by id (pure helper).
 
     Policy code should use this instead of duplicating catalog scanning logic.

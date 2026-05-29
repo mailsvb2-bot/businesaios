@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from runtime.monetization import (
     RevenueAdvisoryService,
@@ -18,7 +18,7 @@ def test_revenue_advisory_service_builds_runtime_summary() -> None:
         product_id='product-1',
         snapshots=(
             RevenueSnapshotInput(
-                observed_at=datetime(2026, 4, 9, tzinfo=timezone.utc),
+                observed_at=datetime(2026, 4, 9, tzinfo=UTC),
                 visitors=1000,
                 trials_started=150,
                 conversions=60,
@@ -66,7 +66,7 @@ def test_revenue_advisory_service_builds_execution_envelope_from_runtime_contrac
         product_id='product-2',
         snapshots=(
             RevenueSnapshotInput(
-                observed_at=datetime(2026, 4, 9, tzinfo=timezone.utc),
+                observed_at=datetime(2026, 4, 9, tzinfo=UTC),
                 visitors=200,
                 trials_started=50,
                 conversions=20,

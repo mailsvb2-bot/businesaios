@@ -8,7 +8,7 @@ from typing import List, Optional
 class GuardrailResult:
     ok: bool
     reason: str = ""
-    fixed_text: Optional[str] = None
+    fixed_text: str | None = None
 
 
 def require_max_chars(text: str, max_chars: int) -> GuardrailResult:
@@ -17,7 +17,7 @@ def require_max_chars(text: str, max_chars: int) -> GuardrailResult:
     return GuardrailResult(ok=True, fixed_text=text[:max_chars].rstrip() + "…")
 
 
-def forbid_phrases(text: str, phrases: List[str]) -> GuardrailResult:
+def forbid_phrases(text: str, phrases: list[str]) -> GuardrailResult:
     low = text.lower()
     for p in phrases:
         if p.lower() in low:

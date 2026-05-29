@@ -37,7 +37,7 @@ class DeliverySnapshot:
         return normalize_channel(channel) in self.blocked
 
     @staticmethod
-    def from_mapping(value: Mapping[str, Any] | None) -> "DeliverySnapshot":
+    def from_mapping(value: Mapping[str, Any] | None) -> DeliverySnapshot:
         if not isinstance(value, Mapping):
             return DeliverySnapshot()
         return DeliverySnapshot(

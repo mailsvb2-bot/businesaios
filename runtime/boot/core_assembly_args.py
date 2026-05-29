@@ -21,5 +21,5 @@ class CoreAssemblyArgs:
     handlers: Any
     runtime_infra: RuntimeExecutorInfra
     delivery_state: Any
-    model_registry: Optional[Any] = None
+    model_registry: Any | None = None
     issuer_id: str = "businesaios-core"

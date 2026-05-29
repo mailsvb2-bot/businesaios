@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Mapping
 
 
@@ -9,5 +9,5 @@ def build_behavior_structured_event(kind: str, payload: Mapping[str, Any]) -> di
         "event_type": "behavior_structured",
         "kind": kind,
         "payload": dict(payload),
-        "timestamp": datetime.now(timezone.utc),
+        "timestamp": datetime.now(UTC),
     }

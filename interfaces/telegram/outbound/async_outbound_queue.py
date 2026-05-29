@@ -20,7 +20,7 @@ class OutboundTask:
     # Monotonic sequence to preserve FIFO within same priority.
     seq: int
     method: str
-    chat_id: Optional[int]
+    chat_id: int | None
     fn: Callable[[], Awaitable[Any]]
     created_ts: float
 
@@ -45,8 +45,8 @@ class AsyncTelegramOutboundQueue:
         self._global = AsyncTokenBucket(rps=global_rps, burst=global_burst)
         self._chat_rps = float(chat_rps)
         self._chat_burst = int(chat_burst)
-        self._per_chat: Dict[int, AsyncTokenBucket] = {}
-        self._q: "asyncio.PriorityQueue[tuple[int, int, OutboundTask]]" = asyncio.PriorityQueue(maxsize=maxsize)
+        self._per_chat: dict[int, AsyncTokenBucket] = {}
+        self._q: asyncio.PriorityQueue[tuple[int, int, OutboundTask]] = asyncio.PriorityQueue(maxsize=maxsize)
         self._stop = asyncio.Event()
         self._seq = itertools.count(1)
 
@@ -54,9 +54,9 @@ class AsyncTelegramOutboundQueue:
         self._submitted = 0
         self._executed = 0
         self._errors = 0
-        self._last_err_ms: Dict[str, int] = {}
+        self._last_err_ms: dict[str, int] = {}
 
-    def metrics_snapshot(self) -> Dict[str, Any]:
+    def metrics_snapshot(self) -> dict[str, Any]:
         return {
             "submitted": int(self._submitted),
             "executed": int(self._executed),
@@ -84,7 +84,7 @@ class AsyncTelegramOutboundQueue:
             self._per_chat[chat_id] = b
         return b
 
-    async def submit(self, method: str, chat_id: Optional[int], fn: Callable[[], Awaitable[Any]], *, priority: int = 50) -> None:
+    async def submit(self, method: str, chat_id: int | None, fn: Callable[[], Awaitable[Any]], *, priority: int = 50) -> None:
         task = OutboundTask(
             priority=int(priority),
             seq=int(next(self._seq)),
@@ -100,7 +100,7 @@ class AsyncTelegramOutboundQueue:
         while not self._stop.is_set():
             try:
                 _, _, task = await asyncio.wait_for(self._q.get(), timeout=0.25)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             try:
                 await self._execute_task(task)

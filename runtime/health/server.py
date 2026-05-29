@@ -30,11 +30,11 @@ class HealthSnapshot:
         self._event_log = event_log
         self._name = str(name)
 
-    def collect(self) -> Dict[str, Any]:
-        last_poll_ms: Optional[int] = None
-        last_poll_err_ms: Optional[int] = None
-        last_poll_err: Optional[str] = None
-        last_decision_exec_ms: Optional[int] = None
+    def collect(self) -> dict[str, Any]:
+        last_poll_ms: int | None = None
+        last_poll_err_ms: int | None = None
+        last_poll_err: str | None = None
+        last_decision_exec_ms: int | None = None
         total_events = 0
 
         try:
@@ -58,7 +58,7 @@ class HealthSnapshot:
                 msg="health snapshot collection failed",
             )
 
-        out: Dict[str, Any] = {
+        out: dict[str, Any] = {
             "name": self._name,
             "ts_ms": _now_ms(),
             "telegram": {

@@ -162,7 +162,7 @@ class MarketIntelligenceProviderClient:
                 'replay_key': preflight.replay_key,
                 'resume_cursor': preflight.resume_cursor,
             }
-        run_id = f'mi:{hashlib.sha1(f"{tenant_id}|{provider}|{scope_key}|{request_fingerprint}".encode("utf-8")).hexdigest()[:24]}'
+        run_id = f'mi:{hashlib.sha1(f"{tenant_id}|{provider}|{scope_key}|{request_fingerprint}".encode()).hexdigest()[:24]}'
         checkpoint_before = self.state_store.load_checkpoint(tenant_id=tenant_id, provider=provider, source_family=source_family, scope_key=scope_key)
         self.state_store.begin_run(
             run_id=run_id,

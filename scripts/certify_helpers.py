@@ -17,17 +17,17 @@ from scripts.certify_io import count_lines, iter_py_files, read_text
 from scripts.certify_report import TRUTHY, CertificationReport
 
 
-def parse_import_bases(py: Path) -> Set[str]:
+def parse_import_bases(py: Path) -> set[str]:
     """Return top-level imported base module names for a python file."""
     return parse_import_bases_from_text(read_text(py))
 
 
-def find_network_imports_outside_sealed(root: Path) -> List[Tuple[str, str]]:
+def find_network_imports_outside_sealed(root: Path) -> list[tuple[str, str]]:
     """Forbidden network libs outside runtime/_internal."""
     forbidden = {"httpx", "requests", "aiohttp", "urllib3", "openai", "telegram", "telebot"}
     allowed_dir = (root / "runtime" / "_internal").resolve()
 
-    findings: List[Tuple[str, str]] = []
+    findings: list[tuple[str, str]] = []
     for p in iter_py_files(root):
         rp = p.resolve()
         if allowed_dir in rp.parents or rp == allowed_dir:
@@ -41,7 +41,7 @@ def find_network_imports_outside_sealed(root: Path) -> List[Tuple[str, str]]:
 
 
 
-def check_god_modules(root: Path) -> List[str]:
+def check_god_modules(root: Path) -> list[str]:
     """Warn on unusually large modules."""
     allow = {
         "runtime/_internal/_effects_impl.py",
@@ -49,7 +49,7 @@ def check_god_modules(root: Path) -> List[str]:
         "interfaces/telegram/outbound/outbound_queue.py",
     }
 
-    warnings: List[str] = []
+    warnings: list[str] = []
     for p in iter_py_files(root):
         rel = str(p.relative_to(root).as_posix())
         if rel in allow:
@@ -60,11 +60,11 @@ def check_god_modules(root: Path) -> List[str]:
     return warnings
 
 
-def analyze_god_objects_and_complexity(root: Path) -> Tuple[List[str], List[str]]:
+def analyze_god_objects_and_complexity(root: Path) -> tuple[list[str], list[str]]:
     """Return (warnings, signals) for god-objects / complexity."""
     targets = {"core", "runtime", "interfaces", "runtime.platform"}
-    warnings: List[str] = []
-    signals: List[str] = []
+    warnings: list[str] = []
+    signals: list[str] = []
 
     for p in iter_py_files(root):
         rel = p.relative_to(root).as_posix()
@@ -154,10 +154,10 @@ def analyze_god_objects_and_complexity(root: Path) -> Tuple[List[str], List[str]
     return warnings, signals
 
 
-def detect_policy_divergence_signals(root: Path) -> List[str]:
+def detect_policy_divergence_signals(root: Path) -> list[str]:
     """Heuristics to flag potential double policy or duplicated routing."""
-    signals: List[str] = []
-    policy_classes_by_dir: Dict[str, List[str]] = {}
+    signals: list[str] = []
+    policy_classes_by_dir: dict[str, list[str]] = {}
 
     for p in iter_py_files(root):
         rel = p.relative_to(root).as_posix()
@@ -172,7 +172,7 @@ def detect_policy_divergence_signals(root: Path) -> List[str]:
         except Exception:
             continue
 
-        policies: List[str] = []
+        policies: list[str] = []
         for node in tree.body:
             if isinstance(node, ast.ClassDef) and node.name.lower().endswith("policy"):
                 policies.append(node.name)

@@ -5,7 +5,7 @@ import hmac
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from ..action_context import SafetyActionContext
 from ..action_identity import stable_payload
@@ -16,7 +16,7 @@ _DEFAULT_KEY_ID = 'sim-default'
 
 
 def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _evidence_payload(payload: dict[str, object]) -> dict[str, object]:

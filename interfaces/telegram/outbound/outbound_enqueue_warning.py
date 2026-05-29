@@ -6,7 +6,7 @@ from typing import Any, Dict
 from core.observability.silent import swallow
 
 
-def maybe_emit_queue_high_warning(queue_obj: Any, *, qsize: int, method: str, meta: Dict[str, Any] | None) -> None:
+def maybe_emit_queue_high_warning(queue_obj: Any, *, qsize: int, method: str, meta: dict[str, Any] | None) -> None:
     if qsize < int(queue_obj._warn_queue):
         return
     now_ns = time.monotonic_ns()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from core.behavior.contracts.micro_spinor import MicroSpinor
 from core.behavior.math.aggregation import aggregate_spinors
@@ -8,7 +8,7 @@ from core.behavior.math.complex4 import Complex4
 
 
 def build_stage_spinor(entity_id: str, stage: str, source_spinors: list[MicroSpinor]) -> MicroSpinor:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     psi = aggregate_spinors([Complex4(s.psi_re, s.psi_im) for s in source_spinors])
     return MicroSpinor(
         spinor_id=f"stage:{entity_id}:{stage}",

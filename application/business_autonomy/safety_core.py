@@ -22,15 +22,15 @@ class SafetyRuntimePolicy:
     rust_available: bool = False
 
     @classmethod
-    def python_mirror(cls) -> "SafetyRuntimePolicy":
+    def python_mirror(cls) -> SafetyRuntimePolicy:
         return cls(mode="python_mirror", rust_available=False)
 
     @classmethod
-    def strict_rust_required(cls, *, rust_available: bool = False) -> "SafetyRuntimePolicy":
+    def strict_rust_required(cls, *, rust_available: bool = False) -> SafetyRuntimePolicy:
         return cls(mode="strict_rust_required", rust_available=bool(rust_available))
 
     @classmethod
-    def from_metadata(cls, metadata: Mapping[str, object] | None) -> "SafetyRuntimePolicy":
+    def from_metadata(cls, metadata: Mapping[str, object] | None) -> SafetyRuntimePolicy:
         data = dict(metadata or {})
         mode = str(data.get("safety_core_mode") or "python_mirror").strip() or "python_mirror"
         rust_available = bool(data.get("rust_safety_core_available", False))
@@ -39,7 +39,7 @@ class SafetyRuntimePolicy:
         return cls.python_mirror()
 
 
-def _policy_unavailable_verdict(policy: SafetyRuntimePolicy) -> "SafetyVerdict | None":
+def _policy_unavailable_verdict(policy: SafetyRuntimePolicy) -> SafetyVerdict | None:
     if policy.mode == "strict_rust_required" and not policy.rust_available:
         return SafetyVerdict.deny("rust_safety_core_unavailable", source="rust_safety_core_required")
     return None
@@ -52,11 +52,11 @@ class SafetyVerdict:
     source: str = "python_safety_core"
 
     @classmethod
-    def allow(cls, *, source: str = "python_safety_core") -> "SafetyVerdict":
+    def allow(cls, *, source: str = "python_safety_core") -> SafetyVerdict:
         return cls(True, "allow", source)
 
     @classmethod
-    def deny(cls, reason: str, *, source: str = "python_safety_core") -> "SafetyVerdict":
+    def deny(cls, reason: str, *, source: str = "python_safety_core") -> SafetyVerdict:
         return cls(False, str(reason or "safety_denied"), source)
 
     def to_metadata(self) -> dict[str, object]:

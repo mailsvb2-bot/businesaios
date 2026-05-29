@@ -26,10 +26,10 @@ class PolicyRegistry:
     def __init__(self):
         self._policies = PolicyRegistryStore()
         self._meta = _MetaPolicyRegistry()
-        self._previous: Optional[str] = None
+        self._previous: str | None = None
 
         # rollout config (candidate + pct) - legacy API preserved
-        self._candidate: Optional[str] = None
+        self._candidate: str | None = None
         self._rollout_pct: int = 0
 
     def register(self, policy) -> None:
@@ -79,7 +79,7 @@ class PolicyRegistry:
             raise RuntimeError("NO_ACTIVE_POLICY")
         return ref
 
-    def rollout_config(self) -> Tuple[Optional[str], int]:
+    def rollout_config(self) -> tuple[str | None, int]:
         return self._candidate, int(self._rollout_pct)
 
     # --- SIDE-EFFECT API (must be called only by runtime/_effects_impl through executor) ---
@@ -116,5 +116,5 @@ class PolicyRegistry:
             return
         self._meta.promote(PolicyRef(policy_id=self._previous, version="v1"))
 
-    def canary_ref(self) -> Optional[PolicyRef]:
+    def canary_ref(self) -> PolicyRef | None:
         return self._meta.canary()

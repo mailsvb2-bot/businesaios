@@ -17,7 +17,7 @@ from reliability.outbox_store import OutboxMessage
 
 
 class OutboxLike(Protocol):
-    def list_pending(self, *, limit: int = 100) -> Iterable[Dict[str, Any]]: ...
+    def list_pending(self, *, limit: int = 100) -> Iterable[dict[str, Any]]: ...
     def claim(self, decision_id: str) -> bool: ...
     def mark_delivered(self, decision_id: str) -> None: ...
     def schedule_retry(self, decision_id: str, next_attempt_at_ms: int) -> None: ...
@@ -35,15 +35,15 @@ class RetryStats:
     dead: int = 0
 
 
-def _item_id(item: Dict[str, Any]) -> str:
+def _item_id(item: dict[str, Any]) -> str:
     return str(item.get("decision_id") or item.get("id") or "")
 
 
-def _item_attempts(item: Dict[str, Any]) -> int:
+def _item_attempts(item: dict[str, Any]) -> int:
     return int(item.get("retry_count") or item.get("attempts") or 0)
 
 
-def _item_due_at_ms(item: Dict[str, Any]) -> int | None:
+def _item_due_at_ms(item: dict[str, Any]) -> int | None:
     raw = item.get("next_attempt_at_ms")
     if raw is None:
         raw = item.get("run_after_ms")
@@ -68,7 +68,7 @@ def _move_to_dead_letter(*, outbox: Any, item_id: str, error: str) -> None:
     outbox.move_to_dead_letter(str(item_id), error=error)
 
 
-def _policy_message(*, item: Dict[str, Any], now_ms: int) -> OutboxMessage:
+def _policy_message(*, item: dict[str, Any], now_ms: int) -> OutboxMessage:
     created_at_ms = int(item.get("created_at_ms") or now_ms)
     return OutboxMessage(
         tenant_id="default",

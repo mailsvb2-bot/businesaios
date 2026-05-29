@@ -28,7 +28,7 @@ _POLICY_DEPLOYMENT_ID = "policy_deployment" + _V1
 
 
 class PolicySelector:
-    def __init__(self, registry, safe_mode_policy_id: Optional[str] = None, rollout_config: Optional[RolloutConfig] = None, policy: PolicySelectorPolicy | None = None):
+    def __init__(self, registry, safe_mode_policy_id: str | None = None, rollout_config: RolloutConfig | None = None, policy: PolicySelectorPolicy | None = None):
         self._registry = registry
         self._safe = safe_mode_policy_id
         self._policy = policy or DEFAULT_POLICY_SELECTOR_POLICY

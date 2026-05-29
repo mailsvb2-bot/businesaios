@@ -10,15 +10,15 @@ from runtime.application.decision_transition_lock import (
 )
 
 
-def build_decision_execution_port(*, decision_core: object) -> "DecisionExecutionPort":
+def build_decision_execution_port(*, decision_core: object) -> DecisionExecutionPort:
     return DecisionExecutionPort(decision_core=decision_core)
 
 
-def build_observability_port(*, observability: object) -> "ObservabilityPort":
+def build_observability_port(*, observability: object) -> ObservabilityPort:
     return ObservabilityPort(observability=observability)
 
 
-def build_nullable_observability_port(*, observability: object | None) -> "ObservabilityPort":
+def build_nullable_observability_port(*, observability: object | None) -> ObservabilityPort:
     return ObservabilityPort(observability=observability or _NullObservability())
 
 

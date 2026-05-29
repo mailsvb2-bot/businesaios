@@ -16,8 +16,8 @@ def _iter_py_files(root: Path) -> Iterable[Path]:
         yield p
 
 
-def _scan_file_for_forbidden_imports(path: Path, forbidden_tokens: List[str]) -> List[Tuple[int, str]]:
-    hits: List[Tuple[int, str]] = []
+def _scan_file_for_forbidden_imports(path: Path, forbidden_tokens: list[str]) -> list[tuple[int, str]]:
+    hits: list[tuple[int, str]] = []
     try:
         text = path.read_text(encoding="utf-8", errors="ignore")
     except Exception:

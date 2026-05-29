@@ -36,7 +36,7 @@ def perform_apply_flow(
     tenant_id = str(req.tenant_id)
     try:
         out = apply_port.perform_apply(tenant_id, req.plan)
-        result: Dict[str, Any] = {"status": "applied", "provider": out}
+        result: dict[str, Any] = {"status": "applied", "provider": out}
         ev = build_audit_event(
             tenant_id=tenant_id,
             user_id=str(req.user_id),
@@ -49,7 +49,7 @@ def perform_apply_flow(
         )
         return "done", AdsApplyResult(status="applied", detail=result, audit_event=ev)
     except Exception as e:
-        rollback_detail: Optional[Dict[str, Any]] = None
+        rollback_detail: dict[str, Any] | None = None
         if bool(req.rollback_on_fail):
             rollback_detail = best_effort_rollback(apply_port, tenant_id=tenant_id, plan=req.plan)
         ev = build_audit_event(

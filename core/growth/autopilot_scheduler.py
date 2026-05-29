@@ -12,10 +12,10 @@ class AutopilotTarget:
     tenant_id: str
     platform: str
     account_id: str
-    notify_chat_id: Optional[int] = None
+    notify_chat_id: int | None = None
 
 class AutopilotScheduler:
-    def __init__(self, *, lock: EventStoreJobLock, engine: AutopilotEngine, io: Optional[Any] = None, owner: str = "ads_autopilot") -> None:
+    def __init__(self, *, lock: EventStoreJobLock, engine: AutopilotEngine, io: Any | None = None, owner: str = "ads_autopilot") -> None:
         self._lock = lock
         self._engine = engine
         self._io = io

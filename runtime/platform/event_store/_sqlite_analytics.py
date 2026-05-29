@@ -16,7 +16,7 @@ from observability.platform.observability.silent import swallow as _swallow
 MAX_I64 = 2**63 - 1
 
 
-def _excl_end(end_ms: Optional[int]) -> int:
+def _excl_end(end_ms: int | None) -> int:
     now = int(time.time() * 1000)
     if end_ms is None:
         return min(now + 1, MAX_I64)
@@ -41,8 +41,8 @@ def count_distinct_users(
     *,
     tenant_id: str,
     start_ms: int,
-    end_ms: Optional[int] = None,
-    event_type: Optional[str] = None,
+    end_ms: int | None = None,
+    event_type: str | None = None,
     exclude_system: bool = True,
 ) -> int:
     """Count distinct user_ids in a time window."""
@@ -70,7 +70,7 @@ def recent_user_ids(
     *,
     tenant_id: str,
     start_ms: int = 0,
-    end_ms: Optional[int] = None,
+    end_ms: int | None = None,
     limit: int = 20,
     exclude_system: bool = True,
 ) -> list[tuple[str, int]]:
@@ -105,8 +105,8 @@ def count_events(
     tenant_id: str,
     event_type: str,
     start_ms: int = 0,
-    end_ms: Optional[int] = None,
-    user_id: Optional[str] = None,
+    end_ms: int | None = None,
+    user_id: str | None = None,
 ) -> int:
     """Count events of a type in a time window."""
     tid = _req_tenant(tenant_id)
@@ -126,7 +126,7 @@ def count_events(
         return 0
 
 
-def get_counter(db, *, event_type: str, user_id: Optional[str] = None) -> int:
+def get_counter(db, *, event_type: str, user_id: str | None = None) -> int:
     """Return incremental counter (fast path over full scan)."""
     uid = "__all__" if user_id is None else str(user_id)
     row = db.execute(
@@ -146,8 +146,8 @@ def sum_event_payload_int(
     event_type: str,
     field: str,
     start_ms: int = 0,
-    end_ms: Optional[int] = None,
-    user_id: Optional[str] = None,
+    end_ms: int | None = None,
+    user_id: str | None = None,
 ) -> int:
     """Sum an integer field from payload_json. Tries JSON1, falls back to app-side."""
     tid = _req_tenant(tenant_id)
@@ -225,7 +225,7 @@ def count_events_payload_like(
     event_type: str,
     payload_substring: str,
     start_ms: int = 0,
-    end_ms: Optional[int] = None,
+    end_ms: int | None = None,
 ) -> int:
     """Best-effort analytics: events where payload_json LIKE %substring%."""
     end = _excl_end(end_ms)
@@ -244,7 +244,7 @@ def count_distinct_users_payload_like(
     event_type: str,
     payload_substring: str,
     start_ms: int = 0,
-    end_ms: Optional[int] = None,
+    end_ms: int | None = None,
 ) -> int:
     """Distinct user count where payload_json LIKE %substring%."""
     end = _excl_end(end_ms)

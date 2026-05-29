@@ -17,8 +17,8 @@ def handle_admin_pricing_session(
     ctx: TelegramCtx,
     *,
     user_id: str,
-    pm: Callable[[str, Optional[dict], Optional[str], Optional[Dict]], ProposedAction],
-) -> Optional[ProposedAction]:
+    pm: Callable[[str, dict | None, str | None, dict | None], ProposedAction],
+) -> ProposedAction | None:
     """Handle the admin free-text pricing governance session.
 
     Returns ProposedAction if handled, otherwise None.
@@ -27,7 +27,7 @@ def handle_admin_pricing_session(
     if not (ctx.is_admin and isinstance(ctx.text, str) and ctx.text.strip()):
         return None
 
-    sess: Dict = {}
+    sess: dict = {}
     try:
         if isinstance(ctx.settings, dict):
             sess = dict(ctx.settings.get("admin:pricing_session") or {})

@@ -41,7 +41,7 @@ class FileProviderSyncHistoryStore:
     collection: str = 'provider_sync_history'
 
     @classmethod
-    def default(cls) -> 'FileProviderSyncHistoryStore':
+    def default(cls) -> FileProviderSyncHistoryStore:
         return cls(FileDistributedDocumentStore(_runtime_root() / 'documents'))
 
     def append(self, row: Mapping[str, Any]) -> dict[str, Any]:

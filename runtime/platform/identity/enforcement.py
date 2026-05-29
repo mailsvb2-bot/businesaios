@@ -24,7 +24,7 @@ class EnforcedProductAccess:
     product_id: str
     allowed: bool
     reason: str
-    missing_entitlements: Tuple[str, ...] = ()
+    missing_entitlements: tuple[str, ...] = ()
 
 
 class ProductAccessEnforcer:

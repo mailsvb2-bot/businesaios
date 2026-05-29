@@ -25,12 +25,12 @@ logger = logging.getLogger(__name__)
 ACTION_NAME = "ads_rl_train_tick@v1"
 
 
-def handle_ads_rl_train_tick(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
+def handle_ads_rl_train_tick(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
     p = payload or {}
     bind_runtime_state(event_store=event_store)
     tenant_id = as_tenant_id(str(p.get("tenant_id") or ""))
     lookback_days = int(p.get("lookback_days") or 14)
-    decision_ids: List[str] = [str(x) for x in (p.get("decision_ids") or []) if str(x).strip()]
+    decision_ids: list[str] = [str(x) for x in (p.get("decision_ids") or []) if str(x).strip()]
 
     if not decision_ids:
         return effects.send_message(

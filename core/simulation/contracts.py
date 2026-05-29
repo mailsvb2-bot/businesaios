@@ -22,4 +22,4 @@ class ScenarioOutcome:
 class SimScore:
     score: float
     confidence: float
-    debug: Dict[str, Any]
+    debug: dict[str, Any]

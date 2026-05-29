@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 import pytest
 
@@ -32,7 +32,7 @@ def _signal(
         business_id=business_id,
         kind=DemandSignalKind.SEARCH_INTENT,
         channel=DemandChannel.GOOGLE_MAPS,
-        observed_at=datetime.now(timezone.utc),
+        observed_at=datetime.now(UTC),
         source_ref=f"source:{signal_id}",
         normalized_text="coffee near me",
         confidence=0.9,
@@ -42,7 +42,7 @@ def _signal(
 
 
 def test_candidate_producer_builds_advisory_only_candidate() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     candidates = DemandSignalCandidateProducer().build_candidates(
         tenant_id="tenant-a",
         business_id="biz-a",

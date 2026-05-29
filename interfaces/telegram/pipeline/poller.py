@@ -29,17 +29,17 @@ class TelegramPoller:
         self._decide = decide_fn
         self._execute = execute_fn
         self._cfg = cfg
-        self._offset: Optional[int] = None
+        self._offset: int | None = None
 
     @property
-    def offset(self) -> Optional[int]:
+    def offset(self) -> int | None:
         return self._offset
 
     @staticmethod
     def _now_ms() -> int:
         return int(time.time() * 1000)
 
-    def poll(self) -> List[Dict[str, Any]]:
+    def poll(self) -> list[dict[str, Any]]:
         ws = build_system_world_state(
             source="ingress_poll",
             session={

@@ -7,9 +7,9 @@ def enqueue_best_effort_with_suppression(
     queue_obj: Any,
     *,
     method: str,
-    chat_id: Optional[int],
+    chat_id: int | None,
     fn: Callable[[], Any],
-    meta: Optional[Dict[str, Any]],
+    meta: dict[str, Any] | None,
     priority: int,
     kind: str,
 ) -> bool:

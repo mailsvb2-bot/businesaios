@@ -9,7 +9,7 @@ class Capability:
     name: str
     description: str
 
-CAPABILITIES: Tuple[Capability, ...] = (
+CAPABILITIES: tuple[Capability, ...] = (
     Capability("score", "compute candidate scores"),
     Capability("observe", "attach reward or metrics"),
     Capability("rank", "order candidates"),

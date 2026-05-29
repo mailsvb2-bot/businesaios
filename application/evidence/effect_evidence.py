@@ -132,7 +132,7 @@ class EffectEvidenceBuilder:
         external_refs: tuple[str, ...] | list[str] | None = None,
         confidence: float = 0.0,
         observed_at: datetime | None = None,
-    ) -> "EffectEvidenceBuilder":
+    ) -> EffectEvidenceBuilder:
         row_payload = _safe_dict(payload)
         refs = _tuple_refs(external_refs or (), row_payload.get("external_ref"), row_payload.get("external_refs"))
         self._records.append(
@@ -149,7 +149,7 @@ class EffectEvidenceBuilder:
         )
         return self
 
-    def add_execution_receipt(self, *, payload: Mapping[str, Any] | None = None) -> "EffectEvidenceBuilder":
+    def add_execution_receipt(self, *, payload: Mapping[str, Any] | None = None) -> EffectEvidenceBuilder:
         row_payload = _safe_dict(payload)
         return self.add_record(
             source="executor",
@@ -160,7 +160,7 @@ class EffectEvidenceBuilder:
             confidence=1.0 if row_payload.get("ok") else 0.25,
         )
 
-    def add_feedback_evidence(self, *, feedback: Mapping[str, Any] | None = None) -> "EffectEvidenceBuilder":
+    def add_feedback_evidence(self, *, feedback: Mapping[str, Any] | None = None) -> EffectEvidenceBuilder:
         payload = _safe_dict(feedback)
         evidence = _safe_dict(payload.get("evidence"))
         evidence_result = _safe_dict(evidence.get("router_result") or evidence)
@@ -176,7 +176,7 @@ class EffectEvidenceBuilder:
             )
         return self
 
-    def add_router_evidence(self, *, payload: Mapping[str, Any] | None = None) -> "EffectEvidenceBuilder":
+    def add_router_evidence(self, *, payload: Mapping[str, Any] | None = None) -> EffectEvidenceBuilder:
         row_payload = _safe_dict(payload)
         if not row_payload:
             return self
@@ -190,7 +190,7 @@ class EffectEvidenceBuilder:
             confidence=_safe_float(row_payload.get("confidence"), default=0.0),
         )
 
-    def add_connector_snapshot(self, *, source: str, payload: Mapping[str, Any] | None = None) -> "EffectEvidenceBuilder":
+    def add_connector_snapshot(self, *, source: str, payload: Mapping[str, Any] | None = None) -> EffectEvidenceBuilder:
         row_payload = _safe_dict(payload)
         if not row_payload:
             return self

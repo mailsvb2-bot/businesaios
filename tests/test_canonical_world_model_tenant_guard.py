@@ -9,14 +9,14 @@ from bootstrap.canonical_decision_world_model import CanonicalDecisionWorldModel
 @dataclass(frozen=True)
 class FakeWorldState:
     schema_version: int
-    user: Dict[str, Any]
-    session: Dict[str, Any]
-    product: Dict[str, Any]
-    economy: Dict[str, Any]
+    user: dict[str, Any]
+    session: dict[str, Any]
+    product: dict[str, Any]
+    economy: dict[str, Any]
     timestamp_ms: int
     tenant_id: str = ""
-    meta: Dict[str, Any] = field(default_factory=dict)
-    user_id: Optional[str] = None
+    meta: dict[str, Any] = field(default_factory=dict)
+    user_id: str | None = None
 
 
 class GuardStore:

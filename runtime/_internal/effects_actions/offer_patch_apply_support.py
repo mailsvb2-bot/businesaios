@@ -17,14 +17,14 @@ def resolve_offer_catalog(*, tenant_id: str, product: str, env: str) -> tuple[st
     return f"{tenant}:{prod}:{envv}", cat_path
 
 
-def load_offer_catalog(path: Any) -> Dict[str, Any]:
+def load_offer_catalog(path: Any) -> dict[str, Any]:
     raw = {}
     if path.exists():
         raw = load_yaml(path.read_text(encoding="utf-8")) or {}
     return raw if isinstance(raw, dict) else {}
 
 
-def locate_offer(*, offers: list, offer_id: str) -> Dict[str, Any]:
+def locate_offer(*, offers: list, offer_id: str) -> dict[str, Any]:
     oid = str(offer_id).strip() or "unknown_offer"
     for item in offers:
         if isinstance(item, dict) and str(item.get("offer_id") or "") == oid:
@@ -40,7 +40,7 @@ def locate_offer(*, offers: list, offer_id: str) -> Dict[str, Any]:
     return target
 
 
-def suggest_patch_for_action(*, target: Dict[str, Any], action: str) -> Tuple[str, str, Dict[str, Any]]:
+def suggest_patch_for_action(*, target: dict[str, Any], action: str) -> tuple[str, str, dict[str, Any]]:
     effect = str(target.get("effect") or target.get("title") or "заметный результат").strip()
     days = int(target.get("days") or 7)
     act = str(action).strip() or "improve_ctr"
@@ -72,7 +72,7 @@ def suggest_patch_for_action(*, target: Dict[str, Any], action: str) -> Tuple[st
     return (f"Подсказка: {act}", "Базовый вариант.", {"headline": f"{effect} — за {days} дней"})
 
 
-def summarize_patch_application(*, target: Dict[str, Any], patch: Dict[str, Any]) -> tuple[str, str, bool]:
+def summarize_patch_application(*, target: dict[str, Any], patch: dict[str, Any]) -> tuple[str, str, bool]:
     before = yaml.safe_dump(target, sort_keys=False, allow_unicode=True)
 
     variants = target.get("variants") if isinstance(target.get("variants"), dict) else {}

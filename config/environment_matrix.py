@@ -73,7 +73,7 @@ class EnvironmentMatrix:
         return row
 
     @classmethod
-    def default(cls) -> "EnvironmentMatrix":
+    def default(cls) -> EnvironmentMatrix:
         matrix = cls(
             rows=(
                 EnvironmentMatrixRow(

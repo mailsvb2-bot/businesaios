@@ -33,7 +33,7 @@ class SqliteEventStore(
 
     def __init__(self, path: str):
         self._path = str(path)
-        self._db: Optional[sqlite3.Connection] = None
+        self._db: sqlite3.Connection | None = None
 
     def __enter__(self):
         self._db = sqlite3.connect(self._path, timeout=5.0, check_same_thread=False)

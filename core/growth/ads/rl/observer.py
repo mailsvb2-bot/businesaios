@@ -39,8 +39,8 @@ class _EventStore(Protocol):
     def append_event(self, event: dict) -> None: ...
 
     # Optional accelerators implemented by sqlite/postgres backends.
-    def latest_events(self, *, tenant_id: str, event_types: Tuple[str, ...], limit: int = 2000) -> Iterable[dict]: ...  # type: ignore[override]
-    def latest_event(self, *, tenant_id: str, event_type: str, user_id: str | None = None) -> Optional[dict]: ...  # type: ignore[override]
+    def latest_events(self, *, tenant_id: str, event_types: tuple[str, ...], limit: int = 2000) -> Iterable[dict]: ...  # type: ignore[override]
+    def latest_event(self, *, tenant_id: str, event_type: str, user_id: str | None = None) -> dict | None: ...  # type: ignore[override]
 
 
 @dataclass(frozen=True)
@@ -166,7 +166,7 @@ def _process_import_event(*, tenant_id: str, es: _EventStore, rl_service: Any, i
     return bool((out or {}).get("status") == "ok")
 
 
-def _latest_suggestion_for_campaign(*, tenant_id: str, es: _EventStore, platform: str, campaign_id: str, now_ms: int, lookback_hours: int) -> Optional[dict]:
+def _latest_suggestion_for_campaign(*, tenant_id: str, es: _EventStore, platform: str, campaign_id: str, now_ms: int, lookback_hours: int) -> dict | None:
     start_ms = int(now_ms) - int(lookback_hours) * 3600 * 1000
 
     # Fast-path: backends may provide latest_events.
@@ -214,7 +214,7 @@ def _latest_suggestion_for_campaign(*, tenant_id: str, es: _EventStore, platform
     return latest
 
 
-def _load_checkpoint_ms(*, tenant_id: str, es: _EventStore) -> Optional[int]:
+def _load_checkpoint_ms(*, tenant_id: str, es: _EventStore) -> int | None:
     if hasattr(es, "latest_event"):
         try:
             ev = call_latest_event(

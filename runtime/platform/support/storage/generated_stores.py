@@ -38,7 +38,7 @@ def _make_store_type(name: str, base: type) -> type:
     return cls
 
 
-STORE_TYPES: Dict[str, Type[object]] = {
+STORE_TYPES: dict[str, type[object]] = {
     name: _make_store_type(name, base)
     for name, (_, base) in _STORE_SPECS.items()
 }

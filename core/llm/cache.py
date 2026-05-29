@@ -26,7 +26,7 @@ class TTLTextCache:
         self.policy = resolved_policy
         self.ttl_s = float(resolved_policy.ttl_s if ttl_s is None else ttl_s)
         self.max_items = int(resolved_policy.max_items if max_items is None else max_items)
-        self._store: Dict[str, CacheEntry] = {}
+        self._store: dict[str, CacheEntry] = {}
 
     def _now(self) -> float:
         return time.time()
@@ -43,7 +43,7 @@ class TTLTextCache:
     def make_key(self, s: str) -> str:
         return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         self._prune()
         e = self._store.get(key)
         if not e:

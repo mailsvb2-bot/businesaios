@@ -15,7 +15,7 @@ class ContractValidationIssue:
 class ProductContractValidator:
     """Returns structured issues (for CI / boot self-check), not just exceptions."""
 
-    def validate(self, contract: ProductContract) -> Tuple[ContractValidationIssue, ...]:
+    def validate(self, contract: ProductContract) -> tuple[ContractValidationIssue, ...]:
         issues: list[ContractValidationIssue] = []
         try:
             contract.validate()

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
@@ -156,7 +156,7 @@ class ProviderSecretVersioningService:
 
     @staticmethod
     def _version_label(*, prefix: str) -> str:
-        return f"{prefix}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}"
+        return f"{prefix}-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}"
 
     @staticmethod
     def _current_ref(*, tenant_id: str, provider: ProviderDefinition, business_id: str, secret_name: str) -> SecretRef:

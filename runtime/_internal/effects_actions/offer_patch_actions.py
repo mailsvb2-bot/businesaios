@@ -33,7 +33,7 @@ class OfferPatchEffectsMixin:
         action: str,
         notify_user_id: str | None = None,
         callback_query_id: str | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         assert_called_from_executor()
         scope, cat_path = resolve_offer_catalog(tenant_id=tenant_id, product=product, env=env)
         spec = load_offer_catalog(cat_path)
@@ -69,11 +69,11 @@ class OfferPatchEffectsMixin:
         product: str,
         env: str,
         offer_id: str,
-        patch: Dict[str, Any],
+        patch: dict[str, Any],
         mode: str = "dry_run",
         notify_user_id: str | None = None,
         callback_query_id: str | None = None,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         assert_called_from_executor()
         scope, cat_path = resolve_offer_catalog(tenant_id=tenant_id, product=product, env=env)
         bak_path = cat_path.with_suffix(cat_path.suffix + ".bak")

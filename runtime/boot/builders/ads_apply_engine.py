@@ -18,7 +18,7 @@ from runtime.platform.config.env_flags import env_bool, env_float, env_int
 logger = logging.getLogger(__name__)
 
 
-def build_ads_apply_engine(ads_runtime: Any) -> Optional[Any]:
+def build_ads_apply_engine(ads_runtime: Any) -> Any | None:
     """Construct AdsApplyEngine or return None on failure."""
     try:
         from runtime.ads import (

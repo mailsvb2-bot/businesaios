@@ -30,7 +30,7 @@ class AutopilotLimits:
 class AdsEntitlements:
     mode: AdsMode = AdsMode.READ_ONLY
     limits: AutopilotLimits = field(default_factory=AutopilotLimits)
-    approver_user_id: Optional[str] = None
+    approver_user_id: str | None = None
     policy_defaults: AdsAutopilotPolicyDefaults = DEFAULT_ADS_AUTOPILOT_POLICY_DEFAULTS
 
 

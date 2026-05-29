@@ -22,9 +22,9 @@ class UserStateEffectsMixin:
         user_id: str,
         key: str,
         value: Any = None,
-        notify_text: Optional[str] = None,
-        notify_reply_markup: Optional[Dict[str, Any]] = None,
-        callback_query_id: Optional[str] = None,
+        notify_text: str | None = None,
+        notify_reply_markup: dict[str, Any] | None = None,
+        callback_query_id: str | None = None,
         channel: str = "telegram",
     ) -> Any:
         assert_called_from_executor()
@@ -66,9 +66,9 @@ class UserStateEffectsMixin:
         user_id: str,
         score: int,
         note: str | None = None,
-        notify_text: Optional[str] = None,
-        notify_reply_markup: Optional[Dict[str, Any]] = None,
-        callback_query_id: Optional[str] = None,
+        notify_text: str | None = None,
+        notify_reply_markup: dict[str, Any] | None = None,
+        callback_query_id: str | None = None,
         channel: str = "telegram",
     ) -> Any:
         assert_called_from_executor()

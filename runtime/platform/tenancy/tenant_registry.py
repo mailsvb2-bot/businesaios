@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Dict, Iterable, List, Optional, Protocol
 
 
 class EventStore(Protocol):
-    def append(self, *, tenant_id: str, user_id: Optional[str], event_type: str, payload: Dict[str, Any]) -> None: ...
-    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 5000) -> Iterable[Dict[str, Any]]: ...
+    def append(self, *, tenant_id: str, user_id: str | None, event_type: str, payload: dict[str, Any]) -> None: ...
+    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 5000) -> Iterable[dict[str, Any]]: ...
 
 @dataclass(frozen=True)
 class TenantInfo:
@@ -27,7 +27,7 @@ class TenantRegistry:
             tenant_id=self._registry_tid,
             user_id=None,
             event_type=self.EVT_REG,
-            payload={"tenant_id": tenant_id, "enabled": bool(enabled), "ts_iso": datetime.now(timezone.utc).isoformat()},
+            payload={"tenant_id": tenant_id, "enabled": bool(enabled), "ts_iso": datetime.now(UTC).isoformat()},
         )
 
     def disable(self, *, tenant_id: str) -> None:
@@ -35,17 +35,17 @@ class TenantRegistry:
             tenant_id=self._registry_tid,
             user_id=None,
             event_type=self.EVT_DIS,
-            payload={"tenant_id": tenant_id, "ts_iso": datetime.now(timezone.utc).isoformat()},
+            payload={"tenant_id": tenant_id, "ts_iso": datetime.now(UTC).isoformat()},
         )
 
-    def list_active_tenants(self, *, limit: int = 5000) -> List[TenantInfo]:
+    def list_active_tenants(self, *, limit: int = 5000) -> list[TenantInfo]:
         disabled = set()
         for ev in self._store.latest_events(tenant_id=self._registry_tid, event_type=self.EVT_DIS, limit=limit):
             tid = str((ev.get("payload") or {}).get("tenant_id") or "").strip()
             if tid:
                 disabled.add(tid)
 
-        last: Dict[str, TenantInfo] = {}
+        last: dict[str, TenantInfo] = {}
         for ev in self._store.latest_events(tenant_id=self._registry_tid, event_type=self.EVT_REG, limit=limit):
             p = ev.get("payload") or {}
             tid = str(p.get("tenant_id") or "").strip()

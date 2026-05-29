@@ -25,11 +25,11 @@ class DiagnosticBridgeResult:
     report: dict[str, object]
 
     @classmethod
-    def unavailable(cls, reason: str = "not_provided") -> "DiagnosticBridgeResult":
+    def unavailable(cls, reason: str = "not_provided") -> DiagnosticBridgeResult:
         return cls(False, False, reason, {})
 
     @classmethod
-    def from_report(cls, report: Mapping[str, object] | None) -> "DiagnosticBridgeResult":
+    def from_report(cls, report: Mapping[str, object] | None) -> DiagnosticBridgeResult:
         if report is None:
             return cls.unavailable()
         data = dict(report)

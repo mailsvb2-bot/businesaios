@@ -16,7 +16,7 @@ class AdsSpecBuilder:
     Connector implementations decide how to map them to their native API.
     """
 
-    def to_spec(self, *, plan: TrafficPlan) -> Dict[str, Any]:
+    def to_spec(self, *, plan: TrafficPlan) -> dict[str, Any]:
         c = plan.campaign
         return {
             "notes": plan.notes,

@@ -31,7 +31,7 @@ class LLMAgent:
         self._gateway = gateway
         self._cfg = cfg
 
-    def run_task(self, task: TaskType, ctx: LLMTaskContext, *, model: Optional[str] = None) -> LLMTaskResult:
+    def run_task(self, task: TaskType, ctx: LLMTaskContext, *, model: str | None = None) -> LLMTaskResult:
         sys = build_system_prompt(task, ctx.locale)
         user = build_user_prompt(task, ctx)
 
@@ -57,7 +57,7 @@ class LLMAgent:
         raw_text = getattr(resp, "content", "") or ""
         json_data, rest_text = extract_json_block(raw_text)
 
-        meta: Dict[str, Any] = {
+        meta: dict[str, Any] = {
             "finish_reason": getattr(resp, "finish_reason", None),
             "usage": getattr(resp, "usage", None),
             "model": req.model,

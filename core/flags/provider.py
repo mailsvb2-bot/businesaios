@@ -11,7 +11,7 @@ from core.tenancy.scope import TenantId
 class FlagContext:
     tenant_id: TenantId
     user_id: str | None = None
-    attributes: Dict[str, Any] | None = None
+    attributes: dict[str, Any] | None = None
 
 
 class FeatureFlagProvider(Protocol):

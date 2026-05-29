@@ -11,7 +11,7 @@ from core.governance.evaluators.profit_metrics import ProfitMetricsService
 class Suggestion:
     ok: bool
     reason: str
-    action: Dict[str, Any] | None = None
+    action: dict[str, Any] | None = None
     policy_version: int | None = None
 
 

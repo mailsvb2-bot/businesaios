@@ -11,10 +11,10 @@ from core.offers.offer_events import OFFER_ACCEPTED_V1, OFFER_DECLINED_V1
 class OfferCallback:
     kind: str  # "accept"|"decline"
     offer_id: str
-    meta: Dict[str, Any]
+    meta: dict[str, Any]
 
 
-def parse_offer_callback(cb: Optional[str]) -> Optional[OfferCallback]:
+def parse_offer_callback(cb: str | None) -> OfferCallback | None:
     # format:
     #   offer:accept:<offer_id>
     #   offer:decline:<offer_id>
@@ -35,7 +35,7 @@ def parse_offer_callback(cb: Optional[str]) -> Optional[OfferCallback]:
         return None
     if not offer_id:
         return None
-    meta: Dict[str, Any] = {}
+    meta: dict[str, Any] = {}
     if len(parts) >= 4:
         pr = parts[3].strip()
         try:
@@ -61,7 +61,7 @@ class OfferOutcomeCallback:
     price_rub: int = 0
 
 
-def parse_offer_outcome_callback(cb: Optional[str]) -> Optional[OfferOutcomeCallback]:
+def parse_offer_outcome_callback(cb: str | None) -> OfferOutcomeCallback | None:
     parsed = parse_offer_callback(cb)
     if not parsed:
         return None

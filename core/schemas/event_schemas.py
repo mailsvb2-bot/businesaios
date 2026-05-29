@@ -9,12 +9,12 @@ class UserTransitEventV1(Schema):
     """User transit/location check-in (platform-agnostic)."""
     REQUIRED = {"user_id", "timestamp", "station"}
 
-    def validate(self, payload: Dict[str, Any]) -> None:
+    def validate(self, payload: dict[str, Any]) -> None:
         missing = self.REQUIRED - payload.keys()
         if missing:
             raise ValueError(f"Missing fields: {missing}")
 
-    def normalize(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
         return {
             "user_id": str(payload["user_id"]),
             "ts": int(payload["timestamp"]),

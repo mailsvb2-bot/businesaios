@@ -45,7 +45,7 @@ def recommend_price_minor(
     cur = str(currency or "RUB")
 
     # Stable RNG seed.
-    h = hashlib.sha256(f"{seed}|{user_id}|{step_key}".encode("utf-8")).digest()
+    h = hashlib.sha256(f"{seed}|{user_id}|{step_key}".encode()).digest()
     rng = random.Random(int.from_bytes(h[:8], "big", signed=False))
 
     def _ab(key: str) -> tuple[float, float]:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from app.web.components.autonomy_budget_panel import AutonomyBudgetPanel
 from app.web.components.dead_letter_panel import DeadLetterPanel
@@ -87,7 +87,7 @@ def test_run_control_panel_filters_cross_tenant_events_and_dedupes_controls() ->
 
 
 def test_dead_letter_and_recovery_panels_render_canonical_state() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     message = OutboxMessage(
         tenant_id='tenant-a',
         message_id='msg-1',
@@ -158,7 +158,7 @@ def test_admin_and_runtime_alert_pages_include_operator_sections() -> None:
         comparator=SLOComparator.GTE,
         target_value=0.95,
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     page = AdminPage().build_dashboard(
         tenant_id='tenant-a',
         tenant_records=(),

@@ -17,7 +17,7 @@ from core.ux.callbacks import (
 from core.ux.telegram_keyboards import kb_ads_apply_pending
 
 
-def _get_pending(settings: Dict[str, Any] | None) -> Dict[str, Any] | None:
+def _get_pending(settings: dict[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(settings, dict):
         return None
     p = settings.get(PENDING_KEY)

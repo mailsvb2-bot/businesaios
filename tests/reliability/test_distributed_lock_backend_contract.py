@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 import pytest
 
@@ -15,7 +15,7 @@ from reliability.distributed_lock_backend import (
     safe_sql_identifier,
 )
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def _t(second: int = 0) -> datetime:

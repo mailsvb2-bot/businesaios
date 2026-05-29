@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 import pytest
 from fastapi import HTTPException
@@ -56,7 +56,7 @@ def test_auth_dependencies_fail_closed_when_transport_not_encrypted() -> None:
 
 
 def test_tenant_route_guard_uses_security_guard_for_binding_mismatch() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     principal = AuthPrincipal(
         subject='alice',
         tenant_id='tenant-a',

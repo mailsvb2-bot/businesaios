@@ -24,7 +24,7 @@ def cosine_similarity(a: Mapping[str, float], b: Mapping[str, float]) -> float:
     return dot / math.sqrt(na * nb)
 
 
-def jaccard_similarity(a: Set[str], b: Set[str]) -> float:
+def jaccard_similarity(a: set[str], b: set[str]) -> float:
     if not a or not b:
         return 0.0
     inter = len(a.intersection(b))
@@ -38,7 +38,7 @@ def random_walk(
     *,
     steps: int = 10,
     restart_p: float = 0.0,
-) -> List[str]:
+) -> list[str]:
     """Random walk for recommendation / discovery."""
     if steps <= 0:
         return [start]
@@ -63,10 +63,10 @@ def cooccurrence_recommendations(
     user_to_items: Mapping[str, Sequence[str]],
     *,
     top_k: int = 10,
-) -> Dict[str, List[Tuple[str, float]]]:
+) -> dict[str, list[tuple[str, float]]]:
     """Simple graph-based recommender (User->Item bipartite projection)."""
     co = defaultdict(lambda: defaultdict(int))
-    user_sets: Dict[str, Set[str]] = {u: set(items) for u, items in user_to_items.items()}
+    user_sets: dict[str, set[str]] = {u: set(items) for u, items in user_to_items.items()}
     for items in user_sets.values():
         li = list(items)
         for i in range(len(li)):
@@ -75,7 +75,7 @@ def cooccurrence_recommendations(
                 co[a][b] += 1
                 co[b][a] += 1
 
-    out: Dict[str, List[Tuple[str, float]]] = {}
+    out: dict[str, list[tuple[str, float]]] = {}
     for u, seen in user_sets.items():
         scores = defaultdict(float)
         for it in seen:

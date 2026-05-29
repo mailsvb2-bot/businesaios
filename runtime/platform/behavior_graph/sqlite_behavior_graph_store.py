@@ -64,7 +64,7 @@ class SqliteBehaviorGraphStore:
         self._path = str(path)
         self._db: sqlite3.Connection | None = None
 
-    def __enter__(self) -> "SqliteBehaviorGraphStore":
+    def __enter__(self) -> SqliteBehaviorGraphStore:
         self._db = sqlite3.connect(self._path, timeout=5.0, check_same_thread=False)
         configure_sqlite(self._db, prod=is_prod_env())
         self._db.execute("PRAGMA journal_mode=WAL;")
@@ -130,7 +130,7 @@ class SqliteBehaviorGraphStore:
         built_at_ms: int,
         nodes: list[Node],
         edges: list[Edge],
-        meta: Dict[str, Any] | None = None,
+        meta: dict[str, Any] | None = None,
     ) -> None:
         assert self._db is not None
         tid = str(tenant_id).strip()
@@ -191,7 +191,7 @@ class SqliteBehaviorGraphStore:
                 swallow(__name__, "sqlite_behavior_graph.rollback")
             raise
 
-    def get_snapshot(self, *, tenant_id: str, scope: str) -> Optional[GraphSnapshot]:
+    def get_snapshot(self, *, tenant_id: str, scope: str) -> GraphSnapshot | None:
         assert self._db is not None
         tid = str(tenant_id).strip()
         sc = str(scope).strip()
@@ -215,7 +215,7 @@ class SqliteBehaviorGraphStore:
         edges = [Edge(edge_id=r[0], edge_type=r[1], src=r[2], dst=r[3], weight=float(r[4]), props=(json.loads(r[5]) if r[5] else {})) for r in erows]
         return GraphSnapshot(tenant_id=tid, scope=sc, built_at_ms=built_at_ms, nodes=nodes, edges=edges, meta=meta)
 
-    def get_node(self, *, tenant_id: str, scope: str, node_id: str) -> Optional[Node]:
+    def get_node(self, *, tenant_id: str, scope: str, node_id: str) -> Node | None:
         assert self._db is not None
         tid = str(tenant_id).strip(); sc = str(scope).strip(); nid = str(node_id).strip()
         row = self._db.execute(

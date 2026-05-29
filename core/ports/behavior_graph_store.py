@@ -21,14 +21,14 @@ class BehaviorGraphStore(Protocol):
         built_at_ms: int,
         nodes: list[Node],
         edges: list[Edge],
-        meta: Dict[str, Any] | None = None,
+        meta: dict[str, Any] | None = None,
     ) -> None:
         ...
 
-    def get_snapshot(self, *, tenant_id: str, scope: str) -> Optional[GraphSnapshot]:
+    def get_snapshot(self, *, tenant_id: str, scope: str) -> GraphSnapshot | None:
         ...
 
-    def get_node(self, *, tenant_id: str, scope: str, node_id: str) -> Optional[Node]:
+    def get_node(self, *, tenant_id: str, scope: str, node_id: str) -> Node | None:
         ...
 
     def neighbors(

@@ -24,7 +24,7 @@ class CampaignFactory:
         budget_currency: str,
         audience_region: str,
         creative: TrafficCreative,
-        destination: Dict,
+        destination: dict,
         interests: list[str] | None = None,
     ) -> TrafficCampaignSpec:
         obj = TrafficObjective(kind=str(objective_kind), target_cac_minor=int(target_cac_minor or 0), currency=str(currency))

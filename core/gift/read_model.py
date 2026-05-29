@@ -18,14 +18,14 @@ class GiftTokenStatus:
     token: str
     created_by: str
     expires_ms: int
-    redeemed_by: Optional[str] = None
+    redeemed_by: str | None = None
 
     @property
     def is_redeemed(self) -> bool:
         return bool(self.redeemed_by)
 
 
-def get_gift_token_status(event_store: Any, *, tenant_id: str = "default", token: str) -> Optional[GiftTokenStatus]:
+def get_gift_token_status(event_store: Any, *, tenant_id: str = "default", token: str) -> GiftTokenStatus | None:
     token = (token or "").strip()
     if not token:
         return None

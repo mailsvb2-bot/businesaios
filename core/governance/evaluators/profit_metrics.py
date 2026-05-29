@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from typing import Any, Protocol
 
 from config.profit_metrics_policy import DEFAULT_PROFIT_METRICS_POLICY, ProfitMetricsPolicy
@@ -17,16 +17,16 @@ def _to_utc_dt(ts: Any) -> datetime | None:
     if ts is None:
         return None
     if isinstance(ts, datetime):
-        return ts.astimezone(timezone.utc)
+        return ts.astimezone(UTC)
     try:
         if isinstance(ts, (int, float)):
             v = float(ts)
             if v > 2_000_000_000_000:
-                return datetime.fromtimestamp(v / DEFAULT_PROFIT_METRICS_POLICY.minor_units_multiplier, tz=timezone.utc)
-            return datetime.fromtimestamp(v, tz=timezone.utc)
+                return datetime.fromtimestamp(v / DEFAULT_PROFIT_METRICS_POLICY.minor_units_multiplier, tz=UTC)
+            return datetime.fromtimestamp(v, tz=UTC)
         s = str(ts).replace("Z", "+00:00")
         d = datetime.fromisoformat(s)
-        return d.astimezone(timezone.utc)
+        return d.astimezone(UTC)
     except Exception:
         return None
 
@@ -59,7 +59,7 @@ class ProfitMetricsService:
     def profit_lookback(self, *, tenant_id: str, lookback_days: int) -> ProfitSnapshot:
         tenant_id = str(tenant_id)
         lookback_days = int(lookback_days)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         since = now - timedelta(days=lookback_days)
 
         revenue_minor = 0

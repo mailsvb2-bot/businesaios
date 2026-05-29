@@ -15,7 +15,7 @@ class AICeoPlanRequest:
     horizon: str
     route: DecisionRoute
 
-def extract_ai_ceo_plan_request(*, payload: Dict[str, Any], env: Any) -> AICeoPlanRequest:
+def extract_ai_ceo_plan_request(*, payload: dict[str, Any], env: Any) -> AICeoPlanRequest:
     route = extract_strict_route_from_envelope(payload=payload, env=env)
     route.validate(expected_action=EXPECTED_ACTION)
     p = payload or {}

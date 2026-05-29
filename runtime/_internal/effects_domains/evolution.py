@@ -18,7 +18,7 @@ class EvolutionEffectsMixin:
         correlation_id: str,
         user_id: str,
         job_kind: str,
-        payload: Optional[Dict[str, Any]] = None,
+        payload: dict[str, Any] | None = None,
     ) -> Any:
         assert_called_from_executor()
 

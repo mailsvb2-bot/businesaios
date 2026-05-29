@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 from uuid import uuid4
 
@@ -53,7 +53,7 @@ class CTALandingIntakeService:
     def submit(self, *, payload: dict[str, object]) -> CTASubmitResult:
         safe_payload = dict(payload or {})
         intake_id = f"cta-{uuid4().hex[:16]}"
-        created_at = datetime.now(timezone.utc).isoformat()
+        created_at = datetime.now(UTC).isoformat()
         tenant_id = _stable_id(prefix="tenant", value=_first_non_empty(safe_payload, "tenant_id", "business_name", "company", "email") or intake_id)
         business_id = _stable_id(prefix="business", value=_first_non_empty(safe_payload, "business_id", "business_name", "company", "website", "email") or intake_id)
         user_id = _stable_id(prefix="user", value=_first_non_empty(safe_payload, "user_id", "email", "telegram", "phone") or intake_id)

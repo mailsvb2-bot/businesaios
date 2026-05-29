@@ -19,8 +19,8 @@ class YamlOperatorCatalogLoader:
 
     base_dir: Path
 
-    def load_all_raw(self) -> Dict[str, Mapping[str, Any]]:
-        out: Dict[str, Mapping[str, Any]] = {}
+    def load_all_raw(self) -> dict[str, Mapping[str, Any]]:
+        out: dict[str, Mapping[str, Any]] = {}
         if not self.base_dir.exists():
             return out
         for p in sorted(self.base_dir.glob("*.yaml")):

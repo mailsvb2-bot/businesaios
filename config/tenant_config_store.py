@@ -54,7 +54,7 @@ class TenantConfigSnapshot:
         if self.version is not None:
             self.version.validate()
 
-    def normalized(self) -> "TenantConfigSnapshot":
+    def normalized(self) -> TenantConfigSnapshot:
         return TenantConfigSnapshot(
             tenant_id=require_tenant_id(self.tenant_id),
             runtime_overrides=to_jsonable(dict(self.runtime_overrides)),
@@ -80,7 +80,7 @@ class TenantConfigSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object]) -> "TenantConfigSnapshot":
+    def from_dict(cls, payload: Mapping[str, object]) -> TenantConfigSnapshot:
         item = dict(payload or {})
         version = None
         if isinstance(item.get("version"), Mapping):

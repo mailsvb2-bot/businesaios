@@ -41,7 +41,7 @@ class RetryLearningSnapshot:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> 'RetryLearningSnapshot':
+    def from_dict(cls, payload: Mapping[str, Any]) -> RetryLearningSnapshot:
         return cls(
             tenant_id=_text(payload.get('tenant_id')),
             action_type=_text(payload.get('action_type')),

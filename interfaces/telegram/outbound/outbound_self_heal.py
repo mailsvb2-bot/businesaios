@@ -40,7 +40,7 @@ class SelfHealController:
     def __init__(
         self,
         config: SelfHealConfig,
-        emit: Optional[Callable[[str, dict], None]] = None,
+        emit: Callable[[str, dict], None] | None = None,
     ) -> None:
         self._cfg = config
         self._emit = emit or (lambda _et, _pl: None)

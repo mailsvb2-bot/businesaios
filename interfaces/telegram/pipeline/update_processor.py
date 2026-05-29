@@ -37,7 +37,7 @@ class TelegramUpdateProcessor:
         execute_fn: Any,
         enricher: TelegramReadModelEnricher,
         event_log: Any,
-        product_context: Dict[str, Any] | None = None,
+        product_context: dict[str, Any] | None = None,
     ):
         self._decide = decide_fn
         self._execute = execute_fn
@@ -60,7 +60,7 @@ class TelegramUpdateProcessor:
     def _now_ms(self) -> int:
         return int(time.time() * 1000)
 
-    def handle_update(self, upd: Dict[str, Any]) -> None:
+    def handle_update(self, upd: dict[str, Any]) -> None:
         ctx = build_context(upd)
         if ctx is None:
             return

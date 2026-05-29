@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 
 from billing.chargeback_orchestrator import ChargebackOrchestrator
@@ -57,13 +57,13 @@ def _issued_invoice(*, tenant_id: str, invoice_id: str, total_minor: int) -> Com
         tax_minor=100,
         total_minor=total_minor,
         status=InvoiceLifecycleStatus.ISSUED,
-        issued_at=datetime(2026, 4, 10, tzinfo=timezone.utc),
+        issued_at=datetime(2026, 4, 10, tzinfo=UTC),
     )
 
 
 
 def test_dunning_partial_progress_restart_executes_only_remaining_attempts(tmp_path: Path) -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     metrics = TenantMetricsRegistry()
     orchestrator = DunningOrchestrator(metrics=metrics)
     orchestrator.open_run(tenant_id='tenant-a', invoice_id='inv-partial', started_at=now - timedelta(days=10))
@@ -96,7 +96,7 @@ def test_dunning_partial_progress_restart_executes_only_remaining_attempts(tmp_p
 
 
 def test_sqlite_job_lease_store_rejects_stale_release_after_expired_reacquire(tmp_path: Path) -> None:
-    observed = datetime.now(timezone.utc)
+    observed = datetime.now(UTC)
     store = SqliteBillingJobLeaseStore(sqlite_path=str(tmp_path / 'job-leases.sqlite3'))
 
     first = store.acquire(

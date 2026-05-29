@@ -25,13 +25,13 @@ def _scope_from_payload(p: dict) -> str:
 
 
 def handle_behavior_graph_build(
-    payload: Dict[str, Any] | None,
+    payload: dict[str, Any] | None,
     effects: Any,
     env: Any,
     *,
     event_store: Any,
     store: BehaviorGraphStore,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     p = dict(payload or {})
     tenant_id = require_tenant_id(p.get("tenant_id") or getattr(getattr(env, "tenant", None), "tenant_id", None) or "")
     scope = _scope_from_payload(p)
@@ -95,12 +95,12 @@ def handle_behavior_graph_build(
 
 
 def handle_behavior_graph_node(
-    payload: Dict[str, Any] | None,
+    payload: dict[str, Any] | None,
     effects: Any,
     env: Any,
     *,
     store: BehaviorGraphStore,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     p = dict(payload or {})
     tenant_id = require_tenant_id(p.get("tenant_id") or getattr(getattr(env, "tenant", None), "tenant_id", None) or "")
     scope = _scope_from_payload(p)
@@ -114,12 +114,12 @@ def handle_behavior_graph_node(
 
 
 def handle_behavior_graph_neighbors(
-    payload: Dict[str, Any] | None,
+    payload: dict[str, Any] | None,
     effects: Any,
     env: Any,
     *,
     store: BehaviorGraphStore,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     p = dict(payload or {})
     tenant_id = require_tenant_id(p.get("tenant_id") or getattr(getattr(env, "tenant", None), "tenant_id", None) or "")
     scope = _scope_from_payload(p)
@@ -150,12 +150,12 @@ def handle_behavior_graph_neighbors(
 
 
 def handle_behavior_graph_path(
-    payload: Dict[str, Any] | None,
+    payload: dict[str, Any] | None,
     effects: Any,
     env: Any,
     *,
     store: BehaviorGraphStore,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     p = dict(payload or {})
     tenant_id = require_tenant_id(p.get("tenant_id") or getattr(getattr(env, "tenant", None), "tenant_id", None) or "")
     scope = _scope_from_payload(p)
@@ -179,12 +179,12 @@ def handle_behavior_graph_path(
 
 
 def handle_behavior_graph_reset(
-    payload: Dict[str, Any] | None,
+    payload: dict[str, Any] | None,
     effects: Any,
     env: Any,
     *,
     store: BehaviorGraphStore,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     p = dict(payload or {})
     tenant_id = require_tenant_id(p.get("tenant_id") or getattr(getattr(env, "tenant", None), "tenant_id", None) or "")
     scope = _scope_from_payload(p)

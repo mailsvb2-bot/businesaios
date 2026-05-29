@@ -28,9 +28,9 @@ from core.ux.callbacks import (
 from .common import mk
 
 
-def kb_autopilot_menu(*, role: UserRoleInfo | None = None) -> Dict[str, Any]:
+def kb_autopilot_menu(*, role: UserRoleInfo | None = None) -> dict[str, Any]:
     r = (role or UserRoleInfo("owner")).role
-    rows: List[List[Dict[str, str]]] = []
+    rows: list[list[dict[str, str]]] = []
     if r in ("owner", "operator"):
         rows.append([{"text": "🚀 Запустить: +прибыль за 7 дней", "callback_data": CB_PROFIT_SPRINT_START}])
     rows.extend(
@@ -46,7 +46,7 @@ def kb_autopilot_menu(*, role: UserRoleInfo | None = None) -> Dict[str, Any]:
     return mk(rows)
 
 
-def kb_profit_sprint_lead_sources() -> Dict[str, Any]:
+def kb_profit_sprint_lead_sources() -> dict[str, Any]:
     return mk(
         [
             [{"text": "Входящие сообщения", "callback_data": CB_PROFIT_SPRINT_LEAD_INBOX}],
@@ -58,8 +58,8 @@ def kb_profit_sprint_lead_sources() -> Dict[str, Any]:
     )
 
 
-def kb_ads_apply_pending(*, can_apply: bool = True) -> Dict[str, Any]:
-    rows: List[List[Dict[str, str]]] = [
+def kb_ads_apply_pending(*, can_apply: bool = True) -> dict[str, Any]:
+    rows: list[list[dict[str, str]]] = [
         [{"text": "👀 Предпросмотр плана", "callback_data": CB_ADS_APPLY_PREVIEW}],
     ]
     if can_apply:
@@ -71,7 +71,7 @@ def kb_ads_apply_pending(*, can_apply: bool = True) -> Dict[str, Any]:
     return mk(rows)
 
 
-def kb_growth_menu() -> Dict[str, Any]:
+def kb_growth_menu() -> dict[str, Any]:
     return mk(
         [
             [{"text": "🔁 Сгенерировать backlog", "callback_data": CB_GROWTH_GENERATE}],

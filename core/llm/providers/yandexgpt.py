@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Optional
 from ..contracts import LLMClient, LLMMessage, LLMRequest, LLMResponse, LLMUsage
 from ..redaction import safe_metadata
 
-YandexGPTTransport = Callable[[str, str, Dict[str, Any], int], Dict[str, Any]]
+YandexGPTTransport = Callable[[str, str, dict[str, Any], int], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -17,8 +17,8 @@ class YandexGPTClient(LLMClient):
     model: str = "yandexgpt-lite"
     timeout_s: int = 20
 
-    def _payload(self, req: LLMRequest) -> Dict[str, Any]:
-        payload: Dict[str, Any] = {
+    def _payload(self, req: LLMRequest) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "modelUri": self.model,
             "completionOptions": {
                 "stream": False,
@@ -53,7 +53,7 @@ def _messages(messages: list[LLMMessage]) -> list[dict[str, Any]]:
     return out or [{"role": "user", "text": ""}]
 
 
-def _extract_text(raw: Dict[str, Any]) -> str:
+def _extract_text(raw: dict[str, Any]) -> str:
     result = raw.get("result")
     if not isinstance(result, dict):
         return ""
@@ -69,7 +69,7 @@ def _extract_text(raw: Dict[str, Any]) -> str:
     return str(msg.get("text") or "").strip()
 
 
-def _extract_usage(raw: Dict[str, Any]) -> Optional[LLMUsage]:
+def _extract_usage(raw: dict[str, Any]) -> LLMUsage | None:
     usage = (raw.get("result") or {}).get("usage") if isinstance(raw.get("result"), dict) else raw.get("usage")
     if not isinstance(usage, dict):
         return None
@@ -79,7 +79,7 @@ def _extract_usage(raw: Dict[str, Any]) -> Optional[LLMUsage]:
     return LLMUsage(prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
 
 
-def _extract_finish(raw: Dict[str, Any]) -> str:
+def _extract_finish(raw: dict[str, Any]) -> str:
     result = raw.get("result")
     if isinstance(result, dict) and result.get("finishReason") is not None:
         return str(result.get("finishReason"))

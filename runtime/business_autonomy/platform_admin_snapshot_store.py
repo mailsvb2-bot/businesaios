@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Mapping
 
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore
@@ -10,7 +10,7 @@ CANON_PLATFORM_ADMIN_SNAPSHOT_STORE = True
 
 
 def _now_text() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass(frozen=True)

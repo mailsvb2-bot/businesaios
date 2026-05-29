@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 import pytest
 
@@ -11,7 +11,7 @@ from governance.rbac_contract import RoleId
 
 
 def _principal() -> AuthPrincipal:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return AuthPrincipal(
         subject='owner-1',
         tenant_id='tenant-a',

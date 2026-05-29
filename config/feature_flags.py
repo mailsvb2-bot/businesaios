@@ -31,7 +31,7 @@ class FeatureFlagSnapshot:
             if not str(key or "").strip():
                 raise ValueError("variant keys must be non-empty")
 
-    def merged_with(self, other: "FeatureFlagSnapshot") -> "FeatureFlagSnapshot":
+    def merged_with(self, other: FeatureFlagSnapshot) -> FeatureFlagSnapshot:
         self.validate()
         other.validate()
         if normalize_environment_name(self.environment) != normalize_environment_name(other.environment):
@@ -75,7 +75,7 @@ class ConfigFeatureFlagResolver:
             if normalize_tenant_id(tenant_id)
         }
 
-    def with_tenant_flags(self, snapshot: TenantFeatureFlags) -> "ConfigFeatureFlagResolver":
+    def with_tenant_flags(self, snapshot: TenantFeatureFlags) -> ConfigFeatureFlagResolver:
         snapshot.validate()
         tenant_snapshots = dict(self._tenant_snapshots)
         tenant_snapshots[normalize_tenant_id(snapshot.tenant_id)] = snapshot

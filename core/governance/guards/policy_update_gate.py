@@ -40,8 +40,8 @@ class PolicyUpdateGate:
             raise ValueError("cooldown_ms must be >= 0")
         self._lock = Lock()
         self._event_store = event_store
-        self._pending: Dict[str, PendingUpdate] = {}
-        self._last_apply_ms: Dict[str, int] = {}
+        self._pending: dict[str, PendingUpdate] = {}
+        self._last_apply_ms: dict[str, int] = {}
 
     def bind_event_store(self, event_store: Any | None) -> None:
         with self._lock:
@@ -49,7 +49,7 @@ class PolicyUpdateGate:
             self._pending.clear()
             self._last_apply_ms.clear()
 
-    def propose(self, *, tenant_id: str, domain: str, update_id: str, payload: dict, now_ms: Optional[int] = None) -> str:
+    def propose(self, *, tenant_id: str, domain: str, update_id: str, payload: dict, now_ms: int | None = None) -> str:
         tenant_id = self._normalize_token("tenant_id", tenant_id)
         domain = self._normalize_token("domain", domain)
         update_id = self._normalize_token("update_id", update_id)
@@ -75,7 +75,7 @@ class PolicyUpdateGate:
         )
         return update_id
 
-    def approve(self, *, tenant_id: str, domain: str, update_id: str, now_ms: Optional[int] = None) -> None:
+    def approve(self, *, tenant_id: str, domain: str, update_id: str, now_ms: int | None = None) -> None:
         tenant_id = self._normalize_token("tenant_id", tenant_id)
         domain = self._normalize_token("domain", domain)
         update_id = self._normalize_token("update_id", update_id)
@@ -107,7 +107,7 @@ class PolicyUpdateGate:
             decision_id=update_id,
         )
 
-    def claim_for_apply(self, *, tenant_id: str, domain: str, update_id: str, now_ms: Optional[int] = None) -> dict:
+    def claim_for_apply(self, *, tenant_id: str, domain: str, update_id: str, now_ms: int | None = None) -> dict:
         tenant_id = self._normalize_token("tenant_id", tenant_id)
         domain = self._normalize_token("domain", domain)
         update_id = self._normalize_token("update_id", update_id)
@@ -149,7 +149,7 @@ class PolicyUpdateGate:
     def _domain_key(tenant_id: str, domain: str) -> str:
         return f"{tenant_id}:{domain}"
 
-    def _load_pending(self, *, tenant_id: str, domain: str, update_id: str, store: Any | None) -> Optional[PendingUpdate]:
+    def _load_pending(self, *, tenant_id: str, domain: str, update_id: str, store: Any | None) -> PendingUpdate | None:
         latest: PendingUpdate | None = None
         latest_state: str | None = None
         latest_ts = -1

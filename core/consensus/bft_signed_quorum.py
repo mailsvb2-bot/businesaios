@@ -12,7 +12,7 @@ class SignedVote:
     approve: bool
     signature_ok: bool  # result of crypto verification in infra layer
 
-def bft_signed_quorum(votes: List[SignedVote]) -> bool:
+def bft_signed_quorum(votes: list[SignedVote]) -> bool:
     """Requires >= 2/3 approvals among signature‑valid votes."""
     valid = [v for v in votes if v.signature_ok]
     if not valid:

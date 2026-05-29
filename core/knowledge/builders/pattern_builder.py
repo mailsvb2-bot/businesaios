@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from ..enums import ConfidenceLevel
 from ..errors import KnowledgeValidationError
@@ -56,7 +56,7 @@ class PatternBuilder:
             confidence_level=confidence_level,
             confidence_score=confidence_score,
             tags=draft.tags,
-            created_at=datetime.now(tz=timezone.utc),
+            created_at=datetime.now(tz=UTC),
             created_by=created_by,
             metadata=dict(draft.metadata),
         )

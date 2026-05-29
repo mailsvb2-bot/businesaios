@@ -29,7 +29,7 @@ _LEAD_SOURCE_MAP = {
 }
 
 
-def handle_flow(ctx, *, user_id: str, default_price_rub: int, sess: dict, sl, logger) -> Optional[ProposedAction]:
+def handle_flow(ctx, *, user_id: str, default_price_rub: int, sess: dict, sl, logger) -> ProposedAction | None:
     cb = str(ctx.callback_data or "")
 
     if cb == CB_PROFIT_SPRINT_START:

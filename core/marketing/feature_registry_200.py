@@ -8,7 +8,7 @@ from core.marketing.feature_registry_channels import FEATURES as CHANNEL_FEATURE
 from core.marketing.feature_registry_pricing import FEATURES as PRICING_FEATURES
 from core.marketing.feature_registry_shared import FeatureSpec
 
-FEATURES_200: List[FeatureSpec] = [
+FEATURES_200: list[FeatureSpec] = [
     *CHANNEL_FEATURES,
     *CAMPAIGN_FEATURES,
     *PRICING_FEATURES,
@@ -16,5 +16,5 @@ FEATURES_200: List[FeatureSpec] = [
 ]
 
 
-def feature_map() -> Dict[str, FeatureSpec]:
+def feature_map() -> dict[str, FeatureSpec]:
     return {f.name: f for f in FEATURES_200}

@@ -8,8 +8,8 @@ from core.experiments.types import VariantSpec
 
 
 class VariantBuilder:
-    def build(self, definitions: Iterable[Tuple[str, VariantRole, float]]) -> List[VariantSpec]:
-        variants: List[VariantSpec] = []
+    def build(self, definitions: Iterable[tuple[str, VariantRole, float]]) -> list[VariantSpec]:
+        variants: list[VariantSpec] = []
         total_share = 0.0
         seen_names: set[str] = set()
 

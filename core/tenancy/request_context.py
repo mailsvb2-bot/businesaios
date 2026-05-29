@@ -22,13 +22,13 @@ from typing import Iterator, Optional
 from core.tenancy.scope import TenantId, as_tenant_id
 from core.tenancy.tenant import current_tenant_id
 
-_tenant_var: ContextVar[Optional[TenantId]] = ContextVar("tenant_id", default=None)
+_tenant_var: ContextVar[TenantId | None] = ContextVar("tenant_id", default=None)
 
 
 @dataclass(frozen=True)
 class TenantContext:
     tenant_id: TenantId
-    token: Token[Optional[TenantId]] | None = None
+    token: Token[TenantId | None] | None = None
 
 
 def bind_tenant(tenant_id: str | TenantId) -> TenantContext:
@@ -37,7 +37,7 @@ def bind_tenant(tenant_id: str | TenantId) -> TenantContext:
     return TenantContext(tenant_id=tid, token=token)
 
 
-def reset_tenant(context: TenantContext | Token[Optional[TenantId]] | None) -> None:
+def reset_tenant(context: TenantContext | Token[TenantId | None] | None) -> None:
     if context is None:
         return
     token = context if isinstance(context, Token) else context.token
@@ -61,7 +61,7 @@ def get_tenant_id() -> TenantId:
     return as_tenant_id(current_tenant_id())
 
 
-def maybe_tenant_id() -> Optional[TenantId]:
+def maybe_tenant_id() -> TenantId | None:
     return _tenant_var.get()
 
 

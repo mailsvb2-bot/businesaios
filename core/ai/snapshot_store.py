@@ -18,7 +18,7 @@ class SnapshotStore(Protocol):
     def put(self, snapshot_id: str, canonical_bytes: bytes) -> None:  # pragma: no cover
         ...
 
-    def get(self, snapshot_id: str) -> Optional[bytes]:  # pragma: no cover
+    def get(self, snapshot_id: str) -> bytes | None:  # pragma: no cover
         ...
 
 
@@ -31,5 +31,5 @@ class MemorySnapshotStore:
     def put(self, snapshot_id: str, canonical_bytes: bytes) -> None:
         self._data[str(snapshot_id)] = bytes(canonical_bytes)
 
-    def get(self, snapshot_id: str) -> Optional[bytes]:
+    def get(self, snapshot_id: str) -> bytes | None:
         return self._data.get(str(snapshot_id))

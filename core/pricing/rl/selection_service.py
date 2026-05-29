@@ -6,7 +6,7 @@ from core.pricing.rl.guard import PricingSelectionContext
 from core.pricing.rl.scoring import score_candidates
 from core.scorers.pricing import choose_candidate as select_candidate
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 class PricingSelectionService:
@@ -27,7 +27,7 @@ class PricingSelectionService:
         evidence: Json,
     ) -> Json:
         ctx.validate()
-        cand_list: List[Json] = list(candidates)
+        cand_list: list[Json] = list(candidates)
         scored = score_candidates(cand_list, evidence=evidence)
         chosen = select_candidate(scored)
         return {

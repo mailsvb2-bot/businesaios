@@ -52,10 +52,10 @@ class RetentionDayDecision:
     hazard: float
     readiness: float
     offer_arm: str
-    offer_price_rub: Optional[int]
+    offer_price_rub: int | None
     suppressed: bool
     reason: str
-    debug: Dict[str, Any]
+    debug: dict[str, Any]
 
 
 def _now_ms() -> int:
@@ -69,10 +69,10 @@ def decide_for_day(
     user_id: str,
     day_key: str,
     day_index: int,
-    now_ms: Optional[int] = None,
-    outbound_telemetry: Optional[dict] = None,
-    prices: Optional[dict] = None,
-    entitlements: Optional[dict] = None,
+    now_ms: int | None = None,
+    outbound_telemetry: dict | None = None,
+    prices: dict | None = None,
+    entitlements: dict | None = None,
     policy: RetentionEnginePolicy = DEFAULT_RETENTION_ENGINE_POLICY,
 ) -> RetentionDayDecision:
     now_ms = int(now_ms) if now_ms is not None else _now_ms()
@@ -113,7 +113,7 @@ def decide_for_day(
         policy=policy,
     ):
         suppressed, reason = True, "daily_cap"
-    debug: Dict[str, Any] = {
+    debug: dict[str, Any] = {
         "features": dict(features),
         "hazard": hazard,
         "readiness": readiness,
@@ -225,12 +225,12 @@ class RetentionEngine:
         self,
         *,
         user_id: str,
-        now_ms: Optional[int] = None,
+        now_ms: int | None = None,
         day_key: str = "day:today",
         day_index: int = 0,
-        outbound_telemetry: Optional[dict] = None,
-        prices: Optional[dict] = None,
-        entitlements: Optional[dict] = None,
+        outbound_telemetry: dict | None = None,
+        prices: dict | None = None,
+        entitlements: dict | None = None,
     ) -> RetentionDayDecision:
         if not is_retention_allowed(
             tenant_id=self._tenant_id,
@@ -264,7 +264,7 @@ class RetentionEngine:
         tenant_id: str,
         user_id: str,
         context: dict,
-    ) -> Optional[RetentionDecision]:
+    ) -> RetentionDecision | None:
         if self._tenant_id == "unknown_tenant":
             return None
         requested_tenant = normalize_tenant_scope(tenant_id, allow_unknown=True)

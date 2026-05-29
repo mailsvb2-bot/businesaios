@@ -46,7 +46,7 @@ def compute_pricing_fingerprint(pricing_config: Any) -> str:
         "trial_price_rub",
         "price_caps",
     }
-    filtered: Dict[str, Any] = {k: data.get(k) for k in sorted(allow) if k in data}
+    filtered: dict[str, Any] = {k: data.get(k) for k in sorted(allow) if k in data}
     payload = _stable_json(filtered).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 

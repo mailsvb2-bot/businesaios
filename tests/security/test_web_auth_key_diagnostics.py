@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from app.web.auth import AuthService
 from security.key_management_contract import KeyPurpose
@@ -8,7 +8,7 @@ from security.key_provider import InMemoryKeyProvider
 
 
 def test_auth_service_rejects_unknown_key_id_fail_closed() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = AuthService(key_provider=InMemoryKeyProvider()).authenticate(
         {
             'issued_at': (now - timedelta(minutes=5)).isoformat(),
@@ -24,7 +24,7 @@ def test_auth_service_rejects_unknown_key_id_fail_closed() -> None:
 
 
 def test_auth_service_rejects_wrong_key_purpose() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     provider = InMemoryKeyProvider()
     provider.issue_key(key_id='enc-key', purpose=KeyPurpose.SECRET_ENCRYPTION, tenant_id='tenant-a')
     result = AuthService(key_provider=provider).authenticate(
@@ -43,7 +43,7 @@ def test_auth_service_rejects_wrong_key_purpose() -> None:
 
 
 def test_auth_service_rejects_tenant_mismatch() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     provider = InMemoryKeyProvider()
     provider.issue_key(key_id='request-key', purpose=KeyPurpose.REQUEST_SIGNING, tenant_id='tenant-b', connector_id='crm-a')
     result = AuthService(key_provider=provider).authenticate(
@@ -63,7 +63,7 @@ def test_auth_service_rejects_tenant_mismatch() -> None:
 
 
 def test_auth_service_rejects_connector_mismatch() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     provider = InMemoryKeyProvider()
     provider.issue_key(key_id='request-key', purpose=KeyPurpose.REQUEST_SIGNING, tenant_id='tenant-a', connector_id='crm-b')
     result = AuthService(key_provider=provider).authenticate(

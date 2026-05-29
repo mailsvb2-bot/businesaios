@@ -12,7 +12,7 @@ from core.causal.feature_encoding import FeatureEncoder
 from core.causal.math_utils import clip, dot, linear_regression_fit
 from core.causal.types import CausalDataset, EffectEstimate
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ class DoublyRobustEstimator(CausalEstimator):
     If either model is approximately correct, estimate is more robust.
     """
 
-    covariate_names: Tuple[str, ...] = ()
+    covariate_names: tuple[str, ...] = ()
     # Smoothing is useful for very sparse strata, but it introduces bias.
     # We keep it off by default and rely on clip_min/clip_max for stability.
     smoothing: float = DEFAULT_DOUBLY_ROBUST_POLICY.default_smoothing
@@ -51,17 +51,17 @@ class DoublyRobustEstimator(CausalEstimator):
         t = [DEFAULT_DOUBLY_ROBUST_POLICY.treated_value if float(r.treatment) >= DEFAULT_DOUBLY_ROBUST_POLICY.treatment_threshold else DEFAULT_DOUBLY_ROBUST_POLICY.control_value for r in dataset.rows]
 
         # Fit two OLS models: mu1(x), mu0(x)
-        X1 = [xi for xi, ti in zip(X, t) if ti >= DEFAULT_DOUBLY_ROBUST_POLICY.treatment_threshold]
-        y1 = [yi for yi, ti in zip(y, t) if ti >= DEFAULT_DOUBLY_ROBUST_POLICY.treatment_threshold]
-        X0 = [xi for xi, ti in zip(X, t) if ti < DEFAULT_DOUBLY_ROBUST_POLICY.treatment_threshold]
-        y0 = [yi for yi, ti in zip(y, t) if ti < DEFAULT_DOUBLY_ROBUST_POLICY.treatment_threshold]
+        X1 = [xi for xi, ti in zip(X, t, strict=False) if ti >= DEFAULT_DOUBLY_ROBUST_POLICY.treatment_threshold]
+        y1 = [yi for yi, ti in zip(y, t, strict=False) if ti >= DEFAULT_DOUBLY_ROBUST_POLICY.treatment_threshold]
+        X0 = [xi for xi, ti in zip(X, t, strict=False) if ti < DEFAULT_DOUBLY_ROBUST_POLICY.treatment_threshold]
+        y0 = [yi for yi, ti in zip(y, t, strict=False) if ti < DEFAULT_DOUBLY_ROBUST_POLICY.treatment_threshold]
 
         b1 = linear_regression_fit(X1, y1).coef if X1 else [DEFAULT_DOUBLY_ROBUST_POLICY.control_value for _ in range(len(X[0]))]
         b0 = linear_regression_fit(X0, y0).coef if X0 else [DEFAULT_DOUBLY_ROBUST_POLICY.control_value for _ in range(len(X[0]))]
 
         # DR score per unit
-        scores: List[float] = []
-        for r, xi, yi, ti in zip(dataset.rows, X, y, t):
+        scores: list[float] = []
+        for r, xi, yi, ti in zip(dataset.rows, X, y, t, strict=False):
             k = stratum_key(r.covariates, names)
             ps = clip(float(p.get(k, DEFAULT_DOUBLY_ROBUST_POLICY.propensity_fallback)), float(self.clip_min), float(self.clip_max))
             mu1 = dot(b1, xi)

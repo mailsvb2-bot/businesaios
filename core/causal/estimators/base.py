@@ -5,7 +5,7 @@ from typing import Any, Dict, Protocol, Sequence
 
 from core.causal.types import CausalDataset, EffectEstimate
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)

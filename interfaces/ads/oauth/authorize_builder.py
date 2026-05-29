@@ -23,7 +23,7 @@ def _pct_encode(s: str) -> str:
     return "".join(out)
 
 
-def _query(params: Dict[str, str]) -> str:
+def _query(params: dict[str, str]) -> str:
     parts: list[str] = []
     for k, v in params.items():
         parts.append(f"{_pct_encode(str(k))}={_pct_encode(str(v))}")
@@ -38,7 +38,7 @@ class OAuthAuthorizeParams:
     scope: str
     state: str
     response_type: str = "code"
-    extra: Optional[Dict[str, str]] = None
+    extra: dict[str, str] | None = None
 
 
 def build_authorize_url(p: OAuthAuthorizeParams) -> OAuthAuthorizeURL:

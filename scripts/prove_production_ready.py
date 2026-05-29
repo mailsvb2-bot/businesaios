@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 from scripts.ci.subprocess_io import run_command
@@ -22,14 +22,14 @@ COMMANDS = [
 def _run(spec: dict[str, object]) -> dict[str, object]:
     env = os.environ.copy()
     env.update(spec.get("env", {}))  # type: ignore[arg-type]
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
     outcome = run_command(
         spec["cmd"],  # type: ignore[arg-type]
         cwd=ROOT,
         env=env,
         timeout=180,
     )
-    finished = datetime.now(timezone.utc)
+    finished = datetime.now(UTC)
     output = f"{outcome.stdout}{outcome.stderr}"
     return {
         "name": spec["name"],
@@ -46,7 +46,7 @@ def main() -> int:
     ARTIFACTS.mkdir(exist_ok=True)
     results = [_run(spec) for spec in COMMANDS]
     report = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "scope": "bounded P0 production-readiness smoke, not full production certification",
         "all_ok": all(r.get("ok") for r in results),
         "results": results,

@@ -22,7 +22,7 @@ from core.economics.brain import EconomicBrain
 from core.economics.types import EconomicState
 
 
-def _stable_choice(key: str, options: List[str]) -> str:
+def _stable_choice(key: str, options: list[str]) -> str:
     if not options:
         return ""
     h = hashlib.sha256(key.encode("utf-8")).digest()
@@ -30,14 +30,14 @@ def _stable_choice(key: str, options: List[str]) -> str:
     return options[idx]
 
 
-def _retention_prob(metrics: Dict[str, Any]) -> float:
+def _retention_prob(metrics: dict[str, Any]) -> float:
     retention = metrics.get("retention") if isinstance(metrics.get("retention"), dict) else {}
     users = max(1, int(retention.get("users") or 1))
     active_2d = int(retention.get("active_2d") or 0)
     return max(float(0), min(float(1), float(active_2d) / float(users)))
 
 
-def _avg_plan_price(plans: List[Dict[str, Any]]) -> float:
+def _avg_plan_price(plans: list[dict[str, Any]]) -> float:
     prices: list[float] = []
     for plan in plans:
         try:
@@ -49,7 +49,7 @@ def _avg_plan_price(plans: List[Dict[str, Any]]) -> float:
     return (sum(prices) / float(len(prices))) if prices else float(0)
 
 
-def recommend_prices(*, brain: EconomicBrain, metrics: Dict[str, Any], plans: List[Dict[str, Any]], policy: AdminMarketingPolicy = DEFAULT_ADMIN_MARKETING_POLICY) -> Dict[str, Any]:
+def recommend_prices(*, brain: EconomicBrain, metrics: dict[str, Any], plans: list[dict[str, Any]], policy: AdminMarketingPolicy = DEFAULT_ADMIN_MARKETING_POLICY) -> dict[str, Any]:
     """Return deterministic price recommendations.
 
     Output:
@@ -82,7 +82,7 @@ def recommend_prices(*, brain: EconomicBrain, metrics: Dict[str, Any], plans: Li
     elif action == "upsell":
         why = "Удержание высокое → можно аккуратно поднять цену (upsell)."
 
-    items: List[Dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
     for plan in plans:
         if not isinstance(plan, dict):
             continue
@@ -105,7 +105,7 @@ def recommend_prices(*, brain: EconomicBrain, metrics: Dict[str, Any], plans: Li
     return {"ok": True, "items": items, "meta": {"action": action, "value": value, "retention_prob": retention_prob}}
 
 
-def generate_copy_variants(*, step_key: str, product_name: str = DEFAULT_ADMIN_MARKETING_POLICY.copy.default_product_name, policy: AdminMarketingPolicy = DEFAULT_ADMIN_MARKETING_POLICY) -> Dict[str, str]:
+def generate_copy_variants(*, step_key: str, product_name: str = DEFAULT_ADMIN_MARKETING_POLICY.copy.default_product_name, policy: AdminMarketingPolicy = DEFAULT_ADMIN_MARKETING_POLICY) -> dict[str, str]:
     """Generate deterministic A/B copy variants for a funnel step."""
     step_key = str(step_key or "").strip().lower()
     templates = policy.copy.step_templates

@@ -110,7 +110,7 @@ class SQLiteSecurityAuditChainBackend:
         with _connect(self._db_path) as conn:
             row = conn.execute("SELECT event_hash FROM security_audit_chain ORDER BY event_id DESC LIMIT 1").fetchone()
             previous_hash = str(row[0]) if row else "GENESIS"
-            event_hash = hashlib.sha256(f"{previous_hash}|{event_kind}|{payload_json}|{now}".encode("utf-8")).hexdigest()
+            event_hash = hashlib.sha256(f"{previous_hash}|{event_kind}|{payload_json}|{now}".encode()).hexdigest()
             cursor = conn.execute("INSERT INTO security_audit_chain(event_kind, payload_json, previous_hash, event_hash, created_at_epoch_s) VALUES(?, ?, ?, ?, ?)", (str(event_kind), payload_json, previous_hash, event_hash, now))
             conn.commit()
             return {"event_id": int(cursor.lastrowid), "previous_hash": previous_hash, "event_hash": event_hash, "created_at_epoch_s": now}
@@ -124,7 +124,7 @@ class SQLiteSecurityAuditChainBackend:
             event_id = int(r[0]); event_kind = str(r[1]); payload_json = str(r[2]); previous_hash = str(r[3]); event_hash = str(r[4]); created_at_epoch_s = int(r[5])
             if previous_hash != expected_previous:
                 violations.append(f"chain_break:{event_id}")
-            if hashlib.sha256(f"{previous_hash}|{event_kind}|{payload_json}|{created_at_epoch_s}".encode("utf-8")).hexdigest() != event_hash:
+            if hashlib.sha256(f"{previous_hash}|{event_kind}|{payload_json}|{created_at_epoch_s}".encode()).hexdigest() != event_hash:
                 violations.append(f"hash_mismatch:{event_id}")
             expected_previous = event_hash
         return {"ok": not violations, "violations": violations, "events_checked": len(rows)}

@@ -29,11 +29,11 @@ class ExperimentPlanBuilder:
         subject_key: str,
         audience_key: str,
         owner: str,
-        variant_definitions: Iterable[Tuple[str, VariantRole, float]],
-        metric_definitions: Iterable[Tuple[str, MetricDirection, float, bool]],
+        variant_definitions: Iterable[tuple[str, VariantRole, float]],
+        metric_definitions: Iterable[tuple[str, MetricDirection, float, bool]],
         minimum_sample_size: int,
-        overlap_keys: List[str] | None = None,
-        metadata: Dict[str, str] | None = None,
+        overlap_keys: list[str] | None = None,
+        metadata: dict[str, str] | None = None,
     ) -> ExperimentPlan:
         plan = ExperimentPlan(
             experiment_id=new_experiment_id(),

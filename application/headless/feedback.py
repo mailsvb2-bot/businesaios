@@ -53,7 +53,7 @@ class SimpleHeadlessFeedbackReader:
     evidence_router: EvidenceRouter = field(default_factory=build_evidence_router)
 
     @classmethod
-    def default(cls) -> "SimpleHeadlessFeedbackReader":
+    def default(cls) -> SimpleHeadlessFeedbackReader:
         return cls(outcome_normalizer=OutcomeNormalizer(), evidence_router=build_evidence_router())
 
     def read(

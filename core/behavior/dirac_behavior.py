@@ -49,9 +49,9 @@ class DiracBehaviorModel:
         events: Iterable[Mapping[str, Any]],
         now_ms: int | None = None,
         context: Mapping[str, Any] | None = None,
-    ) -> Tuple[Complex4, Dict[str, Any]]:
+    ) -> tuple[Complex4, dict[str, Any]]:
         # ctx intentionally mutable for operator layer audit signals.
-        ctx: Dict[str, Any] = context if isinstance(context, dict) else dict(context or {})
+        ctx: dict[str, Any] = context if isinstance(context, dict) else dict(context or {})
         evs = [e for e in events if isinstance(e, Mapping)]
         evs = sorted(evs, key=lambda x: int(x.get("timestamp_ms") or 0))
         ts_now = int(now_ms) if now_ms is not None else (int(evs[-1].get("timestamp_ms") or 0) if evs else 0)
@@ -80,7 +80,7 @@ class DiracBehaviorModel:
             cur = Complex4(tuple(float(x * d) for x in cur.re), tuple(float(x * d) for x in cur.im))
             anti *= d
 
-        obs: Dict[str, Any] = self.observables(psi=cur, anti=anti, now_ms=ts_now)
+        obs: dict[str, Any] = self.observables(psi=cur, anti=anti, now_ms=ts_now)
         # Attach optional audit fields (best-effort).
         try:
             den = ctx.get("policy_denials")
@@ -95,11 +95,11 @@ class DiracBehaviorModel:
             swallow(__name__, 'core/behavior/dirac_behavior.py')
         return cur, obs
 
-    def observables(self, *, psi: Complex4, anti: float, now_ms: int) -> Dict[str, float]:
+    def observables(self, *, psi: Complex4, anti: float, now_ms: int) -> dict[str, float]:
         n2 = psi.norm2()
         engagement = _clamp01(math.sqrt(max(0.0, n2)))
 
-        amps = [math.sqrt(max(0.0, (a * a + b * b))) for a, b in zip(psi.re, psi.im)]
+        amps = [math.sqrt(max(0.0, (a * a + b * b))) for a, b in zip(psi.re, psi.im, strict=False)]
         s = sum(amps) + EPS
         intent = float(amps[0] / s)
         trust = float(amps[1] / s)

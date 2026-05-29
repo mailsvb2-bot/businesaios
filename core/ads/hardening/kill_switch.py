@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class KillSwitchState:
     enabled: bool
-    reason: Optional[str] = None
+    reason: str | None = None
     since_ms: int = 0
 
 

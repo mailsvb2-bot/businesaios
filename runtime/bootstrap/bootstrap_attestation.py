@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from pathlib import Path
 
 from runtime.bootstrap.bootstrap_contract import (
@@ -92,7 +92,7 @@ def build_bootstrap_attestation(
     )
     return BootstrapAttestation(
         boot_id=boot_id,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         mode=env.mode,
         entrypoint="runtime.bootstrap.sovereign_bootstrap.bootstrap_runtime",
         process_bootstrap_module="runtime.bootstrap",

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Mapping, Protocol, Sequence
 
 from application.business_autonomy.contracts import BusinessCapability, CapabilityKind
@@ -80,7 +80,7 @@ class BusinessRegistryRecord:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "BusinessRegistryRecord":
+    def from_dict(cls, payload: Mapping[str, Any]) -> BusinessRegistryRecord:
         trust_raw = dict(payload.get("trust") or {})
         capability_rows = [item for item in list(payload.get("capabilities") or []) if isinstance(item, Mapping)]
         record = cls(
@@ -140,7 +140,7 @@ class DistributedBusinessRegistry:
             governance_enabled=bool(record.governance_enabled),
             persistent_surfaces=tuple(sorted({str(item) for item in record.persistent_surfaces if str(item).strip()})),
             version=existing_version + 1,
-            updated_at_utc=datetime.now(timezone.utc).isoformat(),
+            updated_at_utc=datetime.now(UTC).isoformat(),
         )
         persisted_version = self._documents.put(
             collection=self._collection,

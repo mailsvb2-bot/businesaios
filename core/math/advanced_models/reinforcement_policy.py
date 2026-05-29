@@ -5,7 +5,7 @@ from typing import Dict, Hashable, Sequence
 
 State = Hashable
 Action = Hashable
-QTable = Dict[State, Dict[Action, float]]
+QTable = dict[State, dict[Action, float]]
 
 def q_learning_update(
     q_table: QTable,

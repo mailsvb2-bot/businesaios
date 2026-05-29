@@ -28,7 +28,7 @@ class CreativeThompsonBandit:
     - select() kept only as legacy compatibility wrapper
     """
 
-    def __init__(self, arms: List[CreativeArm]):
+    def __init__(self, arms: list[CreativeArm]):
         if not arms:
             raise ValueError("arms must be non-empty.")
         self.arms = list(arms)

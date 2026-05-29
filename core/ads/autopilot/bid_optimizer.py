@@ -7,12 +7,12 @@ from typing import Any, Dict, List
 
 from config.scoring_behavior_policy import DEFAULT_BID_OPTIMIZATION_POLICY
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)
 class BidDecision:
-    per_adgroup_delta_pct: Dict[str, int]
+    per_adgroup_delta_pct: dict[str, int]
     notes: str = ""
 
 
@@ -23,8 +23,8 @@ class BidOptimizer:
     Deltas are capped.
     """
 
-    def optimize(self, *, metrics: Json, adgroups: List[Json], target_cpa_minor: int) -> BidDecision:
-        deltas: Dict[str, int] = {}
+    def optimize(self, *, metrics: Json, adgroups: list[Json], target_cpa_minor: int) -> BidDecision:
+        deltas: dict[str, int] = {}
         t = int(target_cpa_minor or 0)
         if t <= 0:
             return BidDecision({}, notes="no_target")

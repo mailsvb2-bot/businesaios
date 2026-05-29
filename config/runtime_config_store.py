@@ -53,7 +53,7 @@ class RuntimeConfigSnapshot:
         if self.version is not None:
             self.version.validate()
 
-    def normalized(self) -> "RuntimeConfigSnapshot":
+    def normalized(self) -> RuntimeConfigSnapshot:
         return RuntimeConfigSnapshot(
             profile_name=str(self.profile_name).strip(),
             environment=normalize_environment_name(self.environment),
@@ -78,7 +78,7 @@ class RuntimeConfigSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object]) -> "RuntimeConfigSnapshot":
+    def from_dict(cls, payload: Mapping[str, object]) -> RuntimeConfigSnapshot:
         item = dict(payload or {})
         version = None
         if isinstance(item.get("version"), Mapping):

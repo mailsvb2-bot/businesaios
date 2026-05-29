@@ -12,8 +12,8 @@ from .domain_discovery import is_transient_path, line_count, read_text_safe, rel
 from .findings import CanonFsFinding
 
 
-def scan_domain_files(root: Path, domain: Path) -> List[CanonFsFinding]:
-    findings: List[CanonFsFinding] = []
+def scan_domain_files(root: Path, domain: Path) -> list[CanonFsFinding]:
+    findings: list[CanonFsFinding] = []
 
     for path in domain.rglob("*.py"):
         if is_transient_path(path):

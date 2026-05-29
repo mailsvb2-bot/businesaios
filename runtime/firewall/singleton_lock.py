@@ -128,7 +128,7 @@ class SingletonLock:
 
             try:
                 self._fd = os.open(str(self._path), flags, 0o644)
-                os.write(self._fd, f"{pid},{now}".encode("utf-8"))
+                os.write(self._fd, f"{pid},{now}".encode())
                 self._PROCESS_HELD_PATHS[path_key] = 1
                 return
             except FileExistsError:
@@ -156,7 +156,7 @@ class SingletonLock:
 
                     try:
                         self._fd = os.open(str(self._path), flags, 0o644)
-                        os.write(self._fd, f"{pid},{now}".encode("utf-8"))
+                        os.write(self._fd, f"{pid},{now}".encode())
                         self._PROCESS_HELD_PATHS[path_key] = 1
                         return
                     except FileExistsError as e:

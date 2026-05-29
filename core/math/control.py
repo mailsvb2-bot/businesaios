@@ -14,10 +14,10 @@ def bellman_optimality(v_next: float, reward: float, gamma: float) -> float:
 
 @dataclass
 class MDP:
-    states: List[str]
-    actions: List[str]
-    transition: Dict[str, Dict[str, List[Tuple[str, float]]]]  # s,a -> [(s2,p)]
-    reward: Dict[str, Dict[str, Dict[str, float]]]  # s,a,s2 -> r
+    states: list[str]
+    actions: list[str]
+    transition: dict[str, dict[str, list[tuple[str, float]]]]  # s,a -> [(s2,p)]
+    reward: dict[str, dict[str, dict[str, float]]]  # s,a,s2 -> r
 
 
 def value_iteration(
@@ -26,18 +26,18 @@ def value_iteration(
     gamma: float = 0.95,
     iters: int = 200,
     tol: float = 1e-10,
-) -> Tuple[Dict[str, float], Dict[str, str]]:
+) -> tuple[dict[str, float], dict[str, str]]:
     """Classic value iteration for small MDPs."""
     g = float(gamma)
     if g < 0 or g > 1:
         raise ValueError("gamma must be in [0,1].")
 
-    V: Dict[str, float] = {s: 0.0 for s in mdp.states}
-    policy: Dict[str, str] = {s: mdp.actions[0] for s in mdp.states} if mdp.actions else {}
+    V: dict[str, float] = {s: 0.0 for s in mdp.states}
+    policy: dict[str, str] = {s: mdp.actions[0] for s in mdp.states} if mdp.actions else {}
 
     for _ in range(iters):
         delta = 0.0
-        newV: Dict[str, float] = {}
+        newV: dict[str, float] = {}
         for s in mdp.states:
             best_val = None
             best_a = None

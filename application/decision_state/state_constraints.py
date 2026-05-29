@@ -15,7 +15,7 @@ from core.observability.throttled_logger import exception_throttled
 logger = logging.getLogger(__name__)
 
 
-def pricing_constraints_from_state(state: Any, policy: DecisionStateConstraintsPolicy = DEFAULT_DECISION_STATE_CONSTRAINTS_POLICY) -> Dict[str, Any]:
+def pricing_constraints_from_state(state: Any, policy: DecisionStateConstraintsPolicy = DEFAULT_DECISION_STATE_CONSTRAINTS_POLICY) -> dict[str, Any]:
     economy = getattr(state, "economy", None)
     if not isinstance(economy, dict):
         return {}
@@ -24,7 +24,7 @@ def pricing_constraints_from_state(state: Any, policy: DecisionStateConstraintsP
     if not isinstance(ws, dict):
         return {}
 
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
 
     try:
         expected_profit = float(ws.get("expected_profit"))
@@ -126,7 +126,7 @@ def apply_price_constraints(*, state: Any, trace: Any, user_id: str, policy: Dec
         if isinstance(behavior, dict):
             guardrail_violation = bool(behavior.get("guardrails_violation") or behavior.get("behavior_guardrails_violation"))
 
-        decision_constraints: Dict[str, Any] = {"max_band": str(max_band)}
+        decision_constraints: dict[str, Any] = {"max_band": str(max_band)}
         if guardrail_violation:
             decision_constraints.update(
                 {

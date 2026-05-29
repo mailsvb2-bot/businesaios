@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, UTC
 
 from security import (
     AuditRedactionPolicy,
@@ -47,7 +47,7 @@ def test_webhook_verifier_rejects_future_timestamp_when_present() -> None:
     import hashlib
     import hmac
     sig = base64.b64encode(hmac.new(record.secret_bytes, body, hashlib.sha256).digest()).decode('ascii')
-    future = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
+    future = (datetime.now(UTC) + timedelta(minutes=2)).isoformat()
     result = verifier.verify(
         headers={'X-Signature': sig, 'X-Signature-Timestamp': future, 'X-Key-Id': 'wh-v2'},
         body=body,
@@ -59,7 +59,7 @@ def test_webhook_verifier_rejects_future_timestamp_when_present() -> None:
 
 
 def test_token_and_session_policies_cover_enterprise_claims() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     token_verdict = TokenPolicy(required_scopes=('read',), require_issuer=True, require_session_id=True).evaluate(
         issued_at=now - timedelta(minutes=1),
         expires_at=now + timedelta(minutes=5),

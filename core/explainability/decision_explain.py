@@ -5,7 +5,7 @@ from typing import Any, Dict
 from core.decision.ai_decision_trace import DecisionTrace
 
 
-def explain(trace: DecisionTrace, *, max_steps: int = 8) -> Dict[str, Any]:
+def explain(trace: DecisionTrace, *, max_steps: int = 8) -> dict[str, Any]:
     """Return a structured explanation.
 
     No LLM calls. Pure deterministic formatting.
@@ -29,7 +29,7 @@ def explain(trace: DecisionTrace, *, max_steps: int = 8) -> Dict[str, Any]:
     }
 
 
-def _summarize_step(inp: Dict[str, Any], out: Dict[str, Any]) -> str:
+def _summarize_step(inp: dict[str, Any], out: dict[str, Any]) -> str:
     # Keep explainability compact and safe (no secrets, no PII beyond user_id which isn't here).
     # Callers decide what to show to the end-user.
     parts = []

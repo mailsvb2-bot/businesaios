@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 from typing import Any, Protocol
 
 from config.revenue_report_policy import DEFAULT_REVENUE_REPORT_POLICY, RevenueReportPolicy
@@ -22,7 +22,7 @@ class RevenueReporter:
     policy: RevenueReportPolicy = DEFAULT_REVENUE_REPORT_POLICY
 
     def build_daily_report(self, *, tenant_id: str, now_utc: datetime | None = None) -> RevenueReport:
-        now_utc = (now_utc or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        now_utc = (now_utc or datetime.now(UTC)).astimezone(UTC)
         window = make_yesterday_window(now_utc)
         events = self.store.latest_events(tenant_id=tenant_id, limit=self.policy.latest_events_limit)
         m = aggregate_revenue_metrics(events=events, window=window)

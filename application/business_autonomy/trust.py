@@ -31,7 +31,7 @@ class TrustPolicyDecision:
 
 class BusinessTrustRegistry:
     def __init__(self) -> None:
-        self._items: Dict[str, BusinessTrustSnapshot] = {}
+        self._items: dict[str, BusinessTrustSnapshot] = {}
 
     def register(self, snapshot: BusinessTrustSnapshot) -> None:
         self._items[snapshot.business_id] = snapshot

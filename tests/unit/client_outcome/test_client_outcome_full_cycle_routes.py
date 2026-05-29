@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
@@ -49,7 +49,7 @@ def _build_client() -> TestClient:
 
 def test_full_cycle_route_returns_corrected_economics() -> None:
     client = _build_client()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
     response = client.post('/client-outcome/full-cycle', json={
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',
@@ -85,7 +85,7 @@ def test_full_cycle_route_returns_corrected_economics() -> None:
 
 def test_full_cycle_route_supports_partial_reversal_and_refund_preview() -> None:
     client = _build_client()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
     response = client.post('/client-outcome/full-cycle', json={
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',

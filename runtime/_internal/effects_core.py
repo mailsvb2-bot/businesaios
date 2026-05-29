@@ -32,7 +32,7 @@ def initialize_effects_runtime_state(effects: Any) -> None:
         lo=0.0,
         hi=60.0,
     )
-def throttled_emit_error(*, event_log: Any, cache: Dict[str, int] | None, key: str, event_type: str, payload: Dict[str, Any]) -> None:
+def throttled_emit_error(*, event_log: Any, cache: dict[str, int] | None, key: str, event_type: str, payload: dict[str, Any]) -> None:
     try:
         now_ms = int(time.time() * 1000)
         last = int((cache or {}).get(key, 0))

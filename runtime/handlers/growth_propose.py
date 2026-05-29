@@ -11,7 +11,7 @@ from runtime.ports.effects import EffectsPort
 
 ACTION_NAME = ACTION_GROWTH_PROPOSE_V1
 
-def handle_growth_propose(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, proposal_service: Any, proposal_gateway: Any) -> Any:
+def handle_growth_propose(payload: dict[str, Any], effects: EffectsPort, env: Any, *, proposal_service: Any, proposal_gateway: Any) -> Any:
     p = payload or {}
     try:
         route = extract_strict_route_from_envelope(payload=p, env=env)

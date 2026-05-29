@@ -15,7 +15,7 @@ from core.causal.estimators.stratified import StratifiedEstimator
 class EstimatorRegistry:
     """Small registry mapping method -> estimator."""
 
-    estimators: Dict[str, CausalEstimator]
+    estimators: dict[str, CausalEstimator]
 
     def get(self, method: str) -> CausalEstimator | None:
         return self.estimators.get(str(method))

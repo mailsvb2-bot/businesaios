@@ -26,8 +26,8 @@ class RewardEngine:
     def __init__(
         self,
         *,
-        snapshot_store: Optional[SnapshotStore] = None,
-        economic_brain: Optional[EconomicBrain] = None,
+        snapshot_store: SnapshotStore | None = None,
+        economic_brain: EconomicBrain | None = None,
         event_log=None,
         money_scale: float = 0.01,
         max_abs_reward: float = 100.0,
@@ -37,7 +37,7 @@ class RewardEngine:
         self._events = event_log
         self._money_scale = float(money_scale)
         self._max_abs_reward = float(max_abs_reward)
-        self._last_details: Optional[dict] = None
+        self._last_details: dict | None = None
 
     def _has_proof(self, *, decision_id: str, action: str) -> bool:
         """Reward is forbidden without a *valid* proof event (anti-gaming).
@@ -91,7 +91,7 @@ class RewardEngine:
         return 0.0
 
 
-    def last_details(self) -> Optional[dict]:
+    def last_details(self) -> dict | None:
         """Return details from the last observe() call, if any."""
         return self._last_details
 

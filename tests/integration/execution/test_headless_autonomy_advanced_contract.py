@@ -44,7 +44,7 @@ class StubPolicyExplainer:
         summary: str = "ok"
         factors: tuple[str, ...] = ()
 
-    def explain(self, *, state: Any, envelope: Any) -> "_Explanation":
+    def explain(self, *, state: Any, envelope: Any) -> _Explanation:
         return self._Explanation()
 
 

@@ -45,15 +45,15 @@ def emit_pricing_decision(
     chosen_price_rub: int,
     policy_id: str,
     propensity: float | None,
-    segment: Optional[str] = None,
-    candidates: Optional[list[int]] = None,
-    probs: Optional[dict[str, float]] = None,
-    timestamp_ms: Optional[int] = None,
-    extra: Optional[Dict[str, Any]] = None,
+    segment: str | None = None,
+    candidates: list[int] | None = None,
+    probs: dict[str, float] | None = None,
+    timestamp_ms: int | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> None:
     ts = int(timestamp_ms if timestamp_ms is not None else _now_ms())
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "offer_arm": str(offer_arm),
         "base_price_rub": int(base_price_rub),
         "chosen_price_rub": int(chosen_price_rub),
