@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 from billing.client_outcome_billable_cap_policy import ClientOutcomeBillableCapPolicy
 from billing.client_outcome_invoice_aggregator import ClientOutcomeInvoiceAggregator

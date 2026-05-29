@@ -151,7 +151,6 @@ def test_headless_goal_mapper_rehydrates_profile_based_business_memory_without_s
 
 
 def test_autonomy_state_assembly_merges_business_profile_into_request_profile_without_second_brain_guidance() -> None:
-    from types import SimpleNamespace
 
     from application.autonomy.autonomy_state_assembly import AutonomyStateAssembly
 

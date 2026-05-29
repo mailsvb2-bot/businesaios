@@ -17,7 +17,7 @@ from core.creative_intelligence.models import (
     ExperimentConfidenceSnapshot,
     IncrementalitySnapshot,
 )
-from core.experiments.enums import RolloutDecision, VariantRole
+from core.experiments.enums import RolloutDecision
 from core.experiments.service import build_empty_result
 from core.experiments.types import Experiment
 from core.finance.strategic.scenarios.scenario_catalog_data import scenario_definitions

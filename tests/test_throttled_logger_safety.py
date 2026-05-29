@@ -7,7 +7,6 @@ import threading
 import time
 
 from core.observability.throttled_logger import (
-    _LAST_MS,
     _LOCK,
     _should_emit,
     exception_throttled,

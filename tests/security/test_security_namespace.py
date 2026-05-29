@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta
 
 from infrastructure.observability.redaction import redact_dict
 from infrastructure.secrets.runtime import get_secret, register_runtime_secret

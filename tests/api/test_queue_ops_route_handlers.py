@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 from interfaces.api.queue_ops_route_handlers import QueueOpsRouteHandlers
 from runtime.queue.job_contract import JobDispatchRequest

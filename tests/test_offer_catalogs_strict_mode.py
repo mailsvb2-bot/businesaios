@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 
 def test_strict_mode_rejects_bad_yaml_catalog(tmp_path, monkeypatch):
     # Strict mode must fail fast.

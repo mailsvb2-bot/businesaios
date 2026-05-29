@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 import pathlib
-from datetime import datetime, timezone
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 

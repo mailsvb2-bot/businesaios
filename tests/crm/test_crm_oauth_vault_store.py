@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 from crm.providers.common.crm_credentials import CrmAccessToken
 from crm.providers.common.crm_oauth_token_store import SecretVaultBackedCrmOAuthTokenStore

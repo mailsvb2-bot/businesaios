@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 from runtime.queue.queue_remediation_audit_postgres import PostgresQueueRemediationAuditStore
 from runtime.queue.queue_remediation_hooks import (

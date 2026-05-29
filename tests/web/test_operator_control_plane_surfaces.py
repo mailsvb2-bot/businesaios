@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 from app.web.components.autonomy_budget_panel import AutonomyBudgetPanel
 from app.web.components.dead_letter_panel import DeadLetterPanel

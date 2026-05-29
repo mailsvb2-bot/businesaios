@@ -1,7 +1,4 @@
-import re
 from pathlib import Path
-
-import pytest
 
 # The ONLY place real integrations are allowed:
 # NOTE: transport clients may be split into runtime/_internal/effects_clients/*

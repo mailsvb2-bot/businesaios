@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime
 
 from tenancy.tenant_admission_coordinator import LeaseStoreAdmissionBackend
 from tenancy.tenant_backend_clock_policy import TenantBackendClockPolicy

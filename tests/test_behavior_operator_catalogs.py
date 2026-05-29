@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from core.behavior.complex4 import Complex4
 from core.behavior.dirac_operators import apply_event_operator
 from core.behavior.operator_catalogs import (

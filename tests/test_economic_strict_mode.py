@@ -1,4 +1,3 @@
-import pytest
 
 from governance.economic_layer import EconomicAutonomyLayer
 

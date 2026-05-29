@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Mapping
+from typing import Any, Iterable, Mapping
 
 from core.causal.builders.event_store_builder import EventCausalBuilder
 

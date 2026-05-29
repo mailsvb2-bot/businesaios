@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta
 
 from runtime.queue.queue_remediation_analytics import QueueRemediationAnalyticsService
 from runtime.queue.queue_remediation_audit_sqlite import SqliteQueueRemediationAuditStore
@@ -92,7 +92,7 @@ def test_queue_remediation_analytics_exposes_status_source_and_offer_gaps(tmp_pa
 
 
 def test_queue_remediation_analytics_execution_rate_uses_executed_count(tmp_path):
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from runtime.queue.queue_remediation_analytics import QueueRemediationAnalyticsService
     from runtime.queue.queue_remediation_audit_sqlite import SqliteQueueRemediationAuditStore

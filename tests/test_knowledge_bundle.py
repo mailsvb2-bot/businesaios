@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta
 
 from core.knowledge.enums import SourceKind
 from core.knowledge.types import LessonDraft, MemoryRetrieval, TagSet

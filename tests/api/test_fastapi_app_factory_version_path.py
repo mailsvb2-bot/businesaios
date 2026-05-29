@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from interfaces.api.fastapi_app_factory import create_fastapi_app

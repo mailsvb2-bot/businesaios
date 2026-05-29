@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 from governance.control_plane_audit_log import GovernanceAuditEvent, PersistentGovernanceAuditLog
 

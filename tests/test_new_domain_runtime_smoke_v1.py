@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta
 
 from core.economics.contracts import UnitEconomicsSnapshot
 from core.finance.builders.cashflow_builder import build_cashflow_snapshot

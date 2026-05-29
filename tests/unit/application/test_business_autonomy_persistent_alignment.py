@@ -6,11 +6,6 @@ from application.business_autonomy.contracts import (
     IntegrationMode,
     PolicyConstraint,
 )
-from application.business_autonomy.persistence import (
-    PersistentBusinessCapabilityRegistry,
-    PersistentBusinessPlanningMemorySink,
-    PersistentBusinessTrustRegistry,
-)
 from interfaces.api.business_autonomy_route_handlers import build_business_autonomy_route_handlers
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
 

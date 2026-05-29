@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from entrypoints.api.request_context import RequestContext
 from entrypoints.api.webhook_security_surface_guard import WebhookSecuritySurfaceGuard
 from security.webhook_signature_verifier import WebhookVerificationResult

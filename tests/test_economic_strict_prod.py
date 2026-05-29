@@ -1,4 +1,3 @@
-import os
 
 
 def test_prod_implies_strict(monkeypatch):

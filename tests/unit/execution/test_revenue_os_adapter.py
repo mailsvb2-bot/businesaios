@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 from execution.revenue_os_adapter import RevenueOSAdapter
 from runtime.monetization import (

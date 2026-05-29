@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
 
 from core.ai.world_state import WorldStateV1
 from core.ai_ceo.intent import build_intent, build_intent_from_session_args

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import Iterable
 
 
 def _repo_root() -> Path:

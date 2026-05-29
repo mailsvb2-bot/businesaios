@@ -1,7 +1,5 @@
 import threading
 
-import pytest
-
 from interfaces.telegram.outbound.outbound_queue import TelegramOutboundQueue
 
 

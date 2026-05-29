@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 
 def test_env_guard_accepts_mode_alias_and_production_name(monkeypatch):
     from runtime.boot.env import env_guard_production_mode

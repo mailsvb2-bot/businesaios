@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import timedelta
-
 from reliability.distributed_lock import InMemoryDistributedLock
 from reliability.leader_election import LeaderElection
 from runtime.queue.job_contract import JobDispatchRequest, utc_now

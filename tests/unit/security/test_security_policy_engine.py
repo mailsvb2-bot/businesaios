@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta
 
 from compliance.data_classification import KeywordDataClassifier
 from governance.rbac_contract import ActorContext, RoleId

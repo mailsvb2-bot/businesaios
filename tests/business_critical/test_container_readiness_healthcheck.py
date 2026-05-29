@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import os
 
-import pytest
-
 from docker.healthcheck import _health_url
 from docker.healthcheck import main as docker_healthcheck_main
 from scripts.healthcheck import _is_ready_payload

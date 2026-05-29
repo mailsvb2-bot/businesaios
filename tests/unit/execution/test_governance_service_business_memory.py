@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from execution.governance_service import GovernanceService
-from execution.headless_ledger import FileHeadlessLedger, LedgerRecord
+from execution.headless_ledger import LedgerRecord
 
 
 def test_governance_service_includes_business_memory_evidence_in_promotion(tmp_path) -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta
 
 from lead_outcomes import OutcomeVerifier
 from lead_outcomes.client_attribution_policy import ClientAttributionPolicy

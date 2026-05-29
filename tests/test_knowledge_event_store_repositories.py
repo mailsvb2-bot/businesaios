@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta
 
 from core.knowledge.builders.lesson_builder import LessonBuilder
 from core.knowledge.builders.pattern_builder import PatternBuilder

@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib
 
 from application.decision.action_dispatcher import ActionDispatcher as CanonicalActionDispatcher
-from application.decision.action_dispatcher import ActionDispatcher as CoreActionDispatcher
 from application.decision.action_validator import ActionValidator as CanonicalActionValidator
 from application.decision.action_validator import ActionValidator as CoreActionValidator
 from application.decision.decision_service import DecisionApplicationService as CanonicalDecisionApplicationService
@@ -11,13 +10,7 @@ from application.decision.ports import (
     DecisionExecutionPortProtocol as CanonicalDecisionExecutionPortProtocol,
 )
 from application.decision.ports import (
-    DecisionExecutionPortProtocol as CoreDecisionExecutionPortProtocol,
-)
-from application.decision.ports import (
     ObservabilityPortProtocol as CanonicalObservabilityPortProtocol,
-)
-from application.decision.ports import (
-    ObservabilityPortProtocol as CoreObservabilityPortProtocol,
 )
 from core.application.decision_service import DecisionApplicationService as CoreDecisionApplicationService
 from runtime.application.action_dispatcher import ActionDispatcher as RuntimeActionDispatcher

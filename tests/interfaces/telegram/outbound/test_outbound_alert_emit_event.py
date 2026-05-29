@@ -2,8 +2,6 @@ import logging
 import threading
 import time
 
-import pytest
-
 from interfaces.telegram.outbound.outbound_queue import TelegramOutboundQueue
 
 

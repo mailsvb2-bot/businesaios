@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 from entrypoints.api.client_outcome_route_handlers import build_client_outcome_route_handlers
 from lock.economic_truth_lock import validate_no_economic_truth_bypass

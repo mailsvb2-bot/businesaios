@@ -10,7 +10,7 @@ These tests are designed to be:
 
 import ast
 import pathlib
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 

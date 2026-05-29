@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from core.ads.ads_service import AdsCommand, AdsPlan
 from core.ads.apply.contract import AdsApplyRequest

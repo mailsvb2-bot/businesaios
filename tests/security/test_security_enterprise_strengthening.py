@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta
 
 from security import (
     AuditRedactionPolicy,
@@ -15,7 +15,7 @@ from security import (
     TokenPolicy,
     WebhookSignatureVerifier,
 )
-from security.secret_contract import SecretRecord, SecretSource, SecretState
+from security.secret_contract import SecretSource, SecretState
 from security.secret_vault import InMemorySecretVault
 
 

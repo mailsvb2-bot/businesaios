@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from bootstrap.world_snapshot_input_adapter import build_world_snapshot_input
-from core.ai.world_state import WorldStateV1
 from core.ai_ceo.ledger import GrowthSnapshotV1
 from core.ai_ceo.service import build_minimal_plan_steps
 from core.growth.ads.creative.pipeline import generate_candidates

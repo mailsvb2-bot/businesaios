@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tenancy.tenant_context import bind_tenant_context, bind_tenant_id, current_tenant_context, get_current_tenant_id
+from tenancy.tenant_context import bind_tenant_id, current_tenant_context, get_current_tenant_id
 from tenancy.tenant_contract import TenantPlan, TenantRecord
 from tenancy.tenant_registry import InMemoryTenantRegistry
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 from app.web.components.approval_queue_card import ApprovalQueueCard
 from app.web.components.audit_log_table import AuditLogTable

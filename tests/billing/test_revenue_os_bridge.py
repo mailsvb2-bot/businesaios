@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 
 from billing.plan_contract import BillingPlanSpec, PlanRateCardItem
 from billing.revenue_os_bridge import BillingRevenueOSBridge

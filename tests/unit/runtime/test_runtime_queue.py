@@ -12,7 +12,6 @@ from runtime.queue import (
     JobDispatcher,
     JobDispatchRequest,
     JobLease,
-    JobPriority,
     JobRecord,
     JobRetryPolicy,
     JobScheduler,

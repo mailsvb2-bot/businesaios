@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from app.web.components.queue_alert_history_card import QueueAlertHistoryCard
 from app.web.components.queue_rollup_timeline_card import QueueRollupTimelineCard
 from app.web.pages.queue_history import QueueHistoryPage
 from app.web.routes import Routes
 from runtime.queue.queue_alerts import QueueAlert
-from runtime.queue.queue_metrics_rollup_sqlite import QueueHealthWindowSummary
 
 
 @dataclass(frozen=True)

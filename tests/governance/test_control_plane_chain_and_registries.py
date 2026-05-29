@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from governance.control_plane_audit_log import GovernanceAuditEvent, PersistentGovernanceAuditLog
