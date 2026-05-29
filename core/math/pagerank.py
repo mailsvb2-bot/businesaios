@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Mapping, Sequence
+from typing import Mapping, Sequence
 
 
 def pagerank(

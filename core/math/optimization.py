@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, List, Sequence
+from typing import Callable, Sequence
 
 
 def mse_loss(y_true: Sequence[float], y_pred: Sequence[float]) -> float:
