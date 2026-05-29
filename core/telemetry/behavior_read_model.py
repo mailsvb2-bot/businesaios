@@ -7,7 +7,7 @@ It must never raise.
 """
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from config.final_hidden_logic_policy import DEFAULT_BEHAVIOR_TELEMETRY_POLICY
 from core.behavior.dirac_behavior import Complex4, DiracBehaviorModel

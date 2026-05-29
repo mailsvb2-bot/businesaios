@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 from config.telemetry_event_policy import DEFAULT_TELEMETRY_EVENT_POLICY
 

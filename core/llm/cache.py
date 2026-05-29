@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass
-from typing import Dict, Optional
 
 from config.llm_cache_policy import LLMCachePolicy
 

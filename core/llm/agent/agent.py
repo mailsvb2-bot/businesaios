@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Protocol
 
 from core.llm.agent.contracts import LLMTaskContext, LLMTaskResult
 from core.llm.agent.parse import extract_json_block

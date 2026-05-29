@@ -7,7 +7,6 @@ Storage implementations may import this module, but core code must not depend
 on platform_layer paths.
 """
 
-from typing import Dict, Set
 
 UI_CLICK = "ui_click"
 PAYWALL_OPENED = "paywall_opened"

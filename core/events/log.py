@@ -16,7 +16,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import asdict
-from typing import Any, Dict, Optional
+from typing import Any
 
 from config.env_flags import env_bool, env_str
 from core.events.log_append import normalize_legacy_event
