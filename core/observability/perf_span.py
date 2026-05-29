@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 _SLA_BUTTON_BUDGET_MS: int = 300
 

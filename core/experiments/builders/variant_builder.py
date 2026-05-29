@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, List, Tuple
+from typing import Iterable
 
 from core.experiments.enums import VariantRole
 from core.experiments.errors import ExperimentValidationError

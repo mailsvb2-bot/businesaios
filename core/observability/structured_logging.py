@@ -4,7 +4,7 @@ import contextvars
 import json
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.observability.errors import log_exception_throttled
 
