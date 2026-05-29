@@ -24,10 +24,10 @@ class FeatureFlagSnapshot:
             raise ValueError("scope_name is required")
         if not normalize_environment_name(self.environment):
             raise ValueError("environment is required")
-        for key in self.flags.keys():
+        for key in self.flags:
             if not str(key or "").strip():
                 raise ValueError("flag keys must be non-empty")
-        for key in self.variants.keys():
+        for key in self.variants:
             if not str(key or "").strip():
                 raise ValueError("variant keys must be non-empty")
 

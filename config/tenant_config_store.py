@@ -42,13 +42,13 @@ class TenantConfigSnapshot:
         require_tenant_id(self.tenant_id)
         if self.updated_at.tzinfo is None:
             raise ValueError("updated_at must be timezone-aware")
-        for key in self.feature_flags.keys():
+        for key in self.feature_flags:
             if not str(key or "").strip():
                 raise ValueError("feature_flags keys must be non-empty")
-        for key in self.feature_variants.keys():
+        for key in self.feature_variants:
             if not str(key or "").strip():
                 raise ValueError("feature_variants keys must be non-empty")
-        for key in self.policy_overrides.keys():
+        for key in self.policy_overrides:
             if not str(key or "").strip():
                 raise ValueError("policy_overrides keys must be non-empty")
         if self.version is not None:

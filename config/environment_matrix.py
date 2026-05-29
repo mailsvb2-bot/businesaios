@@ -37,7 +37,7 @@ class EnvironmentMatrixRow:
             raise ValueError("environment is required")
         if not str(self.deployment_tier or "").strip():
             raise ValueError("deployment_tier is required")
-        for key in self.default_feature_flags.keys():
+        for key in self.default_feature_flags:
             if not str(key or "").strip():
                 raise ValueError("default feature flag keys must be non-empty")
 
