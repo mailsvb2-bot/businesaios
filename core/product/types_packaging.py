@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from core.product.enums import PackagingChangeType, ProposalMode, ProposalStatus
 from core.product.types_roadmap import PRODUCT_MODULE_ISSUER

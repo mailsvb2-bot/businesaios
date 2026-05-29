@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from application.decisioning.candidate_observations import CandidateObservationSet
 from core.reward.contracts import RewardObservationContext

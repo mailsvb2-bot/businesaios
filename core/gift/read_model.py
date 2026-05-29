@@ -10,7 +10,7 @@ No side-effects here. Policies may use this for validation.
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass(frozen=True)

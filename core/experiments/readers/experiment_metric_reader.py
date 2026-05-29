@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict
-
 from core.experiments.errors import ExperimentNotFoundError
 from core.experiments.types import MetricDefinition
 

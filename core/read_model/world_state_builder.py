@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from core.read_model.reducers import reduce_event
 from kernel.world_state import WorldStateV1

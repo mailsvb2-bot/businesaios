@@ -11,7 +11,7 @@ Why this layer exists:
 - failures should stay observable instead of becoming silent broad-except blocks.
 """
 
-from typing import Any, Iterable
+from typing import Any
 
 from core.events.read_call import call_iter_events, call_latest_event, call_latest_events
 from core.observability.silent import swallow
