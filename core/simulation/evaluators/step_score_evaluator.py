@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
-
-from config.scoring_behavior_policy import DEFAULT_ACTION_RANKING_POLICY
+from typing import Any
 
 from ..contracts import SimScore
 

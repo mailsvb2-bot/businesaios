@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any
 
 from core.llm.contracts import LLMMessage, LLMRequest
 from core.llm.redaction import redact_text

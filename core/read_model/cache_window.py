@@ -8,7 +8,7 @@ It is safe to use in read-only layers.
 
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable
 
 from config.cache_window_policy import DEFAULT_CACHE_WINDOW_POLICY, CacheWindowPolicy
 
