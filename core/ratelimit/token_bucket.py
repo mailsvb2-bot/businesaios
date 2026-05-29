@@ -3,11 +3,10 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Dict, Optional, Protocol, Tuple
+from typing import Protocol
 
 from config.token_bucket_policy import (
     DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS,
-    TokenBucketPolicyDefaults,
 )
 from core.tenancy.scope import TenantId
 

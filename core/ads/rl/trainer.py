@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import List
 
 from core.ads.rl.dataset import Transition
 from core.ads.rl.ope import OPEGate, OPEReport

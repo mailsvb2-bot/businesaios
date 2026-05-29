@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any
 
 from core.retention.event_types import is_known, normalize_event_type
 

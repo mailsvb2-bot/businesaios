@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import random
 from collections import defaultdict
-from typing import Dict, List, Mapping, Sequence, Set, Tuple
+from typing import Mapping, Sequence
 
 
 def cosine_similarity(a: Mapping[str, float], b: Mapping[str, float]) -> float:
