@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 from typing import Any, Dict, Set
 
 from core.admin.read_models.retention_support import iter_events_window, resolve_now_ms

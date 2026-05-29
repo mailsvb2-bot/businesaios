@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 from typing import Protocol
 
 from interfaces.telegram.views.revenue_report_view import render_revenue_report

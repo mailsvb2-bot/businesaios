@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 
 from ..ids import EconomicsSnapshotId
 from ..types import (

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Protocol
 
 from config.profit_metrics_policy import DEFAULT_PROFIT_METRICS_POLICY, ProfitMetricsPolicy

@@ -82,7 +82,7 @@ async def disconnect_tokens_compat(
     )
 
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 
 from .base import ConnectedAccount
 

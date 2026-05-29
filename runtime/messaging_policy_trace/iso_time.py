@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 
 
 def parse_iso_to_epoch_ms(value: str) -> int:

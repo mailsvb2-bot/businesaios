@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 from typing import Any, Mapping
 
 CANON_RUNTIME_MONETIZATION_REVENUE_ADVISORY_CONTRACTS = True

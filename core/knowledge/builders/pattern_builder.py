@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 
 from ..enums import ConfidenceLevel
 from ..errors import KnowledgeValidationError

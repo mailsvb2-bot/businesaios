@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 
 from core.behavior.contracts.micro_spinor import MicroSpinor
 from core.behavior.math.complex4 import Complex4

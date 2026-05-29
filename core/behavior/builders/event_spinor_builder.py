@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 from typing import Any, Mapping
 
 from core.behavior.builders.base_spinor_factory import spinor_from_scores

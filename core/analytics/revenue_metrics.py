@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone, UTC
+from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, Protocol
 
 from config.revenue_metrics_policy import DEFAULT_REVENUE_METRICS_POLICY, RevenueMetricsPolicy

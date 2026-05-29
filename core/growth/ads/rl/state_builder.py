@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime, timezone
 
 from .contracts import AdsRLOptSpec, AdsRLState
 

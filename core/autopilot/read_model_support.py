@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone, UTC
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple
 
 from core.observability.throttled_logger import exception_throttled
