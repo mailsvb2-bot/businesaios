@@ -16,7 +16,7 @@ This module is intentionally tolerant: missing events => zeros.
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable
+from typing import Any, Iterable
 
 from core.events.read_call import call_iter_events, call_latest_events
 from core.growth.spend_ledger_event_store import EventStoreSpendLedger

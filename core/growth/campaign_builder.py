@@ -13,7 +13,7 @@ Rules:
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping
+from typing import Any, Mapping
 
 
 @dataclass(frozen=True)

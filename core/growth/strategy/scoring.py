@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Deterministic scoring for growth hypotheses (ICE-ish + risk penalty)."""
 
-from typing import Iterable, Tuple
+from typing import Iterable
 
 from config.scoring_behavior_policy import (
     DEFAULT_GROWTH_STRATEGY_SCORING_POLICY,

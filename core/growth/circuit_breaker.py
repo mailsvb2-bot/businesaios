@@ -14,7 +14,6 @@ backed by event_store aggregation or a shared store.
 
 import time
 from dataclasses import dataclass
-from typing import Dict
 
 
 @dataclass
