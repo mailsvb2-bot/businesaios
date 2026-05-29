@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Protocol, Sequence
+from typing import Any, Protocol
 
 from core.causal.types import CausalDataset, EffectEstimate
 
