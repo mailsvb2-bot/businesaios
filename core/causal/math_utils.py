@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence, Tuple
+from typing import Sequence
 
 
 def mean(xs: Sequence[float]) -> float:

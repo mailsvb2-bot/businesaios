@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Optional
+from typing import Iterable
 
 from core.experiments.types import ExperimentResult
 

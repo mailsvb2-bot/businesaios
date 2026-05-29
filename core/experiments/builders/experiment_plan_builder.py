@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Tuple
+from typing import Iterable
 
 from core.experiments.builders.metric_set_builder import MetricSetBuilder
 from core.experiments.builders.variant_builder import VariantBuilder

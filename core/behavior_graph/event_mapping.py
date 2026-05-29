@@ -6,7 +6,7 @@ Heuristic-light and generic: creates a consistent structural view of an event st
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Iterable
 
 
 @dataclass(frozen=True)

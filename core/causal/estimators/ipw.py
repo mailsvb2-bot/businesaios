@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Sequence, Tuple
+from typing import Any
 
 # FIX: use shared propensity utility (was duplicated in doubly_robust.py)
 from core.causal.estimators._propensity import fit_stratified_propensity, stratum_key
 from core.causal.estimators.base import CausalEstimator, EstimatorResult, _counts
-from core.causal.math_utils import clip, mean
+from core.causal.math_utils import clip
 from core.causal.types import CausalDataset, EffectEstimate
 
 Json = dict[str, Any]

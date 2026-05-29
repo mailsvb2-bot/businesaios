@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Sequence, Tuple
+from typing import Any, Mapping, Sequence
 
 from core.causal.estimators.base import CausalEstimator, EstimatorResult, _counts
 from core.causal.math_utils import mean
