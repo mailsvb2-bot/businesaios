@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Tuple
-
 from core.behavior.complex4 import EPS, Complex4
 
 

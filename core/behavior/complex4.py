@@ -8,7 +8,6 @@ and deterministic serialization.
 
 import math
 from dataclasses import dataclass
-from typing import Tuple
 
 EPS = 1e-9
 
