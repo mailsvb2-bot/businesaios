@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 
 def compose_fallback_message(offer: dict[str, Any], locale: str = "ru") -> str:

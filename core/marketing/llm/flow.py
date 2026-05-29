@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from core.marketing.llm_guardrails import validate_marketing_text
 from core.marketing.llm_postprocess import normalize_generated_text
 from core.marketing.llm_prompt_builder import MarketingLLMInputs, build_marketing_request

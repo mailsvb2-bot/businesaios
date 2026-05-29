@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """Canonical orchestration surface for marketing LLM composition."""
 
-from typing import Optional
 
 from core.marketing.llm.composer_async_flow import compose_async_flow
 from core.marketing.llm.composer_sync_flow import compose_sync_flow

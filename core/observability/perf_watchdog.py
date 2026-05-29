@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Dict
+from typing import Any
 
 from config.env_flags import env_int
 from core.observability.perf_span import sla_budget_ms
