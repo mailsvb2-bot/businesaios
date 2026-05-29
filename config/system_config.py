@@ -4,7 +4,7 @@ CANON_COMPAT_SHIM = True
 
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping
+from typing import Any, Mapping
 
 from config.environment_matrix import normalize_environment_name
 from core.tenancy.normalization import normalize_tenant_id

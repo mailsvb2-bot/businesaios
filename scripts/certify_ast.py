@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ast
-from typing import Set
 
 COMPLEXITY_NODES = (
     ast.If,

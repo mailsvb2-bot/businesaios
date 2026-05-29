@@ -33,7 +33,6 @@ if str(ROOT) not in sys.path:
 
 from canon.canon_ai_enforcer import run_enforcer
 from scripts.certify_helpers import (
-    TRUTHY,
     CertificationReport,
     analyze_god_objects_and_complexity,
     check_god_modules,

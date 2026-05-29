@@ -8,7 +8,7 @@ from scripts.ci.contracts import ExecutionReport, ExecutionRequest, StepResult
 from scripts.ci.coverage_report import write_coverage_stub_xml
 from scripts.ci.goal import optimization_goal
 from scripts.ci.junit_report import write_junit_xml
-from scripts.ci.paths import coverage_dir, execution_dir, junit_dir, reports_dir
+from scripts.ci.paths import execution_dir, junit_dir, reports_dir
 from scripts.ci.plan_registry import plan_for_gate, requires_release_proof_environment
 from scripts.ci.reports import write_report
 from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state

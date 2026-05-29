@@ -12,7 +12,7 @@ requirements (catalog_id optional, offers list required, each offer has id).
 
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from runtime.platform.config.yaml_loader import load_yaml
 

@@ -6,7 +6,6 @@ import os
 from typing import Any
 
 from runtime.platform.postgres_contract import (
-    REQUIRED_MIGRATIONS,
     REQUIRED_SCHEMA_OBJECTS,
     PostgresRuntimeProof,
     evaluate_postgres_contract,
