@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 # Tier‑Ω FINAL: signed quorum gate (BFT‑shaped).
 # The real system would verify cryptographic signatures and membership; here it's a clean contract.

@@ -7,7 +7,6 @@ modules so the contract is easier to audit and extend without growing another
 God module.
 """
 
-from typing import Dict
 
 from core.ai.schema_registry import SchemaRegistry
 

@@ -11,9 +11,8 @@ The policy layer reads the catalog; prices are re-checked at pay time.
 """
 
 import json
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from core.observability.silent import swallow
 
