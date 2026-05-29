@@ -55,13 +55,7 @@ def find_forbidden_release_artifacts(root: Path) -> list[str]:
         if not p.exists():
             continue
         rel = p.relative_to(root).as_posix()
-        if "__pycache__" in p.parts:
-            bad.append(rel)
-        elif p.suffix == ".pyc":
-            bad.append(rel)
-        elif rel.startswith("runtime/data/demo/") and p.suffix == ".db":
-            bad.append(rel)
-        elif rel.startswith("runtime/data/test/") and p.suffix == ".db":
+        if "__pycache__" in p.parts or p.suffix == ".pyc" or rel.startswith("runtime/data/demo/") and p.suffix == ".db" or rel.startswith("runtime/data/test/") and p.suffix == ".db":
             bad.append(rel)
     return bad
 
