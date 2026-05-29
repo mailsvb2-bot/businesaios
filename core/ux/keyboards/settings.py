@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Settings, state, demo and weather keyboards."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from core.ux.callbacks import CB_MENU_MAIN
 

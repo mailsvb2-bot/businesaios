@@ -8,7 +8,7 @@ Why here:
 - Keeping them in core.ux prevents cross-layer cycles.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 
 def inline_button(text: str, callback_data: str) -> dict[str, Any]:

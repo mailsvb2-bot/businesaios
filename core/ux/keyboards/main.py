@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Main and navigation keyboards."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from core.users.roles import UserRoleInfo
 from core.ux.callbacks import (
