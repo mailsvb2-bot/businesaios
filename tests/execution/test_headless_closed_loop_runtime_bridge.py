@@ -9,11 +9,21 @@ from execution.closed_loop_orchestrator import ClosedLoopOrchestrator
 
 
 @dataclass
-class _Request: tenant_id: str = "tenant-1"; business_id: str = "biz-1"; autonomy_tier: str = "supervised"
+class _Request:
+    tenant_id: str = "tenant-1"
+    business_id: str = "biz-1"
+    autonomy_tier: str = "supervised"
 @dataclass
-class _ExecutionResult: ok: bool = True; error: str | None = None; output: dict | None = None
+class _ExecutionResult:
+    ok: bool = True
+    error: str | None = None
+    output: dict | None = None
 @dataclass
-class _AutonomyDecision: action_class: str = "effectful"; tier: str = "supervised"; approval_required: bool = False; blocked_by_policy: bool = False
+class _AutonomyDecision:
+    action_class: str = "effectful"
+    tier: str = "supervised"
+    approval_required: bool = False
+    blocked_by_policy: bool = False
 
 def test_headless_closed_loop_reads_router_result_from_feedback_contract() -> None:
     service = HeadlessClosedLoopService(orchestrator=ClosedLoopOrchestrator())

@@ -28,11 +28,21 @@ class _BudgetGuard:
         return TenantExecutionUsage(tenant_id=tenant_id, action_count=1)
     def evaluate(self, *, usage):
         self.calls.append('evaluate')
-        class V: allowed=True; reason='ok'; tenant_id=usage.tenant_id; violations=(); consumed=False
+        class V:
+            allowed = True
+            reason = 'ok'
+            tenant_id = usage.tenant_id
+            violations = ()
+            consumed = False
         return V()
     def consume(self, *, usage):
         self.calls.append('consume')
-        class V: allowed=True; reason='ok'; tenant_id=usage.tenant_id; violations=(); consumed=True
+        class V:
+            allowed = True
+            reason = 'ok'
+            tenant_id = usage.tenant_id
+            violations = ()
+            consumed = True
         return V()
 
 
