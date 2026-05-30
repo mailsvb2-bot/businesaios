@@ -28,7 +28,8 @@ def test_effects_are_callable_only_during_executor_window(tmp_path):
     schemas = SchemaRegistry()
     schemas.register("send_message@v1", 1, DecisionSchema(required={"user_id", "text"}, optional=set(), field_types={"user_id": str, "text": str}))
 
-    preg = PolicyRegistry(); preg.register(PolicyA())
+    preg = PolicyRegistry()
+    preg.register(PolicyA())
     selector = PolicySelector(preg)
 
     keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")

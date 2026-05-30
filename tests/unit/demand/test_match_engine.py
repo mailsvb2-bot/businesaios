@@ -10,7 +10,8 @@ from supply_state.business_live_state_builder import BusinessLiveStateBuilder
 def test_match_engine():
     request = DemandCaptureService().capture({"text":"premium service near me", "channel":"website", "customer_id":"c1"})
     intent = ClientIntentBuilder().build(request)
-    directory = BusinessDirectory(); directory.seed_defaults()
+    directory = BusinessDirectory()
+    directory.seed_defaults()
     profiles = directory.list_profiles()
     builder = BusinessLiveStateBuilder()
     live_states = tuple(builder.build(p.business_id) for p in profiles)
