@@ -13,7 +13,8 @@ from runtime._internal.router_support import execute_effect_action_sync
 def yookassa_create_payment(*, effects: Any | None = None, decision_id: str, amount: int, currency: str, user_id: str, metadata: dict[str, Any] | None = None) -> tuple[bool, dict[str, Any]]:
     from core.payments.provider import idempotence_key_for_order
     cur = str(currency or "RUB").upper().strip() or "RUB"
-    if cur != "RUB": return False, {"error": "UNSUPPORTED_CURRENCY", "currency": cur}
+    if cur != "RUB":
+        return False, {"error": "UNSUPPORTED_CURRENCY", "currency": cur}
     md = metadata if isinstance(metadata, dict) else {}
     out = execute_effect_action_sync(effects, EffectActionType.PAYMENTS_YOOKASSA_CREATE, {
         "amount_rub": (Decimal(int(amount)) / Decimal("100")).quantize(Decimal("0.01")),

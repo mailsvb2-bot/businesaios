@@ -12,7 +12,8 @@ class _NoopDeliveryState:
     def mark_delivered(self, message_id: str) -> None: return None
 
 def build_guarded_effects(*, effects_cls: Any, event_log: Any, policy_registry: Any, delivery_state: Any = None, ledger: Any = None, payment_outbox: Any = None, telegram_outbound_queue: Any = None, settings_gateway: Any = None, messaging_policy_event_store: Any = None, messaging_policy_read_service: Any = None, http_transport: Any = None, effect_router: Any = None) -> tuple[str, EffectsPort]:
-    cap = issue_capability(); cap_token = cap.token
+    cap = issue_capability()
+    cap_token = cap.token
     raw: EffectsPort = effects_cls(
         event_log=event_log, policy_registry=policy_registry, delivery_state=delivery_state or _NoopDeliveryState(), ledger=ledger,
         payment_outbox=payment_outbox, telegram_outbound_queue=telegram_outbound_queue, settings_gateway=settings_gateway,
