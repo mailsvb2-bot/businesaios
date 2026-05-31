@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Action Catalog (single source of truth).
 
 The catalog stays canonical, but the entry definitions live in small grouped
@@ -7,6 +5,7 @@ modules so the contract is easier to audit and extend without growing another
 God module.
 """
 
+from __future__ import annotations
 
 from core.ai.schema_registry import SchemaRegistry
 

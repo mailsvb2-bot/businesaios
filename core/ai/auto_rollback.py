@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """Auto-rollback guard.
 
 Pure function: if metrics indicate collapse, suggest rollback.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 

@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Small deterministic complex vector used by Behavioral OS.
 
 Complex numbers are represented as separate real/imag tuples for speed
 and deterministic serialization.
 """
+
+from __future__ import annotations
 
 import math
 from dataclasses import dataclass

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Best-effort event-store helpers for read models.
 
 These helpers sit *above* the strict signature-safe helpers in
@@ -10,6 +8,8 @@ Why this layer exists:
 - that best-effort policy should not be reimplemented in every read model;
 - failures should stay observable instead of becoming silent broad-except blocks.
 """
+
+from __future__ import annotations
 
 from typing import Any
 

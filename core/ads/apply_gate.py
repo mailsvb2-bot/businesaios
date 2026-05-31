@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Ads apply gate (prod-safe).
 
 Goals:
@@ -10,9 +8,11 @@ Goals:
 This module is deterministic and has no network / side-effects.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Mapping
 
 ADS_APPLY_SETTING_KEY = "ads:apply_enabled"
 ADS_APPLY_ENABLED_SINCE_MS_KEY = "ads:apply_enabled_since_ms"

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Gift links (one-time) read model.
 
 We keep this intentionally simple and event-sourced:
@@ -8,6 +6,8 @@ We keep this intentionally simple and event-sourced:
 
 No side-effects here. Policies may use this for validation.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any

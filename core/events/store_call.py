@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Canonical event-store call discipline.
 
 Prevents false fallback behavior where an internal ``TypeError`` from the store
 implementation could be mistaken for a signature mismatch.
 """
+
+from __future__ import annotations
 
 from typing import Any, Callable
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Stable digest for AdsPlan.
 
 We hash (platform, action, payload-json-stable) for each command.
@@ -8,9 +6,11 @@ This is used for idempotency keys and audit correlation.
 This module is PURE.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 
 def plan_digest(plan: Any) -> str:

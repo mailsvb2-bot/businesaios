@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """Ads apply limits (small, dumb primitives)."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Any, Tuple
+from typing import Any
 
 
 @dataclass(frozen=True)

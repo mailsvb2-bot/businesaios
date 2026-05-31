@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Ads Apply flow codec.
 
 This module is a small deterministic primitive:
@@ -7,9 +5,11 @@ This module is a small deterministic primitive:
 - computes stable idempotency key material
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
-from typing import Any, Dict, Mapping
+from typing import Any, Mapping
 
 PENDING_KEY = "ads:apply_pending_plan"
 

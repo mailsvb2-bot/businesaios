@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """V13 LTV-oriented world model (pure & deterministic).
 
 This module MUST NOT perform side-effects.
 It is used only to derive decision features (e.g., predicted_ltv) that may
 influence *policy proposals*. DecisionCore remains the ONLY brain.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 

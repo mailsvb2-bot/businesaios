@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """Event -> behavior graph mapping.
 
 Heuristic-light and generic: creates a consistent structural view of an event stream.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Iterable

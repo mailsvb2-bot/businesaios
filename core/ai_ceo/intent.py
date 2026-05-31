@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Canonical AI CEO intent resolution.
 
 Single source of truth for converting UI/runtime inputs into ``CEOIntentV1``.
 This prevents planner-support helpers and runtime boot from inventing slightly
  different horizon/risk/objective parsing rules.
 """
+
+from __future__ import annotations
 
 from core.ai_ceo.contracts import CEOIntentV1
 

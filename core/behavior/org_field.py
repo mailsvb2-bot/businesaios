@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """B2B / organization-level aggregation for BusinesAIOS.
 
 We treat an org/account as a *field* of role-states.
 """
+
+from __future__ import annotations
 
 import math
 from dataclasses import dataclass

@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """Audit event builder for ads apply."""
 
+from __future__ import annotations
+
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.ads.apply.plan_digest import plan_digest
 
