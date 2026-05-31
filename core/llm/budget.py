@@ -39,9 +39,7 @@ class DailyTokenBudget:
         u = int(self._user.get(ukey, 0))
         if t + int(tokens) > int(self._caps.tenant_tokens_per_day):
             return False
-        if u + int(tokens) > int(self._caps.user_tokens_per_day):
-            return False
-        return True
+        return u + int(tokens) <= int(self._caps.user_tokens_per_day)
 
     def spend(self, *, tenant_id: str, user_id: str, tokens: int) -> None:
         day = self._day()
@@ -134,9 +132,7 @@ class EventStoreDailyTokenBudget:
         spent_tenant, spent_user = self._sum(tenant_id=tenant_id, user_id=user_id)
         if spent_tenant + int(tokens) > int(self._caps.tenant_tokens_per_day):
             return False
-        if spent_user + int(tokens) > int(self._caps.user_tokens_per_day):
-            return False
-        return True
+        return spent_user + int(tokens) <= int(self._caps.user_tokens_per_day)
 
     def spend(self, *, tenant_id: str, user_id: str, tokens: int) -> None:
         # No-op: spending is recorded via LLM_COMPLETED telemetry events.

@@ -39,6 +39,4 @@ class StateCompletenessEvaluator:
     def _is_missing(self, value: object) -> bool:
         if value is None:
             return True
-        if isinstance(value, str) and value.strip().lower() in {"", "unknown"}:
-            return True
-        return False
+        return isinstance(value, str) and value.strip().lower() in {"", "unknown"}

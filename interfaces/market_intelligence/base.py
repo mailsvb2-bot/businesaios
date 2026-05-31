@@ -267,7 +267,7 @@ class MarketIntelConnectorBase(BaseConnector):
             body='Dry-run preview only. No external request executed.',
             url=target.subject_url,
             evidence={'query': target.query, 'account_ref': target.account_ref, 'limit': target.limit},
-            metadata={'preview': True, 'requested_payload_keys': sorted(str(key) for key in payload.keys())},
+            metadata={'preview': True, 'requested_payload_keys': sorted(str(key) for key in payload)},
             tags=(self.source_family, self.provider_key, 'preview'),
         )
         return MarketIntelligenceEnvelope(
@@ -329,7 +329,7 @@ class MarketIntelConnectorBase(BaseConnector):
             records=tuple(records),
             cursor=_safe_text(normalized_raw.get('cursor')),
             summary={'records_count': len(records), 'provider_status': str(normalized_raw.get('status') or 'ok'), 'requested_limit': target.limit},
-            metadata={'source_payload_keys': sorted(str(key) for key in payload.keys()), 'provider_metadata': _safe_dict(normalized_raw.get('metadata'))},
+            metadata={'source_payload_keys': sorted(str(key) for key in payload), 'provider_metadata': _safe_dict(normalized_raw.get('metadata'))},
         )
 
     def _to_result(

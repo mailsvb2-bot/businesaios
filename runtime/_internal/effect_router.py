@@ -35,7 +35,7 @@ class EffectRouter:
         key = require_effect_action_type(action_type)
         self._handlers[key] = handler
     def supported_action_types(self) -> tuple[str, ...]:
-        return tuple(sorted(str(item) for item in self._handlers.keys()))
+        return tuple(sorted(str(item) for item in self._handlers))
     def supported_action_enums(self) -> tuple[EffectActionType, ...]:
         return tuple(sorted(self._handlers.keys(), key=str))
     def payload_contracts(self) -> dict[str, tuple[str, ...]]:
