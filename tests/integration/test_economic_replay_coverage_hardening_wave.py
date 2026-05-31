@@ -7,6 +7,7 @@ import pytest
 
 from execution.economic_audit_bundle import EconomicAuditBundleService
 from execution.economic_bundle_quarantine_store import InMemoryEconomicBundleQuarantineStore
+from execution.economic_replay_epoch_guard import EconomicReplayEpochGuard
 
 
 def _scope() -> dict[str, str]:
@@ -151,7 +152,6 @@ def test_partial_progress_restart_matrix_rejects_second_resume_after_corruption(
     assert rows[-1].status == 'denied'
 
 
-from execution.economic_replay_epoch_guard import EconomicReplayEpochGuard
 
 
 def test_scope_lineage_digest_mismatch_is_denied_even_when_manifest_shape_is_valid(tmp_path: Path) -> None:

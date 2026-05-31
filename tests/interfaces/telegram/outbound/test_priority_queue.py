@@ -1,7 +1,9 @@
 import threading
 import time
 
-from interfaces.telegram.outbound.outbound_queue import TelegramOutboundQueue
+import pytest
+
+from interfaces.telegram.outbound.outbound_queue import OutboundTask, TelegramOutboundQueue
 
 
 class _NullLog:
@@ -96,9 +98,7 @@ def test_priorityqueue_marketing_is_best_effort_and_drops_on_full():
         q.stop()
 
 
-import pytest
 
-from interfaces.telegram.outbound.outbound_queue import OutboundTask
 
 
 def test_priorityqueue_legacy_enqueue_methods_preserve_priority_behavior() -> None:

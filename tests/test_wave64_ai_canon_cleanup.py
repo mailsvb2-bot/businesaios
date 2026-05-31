@@ -7,6 +7,7 @@ from core.ai_ceo.planner_support import build_plan as build_plan_support
 from core.ai_ceo.safety import AutonomyPolicyV1
 from core.marketing.llm_composer import LLMComposerConfig, MarketingLLMComposer
 from runtime.boot.builders.ads_stack import wire_ads_stack
+from runtime.boot.builders.ai_ceo_planner import build_runtime_ai_ceo_planner
 
 
 class _LLM:
@@ -72,7 +73,6 @@ def test_ads_stack_prefers_public_llm_property_over_private_attr(tmp_path, monke
     assert out['campaign_builder'] is _Composer.llm_client
 
 
-from runtime.boot.builders.ai_ceo_planner import build_runtime_ai_ceo_planner
 
 
 def test_runtime_ai_ceo_planner_builds_canonical_plan() -> None:

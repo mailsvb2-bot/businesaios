@@ -1,4 +1,8 @@
+import json
+from hashlib import sha256
+
 from execution.economic_audit_bundle import EconomicAuditBundleService
+from execution.economic_export_manifest import manifest_payload_for_digest
 from execution.economic_multi_backend_reconciliation import EconomicMultiBackendReconciliationBuilder
 from execution.economic_retention_policy import EconomicRetentionPolicy, apply_economic_retention_policy
 
@@ -87,10 +91,7 @@ def test_economic_multi_backend_reconciliation_detects_inconsistent_node() -> No
     assert recon['inconsistent_node_ids'] == ['node-b']
 
 
-import json
-from hashlib import sha256
 
-from execution.economic_export_manifest import manifest_payload_for_digest
 
 
 def test_economic_audit_bundle_recomputes_manifest_digest_after_retention_application() -> None:

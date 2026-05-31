@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import ast
+import pathlib
+
 """Lock test: forbid ad-hoc WorldState construction inside Telegram interface.
 
 Canonical rule:
@@ -11,8 +14,6 @@ WorldStateV1 may only be constructed inside:
 This prevents "alternative paths" where a future change bypasses reducers.
 """
 
-import ast
-import pathlib
 
 ALLOWED_CONSTRUCTORS = {
     "interfaces/telegram/runtime/telegram_runtime_worldstate_builder.py",

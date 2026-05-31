@@ -1,4 +1,4 @@
-from runtime.bootstrap.crm_connector_boot import build_crm_connector_registry
+from runtime.bootstrap.crm_connector_boot import _build_token_store, build_crm_connector_registry
 from security.secret_vault import InMemorySecretVault
 
 
@@ -19,7 +19,6 @@ def test_connector_boot_accepts_injected_token_store() -> None:
     assert registry.get("pipedrive") is not None
 
 
-from runtime.bootstrap.crm_connector_boot import _build_token_store
 
 
 def test_connector_boot_prefers_vault_backed_store_when_vault_is_injected() -> None:

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import ast
+import pathlib
+
 """Semantic bypass guardrails.
 
 Goal:
@@ -12,8 +15,6 @@ Notes:
   - A small facade/proxy MAY call DecisionCore.decide; currently we allow main.py.
 """
 
-import ast
-import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
