@@ -16,9 +16,12 @@ with environment barriers:
 
 from __future__ import annotations
 
+import compileall
 import os
 import sys
+import warnings
 
+from core.observability.silent import swallow
 from runtime.platform.config.env_flags import env_str
 
 
@@ -64,10 +67,7 @@ def _clean_build_artifacts(root: str = ".") -> None:
             swallow(__name__, 'scripts/run_tests_clean.py')
 
 
-import compileall
-import warnings
 
-from core.observability.silent import swallow
 
 
 def main() -> int:

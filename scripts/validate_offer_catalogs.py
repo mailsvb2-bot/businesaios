@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+from typing import Any
+
+from runtime.platform.config.yaml_loader import load_yaml
+
 """Validate offer catalogs in data/offer_catalogs.
 
 Why a script (not only tests):
@@ -10,11 +16,7 @@ This script is intentionally conservative: it checks the minimal structural
 requirements (catalog_id optional, offers list required, each offer has id).
 """
 
-import sys
-from pathlib import Path
-from typing import Any
 
-from runtime.platform.config.yaml_loader import load_yaml
 
 
 def _err(code: str, path: Path, msg: str) -> tuple[str, str, str]:

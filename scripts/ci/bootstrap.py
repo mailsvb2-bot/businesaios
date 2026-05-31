@@ -1,15 +1,17 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from scripts.ci.paths import repo_root
+from scripts.ci.subprocess_io import run_python
+
 """CI dependency bootstrap only.
 
 This surface may prepare Python packaging tools and test dependencies for CI,
 but it must not define runtime gate order or construct the application/runtime.
 """
 
-from pathlib import Path
 
-from scripts.ci.paths import repo_root
-from scripts.ci.subprocess_io import run_python
 
 CANON_CI_BOOTSTRAP = True
 
