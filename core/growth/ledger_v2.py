@@ -109,13 +109,12 @@ def _iter_events(
         return
     latest = getattr(event_store, "latest_events", None)
     if callable(latest):
-        for e in call_latest_events(
+        yield from call_latest_events(
             latest_fn=latest,
             tenant_id=str(tenant_id),
             event_types=(str(event_type),),
             limit=int(limit),
-        ) or []:
-            yield e
+        ) or []
 
 
 def _event_ts_ms(e: dict[str, Any]) -> int:
