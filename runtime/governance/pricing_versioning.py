@@ -19,7 +19,7 @@ import hashlib
 import json
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_path, env_str
@@ -65,7 +65,8 @@ def get_pricing_version() -> str:
     override_path = str(env_path("PRICING_VERSION_OVERRIDE_PATH", "data/pricing_version_override.txt")).strip()
     if override_path:
         try:
-            txt = open(override_path, encoding="utf-8").read().strip()
+            with open(override_path, encoding="utf-8") as fh:
+                txt = fh.read().strip()
             if txt:
                 return txt
         except Exception:

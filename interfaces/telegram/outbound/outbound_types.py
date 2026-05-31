@@ -7,9 +7,9 @@ Extracted from outbound_queue.py to eliminate god-module.
 
 import threading
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable
 
-PriorityArg = Union[int, str]
+PriorityArg = int | str
 
 
 @dataclass

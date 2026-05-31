@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping, Optional
+from typing import Mapping
 
 from config.experiments_defaults import DEFAULT_EXPERIMENT_DEFAULTS
 from core.experiments.enums import (
@@ -120,4 +120,4 @@ class Experiment:
 
 
 ExperimentMap = Mapping[str, ExperimentPlan]
-OptionalExperiment = Optional[ExperimentPlan]
+OptionalExperiment = ExperimentPlan | None

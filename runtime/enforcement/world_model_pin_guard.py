@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from runtime.enforcement import WorldModelPin, WorldModelPinCheckResult
 from runtime.platform.config.env_flags import env_bool
@@ -49,7 +49,7 @@ def check_world_model_pin(
 
     if pinned_hash != current_hash:
         return WorldModelPinCheckResult(
-            ok=False if strict else True,
+            ok=not strict,
             strict=strict,
             reason="pricing_world_model_hash_mismatch",
             pinned=pinned_dict,

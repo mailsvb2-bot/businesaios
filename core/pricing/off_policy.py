@@ -17,7 +17,7 @@ replays a deterministic action (price point).
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable
+from typing import Any, Iterable
 
 from config.pricing_retention_policy import (
     DEFAULT_PRICING_OFF_POLICY_DEFAULTS,
@@ -118,5 +118,4 @@ def _iter_events(
         return
     latest = getattr(event_store, "latest_events", None)
     if callable(latest):
-        for e in latest(tenant_id=tenant_id, event_types=(event_type,), limit=int(limit)) or []:
-            yield e
+        yield from latest(tenant_id=tenant_id, event_types=(event_type,), limit=int(limit)) or []

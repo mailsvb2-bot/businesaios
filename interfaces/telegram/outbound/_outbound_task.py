@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable
 
-PriorityArg = Union[int, str]
+PriorityArg = int | str
 
 
 @dataclass
