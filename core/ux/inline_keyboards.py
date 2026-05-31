@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Inline keyboard builders (UI primitives).
 
 Why here:
@@ -7,6 +5,8 @@ Why here:
 - Offers layer may need them, but offers MUST NOT depend on policies.
 - Keeping them in core.ux prevents cross-layer cycles.
 """
+
+from __future__ import annotations
 
 from typing import Any
 

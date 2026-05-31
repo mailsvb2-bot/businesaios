@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Retention event type compatibility surface.
 
 Single source of truth lives in core.events.event_types.
 This module remains as a thin explicit shim for older retention imports.
 """
+
+from __future__ import annotations
 
 from core.events.event_types import (
     KNOWN_EVENT_TYPES,

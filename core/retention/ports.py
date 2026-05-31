@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Retention ports.
 
 This module exists to keep core.retention independent from concrete storage
@@ -9,7 +7,9 @@ The production repo currently uses SqliteEventStore which provides these methods
 Core code MUST depend on this Protocol only (no platform_layer imports).
 """
 
-from typing import Any, Dict, Iterable, Iterator, Optional, Protocol, Tuple
+from __future__ import annotations
+
+from typing import Any, Iterable, Protocol
 
 
 class RetentionStore(Protocol):

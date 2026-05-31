@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Common pure keyboard helpers."""
+
+from __future__ import annotations
 
 from typing import Any
 

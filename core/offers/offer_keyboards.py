@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Offer keyboards (UI bundle).
 
 Policy should not know button wiring.
 OfferEngine may attach reply_markup into OfferRender.meta.
 """
+
+from __future__ import annotations
 
 from core.ux.inline_keyboards import inline_button, inline_keyboard
 

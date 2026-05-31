@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical offer-catalog identity helpers.
 
 This module is intentionally tiny: it holds the *one* source of truth for
@@ -8,6 +6,8 @@ catalog ids and tenant/product/env registry candidate building.
 Meaningful offers logic stays in OfferCatalogResolver and OfferCatalogRegistry.
 This helper exists only to prevent duplicated string-shape logic from drifting.
 """
+
+from __future__ import annotations
 
 from core.tenancy.normalization import normalize_tenant_id
 

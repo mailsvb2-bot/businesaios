@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """DEPRECATED bridge: retention offer catalog.
 
 Historically, v13 owned offer definitions under retention.config.* which caused
@@ -12,7 +10,9 @@ We keep this module ONLY to avoid breaking older imports.
 It must stay *lazy* and must not import OfferEngine/registries at import-time.
 """
 
-from typing import Any, Dict, Iterable, Iterator, Mapping, MutableMapping, Optional
+from __future__ import annotations
+
+from typing import Any, Iterable, Iterator, MutableMapping
 
 
 def _load_offers() -> dict[str, Any]:
