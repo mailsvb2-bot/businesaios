@@ -35,8 +35,7 @@ def fetch_text(
     proc = subprocess.run(
         cmd,
         input=body,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
     output = proc.stdout.decode("utf-8", errors="replace")

@@ -10,8 +10,7 @@ socket.socket()
 
     proc = subprocess.run(
         [sys.executable, "-c", code],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
 
     # без seccomp должно быть ОК
@@ -29,8 +28,7 @@ socket.socket()
 
     proc = subprocess.run(
         [sys.executable, "-c", code],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
     )
 
     assert proc.returncode != 0

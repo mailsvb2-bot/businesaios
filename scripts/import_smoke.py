@@ -39,7 +39,7 @@ def _env() -> dict[str, str]:
 
 
 def check_import(target: str) -> ImportResult:
-    code = "import importlib; importlib.import_module({!r}); print('OK {}')".format(target, target)
+    code = f"import importlib; importlib.import_module({target!r}); print('OK {target}')"
     outcome = run_command(
         ["python", "-S", "-c", code],
         cwd=REPO_ROOT,
