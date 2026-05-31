@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
-
 from dataclasses import dataclass, field
 from typing import Mapping
+
+CANON_COMPAT_SHIM = True
 
 CANON_ENVIRONMENT_MATRIX = True
 

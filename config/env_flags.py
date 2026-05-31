@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical environment access helpers for core/config surfaces.
 
 CANON_COMPAT_SHIM = True
@@ -8,6 +6,8 @@ Implementation is delegated to :mod:`shared.env_access` so core/config/runtime
 share one parsing layer without importing the ``runtime`` package during config
 bootstrap.
 """
+
+from __future__ import annotations
 
 from pathlib import Path
 

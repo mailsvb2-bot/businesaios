@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Academic target architecture for BusinesAIOS.
 
 This module is intentionally small and normative. It describes the final target
@@ -7,6 +5,8 @@ shape of the system without pretending the migration is already complete.
 Legacy namespace maps may continue to exist during migration, but they must not
 contradict the target model declared here.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Final

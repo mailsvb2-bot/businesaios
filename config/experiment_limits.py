@@ -1,9 +1,10 @@
-from __future__ import annotations
-
 """Explicit compatibility wrapper with a real module file."""
 
-CANON_COMPAT_SHIM = True
+from __future__ import annotations
 
 from config import ExperimentLimits as ExperimentLimits
 
+CANON_COMPAT_SHIM = True
+
 __all__ = ['ExperimentLimits']
+
