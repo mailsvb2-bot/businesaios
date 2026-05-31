@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import shutil
+from contextlib import suppress
 from pathlib import Path
 
 from scripts.ci.paths import repo_root
 from scripts.ci.subprocess_io import run_command
-from contextlib import suppress
 
 _RUNTIME_STATE_PATTERNS = ("*.sqlite3", "*.sqlite", "*.db")
 _RUNTIME_STATE_ROOTS = (

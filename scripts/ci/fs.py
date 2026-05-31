@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from contextlib import suppress
+from pathlib import Path
 
 
 def ensure_writable_dir(path: Path) -> Path:
