@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical YAML loader.
 
 CANON_COMPAT_SHIM = True
@@ -13,6 +11,8 @@ call sites that still pass `path.read_text(...)`. PyYAML is intentionally lazy:
 module import must not fail just because optional runtime dependencies are not
 installed yet.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
