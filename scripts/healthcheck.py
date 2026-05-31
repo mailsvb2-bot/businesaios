@@ -25,9 +25,7 @@ def _is_ready_payload(payload: object) -> bool:
         return False
     if payload.get("status") in {"blocked", "degraded", "fail", "failed"}:
         return False
-    if payload.get("runtime_wired") is False:
-        return False
-    return True
+    return payload.get("runtime_wired") is not False
 
 
 def main() -> None:

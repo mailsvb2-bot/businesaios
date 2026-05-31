@@ -97,7 +97,7 @@ def analyze_god_objects_and_complexity(root: Path) -> tuple[list[str], list[str]
             pub_attrs = 0
 
             for item in node.body:
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef):
                     if is_public_name(item.name):
                         pub_methods += 1
                     max_fn_complexity = max(
@@ -136,7 +136,7 @@ def analyze_god_objects_and_complexity(root: Path) -> tuple[list[str], list[str]
                 )
 
         for node in tree.body:
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 if not is_public_name(node.name):
                     continue
                 c = function_cyclomatic_complexity(node)

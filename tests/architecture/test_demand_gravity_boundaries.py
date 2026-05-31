@@ -41,7 +41,7 @@ def test_demand_gravity_has_no_forbidden_symbols_or_raw_side_effect_imports() ->
     for path in root.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
                 if node.name in FORBIDDEN_NAMES:
                     findings.append(f"{path}:{node.lineno}:forbidden_symbol:{node.name}")
             if isinstance(node, ast.Name) and node.id in FORBIDDEN_NAMES:

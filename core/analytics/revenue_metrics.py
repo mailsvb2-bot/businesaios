@@ -18,7 +18,7 @@ def _to_utc_dt(ts: Any, *, policy: RevenueMetricsPolicy = DEFAULT_REVENUE_METRIC
     if isinstance(ts, datetime):
         return ts.astimezone(UTC)
     try:
-        if isinstance(ts, (int, float)):
+        if isinstance(ts, int | float):
             v = float(ts)
             if v > float(policy.epoch_millis_threshold):
                 return datetime.fromtimestamp(v / float(policy.zero_amount + 1000), tz=UTC)

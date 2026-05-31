@@ -13,7 +13,7 @@ TARGET_FILES = [
 SUSPECT_NAMES = {"threshold", "multiplier", "rollout", "limit"}
 
 def _is_numeric(node: ast.AST) -> bool:
-    return isinstance(node, ast.Constant) and isinstance(node.value, (int, float))
+    return isinstance(node, ast.Constant) and isinstance(node.value, int | float)
 
 def test_no_magic_numbers_in_targeted_policy_assignments():
     offenders = []

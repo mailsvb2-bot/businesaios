@@ -64,7 +64,7 @@ def test_no_decide_definitions_outside_decision_core():
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "decide":
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == "decide":
                 offenders.append(f"{path}:{node.lineno}: def decide")
     assert not offenders, "Forbidden decide() definitions found:\n" + "\n".join(offenders)
 

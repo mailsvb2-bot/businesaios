@@ -34,7 +34,7 @@ def _flatten_dict_keys(payload: object) -> tuple[str, ...]:
             for key, inner in value.items():
                 found.append(str(key))
                 walk(inner)
-        elif isinstance(value, (list, tuple, set)):
+        elif isinstance(value, list | tuple | set):
             for item in value:
                 walk(item)
 

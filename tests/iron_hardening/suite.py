@@ -66,7 +66,7 @@ def test_iron_02_only_one_decide_def_in_prod():
     for p in _iter_prod_py():
         tree = _parse(p)
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "decide":
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == "decide":
                 rel = p.relative_to(ROOT).as_posix()
                 if rel.startswith("interfaces/messaging_runtime/"):
                     continue
