@@ -113,8 +113,7 @@ def _latest_events(event_store: Any, *, tenant_id: str, event_type: str, limit: 
     latest = getattr(event_store, "latest_events", None)
     if callable(latest):
         try:
-            for e in latest(tenant_id=tenant_id, event_types=(event_type,), limit=int(limit)) or []:
-                yield e
+            yield from latest(tenant_id=tenant_id, event_types=(event_type,), limit=int(limit)) or []
         except Exception:
             return
 

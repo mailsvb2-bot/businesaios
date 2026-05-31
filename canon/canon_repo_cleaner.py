@@ -23,11 +23,7 @@ def is_junk(path):
         if p in path:
             return True
 
-    for ext in JUNK_EXTENSIONS:
-        if path.endswith(ext):
-            return True
-
-    return False
+    return any(path.endswith(ext) for ext in JUNK_EXTENSIONS)
 
 
 def scan_repo(root="."):

@@ -26,8 +26,7 @@ def iter_py_files(root: Path = REPO_ROOT) -> Iterable[Path]:
         base = root / folder
         if not base.exists():
             continue
-        for path in base.rglob("*.py"):
-            yield path
+        yield from base.rglob("*.py")
 
 
 def safe_read_text(path: Path) -> str:
