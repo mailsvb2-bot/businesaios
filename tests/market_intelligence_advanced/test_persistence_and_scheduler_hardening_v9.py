@@ -37,7 +37,7 @@ def test_scheduler_lease_prevents_duplicate_run(tmp_path: Path) -> None:
     orchestration = MarketIntelligenceOrchestration(store=MarketIntelligenceOrchestration().store.__class__(tmp_path / 'schedule.json'))
     orchestration.register('amazon-marketplace', SyncSchedule(provider='amazon', source_family='marketplace', cadence_minutes=1, query='shoes'))
     loop = MarketIntelligenceLoop(execute_action=execute_action)
-    scheduler_a = MarketIntelligenceSchedulerService(loop=loop, orchestration=orchestration, lease_store=lease_store, owner_id='owner-a')
+    _ = MarketIntelligenceSchedulerService(loop=loop, orchestration=orchestration, lease_store=lease_store, owner_id='owner-a')
     scheduler_b = MarketIntelligenceSchedulerService(loop=loop, orchestration=orchestration, lease_store=lease_store, owner_id='owner-b')
     assert lease_store.try_acquire(lease_key='tenant-a:amazon-marketplace', owner_id='owner-a', ttl_seconds=300) is True
     results = scheduler_b.run_due(tenant_id='tenant-a')

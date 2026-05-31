@@ -16,7 +16,7 @@ from runtime.queue.queue_remediation_route_history_sqlite import SqliteQueueReme
 def test_queue_remediation_analytics_summarizes_activity(tmp_path):
     audit = SqliteQueueRemediationAuditStore(tmp_path / 'audit.sqlite3')
     routes = SqliteQueueRemediationRouteHistoryStore(tmp_path / 'routes.sqlite3')
-    coordinator = QueueRemediationCoordinator(audit_sink=audit)
+    _ = QueueRemediationCoordinator(audit_sink=audit)
     now = datetime(2026, 3, 28, 12, 0, tzinfo=UTC)
     plan = QueueRemediationPlan(
         tenant_id='t1',

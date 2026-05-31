@@ -37,7 +37,7 @@ def test_runtime_ads_modules_use_public_surfaces() -> None:
     for rel, required_imports in targets.items():
         owner_path, *needles = required_imports
         if owner_path is not None:
-            alias_name = Path(rel).name
+            _ = Path(rel).name
             alias = importlib.import_module(rel.replace('/', '.'))
             assert hasattr(alias, '__getattr__') or alias is not None
             text = Path(owner_path).read_text(encoding='utf-8')

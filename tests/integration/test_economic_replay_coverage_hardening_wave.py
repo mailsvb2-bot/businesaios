@@ -247,7 +247,7 @@ def test_payload_valid_but_lineage_and_semantic_corruption_are_denied(tmp_path: 
     rows = quarantine.list_rows()
     assert rows[-1].status in {'quarantined', 'denied'}
 
-    validation = service.import_json
+    _ = service.import_json
     # Re-read failure details through direct validator path to prove combinatorics were detected.
     data = json.loads(path.read_text(encoding='utf-8'))
     from execution.economic_audit_bundle import validate_economic_bundle_payload

@@ -136,7 +136,7 @@ def test_sqlite_job_lease_store_rejects_stale_release_after_expired_reacquire(tm
 def test_mixed_billing_failure_chain_is_restart_safe_and_deduped(tmp_path: Path) -> None:
     metrics = TenantMetricsRegistry()
     provider = _Provider()
-    lifecycle = InvoiceLifecycleService()
+    _ = InvoiceLifecycleService()
     dispatcher = JobDispatcher(store=InMemoryJobStore(), idempotency_store=InMemoryIdempotencyStore())
 
     issued = _issued_invoice(tenant_id='tenant-a', invoice_id='inv-mixed-a', total_minor=1000)

@@ -273,7 +273,7 @@ def test_reconciliation_reports_missing_dispute_stage_when_truth_is_inconsistent
 
 def test_admin_view_surface_contains_operator_and_anomaly_widgets() -> None:
     client = _build_client()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
+    _ = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
     selected = client.post('/client-outcome/select', json={
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',

@@ -10,7 +10,7 @@ from security.security_policy_engine import SecurityPolicyEngine
 
 def _resource() -> SecurityResource:
     classifier = KeywordDataClassifier()
-    classification = classifier.classify_payload if False else None
+    _ = classifier.classify_payload if False else None
     result = classifier.classify(
         __import__('compliance.data_classification', fromlist=['DataAsset']).DataAsset(
             asset_id='a1',

@@ -133,7 +133,7 @@ def test_replay_after_key_revoke_rejected(tmp_path):
 
 def test_fuzz_payload_mutations_fail(tmp_path):
     core, executor, state, ledger_ctx = _build(tmp_path)
-    env = core.optimize(state)
+    _ = core.optimize(state)
 
     rnd = random.Random(1337)
     for _ in range(25):

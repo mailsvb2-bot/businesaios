@@ -49,7 +49,7 @@ def test_managed_runtime_plane_can_drive_market_intelligence_runtime_lifecycle()
     audit = RuntimeAuditLog()
     observability = RuntimeObservability(audit)
     plane = ManagedRuntimePlane(observability=observability)
-    runtime = build_market_intelligence_runtime(
+    _ = build_market_intelligence_runtime(
         execute_action=_execute_action,
         runtime_observability=observability,
         managed_runtime_plane=plane,

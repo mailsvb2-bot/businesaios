@@ -198,7 +198,7 @@ def test_fastapi_control_plane_audit_reads_same_execute_action_audit_log(tmp_pat
     )
     assert action_response.status_code == 200
 
-    audit_response = client.get('/control-plane/audit/actions?trace_id=idem-does-not-matter', headers={
+    _ = client.get('/control-plane/audit/actions?trace_id=idem-does-not-matter', headers={
         'x-api-key': 'development-control-plane-key',
         'x-tenant-id': 'tenant-a',
         'x-actor-id': 'operator-1',

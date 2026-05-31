@@ -11,7 +11,7 @@ def test_span_emits_latency_event():
         with SqliteEventStore(path) as store:
             log = EventLog(store, tenant="default")
             with Span(event_log=log, stage="router", user_id="u1", correlation_key="k"):
-                x = 1 + 1
+                _ = 1 + 1
             # confirm
             evs = list(store.iter_events(tenant_id="default", start_ms=0, end_ms=None, event_type="latency_span"))
             assert len(evs) >= 1
