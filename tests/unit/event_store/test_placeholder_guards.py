@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from core.events.log import EventLog
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.platform.event_store.postgres_event_store import PostgresEventStore, describe_declared_absence
 from runtime.platform.event_store.postgres_event_store_part1 import describe_declared_absence as describe_part1
 from runtime.platform.event_store.postgres_event_store_part1 import raise_if_used
@@ -25,8 +27,6 @@ def test_split_placeholder_fails_closed() -> None:
         raise_if_used()
 
 
-from core.events.log import EventLog
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 def test_event_log_emit_legacy_marks_payload_in_nonprod(monkeypatch) -> None:

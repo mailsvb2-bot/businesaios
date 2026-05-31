@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from observability.platform.telemetry.event_store import JsonlEventStore
+from observability.platform.telemetry.event_store import JsonlEventStore, SqliteEventStore, build_default_event_store
 
 
 def test_jsonl_event_store_skips_corrupted_lines_and_filters_time(tmp_path) -> None:
@@ -16,7 +16,6 @@ def test_jsonl_event_store_skips_corrupted_lines_and_filters_time(tmp_path) -> N
     assert len(all_events) == 2
 
 
-from observability.platform.telemetry.event_store import SqliteEventStore, build_default_event_store
 
 
 def test_sqlite_event_store_latest_events_returns_most_recent_first(tmp_path) -> None:

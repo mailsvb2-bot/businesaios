@@ -16,6 +16,7 @@ from governance.approval_contract import ApprovalDecision, ApprovalOutcome, Appr
 from governance.approval_store import InMemoryApprovalStore
 from governance.approval_workflow import ApprovalWorkflow
 from governance.change_control_policy import ChangeControlPolicy
+from governance.control_plane_audit_log import PersistentGovernanceAuditLog
 from governance.emergency_stop_guard import EmergencyStopGuard
 from governance.kill_switch_registry import KillSwitchRegistry
 from governance.permission_matrix import PermissionMatrix
@@ -400,7 +401,6 @@ def test_governance_runtime_emits_resume_hint_and_resume_ready_events() -> None:
     assert resume_ready[-1]['payload']['resume']['approval_id'] == approval_id
 
 
-from governance.control_plane_audit_log import PersistentGovernanceAuditLog
 
 
 def test_governance_runtime_persists_resume_audit_events(tmp_path) -> None:
