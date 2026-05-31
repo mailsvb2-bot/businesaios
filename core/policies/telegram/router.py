@@ -36,7 +36,7 @@ def _has_perm(ctx: TelegramCtx, perm: str) -> bool:
 
 def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", gift_ttl_sec: int = 7 * 24 * 3600) -> ProposedAction:
     user_id = ctx.state.user_id or "anonymous"
-    role = UserRoleInfo.from_settings(ctx.settings if isinstance(ctx.settings, dict) else {})
+    _ = UserRoleInfo.from_settings(ctx.settings if isinstance(ctx.settings, dict) else {})
     legacy_prices = build_legacy_prices(default_price_rub=default_price_rub)
 
     def pm(*, text: str, reply_markup: dict | None = None, track_event_type: str | None = None, track_payload: dict | None = None) -> ProposedAction:

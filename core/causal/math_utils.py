@@ -108,7 +108,7 @@ def linear_regression_fit(X: list[list[float]], y: list[float]) -> LinRegResult:
     if not X:
         return LinRegResult(coef=[])
     n = len(X)
-    p = len(X[0])
+    _ = len(X[0])
     if n != len(y):
         raise ValueError("X and y size mismatch")
 

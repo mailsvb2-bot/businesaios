@@ -71,7 +71,7 @@ def handle_ads_apply(ctx: TelegramCtx, *, user_id: str) -> ProposedAction:
                 reply_markup={"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": CB_ADS_APPLY_MENU}]]},
                 callback_query_id=ctx.callback_query_id,
             )
-        idem = compute_plan_idempotency_key(pending)
+        _ = compute_plan_idempotency_key(pending)
         # Strict single-path: execution happens only via ads_apply_flow (pending confirm).
         return propose_message(
             user_id=str(user_id),

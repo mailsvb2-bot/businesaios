@@ -187,7 +187,7 @@ def _resolve_recovery_action(*, executor: RuntimeExecutor, env: Any) -> str:
     return _plan_action(_recovery_plan(executor=executor, env=env))
 
 def _handle_non_resume_action(*, action: str, outbox: Any, env: Any, item: dict[str, Any]) -> bool:
-    decision_id = _decision_id_from_item(item)
+    _ = _decision_id_from_item(item)
     if action in _DEAD_LETTER_ACTIONS:
         _quarantine_item(outbox=outbox, env=env, item=item, reason=f"recovery_plan_{action}")
         return True
