@@ -42,7 +42,7 @@ def evaluate_stop_loss(*, contract: AutopilotContract, metrics: Mapping[str, Any
     except Exception:
         cac = 0
 
-    s = contract.safety_policy
+    _ = contract.safety_policy
     return evaluate_stop_loss_window(contract=contract, window=[{"profit_minor": profit, "cac_minor": cac}])
 
 

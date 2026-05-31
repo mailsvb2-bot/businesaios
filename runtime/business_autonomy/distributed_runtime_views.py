@@ -157,7 +157,7 @@ class DistributedBusinessPlanningMemorySink:
         business_id = str(request.business_id)
         goal_family = str(request.metadata.get("goal_family") or request.goal_type or "default")
         verified = result.verdict in {ExecutionVerdict.COMPLETED, ExecutionVerdict.SIMULATED}
-        snapshot = self.backend.merge_feedback(
+        _ = self.backend.merge_feedback(
             tenant_id=tenant_id,
             business_id=business_id,
             goal_plan_patch={

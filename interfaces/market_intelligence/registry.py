@@ -23,7 +23,7 @@ _READ_ONLY_ACTIONS = {
 
 
 def _entry(name: str, family: str) -> dict[str, object]:
-    ready = bool(provider_supported(name))
+    _ = bool(provider_supported(name))
     return build_registry_entry(
         name=name,
         status='implemented',

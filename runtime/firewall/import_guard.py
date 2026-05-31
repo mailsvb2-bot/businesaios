@@ -87,7 +87,7 @@ def _infer_caller_module() -> str:
     while frame is not None:
         g = frame.f_globals or {}
         mod = g.get("__name__", "") or ""
-        file = g.get("__file__", "") or ""
+        _ = g.get("__file__", "") or ""
         if mod and not mod.startswith(("importlib", "runtime.firewall.import_guard")):
             return mod
         # Skip builtins and C-frames
