@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 
-from scripts.ci.paths import coverage_dir, junit_dir
-from scripts.ci.subprocess_io import run_pytest
+from scripts.ci.paths import coverage_dir, junit_dir, reports_dir
+from scripts.ci.subprocess_io import CommandOutcome, run_pytest
+
+
+_MAX_FAILURE_MESSAGE_CHARS = 4000
 
 
 def _write_coverage_honesty_artifact(*, coverage_name: str, junit_name: str, target_args: list[str], mark_expression: str) -> None:
@@ -25,6 +28,40 @@ def _write_coverage_honesty_artifact(*, coverage_name: str, junit_name: str, tar
         "claims_production_ready": False,
     }
     coverage_path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+def _diagnostics_stem(junit_name: str) -> str:
+    return str(junit_name or "pytest").removesuffix(".xml").replace("/", "-")
+
+
+def _failure_excerpt(outcome: CommandOutcome) -> str:
+    text = "\n".join(part for part in (outcome.stdout, outcome.stderr) if part)
+    if not text.strip():
+        return "no pytest output captured"
+    return text[-_MAX_FAILURE_MESSAGE_CHARS:]
+
+
+def _write_pytest_diagnostics(*, junit_name: str, target_args: list[str], mark_expression: str, outcome: CommandOutcome) -> None:
+    diagnostics_dir = reports_dir() / "pytest"
+    diagnostics_dir.mkdir(parents=True, exist_ok=True)
+    stem = _diagnostics_stem(junit_name)
+    stdout_path = diagnostics_dir / f"{stem}.stdout.txt"
+    stderr_path = diagnostics_dir / f"{stem}.stderr.txt"
+    json_path = diagnostics_dir / f"{stem}.failure.json"
+    stdout_path.write_text(outcome.stdout or "", encoding="utf-8")
+    stderr_path.write_text(outcome.stderr or "", encoding="utf-8")
+    payload = {
+        "artifact": "pytest_failure_diagnostics",
+        "junit_artifact": junit_name,
+        "targets": list(target_args),
+        "mark_expression": mark_expression,
+        "returncode": outcome.returncode,
+        "stdout_artifact": stdout_path.relative_to(reports_dir()).as_posix(),
+        "stderr_artifact": stderr_path.relative_to(reports_dir()).as_posix(),
+        "failure_excerpt": _failure_excerpt(outcome),
+        "claims_production_ready": False,
+    }
+    json_path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
 def run_pytest_with_report(
@@ -56,8 +93,15 @@ def run_pytest_with_report(
         mark_expression=mark_expression,
     )
     if outcome.returncode != 0:
+        _write_pytest_diagnostics(
+            junit_name=junit_name,
+            target_args=target_args,
+            mark_expression=mark_expression,
+            outcome=outcome,
+        )
+        excerpt = _failure_excerpt(outcome)
         if outcome.returncode == 124:
-            return False, f"pytest timed out for targets={target_args} mark={mark_expression}"
-        return False, f"pytest failed for targets={target_args} mark={mark_expression}"
+            return False, f"pytest timed out for targets={target_args} mark={mark_expression}\n{excerpt}"
+        return False, f"pytest failed for targets={target_args} mark={mark_expression}\n{excerpt}"
 
     return True, "pytest gate passed; code coverage not collected"
