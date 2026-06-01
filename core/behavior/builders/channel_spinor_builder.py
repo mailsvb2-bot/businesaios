@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from core.behavior.contracts.micro_spinor import MicroSpinor
 from core.behavior.math.aggregation import aggregate_spinors
@@ -8,7 +8,7 @@ from core.behavior.math.complex4 import Complex4
 
 
 def build_channel_spinor(entity_id: str, channel: str, source_spinors: list[MicroSpinor]) -> MicroSpinor:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     psi = aggregate_spinors([Complex4(s.psi_re, s.psi_im) for s in source_spinors])
     return MicroSpinor(
         spinor_id=f"channel:{entity_id}:{channel}",

@@ -1,13 +1,21 @@
 from __future__ import annotations
 
-from core.decision.ai_decision_trace import TraceBuilder
 from application.decision_runtime.runtime import (
     apply_state_constraints as _apply_state_constraints,
+)
+from application.decision_runtime.runtime import (
     build_trace as _build_trace,
+)
+from application.decision_runtime.runtime import (
     extract_correlation_key as _extract_correlation_key,
+)
+from application.decision_runtime.runtime import (
     select_and_propose as _select_and_propose,
+)
+from application.decision_runtime.runtime import (
     validate_and_gate_action as _validate_and_gate_action,
 )
+from core.decision.ai_decision_trace import TraceBuilder
 
 CANON_DECISION_RUNTIME_COMPAT = True
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from core.ai.decision import Decision
-from kernel.decision_crypto import signed_envelope_from_decision
 from core.security.keyring import Keyring
+from kernel.decision_crypto import signed_envelope_from_decision
 
 
 def test_resigned_envelope_changes_signature_after_payload_enrich() -> None:

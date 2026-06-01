@@ -41,7 +41,7 @@ class FileProviderRuntimeExportLedger:
     partition_prefix: str = 'provider_runtime_exports'
 
     @classmethod
-    def default(cls) -> 'FileProviderRuntimeExportLedger':
+    def default(cls) -> FileProviderRuntimeExportLedger:
         return cls(FileDistributedEvidenceAppendPort(_runtime_root() / 'append'))
 
     def append(self, row: Mapping[str, Any]) -> dict[str, Any]:

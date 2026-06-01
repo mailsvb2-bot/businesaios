@@ -9,7 +9,7 @@ class ApiVersion:
     minor: int = 0
 
     @staticmethod
-    def parse(v: str | None, *, default: "ApiVersion") -> "ApiVersion":
+    def parse(v: str | None, *, default: ApiVersion) -> ApiVersion:
         raw = (v or "").strip().lstrip("v").strip()
         if not raw:
             return default
@@ -26,7 +26,7 @@ class ApiVersion:
     def str_tag(self) -> str:
         return f"v{self.major}.{self.minor}"
 
-    def matches_major(self, other: "ApiVersion") -> bool:
+    def matches_major(self, other: ApiVersion) -> bool:
         return self.major == other.major
 
 

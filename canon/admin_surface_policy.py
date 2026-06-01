@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 CANON_ADMIN_SURFACE_POLICY = True
 ADMIN_SURFACE_POLICY = {
     'new_feature_must_be_visible_in_admin': True,

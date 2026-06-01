@@ -30,7 +30,6 @@ __all__ = [
 from runtime.finance.host_runtime_integration import FinanceHostRuntimeBinding
 from runtime.finance.job_orchestrator import FinanceJobOrchestrator
 
-
 CANON_BOOT_WIRING_ONLY = True
 # StrategicFinanceService is built in runtime finance runtime factory.
 

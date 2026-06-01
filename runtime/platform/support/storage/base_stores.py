@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class ArtifactStore:
     def __init__(self) -> None:
         self._items: dict[str, object] = {}

@@ -7,10 +7,9 @@ from typing import Any
 
 import pytest
 
-from execution.headless_contract import HeadlessExecutionContract
 from application.headless.models import GoalExecutionRequest
+from execution.headless_contract import HeadlessExecutionContract
 from runtime.execution.executor_result import ExecutionResult
-
 
 pf_mod = pytest.importorskip("execution.performance_feedback_learning")
 ch_mod = pytest.importorskip("execution.capability_health_scoring")
@@ -63,7 +62,7 @@ class StubPolicyExplainer:
         summary: str = "ok"
         factors: tuple[str, ...] = ()
 
-    def explain(self, *, state: Any, envelope: Any) -> "_Explanation":
+    def explain(self, *, state: Any, envelope: Any) -> _Explanation:
         return self._Explanation()
 
 

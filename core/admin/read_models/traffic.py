@@ -26,7 +26,7 @@ def users_today(event_store: Any, *, tenant_id: str = "default", now_ms: int | N
     )
     if count:
         return int(count)
-    seen: Set[str] = set()
+    seen: set[str] = set()
     for ev in iter_events_window(event_store, tenant_id=str(tenant_id), start_ms=start_ms, end_ms=now_ms_resolved):
         uid = ev.get("user_id")
         if uid and uid != "system":
@@ -36,13 +36,13 @@ def users_today(event_store: Any, *, tenant_id: str = "default", now_ms: int | N
 
 def funnel_counts(
     event_store: Any,
-    event_types: List[str],
+    event_types: list[str],
     *,
     tenant_id: str = "default",
     start_ms: int = 0,
     end_ms: int | None = None,
-) -> Dict[str, int]:
-    out: Dict[str, int] = {}
+) -> dict[str, int]:
+    out: dict[str, int] = {}
     for et in event_types:
         if not et:
             continue
@@ -57,7 +57,7 @@ def funnel_counts(
             if counted:
                 out[et] = int(counted)
                 continue
-        seen: Set[str] = set()
+        seen: set[str] = set()
         iterator = (
             iter_events_window(event_store, tenant_id=str(tenant_id), start_ms=int(start_ms), end_ms=int(end_ms), event_type=str(et))
             if end_ms is not None
@@ -71,7 +71,7 @@ def funnel_counts(
     return out
 
 
-def demo_summary(event_store: Any, *, tenant_id: str = "default", days: int = 30, now_ms: int | None = None) -> Dict[str, Any]:
+def demo_summary(event_store: Any, *, tenant_id: str = "default", days: int = 30, now_ms: int | None = None) -> dict[str, Any]:
     if event_store is None or not hasattr(event_store, "iter_events"):
         return {"sent_work": 0, "sent_home": 0, "users": 0}
     now_ms_resolved = resolve_now_ms(now_ms=now_ms)
@@ -84,7 +84,7 @@ def demo_summary(event_store: Any, *, tenant_id: str = "default", days: int = 30
         event_type="audio_sent",
     )
     sent_work = sent_home = 0
-    seen_users: Set[str] = set()
+    seen_users: set[str] = set()
     for ev in iter_events_window(event_store, tenant_id=str(tenant_id), start_ms=start_ms, end_ms=now_ms_resolved, event_type="audio_sent"):
         uid = ev.get("user_id")
         if not uid or uid == "system":
@@ -98,7 +98,7 @@ def demo_summary(event_store: Any, *, tenant_id: str = "default", days: int = 30
     return {"sent_work": int(sent_work), "sent_home": int(sent_home), "users": int(users or len(seen_users))}
 
 
-def segments_summary(event_store: Any, *, tenant_id: str = "default", days: int = 30, now_ms: int | None = None) -> Dict[str, int]:
+def segments_summary(event_store: Any, *, tenant_id: str = "default", days: int = 30, now_ms: int | None = None) -> dict[str, int]:
     if event_store is None or not hasattr(event_store, "iter_events"):
         return {"new_users": 0, "active_users_7d": 0, "payers_30d": 0, "granted_30d": 0}
 
@@ -115,7 +115,7 @@ def segments_summary(event_store: Any, *, tenant_id: str = "default", days: int 
     }
 
 
-def funnel2_report(event_store: Any, *, tenant_id: str = "default", days: int = 7, now_ms: int | None = None) -> Dict[str, Any]:
+def funnel2_report(event_store: Any, *, tenant_id: str = "default", days: int = 7, now_ms: int | None = None) -> dict[str, Any]:
     now_ms_resolved = resolve_now_ms(now_ms=now_ms)
     start_ms = window_start_ms(now_ms=now_ms_resolved, days=days)
     stages = [
@@ -132,7 +132,7 @@ def funnel2_report(event_store: Any, *, tenant_id: str = "default", days: int = 
     return {"start_ms": start_ms, "days": int(days), "counts": counts, "rates_pct_from_view": rates, "stages": stages}
 
 
-def ab_offers_summary(event_store: Any, *, tenant_id: str = "default", days: int = 30, now_ms: int | None = None) -> Dict[str, Any]:
+def ab_offers_summary(event_store: Any, *, tenant_id: str = "default", days: int = 30, now_ms: int | None = None) -> dict[str, Any]:
     now_ms_resolved = resolve_now_ms(now_ms=now_ms)
     start_ms = window_start_ms(now_ms=now_ms_resolved, days=days)
     variants = safe_count_events_window(event_store, tenant_id=str(tenant_id), event_type="marketing_copy_set", start_ms=start_ms, end_ms=now_ms_resolved)
@@ -142,7 +142,7 @@ def ab_offers_summary(event_store: Any, *, tenant_id: str = "default", days: int
     return {"variants_set": 0, "variants_chosen": 0}
 
 
-def giftshare_summary(event_store: Any, *, tenant_id: str = "default", days: int = 30, now_ms: int | None = None) -> Dict[str, int]:
+def giftshare_summary(event_store: Any, *, tenant_id: str = "default", days: int = 30, now_ms: int | None = None) -> dict[str, int]:
     now_ms_resolved = resolve_now_ms(now_ms=now_ms)
     start_ms = window_start_ms(now_ms=now_ms_resolved, days=days)
     shares = safe_count_events_window(event_store, tenant_id=str(tenant_id), event_type="share_clicked", start_ms=start_ms, end_ms=now_ms_resolved)

@@ -19,7 +19,7 @@ class AutonomyPolicyV1:
     allow_ads: bool = True
     allow_pricing: bool = False
     allow_llm: bool = True
-    max_daily_spend_minor: Optional[int] = None
+    max_daily_spend_minor: int | None = None
 
 
 def from_env() -> AutonomyPolicyV1:
@@ -33,7 +33,7 @@ def from_env() -> AutonomyPolicyV1:
     )
 
 
-def check_step_allowed(step_action: str, *, policy: AutonomyPolicyV1) -> Optional[str]:
+def check_step_allowed(step_action: str, *, policy: AutonomyPolicyV1) -> str | None:
     a = str(step_action or "")
     if a.startswith("ads_") or "ads" in a:
         if not policy.allow_ads:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, Optional
+from typing import Iterable
 
 from core.experiments.errors import DuplicateAssignmentError
 from core.experiments.types import ExperimentAssignment
@@ -8,7 +8,7 @@ from core.experiments.types import ExperimentAssignment
 
 class InMemoryAssignmentRepository:
     def __init__(self) -> None:
-        self._by_experiment: Dict[str, Dict[str, ExperimentAssignment]] = {}
+        self._by_experiment: dict[str, dict[str, ExperimentAssignment]] = {}
 
     def save(self, assignment: ExperimentAssignment) -> ExperimentAssignment:
         subject_map = self._by_experiment.setdefault(assignment.experiment_id, {})
@@ -22,5 +22,5 @@ class InMemoryAssignmentRepository:
     def list_by_experiment(self, experiment_id: str) -> Iterable[ExperimentAssignment]:
         return list(self._by_experiment.get(experiment_id, {}).values())
 
-    def find_by_subject(self, experiment_id: str, subject_id: str) -> Optional[ExperimentAssignment]:
+    def find_by_subject(self, experiment_id: str, subject_id: str) -> ExperimentAssignment | None:
         return self._by_experiment.get(experiment_id, {}).get(subject_id)

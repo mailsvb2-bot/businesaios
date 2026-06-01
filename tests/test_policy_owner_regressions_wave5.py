@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-from decimal import Decimal
-
 from config.ads_rl_policy import AdsRLRewardPolicy, AdsRLServicePolicy
 from config.economics_builder_policy import BudgetEnvelopeBuilderPolicy
 from config.strategic_finance_advisory_policy import StrategicFinanceAdvisoryPolicyDefaults
 from core.economics.builders.budget_envelope_builder import BudgetEnvelopeBuilder
 from core.economics.enums import BudgetPressureLevel, MarginHealthStatus
 from core.economics.types import CashflowSignal, MarginSnapshot, SpendSignal
-from core.finance.strategic.allocation.allocation_constraints import AllocationConstraints
 from core.finance.strategic.services.advisory_policy import StrategicFinanceAdvisoryPolicy
-from core.growth.ads.rl.contracts import AdsRLAction, AdsRLOptSpec, AdsRLState
+from core.growth.ads.rl.contracts import AdsRLOptSpec, AdsRLState
 from core.growth.ads.rl.reward import compute_reward
 from core.growth.ads.rl.service import AdsRLOptimizerDeps, AdsRLOptimizerService
 from runtime.platform.event_store.memory_event_store import MemoryEventStore

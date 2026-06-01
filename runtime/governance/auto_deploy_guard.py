@@ -20,7 +20,7 @@ from runtime.platform.config.env_flags import env_bool, env_int, env_str
 class AutoDeployVerdict:
     ok: bool
     reason: str
-    rollout_pct: Optional[int] = None
+    rollout_pct: int | None = None
 
 
 class AutoDeployGuard:

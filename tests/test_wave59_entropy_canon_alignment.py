@@ -9,9 +9,9 @@ from core.behavior.operators.operator_context_resolver import resolve_operator_r
 from core.offers.offer_catalog_resolver import OfferCatalogKey, OfferCatalogResolver
 from core.retention.decision_adapter_support import try_build_offer_step
 from core.retention.decision_steps import render_offer_step
-from runtime.telegram_message_factory import resolve_tenant_id
 from runtime.messaging_policy_alert_dedup_persistent.store import PersistentAlertNotificationDedupStore
 from runtime.messaging_policy_alert_subscriptions.subscription_record import AlertSubscriptionRecord
+from runtime.telegram_message_factory import resolve_tenant_id
 
 
 class _CatalogRegistry:

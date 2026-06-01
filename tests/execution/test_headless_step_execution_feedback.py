@@ -1,6 +1,6 @@
+from application.headless.step_builder import HeadlessStepBuilder
 from contracts.action_result import ActionResult
 from contracts.executable_action import ExecutableAction
-from application.headless.step_builder import HeadlessStepBuilder
 
 
 def test_headless_step_builder_attaches_canonical_execution_feedback() -> None:

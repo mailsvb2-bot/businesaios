@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Priority constants and mapping helpers for TelegramOutboundQueue.
 
 Responsibility: single source of truth for priority ladder.

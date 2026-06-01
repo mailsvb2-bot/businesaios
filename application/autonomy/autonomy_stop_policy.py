@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
 CANON_AUTONOMY_STOP_POLICY = True
 
 

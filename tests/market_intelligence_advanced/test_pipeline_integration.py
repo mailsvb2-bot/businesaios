@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from execution.market_intelligence_advanced_pipeline import MarketIntelligenceAdvancedPipeline
 from execution.market_intelligence_advanced_models import HumanFeedbackEvent
+from execution.market_intelligence_advanced_pipeline import MarketIntelligenceAdvancedPipeline
 from execution.market_intelligence_tenant_isolation import TenantIntelligenceScope
 
 

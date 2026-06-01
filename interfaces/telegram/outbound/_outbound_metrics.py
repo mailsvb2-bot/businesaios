@@ -35,7 +35,7 @@ def priority_label(prio: int, *, PRIO_UX=10, PRIO_SYSTEM=20, PRIO_PAYMENTS=30,
     return "normal"
 
 
-def compute_metrics_snapshot(samples: list, qsize: int) -> Dict:
+def compute_metrics_snapshot(samples: list, qsize: int) -> dict:
     """Build the metrics snapshot dict from raw samples.
 
     samples: list of (priority: int, wait_ms: float, exec_ms: float)
@@ -45,7 +45,7 @@ def compute_metrics_snapshot(samples: list, qsize: int) -> Dict:
         label = priority_label(int(prio))
         buckets.setdefault(label, []).append((float(wait_ms), float(exec_ms)))
 
-    out: Dict = {"total_samples": len(samples), "qsize": qsize, "by_priority": {}}
+    out: dict = {"total_samples": len(samples), "qsize": qsize, "by_priority": {}}
     for label, rows in buckets.items():
         waits = [w for (w, _) in rows]
         execs = [e for (_, e) in rows]

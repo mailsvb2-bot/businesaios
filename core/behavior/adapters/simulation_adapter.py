@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from core.behavior.operators.operator_application import apply_operator
 from core.behavior.math.complex4 import Complex4
+from core.behavior.operators.operator_application import apply_operator
 
 
 def simulate_operator_sequence(

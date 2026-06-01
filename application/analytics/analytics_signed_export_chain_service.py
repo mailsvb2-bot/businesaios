@@ -23,7 +23,7 @@ class AnalyticsSignedExportChainService:
             bundle=bundle,
         )
         manifest_path = result["manifest_file"]
-        with open(manifest_path, "r", encoding="utf-8") as fh:
+        with open(manifest_path, encoding="utf-8") as fh:
             manifest_payload = json.load(fh)
         chain_record = self.manifest_chain_store.put(
             export_id=str(export_id),

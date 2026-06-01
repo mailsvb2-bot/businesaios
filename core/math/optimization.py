@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, List, Sequence
+from typing import Callable, Sequence
 
 
 def mse_loss(y_true: Sequence[float], y_pred: Sequence[float]) -> float:
@@ -11,7 +11,7 @@ def mse_loss(y_true: Sequence[float], y_pred: Sequence[float]) -> float:
     if not y_true:
         return 0.0
     s = 0.0
-    for yt, yp in zip(y_true, y_pred):
+    for yt, yp in zip(y_true, y_pred, strict=False):
         d = float(yt) - float(yp)
         s += d * d
     return s
@@ -19,7 +19,7 @@ def mse_loss(y_true: Sequence[float], y_pred: Sequence[float]) -> float:
 
 @dataclass
 class GDResult:
-    theta: List[float]
+    theta: list[float]
     loss: float
     steps: int
 

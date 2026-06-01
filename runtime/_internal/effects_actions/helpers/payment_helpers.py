@@ -5,6 +5,7 @@ Each function is a small, testable primitive.
 """
 
 from __future__ import annotations
+
 from typing import Any, Dict, Optional
 
 
@@ -29,8 +30,8 @@ def build_access_grant_payload(
     user_id: str,
     product_id: str,
     duration_days: int,
-    payment_id: Optional[str] = None,
-) -> Dict[str, Any]:
+    payment_id: str | None = None,
+) -> dict[str, Any]:
     """Build a deterministic access grant payload."""
     return {
         "user_id": str(user_id),

@@ -5,7 +5,6 @@ from boot.runtime_boot import build_runtime_boot_surface, build_runtime_orchestr
 from formal.regression_gate.observability_contract import REQUIRED_OBSERVABILITY_KEYS
 
 
-
 def test_runtime_boot_builds_fresh_stateful_observability_instances() -> None:
     first = build_runtime_orchestrator()
     second = build_runtime_orchestrator()

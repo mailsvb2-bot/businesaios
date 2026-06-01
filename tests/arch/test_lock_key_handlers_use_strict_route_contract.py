@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 import pytest
+
 from tests._infra.repo_scan import REPO_ROOT, format_hits, scan_lines
+
 
 @pytest.mark.lock
 def test_lock_key_handlers_use_strict_route_contract() -> None:

@@ -12,13 +12,12 @@ Fallback:
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
+from core.actions.proof_registry import ACTION_PROOF_EVENT
 from core.ai.snapshot_store import SnapshotStore
 from core.economics.brain import EconomicBrain
 from core.reward.delayed import eligible as _delayed_eligible
-from core.actions.proof_registry import ACTION_PROOF_EVENT
-from core.observability.silent import swallow
 from core.reward.observe_flow import observe_governed_reward, shape_fallback_reward
 
 
@@ -26,8 +25,8 @@ class RewardEngine:
     def __init__(
         self,
         *,
-        snapshot_store: Optional[SnapshotStore] = None,
-        economic_brain: Optional[EconomicBrain] = None,
+        snapshot_store: SnapshotStore | None = None,
+        economic_brain: EconomicBrain | None = None,
         event_log=None,
         money_scale: float = 0.01,
         max_abs_reward: float = 100.0,
@@ -37,7 +36,7 @@ class RewardEngine:
         self._events = event_log
         self._money_scale = float(money_scale)
         self._max_abs_reward = float(max_abs_reward)
-        self._last_details: Optional[dict] = None
+        self._last_details: dict | None = None
 
     def _has_proof(self, *, decision_id: str, action: str) -> bool:
         """Reward is forbidden without a *valid* proof event (anti-gaming).
@@ -91,7 +90,7 @@ class RewardEngine:
         return 0.0
 
 
-    def last_details(self) -> Optional[dict]:
+    def last_details(self) -> dict | None:
         """Return details from the last observe() call, if any."""
         return self._last_details
 

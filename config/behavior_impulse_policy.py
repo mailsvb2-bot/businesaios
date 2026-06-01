@@ -3,7 +3,6 @@ from __future__ import annotations
 CANON_COMPAT_SHIM = True
 
 from dataclasses import dataclass, field
-from typing import Dict, Tuple
 
 
 @dataclass(frozen=True)
@@ -25,10 +24,10 @@ class ImpulseBoundsPolicy:
     zero_value: float = 0.0
 
 
-ImpulseTuple = Tuple[float, float, float, float, float]
+ImpulseTuple = tuple[float, float, float, float, float]
 
 
-def default_event_impulse_tuples() -> Dict[str, ImpulseTuple]:
+def default_event_impulse_tuples() -> dict[str, ImpulseTuple]:
     z = 0.0
     return {
         "ui_click": (0.02, z, z, z, z),
@@ -57,7 +56,7 @@ def default_event_impulse_tuples() -> Dict[str, ImpulseTuple]:
 
 @dataclass(frozen=True)
 class BehaviorImpulsePolicy:
-    event_impulses: Dict[str, ImpulseTuple] = field(default_factory=default_event_impulse_tuples)
+    event_impulses: dict[str, ImpulseTuple] = field(default_factory=default_event_impulse_tuples)
     bounds: ImpulseBoundsPolicy = field(default_factory=ImpulseBoundsPolicy)
 
 

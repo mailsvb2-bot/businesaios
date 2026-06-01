@@ -93,7 +93,7 @@ def append_experiment(event_store: Any, *, tenant_id: str, user_id: str, decisio
     return str(ev.event_id)
 
 
-def list_hypotheses(event_store: Any, *, tenant_id: str, limit: int = 100) -> Tuple[GrowthHypothesisV1, ...]:
+def list_hypotheses(event_store: Any, *, tenant_id: str, limit: int = 100) -> tuple[GrowthHypothesisV1, ...]:
     events = _latest(event_store, tenant_id=tenant_id, types=(GROWTH_HYPOTHESIS_CREATED,), limit=int(limit))
     out: list[GrowthHypothesisV1] = []
     for e in events:
@@ -105,9 +105,9 @@ def list_hypotheses(event_store: Any, *, tenant_id: str, limit: int = 100) -> Tu
     return tuple(out)
 
 
-def latest_scores(event_store: Any, *, tenant_id: str, limit: int = 250) -> Dict[str, OpportunityScoreV1]:
+def latest_scores(event_store: Any, *, tenant_id: str, limit: int = 250) -> dict[str, OpportunityScoreV1]:
     events = _latest(event_store, tenant_id=tenant_id, types=(GROWTH_HYPOTHESIS_SCORED,), limit=int(limit))
-    m: Dict[str, OpportunityScoreV1] = {}
+    m: dict[str, OpportunityScoreV1] = {}
     for e in events:
         try:
             s = (e.get("payload") or {}).get("score") or {}
@@ -119,9 +119,9 @@ def latest_scores(event_store: Any, *, tenant_id: str, limit: int = 250) -> Dict
     return m
 
 
-def latest_states(event_store: Any, *, tenant_id: str, limit: int = 250) -> Dict[str, str]:
+def latest_states(event_store: Any, *, tenant_id: str, limit: int = 250) -> dict[str, str]:
     events = _latest(event_store, tenant_id=tenant_id, types=(GROWTH_HYPOTHESIS_STATE,), limit=int(limit))
-    m: Dict[str, str] = {}
+    m: dict[str, str] = {}
     for e in events:
         try:
             p = dict(e.get("payload") or {})
@@ -134,18 +134,18 @@ def latest_states(event_store: Any, *, tenant_id: str, limit: int = 250) -> Dict
     return m
 
 
-def list_backlog(event_store: Any, *, tenant_id: str, limit: int = 100) -> Tuple[Tuple[GrowthHypothesisV1, Optional[OpportunityScoreV1], str], ...]:
+def list_backlog(event_store: Any, *, tenant_id: str, limit: int = 100) -> tuple[tuple[GrowthHypothesisV1, OpportunityScoreV1 | None, str], ...]:
     hs = list_hypotheses(event_store, tenant_id=tenant_id, limit=int(limit))
     scores = latest_scores(event_store, tenant_id=tenant_id, limit=int(limit) * 3)
     states = latest_states(event_store, tenant_id=tenant_id, limit=int(limit) * 3)
 
-    out: list[Tuple[GrowthHypothesisV1, Optional[OpportunityScoreV1], str]] = []
+    out: list[tuple[GrowthHypothesisV1, OpportunityScoreV1 | None, str]] = []
     for h in hs:
         out.append((h, scores.get(h.hypothesis_id), states.get(h.hypothesis_id, "new")))
     return tuple(out)
 
 
-def _latest(event_store: Any, *, tenant_id: str, types: Tuple[str, ...], limit: int) -> List[Dict[str, Any]]:
+def _latest(event_store: Any, *, tenant_id: str, types: tuple[str, ...], limit: int) -> list[dict[str, Any]]:
     latest = getattr(event_store, "latest_events", None)
     if callable(latest):
         try:

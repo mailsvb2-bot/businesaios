@@ -6,9 +6,9 @@ from connectors.platform.ads.registry import AdsConnectorRegistry as PlatformAds
 from connectors.platform.ads.sqlite_token_store import SqliteAdsTokenStore
 from connectors.platform.ads.token_store import OAuthToken
 from interfaces.ads.capabilities import AdsCapabilities
-from interfaces.ads.google_ads_connector import GoogleAdsConnector
-from interfaces.ads.registry import AdsConnectorRegistry, CONNECTORS
 from interfaces.ads.connector_availability_guard import assert_live_write_allowed, ensure_demo_registry_truth
+from interfaces.ads.google_ads_connector import GoogleAdsConnector
+from interfaces.ads.registry import CONNECTORS, AdsConnectorRegistry
 
 
 def test_ads_capabilities_bridge_to_common_connector_contract() -> None:

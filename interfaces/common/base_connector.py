@@ -4,13 +4,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict
 
 from interfaces.common.auth_session import AuthSession
+from interfaces.common.canonical_connector_contract import canonical_connector_contract
 from interfaces.common.connector_capabilities import ConnectorCapabilities
 from interfaces.common.connector_health import ConnectorHealth
 from interfaces.common.connector_maturity import ConnectorMaturity
 from interfaces.common.connector_result import ConnectorResult
-from interfaces.common.rate_limit_guard import RateLimitGuard
-from interfaces.common.connector_truth import connector_truth_payload
-from interfaces.common.canonical_connector_contract import canonical_connector_contract
 from interfaces.common.connector_support import (
     build_health,
     build_invalid_payload_result,
@@ -19,6 +17,8 @@ from interfaces.common.connector_support import (
     normalize_operation,
     normalize_payload,
 )
+from interfaces.common.connector_truth import connector_truth_payload
+from interfaces.common.rate_limit_guard import RateLimitGuard
 
 
 @dataclass
@@ -74,7 +74,7 @@ class BaseConnector:
     def execute(
         self,
         operation: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         *,
         idempotency_key: str | None = None,
         dry_run: bool = False,
@@ -176,7 +176,7 @@ class BaseConnector:
     def _execute_configured(
         self,
         operation: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         *,
         idempotency_key: str | None = None,
         dry_run: bool = False,
@@ -186,8 +186,8 @@ class BaseConnector:
     def _verify_configured(
         self,
         operation: str,
-        payload: Dict[str, Any],
-        result_payload: Dict[str, Any] | None = None,
+        payload: dict[str, Any],
+        result_payload: dict[str, Any] | None = None,
     ) -> ConnectorResult:
         return ConnectorResult(ok=False, code="verify_not_supported", message=f"{operation} verify is not implemented yet")
 

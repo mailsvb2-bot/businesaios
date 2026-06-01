@@ -95,8 +95,8 @@ def test_persistent_tenant_policy_override_registry_roundtrip(tmp_path) -> None:
 
 
 def test_persistent_approval_store_persists_expired_status_on_read(tmp_path) -> None:
-    from datetime import timedelta
     import time
+    from datetime import timedelta
 
     path = tmp_path / 'approvals_expire.json'
     store = PersistentApprovalStore(path)

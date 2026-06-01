@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable
 
 from ..contracts import LLMClient, LLMRequest, LLMResponse, LLMUsage
 from ..redaction import safe_metadata
 
-
-
-OpenAICompatTransport = Callable[[str, str, Dict[str, Any], int], Dict[str, Any]]
+OpenAICompatTransport = Callable[[str, str, dict[str, Any], int], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -17,7 +15,7 @@ class OpenAICompatConfig:
     base_url: str
     api_key: str
     default_model: str = "gpt-4.1-mini"
-    transport: Optional[OpenAICompatTransport] = None
+    transport: OpenAICompatTransport | None = None
 
 
 class OpenAICompatClient(LLMClient):
@@ -29,9 +27,9 @@ class OpenAICompatClient(LLMClient):
     def __init__(self, cfg: OpenAICompatConfig) -> None:
         self._cfg = cfg
 
-    def _payload_for(self, req: LLMRequest) -> Dict[str, Any]:
+    def _payload_for(self, req: LLMRequest) -> dict[str, Any]:
         model = req.model or self._cfg.default_model
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model,
             "input": [
                 {"role": m.role, "content": [{"type": "input_text", "text": m.content}]}
@@ -46,7 +44,7 @@ class OpenAICompatClient(LLMClient):
         return payload
 
     @staticmethod
-    def _response_from(data: Dict[str, Any]) -> LLMResponse:
+    def _response_from(data: dict[str, Any]) -> LLMResponse:
         text = _extract_text(data)
         usage = _extract_usage(data)
         finish = _extract_finish(data)
@@ -82,7 +80,7 @@ class OpenAICompatClient(LLMClient):
         return self._response_from(data)
 
 
-def _extract_text(data: Dict[str, Any]) -> str:
+def _extract_text(data: dict[str, Any]) -> str:
     if isinstance(data.get("output_text"), str) and data["output_text"].strip():
         return data["output_text"].strip()
     out = data.get("output")
@@ -104,7 +102,7 @@ def _extract_text(data: Dict[str, Any]) -> str:
     return ""
 
 
-def _extract_usage(data: Dict[str, Any]) -> Optional[LLMUsage]:
+def _extract_usage(data: dict[str, Any]) -> LLMUsage | None:
     u = data.get("usage")
     if not isinstance(u, dict):
         return None
@@ -114,7 +112,7 @@ def _extract_usage(data: Dict[str, Any]) -> Optional[LLMUsage]:
     return LLMUsage(prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
 
 
-def _extract_finish(data: Dict[str, Any]) -> str:
+def _extract_finish(data: dict[str, Any]) -> str:
     if isinstance(data.get("finish_reason"), str):
         return data["finish_reason"]
     choices = data.get("choices")

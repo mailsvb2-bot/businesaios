@@ -14,7 +14,6 @@ from reliability.distributed_lock import DistributedLock
 from reliability.leader_election import LeaderElection
 from runtime.executor_runtime_support import RuntimeExecutorRecoverySupport, build_executor_recovery_support
 
-
 CANON_MARKET_INTELLIGENCE_RUNTIME_SUPPORT = True
 
 

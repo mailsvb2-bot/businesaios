@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Any
 
-from core.ads.apply_engine import AdsApplyEngine, AdsApplyEnv
-from core.ads.apply.limits import AdsApplyLimits
-from core.ads.apply.contract import AdsApplyRequest
-from core.ads.apply_gate import AdsApplyState
 from core.ads.ads_service import AdsCommand, AdsPlan
+from core.ads.apply.contract import AdsApplyRequest
+from core.ads.apply.limits import AdsApplyLimits
+from core.ads.apply_engine import AdsApplyEngine, AdsApplyEnv
+from core.ads.apply_gate import AdsApplyState
 from core.ads.hardening.kill_switch import AdsKillSwitch
 from core.ads.hardening.rate_limiter import AdsRateLimiter
-from core.api.idempotency import MemoryIdempotencyStore, IdempotencyKey
+from core.api.idempotency import IdempotencyKey, MemoryIdempotencyStore
 from core.tenancy.scope import as_tenant_id
 
 
@@ -17,7 +17,7 @@ class FakeApplyPort:
     def __init__(self) -> None:
         self.calls = 0
 
-    def perform_apply(self, tenant_id: str, plan: Any) -> Dict[str, Any]:
+    def perform_apply(self, tenant_id: str, plan: Any) -> dict[str, Any]:
         self.calls += 1
         if self.calls == 1:
             return {"ok": True, "tenant": tenant_id, "n": len(plan.commands or [])}

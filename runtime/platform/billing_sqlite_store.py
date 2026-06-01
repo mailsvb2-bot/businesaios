@@ -2,18 +2,17 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from sqlite3 import IntegrityError
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
+from sqlite3 import IntegrityError
 from typing import Iterator
 
 from billing.commercial_cycle_contract import CommercialCollectionResult
 from billing.ledger_event import LedgerEntry, LedgerPosting
 from billing.ledger_store import LedgerStoreContract
 from core.tenancy.normalization import require_tenant_id
-
 
 CANON_PLATFORM_BILLING_SQLITE_STORE = True
 SCHEMA_VERSION = 1

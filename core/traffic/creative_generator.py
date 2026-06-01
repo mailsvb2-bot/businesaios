@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Ad creative generator — deterministic fallback + LLM-powered upgrade.
 
 Architecture:
@@ -28,11 +29,11 @@ def _normalize_cta(value: Any) -> str:
     return _CTA_ALIASES.get(text.lower(), "Написать")
 
 
-def _normalize_interests(value: Any) -> List[str]:
+def _normalize_interests(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     seen: set[str] = set()
-    out: List[str] = []
+    out: list[str] = []
     for item in value:
         text = str(item or "").strip()
         if not text:
@@ -136,7 +137,7 @@ class LLMCreativeGenerator:
             timeout_s=self._timeout_s,
         )
 
-    def _parse_response(self, *, resp: Any, offer_title: str) -> Tuple[TrafficCreative, List[str]]:
+    def _parse_response(self, *, resp: Any, offer_title: str) -> tuple[TrafficCreative, list[str]]:
         raw_text = str(getattr(resp, "content", "") or "").strip()
         json_data = None
         if raw_text:
@@ -156,7 +157,7 @@ class LLMCreativeGenerator:
         creative = TrafficCreative(headline=headline, primary_text=primary_text, cta=cta)
         return creative, interests
 
-    def _fallback_result(self, *, what: str, offer_title: str, seed: str) -> Tuple[TrafficCreative, List[str]]:
+    def _fallback_result(self, *, what: str, offer_title: str, seed: str) -> tuple[TrafficCreative, list[str]]:
         return self._fallback.build(what=what, offer_title=offer_title, seed=seed), []
 
     async def generate_async(
@@ -166,7 +167,7 @@ class LLMCreativeGenerator:
         offer_title: str,
         region: str = "",
         seed: str = "v1",
-    ) -> Tuple[TrafficCreative, List[str]]:
+    ) -> tuple[TrafficCreative, list[str]]:
         try:
             req = self._build_request(what=what, offer_title=offer_title, region=region, seed=seed)
             resp = await self._llm.generate(req)
@@ -191,7 +192,7 @@ class LLMCreativeGenerator:
         offer_title: str,
         region: str = "",
         seed: str = "v1",
-    ) -> Tuple[TrafficCreative, List[str]]:
+    ) -> tuple[TrafficCreative, list[str]]:
         try:
             generate_sync = getattr(self._llm, "generate_sync", None)
             if callable(generate_sync):

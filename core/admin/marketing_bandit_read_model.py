@@ -37,8 +37,8 @@ Output:
 from typing import Any, Dict
 
 from config.marketing_bandit_policy import DEFAULT_MARKETING_BANDIT_POLICY, MarketingBanditPolicy
-from core.read_model.cache import global_cache, watermark_for
 from core.admin.marketing_bandit_read_model_support import resolve_window_bounds
+from core.read_model.cache import global_cache, watermark_for
 
 
 def marketing_bandit_stats(
@@ -50,7 +50,7 @@ def marketing_bandit_stats(
     attribution_window_ms: int = DEFAULT_MARKETING_BANDIT_POLICY.default_attribution_window_ms,
     now_ms: int | None = None,
     policy: MarketingBanditPolicy = DEFAULT_MARKETING_BANDIT_POLICY,
-) -> Dict[str, Dict[str, Dict[str, float]]]:
+) -> dict[str, dict[str, dict[str, float]]]:
     # Invalidate on relevant event types (best-effort).
     wm = watermark_for(
         event_store,
@@ -58,20 +58,20 @@ def marketing_bandit_stats(
         event_types=(str(step_key), *policy.relevant_event_types),
     )
 
-    def _compute() -> Dict[str, Dict[str, Dict[str, float]]]:
+    def _compute() -> dict[str, dict[str, dict[str, float]]]:
         start_ms, resolved_now_ms = resolve_window_bounds(now_ms=now_ms, window_days=window_days)
 
-        out: Dict[str, Dict[str, Dict[str, float]]] = {str(step_key): policy.variant_priors}
+        out: dict[str, dict[str, dict[str, float]]] = {str(step_key): policy.variant_priors}
 
         if event_store is None or not hasattr(event_store, "iter_events"):
             return out
 
         # user_id -> {'ts': int, 'variant': 'a'|'b'}
-        last_exposure: Dict[str, Dict[str, object]] = {}
+        last_exposure: dict[str, dict[str, object]] = {}
         # user_id -> first exposure ts (for time-to-purchase)
-        first_exposure_ts: Dict[str, int] = {}
+        first_exposure_ts: dict[str, int] = {}
         # user_id -> last processed ts (for reaction/hesitation heuristics)
-        last_event_ts: Dict[str, int] = {}
+        last_event_ts: dict[str, int] = {}
 
         try:
             for ev in event_store.iter_events(tenant_id=str(tenant_id), start_ms=start_ms, end_ms=resolved_now_ms):

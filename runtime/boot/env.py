@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 CANON_BOOT_WIRING_ONLY = True
 
 """Canonical environment parsing utilities.
@@ -19,8 +20,8 @@ except ModuleNotFoundError:  # dependency may be absent during import-smoke
     def _load_dotenv(*_args: object, **_kwargs: object) -> bool:
         return False
 
-from runtime.platform.config.env_access import env_bool, env_float, env_int, env_str
 from runtime.boot.canonical.env import normalize_env
+from runtime.platform.config.env_access import env_bool, env_float, env_int, env_str
 
 # Compatibility note for canon audit locks:
 # from runtime.platform.config.env_flags import env_bool as _env_bool

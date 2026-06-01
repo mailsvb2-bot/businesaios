@@ -12,13 +12,13 @@ def build_outbound_task(
     priority: int,
     seq: int,
     kind: str,
-    meta: Optional[Dict[str, Any]],
+    meta: dict[str, Any] | None,
     method: str,
-    chat_id: Optional[int],
+    chat_id: int | None,
     fn: Any,
     critical: bool,
     done: threading.Event | None = None,
-    result_box: Dict[str, Any] | None = None,
+    result_box: dict[str, Any] | None = None,
 ) -> OutboundTask:
     return OutboundTask(
         priority=int(priority),

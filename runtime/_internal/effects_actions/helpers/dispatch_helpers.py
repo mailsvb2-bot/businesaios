@@ -4,6 +4,7 @@ Extracted from RuntimeExecutor._dispatch (Patch 06).
 """
 
 from __future__ import annotations
+
 from typing import Any, Dict, Optional
 
 

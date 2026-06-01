@@ -8,11 +8,11 @@ from runtime.handlers import ActionHandlerRegistry
 
 
 def register_ads_handlers(*, handlers: ActionHandlerRegistry, event_store, ads_runtime, ads_autopilot_engine, ads_apply_engine) -> None:
+    from runtime.handlers.ads_apply_execute import handle_ads_apply_execute as _ads_apply_execute
+    from runtime.handlers.ads_autopilot_tick import handle_ads_autopilot_tick
+    from runtime.handlers.ads_rl_report import handle_ads_rl_report
     from runtime.handlers.ads_rl_suggest import handle_ads_rl_suggest
     from runtime.handlers.ads_rl_train_tick import handle_ads_rl_train_tick
-    from runtime.handlers.ads_rl_report import handle_ads_rl_report
-    from runtime.handlers.ads_autopilot_tick import handle_ads_autopilot_tick
-    from runtime.handlers.ads_apply_execute import handle_ads_apply_execute as _ads_apply_execute
 
     handlers.register("ads_rl_suggest@v1", lambda payload, effects, env: handle_ads_rl_suggest(payload, effects, env, event_store=event_store))
     handlers.register("ads_rl_train_tick@v1", lambda payload, effects, env: handle_ads_rl_train_tick(payload, effects, env, event_store=event_store))

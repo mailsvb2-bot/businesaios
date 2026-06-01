@@ -61,9 +61,9 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
             reply_markup=None,
         )
     try:
-        from core.payments.read_model import latest_payment_status
         from core.entitlements.read_model import compute_entitlements
-        from core.users.read_model import user_settings, selected_tariff, mood_last
+        from core.payments.read_model import latest_payment_status
+        from core.users.read_model import mood_last, selected_tariff, user_settings
 
         pay = latest_payment_status(event_store=event_store, user_id=target)
         ent = compute_entitlements(event_store, user_id=target)

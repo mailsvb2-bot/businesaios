@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 from application.decisioning.candidate_collection import CandidateCollection
-from kernel.decisioning.candidate_types import CandidateEnvelope
+from core.economics.candidate_scorer import EconomicsCandidateScorerImpl
+from core.economics.contracts import EconomicsScoringContext
 from core.growth.contracts import GrowthScoringContext
 from core.growth.service import GrowthService
 from core.growth.simple_candidate_scorer import SimpleGrowthCandidateScorer
-from core.reward.contracts import RewardObservationContext
-from core.reward.reward_observer import RewardObserver
-from core.reward.service import RewardService
-from core.economics.candidate_scorer import EconomicsCandidateScorerImpl
-from core.economics.contracts import EconomicsScoringContext
 from core.ml.candidate_scorer import MlCandidateScorerImpl
 from core.ml.contracts import MlScoringContext
 from core.ml.service import MlService
+from core.reward.contracts import RewardObservationContext
+from core.reward.reward_observer import RewardObserver
+from core.reward.service import RewardService
+from kernel.decisioning.candidate_types import CandidateEnvelope
 
 
 def _candidates():

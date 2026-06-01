@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
-
 import hashlib
+
 from core.observability.silent import swallow
 
 
@@ -11,7 +10,7 @@ def choose_variant(
     user_id: str,
     step_key: str,
     seed: str = "1",
-    bandit: Optional[Dict[str, Dict[str, float]]] = None,
+    bandit: dict[str, dict[str, float]] | None = None,
 ) -> str:
     """Deterministic A/B selection with optional bandit override.
 

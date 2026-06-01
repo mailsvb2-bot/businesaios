@@ -23,9 +23,9 @@ class CanonModuleManifest:
     owner: str
     role: CanonModuleRole
     public_exports: tuple[tuple[str, str], ...] = ()
-    authorities: FrozenSet[CanonAuthority] = field(default_factory=frozenset)
-    allowed_internal_import_prefixes: FrozenSet[str] = field(default_factory=frozenset)
-    forbidden_internal_import_prefixes: FrozenSet[str] = field(default_factory=frozenset)
+    authorities: frozenset[CanonAuthority] = field(default_factory=frozenset)
+    allowed_internal_import_prefixes: frozenset[str] = field(default_factory=frozenset)
+    forbidden_internal_import_prefixes: frozenset[str] = field(default_factory=frozenset)
     decision_authority: bool = False
     effect_authority: bool = False
     state_authority: bool = False

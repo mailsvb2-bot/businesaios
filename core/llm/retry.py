@@ -5,7 +5,6 @@ import random
 from dataclasses import dataclass
 from typing import Awaitable, Callable, TypeVar
 
-
 T = TypeVar("T")
 
 
@@ -30,9 +29,7 @@ def default_is_retryable(exc: Exception) -> bool:
         return True
     if "429" in msg or "rate" in msg:
         return True
-    if any(x in msg for x in ("500", "502", "503", "504", "5xx")):
-        return True
-    return False
+    return any(x in msg for x in ("500", "502", "503", "504", "5xx"))
 
 
 async def with_retry(fn: Callable[[], Awaitable[T]], cfg: RetryConfig, *, is_retryable=default_is_retryable) -> T:

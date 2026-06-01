@@ -18,30 +18,30 @@ Canonical lightweight math stack for product decisioning:
 - Logistic function (sigmoid)
 """
 
-from .probability import bayes, naive_bayes_posterior, purchase_prob_from_history, HistorySignals
-from .optimization import mse_loss, gradient_descent
+from .abtest import z_test_proportions, z_to_pvalue_2sided
 from .bandits import UCB1, ThompsonBernoulli
-from .network import metcalfe_value
+from .complex_systems import feedback_step, growth_step
+from .control import MDP, bellman_optimality, value_iteration
+from .economics import cac, ltv, unit_profit
 from .graphs import (
+    cooccurrence_recommendations,
     cosine_similarity,
     jaccard_similarity,
     random_walk,
-    cooccurrence_recommendations,
 )
-from .pagerank import pagerank
 from .information import entropy
-from .economics import ltv, cac, unit_profit
-from .queueing import little_law, mm1_wait_time
+from .logistic import logit, sigmoid
 from .markov import (
     estimate_transition_counts,
-    normalize_transition_counts,
     next_state_distribution,
+    normalize_transition_counts,
 )
-from .complex_systems import growth_step, feedback_step
-from .control import bellman_optimality, value_iteration, MDP
-from .abtest import z_test_proportions, z_to_pvalue_2sided
-from .powerlaw import pareto_top_share, fit_alpha_mle
-from .logistic import sigmoid, logit
+from .network import metcalfe_value
+from .optimization import gradient_descent, mse_loss
+from .pagerank import pagerank
+from .powerlaw import fit_alpha_mle, pareto_top_share
+from .probability import HistorySignals, bayes, naive_bayes_posterior, purchase_prob_from_history
+from .queueing import little_law, mm1_wait_time
 
 __all__ = [
     "bayes",

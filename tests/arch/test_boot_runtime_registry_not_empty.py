@@ -4,7 +4,6 @@ from pathlib import Path
 
 from runtime.runtime_boot import boot_runtime
 
-
 CANON_BOOT_WIRING_ONLY = True
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 

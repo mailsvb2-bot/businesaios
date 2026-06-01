@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
+
 CANON_BUSINESS_MEMORY_TAXONOMY = True
 
 def _text(value: object) -> str:
@@ -32,18 +34,28 @@ class BusinessMemoryTaxonomy:
         return NormalizedFeedback(failure_kind=failure_kind, outcome_kinds=outcome_kinds, evidence_labels=tuple(dict.fromkeys(labels)), raw_error=raw_error, raw_stop_reason=raw_stop_reason)
     def _normalize_failure_kind(self, *, error: str, stop_reason: str) -> str:
         joined = f"{_norm(error)}|{_norm(stop_reason)}"
-        if "timeout" in joined: return "timeout_external"
-        if "rate_limit" in joined or "ratelimit" in joined: return "rate_limit"
-        if "auth" in joined or "unauthorized" in joined or "forbidden" in joined: return "auth_failure"
-        if "network" in joined or "connection" in joined or "dns" in joined: return "network_failure"
-        if "validation" in joined or "invalid" in joined: return "validation_failure"
-        if "operator" in joined or "manual_review" in joined or "human" in joined: return "operator_handoff_required"
-        if "budget" in joined or "spend" in joined or "funds" in joined: return "budget_constraint"
-        if "policy" in joined or "guard" in joined or "unsafe" in joined: return "policy_block"
+        if "timeout" in joined:
+            return "timeout_external"
+        if "rate_limit" in joined or "ratelimit" in joined:
+            return "rate_limit"
+        if "auth" in joined or "unauthorized" in joined or "forbidden" in joined:
+            return "auth_failure"
+        if "network" in joined or "connection" in joined or "dns" in joined:
+            return "network_failure"
+        if "validation" in joined or "invalid" in joined:
+            return "validation_failure"
+        if "operator" in joined or "manual_review" in joined or "human" in joined:
+            return "operator_handoff_required"
+        if "budget" in joined or "spend" in joined or "funds" in joined:
+            return "budget_constraint"
+        if "policy" in joined or "guard" in joined or "unsafe" in joined:
+            return "policy_block"
         stable_stop = _norm(stop_reason)
-        if stable_stop: return f"stop_reason:{stable_stop}"
+        if stable_stop:
+            return f"stop_reason:{stable_stop}"
         stable_error = _norm(error)
-        if stable_error: return f"error:{stable_error}"
+        if stable_error:
+            return f"error:{stable_error}"
         return "execution_failed_unknown"
     def _normalize_outcome_kinds(self, *, completed: bool, final_feedback: dict[str, Any]) -> tuple[str, ...]:
         outcomes: list[str] = []
@@ -53,7 +65,9 @@ class BusinessMemoryTaxonomy:
         for key, value in normalized_outcome.items():
             stable_key = _norm(key)
             stable_value = _norm(value)
-            if stable_key and stable_value: outcomes.append(f"{stable_key}={stable_value}")
-            elif stable_key: outcomes.append(stable_key)
+            if stable_key and stable_value:
+                outcomes.append(f"{stable_key}={stable_value}")
+            elif stable_key:
+                outcomes.append(stable_key)
         return tuple(dict.fromkeys(outcomes))
 __all__ = ["BusinessMemoryTaxonomy", "CANON_BUSINESS_MEMORY_TAXONOMY", "NormalizedFeedback"]

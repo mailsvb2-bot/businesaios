@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class RewardNormalizer:
     def __init__(self, scale: float = 1.0) -> None:
         self._scale = scale

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
+from typing import Any, Iterable, Mapping, Sequence
 
 from config.feature_encoding_policy import DEFAULT_FEATURE_ENCODING_POLICY, FeatureEncodingPolicy
 
@@ -17,8 +17,8 @@ class EncodedMatrix:
     This intentionally avoids numpy dependency.
     """
 
-    x: List[List[float]]
-    columns: List[str]
+    x: list[list[float]]
+    columns: list[str]
 
 
 def _is_number(v: Any) -> bool:
@@ -44,7 +44,7 @@ def build_feature_encoder(
     covariate_names: Sequence[str],
     categorical_limit: int | None = None,
     policy: FeatureEncodingPolicy = DEFAULT_FEATURE_ENCODING_POLICY,
-) -> "FeatureEncoder":
+) -> FeatureEncoder:
     limit = policy.categorical_limit if categorical_limit is None else int(categorical_limit)
     return FeatureEncoder(covariate_names=list(covariate_names), categorical_limit=int(limit), policy=policy)
 
@@ -62,16 +62,16 @@ class FeatureEncoder:
     propensity/outcome regressions without external deps.
     """
 
-    covariate_names: List[str]
+    covariate_names: list[str]
     categorical_limit: int = DEFAULT_FEATURE_ENCODING_POLICY.categorical_limit
     policy: FeatureEncodingPolicy = DEFAULT_FEATURE_ENCODING_POLICY
 
-    _cat_values: Dict[str, List[str]] = None  # type: ignore
+    _cat_values: dict[str, list[str]] = None  # type: ignore
 
     def observe(self, rows: Iterable[Mapping[str, Any]]) -> None:
         self._cat_values = {}
         for name in self.covariate_names:
-            values: List[str] = []
+            values: list[str] = []
             for r in rows:
                 v = r.get(name)
                 if v is None:
@@ -85,8 +85,8 @@ class FeatureEncoder:
                     break
             self._cat_values[name] = values
 
-    def columns(self) -> List[str]:
-        cols: List[str] = ["intercept"]
+    def columns(self) -> list[str]:
+        cols: list[str] = ["intercept"]
         for name in self.covariate_names:
             cats = (self._cat_values or {}).get(name) or []
             if cats:
@@ -100,9 +100,9 @@ class FeatureEncoder:
         if self._cat_values is None:
             self.observe(rows)
         cols = self.columns()
-        x: List[List[float]] = []
+        x: list[list[float]] = []
         for r in rows:
-            row: List[float] = [float(self.policy.intercept_value)]  # intercept
+            row: list[float] = [float(self.policy.intercept_value)]  # intercept
             for name in self.covariate_names:
                 cats = (self._cat_values or {}).get(name) or []
                 v = r.get(name)

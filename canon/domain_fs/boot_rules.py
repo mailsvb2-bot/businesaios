@@ -27,9 +27,9 @@ FORBIDDEN_BOOT_TOKENS: tuple[str, ...] = (
 )
 
 
-def scan_boot_wiring_only(root: Path) -> List[CanonFsFinding]:
+def scan_boot_wiring_only(root: Path) -> list[CanonFsFinding]:
     boot = root / "runtime" / "boot"
-    findings: List[CanonFsFinding] = []
+    findings: list[CanonFsFinding] = []
 
     if not boot.exists():
         return findings

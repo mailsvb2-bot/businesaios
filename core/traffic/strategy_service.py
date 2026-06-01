@@ -17,8 +17,8 @@ from core.traffic.audience_selector import AudienceSelector
 from core.traffic.bid_manager import BidManager
 from core.traffic.budget_allocator import BudgetAllocator
 from core.traffic.campaign_factory import CampaignFactory
-from core.traffic.creative_generator import CreativeGenerator
 from core.traffic.contracts import TrafficCreative, TrafficPlan
+from core.traffic.creative_generator import CreativeGenerator
 
 
 @dataclass(frozen=True)
@@ -50,7 +50,7 @@ class TrafficStrategyService:
         total_budget_minor_7d: int,
         budget_currency: str,
         target_cac_minor: int,
-        destination: Dict,
+        destination: dict,
         seed: str,
     ) -> TrafficPlan:
         daily = self.budget_allocator.daily_from_total(
@@ -62,7 +62,7 @@ class TrafficStrategyService:
 
         # --- Creative + LLM interests ---
         creative: TrafficCreative
-        llm_interests: List[str] = []
+        llm_interests: list[str] = []
 
         gen = self.creative_generator
         build_with_interests = getattr(gen, "build_with_interests", None)

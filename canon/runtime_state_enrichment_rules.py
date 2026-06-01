@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 FORBIDDEN_RUNTIME_ENRICHMENT_KEYS: tuple[str, ...] = (
     "winner",
     "winning_candidate",

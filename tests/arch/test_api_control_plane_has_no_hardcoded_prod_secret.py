@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 FORBIDDEN_LITERALS = (
     'change-me-control-plane-secret',
     'dev-control-plane-secret',

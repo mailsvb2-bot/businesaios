@@ -1,6 +1,6 @@
-from core.policies.types import PolicyRef, RolloutConfig
 from core.policies.registry import PolicyRegistry
 from core.policies.rollout import SafeRolloutManager
+from core.policies.types import PolicyRef, RolloutConfig
 
 
 def test_promote_flow():

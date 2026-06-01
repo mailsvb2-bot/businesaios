@@ -21,7 +21,8 @@ from typing import Any, Dict, Optional
 from core.observability.errors import log_exception_throttled
 from core.observability.perf import AutoAccelerator, rolling_latency_summary
 from interfaces.telegram.read_models.admin_access import is_superadmin, load_admin_metrics, resolve_admin_metrics
-from interfaces.telegram.read_models.cache_window import CacheWindow as _CacheEntry, is_cache_fresh
+from interfaces.telegram.read_models.cache_window import CacheWindow as _CacheEntry
+from interfaces.telegram.read_models.cache_window import is_cache_fresh
 from interfaces.telegram.read_models.components.pricing import load_pricing_suggestions  # compatibility anchor
 from interfaces.telegram.read_models.components.profile import load_user_profile  # compatibility anchor
 from interfaces.telegram.read_models.user_bundle import load_user_bundle
@@ -43,8 +44,8 @@ class TelegramReadModelEnricher:
         self._ttl_ms = int(ttl_ms)
         self._accelerator = AutoAccelerator(base_ttl_ms=int(ttl_ms))
         self._tenant_id = str(tenant_id or "default")
-        self._user_cache: Dict[str, _CacheEntry] = {}
-        self._admin_cache: Optional[_CacheEntry] = None
+        self._user_cache: dict[str, _CacheEntry] = {}
+        self._admin_cache: _CacheEntry | None = None
 
     def _latest_event_ts(self) -> int:
         try:
@@ -72,7 +73,7 @@ class TelegramReadModelEnricher:
         except Exception as exc:
             log_exception_throttled(log, "telegram_read_model_bandit_warning_emit_failed", exc)
 
-    def enrich_user(self, *, chat_id: str) -> Dict[str, Any]:
+    def enrich_user(self, *, chat_id: str) -> dict[str, Any]:
         """Return a dict of user enrichment fields for WorldState.user.
 
         Cache key:
@@ -110,7 +111,7 @@ class TelegramReadModelEnricher:
             enrich_admin_metrics=self.enrich_admin_metrics,
         )
 
-        value: Dict[str, Any] = {
+        value: dict[str, Any] = {
             "settings": bundle["settings"],
             "city": bundle["city"],
             "selected_tariff": bundle["selected_tariff"],
@@ -137,11 +138,11 @@ class TelegramReadModelEnricher:
         self,
         *,
         chat_id: str,
-        session: Optional[Dict[str, Any]] = None,
-        meta: Optional[Dict[str, Any]] = None,
-        product: Optional[Dict[str, Any]] = None,
-        economy: Optional[Dict[str, Any]] = None,
-        entitlements: Optional[Dict[str, Any]] = None,
+        session: dict[str, Any] | None = None,
+        meta: dict[str, Any] | None = None,
+        product: dict[str, Any] | None = None,
+        economy: dict[str, Any] | None = None,
+        entitlements: dict[str, Any] | None = None,
         limit: int = 800,
     ) -> WorldStateV1:
         """Canonical runtime builder for Telegram.
@@ -161,7 +162,7 @@ class TelegramReadModelEnricher:
             limit=limit,
         )
 
-    def enrich_admin_metrics(self) -> Dict[str, Any]:
+    def enrich_admin_metrics(self) -> dict[str, Any]:
         now_ms = _now_ms()
         cached = self._admin_cache
         latest_ts = self._latest_event_ts()

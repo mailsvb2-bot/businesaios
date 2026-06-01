@@ -8,8 +8,8 @@ Hard invariants:
 - Never crashes the process on a single bad job.
 """
 
-import time
 import logging
+import time
 from dataclasses import dataclass
 
 from runtime.evolution import EvolutionOutbox, handle_evolution_job

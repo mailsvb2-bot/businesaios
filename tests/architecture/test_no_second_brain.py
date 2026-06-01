@@ -1,6 +1,6 @@
 from pathlib import Path
-from canon.anti_second_brain_rules import FORBIDDEN_DECISION_CLASS_NAMES
 
+from canon.anti_second_brain_rules import FORBIDDEN_DECISION_CLASS_NAMES
 
 ROOT = Path(__file__).resolve().parents[2]
 

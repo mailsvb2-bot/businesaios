@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 _ALLOWED = {
     'security/request_signing.py',
     'security/request_signature_verifier.py',

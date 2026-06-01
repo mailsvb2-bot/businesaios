@@ -1,3 +1,5 @@
+from execution.inference_capacity_contract import InferenceCapacityTier
+from execution.inference_provider_contract import InferenceResponse
 from runtime.inference.distributed import (
     DistributedInferenceNode,
     DistributedInferenceNodeAttestation,
@@ -5,8 +7,6 @@ from runtime.inference.distributed import (
     DistributedInferenceNodeHealthScoring,
     DistributedInferenceNodeResultConsensus,
 )
-from execution.inference_capacity_contract import InferenceCapacityTier
-from execution.inference_provider_contract import InferenceResponse
 
 
 def test_distributed_node_health_scoring_prefers_healthy_trusted_node():

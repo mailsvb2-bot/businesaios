@@ -25,7 +25,7 @@ class ActuationRegistry:
     """
 
     _lock: Lock = Lock()
-    _by_domain: Dict[str, List[ControllerRef]] = {}
+    _by_domain: dict[str, list[ControllerRef]] = {}
 
     @classmethod
     def register(cls, *, domain: str, controller_id: str, source: str) -> None:
@@ -49,7 +49,7 @@ class ActuationRegistry:
         raise SplitBrainActuationError(msg)
 
     @classmethod
-    def snapshot(cls) -> Dict[str, Tuple[ControllerRef, ...]]:
+    def snapshot(cls) -> dict[str, tuple[ControllerRef, ...]]:
         with cls._lock:
             return {domain: tuple(refs) for domain, refs in cls._by_domain.items()}
 

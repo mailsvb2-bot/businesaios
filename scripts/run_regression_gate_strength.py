@@ -12,8 +12,8 @@ from formal.proof_obligations import try_prove_runtime_decision_gate, verify_run
 from formal.regression_gate import (
     evaluate_mutation_strength,
     replay_cases_from_corpus,
-    run_project_snapshot_bundle,
     replay_runtime_decision,
+    run_project_snapshot_bundle,
     run_replay_suite,
 )
 

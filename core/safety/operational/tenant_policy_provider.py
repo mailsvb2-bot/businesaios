@@ -6,7 +6,6 @@ from pathlib import Path
 
 from core.safety.operational.operational_budget_policy import OperationalBudgetPolicy
 
-
 CANON_TENANT_OPERATIONAL_POLICY_PROVIDER = True
 
 
@@ -25,7 +24,7 @@ class TenantOperationalBudgetPolicyProvider:
         self,
         tenant_id: str,
         policy: OperationalBudgetPolicy,
-    ) -> "TenantOperationalBudgetPolicyProvider":
+    ) -> TenantOperationalBudgetPolicyProvider:
         policy.validate()
         next_overrides = dict(self.tenant_overrides)
         next_overrides[str(tenant_id)] = policy
@@ -38,7 +37,7 @@ class TenantOperationalBudgetPolicyProvider:
     def from_mapping(
         cls,
         data: dict[str, object],
-    ) -> "TenantOperationalBudgetPolicyProvider":
+    ) -> TenantOperationalBudgetPolicyProvider:
         raw = dict(data or {})
         default_policy = cls._policy_from_dict(dict(raw.get("default_policy") or {}))
         raw_tenant_overrides = dict(raw.get("tenant_overrides") or {})
@@ -52,7 +51,7 @@ class TenantOperationalBudgetPolicyProvider:
         )
 
     @classmethod
-    def from_json_file(cls, path: str | Path) -> "TenantOperationalBudgetPolicyProvider":
+    def from_json_file(cls, path: str | Path) -> TenantOperationalBudgetPolicyProvider:
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
         if not isinstance(payload, dict):
             raise ValueError("policy provider JSON must be an object")

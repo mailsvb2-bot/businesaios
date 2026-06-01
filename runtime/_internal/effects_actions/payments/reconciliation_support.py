@@ -30,7 +30,7 @@ def event_already_processed(*, effects: Any, external_id: str) -> bool:
     return False
 
 
-def resolve_created_payment_context(*, effects: Any, external_id: str) -> Tuple[str, str]:
+def resolve_created_payment_context(*, effects: Any, external_id: str) -> tuple[str, str]:
     envelope_id = ""
     user_id = "system"
     try:

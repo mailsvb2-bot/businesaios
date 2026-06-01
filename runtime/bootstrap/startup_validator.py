@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from runtime.service_names import RuntimeServiceName
+import tempfile
 from dataclasses import fields, is_dataclass
+from pathlib import Path
+
 from runtime.application.contracts import RuntimeServiceExports
 from runtime.bootstrap.bootstrap_contract import (
     BootstrapAttestationPolicy,
@@ -12,8 +14,9 @@ from runtime.bootstrap.bootstrap_contract import (
 from runtime.bootstrap.bootstrap_failfast import BootstrapAttestationError, raise_failfast
 from runtime.bootstrap.entrypoint_manifest import canonical_bootstrap_surface_manifest
 from runtime.lifecycle import RuntimeLifecycle
-from pathlib import Path
-import tempfile
+from runtime.service_names import RuntimeServiceName
+
+
 def _ensure_runtime_dir(env: BootstrapEnvironment) -> None:
     runtime_dir = env.runtime_dir
     if runtime_dir.exists() and not runtime_dir.is_dir():

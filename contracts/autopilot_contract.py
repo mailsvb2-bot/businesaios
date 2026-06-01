@@ -47,12 +47,12 @@ class AutopilotConstraints:
 class DataRequirements:
     """Minimum telemetry required for safe optimization."""
 
-    required_event_types: Tuple[str, ...] = (
+    required_event_types: tuple[str, ...] = (
         # Funnel primitives (internal)
         "lead_created@v1",
         "purchase_completed@v1",
     )
-    optional_event_types: Tuple[str, ...] = ()
+    optional_event_types: tuple[str, ...] = ()
 
     def validate(self) -> None:
         if not self.required_event_types:
@@ -103,7 +103,7 @@ class SafetyPolicy:
     # exceeds this and conversions_window==0, autopilot must back off.
     stop_loss_max_spend_minor_no_conv: int = 0
     stop_loss_no_conv_days: int = 1
-    allow_channels: Tuple[str, ...] = ("internal",)
+    allow_channels: tuple[str, ...] = ("internal",)
 
     def validate(self) -> None:
         if int(self.stop_loss_max_cac_minor) < 0:

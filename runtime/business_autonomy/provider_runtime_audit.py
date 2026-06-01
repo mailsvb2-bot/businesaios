@@ -15,7 +15,7 @@ class ProviderRuntimeAuditRecorder:
     evidence_store: Any
 
     @classmethod
-    def in_memory(cls) -> 'ProviderRuntimeAuditRecorder':
+    def in_memory(cls) -> ProviderRuntimeAuditRecorder:
         return cls(audit_store=InMemoryAuditStore(), evidence_store=InMemoryEvidenceStore())
 
     def record_sync_run(

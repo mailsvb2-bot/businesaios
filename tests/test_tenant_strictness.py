@@ -4,7 +4,18 @@ import pytest
 
 
 def test_contract_product_contract_requires_tenant_id():
-    from contracts.product_contract import ProductContract, EntryPolicy, OfferCatalog, Offer, TelemetrySchema, TelemetryEventSpec, TelemetryField, EntitlementsSpec, ModulesSpec, ModuleSpec
+    from contracts.product_contract import (
+        EntitlementsSpec,
+        EntryPolicy,
+        ModuleSpec,
+        ModulesSpec,
+        Offer,
+        OfferCatalog,
+        ProductContract,
+        TelemetryEventSpec,
+        TelemetryField,
+        TelemetrySchema,
+    )
 
     pc = ProductContract(
         tenant_id="",

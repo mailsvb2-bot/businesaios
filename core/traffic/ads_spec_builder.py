@@ -3,8 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict
 
-from core.ads.ads_service import AdsPlan
-from core.ads.ads_service import AdsService
+from core.ads.ads_service import AdsPlan, AdsService
 
 from .contracts import TrafficPlan
 
@@ -17,7 +16,7 @@ class AdsSpecBuilder:
     Connector implementations decide how to map them to their native API.
     """
 
-    def to_spec(self, *, plan: TrafficPlan) -> Dict[str, Any]:
+    def to_spec(self, *, plan: TrafficPlan) -> dict[str, Any]:
         c = plan.campaign
         return {
             "notes": plan.notes,

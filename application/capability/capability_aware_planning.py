@@ -5,7 +5,6 @@ from typing import Any, Mapping
 
 from application.capability.capability_router import ExecutionCapabilityRouter
 
-
 CANON_CAPABILITY_AWARE_PLANNING = True
 
 

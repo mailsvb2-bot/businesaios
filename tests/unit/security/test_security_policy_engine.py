@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from compliance.data_classification import KeywordDataClassifier
 from governance.rbac_contract import ActorContext, RoleId
@@ -10,7 +10,7 @@ from security.security_policy_engine import SecurityPolicyEngine
 
 def _resource() -> SecurityResource:
     classifier = KeywordDataClassifier()
-    classification = classifier.classify_payload if False else None
+    _ = classifier.classify_payload if False else None
     result = classifier.classify(
         __import__('compliance.data_classification', fromlist=['DataAsset']).DataAsset(
             asset_id='a1',
@@ -32,7 +32,7 @@ def _resource() -> SecurityResource:
 
 
 def test_security_policy_engine_allows_happy_path() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     engine = SecurityPolicyEngine()
     actor = ActorContext(actor_id='owner-1', tenant_id='tenant-1', role_ids=frozenset({RoleId.OWNER}))
     verdict = engine.evaluate(
@@ -68,7 +68,7 @@ def test_security_policy_engine_allows_happy_path() -> None:
 
 
 def test_security_policy_engine_fails_closed_on_partial_binding_evidence() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     engine = SecurityPolicyEngine()
     actor = ActorContext(actor_id='owner-1', tenant_id='tenant-1', role_ids=frozenset({RoleId.OWNER}))
     verdict = engine.evaluate(

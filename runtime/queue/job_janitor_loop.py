@@ -16,7 +16,6 @@ from runtime.queue.job_janitor import JobQueueJanitor, QueueJanitorReport
 from runtime.queue.job_stop_token import JobStopToken
 from runtime.queue.queue_retention import QueueRetentionManager, QueueRetentionReport
 
-
 CANON_RUNTIME_QUEUE_JANITOR_LOOP = True
 
 

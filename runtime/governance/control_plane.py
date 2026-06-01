@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from governance.governance_ai import GovernanceAI
 
@@ -14,7 +14,7 @@ class GovernanceDecision:
     reason: str
 
 class GovernanceControlPlane:
-    def __init__(self, ai: Optional[GovernanceAI] = None):
+    def __init__(self, ai: GovernanceAI | None = None):
         self._ai = ai or GovernanceAI()
         self._frozen = False
 
@@ -22,7 +22,7 @@ class GovernanceControlPlane:
     def frozen(self) -> bool:
         return self._frozen
 
-    def evaluate(self, metrics: Dict[str, Any]) -> GovernanceDecision:
+    def evaluate(self, metrics: dict[str, Any]) -> GovernanceDecision:
         verdict = self._ai.evaluate(metrics)
         if verdict == "rollback":
             return GovernanceDecision("rollback", "revenue_drop")

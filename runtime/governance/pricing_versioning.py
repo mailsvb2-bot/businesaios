@@ -17,9 +17,10 @@ No side-effects on import.
 
 import hashlib
 import json
-from pathlib import Path
 from dataclasses import asdict
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any
+
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_path, env_str
 
@@ -45,7 +46,7 @@ def compute_pricing_fingerprint(pricing_config: Any) -> str:
         "trial_price_rub",
         "price_caps",
     }
-    filtered: Dict[str, Any] = {k: data.get(k) for k in sorted(allow) if k in data}
+    filtered: dict[str, Any] = {k: data.get(k) for k in sorted(allow) if k in data}
     payload = _stable_json(filtered).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
@@ -64,7 +65,8 @@ def get_pricing_version() -> str:
     override_path = str(env_path("PRICING_VERSION_OVERRIDE_PATH", "data/pricing_version_override.txt")).strip()
     if override_path:
         try:
-            txt = open(override_path, "r", encoding="utf-8").read().strip()
+            with open(override_path, encoding="utf-8") as fh:
+                txt = fh.read().strip()
             if txt:
                 return txt
         except Exception:
@@ -90,7 +92,7 @@ def enforce_pricing_versioning_or_raise(*, pricing_config: Any, production_stric
     prev = None
     if Path(path).exists():
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 prev = json.load(f)
         except Exception:
             prev = None

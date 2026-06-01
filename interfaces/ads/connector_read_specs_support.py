@@ -60,7 +60,7 @@ async def provider_metric_rows_from_spec(
     account_id: str,
     access_token: str,
     level: str,
-    object_ids: Optional[Sequence[str]],
+    object_ids: Sequence[str] | None,
     date_from: date,
     date_to: date,
     spec: MetricReadSpec,
@@ -84,7 +84,7 @@ def campaign_from_row_with_spec(
     *,
     platform: AdsPlatform,
     account_id: str,
-    row: Dict[str, Any],
+    row: dict[str, Any],
     spec: CampaignReadSpec,
 ) -> Campaign:
     return build_campaign_from_row(
@@ -106,7 +106,7 @@ def metric_from_row_with_spec(
     platform: AdsPlatform,
     account_id: str,
     level: str,
-    row: Dict[str, Any],
+    row: dict[str, Any],
     spec: MetricReadSpec,
 ) -> MetricPoint:
     return build_metric_point_from_row(

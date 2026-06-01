@@ -19,7 +19,7 @@ class EventLogSink:
     event_store: Any
     default_event_log: EventLog
 
-    def emit(self, *, tenant_id: str, user_id: Optional[str], event_type: str, payload: Dict[str, Any]) -> None:
+    def emit(self, *, tenant_id: str, user_id: str | None, event_type: str, payload: dict[str, Any]) -> None:
         # EventLog is tenant-scoped. If caller provided a different tenant_id,
         # we enforce by constructing a new scoped EventLog.
         tid = require_tenant_id(tenant_id)

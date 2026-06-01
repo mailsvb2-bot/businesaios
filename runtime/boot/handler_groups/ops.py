@@ -7,6 +7,7 @@ from runtime.handlers import ActionHandlerRegistry
 from runtime.handlers_ops import (
     handle_admin_set_perm,
     handle_admin_set_role,
+    handle_admin_user_card,
     handle_answer_callback,
     handle_apply_pricing_change,
     handle_capture_payment,
@@ -24,7 +25,6 @@ from runtime.handlers_ops import (
     handle_send_weather,
     handle_set_marketing_copy,
     handle_set_user_setting,
-    handle_admin_user_card,
 )
 
 

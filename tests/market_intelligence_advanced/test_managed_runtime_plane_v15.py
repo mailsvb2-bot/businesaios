@@ -3,8 +3,8 @@ from __future__ import annotations
 from runtime.audit_log import RuntimeAuditLog
 from runtime.boot.market_intelligence_boot import build_market_intelligence_runtime
 from runtime.managed_runtime_plane import ManagedRuntimePlane
-from runtime.market.market_watch_service import MarketWatchService
 from runtime.market.market_trend_engine import MarketTrendEngine
+from runtime.market.market_watch_service import MarketWatchService
 from runtime.registry import RuntimeRegistry
 from runtime.runtime_observability import RuntimeObservability
 from runtime.service_names import RuntimeServiceName
@@ -49,7 +49,7 @@ def test_managed_runtime_plane_can_drive_market_intelligence_runtime_lifecycle()
     audit = RuntimeAuditLog()
     observability = RuntimeObservability(audit)
     plane = ManagedRuntimePlane(observability=observability)
-    runtime = build_market_intelligence_runtime(
+    _ = build_market_intelligence_runtime(
         execute_action=_execute_action,
         runtime_observability=observability,
         managed_runtime_plane=plane,

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol
-from runtime.bootstrap.runtime_builder import build_runtime
+
 from runtime.bootstrap.bootstrap_contract import BootstrapEnvironment
 from runtime.bootstrap.bootstrap_lock import BootstrapLock
+from runtime.bootstrap.runtime_builder import build_runtime
 
 CANON_RUNTIME_BOOTSTRAP_DEPENDENCY_WIRING_EXPLICIT_EXPORTS_ONLY = True
 class RuntimeBuilder(Protocol):

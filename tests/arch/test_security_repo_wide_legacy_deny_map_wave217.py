@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 ROOT = Path('.')
 
 BLOCKED_LOW_LEVEL_SECURITY_MODULES = {

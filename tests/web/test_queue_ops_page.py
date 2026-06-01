@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import SimpleNamespace
 from datetime import datetime
+from types import SimpleNamespace
 
 from app.web.components.queue_health_card import QueueHealthCard
 from app.web.components.queue_remediation_audit_card import QueueRemediationAuditCard
 from app.web.pages.queue_ops import QueueOpsPage
 from app.web.routes import Routes
 from runtime.queue.queue_alerts import QueueAlert
-from runtime.queue.queue_slo import QueueSLOReport
 
 
 @dataclass(frozen=True)

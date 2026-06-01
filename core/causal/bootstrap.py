@@ -10,7 +10,7 @@ class BootstrapResult:
     stderr: float
     ci95_low: float
     ci95_high: float
-    samples: List[float]
+    samples: list[float]
 
 
 def bootstrap_ci(
@@ -27,7 +27,7 @@ def bootstrap_ci(
         return BootstrapResult(stderr=0.0, ci95_low=vals[0] if vals else 0.0, ci95_high=vals[0] if vals else 0.0, samples=[vals[0] if vals else 0.0])
 
     rnd = random.Random(int(seed))
-    means: List[float] = []
+    means: list[float] = []
     for _ in range(int(n_boot)):
         s = [vals[rnd.randrange(0, n)] for _ in range(n)]
         means.append(sum(s) / float(n))

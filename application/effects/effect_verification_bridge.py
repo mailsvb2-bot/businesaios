@@ -5,7 +5,6 @@ from typing import Any, Mapping
 from application.effects.canonical_execution_feedback import canonical_execution_feedback
 from application.effects.effect_outcome_vocabulary import normalize_outcome_status, outcome_is_verified
 
-
 CANON_EFFECT_VERIFICATION_BRIDGE = True
 
 

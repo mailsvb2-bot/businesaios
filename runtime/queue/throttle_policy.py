@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from runtime.queue.backpressure_policy import BackpressurePolicy, BackpressureVerdict
 
-
 CANON_RUNTIME_QUEUE_THROTTLE_POLICY = True
 
 

@@ -42,17 +42,17 @@ def extract_telegram_user_id(update: dict) -> int | None:
 class TelegramContext:
     update_id: int
     chat_id: str
-    message_id: Optional[int]
+    message_id: int | None
     text: str
-    command: Optional[str]
+    command: str | None
     args: str
     is_callback: bool
-    callback_data: Optional[str]
-    callback_query_id: Optional[str]
-    raw: Dict[str, Any]
+    callback_data: str | None
+    callback_query_id: str | None
+    raw: dict[str, Any]
 
 
-def _extract_message(update: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str, bool, Optional[str]]:
+def _extract_message(update: dict[str, Any]) -> tuple[dict[str, Any] | None, str, bool, str | None]:
     for k in (
         "message",
         "edited_message",
@@ -70,7 +70,7 @@ def _extract_message(update: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], 
     return None, "", False, None
 
 
-def _parse_command(text: str) -> Tuple[Optional[str], str]:
+def _parse_command(text: str) -> tuple[str | None, str]:
     t = (text or "").strip()
     if not t.startswith("/"):
         return None, ""
@@ -80,7 +80,7 @@ def _parse_command(text: str) -> Tuple[Optional[str], str]:
     return cmd, args
 
 
-def build_context(update: Dict[str, Any]) -> Optional[TelegramContext]:
+def build_context(update: dict[str, Any]) -> TelegramContext | None:
     if not isinstance(update, dict):
         return None
     upd_id = update.get("update_id")

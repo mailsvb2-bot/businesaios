@@ -1,5 +1,5 @@
-from runtime.bootstrap import build_crm_connector_registry, build_crm_provider_registry
 from crm.registry.crm_registry_consistency import assert_crm_registry_consistency
+from runtime.bootstrap import build_crm_connector_registry, build_crm_provider_registry
 
 
 def test_runtime_crm_registries_match() -> None:

@@ -1,7 +1,6 @@
 import ast
 import pathlib
 
-
 RUNTIME_PLATFORM_CORE_IMPORT_ALLOWLIST = {
     pathlib.Path("runtime/platform/support/policy/policy_factory.py"),
     pathlib.Path("runtime/platform/support/policy/policy_registry.py"),

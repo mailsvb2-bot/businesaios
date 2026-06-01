@@ -28,7 +28,7 @@ class WorldModelStorePort:
     - Return value is a plain JSON-like dict; conversion to core models happens in runtime.
     """
 
-    def get_active_payload(self, *, tenant_id: str, product_id: str) -> Optional[Dict[str, Any]]: ...
+    def get_active_payload(self, *, tenant_id: str, product_id: str) -> dict[str, Any] | None: ...
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,7 @@ class FileWorldModelStore(WorldModelStorePort):
     def _path(self, tenant_id: str, product_id: str) -> Path:
         return Path(self.base_dir) / str(tenant_id) / str(product_id)
 
-    def get_active_payload(self, *, tenant_id: str, product_id: str) -> Optional[Dict[str, Any]]:
+    def get_active_payload(self, *, tenant_id: str, product_id: str) -> dict[str, Any] | None:
         root = self._path(tenant_id, product_id)
         active = root / "ACTIVE"
         if not active.exists():

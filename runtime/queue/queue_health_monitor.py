@@ -18,7 +18,6 @@ from runtime.queue.queue_alerts import QueueAlert, QueueAlertPublishReport, Queu
 from runtime.queue.queue_metrics_rollup_sqlite import SqliteQueueMetricsRollupStore
 from runtime.queue.queue_slo import QueueSLOEvaluator, QueueSLOReport
 
-
 CANON_RUNTIME_QUEUE_HEALTH_MONITOR = True
 
 PressureReaderFactory = Callable[[str, str, datetime], TenantPressureReader | None]

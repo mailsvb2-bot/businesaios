@@ -1,5 +1,5 @@
-from .contracts import AdsRLAction, AdsRLState, AdsRLSuggestion, AdsRLOptSpec
-from .service import AdsRLOptimizerService, AdsRLOptimizerDeps
+from .contracts import AdsRLAction, AdsRLOptSpec, AdsRLState, AdsRLSuggestion
+from .service import AdsRLOptimizerDeps, AdsRLOptimizerService
 
 __all__ = [
     "AdsRLAction",

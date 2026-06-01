@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.creative_intelligence.models import CreativeEconomicsInput, CreativeEvidenceBundle
+from core.creative_intelligence.models import CreativeEconomicsInput
 from runtime.audit_log import RuntimeAuditLog
 from runtime.creative.creative_intelligence_service import CreativeIntelligenceService
 from runtime.market.market_trend_engine import MarketTrendEngine

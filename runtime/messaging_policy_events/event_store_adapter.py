@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from runtime.tenancy import normalize_tenant_scope
 from runtime.messaging_policy_events.event_record import MessagingPolicyEventRecord
 from runtime.messaging_policy_events.event_types import MESSAGING_POLICY_EVENT_TYPES
+from runtime.tenancy import normalize_tenant_scope
 
 
 class EventLogMessagingPolicyEventStore:

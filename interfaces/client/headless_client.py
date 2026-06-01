@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from execution.headless_boot import build_headless_runtime
 from application.headless.models import CEOParticipation, GoalExecutionReport, GoalExecutionRequest
-
+from execution.headless_boot import build_headless_runtime
 
 CANON_HEADLESS_CLIENT = True
 

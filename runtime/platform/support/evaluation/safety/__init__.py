@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from runtime.platform.support.contracts.evaluation import EvaluationResult
 
+
 class AbuseCaseEval:
     def evaluate(self, candidate_id: str, payload) -> EvaluationResult:
         score = float(payload.get("abuse_case_score", 0.0))

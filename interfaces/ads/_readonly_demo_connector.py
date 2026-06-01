@@ -7,6 +7,7 @@ from typing import AsyncIterator, Optional, Sequence
 
 from interfaces.ads.base import AdsConnector
 from interfaces.ads.capabilities import AdsCapabilities
+from interfaces.ads.connector_availability_guard import build_demo_connector_metadata, build_demo_write_error
 from interfaces.ads.contracts import (
     Campaign,
     CreateOrUpdateRequest,
@@ -16,7 +17,6 @@ from interfaces.ads.contracts import (
     OAuthConnectResult,
 )
 from interfaces.ads.errors import ValidationError
-from interfaces.ads.connector_availability_guard import build_demo_connector_metadata, build_demo_write_error
 
 # Explicit marker: this is NOT a production integration.
 READ_ONLY_DEMO_CONNECTOR = True
@@ -52,7 +52,7 @@ class ReadOnlyDemoConnector(AdsConnector):
         tenant_id: str,
         account_id: str,
         level: str,
-        object_ids: Optional[Sequence[str]],
+        object_ids: Sequence[str] | None,
         date_from: date,
         date_to: date,
     ) -> AsyncIterator[MetricsPoint]:

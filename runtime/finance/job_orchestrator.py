@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING, Callable, Mapping
 
 if TYPE_CHECKING:
     from runtime.boot.finance_boot import StrategicFinanceRuntime
-from runtime.tenancy import require_tenant_id
 from runtime.finance.event_publisher import FinanceEventPublisher
 from runtime.finance.job_spec import FinanceJobSpec
+from runtime.tenancy import require_tenant_id
 
 
 @dataclass(frozen=True)
@@ -22,7 +22,7 @@ class FinanceJobOrchestrator:
     def __init__(
         self,
         *,
-        runtime: "StrategicFinanceRuntime",
+        runtime: StrategicFinanceRuntime,
         job_registry: Mapping[str, Callable[[dict], object]],
         job_specs: Mapping[str, FinanceJobSpec],
         event_publisher: FinanceEventPublisher,

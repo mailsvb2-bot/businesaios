@@ -1,6 +1,8 @@
 from __future__ import annotations
-from observability.platform.telemetry.event_store import InMemoryEventStore
+
 from core.growth.job_lock_eventstore import EventStoreJobLock
+from observability.platform.telemetry.event_store import InMemoryEventStore
+
 
 def test_job_lock_acquire_release():
     es = InMemoryEventStore()

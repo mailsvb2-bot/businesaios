@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Optional
 
 from core.observability.structured_logging import log_exception_throttled
-from core.tenancy.normalization import normalize_tenant_id_or_unknown
 from core.policies.telegram.handlers.autopilot_parts.flow_diag import handle_diag_text
 from core.policies.telegram.handlers.autopilot_parts.flow_launch import build_launch_action
 from core.policies.telegram.handlers.autopilot_parts.shared import kb_pick_channel, set_session
 from core.policies.telegram.helpers import ProposedAction, propose
+from core.tenancy.normalization import normalize_tenant_id_or_unknown
 from core.ux.callbacks import (
     CB_AUTOPILOT_MENU,
     CB_AUTOPILOT_START_7D,
@@ -20,7 +20,6 @@ from core.ux.callbacks import (
 )
 from core.ux.telegram_keyboards import kb_back_main
 
-
 _LEAD_SOURCE_MAP = {
     CB_PROFIT_SPRINT_LEAD_INBOX: "inbox",
     CB_PROFIT_SPRINT_LEAD_CALLS: "calls",
@@ -30,7 +29,7 @@ _LEAD_SOURCE_MAP = {
 }
 
 
-def handle_flow(ctx, *, user_id: str, default_price_rub: int, sess: dict, sl, logger) -> Optional[ProposedAction]:
+def handle_flow(ctx, *, user_id: str, default_price_rub: int, sess: dict, sl, logger) -> ProposedAction | None:
     cb = str(ctx.callback_data or "")
 
     if cb == CB_PROFIT_SPRINT_START:

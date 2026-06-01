@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from runtime.monetization import FileRevenueExperimentRegistry
-from runtime.monetization import RevenueExperimentSurface
-from runtime.monetization import build_revenue_advisory_store_wiring
+from runtime.monetization import (
+    FileRevenueExperimentRegistry,
+    RevenueExperimentSurface,
+    build_revenue_advisory_store_wiring,
+)
 
 
 def test_file_revenue_experiment_registry_roundtrip(tmp_path: Path) -> None:

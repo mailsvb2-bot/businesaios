@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from core.safety.operational.runtime_bootstrap import resolve_operational_safety_runtime

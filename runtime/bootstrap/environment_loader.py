@@ -1,10 +1,13 @@
 from __future__ import annotations
-from pathlib import Path
+
 import os
 import sys
 import tempfile
+from pathlib import Path
+
 from config.env_flags import env_bool, env_str
 from runtime.bootstrap.bootstrap_contract import BootstrapEnvironment, BootstrapMode
+
 
 def _running_under_pytest() -> bool:
     return (

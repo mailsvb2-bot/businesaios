@@ -1,11 +1,13 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Dict, Iterable, Optional, Protocol
 
+
 class EventStore(Protocol):
-    def append(self, *, tenant_id: str, user_id: Optional[str], event_type: str, payload: Dict) -> None: ...
-    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 200) -> Iterable[Dict]: ...
+    def append(self, *, tenant_id: str, user_id: str | None, event_type: str, payload: dict) -> None: ...
+    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 200) -> Iterable[dict]: ...
 
 @dataclass(frozen=True)
 class LockResult:
@@ -21,7 +23,7 @@ class EventStoreJobLock:
         self._ttl = int(ttl_seconds)
 
     def try_acquire(self, *, tenant_id: str, lock_key: str, owner: str) -> LockResult:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         last_acq = _latest(self._store.latest_events(tenant_id=tenant_id, event_type=self.EVT_ACQ, limit=200), lock_key)
         last_rel = _latest(self._store.latest_events(tenant_id=tenant_id, event_type=self.EVT_REL, limit=200), lock_key)
 
@@ -39,19 +41,19 @@ class EventStoreJobLock:
         return LockResult(True, "acquired")
 
     def release(self, *, tenant_id: str, lock_key: str, owner: str) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self._store.append(tenant_id=tenant_id, user_id=None, event_type=self.EVT_REL, payload={"lock_key": lock_key, "owner": owner, "released_at_iso": now.isoformat()})
 
-def _latest(events: Iterable[Dict], lock_key: str) -> Optional[Dict]:
+def _latest(events: Iterable[dict], lock_key: str) -> dict | None:
     for ev in events:
         if (ev.get("payload") or {}).get("lock_key") == lock_key:
             return ev
     return None
 
-def _parse_iso(s: Optional[str]) -> Optional[datetime]:
+def _parse_iso(s: str | None) -> datetime | None:
     if not s:
         return None
     dt = datetime.fromisoformat(s)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt

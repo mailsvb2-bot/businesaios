@@ -10,7 +10,6 @@ application-facing adapters delegate to one already-owned transition call
 from dataclasses import dataclass
 from typing import Any, Callable
 
-
 CANON_RUNTIME_APPLICATION_DECISION_TRANSITION_SINGLE_OWNER = True
 CANON_RUNTIME_APPLICATION_DECISION_TRANSITION_FAIL_CLOSED = True
 CANON_RUNTIME_APPLICATION_DECISION_TRANSITION_NO_DECISION_LOGIC = True

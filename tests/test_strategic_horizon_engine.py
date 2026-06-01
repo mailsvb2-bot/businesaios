@@ -1,22 +1,22 @@
 import pytest
 
 from core.strategic_horizon.engine import (
-    StrategicHorizonEngine,
-    SystemState,
-    EconomyState,
-    UserDynamics,
-    LearningState,
-    RiskState,
-    ProductState,
-    ExternalContext,
-    StrategicMode,
-    LearningRegime,
-    MODE_COOLDOWN_SECONDS,
+    MAX_RISK_BUDGET,
+    MIN_MARGIN_SAFE,
+    MIN_RISK_BUDGET,
     MIN_RUNWAY_DEFENSE,
     MIN_RUNWAY_STABILIZE,
-    MIN_MARGIN_SAFE,
-    MAX_RISK_BUDGET,
-    MIN_RISK_BUDGET,
+    MODE_COOLDOWN_SECONDS,
+    EconomyState,
+    ExternalContext,
+    LearningRegime,
+    LearningState,
+    ProductState,
+    RiskState,
+    StrategicHorizonEngine,
+    StrategicMode,
+    SystemState,
+    UserDynamics,
 )
 
 

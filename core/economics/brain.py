@@ -11,12 +11,11 @@ from config.economics_domain_policy import (
     EconomicBrainPolicy,
     LTVEstimatorPolicy,
 )
-
-from kernel.decisioning.decision_types import RecommendationSet
 from core.economics.contracts import EconomicsContext, EconomicsRecommendationBuilderPort
 from core.economics.recommendation_policy import ensure_economics_recommendations
 from core.economics.types import EconomicAction, EconomicState
 from core.strategic_horizon.engine import StrategicMode
+from kernel.decisioning.decision_types import RecommendationSet
 
 
 @dataclass(frozen=True)

@@ -5,8 +5,8 @@ CANON_BOOT_WIRING_ONLY = True
 
 from typing import Any
 
-from runtime.platform.config.env_flags import env_csv, env_int, env_str
 from bootstrap.failure_policy import raise_or_log_boot_failure
+from runtime.platform.config.env_flags import env_csv, env_int, env_str
 
 
 def build_policy_registry(*, settings: Any, pricing: Any, retention: Any, logging_mod: Any):
@@ -40,11 +40,11 @@ def _resolve_admin_ids(*, settings: Any) -> tuple[str, ...]:
 
 
 def _register_core_policies(*, preg: Any, pricing: Any, retention: Any, settings: Any, admin_ids: tuple[str, ...]) -> None:
-    from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
-    from core.policies.telegram.ingress_policy import TelegramIngressPolicyV1
+    from core.policies.offer_outcome_emit_policy import OfferOutcomeEmitPolicyV1
     from core.policies.payments_policies import PaymentsReconcilePolicyV1
     from core.policies.payments_webhook_policy import PaymentsWebhookReconcilePolicyV1
-    from core.policies.offer_outcome_emit_policy import OfferOutcomeEmitPolicyV1
+    from core.policies.telegram.ingress_policy import TelegramIngressPolicyV1
+    from core.policies.telegram.unified_policy import UnifiedTelegramPolicyV3
 
     preg.register(
         UnifiedTelegramPolicyV3(

@@ -6,7 +6,6 @@ from pathlib import Path
 
 from runtime.state.state_contract import StateSynthesizedSnapshot
 
-
 CANON_STATE_DELTA_LOG = True
 
 

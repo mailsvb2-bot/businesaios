@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from runtime.economic_core.audit_provenance_bridge import build_audit_provenance_fragment, build_audit_provenance_snapshot
 from economics.contracts import TruthFragment
+from runtime.economic_core.audit_provenance_bridge import (
+    build_audit_provenance_fragment,
+    build_audit_provenance_snapshot,
+)
 
 
 def test_audit_provenance_fragment_projects_export_hash_and_evidence_without_new_truth() -> None:

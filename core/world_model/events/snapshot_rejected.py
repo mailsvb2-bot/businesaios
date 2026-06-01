@@ -17,7 +17,7 @@ class WorldSnapshotRejected:
     payload: dict = field(default_factory=dict)
 
     @staticmethod
-    def create(*, snapshot_id: str, tenant_id: str, business_id: str, built_at_ms: int, reason: str, payload: dict | None = None) -> "WorldSnapshotRejected":
+    def create(*, snapshot_id: str, tenant_id: str, business_id: str, built_at_ms: int, reason: str, payload: dict | None = None) -> WorldSnapshotRejected:
         return WorldSnapshotRejected(
             event_id=new_event_id("world_snapshot_rejected"),
             event_type="world_snapshot_rejected@v1",

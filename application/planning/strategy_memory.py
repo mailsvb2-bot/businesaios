@@ -7,7 +7,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
-
 CANON_STRATEGY_MEMORY = True
 STRATEGY_MEMORY_SCHEMA_VERSION = 1
 _ALLOWED_HORIZONS = frozenset({"day", "week", "month", "quarter"})
@@ -62,7 +61,7 @@ class StrategyPatternStat:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "StrategyPatternStat":
+    def from_dict(cls, payload: Mapping[str, Any]) -> StrategyPatternStat:
         return cls(
             key=_text(payload.get("key")),
             observed_runs=max(0, _safe_int(payload.get("observed_runs"))),
@@ -111,7 +110,7 @@ class StrategyMemorySnapshot:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "StrategyMemorySnapshot":
+    def from_dict(cls, payload: Mapping[str, Any]) -> StrategyMemorySnapshot:
         def _load_stats(value: object) -> dict[str, StrategyPatternStat]:
             raw = _safe_dict(value)
             return {str(key): StrategyPatternStat.from_dict(_safe_dict(item)) for key, item in raw.items() if _text(key)}

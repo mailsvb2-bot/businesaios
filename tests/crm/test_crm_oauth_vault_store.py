@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from crm.providers.common.crm_credentials import CrmAccessToken
 from crm.providers.common.crm_oauth_token_store import SecretVaultBackedCrmOAuthTokenStore
@@ -12,7 +12,7 @@ def test_vault_backed_oauth_token_store_roundtrip() -> None:
     token = CrmAccessToken(
         access_token='access-1',
         refresh_token='refresh-1',
-        expires_at=datetime(2030, 1, 1, tzinfo=timezone.utc),
+        expires_at=datetime(2030, 1, 1, tzinfo=UTC),
         scope=('crm.objects.contacts.write',),
         metadata={'region': 'eu1'},
     )

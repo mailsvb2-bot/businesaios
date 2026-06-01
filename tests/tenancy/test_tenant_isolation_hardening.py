@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import pytest
 
+from tenancy.tenant_audit_scope import TenantAuditScope
+from tenancy.tenant_billing_scope import TenantBillingScope
+from tenancy.tenant_connector_scope import TenantConnectorScope
 from tenancy.tenant_contract import TenantRecord
 from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetGuard, TenantExecutionUsage
+from tenancy.tenant_feature_flags import TenantFeatureFlags
+from tenancy.tenant_memory_scope import TenantMemoryScope
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore, TenantPolicyBundle
-from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_queue_scope import TenantQueueScope
+from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_registry import InMemoryTenantRegistry
 from tenancy.tenant_runtime_isolation import TenantRuntimeIsolation
 from tenancy.tenant_runtime_limits import TenantRuntimeLimits
-from tenancy.tenant_feature_flags import TenantFeatureFlags
-from tenancy.tenant_memory_scope import TenantMemoryScope
-from tenancy.tenant_connector_scope import TenantConnectorScope
-from tenancy.tenant_audit_scope import TenantAuditScope
-from tenancy.tenant_billing_scope import TenantBillingScope
 
 
 def _bundle(tenant_id: str) -> TenantPolicyBundle:

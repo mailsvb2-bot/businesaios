@@ -4,12 +4,12 @@ import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from governance.rbac_contract import RoleId
-from entrypoints.api.api_key_policy import ApiKeyPolicy, InMemoryApiKeyStore
 from adapters.api.fastapi.auth_dependencies import AuthDependencyBundle, CompositeAuthPolicy
+from entrypoints.api.api_key_policy import ApiKeyPolicy, InMemoryApiKeyStore
 from entrypoints.api.jwt_policy import JwtClaims, JwtPolicy
 from entrypoints.api.request_context import RequestContext
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
+from governance.rbac_contract import RoleId
 
 
 def _request(headers: dict[str, str] | None = None) -> Request:

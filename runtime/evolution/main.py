@@ -10,12 +10,12 @@ This module MUST NOT start Telegram runtime.
 import logging
 from typing import Any, Dict
 
-from runtime.observability.error_handling import exception_throttled
-from runtime.platform.config.env_flags import env_int, env_str
 from bootstrap.health_server import start_health_server
 from bootstrap.mode_gate import startup_summary, validate_run_mode
 from runtime.boot.tenant_self_check import tenant_self_check
 from runtime.evolution.worker import build_worker_from_env, evolution_enabled
+from runtime.observability.error_handling import exception_throttled
+from runtime.platform.config.env_flags import env_int, env_str
 
 log = logging.getLogger("runtime.evolution.main")
 
@@ -39,7 +39,7 @@ def main() -> None:
     worker = build_worker_from_env()
     port = env_int("EVOLUTION_HEALTH_PORT", 8087, lo=0, hi=65535)
 
-    def _state() -> Dict[str, Any]:
+    def _state() -> dict[str, Any]:
         st = worker.state
         return {
             "ok": bool(st.ok),

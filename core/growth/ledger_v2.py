@@ -16,11 +16,11 @@ This module is intentionally tolerant: missing events => zeros.
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable
+from typing import Any, Iterable
 
-from core.observability.structured_logging import log_exception_throttled
-from core.events.read_call import call_latest_events, call_iter_events
+from core.events.read_call import call_iter_events, call_latest_events
 from core.growth.spend_ledger_event_store import EventStoreSpendLedger
+from core.observability.structured_logging import log_exception_throttled
 
 
 def _day_start_ms(ts_ms: int) -> int:
@@ -94,7 +94,7 @@ def _iter_events(
     start_ms: int,
     end_ms: int,
     limit: int = 5000,
-) -> Iterable[Dict[str, Any]]:
+) -> Iterable[dict[str, Any]]:
     it = getattr(event_store, "iter_events", None)
     if callable(it):
         yield from call_iter_events(
@@ -109,16 +109,15 @@ def _iter_events(
         return
     latest = getattr(event_store, "latest_events", None)
     if callable(latest):
-        for e in call_latest_events(
+        yield from call_latest_events(
             latest_fn=latest,
             tenant_id=str(tenant_id),
             event_types=(str(event_type),),
             limit=int(limit),
-        ) or []:
-            yield e
+        ) or []
 
 
-def _event_ts_ms(e: Dict[str, Any]) -> int:
+def _event_ts_ms(e: dict[str, Any]) -> int:
     try:
         return int(e.get("timestamp_ms") or 0)
     except Exception:

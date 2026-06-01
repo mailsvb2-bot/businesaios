@@ -3,7 +3,6 @@ from __future__ import annotations
 from tests.arch.rules.forbidden_name_fragments import FORBIDDEN_PACKET_CONTROL_KEYS
 from tests.arch.scanners.python_file_loader import read_text
 
-
 TARGET_FILES = (
     "runtime/decision_input/runtime_state_enrichment.py",
     "core/decisioning/decision_core_input_bridge.py",

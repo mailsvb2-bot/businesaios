@@ -8,8 +8,8 @@ from .domain_discovery import is_transient_path, rel
 from .findings import CanonFsFinding
 
 
-def scan_domain_subdirs(root: Path, domain: Path) -> List[CanonFsFinding]:
-    findings: List[CanonFsFinding] = []
+def scan_domain_subdirs(root: Path, domain: Path) -> list[CanonFsFinding]:
+    findings: list[CanonFsFinding] = []
 
     for child in domain.iterdir():
         if child.is_dir() and not is_transient_path(child) and child.name not in ALLOWED_SUBDIRS:

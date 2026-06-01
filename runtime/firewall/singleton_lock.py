@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 from threading import RLock
 
-from runtime.platform.config.env_flags import env_bool, env_path, env_str
 from runtime.observability.error_handling import swallow
+from runtime.platform.config.env_flags import env_bool, env_path, env_str
 
 try:  # pragma: no cover
     import ctypes  # type: ignore
@@ -128,7 +128,7 @@ class SingletonLock:
 
             try:
                 self._fd = os.open(str(self._path), flags, 0o644)
-                os.write(self._fd, f"{pid},{now}".encode("utf-8"))
+                os.write(self._fd, f"{pid},{now}".encode())
                 self._PROCESS_HELD_PATHS[path_key] = 1
                 return
             except FileExistsError:
@@ -156,7 +156,7 @@ class SingletonLock:
 
                     try:
                         self._fd = os.open(str(self._path), flags, 0o644)
-                        os.write(self._fd, f"{pid},{now}".encode("utf-8"))
+                        os.write(self._fd, f"{pid},{now}".encode())
                         self._PROCESS_HELD_PATHS[path_key] = 1
                         return
                     except FileExistsError as e:

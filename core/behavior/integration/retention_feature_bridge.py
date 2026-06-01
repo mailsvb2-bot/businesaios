@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 def inject_behavior_observables(feature_vector: dict[str, float], observables: dict[str, float]) -> dict[str, float]:
     result = dict(feature_vector)
     mapping = {

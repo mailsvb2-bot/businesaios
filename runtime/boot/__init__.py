@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import sys
 from importlib import import_module
+from typing import Any
 
 from runtime.public_api_alias import install_public_api_alias
-from typing import Any
 
 CANON_RUNTIME_BOOT_PACKAGE_ROOT = True
 CANON_RUNTIME_BOOT_RUNTIME_LOCAL_ONLY = True

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 SUSPICIOUS_CONFIG_WORDS: tuple[str, ...] = (
     "threshold",
     "limit",

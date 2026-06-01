@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional
 from kernel.world_state import WorldStateV1
 
 
-def build_world_state_for_chat(*, event_store: Any, tenant_id: str, chat_id: str, session: Optional[Dict[str, Any]] = None, meta: Optional[Dict[str, Any]] = None, product: Optional[Dict[str, Any]] = None, economy: Optional[Dict[str, Any]] = None, entitlements: Optional[Dict[str, Any]] = None, limit: int = 800) -> WorldStateV1:
+def build_world_state_for_chat(*, event_store: Any, tenant_id: str, chat_id: str, session: dict[str, Any] | None = None, meta: dict[str, Any] | None = None, product: dict[str, Any] | None = None, economy: dict[str, Any] | None = None, entitlements: dict[str, Any] | None = None, limit: int = 800) -> WorldStateV1:
     try:
         events = event_store.latest_events(
             tenant_id=tenant_id,

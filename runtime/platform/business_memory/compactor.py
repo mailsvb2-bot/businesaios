@@ -5,9 +5,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from runtime.platform.business_memory.models import BusinessMemoryRecord
-from runtime.platform.business_memory.policy import BusinessMemoryPolicy, DEFAULT_BUSINESS_MEMORY_POLICY
+from runtime.platform.business_memory.policy import DEFAULT_BUSINESS_MEMORY_POLICY, BusinessMemoryPolicy
 from runtime.platform.business_memory.semantics import counts_as_failure, counts_as_operator_handoff, counts_as_success
-
 
 CANON_BUSINESS_MEMORY_COMPACTOR = True
 

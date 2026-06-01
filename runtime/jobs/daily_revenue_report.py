@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Protocol
 
-from runtime.revenue import RevenueReporter, RevenueSprintState, TenantProfile
 from interfaces.telegram.views.revenue_report_view import render_revenue_report
+from runtime.revenue import RevenueReporter, RevenueSprintState, TenantProfile
 
 
 class KVStore(Protocol):
@@ -24,7 +24,7 @@ class DailyRevenueReportJob:
     tg: TelegramSender
 
     async def run(self, *, tenant_id: str) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         raw = self.kv.get_json(f"revenue_sprint:{tenant_id}", default={})
         state = RevenueSprintState(**raw) if raw else RevenueSprintState()

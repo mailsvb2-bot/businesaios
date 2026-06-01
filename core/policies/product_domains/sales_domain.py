@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.tenancy.normalization import normalize_tenant_id_or_unknown
 from core.policies.product_domains.sales_domain_support import build_offer_action
-from core.policies.telegram.helpers import ProposedAction, propose_message
 from core.policies.sales.sales_keyboards import sales_main_kb
+from core.policies.telegram.helpers import ProposedAction, propose_message
+from core.tenancy.normalization import normalize_tenant_id_or_unknown
 
 
 @dataclass

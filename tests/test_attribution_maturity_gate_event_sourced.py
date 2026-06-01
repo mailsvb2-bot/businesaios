@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
-from core.ads.rl.runtime_state import maturity_gate, bind_runtime_state
+from core.ads.rl.runtime_state import bind_runtime_state, maturity_gate
 from core.governance.evaluators.attribution_maturity import AttributionMaturityGate
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 def test_maturity_gate_persists_snapshots_in_event_store() -> None:

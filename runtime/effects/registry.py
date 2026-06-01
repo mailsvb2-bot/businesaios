@@ -12,7 +12,7 @@ ActionHandler = Callable[..., object]
 
 
 def build_registry(effects_impl) -> Mapping[str, ActionHandler]:
-    reg: Dict[str, ActionHandler] = {
+    reg: dict[str, ActionHandler] = {
         "send_message@v1": effects_impl.send_message,
         "compose_marketing_message@v1": effects_impl.compose_marketing_message,
         "send_audio@v1": effects_impl.send_audio,

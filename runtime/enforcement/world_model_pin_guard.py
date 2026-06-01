@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from runtime.enforcement import WorldModelPin, WorldModelPinCheckResult
-from runtime.world_model import extract_world_model_metadata
 from runtime.platform.config.env_flags import env_bool
+from runtime.world_model import extract_world_model_metadata
 
 
 class WorldModelPinMismatchError(RuntimeError):
@@ -17,7 +17,7 @@ def is_strict_world_model_pinning_enabled() -> bool:
 
 def check_world_model_pin(
     *,
-    pinned_meta: Dict[str, Any] | None,
+    pinned_meta: dict[str, Any] | None,
     state: Any,
 ) -> WorldModelPinCheckResult:
     pinned = WorldModelPin.from_payload(pinned_meta)
@@ -49,7 +49,7 @@ def check_world_model_pin(
 
     if pinned_hash != current_hash:
         return WorldModelPinCheckResult(
-            ok=False if strict else True,
+            ok=not strict,
             strict=strict,
             reason="pricing_world_model_hash_mismatch",
             pinned=pinned_dict,
@@ -67,7 +67,7 @@ def check_world_model_pin(
 
 def enforce_world_model_pin_or_raise(
     *,
-    pinned_meta: Dict[str, Any] | None,
+    pinned_meta: dict[str, Any] | None,
     state: Any,
 ) -> WorldModelPinCheckResult:
     result = check_world_model_pin(
@@ -79,7 +79,7 @@ def enforce_world_model_pin_or_raise(
     return result
 
 
-def _as_str_or_none(value: Any) -> Optional[str]:
+def _as_str_or_none(value: Any) -> str | None:
     if value is None:
         return None
     s = str(value).strip()

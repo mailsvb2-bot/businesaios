@@ -15,7 +15,7 @@ def latency_brief(
     limit: int = DEFAULT_ADMIN_LATENCY_POLICY.default_brief_limit,
     now_ms: int | None = None,
     policy: AdminLatencyPolicy = DEFAULT_ADMIN_LATENCY_POLICY,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Aggregate latency spans into per-button stats (best-effort)."""
     if event_store is None or not hasattr(event_store, "iter_events"):
         return {"top_slowest": [], "window_days": int(days), "samples": 0}
@@ -34,8 +34,8 @@ def latency_brief(
     tenant_scope = normalize_admin_tenant_id(tenant_id)
     start_ms, now_ms = resolve_window_range(days=days, now_ms=now_ms)
 
-    ck_to_btn: Dict[str, str] = {}
-    per_btn: Dict[str, List[int]] = {}
+    ck_to_btn: dict[str, str] = {}
+    per_btn: dict[str, list[int]] = {}
     samples = 0
 
     for ev in event_store.iter_events(tenant_id=tenant_scope, start_ms=start_ms, end_ms=now_ms, event_type="latency_span"):
@@ -62,7 +62,7 @@ def latency_brief(
         except Exception:
             continue
 
-    def _pct(xs: List[int], q: float) -> int:
+    def _pct(xs: list[int], q: float) -> int:
         if not xs:
             return 0
         ys = sorted(xs)
@@ -70,7 +70,7 @@ def latency_brief(
         i = max(0, min(len(ys) - 1, i))
         return int(ys[i])
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for btn, durs in per_btn.items():
         if not durs:
             continue
@@ -96,7 +96,7 @@ def latency_breakdown(
     limit: int = DEFAULT_ADMIN_LATENCY_POLICY.default_breakdown_limit,
     now_ms: int | None = None,
     policy: AdminLatencyPolicy = DEFAULT_ADMIN_LATENCY_POLICY,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Per-button latency stats with stage split: router/decide/execute/telegram_api."""
     if event_store is None or not hasattr(event_store, "iter_events"):
         return {"rows": [], "window_days": int(days), "samples": 0}
@@ -115,8 +115,8 @@ def latency_breakdown(
     tenant_scope = normalize_admin_tenant_id(tenant_id)
     start_ms, now_ms = resolve_window_range(days=days, now_ms=now_ms)
 
-    ck_to_btn: Dict[str, str] = {}
-    per_btn_stage: Dict[str, Dict[str, List[int]]] = {}
+    ck_to_btn: dict[str, str] = {}
+    per_btn_stage: dict[str, dict[str, list[int]]] = {}
     samples = 0
     wanted = {"router", "decide", "execute", "telegram_api"}
 
@@ -150,7 +150,7 @@ def latency_breakdown(
         except Exception:
             continue
 
-    def _pct(xs: List[int], q: float) -> int:
+    def _pct(xs: list[int], q: float) -> int:
         if not xs:
             return 0
         ys = sorted(xs)
@@ -158,9 +158,9 @@ def latency_breakdown(
         i = max(0, min(len(ys) - 1, i))
         return int(ys[i])
 
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for btn, by_stage in per_btn_stage.items():
-        row: Dict[str, Any] = {"button": str(btn)[: int(policy.button_key_max_len)]}
+        row: dict[str, Any] = {"button": str(btn)[: int(policy.button_key_max_len)]}
         score = 0
         for stage in ["decide", "execute", "telegram_api"]:
             durs = by_stage.get(stage) or []
@@ -186,7 +186,7 @@ def sla_breaches_brief(
     limit: int = DEFAULT_ADMIN_LATENCY_POLICY.default_breaches_limit,
     now_ms: int | None = None,
     policy: AdminLatencyPolicy = DEFAULT_ADMIN_LATENCY_POLICY,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Recent latency SLA breaches emitted by perf.watchdog."""
     if event_store is None or not hasattr(event_store, "iter_events"):
         return {"breaches": [], "window_days": int(days)}
@@ -203,7 +203,7 @@ def sla_breaches_brief(
 
     tenant_scope = normalize_admin_tenant_id(tenant_id)
     start_ms, now_ms = resolve_window_range(days=days, now_ms=now_ms)
-    breaches: List[Dict[str, Any]] = []
+    breaches: list[dict[str, Any]] = []
 
     for ev in event_store.iter_events(tenant_id=tenant_scope, start_ms=start_ms, end_ms=now_ms, event_type="latency_sla_breached"):
         try:

@@ -7,13 +7,21 @@ from core.observability.perf import set_sla_budget_ms
 from core.observability.telemetry import telegram_api_span as core_telegram_api_span
 from runtime.execution.telemetry import (
     correlation_key_scope as execution_correlation_key_scope,
+)
+from runtime.execution.telemetry import (
     execute_total_span as execution_execute_total_span,
+)
+from runtime.execution.telemetry import (
     telegram_api_span as execution_telegram_api_span,
 )
 from runtime.observability.metrics import Metrics as RuntimeMetrics
 from runtime.observability.telemetry import (
     correlation_key_scope as runtime_correlation_key_scope,
+)
+from runtime.observability.telemetry import (
     execute_total_span as runtime_execute_total_span,
+)
+from runtime.observability.telemetry import (
     telegram_api_span as runtime_telegram_api_span,
 )
 from runtime.platform.support.explainability.decision_trace import DecisionTrace as RuntimeCompatDecisionTrace

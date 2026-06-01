@@ -5,12 +5,13 @@ from dataclasses import replace
 from typing import Any, Dict, Iterable, List
 
 from core._safe_logging import log_fallback
-from kernel.world_state import WorldStateV1
 from core.ai_ceo.contracts import CEOIntentV1, CEOPlanStepV1, CEOPlanV1
 from core.ai_ceo.intent import build_intent_from_session_args
-from core.ai_ceo.ledger import GrowthSnapshotV1, to_dict as snapshot_to_dict
+from core.ai_ceo.ledger import GrowthSnapshotV1
+from core.ai_ceo.ledger import to_dict as snapshot_to_dict
 from core.ai_ceo.safety import AutonomyPolicyV1, check_step_allowed
 from core.ai_ceo.scoring import rank_steps
+from kernel.world_state import WorldStateV1
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class CEOContextReader:
             return "telegram"
 
     @staticmethod
-    def safe_offer(state: WorldStateV1) -> Dict[str, Any]:
+    def safe_offer(state: WorldStateV1) -> dict[str, Any]:
         try:
             product = state.product if isinstance(state.product, dict) else {}
             offer = product.get("default_offer")
@@ -93,7 +94,7 @@ def _build_blocked_step(step: CEOPlanStepV1, *, autonomy: AutonomyPolicyV1, snap
     return replace(step, action="send_message@v1", payload=payload, tags=tuple(list(step.tags) + ["blocked"]))
 
 
-def build_default_plan_steps(*, tenant_id: str, user_id: str, locale: str, channel: str, offer: Dict[str, Any], plan_id: str, dry_run: bool) -> list[CEOPlanStepV1]:
+def build_default_plan_steps(*, tenant_id: str, user_id: str, locale: str, channel: str, offer: dict[str, Any], plan_id: str, dry_run: bool) -> list[CEOPlanStepV1]:
     safe_tenant = str(tenant_id or "unknown")
     safe_user = str(user_id or "unknown")
     safe_locale = str(locale or "ru")
@@ -169,7 +170,7 @@ def apply_policy_and_rank(
     autonomy: AutonomyPolicyV1,
     snapshot: GrowthSnapshotV1,
 ) -> list[CEOPlanStepV1]:
-    safe_steps: List[CEOPlanStepV1] = []
+    safe_steps: list[CEOPlanStepV1] = []
     for step in steps:
         reason = check_step_allowed(step.action, policy=autonomy)
         if reason:
@@ -184,7 +185,7 @@ def apply_policy_and_rank(
         return list(safe_steps)
 
 
-def build_plan_targets(*, intent: CEOIntentV1) -> Dict[str, Any]:
+def build_plan_targets(*, intent: CEOIntentV1) -> dict[str, Any]:
     return {
         "horizon_days": intent.horizon_days,
         "risk_level": intent.risk_level,

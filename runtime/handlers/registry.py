@@ -1,8 +1,12 @@
 from __future__ import annotations
+
 import importlib
 from inspect import Parameter, signature
 from typing import Any, Callable
+
 from runtime.ports.effects import EffectsPort
+
+
 class ActionHandlerRegistry:
     def __init__(self) -> None:
         self._handlers: dict[str, Callable[..., Any]] = {}

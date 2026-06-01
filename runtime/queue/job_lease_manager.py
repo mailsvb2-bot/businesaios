@@ -18,7 +18,6 @@ from runtime.queue.job_contract import JobLease, JobRecord, normalize_now, utc_n
 from runtime.queue.job_store_backend import JobStoreBackend
 from runtime.queue.job_visibility_timeout import JobVisibilityTimeout, JobVisibilityWindow
 
-
 CANON_RUNTIME_QUEUE_JOB_LEASE_MANAGER = True
 
 

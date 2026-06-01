@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from execution.runtime_keys import ACTION_BUDGET_KEY
 from dataclasses import asdict
 from typing import Any, Mapping
 
@@ -10,7 +9,7 @@ from execution.canonical_autonomy_safety import canonical_autonomy_safety_decisi
 from execution.canonical_operator_handoff import canonical_operator_handoff
 from execution.headless_trace import HeadlessTrace
 from execution.operator_handoff_policy import OperatorHandoffPolicy
-
+from execution.runtime_keys import ACTION_BUDGET_KEY
 
 CANON_AUTONOMY_FEEDBACK_STEP = True
 

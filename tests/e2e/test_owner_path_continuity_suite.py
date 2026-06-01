@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 import pytest
+
 from tests.e2e._headless_harness import ScenarioStep, build_harness, make_request
+
 pytestmark = [pytest.mark.integration, pytest.mark.e2e]
 def test_owner_path_replay_and_resume_keep_one_canonical_trace(tmp_path) -> None:
     first = build_harness(

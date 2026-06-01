@@ -6,7 +6,6 @@ from pathlib import Path
 
 from scripts.ci.paths import repo_root
 
-
 RUNNER = Path("scripts/staging/run_staging_runtime_proof.sh")
 
 

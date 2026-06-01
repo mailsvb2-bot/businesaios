@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict
+from typing import Any
 
-from kernel.world_state import WorldStateV1
 from core.read_model.reducers import reduce_event
+from kernel.world_state import WorldStateV1
 
 
 def build_world_state_from_events(
     *,
     tenant_id: str,
     user_id: str,
-    session: Dict[str, Any],
-    product: Dict[str, Any],
-    economy: Dict[str, Any],
+    session: dict[str, Any],
+    product: dict[str, Any],
+    economy: dict[str, Any],
     events: list[dict],
 ) -> WorldStateV1:
     """Deterministic builder: events -> reduced snapshot -> WorldStateV1.
@@ -21,7 +21,7 @@ def build_world_state_from_events(
     This builder does NOT perform I/O. It only reduces events passed in.
     """
 
-    base: Dict[str, Any] = {
+    base: dict[str, Any] = {
         "last_ts_ms": 0,
         "sessions_7d": 0,
         "purchases_30d": 0,

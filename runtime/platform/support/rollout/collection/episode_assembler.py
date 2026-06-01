@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from runtime.platform.support.contracts.trajectory import Trajectory
 from runtime.platform.support.contracts.episode import Episode
+from runtime.platform.support.contracts.trajectory import Trajectory
 
 
 class EpisodeAssembler:

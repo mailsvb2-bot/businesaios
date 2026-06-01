@@ -2,14 +2,13 @@ from __future__ import annotations
 
 CANON_COMPAT_SHIM = True
 
-from dataclasses import dataclass, field
 import re
-from typing import Any, Dict, Mapping
+from dataclasses import dataclass, field
+from typing import Any, Mapping
 
 from config.environment_matrix import normalize_environment_name
 from core.tenancy.normalization import normalize_tenant_id
 from governance.persistence_codec import to_jsonable
-
 
 CANONICAL_OBJECTIVE_NAME = 'profit_adjusted_growth'
 CANONICAL_FLOW = (
@@ -56,7 +55,7 @@ class RuntimeLimits:
 
 @dataclass
 class ConfigSection:
-    values: Dict[str, Any] = field(default_factory=dict)
+    values: dict[str, Any] = field(default_factory=dict)
 
     def get(self, key: str, default: Any = None) -> Any:
         return self.values.get(key, default)
@@ -70,7 +69,7 @@ class ConfigSection:
     def merge(self, mapping: Mapping[str, Any]) -> None:
         self.values.update(to_jsonable(dict(mapping or {})))
 
-    def normalized(self) -> 'ConfigSection':
+    def normalized(self) -> ConfigSection:
         normalized_values = {
             str(key).strip(): to_jsonable(value)
             for key, value in dict(self.values).items()
@@ -92,10 +91,10 @@ class ConfigSection:
 class SystemConfig:
     objective: OptimizationObjective = field(default_factory=OptimizationObjective)
     limits: RuntimeLimits = field(default_factory=RuntimeLimits)
-    sections: Dict[str, ConfigSection] = field(default_factory=dict)
+    sections: dict[str, ConfigSection] = field(default_factory=dict)
     environment: str = 'dev'
     tenant_id: str | None = None
-    labels: Dict[str, str] = field(default_factory=dict)
+    labels: dict[str, str] = field(default_factory=dict)
 
     def section(self, name: str) -> ConfigSection:
         normalized = self._normalize_section_name(name)
@@ -106,7 +105,7 @@ class SystemConfig:
     def merge_section(self, name: str, mapping: Mapping[str, Any]) -> None:
         self.section(name).merge(mapping)
 
-    def normalized(self) -> 'SystemConfig':
+    def normalized(self) -> SystemConfig:
         normalized_sections = {
             self._normalize_section_name(name): section.normalized()
             for name, section in dict(self.sections).items()
@@ -170,7 +169,7 @@ class SystemConfig:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> 'SystemConfig':
+    def from_dict(cls, payload: Mapping[str, Any]) -> SystemConfig:
         rows = dict(payload or {})
         objective_payload = dict(rows.get('objective') or {})
         limits_payload = dict(rows.get('limits') or {})

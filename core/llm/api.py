@@ -11,18 +11,29 @@ Design constraints:
 from __future__ import annotations
 
 from config.llm_provider_policy import DEFAULT_LLM_PROVIDER_POLICY, LLMProviderPolicy
+
 from .contracts import LLMClient
-from .providers.mock import MockLLMClient as _MockAdapter
-from .providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
 from .providers.anthropic import AnthropicClient, AnthropicTransport
 from .providers.gigachat import GigaChatClient, GigaChatTransport
+from .providers.mock import MockLLMClient as _MockAdapter
+from .providers.openai_provider import OpenAICompatClient, OpenAICompatConfig
 from .providers.yandexgpt import YandexGPTClient, YandexGPTTransport
 from .service import (
     OpenAICompatTransport,
+)
+from .service import (
     build_anthropic_provider as _assemble_anthropic,
+)
+from .service import (
     build_gigachat_provider as _assemble_gigachat,
+)
+from .service import (
     build_mock_client as _assemble_mock,
+)
+from .service import (
     build_openai_compat_client as _assemble_openai_compat,
+)
+from .service import (
     build_yandexgpt_provider as _assemble_yandexgpt,
 )
 

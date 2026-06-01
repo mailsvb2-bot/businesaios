@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..contracts import MemoryLinkRepository, MemoryLinkWriter as MemoryLinkWriterContract
+from ..contracts import MemoryLinkRepository
+from ..contracts import MemoryLinkWriter as MemoryLinkWriterContract
 from ..errors import KnowledgeValidationError
 from ..ids import new_memory_link_id
 from ..types import MemoryLink

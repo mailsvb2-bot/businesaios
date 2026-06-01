@@ -10,7 +10,6 @@ from typing import Any, Mapping
 from application.capability.capability_health_policy import CapabilityHealthPolicy
 from application.capability.capability_matrix import CapabilityMatrix
 
-
 CANON_CAPABILITY_HEALTH_SCORING = True
 CAPABILITY_HEALTH_SCHEMA_VERSION = 2
 
@@ -62,7 +61,7 @@ class CapabilityHealthCounters:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> 'CapabilityHealthCounters':
+    def from_dict(cls, payload: Mapping[str, Any]) -> CapabilityHealthCounters:
         return cls(
             attempts=max(0, _safe_int(payload.get('attempts'))),
             executed=max(0, _safe_int(payload.get('executed'))),
@@ -125,7 +124,7 @@ class CapabilityHealthSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> 'CapabilityHealthSnapshot':
+    def from_dict(cls, payload: Mapping[str, Any]) -> CapabilityHealthSnapshot:
         return cls(
             schema_version=max(1, _safe_int(payload.get('schema_version'), default=CAPABILITY_HEALTH_SCHEMA_VERSION)),
             tenant_id=_text(payload.get('tenant_id')),

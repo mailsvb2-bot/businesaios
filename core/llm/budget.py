@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, Tuple, Protocol, Any, Optional
-
 import time
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional, Protocol, Tuple
 
 from config.llm_budget_policy import DEFAULT_LLM_BUDGET_POLICY, LLMBudgetPolicy
 from core.telemetry.event_types import LLM_COMPLETED
@@ -26,8 +25,8 @@ class DailyTokenBudget:
 
     def __init__(self, caps: BudgetCaps) -> None:
         self._caps = caps
-        self._tenant: Dict[Tuple[str, str], int] = {}
-        self._user: Dict[Tuple[str, str, str], int] = {}
+        self._tenant: dict[tuple[str, str], int] = {}
+        self._user: dict[tuple[str, str, str], int] = {}
 
     def _day(self) -> str:
         return day_key_utc()
@@ -40,9 +39,7 @@ class DailyTokenBudget:
         u = int(self._user.get(ukey, 0))
         if t + int(tokens) > int(self._caps.tenant_tokens_per_day):
             return False
-        if u + int(tokens) > int(self._caps.user_tokens_per_day):
-            return False
-        return True
+        return u + int(tokens) <= int(self._caps.user_tokens_per_day)
 
     def spend(self, *, tenant_id: str, user_id: str, tokens: int) -> None:
         day = self._day()
@@ -60,7 +57,7 @@ class TokenBudget(Protocol):
         ...
 
 
-def _utc_day_bounds_ms(ts_ms: Optional[int] = None) -> tuple[int, int]:
+def _utc_day_bounds_ms(ts_ms: int | None = None) -> tuple[int, int]:
     """Return (start_ms, end_ms_exclusive) for UTC day containing ts_ms."""
     if ts_ms is None:
         ts_ms = int(time.time() * 1000)
@@ -84,7 +81,7 @@ class EventStoreDailyTokenBudget:
         self._caps = caps
         self._ttl = float(cache_ttl_s)
         # cache: (day, tenant, user)->(ts, spent_tenant, spent_user)
-        self._cache: Dict[Tuple[str, str, str], Tuple[float, int, int]] = {}
+        self._cache: dict[tuple[str, str, str], tuple[float, int, int]] = {}
 
     def _day(self) -> str:
         return day_key_utc()
@@ -135,9 +132,7 @@ class EventStoreDailyTokenBudget:
         spent_tenant, spent_user = self._sum(tenant_id=tenant_id, user_id=user_id)
         if spent_tenant + int(tokens) > int(self._caps.tenant_tokens_per_day):
             return False
-        if spent_user + int(tokens) > int(self._caps.user_tokens_per_day):
-            return False
-        return True
+        return spent_user + int(tokens) <= int(self._caps.user_tokens_per_day)
 
     def spend(self, *, tenant_id: str, user_id: str, tokens: int) -> None:
         # No-op: spending is recorded via LLM_COMPLETED telemetry events.

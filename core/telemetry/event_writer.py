@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.events.log import EventLog
 from core.tenancy.scope import TenantScope
@@ -43,8 +43,8 @@ async def append_event(
     *,
     event_type: str,
     ctx: TelemetryContext,
-    payload: Dict[str, Any],
-    ts_ms: Optional[int] = None,
+    payload: dict[str, Any],
+    ts_ms: int | None = None,
     source: str = "telemetry",
 ) -> None:
     """Append an event into the canonical event stream.

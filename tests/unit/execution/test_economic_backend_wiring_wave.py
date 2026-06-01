@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from execution.economic_store_wiring import EconomicStoreWiring
 from execution.cross_run_economic_audit import CrossRunEconomicAuditBuilder
+from execution.economic_store_wiring import EconomicStoreWiring
 
 
 def test_economic_store_wiring_creates_jsonl_backends(tmp_path: Path) -> None:

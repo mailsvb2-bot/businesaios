@@ -12,9 +12,15 @@ All network I/O is executed via runtime.effects -> sealed runtime/_internal.
 
 from typing import Any, Optional
 
+from runtime.llm import (
+    LLMAgent,
+    LLMAgentConfig,
+    build_runtime_llm_client,
+    normalize_provider,
+    resolve_runtime_llm_settings,
+)
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_bool, env_float, env_int, env_str
-from runtime.llm import LLMAgent, LLMAgentConfig, build_runtime_llm_client, normalize_provider, resolve_runtime_llm_settings
 
 
 def _setting_or_env(settings: Any, name: str, default: str = "") -> str:
@@ -124,7 +130,7 @@ def build_marketing_llm_composer(*, settings: Any, event_store: Any, logger: Any
     return MarketingLLMComposer(llm, cfg, event_store=event_store)
 
 
-def build_marketing_llm_agent(*, settings: Any, event_store: Any, logger: Any) -> Optional[Any]:
+def build_marketing_llm_agent(*, settings: Any, event_store: Any, logger: Any) -> Any | None:
     """Build canonical LLMAgent facade (Variant B).
 
     We reuse the same underlying LLM client wiring as the composer to avoid

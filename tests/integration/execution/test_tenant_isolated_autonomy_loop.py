@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from entrypoints.api.request_context import RequestContext
 from infra.feature_flag_store import InMemoryFeatureFlagStore
 from infra.feature_flags import FeatureFlags
 from infra.kill_switches import KillSwitchRegistry
@@ -9,7 +10,6 @@ from infra.maintenance_mode import MaintenanceMode
 from infra.runtime_guardrails import RuntimeGuardrails
 from interfaces.api.action_models import ExecuteActionRequest, ExecuteActionResponse
 from interfaces.api.execute_action_with_control_plane import ExecuteActionWithControlPlane
-from entrypoints.api.request_context import RequestContext
 from observability.action_audit_log import ActionAuditLog
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope

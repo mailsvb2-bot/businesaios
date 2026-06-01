@@ -6,10 +6,10 @@ These commands intentionally stay local and explicit. They provide a usable
 operator surface for offline tooling instead of decorative no-op entrypoints.
 """
 
-from collections.abc import Callable, Sequence
 import json
 import os
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 

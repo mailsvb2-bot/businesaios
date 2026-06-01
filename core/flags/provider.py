@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, Optional, Dict, Any
+from typing import Any, Dict, Optional, Protocol
 
-from core.tenancy.scope import TenantId
 from config.env_flags import env_bool, env_csv
+from core.tenancy.scope import TenantId
 
 
 @dataclass(frozen=True)
 class FlagContext:
     tenant_id: TenantId
     user_id: str | None = None
-    attributes: Dict[str, Any] | None = None
+    attributes: dict[str, Any] | None = None
 
 
 class FeatureFlagProvider(Protocol):

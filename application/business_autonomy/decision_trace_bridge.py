@@ -12,7 +12,7 @@ class BusinessAutonomyDecisionTraceBridge:
     store: object
 
     @classmethod
-    def default(cls) -> 'BusinessAutonomyDecisionTraceBridge':
+    def default(cls) -> BusinessAutonomyDecisionTraceBridge:
         return cls(store=PersistentDecisionTraceStore())
 
     def append_execution(self, *, request: BusinessExecutionRequest, result: BusinessExecutionResult, evidence_id: str) -> None:

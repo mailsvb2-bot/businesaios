@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from runtime.observability.error_handling import swallow
-from runtime._internal.effects_clients.http_client import http_json
-from runtime._internal.http_transport import HttpTransport
-from runtime.platform.config.env_flags import env_bool, env_str
-from runtime._internal.effects_clients.telegram_startup import classify_startup
 from runtime._internal.effects_actions.telegram.runtime_mode import is_telegram_mode
+from runtime._internal.effects_clients.http_client import http_json
+from runtime._internal.effects_clients.telegram_startup import classify_startup
+from runtime._internal.http_transport import HttpTransport
+from runtime.observability.error_handling import swallow
+from runtime.platform.config.env_flags import env_bool, env_str
 
 
 def _telegram_api_base() -> str:

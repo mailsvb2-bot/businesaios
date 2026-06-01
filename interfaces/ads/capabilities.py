@@ -5,7 +5,6 @@ from typing import Any, Mapping
 
 from interfaces.common.connector_capabilities import ConnectorCapabilities
 
-
 CANON_ADS_CAPABILITIES = True
 
 
@@ -78,7 +77,7 @@ class AdsCapabilities:
         )
 
     @classmethod
-    def from_registry_entry(cls, entry: Mapping[str, Any]) -> 'AdsCapabilities':
+    def from_registry_entry(cls, entry: Mapping[str, Any]) -> AdsCapabilities:
         actions = tuple(str(item).strip() for item in entry.get('action_types') or () if str(item).strip())
         return cls(
             read_inventory=bool(entry.get('read', False)),

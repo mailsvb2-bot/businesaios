@@ -4,12 +4,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from execution.autonomy_kill_switch import KillSwitchRule
-from execution.headless_contract import HeadlessExecutionContract
 from application.headless.models import GoalExecutionRequest
-from runtime.execution.executor_result import ExecutionResult
 from execution.autonomy_counters import FileAutonomyCounterStore
-from execution.autonomy_kill_switch import FileAutonomyKillSwitchRegistry
+from execution.autonomy_kill_switch import FileAutonomyKillSwitchRegistry, KillSwitchRule
+from execution.headless_contract import HeadlessExecutionContract
+from runtime.execution.executor_result import ExecutionResult
 
 
 @dataclass(frozen=True)

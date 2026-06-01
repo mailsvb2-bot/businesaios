@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from runtime.platform.config.env_flags import env_bool, env_path
 from runtime._internal.effects_domains.admin_pricing_support import persist_pricing_version_override
+from runtime.platform.config.env_flags import env_bool, env_path
 
 
 def validate_pricing_change(

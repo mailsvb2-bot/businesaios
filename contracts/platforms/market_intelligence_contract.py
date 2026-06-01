@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-
 CANON_MARKET_INTELLIGENCE_CONTRACT = True
 
 SOURCE_FAMILIES: tuple[str, ...] = ('marketplace', 'ads_library', 'competitor_analytics', 'search_intelligence', 'professional_network', 'content_platform', 'app_store', 'review_platform', 'landing_intelligence', 'video_platform', 'ads_spy', 'newsletter_intelligence')

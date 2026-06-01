@@ -1,5 +1,4 @@
-from learning import policy_update, replay, rollout, trainer
-from learning import registry
+from learning import policy_update, registry, replay, rollout, trainer
 
 
 def test_learning_contract_surfaces_are_centered_in_four_modules():

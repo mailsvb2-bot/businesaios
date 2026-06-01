@@ -6,7 +6,11 @@ from typing import Any, Mapping
 from interfaces.common.connector_capabilities import ConnectorCapabilities
 from interfaces.common.connector_maturity import ConnectorMaturity
 from interfaces.common.connector_result import ConnectorResult
-from interfaces.common.connector_support import build_invalid_payload_result, build_not_configured_result, normalize_operation
+from interfaces.common.connector_support import (
+    build_invalid_payload_result,
+    build_not_configured_result,
+    normalize_operation,
+)
 
 
 @dataclass(frozen=True)

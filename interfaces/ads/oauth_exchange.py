@@ -7,17 +7,17 @@ from interfaces.ads.errors import ValidationError
 
 
 class HTTPClient(Protocol):
-    async def get(self, url: str, *, headers: Dict[str, str], params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]: ...
+    async def get(self, url: str, *, headers: dict[str, str], params: dict[str, Any] | None = None) -> dict[str, Any]: ...
 
-    async def post(self, url: str, *, headers: Dict[str, str], data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]: ...
+    async def post(self, url: str, *, headers: dict[str, str], data: dict[str, Any] | None = None) -> dict[str, Any]: ...
 
 
 @dataclass(frozen=True)
 class OAuthTokenExchangeResult:
     access_token: str
-    refresh_token: Optional[str] = None
-    expires_in: Optional[int] = None
-    raw: Optional[Dict[str, Any]] = None
+    refresh_token: str | None = None
+    expires_in: int | None = None
+    raw: dict[str, Any] | None = None
 
 
 class OAuthExchanger(Protocol):
@@ -135,11 +135,11 @@ class VkOAuthExchanger:
         )
 
 
-def _str_or_none(x: Any) -> Optional[str]:
+def _str_or_none(x: Any) -> str | None:
     return str(x) if x is not None else None
 
 
-def _int_or_none(x: Any) -> Optional[int]:
+def _int_or_none(x: Any) -> int | None:
     try:
         return int(x) if x is not None else None
     except Exception:

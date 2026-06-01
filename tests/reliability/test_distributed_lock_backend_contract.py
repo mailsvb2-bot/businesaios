@@ -1,13 +1,21 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from reliability.distributed_lock import LockLease
-from reliability.distributed_lock_backend import LockBackendRecord, build_expires_at, datetime_to_epoch_ms, ensure_aware, epoch_ms_to_datetime, normalize_lock_inputs, safe_sql_identifier
+from reliability.distributed_lock_backend import (
+    LockBackendRecord,
+    build_expires_at,
+    datetime_to_epoch_ms,
+    ensure_aware,
+    epoch_ms_to_datetime,
+    normalize_lock_inputs,
+    safe_sql_identifier,
+)
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def _t(second: int = 0) -> datetime:

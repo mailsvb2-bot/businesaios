@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Protocol
+
 from runtime.platform.support.contracts.transition import Transition
 
 

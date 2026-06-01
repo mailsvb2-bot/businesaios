@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
-from core.llm.budget import BudgetCaps
 from config.marketing_llm_policy import DEFAULT_MARKETING_LLM_POLICY, MarketingLLMPolicy
+from core.llm.budget import BudgetCaps
 from core.llm.circuit import CircuitConfig
 from core.llm.contracts import LLMClient
 from core.llm.sampling import DebugSampling
 from core.marketing.async_runner import run_awaitable_sync
 from core.marketing.llm.composer_runtime import build_composer_runtime
 from core.marketing.llm.service import compose_marketing_text_async, compose_marketing_text_sync
-from core.marketing.llm_text_policy import validate_marketing_text as _validate_marketing_text
 from core.marketing.llm_prompt_builder import MarketingLLMInputs
 from core.marketing.llm_telemetry import emit_trace_async, maybe_emit_alert
+from core.marketing.llm_text_policy import validate_marketing_text as _validate_marketing_text
 
 validate_marketing_text = _validate_marketing_text
 
@@ -54,16 +54,16 @@ class MarketingLLMComposer:
         """
         return self._llm
 
-    async def compose(self, inp: MarketingLLMInputs) -> Optional[str]:
+    async def compose(self, inp: MarketingLLMInputs) -> str | None:
         return await self._compose_async(inp)
 
-    def compose_sync(self, inp: MarketingLLMInputs) -> Optional[str]:
+    def compose_sync(self, inp: MarketingLLMInputs) -> str | None:
         gen_sync = getattr(self._llm, "generate_sync", None)
         if callable(gen_sync):
             return self._compose_sync_via_generate_sync(inp)
         return run_awaitable_sync(self._compose_async(inp))
 
-    async def _compose_async(self, inp: MarketingLLMInputs) -> Optional[str]:
+    async def _compose_async(self, inp: MarketingLLMInputs) -> str | None:
         return await compose_marketing_text_async(self, inp)
 
     async def _maybe_alert(self, inp: MarketingLLMInputs, *, reason: str) -> None:
@@ -94,5 +94,5 @@ class MarketingLLMComposer:
             error_code=f"guardrail:{reason}",
         )
 
-    def _compose_sync_via_generate_sync(self, inp: MarketingLLMInputs) -> Optional[str]:
+    def _compose_sync_via_generate_sync(self, inp: MarketingLLMInputs) -> str | None:
         return compose_marketing_text_sync(self, inp)

@@ -7,10 +7,11 @@ execution state or become another decision surface.
 """
 
 import importlib
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-import os
+
 sqlite3 = importlib.import_module("sqlite3")
 from threading import RLock
 
@@ -18,7 +19,6 @@ from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.job_janitor import QueueJanitorReport
 from runtime.queue.queue_leadership import QueueLeadershipReport
-
 
 CANON_RUNTIME_QUEUE_JANITOR_HISTORY_SQLITE = True
 

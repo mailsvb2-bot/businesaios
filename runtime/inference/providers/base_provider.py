@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from execution.inference_provider_contract import InferenceProviderHealth
 
-
 CANON_RUNTIME_INFERENCE_BASE_PROVIDER = True
 
 

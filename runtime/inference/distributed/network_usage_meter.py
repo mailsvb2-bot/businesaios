@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 CANON_RUNTIME_DISTRIBUTED_NETWORK_USAGE_METER = True
 
 

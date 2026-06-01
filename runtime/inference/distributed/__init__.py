@@ -17,11 +17,11 @@ from runtime.inference.distributed.node_attestation_contract import (
     DistributedInferenceNodeAttestationPolicy,
 )
 from runtime.inference.distributed.node_health_scoring import DistributedInferenceNodeHealthScoring
-from runtime.inference.distributed.node_result_consensus import DistributedInferenceNodeResultConsensus
 from runtime.inference.distributed.node_registry import (
     DistributedInferenceNode,
     DistributedInferenceNodeRegistry,
 )
+from runtime.inference.distributed.node_result_consensus import DistributedInferenceNodeResultConsensus
 from runtime.inference.distributed.node_selection_policy import DistributedInferenceNodeSelectionPolicy
 
 CANON_RUNTIME_DISTRIBUTED_INFERENCE_NAMESPACE = True

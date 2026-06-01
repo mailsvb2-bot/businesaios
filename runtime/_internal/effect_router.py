@@ -1,17 +1,20 @@
 from __future__ import annotations
+
 import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
-from runtime._internal.http_transport import HttpTransport, build_http_transport
-from runtime._internal.effect_types import EffectActionType, require_effect_action_type
+
+from runtime._internal.effect_evidence_contract import effect_result_to_evidence, evidence_contract_fields
 from runtime._internal.effect_payloads import normalize_effect_payload, payload_contract_fields
 from runtime._internal.effect_results import canonical_effect_result, result_contract_fields
-from runtime._internal.effect_evidence_contract import effect_result_to_evidence, evidence_contract_fields
-from runtime._internal.effects_clients.yookassa_client import create_payment, get_payment_status
-from runtime._internal.effects_clients.weather_client import open_meteo_weather
+from runtime._internal.effect_types import EffectActionType, require_effect_action_type
 from runtime._internal.effects_actions.llm_completion_support import call_marketing_llm
 from runtime._internal.effects_actions.telegram.startup import telegram_self_check_effect
 from runtime._internal.effects_actions.telegram_actions_polling import poll_telegram_updates_effect
+from runtime._internal.effects_clients.weather_client import open_meteo_weather
+from runtime._internal.effects_clients.yookassa_client import create_payment, get_payment_status
+from runtime._internal.http_transport import HttpTransport, build_http_transport
+
 EffectHandler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 def _optional_text(value: Any) -> str | None:
     if not isinstance(value, str):
@@ -32,7 +35,7 @@ class EffectRouter:
         key = require_effect_action_type(action_type)
         self._handlers[key] = handler
     def supported_action_types(self) -> tuple[str, ...]:
-        return tuple(sorted(str(item) for item in self._handlers.keys()))
+        return tuple(sorted(str(item) for item in self._handlers))
     def supported_action_enums(self) -> tuple[EffectActionType, ...]:
         return tuple(sorted(self._handlers.keys(), key=str))
     def payload_contracts(self) -> dict[str, tuple[str, ...]]:

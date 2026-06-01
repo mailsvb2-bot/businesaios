@@ -10,37 +10,37 @@ class Complex4:
     im: tuple[float, float, float, float]
 
     @classmethod
-    def zero(cls) -> "Complex4":
+    def zero(cls) -> Complex4:
         return cls((0.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0))
 
-    def add(self, other: "Complex4") -> "Complex4":
+    def add(self, other: Complex4) -> Complex4:
         return Complex4(
-            tuple(a + b for a, b in zip(self.re, other.re)),
-            tuple(a + b for a, b in zip(self.im, other.im)),
+            tuple(a + b for a, b in zip(self.re, other.re, strict=False)),
+            tuple(a + b for a, b in zip(self.im, other.im, strict=False)),
         )
 
-    def scale(self, factor: float) -> "Complex4":
+    def scale(self, factor: float) -> Complex4:
         return Complex4(
             tuple(v * factor for v in self.re),
             tuple(v * factor for v in self.im),
         )
 
-    def component_scale(self, factors: tuple[float, float, float, float]) -> "Complex4":
+    def component_scale(self, factors: tuple[float, float, float, float]) -> Complex4:
         return Complex4(
-            tuple(v * f for v, f in zip(self.re, factors)),
-            tuple(v * f for v, f in zip(self.im, factors)),
+            tuple(v * f for v, f in zip(self.re, factors, strict=False)),
+            tuple(v * f for v, f in zip(self.im, factors, strict=False)),
         )
 
     def magnitude(self) -> tuple[float, float, float, float]:
-        return tuple(sqrt(r * r + i * i) for r, i in zip(self.re, self.im))
+        return tuple(sqrt(r * r + i * i) for r, i in zip(self.re, self.im, strict=False))
 
     def phase(self) -> tuple[float, float, float, float]:
-        return tuple(atan2(i, r) for r, i in zip(self.re, self.im))
+        return tuple(atan2(i, r) for r, i in zip(self.re, self.im, strict=False))
 
     def norm_sq(self) -> float:
-        return sum((r * r + i * i) for r, i in zip(self.re, self.im))
+        return sum((r * r + i * i) for r, i in zip(self.re, self.im, strict=False))
 
-    def renormalize(self, ceiling: float = 1.0) -> "Complex4":
+    def renormalize(self, ceiling: float = 1.0) -> Complex4:
         norm = self.norm_sq()
         if norm <= ceiling * ceiling or norm <= 0.0:
             return self

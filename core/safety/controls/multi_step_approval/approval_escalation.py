@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 from .models import ApprovalTicket, ApprovalWorkflowState
 
@@ -15,7 +15,7 @@ class ApprovalEscalationEngine:
 
     def apply(self, ticket: ApprovalTicket, *, base_required: int, now: datetime | None = None) -> ApprovalTicket:
         current = ticket
-        instant = now or datetime.now(timezone.utc)
+        instant = now or datetime.now(UTC)
         required = max(int(base_required), int(ticket.required_approvals or 0))
         approvals = len(tuple(ticket.approvals or ()))
         if ticket.state in {
@@ -29,7 +29,7 @@ class ApprovalEscalationEngine:
             try:
                 expiry = datetime.fromisoformat(str(ticket.expires_at))
                 if expiry.tzinfo is None:
-                    expiry = expiry.replace(tzinfo=timezone.utc)
+                    expiry = expiry.replace(tzinfo=UTC)
                 if expiry <= instant and ticket.state in {
                     ApprovalWorkflowState.PENDING,
                     ApprovalWorkflowState.REQUESTED,

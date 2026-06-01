@@ -1,23 +1,22 @@
-from core.tenancy.tenant import current_tenant_id
-import time
 import random
+import time
+
 import pytest
 
-from core.ai.world_state import WorldStateV1
-from core.ai.policy_registry import PolicyRegistry
-from core.policies.selector import PolicySelector
-from core.ai.schema_registry import SchemaRegistry, DecisionSchema
-from core.ai.snapshot_store import MemorySnapshotStore
 from core.ai.decision_core import DecisionCore
-from core.security.keyring import Keyring
+from core.ai.policy_registry import PolicyRegistry
+from core.ai.schema_registry import DecisionSchema, SchemaRegistry
+from core.ai.snapshot_store import MemorySnapshotStore
+from core.ai.world_state import WorldStateV1
 from core.events.log import EventLog
-
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
-from runtime.platform.ledger.sqlite_ledger import SqliteLedger
-
+from core.policies.selector import PolicySelector
+from core.security.keyring import Keyring
+from core.tenancy.tenant import current_tenant_id
+from runtime.executor import RuntimeExecutor
 from runtime.guard import RuntimeGuard
 from runtime.handlers import ActionHandlerRegistry
-from runtime.executor import RuntimeExecutor
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
+from runtime.platform.ledger.sqlite_ledger import SqliteLedger
 
 
 class _Policy:
@@ -134,7 +133,7 @@ def test_replay_after_key_revoke_rejected(tmp_path):
 
 def test_fuzz_payload_mutations_fail(tmp_path):
     core, executor, state, ledger_ctx = _build(tmp_path)
-    env = core.optimize(state)
+    _ = core.optimize(state)
 
     rnd = random.Random(1337)
     for _ in range(25):

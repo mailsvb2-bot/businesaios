@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Mapping, Optional
+from typing import Mapping
 
 
 def bayes(p_b_given_a: float, p_a: float, p_b: float) -> float:
@@ -53,7 +53,7 @@ def purchase_prob_from_history(
     history: HistorySignals,
     *,
     base_rate: float = 0.02,
-    weights: Optional[Dict[str, float]] = None,
+    weights: dict[str, float] | None = None,
 ) -> float:
     """A tiny Bayesian-style heuristic (safe baseline, not a trained model):
       P(buy|user) ≈ clamp( base_rate * Π (1 + w_i * signal_i) )

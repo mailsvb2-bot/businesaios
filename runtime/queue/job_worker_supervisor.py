@@ -21,7 +21,6 @@ from runtime.queue.job_worker import JobWorker
 from runtime.queue.job_worker_loop import JobWorkerLoop, WorkerLoopReport
 from runtime.queue.queue_observability import QueueObservabilityRegistry, QueueObservabilitySnapshot
 
-
 CANON_RUNTIME_QUEUE_WORKER_SUPERVISOR = True
 
 

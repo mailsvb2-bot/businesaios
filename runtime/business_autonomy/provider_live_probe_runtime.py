@@ -7,13 +7,13 @@ from application.business_autonomy.provider_admin_contract import ProviderDefini
 from application.business_autonomy.provider_runtime_contract import ProviderLiveProbeResult
 from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
 from runtime.business_autonomy.provider_http_live_clients import VendorHttpLiveTransport, build_live_http_transports
-from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
 from runtime.business_autonomy.provider_probe_result_enricher import (
     enrich_probe_result_with_messaging_health,
     finalize_probe_result,
 )
 from runtime.business_autonomy.provider_runtime_observability import ProviderRuntimeObservability
+from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_LIVE_PROBE_RUNTIME = True

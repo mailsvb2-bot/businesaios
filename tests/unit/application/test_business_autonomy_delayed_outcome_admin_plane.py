@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from application.business_autonomy.delayed_outcome_bridge import BusinessAutonomyDelayedOutcomeBridge
 from application.business_autonomy.operator_admin_plane import UnifiedOperatorAdminPlane
@@ -20,7 +20,7 @@ def test_delayed_outcome_bridge_exposes_quarantine_summary(tmp_path) -> None:
                 "tenant_id": "tenant-a",
                 "business_id": "biz-a",
                 "goal_id": "goal-a",
-                "expected_ready_at_utc": (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(),
+                "expected_ready_at_utc": (datetime.now(UTC) - timedelta(days=2)).isoformat(),
                 "metadata": {},
                 "status": "pending",
             }

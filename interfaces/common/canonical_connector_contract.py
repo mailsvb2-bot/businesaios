@@ -4,7 +4,6 @@ from typing import Any, Mapping
 
 from interfaces.common.connector_maturity import ConnectorMaturity
 
-
 CANON_CONNECTOR_OPERATIONAL_CONTRACT = True
 
 

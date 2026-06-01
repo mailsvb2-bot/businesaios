@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 
 from adapters.api.fastapi.public_routes import register_public_api_routes
 from entrypoints.api.api_handler_bundle import build_api_handler_bundle
-from entrypoints.api.health_handler import HealthHandler
 from entrypoints.api.economic_route_handlers import build_economic_route_handlers
+from entrypoints.api.health_handler import HealthHandler
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
 
@@ -49,7 +49,7 @@ def _build_client() -> TestClient:
 
 def test_corrected_economics_route_exposes_refund_request_bridge() -> None:
     client = _build_client()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
     response = client.post('/client-outcome/full-cycle', json={
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',
@@ -91,7 +91,7 @@ def test_corrected_economics_route_exposes_refund_request_bridge() -> None:
 
 def test_full_cycle_idempotency_key_replays_same_response_without_duplication() -> None:
     client = _build_client()
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat()
     request = {
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',

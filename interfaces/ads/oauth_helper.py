@@ -14,7 +14,7 @@ class OAuthAppConfig:
     client_id: str
     client_secret: str
     scopes: str
-    extra_auth_params: Optional[Dict[str, str]] = None
+    extra_auth_params: dict[str, str] | None = None
 
 
 def build_authorization_url(*, cfg: OAuthAppConfig, redirect_uri: str, state: str) -> str:
@@ -28,7 +28,7 @@ def build_authorization_url(*, cfg: OAuthAppConfig, redirect_uri: str, state: st
     if not cfg.authorize_url or not cfg.client_id:
         raise ValidationError("OAuth config missing", field="client_id")
 
-    params: Dict[str, str] = {
+    params: dict[str, str] = {
         "client_id": cfg.client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",

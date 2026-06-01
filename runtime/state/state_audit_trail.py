@@ -6,7 +6,6 @@ from pathlib import Path
 
 from runtime.state.state_contract import StateSynthesisRequest, StateSynthesizedSnapshot
 
-
 CANON_STATE_AUDIT_TRAIL = True
 
 

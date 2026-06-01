@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import time
+from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
@@ -17,14 +17,14 @@ from core.creative_intelligence.models import (
     ExperimentConfidenceSnapshot,
     IncrementalitySnapshot,
 )
-from core.experiments.enums import RolloutDecision, VariantRole
+from core.experiments.enums import RolloutDecision
 from core.experiments.service import build_empty_result
 from core.experiments.types import Experiment
 from core.finance.strategic.scenarios.scenario_catalog_data import scenario_definitions
+from core.governance.evaluators.profit_metrics import ProfitMetricsService
 from core.growth.strategy.contracts import GrowthHypothesisV1, GrowthSignalV1
 from core.growth.strategy.service import _default_steps
 from core.growth.strategy.signals import build_signals
-from core.governance.evaluators.profit_metrics import ProfitMetricsService
 from core.reward_bridge.future_value_builder import build_future_value
 from core.reward_bridge.immediate_reward_builder import build_immediate_reward
 

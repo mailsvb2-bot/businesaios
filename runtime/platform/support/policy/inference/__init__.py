@@ -7,6 +7,7 @@ from typing import Any
 
 from runtime.platform.support.contracts.observation import Observation
 
+
 class ActionPostprocessing:
     def apply(self, action):
         return action

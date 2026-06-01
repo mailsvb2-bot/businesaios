@@ -6,7 +6,6 @@ from core.safety.operational.operational_budget_accountant import BudgetAccounti
 from core.safety.operational.ports import OperationalBudgetLedgerPort
 from core.safety.operational.tenant_policy_provider import TenantOperationalBudgetPolicyProvider
 
-
 CANON_OPERATIONAL_BUDGET_GUARD = True
 
 

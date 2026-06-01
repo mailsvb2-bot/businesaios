@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Gift links (one-time) read model.
 
 We keep this intentionally simple and event-sourced:
@@ -9,8 +7,10 @@ We keep this intentionally simple and event-sourced:
 No side-effects here. Policies may use this for validation.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -18,14 +18,14 @@ class GiftTokenStatus:
     token: str
     created_by: str
     expires_ms: int
-    redeemed_by: Optional[str] = None
+    redeemed_by: str | None = None
 
     @property
     def is_redeemed(self) -> bool:
         return bool(self.redeemed_by)
 
 
-def get_gift_token_status(event_store: Any, *, tenant_id: str = "default", token: str) -> Optional[GiftTokenStatus]:
+def get_gift_token_status(event_store: Any, *, tenant_id: str = "default", token: str) -> GiftTokenStatus | None:
     token = (token or "").strip()
     if not token:
         return None

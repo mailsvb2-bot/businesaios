@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 CANON_BUSINESS_MEMORY_MODELS = True
 
 
@@ -57,7 +56,7 @@ class BusinessMemoryRecord:
         }
 
     @classmethod
-    def from_dict(cls, payload: dict[str, Any] | None, *, business_id: str) -> 'BusinessMemoryRecord':
+    def from_dict(cls, payload: dict[str, Any] | None, *, business_id: str) -> BusinessMemoryRecord:
         data = dict(payload or {})
         return cls(
             business_id=str(data.get('business_id') or business_id),

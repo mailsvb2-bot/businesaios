@@ -3,15 +3,15 @@ from pathlib import Path
 from shared.registry import (
     ActionRegistry,
     ActionRunnerRegistry,
+    ComponentRegistry,
     ConnectorRegistry,
     ExperimentRegistry,
-    ModelRegistry,
-    PolicyRegistry,
-    TemplateRegistry,
     InputRegistry,
+    ModelRegistry,
     OpportunityRegistry,
+    PolicyRegistry,
     ServiceRegistry,
-    ComponentRegistry,
+    TemplateRegistry,
 )
 
 

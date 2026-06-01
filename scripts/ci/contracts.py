@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
-
 GateName = str
 StepName = str
 StepStatus = str

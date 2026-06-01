@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Sequence
-import math
+
 
 def require_non_empty(name: str, values: Sequence[object]) -> None:
     if not values:
@@ -14,7 +15,7 @@ def require_same_length(name_a: str, a: Sequence[object], name_b: str, b: Sequen
 
 def safe_dot(xs: Sequence[float], ys: Sequence[float]) -> float:
     require_same_length("xs", xs, "ys", ys)
-    return float(sum(float(x) * float(y) for x, y in zip(xs, ys)))
+    return float(sum(float(x) * float(y) for x, y in zip(xs, ys, strict=False)))
 
 def l2_norm(xs: Sequence[float]) -> float:
     return math.sqrt(sum(float(x) * float(x) for x in xs))

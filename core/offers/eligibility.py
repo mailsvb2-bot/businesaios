@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping
+
 from core.observability.silent import swallow
 
 
@@ -16,7 +17,7 @@ def check_offer_eligibility(
     product: Mapping[str, Any],
     tenant_id: str,
     entitlements: Mapping[str, Any],
-    payment_status: Optional[str],
+    payment_status: str | None,
     offer_id: str,
 ) -> Eligibility:
     # 1) product module flag

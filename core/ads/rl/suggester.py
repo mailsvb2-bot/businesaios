@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 from core.ads.rl.policy_store import PolicyStore
 from core.governance.evaluators.profit_metrics import ProfitMetricsService
@@ -11,7 +11,7 @@ from core.governance.evaluators.profit_metrics import ProfitMetricsService
 class Suggestion:
     ok: bool
     reason: str
-    action: Dict[str, Any] | None = None
+    action: dict[str, Any] | None = None
     policy_version: int | None = None
 
 

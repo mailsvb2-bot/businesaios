@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from interfaces.web.debug.common.query_utils import clean_text, clamp_int
+from interfaces.web.debug.common.query_utils import clamp_int, clean_text
 from interfaces.web.debug.messaging_policy_dashboard.html_controller import MessagingPolicyDashboardHtmlController
 from interfaces.web.debug.messaging_policy_dashboard.json_controller import MessagingPolicyDashboardJsonController
 

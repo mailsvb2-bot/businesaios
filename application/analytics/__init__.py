@@ -14,7 +14,9 @@ from application.analytics.dashboard_service import ApplicationAnalyticsDashboar
 from application.analytics.fleet_analytics_coordinator import FleetAnalyticsCoordinator
 from application.analytics.fleet_analytics_scheduler import FleetAnalyticsScheduler
 from application.analytics.fleet_queue_job_bridge import AnalyticsFleetQueueJobBridge
-from application.analytics.persistent_distributed_analytics_materializer import PersistentDistributedAnalyticsMaterializer
+from application.analytics.persistent_distributed_analytics_materializer import (
+    PersistentDistributedAnalyticsMaterializer,
+)
 
 __all__ = [
     'AnalyticsAlertDedupService',

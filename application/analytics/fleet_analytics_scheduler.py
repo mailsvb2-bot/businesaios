@@ -5,7 +5,9 @@ from typing import Iterable
 
 from application.analytics.analytics_delivery_service import AnalyticsDeliveryService
 from application.analytics.fleet_analytics_coordinator import FleetAnalyticsCoordinator
-from application.analytics.persistent_distributed_analytics_materializer import PersistentDistributedAnalyticsMaterializer
+from application.analytics.persistent_distributed_analytics_materializer import (
+    PersistentDistributedAnalyticsMaterializer,
+)
 
 
 @dataclass

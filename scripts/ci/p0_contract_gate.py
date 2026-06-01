@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-import sys
 
 sys.dont_write_bytecode = True
 

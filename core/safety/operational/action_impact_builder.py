@@ -11,7 +11,6 @@ from contracts.action_impact_contract import (
 from core.safety.operational.action_classifier import ActionClassifier
 from core.safety.operational.action_cost_model import ActionCostModel
 
-
 CANON_OPERATIONAL_ACTION_IMPACT_BUILDER = True
 
 

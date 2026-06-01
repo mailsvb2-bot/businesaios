@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class ActionGuard:
     def allows(self, payload: dict) -> bool:
         return not bool(payload.get("action_blocked", False))

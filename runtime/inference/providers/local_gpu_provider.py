@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from execution.inference_capacity_contract import InferenceCapacityLimits, InferenceCapacityProfile, InferenceCapacityTier
+from execution.inference_capacity_contract import (
+    InferenceCapacityLimits,
+    InferenceCapacityProfile,
+    InferenceCapacityTier,
+)
 from execution.inference_provider_contract import InferenceRequest, InferenceResponse
 from runtime.inference.providers.base_provider import BaseInferenceProviderState, BaseInferenceProviderSupport
-
 
 CANON_RUNTIME_LOCAL_GPU_PROVIDER = True
 

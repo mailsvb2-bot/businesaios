@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import pytest
-
 from connectors.platform.connector_capability_contract import ConnectorCapabilityDescriptor, ConnectorMaturity
 from connectors.platform.connector_circuit_breaker import BreakerState, CircuitBreakerRule, ConnectorCircuitBreaker
 from connectors.platform.connector_contract import ConnectorRequest, ConnectorVerificationRequest

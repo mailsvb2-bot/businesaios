@@ -8,14 +8,13 @@ Operational only:
 - workers must execute an injected canonical runner.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from enum import Enum
 import json
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta, timezone
+from enum import Enum
 from typing import Any, Mapping
 
 from core.tenancy.normalization import require_tenant_id
-
 
 CANON_RUNTIME_QUEUE_CONTRACT = True
 
@@ -29,7 +28,7 @@ MAX_ERROR_LENGTH = 2_000
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def normalize_now(value: datetime | None = None) -> datetime:
@@ -41,7 +40,7 @@ def _normalize_datetime(value: datetime, *, field_name: str) -> datetime:
         raise TypeError(f"{field_name} must be a datetime")
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{field_name} must be timezone-aware")
-    return value.astimezone(timezone.utc)
+    return value.astimezone(UTC)
 
 
 def _normalize_optional_datetime(value: datetime | None, *, field_name: str) -> datetime | None:

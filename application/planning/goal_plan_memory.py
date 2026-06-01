@@ -7,7 +7,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
-
 CANON_GOAL_PLAN_MEMORY = True
 GOAL_PLAN_SCHEMA_VERSION = 1
 
@@ -76,7 +75,7 @@ class GoalPlanSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "GoalPlanSnapshot":
+    def from_dict(cls, payload: Mapping[str, Any]) -> GoalPlanSnapshot:
         completed_steps = []
         for item in payload.get("completed_steps") or []:
             row = _safe_dict(item)

@@ -13,7 +13,7 @@ async def require_token_compat(
     account_id: str,
     connector_name: str,
     require_access_token: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     tok = await tokens.get(
         tenant_id=tenant_id,
         platform=platform,

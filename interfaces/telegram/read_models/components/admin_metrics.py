@@ -5,10 +5,18 @@ from typing import Any, Dict
 from runtime.platform.config.feature_flags import FeatureFlags
 
 
-def load_admin_metrics(event_store: Any, *, tenant_id: str) -> Dict[str, Any]:
-    out: Dict[str, Any] = {}
+def load_admin_metrics(event_store: Any, *, tenant_id: str) -> dict[str, Any]:
+    out: dict[str, Any] = {}
     try:
-        from core.admin.read_model import users_today, funnel_counts, demo_summary, retention_brief, health_brief, pricing_change_requests, latency_brief
+        from core.admin.read_model import (
+            demo_summary,
+            funnel_counts,
+            health_brief,
+            latency_brief,
+            pricing_change_requests,
+            retention_brief,
+            users_today,
+        )
         try:
             out["users_today"] = users_today(event_store, tenant_id=str(tenant_id))
         except Exception:

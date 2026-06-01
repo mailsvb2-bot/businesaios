@@ -17,11 +17,10 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from core.causal.api import estimate_causal_effect
 from core.causal.types import CausalDataset, CausalQuery, CausalRow, EffectEstimate
 
+Json = dict[str, Any]
 
-Json = Dict[str, Any]
 
-
-def _ts_ms(ev: Json) -> Optional[int]:
+def _ts_ms(ev: Json) -> int | None:
     # Support a few common shapes.
     for k in ("timestamp_ms", "ts_ms", "time_ms", "created_at_ms"):
         v = ev.get(k)
@@ -57,16 +56,16 @@ def _dow(day_index: int) -> int:
 
 @dataclass(frozen=True)
 class DailyPanel:
-    rows: List[CausalRow]
+    rows: list[CausalRow]
     meta: Json
 
 
 def build_daily_panel(
     events: Iterable[Json],
     *,
-    treatment_event_types: Tuple[str, ...],
-    outcome_event_types: Tuple[str, ...],
-    revenue_minor_keys: Tuple[str, ...] = ("amount_minor", "amount", "sum_minor"),
+    treatment_event_types: tuple[str, ...],
+    outcome_event_types: tuple[str, ...],
+    revenue_minor_keys: tuple[str, ...] = ("amount_minor", "amount", "sum_minor"),
     max_days: int = 60,
 ) -> DailyPanel:
     """Aggregate an event window into per-day rows.
@@ -87,7 +86,7 @@ def build_daily_panel(
     if not te or not oe:
         return DailyPanel(rows=[], meta={"reason": "empty_types"})
 
-    buckets: Dict[int, Dict[str, Any]] = {}
+    buckets: dict[int, dict[str, Any]] = {}
 
     # First pass: bucket events
     for ev in list(events):
@@ -131,7 +130,7 @@ def build_daily_panel(
     if max_days > 0 and len(days) > int(max_days):
         days = days[-int(max_days):]
 
-    rows: List[CausalRow] = []
+    rows: list[CausalRow] = []
     prev_y: float = 0.0
     for d in days:
         b = buckets[d]
@@ -162,7 +161,7 @@ def build_daily_panel(
     return DailyPanel(rows=rows, meta=meta)
 
 
-def estimate_effect_from_daily_panel(panel: DailyPanel, *, method: str = "dr") -> Optional["CausalResult"]:  # noqa: F821
+def estimate_effect_from_daily_panel(panel: DailyPanel, *, method: str = "dr") -> CausalResult | None:  # noqa: F821
     if not panel.rows:
         return None
     # FIX: CausalDataset has no `meta` field — pass only rows.
@@ -172,7 +171,7 @@ def estimate_effect_from_daily_panel(panel: DailyPanel, *, method: str = "dr") -
     return estimate_causal_effect(ds, query=q)
 
 
-def placebo_shift_treatment(panel: DailyPanel, *, shift_days: int = 1, method: str = "dr") -> Optional["CausalResult"]:  # noqa: F821
+def placebo_shift_treatment(panel: DailyPanel, *, shift_days: int = 1, method: str = "dr") -> CausalResult | None:  # noqa: F821
     """Placebo test: shift treatment forward by N days.
 
     If we still see a strong effect after shifting, it's a warning sign.
@@ -193,7 +192,7 @@ def placebo_shift_treatment(panel: DailyPanel, *, shift_days: int = 1, method: s
         if 0 <= j < len(shifted):
             shifted[j] = int(v)
 
-    out_rows: List[CausalRow] = []
+    out_rows: list[CausalRow] = []
     for i, r in enumerate(rows):
         # FIX: use correct CausalRow field names (treatment/outcome/covariates)
         out_rows.append(

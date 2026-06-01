@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -12,7 +12,10 @@ from runtime.demand_gravity import (
     DemandSignalKind,
     build_demand_gravity_admin_view,
 )
-from runtime.demand_gravity.no_second_brain import DemandGravitySecondBrainViolation, assert_payload_has_no_decision_fields
+from runtime.demand_gravity.no_second_brain import (
+    DemandGravitySecondBrainViolation,
+    assert_payload_has_no_decision_fields,
+)
 
 
 def _signal(
@@ -29,7 +32,7 @@ def _signal(
         business_id=business_id,
         kind=DemandSignalKind.SEARCH_INTENT,
         channel=DemandChannel.GOOGLE_MAPS,
-        observed_at=datetime.now(timezone.utc),
+        observed_at=datetime.now(UTC),
         source_ref=f"source:{signal_id}",
         normalized_text="coffee near me",
         confidence=0.9,
@@ -39,7 +42,7 @@ def _signal(
 
 
 def test_candidate_producer_builds_advisory_only_candidate() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     candidates = DemandSignalCandidateProducer().build_candidates(
         tenant_id="tenant-a",
         business_id="biz-a",

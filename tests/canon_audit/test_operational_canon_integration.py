@@ -4,7 +4,6 @@ from pathlib import Path
 
 from tools.canon_audit.checks import OPERATIONAL_CANON_INCLUDE_PATHS, run_operational_canon_checks
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 

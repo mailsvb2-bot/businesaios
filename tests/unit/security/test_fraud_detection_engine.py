@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from security.behavioral_baseline import BehavioralBaseline
 from security.anomaly_detector import AnomalyDetector
+from security.behavioral_baseline import BehavioralBaseline
 from security.fraud_detection_engine import FraudDetectionEngine
 
 

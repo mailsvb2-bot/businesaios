@@ -3,7 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-from application.admin.platform_control_center.support import RiskRecommendation, architectural_score, code_navigation_payload, patch_code_for, patch_shape_for, patch_template_for, stop_condition_text
+from application.admin.platform_control_center.support import (
+    RiskRecommendation,
+    architectural_score,
+    code_navigation_payload,
+    patch_code_for,
+    patch_shape_for,
+    patch_template_for,
+    stop_condition_text,
+)
 
 CANON_PLATFORM_CONTROL_CENTER_PATCH_SUGGESTION_ENGINE = True
 

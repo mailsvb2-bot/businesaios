@@ -14,12 +14,11 @@ from typing import Any, Protocol
 
 from governance.constitution import Constitution
 from governance.economic_layer import EconomicAutonomyLayer
-
 from runtime.execution.effects_factory import build_guarded_effects
 from runtime.execution.executor_warnings import throttled_exec_warn
+from runtime.execution.reliability_runtime import build_runtime_reliability
 from runtime.firewall.import_guard import allow_internal_import
 from runtime.runtime_infra import RuntimeInfra
-from runtime.execution.reliability_runtime import build_runtime_reliability
 
 CANON_RUNTIME_EXECUTION_ASSEMBLY = True
 

@@ -7,6 +7,7 @@ from typing import Dict, Iterable, Mapping, Protocol
 
 from runtime.platform.support.contracts.evaluation import EvaluationResult
 
+
 class BaselineComparator:
     def compare(self, baseline: float, candidate: float) -> dict[str, float]:
         return {
@@ -29,7 +30,7 @@ class Evaluator(Protocol):
 
 class EvaluationRegistry:
     def __init__(self) -> None:
-        self._items: Dict[str, EvaluationResult] = {}
+        self._items: dict[str, EvaluationResult] = {}
 
     def register(self, result: EvaluationResult) -> None:
         self._items[result.candidate_id] = result

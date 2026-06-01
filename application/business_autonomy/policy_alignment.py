@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from application.capability.capability_execution_verdict import CapabilityExecutionVerdictBuilder
 from application.business_autonomy.contracts import BusinessExecutionRequest
+from application.capability.capability_execution_verdict import CapabilityExecutionVerdictBuilder
 
 
 @dataclass(frozen=True)
@@ -87,7 +87,7 @@ class _CapabilityVerdictRequest:
         self.meta = dict(meta)
 
     @classmethod
-    def from_business_request(cls, request: BusinessExecutionRequest) -> "_CapabilityVerdictRequest":
+    def from_business_request(cls, request: BusinessExecutionRequest) -> _CapabilityVerdictRequest:
         tenant_id = str(request.envelope.metadata.get("tenant_id") or request.envelope.business_id or "global")
         approval_policy = dict(request.envelope.metadata.get("approval_policy") or {})
         constraints: dict[str, Any] = {}

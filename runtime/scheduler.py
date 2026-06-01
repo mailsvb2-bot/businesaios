@@ -19,12 +19,12 @@ from learning.replay import FeedbackLoopFirewall
 from ml.policy_promotion_guard import PolicyPromotionGuard
 from ml.policy_rollout_manager import PolicyRolloutManager
 from runtime.autopilot_feedback_guard import AutopilotFeedbackGuard
+from runtime.scheduler_monitoring_flow import evaluate_monitor_window
 from runtime.scheduler_parts.monitoring import (
     build_commit_metrics,
     load_candidate_metrics,
 )
 from runtime.scheduler_parts.result import LearningJobResult
-from runtime.scheduler_monitoring_flow import evaluate_monitor_window
 from runtime.scheduler_run_cycle import run_learning_cycle
 
 CANON_RUNTIME_SCHEDULER_SINGLE_DECISION_PATH = True
@@ -77,7 +77,7 @@ class LearningJob:
     def run_once(self) -> LearningJobResult:
         return run_learning_cycle(self)
 
-    def monitor_and_maybe_rollback(self) -> Optional[LearningJobResult]:
+    def monitor_and_maybe_rollback(self) -> LearningJobResult | None:
         st = self._rollout.state()
         if st.status != "rolling" or not st.candidate_policy_id:
             return None

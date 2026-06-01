@@ -38,7 +38,7 @@ def decorate_retention_payload(*, payload: dict, user_id: str, key: str, msg: st
         return payload
 
 
-def build_initial_plan(*, decision: Any, user_id: str) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+def build_initial_plan(*, decision: Any, user_id: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     debug = build_retention_debug(decision)
     step = make_telemetry_step(decision=decision, user_id=user_id)
     step["payload"] = decorate_retention_payload(
@@ -57,7 +57,7 @@ def try_build_offer_step(
     offer_engine: Any,
     cooldown_store: Any,
     user_id: str,
-) -> Tuple[dict | None, Dict[str, Any] | None]:
+) -> tuple[dict | None, dict[str, Any] | None]:
     if decision.suppressed or not decision.offer_arm or decision.offer_arm == "NONE" or decision.offer_price_rub is None:
         return None, None
 

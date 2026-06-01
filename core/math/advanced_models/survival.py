@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List, Sequence
 import math
+from dataclasses import dataclass
+from typing import Sequence
+
 
 @dataclass(frozen=True)
 class KaplanMeierPoint:
@@ -10,13 +11,13 @@ class KaplanMeierPoint:
     survival_probability: float
 
 class KaplanMeierEstimator:
-    def fit(self, event_times: Sequence[float], observed: Sequence[int]) -> List[KaplanMeierPoint]:
+    def fit(self, event_times: Sequence[float], observed: Sequence[int]) -> list[KaplanMeierPoint]:
         if len(event_times) != len(observed):
             raise ValueError("event_times and observed must have same length")
-        rows = sorted((float(t), int(o)) for t, o in zip(event_times, observed))
+        rows = sorted((float(t), int(o)) for t, o in zip(event_times, observed, strict=False))
         at_risk = len(rows)
         survival = 1.0
-        points: List[KaplanMeierPoint] = []
+        points: list[KaplanMeierPoint] = []
         i = 0
         while i < len(rows):
             t = rows[i][0]

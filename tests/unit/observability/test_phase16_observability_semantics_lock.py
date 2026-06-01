@@ -5,6 +5,7 @@ from observability.platform.telemetry.event_stream import InMemoryEventStore
 from observability.platform.telemetry.metrics import Metrics
 from runtime.observability.metrics import Metrics as RuntimeMetrics
 
+
 def test_platform_event_store_sink_semantics_preserved() -> None:
     store = InMemoryEventStore()
     sink = EventStoreSink(store=store)

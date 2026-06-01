@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import pytest
-from datetime import timedelta
 import math
+from datetime import timedelta
+
+import pytest
 
 from tenancy.tenant_metrics_aggregator import TenantMetricsAggregator
 from tenancy.tenant_metrics_contract import TenantMetricPoint, utc_now

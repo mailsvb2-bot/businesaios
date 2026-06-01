@@ -17,12 +17,13 @@ from core.finance.strategic.repositories.forecast_repository import ForecastRepo
 from core.finance.strategic.repositories.scenario_repository import ScenarioRepository
 from core.finance.strategic.scenarios.scenario_catalog import ScenarioCatalog
 from core.finance.strategic.services.advisory_policy import StrategicFinanceAdvisoryPolicy
+from core.finance.strategic.services.rolling_forecast_service import RollingForecastService
 from core.finance.strategic.services.strategic_finance_payload import build_decision_payload
 from core.finance.strategic.services.strategic_finance_persistence import persist_runtime_artifacts
 from core.finance.strategic.services.strategic_finance_service_support import build_artifacts, build_decision_trace
 from core.finance.strategic.services.strategic_finance_types import StrategicFinanceDecision
-from core.finance.strategic.services.rolling_forecast_service import RollingForecastService
 from core.finance.strategic.types import DecisionTrace, FinancialInput
+
 
 class StrategicFinanceService:
     """Strategic finance domain service.

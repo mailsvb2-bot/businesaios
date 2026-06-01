@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from config.final_hidden_logic_policy import DEFAULT_KNOWLEDGE_DEDUPLICATION_POLICY
+
 from ..types import LessonDraft
 from .token_similarity import jaccard_similarity
 

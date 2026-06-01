@@ -4,10 +4,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from config.economics_domain_policy import DEFAULT_ECONOMICS_MATH_POLICY, DEFAULT_ECONOMICS_SIGNAL_DEFAULTS
+
 from .enums import BudgetPressureLevel, EconomicsSignalStatus, MarginHealthStatus, PaybackRiskLevel
 from .guard import GuardTrigger
 from .ids import EconomicsSnapshotId
-from config.economics_domain_policy import DEFAULT_ECONOMICS_SIGNAL_DEFAULTS, DEFAULT_ECONOMICS_MATH_POLICY
 
 
 @dataclass(frozen=True)
@@ -17,7 +18,7 @@ class EconomicState:
     cost: float
 
     @staticmethod
-    def from_world_economy(economy: Dict[str, Any] | None) -> "EconomicState":
+    def from_world_economy(economy: dict[str, Any] | None) -> EconomicState:
         economy = dict(economy or {})
         defaults = DEFAULT_ECONOMICS_SIGNAL_DEFAULTS
         rp = max(
@@ -81,14 +82,14 @@ class CustomerValueSignal:
     average_order_value: float
     purchase_frequency_30d: float
     gross_retention_30d: float
-    contribution_margin_ratio: Optional[float] = None
+    contribution_margin_ratio: float | None = None
 
 
 @dataclass(frozen=True)
 class CashflowSignal:
     cash_in: float
     cash_out: float
-    runway_days: Optional[int]
+    runway_days: int | None
     unrestricted_cash: float
     currency: str = DEFAULT_ECONOMICS_SIGNAL_DEFAULTS.default_currency
 
@@ -131,20 +132,20 @@ class BudgetEnvelope:
 
 @dataclass(frozen=True)
 class PaybackSnapshot:
-    cac_payback_days: Optional[float]
+    cac_payback_days: float | None
     risk_level: PaybackRiskLevel
 
 
 @dataclass(frozen=True)
 class LTVSnapshot:
-    ltv: Optional[float]
-    assumptions: Dict[str, Any] = field(default_factory=dict)
+    ltv: float | None
+    assumptions: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class CACSnapshot:
-    blended_cac: Optional[float]
-    attributed_new_customers: Optional[int] = None
+    blended_cac: float | None
+    attributed_new_customers: int | None = None
 
 
 @dataclass(frozen=True)
@@ -153,13 +154,13 @@ class EconomicsEvaluation:
     margin_health_status: EconomicsSignalStatus
     ltv_cac_status: EconomicsSignalStatus
     payback_risk_status: EconomicsSignalStatus
-    scores: Dict[str, float] = field(default_factory=dict)
+    scores: dict[str, float] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class BudgetAllocationAdvice:
     total_recommended_budget: float
-    channel_allocations: Dict[str, float]
+    channel_allocations: dict[str, float]
     rationale: str
 
 
@@ -190,10 +191,10 @@ class EconomicsSnapshot:
     ltv: LTVSnapshot
     cac: CACSnapshot
     evaluation: EconomicsEvaluation
-    guard_triggers: List[GuardTrigger] = field(default_factory=list)
-    explanations: Dict[str, str] = field(default_factory=dict)
-    policy_advice: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    guard_triggers: list[GuardTrigger] = field(default_factory=list)
+    explanations: dict[str, str] = field(default_factory=dict)
+    policy_advice: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def has_blocking_guard(self) -> bool:

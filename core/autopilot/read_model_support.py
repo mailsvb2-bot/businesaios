@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import logging
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Optional, Set, Tuple
 
 from core.observability.throttled_logger import exception_throttled
@@ -9,25 +9,25 @@ from core.observability.throttled_logger import exception_throttled
 logger = logging.getLogger(__name__)
 
 
-def utc_now_ms(*, now_ms: Optional[int] = None) -> int:
+def utc_now_ms(*, now_ms: int | None = None) -> int:
     if now_ms is None:
-        return int(datetime.now(timezone.utc).timestamp() * 1000)
+        return int(datetime.now(UTC).timestamp() * 1000)
     return int(now_ms)
 
 
-def day_start_ms_utc(*, days_ago: int, now_ms: Optional[int] = None) -> int:
-    now_dt = datetime.fromtimestamp(utc_now_ms(now_ms=now_ms) / 1000.0, tz=timezone.utc)
-    d0 = datetime(now_dt.year, now_dt.month, now_dt.day, tzinfo=timezone.utc)
+def day_start_ms_utc(*, days_ago: int, now_ms: int | None = None) -> int:
+    now_dt = datetime.fromtimestamp(utc_now_ms(now_ms=now_ms) / 1000.0, tz=UTC)
+    d0 = datetime(now_dt.year, now_dt.month, now_dt.day, tzinfo=UTC)
     d = d0 - timedelta(days=int(days_ago))
     return int(d.timestamp() * 1000)
 
 
-def today_start_ms(*, now_ms: Optional[int] = None) -> int:
+def today_start_ms(*, now_ms: int | None = None) -> int:
     return day_start_ms_utc(days_ago=0, now_ms=now_ms)
 
 
-def collect_unique_users(*, event_store: Any, tenant_id: str, start_ms: int, end_ms: Optional[int], event_type: str) -> Set[str]:
-    users: Set[str] = set()
+def collect_unique_users(*, event_store: Any, tenant_id: str, start_ms: int, end_ms: int | None, event_type: str) -> set[str]:
+    users: set[str] = set()
     tenant_value = str(tenant_id)
     start_value = int(start_ms)
     event_type_value = str(event_type)
@@ -43,7 +43,7 @@ def collect_unique_users(*, event_store: Any, tenant_id: str, start_ms: int, end
     return users
 
 
-def collect_revenue_and_users(*, event_store: Any, tenant_id: str, start_ms: int, end_ms: Optional[int], event_type: str, amount_key: str) -> Tuple[Set[str], int]:
+def collect_revenue_and_users(*, event_store: Any, tenant_id: str, start_ms: int, end_ms: int | None, event_type: str, amount_key: str) -> tuple[set[str], int]:
     users = collect_unique_users(
         event_store=event_store,
         tenant_id=tenant_id,
@@ -69,7 +69,7 @@ def collect_revenue_and_users(*, event_store: Any, tenant_id: str, start_ms: int
     return users, revenue_minor
 
 
-def collect_ads_metrics(*, event_store: Any, tenant_id: str, start_ms: int, end_ms: int) -> Dict[str, int]:
+def collect_ads_metrics(*, event_store: Any, tenant_id: str, start_ms: int, end_ms: int) -> dict[str, int]:
     spend_minor = 0
     conversions = 0
     for ev in event_store.iter_events(tenant_id=str(tenant_id), start_ms=int(start_ms), end_ms=int(end_ms), event_type="ads_metrics_imported"):
@@ -86,8 +86,8 @@ def collect_ads_metrics(*, event_store: Any, tenant_id: str, start_ms: int, end_
     return {"spend_minor": int(spend_minor), "conversions": int(conversions)}
 
 
-def collect_recent_autopilot_action_rows(*, event_store: Any, tenant_id: str, start_ms: int, end_ms: int) -> List[Mapping[str, Any]]:
-    out: List[Mapping[str, Any]] = []
+def collect_recent_autopilot_action_rows(*, event_store: Any, tenant_id: str, start_ms: int, end_ms: int) -> list[Mapping[str, Any]]:
+    out: list[Mapping[str, Any]] = []
     for ev in event_store.iter_events(tenant_id=str(tenant_id), start_ms=int(start_ms), end_ms=int(end_ms), event_type="autopilot_decision@v1"):
         payload = ev.get("payload") if isinstance(ev.get("payload"), dict) else {}
         out.append(

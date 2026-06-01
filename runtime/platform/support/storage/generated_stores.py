@@ -10,7 +10,6 @@ from typing import Dict, Type
 
 from runtime.platform.support.storage.base_stores import ArtifactStore, DatasetStore
 
-
 _STORE_SPECS: dict[str, tuple[str, type]] = {
     "CheckpointStore": ("checkpoint_store", ArtifactStore),
     "EvaluationStore": ("evaluation_store", ArtifactStore),
@@ -39,7 +38,7 @@ def _make_store_type(name: str, base: type) -> type:
     return cls
 
 
-STORE_TYPES: Dict[str, Type[object]] = {
+STORE_TYPES: dict[str, type[object]] = {
     name: _make_store_type(name, base)
     for name, (_, base) in _STORE_SPECS.items()
 }

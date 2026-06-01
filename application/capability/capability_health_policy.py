@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Mapping
-
 
 CANON_CAPABILITY_HEALTH_POLICY = True
 
@@ -33,8 +32,8 @@ def _parse_ts(value: object) -> datetime | None:
             return datetime.fromisoformat(text[:-1] + '+00:00')
         parsed = datetime.fromisoformat(text)
         if parsed.tzinfo is None:
-            return parsed.replace(tzinfo=timezone.utc)
-        return parsed.astimezone(timezone.utc)
+            return parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
     except ValueError:
         return None
 
@@ -83,7 +82,7 @@ class CapabilityHealthPolicy:
         observed_at = _parse_ts(updated_at)
         if observed_at is None:
             return 'unknown', 0.0
-        now = now_utc or datetime.now(timezone.utc)
+        now = now_utc or datetime.now(UTC)
         age_seconds = max(0.0, (now - observed_at).total_seconds())
         if age_seconds >= self._stale_after_hours * 3600.0:
             return 'stale', 0.10

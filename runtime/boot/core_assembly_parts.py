@@ -5,9 +5,16 @@ CANON_BOOT_WIRING_ONLY = True
 
 from typing import Any, Optional, Tuple
 
-from runtime.boot import EconomicBrain, EconomicReward, GrowthPolicy, LTVEstimator, LearningSystem, PricingPolicy, RewardEngine
-
 from learning.registry import ArtifactRegistry
+from runtime.boot import (
+    EconomicBrain,
+    EconomicReward,
+    GrowthPolicy,
+    LearningSystem,
+    LTVEstimator,
+    PricingPolicy,
+    RewardEngine,
+)
 
 
 def build_economic_brain() -> EconomicBrain:
@@ -19,7 +26,7 @@ def build_economic_brain() -> EconomicBrain:
     )
 
 
-def build_reward_and_learning_components(*, snapshot_store: Any, event_log: Any, model_registry: Optional[Any] = None) -> Tuple[EconomicBrain, RewardEngine, LearningSystem]:
+def build_reward_and_learning_components(*, snapshot_store: Any, event_log: Any, model_registry: Any | None = None) -> tuple[EconomicBrain, RewardEngine, LearningSystem]:
     economic_brain = build_economic_brain()
     reward_engine = RewardEngine(
         snapshot_store=snapshot_store,

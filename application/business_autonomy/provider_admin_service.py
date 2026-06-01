@@ -1,37 +1,40 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Mapping
 
-from core.tenancy.normalization import require_tenant_id
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService
-from application.business_autonomy.provider_admin_contract import ProviderActivationStatus, ProviderCredentialSubmission, ProviderDefinition
-from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
-from runtime.business_autonomy.provider_secret_versioning import ProviderSecretVersioningService
-from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
-from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
-from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
-from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
-from runtime.business_autonomy.provider_sync_scheduler import ProviderSyncScheduler
-from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
-from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
+from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
+from application.business_autonomy.provider_admin_contract import (
+    ProviderActivationStatus,
+    ProviderCredentialSubmission,
+    ProviderDefinition,
+)
+from application.business_autonomy.provider_catalog import provider_map
 from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from application.business_autonomy.provider_messaging_metadata import messaging_binding_to_metadata
+from core.tenancy.normalization import require_tenant_id
+from reliability.idempotency_store import InMemoryIdempotencyStore
+from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
+from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
+from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
+from runtime.business_autonomy.provider_live_probe_runtime import ProviderLiveProbeRuntime
+from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
+from runtime.business_autonomy.provider_pagination_walkers import ProviderPaginationWalkers
 from runtime.business_autonomy.provider_queue_execution import ProviderQueueExecutionRuntime
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
-from runtime.business_autonomy.provider_live_probe_runtime import ProviderLiveProbeRuntime
-from runtime.business_autonomy.provider_pagination_walkers import ProviderPaginationWalkers
+from runtime.business_autonomy.provider_secret_versioning import ProviderSecretVersioningService
+from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
+from runtime.business_autonomy.provider_sync_scheduler import ProviderSyncScheduler
+from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
+from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
 from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
-from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
+from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
-from application.business_autonomy.provider_catalog import provider_map
-from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
 from security.connector_secret_scope import ConnectorSecretScope, SecretAccessOperation, SecretScopeBinding
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import SecretVault
-from reliability.idempotency_store import InMemoryIdempotencyStore
-
 
 CANON_PROVIDER_ADMIN_SERVICE = True
 
@@ -261,7 +264,7 @@ class ProviderAdminService:
             title=provider.title,
             channel_kind=provider.channel_kind.value,
             secret_fields_bound=tuple(sorted(secret_names)),
-            last_updated_utc=datetime.now(timezone.utc).isoformat(),
+            last_updated_utc=datetime.now(UTC).isoformat(),
             governance_enabled=governance_enabled,
             persistent_surfaces=persistent_surfaces,
             onboarding_ready=onboarding_ready,
@@ -325,7 +328,7 @@ class ProviderAdminService:
             title=current.title,
             channel_kind=current.channel_kind,
             secret_fields_bound=current.secret_fields_bound,
-            last_updated_utc=datetime.now(timezone.utc).isoformat(),
+            last_updated_utc=datetime.now(UTC).isoformat(),
             governance_enabled=current.governance_enabled,
             persistent_surfaces=current.persistent_surfaces,
             onboarding_ready=False,
@@ -376,7 +379,7 @@ class ProviderAdminService:
             title=current.title,
             channel_kind=current.channel_kind,
             secret_fields_bound=current.secret_fields_bound,
-            last_updated_utc=datetime.now(timezone.utc).isoformat(),
+            last_updated_utc=datetime.now(UTC).isoformat(),
             governance_enabled=current.governance_enabled,
             persistent_surfaces=current.persistent_surfaces,
             onboarding_ready=connected and current.onboarding_ready,

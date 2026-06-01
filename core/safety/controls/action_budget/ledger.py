@@ -6,8 +6,8 @@ from typing import Protocol
 
 from runtime.platform.safety_action_budget_ledger import (
     CANON_PLATFORM_SAFETY_ACTION_BUDGET_LEDGER,
-    PlatformSqliteActionBudgetLedger,
     SCHEMA_VERSION,
+    PlatformSqliteActionBudgetLedger,
 )
 
 CANON_SAFETY_ACTION_BUDGET_LEDGER = True

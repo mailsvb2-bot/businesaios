@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from execution.inference_acceleration_contract import InferenceAccelerationProfile, InferenceMemoryTransferPlan
 from execution.inference_provider_contract import InferenceProviderHealth
 
-
 CANON_RUNTIME_INFERENCE_PROVIDER_ACCELERATION_PRESSURE_POLICY = True
 
 

@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
+from config.env_flags import env_path, env_str
 from core.admin.ai_marketing import generate_copy_variants
 from core.tenancy.normalization import normalize_tenant_id_or_unknown
-from config.env_flags import env_path, env_str
 
 
-def regenerate_marketing_copy(payload: Dict[str, Any]) -> Dict[str, Any]:
+def regenerate_marketing_copy(payload: dict[str, Any]) -> dict[str, Any]:
     """Deterministically regenerate marketing copy variants and persist as events.
 
     This is an EVOLUTION-timescale action:

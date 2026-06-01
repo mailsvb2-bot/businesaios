@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 
 class PolicyDeniedTelemetryEmitter:
@@ -10,7 +10,7 @@ class PolicyDeniedTelemetryEmitter:
     def maybe_emit(self, entity_id: str, policy_denials: dict[str, int], now: datetime | None = None) -> dict[str, object] | None:
         if not policy_denials:
             return None
-        current_time = now or datetime.now(timezone.utc)
+        current_time = now or datetime.now(UTC)
         last_time = self._last_emitted_at.get(entity_id)
         if last_time and current_time - last_time < timedelta(seconds=60):
             return None

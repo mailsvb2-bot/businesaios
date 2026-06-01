@@ -6,7 +6,6 @@ from contracts.action_impact_contract import ActionCategory, ActionExecutionCont
 from core.safety.operational.action_registry import OperationalActionRegistry
 from core.safety.operational.action_spec import ActionOperationalSpec
 
-
 CANON_OPERATIONAL_ACTION_CLASSIFIER = True
 
 

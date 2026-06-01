@@ -7,4 +7,4 @@ class ConnectorResult:
     ok: bool
     code: str
     message: str = ''
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)

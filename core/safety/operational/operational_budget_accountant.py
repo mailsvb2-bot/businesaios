@@ -7,7 +7,6 @@ from typing import Any
 from contracts.action_impact_contract import ActionExecutionContext, ActionImpact
 from core.safety.operational.ports import OperationalBudgetLedgerPort
 
-
 CANON_OPERATIONAL_BUDGET_ACCOUNTANT = True
 
 

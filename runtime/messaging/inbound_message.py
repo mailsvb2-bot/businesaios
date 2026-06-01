@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from runtime.tenancy import require_tenant_id
 from runtime.messaging.channel_normalizer import normalize_channel
+from runtime.tenancy import require_tenant_id
 
 
 @dataclass(frozen=True)

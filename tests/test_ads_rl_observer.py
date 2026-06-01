@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import time
 
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
-
 from core.growth.ads.rl.contracts import AdsRLOptSpec
 from core.growth.ads.rl.observer import observe_tick_once
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 class DummyRL:

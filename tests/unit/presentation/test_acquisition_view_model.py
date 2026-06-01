@@ -3,9 +3,9 @@ from __future__ import annotations
 from acquisition.feasibility_solver import AcquisitionFeasibilityRequest, FeasibilitySolver
 from acquisition.funnel_model import FunnelStage
 from presentation import (
+    CANON_PRESENTATION_ACQUISITION_VIEW_MODEL,
     AcquisitionRecommendationView,
     AcquisitionViewModel,
-    CANON_PRESENTATION_ACQUISITION_VIEW_MODEL,
     build_acquisition_view_model,
 )
 

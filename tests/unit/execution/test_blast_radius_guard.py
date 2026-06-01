@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from execution.blast_radius_guard import BlastRadiusGuard
 from application.headless.models import GoalExecutionRequest
+from execution.blast_radius_guard import BlastRadiusGuard
 
 
 class EventLogStub:

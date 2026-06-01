@@ -7,12 +7,11 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
-from execution.goal_family_classifier import GoalFamilyClassifier
 from application.planning.long_horizon_planner import LongHorizonPlanner
+from execution.goal_family_classifier import GoalFamilyClassifier
 from execution.multi_goal_policy import MultiGoalPolicy
 from execution.strategy import StrategicPlanner
 from execution.strategy_support_policy import StrategySupportPolicy
-
 
 CANON_MULTI_GOAL_PLANNER = True
 MULTI_GOAL_SCHEMA_VERSION = 1
@@ -67,7 +66,7 @@ class GoalQueueItem:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "GoalQueueItem":
+    def from_dict(cls, payload: Mapping[str, Any]) -> GoalQueueItem:
         return cls(
             goal_id=_text(payload.get("goal_id")),
             goal=_text(payload.get("goal")),
@@ -101,7 +100,7 @@ class MultiGoalPlanSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "MultiGoalPlanSnapshot":
+    def from_dict(cls, payload: Mapping[str, Any]) -> MultiGoalPlanSnapshot:
         return cls(
             schema_version=max(1, _safe_int(payload.get("schema_version"), default=MULTI_GOAL_SCHEMA_VERSION)),
             tenant_id=_text(payload.get("tenant_id")),

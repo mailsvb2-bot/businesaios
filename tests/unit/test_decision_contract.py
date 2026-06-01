@@ -5,9 +5,9 @@ from application.decision.decision_contract import (
     start_trace,
 )
 from core.constraints.decision import DecisionConstraints
+from core.decision.decision_contract import canonical_request as compat_canonical_request
 from kernel.decision_candidate import DecisionCandidate
 from kernel.decision_request import DecisionRequest
-from core.decision.decision_contract import canonical_request as compat_canonical_request
 
 
 def test_canonical_request_defaults_are_honest_and_non_sovereign() -> None:

@@ -13,7 +13,8 @@ from config.pricing_retention_policy import (
     PricingStopLossPolicy,
 )
 from core.pricing.stop_loss_parts.config import StopLossConfig
-from core.pricing.stop_loss_parts.cooldown import cooldown_state, now_ms as current_time_ms
+from core.pricing.stop_loss_parts.cooldown import cooldown_state
+from core.pricing.stop_loss_parts.cooldown import now_ms as current_time_ms
 from core.pricing.stop_loss_parts.metrics import (
     collect_payments_index,
     collect_trials,
@@ -30,14 +31,14 @@ def should_apply_price(
     candidate_price_rub: int,
     base_price_rub: int,
     cfg: StopLossConfig,
-    now_ms: Optional[int] = None,
-    context_key: Optional[str] = None,
+    now_ms: int | None = None,
+    context_key: str | None = None,
     window_hours: int = 24,
     policy: PricingStopLossPolicy = DEFAULT_PRICING_STOP_LOSS_POLICY,
-) -> Tuple[bool, Dict[str, Any]]:
+) -> tuple[bool, dict[str, Any]]:
     cand = int(candidate_price_rub)
     base = int(base_price_rub)
-    debug: Dict[str, Any] = {
+    debug: dict[str, Any] = {
         "enabled": bool(cfg.enabled),
         "method": "pricing_stop_loss_event_sourced_v1",
         "candidate_price_rub": int(cand),
@@ -169,7 +170,7 @@ def should_apply_price(
 class StopLossDecision:
     allowed: bool
     reason: str
-    details: Dict[str, Any]
+    details: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -191,8 +192,8 @@ class StopLossPolicy:
         offer_arm: str,
         candidate_price_rub: int,
         base_price_rub: int,
-        now_ms: Optional[int] = None,
-        context_key: Optional[str] = None,
+        now_ms: int | None = None,
+        context_key: str | None = None,
     ) -> StopLossDecision:
         allowed, details = should_apply_price(
             event_store,

@@ -12,7 +12,6 @@ from typing import Any, Mapping
 from runtime.decision_gateway import execute_runtime_decision
 from runtime.decision_input.runtime_packet_provider import maybe_build_decision_input_packet
 
-
 CANON_RUNTIME_SCHEDULER_DECISION_REQUEST_SINGLE_PATH = True
 CANON_RUNTIME_SCHEDULER_DECISION_REQUEST_NO_RAW_DECISION_LOGIC = True
 CANON_RUNTIME_SCHEDULER_DECISION_REQUEST_GATEWAY_ONLY = True

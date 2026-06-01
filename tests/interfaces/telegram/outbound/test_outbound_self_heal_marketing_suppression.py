@@ -1,4 +1,5 @@
 import time
+
 from interfaces.telegram.outbound.outbound_queue import TelegramOutboundQueue
 
 

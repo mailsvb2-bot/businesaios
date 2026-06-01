@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Protocol
 
 from core.contracts.revenue_sprint import RevenueSprintConfig, RevenueSprintState
@@ -24,7 +24,7 @@ class BoostController:
         self._cfg = config
 
     def start_or_status(self, *, tenant_id: str, now_utc: datetime | None = None) -> BoostResult:
-        now_utc = (now_utc or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        now_utc = (now_utc or datetime.now(UTC)).astimezone(UTC)
         key = f"revenue_sprint:{tenant_id}"
         raw = self._kv.get_json(key, default={})
         state = RevenueSprintState(**raw) if raw else RevenueSprintState()

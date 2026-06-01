@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import math
 
+
 class EvaluatorBridge:
     def bridge(self, score: float) -> dict[str, float]:
         return {"preference_score": score}
 
 class PreferenceDatasetBuilder:
     def build(self, winning: list[str], losing: list[str]) -> list[tuple[str, str]]:
-        return list(zip(winning, losing))
+        return list(zip(winning, losing, strict=False))
 
 class PreferenceModel:
     def score(self, left: float, right: float) -> float:

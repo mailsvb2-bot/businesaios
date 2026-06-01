@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.observability.throttled_logger import exception_throttled
 from core.economics.economics_config import EconomicsConfigV1
+from core.observability.throttled_logger import exception_throttled
 
 
 def band_rank(band: str | None) -> int:

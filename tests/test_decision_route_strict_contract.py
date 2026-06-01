@@ -1,5 +1,6 @@
 from kernel.decisioning.route_contract import DecisionRouteViolation, extract_strict_route_from_envelope
 
+
 class _Decision:
     def __init__(self, *, decision_id="d1", correlation_id="c1", issuer_id="businesaios-core", action="pricing_select@v1"):
         self.decision_id = decision_id

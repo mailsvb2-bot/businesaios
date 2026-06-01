@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 
-
 FORBIDDEN_DEMAND_METHOD_NAMES = {
     "allocate_budget",
     "approve",

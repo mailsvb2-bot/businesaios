@@ -3,14 +3,14 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any
 
 
 @dataclass
 class _OutboxStub:
-    items: List[Dict[str, Any]] = field(default_factory=list)
+    items: list[dict[str, Any]] = field(default_factory=list)
 
-    def enqueue_once(self, *, dedupe_key: str, payload: Dict[str, Any]) -> None:
+    def enqueue_once(self, *, dedupe_key: str, payload: dict[str, Any]) -> None:
         # Best-effort idempotency for the test.
         for it in self.items:
             if it.get("dedupe_key") == dedupe_key:

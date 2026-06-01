@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from runtime.integration.degraded_note_builder import append_note, build_missing_input_note
 from runtime.integration.default_state_factories import (
     default_advisory_packet,
     default_architecture_state,
@@ -10,6 +9,7 @@ from runtime.integration.default_state_factories import (
     default_structure_state,
     default_user_observables,
 )
+from runtime.integration.degraded_note_builder import append_note, build_missing_input_note
 from runtime.integration.fallback_policy import FallbackPolicy
 from runtime.integration.missing_input_error import MissingIntegrationInputError
 

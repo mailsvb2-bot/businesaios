@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from threading import RLock
 
+from runtime.queue import _persistent_job_store_methods as _persistent_job_store_methods
 from runtime.queue._inmemory_job_store_ops import (
     claim_job,
     count_queue_jobs,
@@ -14,8 +15,8 @@ from runtime.queue._inmemory_job_store_ops import (
     mark_dead_letter,
     mark_failed,
     mark_succeeded,
-    put_job,
     purge_terminal_job_records,
+    put_job,
     reap_expired_claim_jobs,
     release_claim,
     renew_claim_lease,
@@ -29,13 +30,11 @@ from runtime.queue._json_job_store_persistence import (
     load_json_job_store_state,
     runtime_queue_store_path,
 )
+from runtime.queue._persistent_job_store_support import build_default_job_store as build_default_queue_job_store
 from runtime.queue.job_contract import JobRecord, JobState
 from runtime.queue.job_store_backend import JobStoreBackend
 from runtime.queue.job_store_sqlite import SqliteJobStore, runtime_queue_sqlite_store_path
 from runtime.queue.queue_store_policy import DEFAULT_QUEUE_STORE_POLICY
-from runtime.queue._persistent_job_store_support import build_default_job_store as build_default_queue_job_store
-from runtime.queue import _persistent_job_store_methods as _persistent_job_store_methods
-
 
 CANON_RUNTIME_QUEUE_JOB_STORE = True
 

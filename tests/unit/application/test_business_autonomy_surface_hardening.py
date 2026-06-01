@@ -8,7 +8,6 @@ from application.business_autonomy.onboarding_contract import BusinessOnboarding
 from application.business_autonomy.operator_admin_plane import UnifiedOperatorAdminPlane
 from application.business_autonomy.service import BusinessAutonomyService
 
-
 TARGET_FILES = (
     'application/business_autonomy/service.py',
     'application/business_autonomy/registry.py',

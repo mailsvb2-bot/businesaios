@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # CANON_META_PACK: helper is part of the repository engineering constitution.
 # CANON_MASTER_LAYER: this helper checks the full constitutional stack as one system.
-
 from dataclasses import dataclass
 from pathlib import Path
 

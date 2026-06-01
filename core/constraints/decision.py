@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 from config.system_config import CANONICAL_OBJECTIVE_NAME, RuntimeLimits
 
-_ZERO = float()
+_ZERO = 0.0
 _ONE = float(True)
 _RUNTIME_LIMITS = RuntimeLimits()
 

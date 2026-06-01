@@ -8,13 +8,13 @@ from application.decision.action_errors import (
     InvalidActionError,
 )
 from application.decision.action_result import ActionExecutionResult
+from runtime.application import (
+    ActionExecutionRejectedError as PublicActionExecutionRejectedError,
+)
 from runtime.application.action_errors import (
     ActionExecutionRejectedError as CompatActionExecutionRejectedError,
 )
 from runtime.application.action_result import ActionExecutionResult as CompatActionExecutionResult
-from runtime.application import (
-    ActionExecutionRejectedError as PublicActionExecutionRejectedError,
-)
 
 
 def test_runtime_action_result_is_core_owned() -> None:

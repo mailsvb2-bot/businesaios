@@ -6,7 +6,6 @@ from typing import Any, Mapping
 from runtime.messaging.inbound_decision_gateway import MessagingInboundDecisionGateway, process_inbound_gateway_message
 from runtime.messaging.inbound_message import InboundMessage
 
-
 CANON_PROVIDER_WEBHOOK_INBOUND_PROCESSOR = True
 
 

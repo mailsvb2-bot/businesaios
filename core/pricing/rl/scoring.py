@@ -5,16 +5,16 @@ from typing import Any, Dict, Sequence
 from core.scorers.pricing import choose_probabilities, sample_index
 
 
-def posterior_mean_conv(*, stats: Dict[int, tuple[int, int]], price: int, prior_alpha: float, prior_beta: float) -> float:
+def posterior_mean_conv(*, stats: dict[int, tuple[int, int]], price: int, prior_alpha: float, prior_beta: float) -> float:
     trials_n, succ_n = stats.get(int(price), (0, 0))
     a = float(prior_alpha) + float(succ_n)
     b = float(prior_beta) + float(max(0, trials_n - succ_n))
     return float(a) / float(a + b) if (a + b) > 0 else 0.0
 
 
-def choose_candidate(*, rng: Any, candidates: Sequence[int], stats: Dict[int, tuple[int, int]], exploration: str, epsilon: float, temperature: float, prior_alpha: float, prior_beta: float) -> dict[str, Any]:
+def choose_candidate(*, rng: Any, candidates: Sequence[int], stats: dict[int, tuple[int, int]], exploration: str, epsilon: float, temperature: float, prior_alpha: float, prior_beta: float) -> dict[str, Any]:
     means = [posterior_mean_conv(stats=stats, price=p, prior_alpha=prior_alpha, prior_beta=prior_beta) for p in candidates]
-    exp_rev = [float(p) * float(m) for p, m in zip(candidates, means)]
+    exp_rev = [float(p) * float(m) for p, m in zip(candidates, means, strict=False)]
     probs = choose_probabilities(
         exploration=str(exploration or "softmax_v1"),
         expected_revenue=exp_rev,
@@ -33,7 +33,7 @@ def choose_candidate(*, rng: Any, candidates: Sequence[int], stats: Dict[int, tu
 
 
 
-def score_candidates(candidates: Sequence[dict[str, Any]], *, evidence: Dict[str, Any]) -> list[dict[str, Any]]:
+def score_candidates(candidates: Sequence[dict[str, Any]], *, evidence: dict[str, Any]) -> list[dict[str, Any]]:
     scored: list[dict[str, Any]] = []
     default_score = float(evidence.get("default_score", 0.0) or 0.0)
     for idx, candidate in enumerate(candidates):

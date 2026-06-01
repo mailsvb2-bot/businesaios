@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
-from runtime.security.runtime_asserts import assert_called_from_executor
 from runtime._internal.effects_actions.payments.reconciliation_support import (
     FAILED_STATUSES,
     SUCCESS_STATUSES,
@@ -12,6 +11,7 @@ from runtime._internal.effects_actions.payments.reconciliation_support import (
     resolve_created_payment_context,
     try_mark_terminal_outbox,
 )
+from runtime.security.runtime_asserts import assert_called_from_executor
 
 
 def reconcile_payments_effect(
@@ -21,7 +21,7 @@ def reconcile_payments_effect(
     if effects.ledger is None:
         return True
     try:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         window_start = now - timedelta(minutes=int(window_min))
         start_ms = int(window_start.timestamp() * 1000)
         end_ms = int(now.timestamp() * 1000)

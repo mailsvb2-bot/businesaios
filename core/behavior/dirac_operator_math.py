@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Tuple
-
-from core.behavior.complex4 import Complex4, EPS
+from core.behavior.complex4 import EPS, Complex4
 
 
 def clamp01(x: float) -> float:
@@ -26,7 +24,7 @@ def clamp(x: float, lo: float, hi: float) -> float:
 
 def apply_diag_impulse(
     psi: Complex4,
-    d: Tuple[float, float, float, float],
+    d: tuple[float, float, float, float],
     phase_gain: float,
 ) -> Complex4:
     """Apply diagonal impulse + small phase rotation."""

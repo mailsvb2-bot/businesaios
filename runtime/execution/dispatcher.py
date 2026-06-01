@@ -7,7 +7,7 @@ Keeps RuntimeExecutor small and avoids hidden centers of gravity.
 
 from typing import Any
 
-from runtime.security.capability_gate import set_effect_capability, clear_effect_capability
+from runtime.security.capability_gate import clear_effect_capability, set_effect_capability
 
 
 def effect_succeeded(handler_output: Any) -> bool:

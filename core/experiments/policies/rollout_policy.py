@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from config.experiments_policy import (
-    ConservativeRolloutPolicyDefaults,
     DEFAULT_CONSERVATIVE_ROLLOUT_POLICY_DEFAULTS,
+    ConservativeRolloutPolicyDefaults,
 )
 from core.experiments.enums import RiskLevel, RolloutDecision
 

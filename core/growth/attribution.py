@@ -30,7 +30,7 @@ class Attribution:
     click_id: str = ""
     impression_id: str = ""
 
-    def as_dict(self) -> Dict[str, str]:
+    def as_dict(self) -> dict[str, str]:
         return {
             "source": str(self.source or ""),
             "campaign": str(self.campaign or ""),
@@ -58,7 +58,7 @@ def parse_utm_from_args(args: str) -> Attribution:
     # Normalize separators
     a = a.replace(";", "&").replace("?", "&")
     parts = [p for p in a.split("&") if p]
-    kv: Dict[str, str] = {}
+    kv: dict[str, str] = {}
     for p in parts:
         if "=" not in p:
             continue
@@ -91,7 +91,7 @@ def parse_utm_from_args(args: str) -> Attribution:
     )
 
 
-def latest_attribution(event_store: Any, *, tenant_id: str, user_id: str, lookback_days: int = 30) -> Optional[Attribution]:
+def latest_attribution(event_store: Any, *, tenant_id: str, user_id: str, lookback_days: int = 30) -> Attribution | None:
     if event_store is None or not hasattr(event_store, "iter_events"):
         return None
     # Best-effort scan (bounded): we only look at utm_set events in the window.

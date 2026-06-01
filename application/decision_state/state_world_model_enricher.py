@@ -10,7 +10,7 @@ from core.observability.throttled_logger import exception_throttled
 logger = logging.getLogger(__name__)
 
 
-def extract_product_metadata(state: Any) -> Tuple[Dict[str, Any], str | None, str | None, str | None]:
+def extract_product_metadata(state: Any) -> tuple[dict[str, Any], str | None, str | None, str | None]:
     try:
         product = dict(getattr(state, "product", {}) or {})
     except Exception:

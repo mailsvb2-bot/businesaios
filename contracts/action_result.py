@@ -1,7 +1,7 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any, Dict
-
 
 CANON_ACTION_RESULT = True
 
@@ -11,7 +11,7 @@ class ActionResult:
     action_id: str
     status: str
     message: str = ''
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
 
     @property
     def attempted(self) -> bool:
@@ -55,7 +55,7 @@ class ActionResult:
         """
         return self.executed
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             'action_id': self.action_id,
             'status': self.status,

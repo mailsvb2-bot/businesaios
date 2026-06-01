@@ -5,7 +5,7 @@ from typing import Any, Dict
 from core.retention.constraints import constraints_from_retention_features
 
 
-def build_retention_debug(decision: Any) -> Dict[str, Any]:
+def build_retention_debug(decision: Any) -> dict[str, Any]:
     debug = dict(decision.debug or {}) if isinstance(getattr(decision, "debug", None), dict) else {}
     features = {
         "churn_risk": float(getattr(decision, "hazard", 0.0) or 0.0),

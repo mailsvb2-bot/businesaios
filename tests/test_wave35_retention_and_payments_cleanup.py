@@ -13,7 +13,6 @@ def test_retention_context_parser_respects_now_ms() -> None:
 def test_payments_reconciliation_uses_support_module() -> None:
     text = open(
         "runtime/_internal/effects_actions/payments/reconciliation.py",
-        "r",
         encoding="utf-8",
     ).read()
     assert "reconciliation_support import" in text

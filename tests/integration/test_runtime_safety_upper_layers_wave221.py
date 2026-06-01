@@ -3,7 +3,12 @@ from __future__ import annotations
 from bootstrap.safety_control_boot import build_safety_control_runtime
 from core.safety.controls.action_identity import canonical_action_id
 from core.safety.controls.multi_step_approval.models import ApprovalTicket, ApprovalWorkflowState
-from runtime.safety_controls import build_runtime_safety_context, evaluate_runtime_action_controls, record_action_failure, record_action_success
+from runtime.safety_controls import (
+    build_runtime_safety_context,
+    evaluate_runtime_action_controls,
+    record_action_failure,
+    record_action_success,
+)
 
 
 def test_safety_manifest_chain_and_rollback_reconcile_roundtrip(monkeypatch) -> None:

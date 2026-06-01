@@ -1,13 +1,14 @@
 from __future__ import annotations
+
 CANON_BOOT_WIRING_ONLY = True
 
 
 from dataclasses import dataclass
 from typing import Any
 
-from runtime.tenancy import normalize_tenant_id
-from runtime.platform.config.env_flags import env_bool, env_str
 from runtime.boot.product_system_builder import SystemBuilder
+from runtime.platform.config.env_flags import env_bool, env_str
+from runtime.tenancy import normalize_tenant_id
 
 
 @dataclass(frozen=True)

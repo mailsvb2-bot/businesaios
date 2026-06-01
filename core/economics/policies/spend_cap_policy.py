@@ -6,6 +6,7 @@ from config.economics_spend_cap_policy import (
     DEFAULT_ECONOMICS_SPEND_CAP_POLICY_DEFAULTS,
     EconomicsSpendCapPolicyDefaults,
 )
+
 from ..types import BudgetEnvelope, SpendCapAdvice
 
 

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import hashlib
+from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from runtime._internal.market_intelligence.state_store import SqliteMarketIntelligenceStateStore
-
 
 CANON_MARKET_INTELLIGENCE_RECOVERY = True
 

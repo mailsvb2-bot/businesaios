@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
+from runtime.business_autonomy.distributed_state import FileRegionRouteState
 from runtime.execution.distributed_execution_plane import (
     DistributedExecutionPlanner,
     GlobalGovernorVerdict,
@@ -11,7 +12,6 @@ from runtime.execution.distributed_execution_plane import (
     ReplayRecoveryPort,
 )
 from runtime.execution.region_ownership_plane import RegionOwnershipPlane, RegionRoute
-from runtime.business_autonomy.distributed_state import FileRegionRouteState
 
 
 @dataclass(frozen=True)

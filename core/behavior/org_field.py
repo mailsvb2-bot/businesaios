@@ -1,18 +1,16 @@
-from __future__ import annotations
-
 """B2B / organization-level aggregation for BusinesAIOS.
 
 We treat an org/account as a *field* of role-states.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
+
 import math
-from typing import Dict, Tuple
+from dataclasses import dataclass
 
 from core.behavior.dirac_behavior import Complex4, DiracBehaviorModel
 
-
-ROLE_WEIGHTS: Dict[str, float] = {
+ROLE_WEIGHTS: dict[str, float] = {
     "lead": 1.0,
     "user": 0.9,
     "champion": 1.1,
@@ -31,15 +29,15 @@ def _w(role: str) -> float:
 
 @dataclass(frozen=True)
 class OrgField:
-    psi_by_role: Dict[str, Complex4]
-    anti_by_role: Dict[str, float]
+    psi_by_role: dict[str, Complex4]
+    anti_by_role: dict[str, float]
 
     @staticmethod
-    def empty() -> "OrgField":
+    def empty() -> OrgField:
         return OrgField(psi_by_role={}, anti_by_role={})
 
 
-def aggregate_org_observables(*, model: DiracBehaviorModel, field: OrgField, now_ms: int) -> Dict[str, float]:
+def aggregate_org_observables(*, model: DiracBehaviorModel, field: OrgField, now_ms: int) -> dict[str, float]:
     if not field.psi_by_role:
         return {
             "org_engagement": 0.0,
@@ -52,7 +50,7 @@ def aggregate_org_observables(*, model: DiracBehaviorModel, field: OrgField, now
     im = [0.0, 0.0, 0.0, 0.0]
     anti_w = 0.0
     total_w = 0.0
-    phases: Dict[str, Tuple[float, float, float, float]] = {}
+    phases: dict[str, tuple[float, float, float, float]] = {}
 
     for role, psi in field.psi_by_role.items():
         w = _w(role)

@@ -6,11 +6,10 @@ Routing-only selection of which policy reference should be used for a given
 state. This module must not compute actions or execute effects.
 """
 
-from typing import Optional
 import logging
+from typing import Optional
 
 from config.decision_safety_policy import DEFAULT_POLICY_SELECTOR_POLICY, PolicySelectorPolicy
-
 from core.observability.errors import log_exception_throttled
 from core.policies.canary import CanaryPolicyResolver
 from core.policies.types import RolloutConfig
@@ -29,7 +28,7 @@ _POLICY_DEPLOYMENT_ID = "policy_deployment" + _V1
 
 
 class PolicySelector:
-    def __init__(self, registry, safe_mode_policy_id: Optional[str] = None, rollout_config: Optional[RolloutConfig] = None, policy: PolicySelectorPolicy | None = None):
+    def __init__(self, registry, safe_mode_policy_id: str | None = None, rollout_config: RolloutConfig | None = None, policy: PolicySelectorPolicy | None = None):
         self._registry = registry
         self._safe = safe_mode_policy_id
         self._policy = policy or DEFAULT_POLICY_SELECTOR_POLICY

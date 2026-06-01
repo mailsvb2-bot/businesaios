@@ -4,7 +4,11 @@ from datetime import timedelta
 
 from security.key_management_contract import KeyMaterialRecord, KeyPurpose, utc_now
 from security.key_provider_sqlite import SqliteKeyProvider, SqliteKeyProviderBackend
-from security.key_rotation_scheduler import KeyRotationScheduler, KeyRotationSchedulerConfig, StdlibSecretReencryptionAdapter
+from security.key_rotation_scheduler import (
+    KeyRotationScheduler,
+    KeyRotationSchedulerConfig,
+    StdlibSecretReencryptionAdapter,
+)
 from security.secret_contract import SecretRef
 from security.secret_vault import SqliteSecretVault
 from security.secret_vault_sqlite import SqliteSecretVaultBackend

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from billing.client_outcome_dispute_classification_bridge import ClientOutcomeDisputeClassificationBridge
 from billing.client_outcome_dispute_service import ClientOutcomeDisputeService
@@ -16,7 +16,7 @@ from registry.base_registry import BaseRegistry
 def test_dispute_classification_bridge_maps_duplicate_client() -> None:
     record = BillableClientRecord(
         record_id='billable:1', tenant_id='tenant-1', business_id='biz-1', order_id='order-1',
-        lead_id='lead-1', package_id='clients-5', verified_at=datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc),
+        lead_id='lead-1', package_id='clients-5', verified_at=datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC),
         unit_price=70.0, currency='EUR'
     )
     bridge = ClientOutcomeDisputeClassificationBridge(dispute_policy=DisputePolicy())
@@ -31,7 +31,7 @@ def test_dispute_classification_bridge_maps_duplicate_client() -> None:
 
 
 def test_open_dispute_enriches_metadata_with_classification() -> None:
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC)
     record = BillableClientRecord(
         record_id='billable:1', tenant_id='tenant-1', business_id='biz-1', order_id='order-1',
         lead_id='lead-1', package_id='clients-5', verified_at=now - timedelta(days=1),
@@ -60,7 +60,7 @@ def test_open_dispute_enriches_metadata_with_classification() -> None:
 
 
 def test_reversal_ledger_bridge_builds_balanced_posting() -> None:
-    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC)
     record = BillableClientRecord(
         record_id='billable:1', tenant_id='tenant-1', business_id='biz-1', order_id='order-1',
         lead_id='lead-1', package_id='clients-5', verified_at=now - timedelta(days=1),

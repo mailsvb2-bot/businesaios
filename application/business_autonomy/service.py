@@ -17,7 +17,11 @@ from application.business_autonomy.guards import BusinessBlastRadiusGuard, Busin
 from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingMode
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
 from application.business_autonomy.policy import BusinessAutonomyPolicy
-from application.business_autonomy.registry import BusinessAdapterRegistry, BusinessCapabilityRegistry, RegisteredBusinessCapabilities
+from application.business_autonomy.registry import (
+    BusinessAdapterRegistry,
+    BusinessCapabilityRegistry,
+    RegisteredBusinessCapabilities,
+)
 
 
 @dataclass(frozen=True)
@@ -35,7 +39,7 @@ class BusinessAutonomyService:
         *,
         adapter_registry: BusinessAdapterRegistry | None = None,
         autonomy_policy: BusinessAutonomyPolicy | None = None,
-        audit_sink: Optional[object] = None,
+        audit_sink: object | None = None,
         channel_registry: TypedChannelAdapterRegistry | None = None,
         blast_radius_guard: BusinessBlastRadiusGuard | None = None,
         budget_guard: BusinessBudgetGuard | None = None,

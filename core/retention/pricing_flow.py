@@ -13,12 +13,12 @@ from core.tenancy.scope import TenantScope
 logger = logging.getLogger(__name__)
 
 
-def pricing_context_key(telemetry: Optional[dict]) -> str:
+def pricing_context_key(telemetry: dict | None) -> str:
     t = telemetry or {}
     return str(t.get("traffic_source") or t.get("utm_source") or t.get("channel") or t.get("source") or "").strip()
 
 
-def maybe_apply_rl_price(*, store, tenant_id: str, user_id: str, offer_arm: str, base_price_rub: Optional[int], now_ms: int, pricing_ctx: str, env_int, env_float, debug: Dict[str, Any], policy: RetentionPricingFlowPolicy = DEFAULT_RETENTION_PRICING_FLOW_POLICY) -> Optional[int]:
+def maybe_apply_rl_price(*, store, tenant_id: str, user_id: str, offer_arm: str, base_price_rub: int | None, now_ms: int, pricing_ctx: str, env_int, env_float, debug: dict[str, Any], policy: RetentionPricingFlowPolicy = DEFAULT_RETENTION_PRICING_FLOW_POLICY) -> int | None:
     price_rub = base_price_rub
     try:
         rl_enabled = bool(env_int("PRICING_RL_ENABLED", int(policy.rl_enabled_default)))
@@ -37,7 +37,7 @@ def maybe_apply_rl_price(*, store, tenant_id: str, user_id: str, offer_arm: str,
     return price_rub
 
 
-def apply_stoploss(*, store, tenant_id: str, user_id: str, offer_arm: str, base_price_rub: Optional[int], current_price_rub: Optional[int], now_ms: int, pricing_ctx: str, env_int, env_float, debug: Dict[str, Any], policy: RetentionPricingFlowPolicy = DEFAULT_RETENTION_PRICING_FLOW_POLICY) -> Tuple[Optional[int], Dict[str, Any]]:
+def apply_stoploss(*, store, tenant_id: str, user_id: str, offer_arm: str, base_price_rub: int | None, current_price_rub: int | None, now_ms: int, pricing_ctx: str, env_int, env_float, debug: dict[str, Any], policy: RetentionPricingFlowPolicy = DEFAULT_RETENTION_PRICING_FLOW_POLICY) -> tuple[int | None, dict[str, Any]]:
     price_rub = current_price_rub
     try:
         sl_enabled = bool(env_int("PRICING_RL_STOPLOSS_ENABLED", int(policy.stoploss_enabled_default)))

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Telegram runner (orchestration only).
 
 Hard invariants:
@@ -9,13 +10,12 @@ Hard invariants:
 This runner is intentionally thin.
 """
 
-from core.observability.silent import swallow
-
-import time
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
+from core.observability.silent import swallow
 from interfaces.telegram.runner_components import build_runner_components
 from interfaces.telegram.runner_loop import handle_idle_poll, poll_updates, run_periodic_loops
 

@@ -12,9 +12,8 @@ State is in-memory (per process). In multi-node deployments, this should be
 backed by event_store aggregation or a shared store.
 """
 
-from dataclasses import dataclass
 import time
-from typing import Dict
+from dataclasses import dataclass
 
 
 @dataclass
@@ -34,7 +33,7 @@ class BreakerState:
 class CircuitBreaker:
     def __init__(self, *, cfg: BreakerConfig | None = None) -> None:
         self._cfg = cfg or BreakerConfig()
-        self._state: Dict[str, BreakerState] = {}
+        self._state: dict[str, BreakerState] = {}
 
     def should_block(self, *, key: str) -> bool:
         st = self._state.get(key)

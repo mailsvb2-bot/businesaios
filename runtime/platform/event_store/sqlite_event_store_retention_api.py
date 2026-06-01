@@ -10,14 +10,14 @@ import runtime.platform.event_store.sqlite_user_state as _us
 class SqliteEventStoreRetentionApi:
     """User-state and retention/bandit API for SqliteEventStore."""
 
-    _db: Optional[sqlite3.Connection]
+    _db: sqlite3.Connection | None
 
     def get_user_state(
         self,
         *,
         tenant_id: str = "default",
         user_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         assert self._db is not None
         return _us.get_user_state(self._db, tenant_id=tenant_id, user_id=user_id)
 

@@ -4,7 +4,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from kernel.world_state import WorldStateV1 as WorldState
 from core.offers.engine import OfferEngine
 from core.retention.decision_adapter_support import (
     build_initial_plan,
@@ -14,6 +13,7 @@ from core.retention.decision_adapter_support import (
 )
 from core.retention.engine import RetentionDayDecision, RetentionDecision, RetentionEngine
 from core.tenancy.normalization import normalize_tenant_scope
+from kernel.world_state import WorldStateV1 as WorldState
 
 log = logging.getLogger(__name__)
 
@@ -25,8 +25,8 @@ class ActionPlan:
     One input -> one plan (no second brain).
     """
 
-    steps: List[Dict[str, Any]]
-    debug: Dict[str, Any]
+    steps: list[dict[str, Any]]
+    debug: dict[str, Any]
 
 
 class RetentionDecisionAdapter:
@@ -48,7 +48,7 @@ class RetentionDecisionAdapter:
         self._offer_engine = offer_engine or OfferEngine.default()
         self._offer_cooldown_store = offer_cooldown_store
 
-    def maybe_decide_offer(self, *, tenant_id: str, user_id: str, context: dict) -> Optional[RetentionDecision]:
+    def maybe_decide_offer(self, *, tenant_id: str, user_id: str, context: dict) -> RetentionDecision | None:
         try:
             ctx = dict(context or {})
             if self._prices and "prices" not in ctx:

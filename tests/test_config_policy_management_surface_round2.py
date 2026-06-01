@@ -11,7 +11,6 @@ from config import (
 )
 
 
-
 def test_system_config_normalizes_sections_and_environment() -> None:
     config = SystemConfig(environment='Production', tenant_id=' Tenant-A ')
     config.merge_section('Runtime Settings', {'workers': 4})

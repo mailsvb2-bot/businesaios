@@ -4,7 +4,6 @@ from typing import Any
 
 from application.business_autonomy.provider_messaging_binding import ProviderMessagingBinding
 
-
 CANON_PROVIDER_MESSAGING_METADATA = True
 
 

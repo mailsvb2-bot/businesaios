@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from application.decisioning.candidate_scores import CandidateScoreSet
 from config.economics_domain_policy import DEFAULT_BUDGET_ENVELOPE_POLICY
 
 from .builders.budget_envelope_builder import BudgetEnvelopeBuilder
@@ -16,9 +17,26 @@ from .builders.payback_builder import PaybackBuilder
 from .builders.policy_advice_builder import EconomicsPolicyAdviceBuilder
 from .builders.read_model_builder import EconomicsReadModelBuilder
 from .builders.unit_economics_builder import UnitEconomicsBuilder
-from .contracts import CashflowReader, CostReader, CustomerValueReader, EconomicsSnapshotRepository, RevenueReader, SpendReader, EconomicsCandidateScorer, EconomicsScoringContext
-from .types import BudgetEnvelope, CashflowSignal, CostSignal, CustomerValueSignal, EconomicsSnapshot, RevenueSignal, SpendSignal, UnitEconomicsSnapshot
-from application.decisioning.candidate_scores import CandidateScoreSet
+from .contracts import (
+    CashflowReader,
+    CostReader,
+    CustomerValueReader,
+    EconomicsCandidateScorer,
+    EconomicsScoringContext,
+    EconomicsSnapshotRepository,
+    RevenueReader,
+    SpendReader,
+)
+from .types import (
+    BudgetEnvelope,
+    CashflowSignal,
+    CostSignal,
+    CustomerValueSignal,
+    EconomicsSnapshot,
+    RevenueSignal,
+    SpendSignal,
+    UnitEconomicsSnapshot,
+)
 from .validators.signal_validator import EconomicsSignalValidator
 
 

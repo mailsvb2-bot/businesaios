@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 FILES = [
     'runtime/handlers/ai_ceo_plan.py',
     'runtime/handlers/ads_autopilot_tick.py',

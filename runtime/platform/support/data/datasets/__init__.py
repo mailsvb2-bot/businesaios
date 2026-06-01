@@ -9,6 +9,7 @@ from runtime.platform.support.contracts.reward import Reward
 from runtime.platform.support.contracts.trajectory import Trajectory
 from runtime.platform.support.contracts.transition import Transition
 
+
 class BenchmarkDataset:
     def __init__(self, items: Iterable[Trajectory] = ()) -> None:
         self._items = list(items)

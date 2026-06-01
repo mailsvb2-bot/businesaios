@@ -10,7 +10,11 @@ from runtime.queue.job_store import InMemoryJobStore
 from runtime.queue.queue_alerts import InMemoryQueueAlertSink, QueueAlertRouter
 from runtime.queue.queue_health_monitor import QueueHealthMonitor
 from runtime.queue.queue_metrics_rollup_sqlite import SqliteQueueMetricsRollupStore
-from runtime.queue.queue_observability import QueueObservabilityRegistry, QueueJanitorTelemetry, QueueLeadershipTelemetry
+from runtime.queue.queue_observability import (
+    QueueJanitorTelemetry,
+    QueueLeadershipTelemetry,
+    QueueObservabilityRegistry,
+)
 from runtime.queue.queue_slo import QueueSLOEvaluator, QueueSLOThresholds
 from runtime.queue.tenant_fair_scheduler import TenantFairScheduler
 

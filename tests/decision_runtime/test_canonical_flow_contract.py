@@ -3,6 +3,7 @@ from application.decision_runtime.canonical_flow_contract import (
     is_canonical_flow_complete,
 )
 
+
 def test_canonical_flow_contract_has_expected_stage_order() -> None:
     assert CANONICAL_FLOW_STAGES == (
         "signal",

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 RUNTIME_DECISION_SERVICE_CONTRACT_VERSION = "RDS-CONTRACT-V1"
 CANON_RUNTIME_DECISION_SERVICE_DESCRIPTOR_OWNER = True
 

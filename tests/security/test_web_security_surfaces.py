@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.web.auth import AuthService
 from app.web.session import SessionStore
-from interfaces.api.fastapi_dependencies import FastAPIDependencyContainer
 from entrypoints.api.request_context import RequestContext
+from interfaces.api.fastapi_dependencies import FastAPIDependencyContainer
 from security.payload_redaction import PayloadRedactor
 from security.token_policy import TokenPolicy
 
@@ -16,7 +16,7 @@ class _BootResult:
 
 
 def test_auth_service_redacts_sensitive_payload() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         'issued_at': (now - timedelta(hours=1)).isoformat(),
         'expires_at': (now + timedelta(hours=23)).isoformat(),

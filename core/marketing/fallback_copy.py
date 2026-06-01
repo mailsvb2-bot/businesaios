@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 
-def compose_fallback_message(offer: Dict[str, Any], locale: str = "ru") -> str:
+def compose_fallback_message(offer: dict[str, Any], locale: str = "ru") -> str:
     title = offer.get("title") or "подходящий сеанс"
     price = offer.get("price")
     cur = offer.get("currency") or "₽"

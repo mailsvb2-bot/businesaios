@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from economics.contracts import EconomicSnapshot, TruthFragment
 
-
 CANON_RUNTIME_ECONOMIC_CORE_SNAPSHOT_FACADE = True
 
 

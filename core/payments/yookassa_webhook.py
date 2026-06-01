@@ -42,7 +42,7 @@ class WebhookParsed:
     object_type: str
     external_payment_id: str
     notification_id: str
-    raw: Dict[str, Any]
+    raw: dict[str, Any]
 
     @property
     def dedupe_key(self) -> str:
@@ -54,7 +54,7 @@ class WebhookParsed:
         return f"yk:webhook:{self.event}:{self.external_payment_id}"
 
 
-def _get_header(headers: Dict[str, str], name: str) -> Optional[str]:
+def _get_header(headers: dict[str, str], name: str) -> str | None:
     for k, v in (headers or {}).items():
         if str(k).lower() == str(name).lower():
             return str(v)
@@ -63,7 +63,7 @@ def _get_header(headers: Dict[str, str], name: str) -> Optional[str]:
 
 def verify_webhook(
     *,
-    headers: Dict[str, str],
+    headers: dict[str, str],
     body_bytes: bytes,
     auth_mode: str,
     basic_user: str | None = None,
@@ -138,9 +138,9 @@ def parse_notification(*, body_bytes: bytes) -> WebhookParsed:
     )
 
 
-def redact_headers(headers: Dict[str, str]) -> Dict[str, str]:
+def redact_headers(headers: dict[str, str]) -> dict[str, str]:
     """Return a safe subset of headers for event-store (no secrets)."""
-    safe: Dict[str, str] = {}
+    safe: dict[str, str] = {}
     for k, v in (headers or {}).items():
         lk = str(k).lower()
         if lk in {"authorization", "cookie", "set-cookie"}:
@@ -153,7 +153,7 @@ def redact_headers(headers: Dict[str, str]) -> Dict[str, str]:
     return safe
 
 
-def canonical_webhook_event_payload(parsed: WebhookParsed, *, headers: Dict[str, str], body_bytes: bytes) -> Tuple[str, Dict[str, Any]]:
+def canonical_webhook_event_payload(parsed: WebhookParsed, *, headers: dict[str, str], body_bytes: bytes) -> tuple[str, dict[str, Any]]:
     """Return (event_type, payload) for event-store."""
     body_hash = hashlib.sha256(body_bytes or b"").hexdigest()
     return (

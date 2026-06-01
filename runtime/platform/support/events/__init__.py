@@ -5,6 +5,7 @@ from typing import Any, Mapping, Protocol
 
 from observability.platform.telemetry.pubsub import AppendOnlyTopicLog
 
+
 class EventPublisherContract(Protocol):
     def publish(self, topic: str, payload: dict) -> None:
         ...

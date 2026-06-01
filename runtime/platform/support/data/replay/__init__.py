@@ -6,6 +6,7 @@ from typing import Any
 from runtime.platform.support.contracts.trajectory import Trajectory
 from runtime.platform.support.contracts.transition import Transition
 
+
 class PrioritizedReplayBuffer:
     def __init__(self) -> None:
         self._items: list[tuple[float, Transition]] = []

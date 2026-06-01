@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from interfaces.api.fastapi_dependencies import FastAPIDependencyContainer
 from interfaces.api.fastapi_router_adapter import create_api_router
+from observability.action_audit_log import ActionAuditLog
+from observability.decision_audit_log import DecisionAuditLog
 from observability.metrics import InMemoryMetrics
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore
 from tenancy.tenant_quota_guard import TenantQuotaGuard
@@ -138,9 +141,7 @@ def test_fastapi_execute_action_replay_does_not_fail_when_quota_is_exhausted_aft
     assert service.calls == 1
 
 
-from fastapi import FastAPI
-from observability.action_audit_log import ActionAuditLog
-from observability.decision_audit_log import DecisionAuditLog
+
 
 
 @dataclass(frozen=True)
@@ -197,7 +198,7 @@ def test_fastapi_control_plane_audit_reads_same_execute_action_audit_log(tmp_pat
     )
     assert action_response.status_code == 200
 
-    audit_response = client.get('/control-plane/audit/actions?trace_id=idem-does-not-matter', headers={
+    _ = client.get('/control-plane/audit/actions?trace_id=idem-does-not-matter', headers={
         'x-api-key': 'development-control-plane-key',
         'x-tenant-id': 'tenant-a',
         'x-actor-id': 'operator-1',

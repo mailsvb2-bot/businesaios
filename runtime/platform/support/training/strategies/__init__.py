@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .hard_case_mining import hard_case_mining
 
+
 class CurriculumManager:
     def level_for_epoch(self, epoch: int) -> int:
         return max(0, epoch)

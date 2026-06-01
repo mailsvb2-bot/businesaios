@@ -69,7 +69,7 @@ def test_runtime_package_roots_replace_selected_public_api_imports() -> None:
     root = Path(__file__).resolve().parents[2]
     for rel, required in TARGETS.items():
         text = (root / rel).read_text(encoding='utf-8')
-        compat_owner_import = None
+        _ = None
         explicit_public_api_import = EXPLICIT_COMPAT_PUBLIC_APIS.get(rel)
         if explicit_public_api_import is not None:
             assert explicit_public_api_import in text, (rel, explicit_public_api_import)

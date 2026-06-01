@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from core.events.event_types import (
-    ALIASES,
-    KNOWN_EVENT_TYPES,
     AI_DECISION_TRACE,
+    ALIASES,
     AUDIO_COMPLETED,
     AUDIO_PROGRESS,
     AUDIO_SENT,
@@ -22,6 +21,7 @@ from core.events.event_types import (
     FINANCE_JOB_COMPLETED,
     FINANCE_JOB_STARTED,
     FINANCE_SCENARIO_SELECTED,
+    KNOWN_EVENT_TYPES,
     MESSAGE_FAILED,
     MESSAGE_SENT,
     MESSAGING_CHANNEL_BLOCKED,

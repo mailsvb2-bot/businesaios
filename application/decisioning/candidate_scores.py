@@ -8,8 +8,8 @@ from kernel.decisioning.candidate_types import CandidateScore
 
 @dataclass(frozen=True)
 class CandidateScoreSet:
-    items: Tuple[CandidateScore, ...]
+    items: tuple[CandidateScore, ...]
 
     @classmethod
-    def from_iterable(cls, values: Iterable[CandidateScore]) -> "CandidateScoreSet":
+    def from_iterable(cls, values: Iterable[CandidateScore]) -> CandidateScoreSet:
         return cls(items=tuple(values))

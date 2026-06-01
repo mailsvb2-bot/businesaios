@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from application.effects.effect_verification_bridge import (
+    extract_router_result_from_feedback,
+    normalize_feedback_contract,
+)
 from execution.closed_loop_orchestrator import ClosedLoopCycleInput, ClosedLoopOrchestrator
-from application.effects.effect_verification_bridge import extract_router_result_from_feedback, normalize_feedback_contract
 
 
 def test_runtime_router_contract_bridges_into_closed_loop_feedback() -> None:

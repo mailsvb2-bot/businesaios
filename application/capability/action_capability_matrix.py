@@ -5,7 +5,6 @@ from typing import Any
 
 from execution.action_catalog import get_action_spec, known_action_types
 
-
 CANON_ACTION_CAPABILITY_MATRIX = True
 
 

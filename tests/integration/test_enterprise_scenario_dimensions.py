@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from core.finance.strategic.scenarios.downside_tree import DownsideTreeEvaluator
 from core.finance.strategic.scenarios.scenario_catalog import ScenarioCatalog
 from core.finance.strategic.scenarios.scenario_dimensions import EnterpriseScenarioInputs
-from core.finance.strategic.scenarios.downside_tree import DownsideTreeEvaluator
 from core.finance.strategic.types import FinancialInput
 
 

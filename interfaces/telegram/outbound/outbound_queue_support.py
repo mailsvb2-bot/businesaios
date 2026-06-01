@@ -8,10 +8,10 @@ from interfaces.telegram.outbound.outbound_lifecycle import ensure_queue_active
 from interfaces.telegram.outbound.outbound_task_builders import build_outbound_task
 
 
-def build_queue_item(*, queue_obj, method: str, chat_id: Optional[int], fn: Callable[[], Any], meta: Optional[Dict[str, Any]], critical: bool, priority, kind: str, with_result: bool = False):
+def build_queue_item(*, queue_obj, method: str, chat_id: int | None, fn: Callable[[], Any], meta: dict[str, Any] | None, critical: bool, priority, kind: str, with_result: bool = False):
     pr = int(queue_obj._normalize_priority(priority))
     seq = int(next(queue_obj._seq))
-    result_box: Dict[str, Any] | None = {} if with_result else None
+    result_box: dict[str, Any] | None = {} if with_result else None
     done = queue_obj._done_event_factory() if with_result else None
     task = build_outbound_task(
         priority=pr,

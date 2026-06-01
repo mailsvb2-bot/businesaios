@@ -13,7 +13,6 @@ from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_metrics_compactor import QueueMetricsCompactionReport, QueueMetricsCompactor
 from runtime.queue.queue_metrics_rollup_sqlite import SqliteQueueMetricsRollupStore
 
-
 CANON_RUNTIME_QUEUE_METRICS_RETENTION = True
 
 

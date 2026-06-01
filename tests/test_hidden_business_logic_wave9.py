@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List
+from typing import Any, Iterable
 
 from config.pricing_retention_policy import (
     PricingOffPolicyDefaults,
@@ -11,8 +11,8 @@ from config.pricing_retention_policy import (
 from config.retention_arms_policy import RetentionArmsPolicy
 from core.pricing.off_policy import ips_estimate_for_price
 from core.pricing.stop_loss import StopLossConfig, should_apply_price
-from core.retention.arms import choose_arm_event_sourced
 from core.retention import engine as engine_mod
+from core.retention.arms import choose_arm_event_sourced
 from core.retention.engine import RetentionDayDecision, RetentionEngine
 from core.retention.engine_support import (
     build_sandbox_suppressed_decision,
@@ -26,11 +26,11 @@ class _Ev:
     tenant_id: str
     user_id: str
     timestamp_ms: int
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 class _PricingStore:
-    def __init__(self, events: List[_Ev]):
+    def __init__(self, events: list[_Ev]):
         self._events = list(events)
 
     def iter_events(
@@ -43,8 +43,8 @@ class _PricingStore:
         event_type: str | None = None,
         event_types: tuple[str, ...] | None = None,
         limit: int | None = None,
-    ) -> Iterable[Dict[str, Any]]:
-        out: List[Dict[str, Any]] = []
+    ) -> Iterable[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
         for e in self._events:
             if e.tenant_id != tenant_id:
                 continue
@@ -67,7 +67,7 @@ class _PricingStore:
             )
         return out[: int(limit) if limit else None]
 
-    def latest_events(self, *, tenant_id: str, event_types: tuple[str, ...], limit: int) -> list[Dict[str, Any]]:
+    def latest_events(self, *, tenant_id: str, event_types: tuple[str, ...], limit: int) -> list[dict[str, Any]]:
         items = [
             {
                 "event_type": e.event_type,
@@ -139,7 +139,7 @@ def test_ips_estimate_uses_policy_defaults_for_inverse_propensity() -> None:
 def test_stop_loss_uses_policy_unit_ratio() -> None:
     now_ms = 10_000_000
     t0 = now_ms - 60_000
-    events: List[_Ev] = []
+    events: list[_Ev] = []
     for i in range(30):
         uid = f"b{i}"
         events.append(_Ev("tariff_selected", "t1", uid, t0 + i, {"tariff": "offer_30_14900", "amount": 15000}))

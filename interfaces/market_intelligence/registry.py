@@ -4,7 +4,6 @@ from contracts.platforms.market_intelligence_provider_catalog import PROVIDER_FA
 from interfaces.common.registry_capability_contract import build_registry_entry
 from interfaces.market_intelligence.provider_factory import provider_supported
 
-
 CANON_MARKET_INTELLIGENCE_REGISTRY = True
 
 _READ_ONLY_ACTIONS = {
@@ -24,7 +23,7 @@ _READ_ONLY_ACTIONS = {
 
 
 def _entry(name: str, family: str) -> dict[str, object]:
-    ready = bool(provider_supported(name))
+    _ = bool(provider_supported(name))
     return build_registry_entry(
         name=name,
         status='implemented',

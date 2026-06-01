@@ -5,7 +5,10 @@ from pathlib import Path
 from application.business_autonomy.provider_catalog import provider_map
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
 from runtime.business_autonomy.provider_queue_execution import ProviderQueueExecutionRuntime
-from runtime.business_autonomy.provider_runtime_write_guard import PROVIDER_WRITE_BLOCK_STATUS, ProviderRuntimeWriteGuard
+from runtime.business_autonomy.provider_runtime_write_guard import (
+    PROVIDER_WRITE_BLOCK_STATUS,
+    ProviderRuntimeWriteGuard,
+)
 from runtime.queue.job_store_sqlite import SqliteJobStore
 from security.secret_vault import InMemorySecretVault
 

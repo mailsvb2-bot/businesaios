@@ -6,7 +6,6 @@ performs deep multilayer verification and direct systemic fixes in the codebase.
 
 from __future__ import annotations
 
-
 CHANGE_POLICY_VERSION = 'V1'
 
 CHANGE_POLICY_RULES = {

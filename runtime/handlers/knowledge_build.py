@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from runtime.knowledge import Lesson, LessonDraft
 from runtime.boot.knowledge_bundle import KnowledgeRuntimeBundle
+from runtime.knowledge import Lesson, LessonDraft
 
 CANON_THIN_HANDLER = True
 

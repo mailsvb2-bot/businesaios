@@ -12,7 +12,7 @@ This is intentionally dumb and explicit.
 """
 
 from dataclasses import dataclass
-from typing import Mapping, Any, Literal
+from typing import Any, Literal, Mapping
 
 UserRole = Literal["owner", "marketer", "operator"]
 
@@ -22,7 +22,7 @@ class UserRoleInfo:
     role: UserRole
 
     @staticmethod
-    def from_settings(settings: Mapping[str, Any] | None) -> "UserRoleInfo":
+    def from_settings(settings: Mapping[str, Any] | None) -> UserRoleInfo:
         if not isinstance(settings, Mapping):
             return UserRoleInfo("owner")
         raw = str(settings.get("user:role") or "").strip().lower()

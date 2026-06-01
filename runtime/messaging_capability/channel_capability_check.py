@@ -3,7 +3,6 @@ from __future__ import annotations
 from interfaces.messaging_runtime.capabilities import get_capabilities
 from runtime.messaging.channel_normalizer import normalize_channel
 
-
 _REQUIRED_FIELDS = (
     "plain_text",
     "html",

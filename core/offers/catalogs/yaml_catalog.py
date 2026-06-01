@@ -37,14 +37,14 @@ class YamlOfferCatalogV1(OfferCatalog):
 
     id: str
     schema_version: int
-    _offers: Dict[str, Dict[str, Any]]
+    _offers: dict[str, dict[str, Any]]
 
     @staticmethod
-    def from_spec(spec: Mapping[str, Any]) -> "YamlOfferCatalogV1":
+    def from_spec(spec: Mapping[str, Any]) -> YamlOfferCatalogV1:
         cid = str(spec.get("catalog_id") or "").strip()
         sv = int(spec.get("schema_version") or 1)
         offers_raw = spec.get("offers") or []
-        offers: Dict[str, Dict[str, Any]] = {}
+        offers: dict[str, dict[str, Any]] = {}
         if isinstance(offers_raw, list):
             for it in offers_raw:
                 if not isinstance(it, dict):
@@ -52,7 +52,7 @@ class YamlOfferCatalogV1(OfferCatalog):
                 oid = str(it.get("offer_id") or "").strip()
                 if not oid:
                     continue
-                o: Dict[str, Any] = dict(it)
+                o: dict[str, Any] = dict(it)
                 rules_raw = o.get("rules") if isinstance(o.get("rules"), dict) else {}
                 o["rules"] = {
                     "min_engagement": float(rules_raw.get("min_engagement") or 0.0),
@@ -62,7 +62,7 @@ class YamlOfferCatalogV1(OfferCatalog):
                 if "base_price_rub" not in o and "price_rub" in o:
                     o["base_price_rub"] = o.get("price_rub")
                 vraw = o.get("variants") if isinstance(o.get("variants"), dict) else {}
-                vnorm: Dict[str, Dict[str, str]] = {}
+                vnorm: dict[str, dict[str, str]] = {}
                 for vk, vv in vraw.items():
                     if not isinstance(vv, dict):
                         continue

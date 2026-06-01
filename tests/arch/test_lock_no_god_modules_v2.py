@@ -4,7 +4,6 @@ from pathlib import Path
 
 from canon.domain_fs import scan_boot_wiring_only, scan_thin_runtime_handlers
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 

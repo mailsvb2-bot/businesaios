@@ -5,7 +5,6 @@ from typing import Tuple
 
 from .models import CreativeCandidate, CreativeGuardrails
 
-
 _RE_EXCESSIVE_PUNCT = re.compile(r"([!?])\1\1+")
 
 
@@ -46,7 +45,7 @@ def _contains_medical_claims(s: str) -> bool:
 def validate_creative(
     c: CreativeCandidate,
     g: CreativeGuardrails,
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     # Length checks
     if len(c.headline) > g.max_headline_len:
         return False, "headline_too_long"

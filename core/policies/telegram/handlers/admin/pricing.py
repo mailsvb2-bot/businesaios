@@ -1,26 +1,26 @@
 from __future__ import annotations
 
 from core.policies.telegram.context import TelegramCtx
-from core.policies.telegram.helpers import ProposedAction, propose
-from core.ux.telegram_keyboards import kb_back_main, kb_staff_menu
 from core.policies.telegram.handlers.admin.pricing_support import (
     ai_request_rows,
     back_markup,
     parse_ai_request_callback,
     parse_plan_callback_id,
     pending_requests_view,
+    pricing_approve_request_payload,
     pricing_edit_request_payload,
     pricing_session_payload,
-    pricing_approve_request_payload,
 )
+from core.policies.telegram.helpers import ProposedAction, propose
+from core.ux.telegram_keyboards import kb_back_main, kb_staff_menu
 
 
 def handle_pricing(ctx: TelegramCtx, *, pm) -> ProposedAction | None:
     if ctx.callback_data == "admin:ai:prices":
         if not ctx.is_admin:
             return pm(text="Доступ запрещён.", reply_markup=kb_back_main())
-        from core.economics.brain import EconomicBrain, LTVEstimator, PricingPolicy, GrowthPolicy, EconomicReward
         from core.admin.ai_marketing import recommend_prices
+        from core.economics.brain import EconomicBrain, EconomicReward, GrowthPolicy, LTVEstimator, PricingPolicy
         from core.plans import active_plans
 
         brain = EconomicBrain(ltv=LTVEstimator(), pricing=PricingPolicy(), growth=GrowthPolicy(), reward=EconomicReward())
@@ -95,8 +95,8 @@ def handle_pricing(ctx: TelegramCtx, *, pm) -> ProposedAction | None:
         if plan_id is None:
             return pm(text="Некорректный plan_id.", reply_markup=kb_staff_menu())
 
-        from core.plans import active_plans
         from core.admin.ai_pricing import suggest_price_for_plan
+        from core.plans import active_plans
 
         plans = active_plans()
         plan_by_id = {int(x.get("plan_id") or 0): x for x in plans}

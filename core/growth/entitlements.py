@@ -6,6 +6,7 @@ from typing import Optional, Protocol
 from config.growth_entitlements_policy import DEFAULT_GROWTH_ENTITLEMENTS_POLICY, GrowthEntitlementsPolicy
 from core.ads.policy import AdsEntitlements, AdsMode, AutopilotLimits
 
+
 @dataclass(frozen=True)
 class DailyLimits:
     max_spend_total: float = DEFAULT_GROWTH_ENTITLEMENTS_POLICY.default_max_spend_total
@@ -17,7 +18,7 @@ class DailyLimits:
     change_window_utc_end: int = DEFAULT_GROWTH_ENTITLEMENTS_POLICY.default_change_window_utc_end
 
 class TenantConfigStore(Protocol):
-    def get(self, *, tenant_id: str, key: str) -> Optional[str]: ...
+    def get(self, *, tenant_id: str, key: str) -> str | None: ...
 
 class GrowthEntitlementsProvider:
     def __init__(self, store: TenantConfigStore, *, policy: GrowthEntitlementsPolicy = DEFAULT_GROWTH_ENTITLEMENTS_POLICY):

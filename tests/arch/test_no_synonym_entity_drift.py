@@ -4,7 +4,6 @@ from tests.arch.rules.synonym_clusters import SYNONYM_CLUSTERS
 from tests.arch.scanners.name_fragment_scanner import find_class_names
 from tests.arch.scanners.python_file_loader import read_text
 
-
 TARGET_FILES = (
     "runtime/decision_gateway.py",
     "runtime/integration/runtime_packet_provider.py",

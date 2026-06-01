@@ -13,11 +13,11 @@ from typing import Any, Dict
 
 from runtime.ads import AdsApplyState, AdsPlan, plan_digest
 from runtime.idempotency import make_idempotency_key
-from runtime.ux import kb_ads_apply_pending
 from runtime.ports.effects import EffectsPort
+from runtime.ux import kb_ads_apply_pending
 
 
-def handle_onboarding_start(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
+def handle_onboarding_start(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
     user_id = str((payload or {}).get("user_id") or "")
     return effects.send_message(
         decision_id=str((payload or {}).get("decision_id") or ""),
@@ -31,7 +31,7 @@ def handle_onboarding_start(payload: Dict[str, Any], effects: EffectsPort, env: 
     )
 
 
-def handle_onboarding_text(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
+def handle_onboarding_text(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
     user_id = str((payload or {}).get("user_id") or "")
     return effects.send_message(
         decision_id=str((payload or {}).get("decision_id") or ""),
@@ -44,7 +44,7 @@ def handle_onboarding_text(payload: Dict[str, Any], effects: EffectsPort, env: A
     )
 
 
-def handle_onboarding_lead_source(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
+def handle_onboarding_lead_source(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
     user_id = str((payload or {}).get("user_id") or "")
     return effects.send_message(
         decision_id=str((payload or {}).get("decision_id") or ""),

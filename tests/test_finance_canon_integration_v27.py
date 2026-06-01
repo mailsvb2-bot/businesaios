@@ -3,7 +3,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from core.economics.enums import BudgetPressureLevel, EconomicsSignalStatus, GuardSeverity, MarginHealthStatus, PaybackRiskLevel
+from core.economics.enums import (
+    BudgetPressureLevel,
+    EconomicsSignalStatus,
+    GuardSeverity,
+    MarginHealthStatus,
+    PaybackRiskLevel,
+)
 from core.economics.guard import GuardTrigger
 from core.economics.ids import EconomicsSnapshotId
 from core.economics.types import (

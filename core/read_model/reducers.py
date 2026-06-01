@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+from typing import Any, Mapping
 
 from core.events.event_types import normalize_event_type
 
 
-def reduce_event(state: Dict[str, Any], ev: Mapping[str, Any]) -> Dict[str, Any]:
+def reduce_event(state: dict[str, Any], ev: Mapping[str, Any]) -> dict[str, Any]:
     """Pure reducer: (state, event) -> new_state.
 
     The reducer is deliberately minimal and bounded.

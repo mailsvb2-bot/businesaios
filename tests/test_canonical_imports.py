@@ -92,7 +92,7 @@ def test_shim_modules_are_reexport_only():
             continue
 
         for node in ast.iter_child_nodes(tree):
-            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
                 raise AssertionError(
                     f"{path.relative_to(ROOT)} is a shim but defines "
                     f"'{node.name}' — move definitions to canonical location."

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from security.key_provider import InMemoryKeyProvider
 from security.key_management_contract import KeyPurpose
+from security.key_provider import InMemoryKeyProvider
 from security.request_signing import RequestSigner, SignedRequestEnvelope, utc_now
 
 
@@ -90,7 +90,9 @@ def test_request_signer_accepts_legacy_v1_envelope_for_backward_compat() -> None
     modern = signer.sign(payload=payload, tenant_id='tenant-a')
     key = key_provider.get(modern.key_id)
 
-    import base64, hashlib, hmac
+    import base64
+    import hashlib
+    import hmac
 
     legacy_signature = base64.b64encode(hmac.new(key.secret_bytes, b'{"operation":"sync","tenant_id":"tenant-a"}', hashlib.sha256).digest()).decode('ascii')
     legacy = SignedRequestEnvelope(

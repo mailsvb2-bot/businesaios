@@ -12,7 +12,6 @@ from tests.arch.scanners.import_scanner import count_import_lines
 from tests.arch.scanners.public_method_scanner import count_public_methods
 from tests.arch.scanners.python_file_loader import read_text
 
-
 TARGET_FILES = (
     "runtime/integration/runtime_packet_provider.py",
     "runtime/decision_gateway.py",

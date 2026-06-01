@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from execution.business_operating_memory import project_business_memory_contract_bundle, project_business_memory_meta_payloads
+from execution.business_operating_memory import (
+    project_business_memory_contract_bundle,
+    project_business_memory_meta_payloads,
+)
 from execution.headless_trace import HeadlessTrace
-
 
 CANON_AUTONOMY_STATE_ASSEMBLY = True
 
@@ -236,7 +238,7 @@ class AutonomyStateAssembly:
             if capability_health_registry is not None:
                 runtime_snapshot = capability_health_registry.runtime_capabilities_for_actions(
                     tenant_id=request.tenant_id,
-                    action_types=[str(key) for key in existing_runtime.keys()],
+                    action_types=[str(key) for key in existing_runtime],
                     existing_runtime_capabilities=existing_runtime,
                 )
             elif capability_health_service is not None:
@@ -244,14 +246,14 @@ class AutonomyStateAssembly:
                 if callable(load_for_actions):
                     runtime_snapshot = load_for_actions(
                         tenant_id=request.tenant_id,
-                        action_types=[str(key) for key in existing_runtime.keys()],
+                        action_types=[str(key) for key in existing_runtime],
                     )
                     runtime_snapshot = {
                         str(key): {**dict(runtime_snapshot.get(str(key)) or {}), **dict(existing_runtime.get(str(key)) or {})}
                         for key in set(existing_runtime.keys()) | set(runtime_snapshot.keys())
                     }
                 else:
-                    capability_keys = [str(key) for key in existing_runtime.keys()]
+                    capability_keys = [str(key) for key in existing_runtime]
                     raw_runtime_snapshot = capability_health_service.load_runtime_snapshot(
                         tenant_id=request.tenant_id,
                         capability_keys=capability_keys,

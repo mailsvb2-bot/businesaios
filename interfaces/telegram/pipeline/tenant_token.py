@@ -13,7 +13,7 @@ We intentionally keep parsing dumb and explicit.
 from typing import Optional
 
 
-def parse_tenant_token(text: str) -> Optional[str]:
+def parse_tenant_token(text: str) -> str | None:
     t = (text or "").strip()
     if not t:
         return None
@@ -33,7 +33,7 @@ def parse_tenant_token(text: str) -> Optional[str]:
     return None
 
 
-def _parse_arg(arg: str) -> Optional[str]:
+def _parse_arg(arg: str) -> str | None:
     a = (arg or "").strip()
     if not a:
         return None

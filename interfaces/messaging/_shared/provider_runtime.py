@@ -5,9 +5,9 @@ from typing import Any, Callable
 from interfaces.messaging._shared.adapter_base import AdapterBase
 from interfaces.messaging._shared.delivery_mapper import map_delivery_result
 from interfaces.messaging._shared.outbound_sender import send_outbound
-from interfaces.messaging._shared.send_guard import guarded_send
 from interfaces.messaging._shared.runner_base import RunnerBase
 from interfaces.messaging._shared.runner_components import build_provider_config
+from interfaces.messaging._shared.send_guard import guarded_send
 
 
 class ProviderRunner(RunnerBase):

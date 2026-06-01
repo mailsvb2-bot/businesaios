@@ -5,6 +5,7 @@ from typing import Callable, Sequence
 
 from core.math.advanced_models import best_response_price, optimal_price_from_grid, point_price_elasticity
 
+
 @dataclass(frozen=True)
 class MarketPriceSummary:
     chosen_price: int

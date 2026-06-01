@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from .types import MarketContext
 
@@ -13,7 +12,7 @@ class WorldModelInput:
     context: MarketContext
     current_price: float
     # Optional: if you already have CAC or cost info.
-    marginal_cost: Optional[float] = None
+    marginal_cost: float | None = None
 
 
 @dataclass(frozen=True)

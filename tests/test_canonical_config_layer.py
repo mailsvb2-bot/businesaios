@@ -1,5 +1,5 @@
-from runtime.platform.config.settings_loader import load_settings
 from runtime.platform.config.feature_flags import FeatureFlags
+from runtime.platform.config.settings_loader import load_settings
 from runtime.platform.config.yaml_loader import load_yaml
 
 

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
+from security.external_adapter_credentials import ExternalAdapterCredential
 from security.governance_owner_factory import build_security_governance_infrastructure
 from security.tenant_security_isolation import TenantSecurityIsolationError
-from security.external_adapter_credentials import ExternalAdapterCredential
 
 
 def test_tenant_isolation_binds_kms_and_notary_reads_to_tenant_scope(tmp_path) -> None:

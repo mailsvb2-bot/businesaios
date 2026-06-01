@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Mapping
 
-
 CANON_MARKET_INTELLIGENCE_ADVANCED_CONTRACT = True
 
 

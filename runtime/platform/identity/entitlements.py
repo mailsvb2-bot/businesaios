@@ -24,13 +24,13 @@ class EntitlementsProvider(Protocol):
 
     def has(self, *, tenant_id: str, user_id: str, entitlement: str) -> bool: ...
 
-    def list(self, *, tenant_id: str, user_id: str) -> Tuple[str, ...]: ...
+    def list(self, *, tenant_id: str, user_id: str) -> tuple[str, ...]: ...
 
 
 class InMemoryIdentityProvider:
     """Safe default for tests/local. Production must bind a real provider."""
 
-    def __init__(self, *, authenticated_users: Optional[Set[Tuple[str, str]]] = None) -> None:
+    def __init__(self, *, authenticated_users: set[tuple[str, str]] | None = None) -> None:
         self._authed = authenticated_users or set()
 
     def resolve(self, *, tenant_id: str, user_id: str) -> AuthContext:
@@ -44,8 +44,8 @@ class InMemoryIdentityProvider:
 class InMemoryEntitlementsProvider:
     """Safe default for tests/local."""
 
-    def __init__(self, *, grants: Optional[Mapping[Tuple[str, str], Iterable[str]]] = None) -> None:
-        self._grants: Dict[Tuple[str, str], Set[str]] = {}
+    def __init__(self, *, grants: Mapping[tuple[str, str], Iterable[str]] | None = None) -> None:
+        self._grants: dict[tuple[str, str], set[str]] = {}
         if grants:
             for k, v in grants.items():
                 self._grants[k] = set(v)
@@ -53,7 +53,7 @@ class InMemoryEntitlementsProvider:
     def has(self, *, tenant_id: str, user_id: str, entitlement: str) -> bool:
         return entitlement in self._grants.get((tenant_id, user_id), set())
 
-    def list(self, *, tenant_id: str, user_id: str) -> Tuple[str, ...]:
+    def list(self, *, tenant_id: str, user_id: str) -> tuple[str, ...]:
         return tuple(sorted(self._grants.get((tenant_id, user_id), set())))
 
 
@@ -61,7 +61,7 @@ class InMemoryEntitlementsProvider:
 class AccessDecision:
     allowed: bool
     reason: str
-    missing_entitlements: Tuple[str, ...] = ()
+    missing_entitlements: tuple[str, ...] = ()
 
 
 class AccessController:

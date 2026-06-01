@@ -34,7 +34,7 @@ def test_non_telegram_send_uses_multichannel_bridge(monkeypatch):
         def send(self, msg):
             return DeliveryResult(ok=True, channel=msg.channel, mode="webhook", external_id="wa-ext-1", detail={"provider": "whatsapp"})
 
-    telegram_mod = mod._telegram_messaging_module()
+    _ = mod._telegram_messaging_module()
     monkeypatch.setattr("runtime._internal.effects_actions.telegram.messaging_parts.transport.get_multichannel_effects_bridge", lambda: _Bridge())
     dummy = _DummySelf()
     out = send_message_effect(dummy, decision_id="d1", correlation_id="c1", user_id="wa:100", text="hello", channel="whatsapp", track_payload={"tenant_id": "tenant-x"})

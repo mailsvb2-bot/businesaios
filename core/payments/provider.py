@@ -8,7 +8,7 @@ SECURITY:
 """
 
 from dataclasses import dataclass
-from typing import Protocol, Optional, Dict, Any
+from typing import Any, Dict, Optional, Protocol
 
 
 class PaymentProviderPort(Protocol):
@@ -18,7 +18,7 @@ class PaymentProviderPort(Protocol):
         amount: int,
         currency: str,
         order_id: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str: ...
 
     def get_payment_status(self, *, external_payment_id: str) -> str: ...

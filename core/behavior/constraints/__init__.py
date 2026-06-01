@@ -9,7 +9,7 @@ def price_constraints_from_behavior(
     *,
     behavior: Mapping[str, Any],
     product: Mapping[str, Any],
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     b = dict(behavior or {})
     anti = float(b.get("anti") or 0.0)
     trust = float(b.get("trust_index") or 0.0)

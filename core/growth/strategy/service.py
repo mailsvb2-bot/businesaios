@@ -4,6 +4,8 @@ import time
 import uuid
 from typing import Any, Optional, Tuple
 
+from config.strategic_growth_policy import DEFAULT_GROWTH_STRATEGY_SERVICE_POLICY, GrowthStrategyServicePolicy
+
 from .backlog_store import (
     append_experiment,
     append_hypothesis,
@@ -16,7 +18,6 @@ from .backlog_store import (
 from .contracts import ExperimentSpecV1, GrowthGoalV1, GrowthHypothesisV1, GrowthSignalV1, StrategyPlanV1
 from .llm_generator import generate_hypotheses
 from .scoring import rank_hypotheses, score_hypothesis
-from config.strategic_growth_policy import DEFAULT_GROWTH_STRATEGY_SERVICE_POLICY, GrowthStrategyServicePolicy
 from .signals import build_signals
 
 
@@ -25,7 +26,7 @@ class GrowthStrategyService:
         self,
         *,
         event_store: Any,
-        llm: Optional[Any] = None,
+        llm: Any | None = None,
         policy: GrowthStrategyServicePolicy | None = None,
     ) -> None:
         self._event_store = event_store
@@ -39,7 +40,7 @@ class GrowthStrategyService:
         user_id: str,
         decision_id: str,
         correlation_id: str,
-        goal: Optional[GrowthGoalV1] = None,
+        goal: GrowthGoalV1 | None = None,
         n: int | None = None,
         model: str = "",
     ) -> StrategyPlanV1:
@@ -48,7 +49,7 @@ class GrowthStrategyService:
         hypothesis_count = self._policy.default_hypothesis_count if n is None else int(n)
         append_strategy_snapshot(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), signals=signals)
 
-        hyps: Tuple[GrowthHypothesisV1, ...] = ()
+        hyps: tuple[GrowthHypothesisV1, ...] = ()
         if self._llm is not None:
             hyps = generate_hypotheses(self._llm, tenant_id=str(tenant_id), goal=g, signals=signals, n=hypothesis_count, model=str(model or ""))
         if not hyps:
@@ -95,7 +96,7 @@ def _default_steps(
     h: GrowthHypothesisV1,
     *,
     policy: GrowthStrategyServicePolicy = DEFAULT_GROWTH_STRATEGY_SERVICE_POLICY,
-) -> Tuple[str, ...]:
+) -> tuple[str, ...]:
     steps = list(policy.base_steps)
     if h.channel in policy.paid_channels:
         steps.insert(1, policy.paid_channel_creative_step)
@@ -104,7 +105,7 @@ def _default_steps(
     return tuple(steps)
 
 
-def _fallback_hypotheses(*, tenant_id: str, signals: GrowthSignalV1, goal: GrowthGoalV1) -> Tuple[GrowthHypothesisV1, ...]:
+def _fallback_hypotheses(*, tenant_id: str, signals: GrowthSignalV1, goal: GrowthGoalV1) -> tuple[GrowthHypothesisV1, ...]:
     now = int(time.time() * 1000)
     out: list[GrowthHypothesisV1] = []
     out.append(

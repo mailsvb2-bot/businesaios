@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical YAML loader.
 
 CANON_COMPAT_SHIM = True
@@ -14,18 +12,20 @@ module import must not fail just because optional runtime dependencies are not
 installed yet.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 @dataclass(frozen=True)
 class YamlLoadResult:
     path: str
-    data: Dict[str, Any]
+    data: dict[str, Any]
 
 
-_CACHE: dict[str, Dict[str, Any]] = {}
+_CACHE: dict[str, dict[str, Any]] = {}
 
 
 def _safe_load_yaml(raw_text: str) -> Any:
@@ -41,7 +41,7 @@ def _looks_like_yaml_text(value: str) -> bool:
     return ("\n" in s) or (":" in s and ("/" not in s and "\\" not in s))
 
 
-def _parse_yaml_text(raw_text: str, *, allow_empty: bool) -> Dict[str, Any]:
+def _parse_yaml_text(raw_text: str, *, allow_empty: bool) -> dict[str, Any]:
     raw = _safe_load_yaml(raw_text)
     if raw is None:
         raw = {}
@@ -52,7 +52,7 @@ def _parse_yaml_text(raw_text: str, *, allow_empty: bool) -> Dict[str, Any]:
     return dict(raw)
 
 
-def load_yaml(source: str | Path, *, allow_empty: bool = True, cache: bool = True) -> Dict[str, Any]:
+def load_yaml(source: str | Path, *, allow_empty: bool = True, cache: bool = True) -> dict[str, Any]:
     if isinstance(source, Path):
         p = source.expanduser().resolve()
         key = str(p)
@@ -77,7 +77,7 @@ def load_yaml(source: str | Path, *, allow_empty: bool = True, cache: bool = Tru
     return _parse_yaml_text(text, allow_empty=allow_empty)
 
 
-def load_yaml_optional(path: Path, *, default: Optional[Dict[str, Any]] = None, cache: bool = True) -> Dict[str, Any]:
+def load_yaml_optional(path: Path, *, default: dict[str, Any] | None = None, cache: bool = True) -> dict[str, Any]:
     p = path.expanduser().resolve()
     if not p.exists():
         return dict(default or {})

@@ -13,8 +13,8 @@ This module is safe to import from platform_layer/* (allowed by architecture tes
 import sqlite3
 from typing import Optional
 
-from runtime.platform.config.env_flags import env_int, env_str
 from observability.platform.observability.silent import swallow
+from runtime.platform.config.env_flags import env_int, env_str
 
 
 def configure_sqlite(conn: sqlite3.Connection, *, prod: bool) -> None:

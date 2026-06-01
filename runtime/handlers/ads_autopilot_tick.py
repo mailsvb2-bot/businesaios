@@ -25,7 +25,6 @@ from runtime.handlers.route_failure_support import (
 )
 from runtime.ports.effects import EffectsPort
 
-
 ACTION_NAME = 'ads_autopilot_tick@v1'
 
 

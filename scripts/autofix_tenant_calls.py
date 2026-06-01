@@ -5,8 +5,7 @@ import difflib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Tuple
-
+from typing import Iterable
 
 EXCLUDE_DIRS = {
     ".git",
@@ -57,8 +56,8 @@ def _rewrite_line(line: str) -> str | None:
     return EMIT_RE.sub(repl, line)
 
 
-def plan_patches(root: Path) -> List[Patch]:
-    patches: List[Patch] = []
+def plan_patches(root: Path) -> list[Patch]:
+    patches: list[Patch] = []
     for f in _iter_py_files(root):
         try:
             before = f.read_text(encoding="utf-8", errors="ignore")
@@ -66,7 +65,7 @@ def plan_patches(root: Path) -> List[Patch]:
             continue
         lines = before.splitlines(True)
         changed = False
-        out: List[str] = []
+        out: list[str] = []
         for line in lines:
             new_line = _rewrite_line(line)
             if new_line is not None and new_line != line:
@@ -92,7 +91,7 @@ def render_unified_diff(p: Patch, root: Path) -> str:
     )
 
 
-def apply_patches(patches: List[Patch]) -> None:
+def apply_patches(patches: list[Patch]) -> None:
     for p in patches:
         p.path.write_text(p.after, encoding="utf-8")
 

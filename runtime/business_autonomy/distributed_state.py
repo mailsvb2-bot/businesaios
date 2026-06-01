@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Mapping, Sequence
@@ -10,12 +10,11 @@ from uuid import uuid4
 from governance.persistence_codec import atomic_write_json, read_json_or_default
 from runtime.execution.region_ownership_plane import RegionRoute, RegionStatePort
 
-
 CANON_BUSINESS_AUTONOMY_DISTRIBUTED_STATE = True
 
 
 def _utc_now_text() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class FileDistributedDocumentStore:

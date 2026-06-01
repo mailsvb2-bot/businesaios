@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
-
 CANON_AUTONOMY_KILL_SWITCH = True
 
 

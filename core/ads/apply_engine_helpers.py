@@ -6,12 +6,12 @@ from typing import Any, Dict, Optional, Protocol
 
 
 class AdsApplyPort(Protocol):
-    def perform_apply(self, tenant_id: str, plan: Any) -> Dict[str, Any]: ...
+    def perform_apply(self, tenant_id: str, plan: Any) -> dict[str, Any]: ...
 
 
 def best_effort_rollback(
     apply_port: AdsApplyPort, *, tenant_id: str, plan: Any
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Try to apply undo commands if present.
 
     Convention:

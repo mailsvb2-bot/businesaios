@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from runtime.tenancy import normalize_tenant_scope
 from runtime.messaging_policy_readmodel.state_accumulator import MessagingPolicyAccumulator
+from runtime.tenancy import normalize_tenant_scope
 
 
 def new_accumulator(*, tenant_id: str, user_id: str, correlation_id: str) -> MessagingPolicyAccumulator:

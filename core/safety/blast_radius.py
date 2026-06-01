@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import time
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, Tuple
 
@@ -36,7 +36,7 @@ def count_recent_actions(*, event_log: Any, tenant_id: str, action: str, window_
     return 0
 
 
-def allow_action(*, policy: BlastRadiusPolicy, event_log: Any, tenant_id: str, action: str) -> Tuple[bool, Dict[str, Any]]:
+def allow_action(*, policy: BlastRadiusPolicy, event_log: Any, tenant_id: str, action: str) -> tuple[bool, dict[str, Any]]:
     if int(policy.max_per_hour or 0) <= 0:
         return True, {"max_per_hour": int(policy.max_per_hour or 0)}
 

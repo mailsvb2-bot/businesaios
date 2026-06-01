@@ -5,7 +5,6 @@ from pathlib import Path
 from canon.legacy.architecture_lock_tests import build_lock_config
 from canon.legacy.data_flow_validator import scan_shadow_state, verify_single_state_source_files_exist
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 

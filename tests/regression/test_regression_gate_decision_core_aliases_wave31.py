@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_DECISION_METHOD_FILES = {
     "boot/registrations/register_decision_core.py",

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from runtime.platform.support.contracts.transition import Transition
-from runtime.platform.support.reward.reward_service import RewardService
-from runtime.platform.support.reward.reward_normalization import RewardNormalizer
 from runtime.platform.support.reward.reward_clipping import RewardClipper
+from runtime.platform.support.reward.reward_normalization import RewardNormalizer
+from runtime.platform.support.reward.reward_service import RewardService
 
 
 class RewardPipeline:

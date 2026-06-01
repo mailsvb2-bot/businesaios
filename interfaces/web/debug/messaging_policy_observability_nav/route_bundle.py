@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from interfaces.web.debug.messaging_policy_observability_nav.html_controller import MessagingPolicyObservabilityNavHtmlController
-from interfaces.web.debug.messaging_policy_observability_nav.json_controller import MessagingPolicyObservabilityNavJsonController
+from interfaces.web.debug.messaging_policy_observability_nav.html_controller import (
+    MessagingPolicyObservabilityNavHtmlController,
+)
+from interfaces.web.debug.messaging_policy_observability_nav.json_controller import (
+    MessagingPolicyObservabilityNavJsonController,
+)
 from interfaces.web.debug.messaging_policy_observability_nav.page_presenter import default_tenant_id
 
 

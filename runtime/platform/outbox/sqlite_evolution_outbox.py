@@ -16,7 +16,7 @@ from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 class EvolutionJob:
     job_id: str
     job_kind: str
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     status: str
     created_ms: int
     updated_ms: int
@@ -62,7 +62,7 @@ class SqliteEvolutionOutbox:
         conn.commit()
         return conn
 
-    def enqueue(self, *, job_kind: str, payload: Optional[Dict[str, Any]] = None, job_id: str | None = None) -> str:
+    def enqueue(self, *, job_kind: str, payload: dict[str, Any] | None = None, job_id: str | None = None) -> str:
         jid = str(job_id or uuid.uuid4())
         now = _now_ms()
         pl = dict(payload or {})
@@ -75,7 +75,7 @@ class SqliteEvolutionOutbox:
             db.commit()
         return jid
 
-    def list_pending(self, *, limit: int = 10) -> List[EvolutionJob]:
+    def list_pending(self, *, limit: int = 10) -> list[EvolutionJob]:
         lim = max(1, min(100, int(limit)))
         with self._connect() as db:
             rows = db.execute(
@@ -83,7 +83,7 @@ class SqliteEvolutionOutbox:
                 "FROM evolution_jobs WHERE status='pending' ORDER BY updated_ms ASC LIMIT ?",
                 (lim,),
             ).fetchall()
-        out: List[EvolutionJob] = []
+        out: list[EvolutionJob] = []
         for r in rows:
             try:
                 payload = json.loads(r[2]) if r[2] else {}

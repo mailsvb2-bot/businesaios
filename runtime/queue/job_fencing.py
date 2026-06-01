@@ -10,11 +10,11 @@ Operational only:
 This module must never introduce business decisions or a second execution path.
 """
 
-from dataclasses import dataclass
 import os
 import platform
 import threading
 import time
+from dataclasses import dataclass
 
 CANON_RUNTIME_QUEUE_JOB_FENCING = True
 

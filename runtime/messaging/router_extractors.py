@@ -36,7 +36,7 @@ def external_user_ref_from_payload(payload: Mapping[str, Any], *, fallback_user_
 def metadata_from_payload(payload: Mapping[str, Any], *, channel: str) -> dict[str, Any]:
     out: dict[str, Any] = {
         "channel": str(channel),
-        "payload_keys": tuple(sorted(str(k) for k in payload.keys())),
+        "payload_keys": tuple(sorted(str(k) for k in payload)),
     }
     for key in ("subject", "name", "locale", "channel_account_id", "web_session_id"):
         if key in payload:

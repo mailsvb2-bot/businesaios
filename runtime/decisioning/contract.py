@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from application.decisioning.candidate_collection import CandidateCollection
-from kernel.decisioning.candidate_types import CandidateEnvelope, CandidateObservation, CandidateScore
 from application.decisioning.decision_command import DecisionCommand
+from kernel.decisioning.candidate_types import CandidateEnvelope, CandidateObservation, CandidateScore
 from kernel.decisioning.decision_types import Recommendation, RecommendationSet
 from kernel.decisioning.route_contract import (
     CANONICAL_ROUTE,

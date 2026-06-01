@@ -3,15 +3,15 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
+from entrypoints.api.auth_contract import AuthPrincipal
+from entrypoints.api.authz_dependencies import AuthzDependencyBundle
+from entrypoints.api.rbac_route_guards import RoutePermissionGuard
+from entrypoints.api.request_context import RequestContext
 from governance.permission_matrix import PermissionMatrix
 from governance.rbac_contract import Permission, RoleId
 from governance.rbac_policy import RbacPolicy
 from governance.role_catalog import RoleCatalog
 from governance.tenant_policy_overrides import PersistentTenantPolicyOverrideRegistry, TenantPolicyOverride
-from entrypoints.api.auth_contract import AuthPrincipal
-from entrypoints.api.authz_dependencies import AuthzDependencyBundle
-from entrypoints.api.rbac_route_guards import RoutePermissionGuard
-from entrypoints.api.request_context import RequestContext
 
 
 def test_policy_override_flow_blocks_then_unblocks_action(tmp_path) -> None:

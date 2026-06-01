@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_SUFFIXES = (
     "boot/factories/decision_core_factory.py",

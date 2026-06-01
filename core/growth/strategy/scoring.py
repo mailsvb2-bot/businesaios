@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Deterministic scoring for growth hypotheses (ICE-ish + risk penalty)."""
 
-from typing import Iterable, Tuple
+from typing import Iterable
 
 from config.scoring_behavior_policy import (
     DEFAULT_GROWTH_STRATEGY_SCORING_POLICY,
@@ -46,7 +46,7 @@ def rank_hypotheses(
     hypotheses: Iterable[GrowthHypothesisV1],
     *,
     policy: GrowthStrategyScoringPolicy = DEFAULT_GROWTH_STRATEGY_SCORING_POLICY,
-) -> Tuple[OpportunityScoreV1, ...]:
+) -> tuple[OpportunityScoreV1, ...]:
     scored = [score_hypothesis(h, policy=policy) for h in hypotheses]
     scored.sort(key=lambda s: (s.score, s.impact, s.confidence, s.ease), reverse=True)
     return tuple(scored)

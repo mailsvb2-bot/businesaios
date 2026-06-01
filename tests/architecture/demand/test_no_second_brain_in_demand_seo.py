@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-
 DEMAND_SEO_ADAPTERS = (
     "location_page_generator.py",
     "service_page_generator.py",

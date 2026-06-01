@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import is_dataclass, replace
 from datetime import UTC, datetime
-import json
 from typing import Any, Mapping, MutableMapping
 
 from execution.business_operating_memory import (

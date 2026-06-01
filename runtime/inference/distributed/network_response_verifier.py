@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from execution.inference_provider_contract import InferenceResponse
 
-
 CANON_RUNTIME_DISTRIBUTED_NETWORK_RESPONSE_VERIFIER = True
 
 

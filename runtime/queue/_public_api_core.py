@@ -63,8 +63,8 @@ from runtime.queue.job_worker_supervisor import JobWorkerSupervisor, WorkerHandl
 from runtime.queue.rate_limit_guard import RateLimitGuard, RateLimitVerdict
 from runtime.queue.tenant_fair_scheduler import (
     TenantFairAllocation,
-    TenantFairScheduleReport,
     TenantFairScheduler,
+    TenantFairScheduleReport,
     TenantQueuePressure,
 )
 from runtime.queue.throttle_policy import ThrottleDecision, ThrottlePolicy

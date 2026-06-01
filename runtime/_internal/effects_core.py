@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Shared runtime-only helpers for sealed effects state.
 This module exists to keep ``runtime._internal._effects_impl`` focused on
 composition instead of accumulating every helper and mutable field concern.
@@ -6,7 +7,10 @@ composition instead of accumulating every helper and mutable field concern.
 import threading
 import time
 from typing import Any, Dict
+
 from runtime.platform.config.env_flags import env_float
+
+
 def initialize_effects_runtime_state(effects: Any) -> None:
     if effects._last_sent is None:
         effects._last_sent = {}
@@ -28,7 +32,7 @@ def initialize_effects_runtime_state(effects: Any) -> None:
         lo=0.0,
         hi=60.0,
     )
-def throttled_emit_error(*, event_log: Any, cache: Dict[str, int] | None, key: str, event_type: str, payload: Dict[str, Any]) -> None:
+def throttled_emit_error(*, event_log: Any, cache: dict[str, int] | None, key: str, event_type: str, payload: dict[str, Any]) -> None:
     try:
         now_ms = int(time.time() * 1000)
         last = int((cache or {}).get(key, 0))

@@ -34,7 +34,7 @@ def build_sandbox_suppressed_decision(
     day_key: str,
     day_index: int,
     policy: RetentionEnginePolicy = DEFAULT_RETENTION_ENGINE_POLICY,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "tenant_id": str(tenant_id),
         "day_key": str(day_key),
@@ -64,7 +64,7 @@ def is_retention_allowed(*, tenant_id: str, user_id: str, fallback_allow: bool) 
         return bool(fallback_allow)
 
 
-def parse_decide_offer_context(context: dict) -> Tuple[str, int, Optional[int]]:
+def parse_decide_offer_context(context: dict) -> tuple[str, int, int | None]:
     try:
         day_key = str(context.get("day_key") or "day:today")
     except Exception:
@@ -87,7 +87,7 @@ def has_active_entitlement(
     tenant_id: str,
     user_id: str,
     now_ms: int,
-    entitlements: Optional[dict],
+    entitlements: dict | None,
 ) -> bool:
     if isinstance(entitlements, dict):
         for value in entitlements.values():
@@ -128,7 +128,7 @@ def has_active_entitlement(
 
 
 def is_outbound_overloaded(
-    outbound_telemetry: Optional[dict],
+    outbound_telemetry: dict | None,
     policy: RetentionEnginePolicy = DEFAULT_RETENTION_ENGINE_POLICY,
 ) -> bool:
     if not isinstance(outbound_telemetry, dict):

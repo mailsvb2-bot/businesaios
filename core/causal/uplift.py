@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Minimal uplift estimator (small & dumb).
 
 Placeholder for a full causal stack.
 Provides difference-in-means uplift with basic safety.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 

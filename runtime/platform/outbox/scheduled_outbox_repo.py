@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List
-
-import sqlite3
 
 
 @dataclass(frozen=True)
@@ -15,7 +14,7 @@ class ScheduledItem:
     user_id: str
     chat_id: int
     run_at_ms: int
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     attempts: int
 
 
@@ -28,7 +27,7 @@ class ScheduledOutboxRepo:
     def __init__(self, conn: sqlite3.Connection):
         self._c = conn
 
-    def add(self, *, user_id: str, chat_id: int, run_at_ms: int, payload: Dict[str, Any]) -> str:
+    def add(self, *, user_id: str, chat_id: int, run_at_ms: int, payload: dict[str, Any]) -> str:
         now = int(time.time() * 1000)
         _id = str(uuid.uuid4())
         self._c.execute(
@@ -38,7 +37,7 @@ class ScheduledOutboxRepo:
         self._c.commit()
         return _id
 
-    def lock_due(self, *, now_ms: int, limit: int = 200, lock_timeout_ms: int = 60_000) -> List[ScheduledItem]:
+    def lock_due(self, *, now_ms: int, limit: int = 200, lock_timeout_ms: int = 60_000) -> list[ScheduledItem]:
         # free stale locks
         self._c.execute(
             "UPDATE scheduled_outbox SET locked_at_ms=NULL WHERE status='pending' AND locked_at_ms IS NOT NULL AND locked_at_ms < ?",
@@ -63,7 +62,7 @@ class ScheduledOutboxRepo:
         )
         self._c.commit()
 
-        out: List[ScheduledItem] = []
+        out: list[ScheduledItem] = []
         for _id, user_id, chat_id, run_at_ms, payload_json, attempts in rows:
             out.append(
                 ScheduledItem(

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 """Canonical checkpoint support surface with compat alias submodules."""
 
+import pickle
 from dataclasses import dataclass
 from pathlib import Path
-import pickle
+
 
 class CheckpointGC:
     def prune(self, directory: str, keep: int) -> list[str]:

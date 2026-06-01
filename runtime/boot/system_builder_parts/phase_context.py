@@ -1,8 +1,8 @@
 from __future__ import annotations
+
 CANON_BOOT_WIRING_ONLY = True
 
 
-from runtime.boot.boot_context import BootPhase, BootContext
 from bootstrap.boot_phases import (
     boot_phase_00_build_registries,
     boot_phase_10_resolve_storage_and_paths,
@@ -10,6 +10,7 @@ from bootstrap.boot_phases import (
     boot_phase_18_print_startup_diagnostics,
     boot_phase_20_keyring,
 )
+from runtime.boot.boot_context import BootContext, BootPhase
 
 
 def initialize_boot_context() -> tuple[BootContext, object, object]:

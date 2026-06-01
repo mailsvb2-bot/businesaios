@@ -5,14 +5,14 @@ from typing import Any, Dict, Literal, Tuple
 
 from config.ads_rl_policy import DEFAULT_ADS_RL_REWARD_POLICY, AdsRLRewardPolicy
 
-from .contracts import AdsRLState, AdsRLOptSpec
+from .contracts import AdsRLOptSpec, AdsRLState
 
 
 @dataclass(frozen=True)
 class RewardBreakdown:
     reward: float
     mode: str
-    components: Dict[str, float]
+    components: dict[str, float]
 
 
 def compute_reward(*, state: AdsRLState, spec: AdsRLOptSpec, policy: AdsRLRewardPolicy = DEFAULT_ADS_RL_REWARD_POLICY) -> RewardBreakdown:

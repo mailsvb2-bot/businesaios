@@ -4,9 +4,9 @@ from runtime.messaging_policy_alert_dedup.dedup_key import build_alert_notificat
 from runtime.messaging_policy_alert_subscriptions.subscription_parser import parse_subscription
 from runtime.messaging_policy_alerts.service import MessagingPolicyAlertService
 from runtime.messaging_policy_dashboard.service import MessagingPolicyDashboardService
+from runtime.messaging_policy_readmodel.read_service import MessagingPolicyReadService
 from runtime.messaging_policy_readmodel.snapshot_key import build_snapshot_key
 from runtime.messaging_policy_trace.group_key import build_trace_group_key
-from runtime.messaging_policy_readmodel.read_service import MessagingPolicyReadService
 
 
 class _TraceSearch:

@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from interfaces.common.connector_health import ConnectorHealth
 from interfaces.common.canonical_connector_contract import canonical_connector_contract
+from interfaces.common.connector_health import ConnectorHealth
 from interfaces.common.connector_result import ConnectorResult
-
 
 STUB_MODE = "stub"
 LIVE_MODE = "live"

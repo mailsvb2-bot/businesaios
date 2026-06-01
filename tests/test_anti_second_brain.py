@@ -1,7 +1,6 @@
 import pathlib
 import re
 
-
 FORBIDDEN = [
     re.compile(r"\bif\s+world_state\b"),
     re.compile(r"\bif\s+state\."),

@@ -9,7 +9,6 @@ from runtime.market_intelligence_provider_support import (
     market_intelligence_provider_supported,
 )
 
-
 CANON_MARKET_INTELLIGENCE_PROVIDER_FACTORY = True
 
 

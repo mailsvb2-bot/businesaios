@@ -1,14 +1,14 @@
-import math
+
 import pytest
 
 # Подстрой импорт под твой репозиторий/путь.
 # Если файл рядом — можно: from core.economics.capital_allocation_engine import ...
 from core.economics.capital_allocation_engine import (
     CapitalAllocationEngine,
-    WorldState,
     CapitalState,
-    DefaultRiskModel,
     ConstraintBuilder,
+    DefaultRiskModel,
+    WorldState,
 )
 
 

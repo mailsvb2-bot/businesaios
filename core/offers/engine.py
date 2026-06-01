@@ -31,17 +31,20 @@ legacy import path ``core.offers.offer_engine`` is now served from ``core.offers
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional
 
-from core.offers.catalog_registry import OfferCatalogRegistry, default_offer_catalog_registry
-from core.offers.models import OfferSpec, OfferVariant
-from core.offers.offer_keyboards import offer_outcome_kb
-from core.offers.offer_types import OfferRender
 from core.marketing.variants import choose_variant as choose_marketing_variant
 from core.observability.silent import swallow
+from core.offers.catalog_registry import OfferCatalogRegistry, default_offer_catalog_registry
 from core.offers.catalog_resolution import resolve_catalog
-from core.offers.offer_catalog_resolver import OfferCatalogResolver
-from core.offers.selection_policy import clamp_band as _clamp_band, choose_band as _choose_band, choose_offer_variant, choose_slot as _choose_slot, eligible
 from core.offers.cooldown_policy import allow_offer_by_cooldown
 from core.offers.eligibility import check_offer_eligibility
+from core.offers.models import OfferSpec, OfferVariant
+from core.offers.offer_catalog_resolver import OfferCatalogResolver
+from core.offers.offer_keyboards import offer_outcome_kb
+from core.offers.offer_types import OfferRender
+from core.offers.selection_policy import choose_band as _choose_band
+from core.offers.selection_policy import choose_offer_variant, eligible
+from core.offers.selection_policy import choose_slot as _choose_slot
+from core.offers.selection_policy import clamp_band as _clamp_band
 
 
 def decide_offer(
@@ -96,7 +99,7 @@ class OfferEngine:
     catalogs: OfferCatalogRegistry
 
     @classmethod
-    def default(cls) -> "OfferEngine":
+    def default(cls) -> OfferEngine:
         return OfferEngine(catalogs=default_offer_catalog_registry())
 
     def render_offer(
@@ -109,7 +112,7 @@ class OfferEngine:
         price_rub: int,
         step_key: str,
         seed: str = "1",
-        bandit: Dict[str, Dict[str, float]] | None = None,
+        bandit: dict[str, dict[str, float]] | None = None,
         context: Mapping[str, Any] | None = None,
     ) -> OfferRender:
         prod = dict(product or {})
@@ -142,8 +145,9 @@ class OfferEngine:
                 meta=meta2,
             )
         except (TypeError, ValueError, KeyError) as e:
-            from core.observability.throttled_logger import exception_throttled
             import logging
+
+            from core.observability.throttled_logger import exception_throttled
             exception_throttled(logging.getLogger(__name__), key="offers.engine.render_offer", msg=f"{type(e).__name__}")
         return rendered
 

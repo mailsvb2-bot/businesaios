@@ -4,23 +4,23 @@ import time
 from dataclasses import dataclass, replace
 from typing import Any, Dict, Optional
 
-from kernel.world_state import WorldStateV1
 from interfaces.telegram.parsing.telegram_context import TelegramContext, extract_telegram_user_id
+from kernel.world_state import WorldStateV1
 
 
 @dataclass(frozen=True)
 class TelegramCompatOverlays:
-    session: Dict[str, Any]
-    meta: Dict[str, Any]
-    product: Dict[str, Any]
-    economy: Dict[str, Any]
-    entitlements: Dict[str, Any]
+    session: dict[str, Any]
+    meta: dict[str, Any]
+    product: dict[str, Any]
+    economy: dict[str, Any]
+    entitlements: dict[str, Any]
     user_id: str
     tenant_id: str
     timestamp_ms: int
 
 
-def build_overlays_from_context(*, ctx: TelegramContext, now_ms: Optional[int] = None, tenant_id: str = "default", user_timezone: str = "Europe/Amsterdam", economy: Optional[Dict[str, Any]] = None, entitlements: Optional[Dict[str, Any]] = None, product_context: Optional[Dict[str, Any]] = None) -> TelegramCompatOverlays:
+def build_overlays_from_context(*, ctx: TelegramContext, now_ms: int | None = None, tenant_id: str = "default", user_timezone: str = "Europe/Amsterdam", economy: dict[str, Any] | None = None, entitlements: dict[str, Any] | None = None, product_context: dict[str, Any] | None = None) -> TelegramCompatOverlays:
     ts = int(now_ms if now_ms is not None else time.time() * 1000)
     session = {
         "channel": "telegram",

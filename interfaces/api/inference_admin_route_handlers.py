@@ -5,7 +5,6 @@ from typing import Any
 
 from runtime.inference.provisioning.capacity_state_store import InferenceCapacityStateStore
 
-
 CANON_API_INFERENCE_ADMIN_ROUTE_HANDLERS = True
 
 

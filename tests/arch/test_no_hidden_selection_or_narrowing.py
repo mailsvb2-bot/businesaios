@@ -34,7 +34,7 @@ def _flatten_dict_keys(payload: object) -> tuple[str, ...]:
             for key, inner in value.items():
                 found.append(str(key))
                 walk(inner)
-        elif isinstance(value, (list, tuple, set)):
+        elif isinstance(value, list | tuple | set):
             for item in value:
                 walk(item)
 
@@ -121,9 +121,9 @@ def test_recommendation_packet_has_no_narrowing_fields() -> None:
 
 
 def test_decision_input_enrichment_has_no_hidden_selection_fields() -> None:
+    from application.decisioning.decision_core_input_bridge import build_decision_core_enrichment
     from contracts.decisioning.decision_envelope_contract import DecisionEnvelopeContract
     from contracts.decisioning.decision_input_contract import DecisionInputContract
-    from application.decisioning.decision_core_input_bridge import build_decision_core_enrichment
 
     enrichment = build_decision_core_enrichment(
         DecisionInputContract(

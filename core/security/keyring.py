@@ -18,8 +18,8 @@ class Keyring:
     - enforces bytes secrets
     """
 
-    def __init__(self, keys: Dict[str, dict], active_kid: str):
-        self._keys: Dict[str, KeyMeta] = {}
+    def __init__(self, keys: dict[str, dict], active_kid: str):
+        self._keys: dict[str, KeyMeta] = {}
         for kid, meta in (keys or {}).items():
             sec = meta.get("secret")
             if isinstance(sec, str):
@@ -31,13 +31,13 @@ class Keyring:
             raise ValueError("ACTIVE_KID_NOT_IN_KEYRING")
         self._active = str(active_kid)
 
-    def sign_key(self) -> Tuple[str, bytes]:
+    def sign_key(self) -> tuple[str, bytes]:
         meta = self._keys[self._active]
         if meta.revoked:
             raise RuntimeError("ACTIVE_KEY_REVOKED")
         return self._active, meta.secret
 
-    def verify_key(self, kid: str) -> Optional[bytes]:
+    def verify_key(self, kid: str) -> bytes | None:
         meta = self._keys.get(str(kid))
         if not meta or meta.revoked:
             return None

@@ -5,10 +5,11 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from core.ux.callbacks import CB_MENU_MAIN
+
 from .common import mk
 
 
-def kb_staff_menu() -> Dict[str, Any]:
+def kb_staff_menu() -> dict[str, Any]:
     return mk(
         [
             [{"text": "📊 Сводка (кратко)", "callback_data": "admin:demo:brief"}],

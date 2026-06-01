@@ -18,10 +18,10 @@ def send_message_transport_effect(
     *,
     chat_id: str,
     text: str,
-    reply_markup: Optional[Dict[str, Any]] = None,
+    reply_markup: dict[str, Any] | None = None,
     priority: Any = "normal",
     critical: bool = True,
-) -> Tuple[bool, Dict[str, Any]]:
+) -> tuple[bool, dict[str, Any]]:
     return telegram_send_message_transport(
         effects,
         chat_id=str(chat_id),
@@ -40,7 +40,7 @@ def send_audio_transport_effect(
     caption: str | None = None,
     priority: Any = "normal",
     critical: bool = True,
-) -> Tuple[bool, Dict[str, Any]]:
+) -> tuple[bool, dict[str, Any]]:
     return telegram_send_audio_transport(
         effects,
         chat_id=str(chat_id),

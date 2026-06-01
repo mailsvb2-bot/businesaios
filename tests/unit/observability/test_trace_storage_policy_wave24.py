@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from observability.decision_trace_store import PersistentDecisionTraceStore
 from observability.execution_trace_contract import (
     DecisionTraceEvent,
     EffectDisposition,
@@ -8,7 +9,6 @@ from observability.execution_trace_contract import (
     TraceStage,
 )
 from observability.execution_trace_store import PersistentExecutionTraceStore
-from observability.decision_trace_store import PersistentDecisionTraceStore
 from observability.runtime_effect_trace_store import PersistentRuntimeEffectTraceStore
 from observability.trace_storage_policy import TraceStoragePolicy
 

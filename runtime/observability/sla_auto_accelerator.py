@@ -24,7 +24,7 @@ class SlaAcceleratorConfig:
     max_ttl_ms: int = 15000
 
     @staticmethod
-    def from_env() -> "SlaAcceleratorConfig":
+    def from_env() -> SlaAcceleratorConfig:
         interval_s = max(5, min(600, env_int("SLA_ACCELERATOR_INTERVAL_S", 30)))
         base_ttl_ms = max(100, min(60_000, env_int("SLA_ACCELERATOR_BASE_TTL_MS", 2000)))
         max_ttl_ms = max(base_ttl_ms, min(120_000, env_int("SLA_ACCELERATOR_MAX_TTL_MS", 15000)))

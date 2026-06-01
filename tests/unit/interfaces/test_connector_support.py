@@ -40,11 +40,11 @@ def test_google_ads_health_exposes_mode() -> None:
 
 
 def test_placeholder_connectors_are_explicit_about_maturity() -> None:
+    from interfaces.communications.sms_connector import SmsConnector
     from interfaces.crm.hubspot_connector import HubspotConnector
     from interfaces.platforms.google_maps_connector import GoogleMapsConnector
     from interfaces.reviews.google_reviews_connector import GoogleReviewsConnector
     from interfaces.website.site_connector import SiteConnector
-    from interfaces.communications.sms_connector import SmsConnector
 
     for connector in (
         HubspotConnector(),

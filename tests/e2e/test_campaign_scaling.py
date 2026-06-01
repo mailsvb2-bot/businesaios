@@ -1,5 +1,5 @@
-from growth.ads.scale_winner_detector import ScaleWinnerDetector
 from growth.ads.budget_allocator import BudgetAllocator
+from growth.ads.scale_winner_detector import ScaleWinnerDetector
 
 
 def test_campaign_scaling_pipeline_builds_scaling_artifacts():

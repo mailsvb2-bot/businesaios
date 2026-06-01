@@ -5,11 +5,10 @@ from pathlib import Path
 from execution.market_intelligence_compliance_boundary import MarketIntelligenceComplianceBoundary
 from execution.market_intelligence_loop import MarketIntelligenceLoop
 from execution.market_intelligence_models import MarketIntelligenceIngestionRequest
-from execution.market_intelligence_operator_control_plane import MarketIntelligenceOperatorControlPlane
-from execution.market_intelligence_orchestration import MarketIntelligenceOrchestration, SyncSchedule
-from execution.market_intelligence_scheduler_service import MarketIntelligenceSchedulerService
-from execution.market_intelligence_schedule_lease import PersistentMarketIntelligenceScheduleLeaseStore
 from execution.market_intelligence_observability_store import PersistentMarketIntelligenceObservabilityStore
+from execution.market_intelligence_orchestration import MarketIntelligenceOrchestration, SyncSchedule
+from execution.market_intelligence_schedule_lease import PersistentMarketIntelligenceScheduleLeaseStore
+from execution.market_intelligence_scheduler_service import MarketIntelligenceSchedulerService
 from runtime.boot.market_intelligence_boot import build_market_intelligence_runtime
 
 
@@ -38,7 +37,7 @@ def test_scheduler_lease_prevents_duplicate_run(tmp_path: Path) -> None:
     orchestration = MarketIntelligenceOrchestration(store=MarketIntelligenceOrchestration().store.__class__(tmp_path / 'schedule.json'))
     orchestration.register('amazon-marketplace', SyncSchedule(provider='amazon', source_family='marketplace', cadence_minutes=1, query='shoes'))
     loop = MarketIntelligenceLoop(execute_action=execute_action)
-    scheduler_a = MarketIntelligenceSchedulerService(loop=loop, orchestration=orchestration, lease_store=lease_store, owner_id='owner-a')
+    _ = MarketIntelligenceSchedulerService(loop=loop, orchestration=orchestration, lease_store=lease_store, owner_id='owner-a')
     scheduler_b = MarketIntelligenceSchedulerService(loop=loop, orchestration=orchestration, lease_store=lease_store, owner_id='owner-b')
     assert lease_store.try_acquire(lease_key='tenant-a:amazon-marketplace', owner_id='owner-a', ttl_seconds=300) is True
     results = scheduler_b.run_due(tenant_id='tenant-a')

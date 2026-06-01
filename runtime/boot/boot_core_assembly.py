@@ -4,14 +4,14 @@ CANON_BOOT_WIRING_ONLY = True
 
 from dataclasses import dataclass
 
+from bootstrap.decision_core_contract import RuntimeDecisionCorePort
 from governance.economic_layer import EconomicAutonomyLayer
+from runtime.boot import CapitalAllocationEngine, EconomicBrain, LearningSystem, RewardEngine, StrategicHorizonEngine
 from runtime.boot.boot_decision_core import build_decision_core
 from runtime.boot.boot_executor import build_executor, build_runtime_infra
 from runtime.boot.boot_guard import build_guard
 from runtime.boot.boot_reward_learning import build_reward_learning
 from runtime.boot.core_assembly_args import CoreAssemblyArgs
-from bootstrap.decision_core_contract import RuntimeDecisionCorePort
-from runtime.boot import CapitalAllocationEngine, EconomicBrain, LearningSystem, RewardEngine, StrategicHorizonEngine
 from survival.controller import SurvivalController
 from survival.metrics import StaticSurvivalMetricsProvider
 

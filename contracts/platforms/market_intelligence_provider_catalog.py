@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
-
 from enum import Enum
+from typing import Any, Mapping
 
 
 class ProviderAuthKind(str, Enum):

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from ..action_catalog import ActionSafetyCatalog, build_default_action_catalog
-from .models import BlastRadiusEstimate
 from ..action_context import SafetyActionContext
+from .models import BlastRadiusEstimate
 
 
 class StaticBlastRadiusAnalyzer:

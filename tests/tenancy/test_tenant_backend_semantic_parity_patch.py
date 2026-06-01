@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from tenancy.tenant_admission_coordinator import LeaseStoreAdmissionBackend
 from tenancy.tenant_admission_contract import TenantAdmissionLease
+from tenancy.tenant_admission_coordinator import LeaseStoreAdmissionBackend
 from tenancy.tenant_runtime_invariant_checks import TenantRuntimeInvariantChecks
 from tenancy.tenant_runtime_lease_store import InMemoryTenantRuntimeLeaseStore
 

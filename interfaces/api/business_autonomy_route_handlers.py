@@ -7,8 +7,8 @@ from typing import Any, Mapping
 
 from application.business_autonomy.delayed_outcome_bridge import BusinessAutonomyDelayedOutcomeBridge
 from application.business_autonomy.safety_core import build_safety_core_admin_surface
-from runtime.business_autonomy.public_api import build_business_autonomy_operationalization
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
+from runtime.business_autonomy.public_api import build_business_autonomy_operationalization
 from runtime.demand_gravity.admin_view import build_demand_gravity_admin_view
 
 CANON_API_BUSINESS_AUTONOMY_ROUTE_HANDLERS = True
@@ -107,7 +107,11 @@ class BusinessAutonomyRouteHandlers:
         bridge = getattr(service, "_governance_alignment_bridge", None)
         if bridge is None:
             return {"business_id": business_id, "execution_verdict": {}, "normalized_request": {}}
-        from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessGoalEnvelope, IntegrationMode
+        from application.business_autonomy.contracts import (
+            BusinessExecutionRequest,
+            BusinessGoalEnvelope,
+            IntegrationMode,
+        )
         request = BusinessExecutionRequest(
             envelope=BusinessGoalEnvelope(
                 business_id=business_id,

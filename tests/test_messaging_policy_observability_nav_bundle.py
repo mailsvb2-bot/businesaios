@@ -1,5 +1,6 @@
 from runtime.boot.web.runtime_web_service_builders import build_messaging_policy_observability_nav_bundle
 
+
 def test_nav_bundle_serves_json_and_html():
     bundle = build_messaging_policy_observability_nav_bundle()
     j = bundle.json(tenant_id="t1")

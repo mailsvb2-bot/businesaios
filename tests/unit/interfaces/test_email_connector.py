@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from interfaces.communications.email_connector import EmailConnector
 from interfaces.common.auth_session import AuthSession
+from interfaces.communications.email_connector import EmailConnector
 
 
 def test_email_connector_executes_and_verifies_when_configured() -> None:

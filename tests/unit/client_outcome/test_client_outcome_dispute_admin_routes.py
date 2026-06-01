@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
 
 from adapters.api.fastapi.public_routes import register_public_api_routes
 from entrypoints.api.api_handler_bundle import build_api_handler_bundle
-from entrypoints.api.health_handler import HealthHandler
 from entrypoints.api.economic_route_handlers import build_economic_route_handlers
+from entrypoints.api.health_handler import HealthHandler
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
 
@@ -56,7 +56,7 @@ def _record_payload() -> dict[str, object]:
         'order_id': 'order-1',
         'lead_id': 'lead-1',
         'package_id': 'clients-5',
-        'verified_at': datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat(),
+        'verified_at': datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat(),
         'unit_price': 70.0,
         'currency': 'EUR',
         'quantity': 1,
@@ -99,7 +99,7 @@ def test_open_reverse_and_admin_summary_routes() -> None:
             'order_id': 'order-1', 'tenant_id': 'tenant-1', 'business_id': 'biz-1',
             'package_id': 'clients-5', 'package_label': '5 clients', 'requested_clients': 5,
             'price_per_verified_client': 70.0, 'currency': 'EUR', 'trust_tier': 'tier1_crm',
-            'created_at': datetime(2026, 4, 13, 12, 0, 0, tzinfo=timezone.utc).isoformat(),
+            'created_at': datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat(),
         },
         'economic_snapshot': {
             'verified_clients': 1, 'billable_clients': 1, 'billed_revenue': 70.0,

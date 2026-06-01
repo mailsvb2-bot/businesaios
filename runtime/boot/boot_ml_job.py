@@ -13,17 +13,15 @@ Single public function: build_ml_job()
 from pathlib import Path
 from typing import Any
 
-from runtime.platform.app_paths import runtime_data_dir
-from runtime.platform.config.env_flags import env_path
-from ml.dataset_builder import DatasetBuilder as MLDatasetBuilder
-from ml.event_store import RuntimeEventStoreAdapter
 from learning.registry import ArtifactRegistry
+from learning.replay import FeedbackLoopFirewall
 from learning.trainer import OfflineTrainer as MLOfflineTrainer
 from learning.trainer import PolicyValidatorV14
-from ml.rollout_manager import RolloutManager
+from ml.dataset_builder import DatasetBuilder as MLDatasetBuilder
+from ml.event_store import RuntimeEventStoreAdapter
 from ml.policy_promotion_guard import PolicyPromotionGuard
 from ml.policy_rollout_manager import PolicyRolloutManager
-from learning.replay import FeedbackLoopFirewall
+from ml.rollout_manager import RolloutManager
 from runtime.autopilot_feedback_guard import AutopilotFeedbackGuard
 from runtime.boot.env import env_float, env_int
 from runtime.boot.ml_job_defaults import (
@@ -36,6 +34,8 @@ from runtime.boot.ml_job_defaults import (
     DEFAULT_ML_SOAK_PERIOD_MS,
 )
 from runtime.governance.auto_deploy_guard import build_auto_deploy_guard_from_env
+from runtime.platform.app_paths import runtime_data_dir
+from runtime.platform.config.env_flags import env_path
 from runtime.scheduler import LearningJob
 
 

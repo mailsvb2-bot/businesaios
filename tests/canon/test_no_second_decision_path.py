@@ -6,7 +6,6 @@ from canon.legacy.architecture_lock_tests import assert_no_critical_legacy_findi
 from canon.legacy.hidden_logic_detector import scan_hidden_logic
 from canon.legacy.legacy_wrapper_guard import scan_legacy_wrappers
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 

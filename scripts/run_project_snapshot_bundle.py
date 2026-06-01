@@ -8,7 +8,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from formal.regression_gate.project_snapshot_bundle import run_project_snapshot_bundle, summarize_project_snapshot_bundle
+from formal.regression_gate.project_snapshot_bundle import (
+    run_project_snapshot_bundle,
+    summarize_project_snapshot_bundle,
+)
 
 
 def main() -> int:

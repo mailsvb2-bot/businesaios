@@ -1,5 +1,5 @@
-from runtime._internal.market_intelligence.http_transport import RetryPolicy
 from execution.market_intelligence_sampling import AdaptiveSamplingStrategy, SamplingCandidate
+from runtime._internal.market_intelligence.http_transport import RetryPolicy
 
 
 def test_retry_policy_marks_429_retryable():

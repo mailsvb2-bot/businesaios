@@ -19,7 +19,7 @@ from core.traffic.creative_generator import LLMCreativeGenerator
 CANON_RUNTIME_CREATIVE_PUBLIC_API = True
 
 __all__ = [
-    'CANON_RUNTIME_CREATIVE_NAMESPACE', 
+    'CANON_RUNTIME_CREATIVE_NAMESPACE',
     'CANON_RUNTIME_CREATIVE_PUBLIC_API',
     'CreativeEconomicsInput',
     'CreativeEvidenceBundle',

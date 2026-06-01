@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -12,23 +12,23 @@ class BehaviorTelemetryV1:
     kind: str
 
     # Stable identifiers for UX
-    button_id: Optional[str] = None
-    screen: Optional[str] = None
+    button_id: str | None = None
+    screen: str | None = None
 
     # Timing / interaction
-    latency_ms: Optional[int] = None
-    delta_ms: Optional[int] = None
+    latency_ms: int | None = None
+    delta_ms: int | None = None
 
     # Audio (optional; populated by WebApp later)
-    audio_id: Optional[str] = None
-    audio_pos_ms: Optional[int] = None
-    audio_total_ms: Optional[int] = None
-    audio_completed: Optional[bool] = None
+    audio_id: str | None = None
+    audio_pos_ms: int | None = None
+    audio_total_ms: int | None = None
+    audio_completed: bool | None = None
 
     # Extra dims (safe)
-    dims: Optional[Dict[str, Any]] = None
+    dims: dict[str, Any] | None = None
 
-    def to_event_payload(self) -> Dict[str, Any]:
+    def to_event_payload(self) -> dict[str, Any]:
         return {
             "schema": "behavior_telemetry@v1",
             "kind": self.kind,

@@ -1,5 +1,5 @@
-from execution.economic_scope_profile import EconomicScopeProfileResolver
 from execution.economic_retention_policy import EconomicRetentionPolicy
+from execution.economic_scope_profile import EconomicScopeProfileResolver
 
 
 def test_scope_profile_resolver_picks_regulated_profile() -> None:

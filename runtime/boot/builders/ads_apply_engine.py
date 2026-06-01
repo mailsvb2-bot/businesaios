@@ -18,7 +18,7 @@ from runtime.platform.config.env_flags import env_bool, env_float, env_int
 logger = logging.getLogger(__name__)
 
 
-def build_ads_apply_engine(ads_runtime: Any) -> Optional[Any]:
+def build_ads_apply_engine(ads_runtime: Any) -> Any | None:
     """Construct AdsApplyEngine or return None on failure."""
     try:
         from runtime.ads import (
@@ -29,8 +29,8 @@ def build_ads_apply_engine(ads_runtime: Any) -> Optional[Any]:
             AdsRateLimiter,
             MemoryIdempotencyStore,
         )
-        from runtime.governance import FeedbackLoopGuard, ProfitMetricsService
         from runtime.boot.ads_apply_provider import AdsGatewayApplyPort
+        from runtime.governance import FeedbackLoopGuard, ProfitMetricsService
 
         env_enabled = env_bool("ADS_APPLY_ENABLED", False)
         max_budget_minor = env_int("ADS_APPLY_MAX_DAILY_BUDGET_MINOR", 0)

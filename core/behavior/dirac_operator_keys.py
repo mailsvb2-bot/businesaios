@@ -6,10 +6,8 @@ Used by dirac_operators (policy/apply) and tools (audit).
 
 from __future__ import annotations
 
-from typing import Tuple
 
-
-def required_operator_keys() -> Tuple[str, ...]:
+def required_operator_keys() -> tuple[str, ...]:
     """Minimal set of event types the OS promises to interpret."""
     return (
         "ui_click",

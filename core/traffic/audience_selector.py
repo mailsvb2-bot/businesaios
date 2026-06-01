@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Audience interest selector.
 
 AudienceSelector — pure, sync, keyword-heuristic (domain default, no I/O).
@@ -24,10 +25,10 @@ class AudienceSelector:
     which are merged in TrafficStrategyService.plan_7d().
     """
 
-    def suggest_interests(self, *, what: str) -> List[str]:
+    def suggest_interests(self, *, what: str) -> list[str]:
         """Return a list of English interest tags for a given product/service description."""
         w = (what or "").lower()
-        tags: List[str] = []
+        tags: list[str] = []
 
         # Healthcare / dental
         if any(k in w for k in ("стомат", "dent", "зуб", "клиник", "медиц", "врач", "health")):
@@ -59,7 +60,7 @@ class AudienceSelector:
 
         # Deduplicate, preserve order
         seen: set[str] = set()
-        result: List[str] = []
+        result: list[str] = []
         for t in tags:
             if t not in seen:
                 seen.add(t)
@@ -67,11 +68,11 @@ class AudienceSelector:
         return result
 
     def merge_llm_interests(
-        self, heuristic: List[str], llm: List[str]
-    ) -> List[str]:
+        self, heuristic: list[str], llm: list[str]
+    ) -> list[str]:
         """Merge heuristic + LLM interests, deduplicated, LLM-first."""
         seen: set[str] = set()
-        merged: List[str] = []
+        merged: list[str] = []
         for t in list(llm) + list(heuristic):
             t = str(t).strip().lower()
             if t and t not in seen:

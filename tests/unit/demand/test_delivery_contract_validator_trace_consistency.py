@@ -1,8 +1,8 @@
 import pytest
 
+from config.execution_contract import CANONICAL_DECISION_PATH, CANONICAL_OPTIMIZATION_TARGET
 from contracts.matching.routing_decision import RoutingDecision
 from routing_execution.delivery_contract_validator import DeliveryContractValidator
-from config.execution_contract import CANONICAL_DECISION_PATH, CANONICAL_OPTIMIZATION_TARGET
 
 
 class Request:

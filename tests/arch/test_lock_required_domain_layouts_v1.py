@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[2]
 REQUIRED = {
     "world_model": ["contracts.py", "types.py", "errors.py", "service.py", "guard.py"],

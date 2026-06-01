@@ -10,9 +10,9 @@ It must remain strictly operational and must never mutate queue execution state
 or introduce a second decision path.
 """
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
-import json
 
 from runtime.platform.postgres_port import PostgresPort
 from runtime.queue.job_contract import normalize_now
@@ -32,7 +32,7 @@ class PostgresQueueRemediationAuditStore:
     def __post_init__(self) -> None:
         self._port: PostgresPort | None = None
 
-    def __enter__(self) -> 'PostgresQueueRemediationAuditStore':
+    def __enter__(self) -> PostgresQueueRemediationAuditStore:
         self._port = PostgresPort(self.dsn, application_name=self.application_name).__enter__()
         self._init_schema()
         return self

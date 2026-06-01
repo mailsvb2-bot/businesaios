@@ -11,7 +11,7 @@ raw mapping specs instead of OfferCatalog objects.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from typing import Any, Mapping
 
 from core.offers.catalogs.yaml_catalog_loader import (
     load_all_yaml_offer_catalog_specs,
@@ -28,7 +28,7 @@ class YamlOfferCatalogLoader:
     def load_file(self, relpath: str) -> Mapping[str, Any]:
         return load_yaml_offer_catalog_spec(base_dir=self.base_dir, filename=relpath)
 
-    def load_all(self) -> Dict[str, Mapping[str, Any]]:
+    def load_all(self) -> dict[str, Mapping[str, Any]]:
         return load_all_yaml_offer_catalog_specs(base_dir=self.base_dir)
 
 

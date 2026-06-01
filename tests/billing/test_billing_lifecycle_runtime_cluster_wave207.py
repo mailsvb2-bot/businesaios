@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 from billing.chargeback_orchestrator import ChargebackOrchestrator
 from billing.commercial_cycle_contract import CommercialCollectionAttempt, CommercialCollectionResult
@@ -66,8 +66,8 @@ def _issued_invoice() -> CommercialInvoiceEnvelope:
     )
     return lifecycle.issue(
         draft,
-        issued_at=datetime(2026, 4, 10, 10, 0, tzinfo=timezone.utc),
-        due_at=datetime(2026, 4, 17, 10, 0, tzinfo=timezone.utc),
+        issued_at=datetime(2026, 4, 10, 10, 0, tzinfo=UTC),
+        due_at=datetime(2026, 4, 17, 10, 0, tzinfo=UTC),
     )
 
 
@@ -108,13 +108,13 @@ def test_billing_lifecycle_runtime_cluster_seams_hold_without_shadow_owners() ->
     actions = dunning.open_run(
         tenant_id=invoice.tenant_id,
         invoice_id=invoice.invoice_id,
-        started_at=datetime(2026, 4, 10, 10, 5, tzinfo=timezone.utc),
+        started_at=datetime(2026, 4, 10, 10, 5, tzinfo=UTC),
     )
     assert len(actions) == 3
     due = dunning.due_actions(
         tenant_id=invoice.tenant_id,
         invoice_id=invoice.invoice_id,
-        now=datetime(2026, 4, 13, 10, 5, tzinfo=timezone.utc),
+        now=datetime(2026, 4, 13, 10, 5, tzinfo=UTC),
     )
     assert {item.attempt_no for item in due} == {1, 2}
     dunning.mark_action_executed(tenant_id=invoice.tenant_id, invoice_id=invoice.invoice_id, attempt_no=1)

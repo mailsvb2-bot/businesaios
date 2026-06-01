@@ -1,5 +1,5 @@
-from interfaces.messaging.whatsapp import Runner as WhatsAppRunner
 from interfaces.messaging.email import Runner as EmailRunner
+from interfaces.messaging.whatsapp import Runner as WhatsAppRunner
 from interfaces.web.chat_widget.runner import Runner as WebChatRunner
 from runtime.messaging.outbound_message import OutboundMessage
 

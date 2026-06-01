@@ -7,7 +7,7 @@ from .models import SandboxOutcome
 
 
 class PredicateSandboxExecutor:
-    def __init__(self, predicates: Iterable[Callable[[SafetyActionContext], str | None]] = ()): 
+    def __init__(self, predicates: Iterable[Callable[[SafetyActionContext], str | None]] = ()):
         self._predicates = tuple(predicates)
 
     def run(self, ctx: SafetyActionContext) -> SandboxOutcome:

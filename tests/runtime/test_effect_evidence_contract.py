@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from runtime._internal.effect_evidence_contract import evidence_contract_fields, effect_result_to_evidence
+from runtime._internal.effect_evidence_contract import effect_result_to_evidence, evidence_contract_fields
 from runtime._internal.effect_types import EffectActionType
 
 

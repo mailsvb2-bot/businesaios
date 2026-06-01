@@ -74,10 +74,10 @@ def test_new_synthetic_support_packages_import_and_expose_modules() -> None:
         module_file = getattr(module, '__file__', '')
         assert module_file.startswith('<synthetic:') or module_file.endswith('.py')
 
-    import runtime.platform.support.serving as serving
     import runtime.platform.support.explainability as explainability
-    import runtime.platform.support.training.strategies as strategies
     import runtime.platform.support.rollout.monitoring as monitoring
+    import runtime.platform.support.serving as serving
+    import runtime.platform.support.training.strategies as strategies
 
     assert serving.serving_router.ServingRouter
     assert explainability.reward_explainer.RewardExplainer

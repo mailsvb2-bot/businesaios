@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """SLA alerting and backlog-purge logic for TelegramOutboundQueue.
 
 Responsibility:

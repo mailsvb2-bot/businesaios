@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from tests.arch._canon_domain_registry_guard import domain_has_any_python, domain_info_list
 
+
 def test_domain_registry_canonical_domains_are_not_empty() -> None:
     offenders: list[str] = []
     for domain in domain_info_list():

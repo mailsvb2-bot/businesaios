@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from routing.router_publisher import RouterPublisher
 from demand_decision.demand_decision_publisher import DemandDecisionPublisher
+from routing.router_publisher import RouterPublisher
 
 
 class Ranked:

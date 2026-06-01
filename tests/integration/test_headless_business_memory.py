@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.ai.decision import Decision, DecisionEnvelope
 from application.effects.effect_journal import FileEffectJournal
-from execution.goal_score import GoalScoreEngine
-from execution.headless_contract import GoalExecutionRequest, HeadlessExecutionContract
 from application.headless.feedback import SimpleHeadlessFeedbackReader
 from application.headless.goal_mapper import HeadlessGoalStateMapper
+from application.headless.stop_policy import HeadlessStopPolicy
+from application.learning.retry_taxonomy import RetryTaxonomy
+from core.ai.decision import Decision, DecisionEnvelope
+from execution.goal_score import GoalScoreEngine
+from execution.headless_contract import GoalExecutionRequest, HeadlessExecutionContract
 from execution.headless_ledger import FileHeadlessLedger
 from execution.headless_state_store import FileHeadlessStateStore
-from application.headless.stop_policy import HeadlessStopPolicy
 from execution.idempotency_guard import FileIdempotencyGuard
 from execution.outcome_normalizer import OutcomeNormalizer
 from execution.policy_explainer import PolicyExplainer
-from application.learning.retry_taxonomy import RetryTaxonomy
 from runtime.execution.executor_result import ExecutionResult
 from runtime.platform.business_memory.service import BusinessMemoryService
 from runtime.platform.business_memory.store import FileBusinessMemoryStore
@@ -151,7 +151,7 @@ def test_headless_goal_mapper_rehydrates_profile_based_business_memory_without_s
 
 
 def test_autonomy_state_assembly_merges_business_profile_into_request_profile_without_second_brain_guidance() -> None:
-    from types import SimpleNamespace
+
     from application.autonomy.autonomy_state_assembly import AutonomyStateAssembly
 
     request = GoalExecutionRequest(
@@ -192,8 +192,8 @@ def test_headless_goal_mapper_merges_memory_profile_into_meta_profile() -> None:
 
 def test_state_assembly_snapshot_uses_canonical_business_memory_projection(tmp_path) -> None:
     from application.autonomy.autonomy_state_assembly import AutonomyStateAssembly
-    from execution.headless_contract import GoalExecutionRequest
     from application.headless.goal_mapper import HeadlessGoalStateMapper
+    from execution.headless_contract import GoalExecutionRequest
     from execution.headless_state_store import FileHeadlessStateStore
 
     class DummyContract:

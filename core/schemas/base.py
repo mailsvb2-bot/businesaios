@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -16,10 +16,10 @@ class Schema:
     Должна быть чистой, детерминированной и без side-effects.
     """
 
-    def validate(self, payload: Dict[str, Any]) -> None:
+    def validate(self, payload: dict[str, Any]) -> None:
         raise NotImplementedError
 
-    def normalize(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def normalize(self, payload: dict[str, Any]) -> dict[str, Any]:
         """
         Приведение к канонической форме для replay/ML.
         """

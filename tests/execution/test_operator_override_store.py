@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 from execution.operator_override_contract import (
     OperatorOverrideDecision,
     OperatorOverrideRequest,
     OperatorOverrideResolution,
     OperatorOverrideStatus,
+    utc_now,
 )
 from execution.operator_override_store import InMemoryOperatorOverrideStore
 from governance.rbac_contract import RoleId
@@ -46,8 +49,7 @@ def test_inmemory_operator_override_store_roundtrip() -> None:
     assert store.list_open(tenant_id='tenant-a') == ()
 
 
-from datetime import timedelta
-from execution.operator_override_contract import utc_now
+
 
 
 def test_inmemory_operator_override_store_expires_stale_request() -> None:

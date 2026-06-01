@@ -6,7 +6,6 @@ from typing import Any, Callable
 from runtime.execution.execution_path_lock import build_execution_path_lock_spec, run_locked_executor_entrypoint
 from runtime.execution.executor_entrypoint import execute_with_entrypoint_span, run_default_execute_call
 
-
 CANON_RUNTIME_EXECUTOR_ENTRYPOINT_BUNDLE_OWNER = True
 CANON_RUNTIME_EXECUTOR_ENTRYPOINT_BUNDLE_NO_DECISION_LOGIC = True
 

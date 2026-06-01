@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class RuntimeErrorBase(Exception):
     """Base class for runtime composition errors."""
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 CANON_DOMAIN_VERSION = "DFS-V1"
 CANON_DOMAIN_NAME = "governance"
 CANON_DOMAIN_ROLE = "strategic-domain"

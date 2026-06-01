@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Write-path helpers for SqliteEventStore append_event.
 
 Responsibility:

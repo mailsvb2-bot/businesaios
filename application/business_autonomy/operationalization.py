@@ -3,11 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
+from observability.audit_export_service import AuditExportService
 from observability.metrics import InMemoryMetrics
 from observability.metrics_exporter import MetricsExporter
-from observability.audit_export_service import AuditExportService
-from observability.tenant_metrics_registry import TenantMetricsRegistry
 from observability.slo_contract import SLIKind
+from observability.tenant_metrics_registry import TenantMetricsRegistry
 from runtime.platform.support.governance import AuditLog
 from runtime.platform.support.orchestration import (
     WorkflowEvents,
@@ -15,6 +15,7 @@ from runtime.platform.support.orchestration import (
     WorkflowRunner,
     WorkflowState,
 )
+
 
 class BusinessAutonomyMetrics:
     """Bridges local counters with canonical tenant-aware metrics registry."""

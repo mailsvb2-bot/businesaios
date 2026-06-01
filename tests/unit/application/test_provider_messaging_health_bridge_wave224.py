@@ -1,5 +1,5 @@
-from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.channel_contracts import ChannelKind
+from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from runtime.business_autonomy.provider_messaging_health_bridge import resolve_provider_messaging_health_signal
 
 

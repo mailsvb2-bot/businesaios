@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Tuple
 
-from runtime._internal.router_support import execute_effect_action_sync
 from runtime._internal.effect_types import EffectActionType
+from runtime._internal.router_support import execute_effect_action_sync
 
 
 def telegram_send_chat_action(effects: Any, *, chat_id: str, action: str = "typing") -> None:
@@ -18,10 +18,10 @@ def telegram_send_message_transport(
     *,
     chat_id: str,
     text: str,
-    reply_markup: Optional[Dict[str, Any]] = None,
+    reply_markup: dict[str, Any] | None = None,
     priority: Any = "normal",
     critical: bool = True,
-) -> Tuple[bool, Dict[str, Any]]:
+) -> tuple[bool, dict[str, Any]]:
     out = execute_effect_action_sync(
         effects,
         EffectActionType.TELEGRAM_SEND_MESSAGE,
@@ -44,7 +44,7 @@ def telegram_send_audio_transport(
     caption: str | None = None,
     priority: Any = "normal",
     critical: bool = True,
-) -> Tuple[bool, Dict[str, Any]]:
+) -> tuple[bool, dict[str, Any]]:
     out = execute_effect_action_sync(
         effects,
         EffectActionType.TELEGRAM_SEND_AUDIO,

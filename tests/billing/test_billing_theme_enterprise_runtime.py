@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
-from billing.credit_balance import InMemoryCreditBalanceStore
+import pytest
+
 from billing.commercial_cycle_contract import DunningAction, SubscriptionLifecycleStatus, utc_now
+from billing.credit_balance import InMemoryCreditBalanceStore
 from billing.dunning_orchestrator import DunningOrchestrator, InMemoryDunningScheduleStore
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
 from billing.ledger_event import LedgerEntry, LedgerPosting
@@ -58,9 +59,9 @@ def _plan(plan_id: TenantPlan, amount: float, currency: str = 'USD') -> BillingP
 
 def test_subscription_cycle_uses_calendar_months() -> None:
     svc = SubscriptionLifecycleService()
-    started_at = datetime(2026, 1, 31, tzinfo=timezone.utc)
+    started_at = datetime(2026, 1, 31, tzinfo=UTC)
     envelope = svc.activate(tenant_id='tenant-a', subscription_id='sub-1', plan_id='growth', activated_at=started_at)
-    assert envelope.cycle.end_at == datetime(2026, 2, 28, tzinfo=timezone.utc)
+    assert envelope.cycle.end_at == datetime(2026, 2, 28, tzinfo=UTC)
 
 
 def test_invoice_lifecycle_guards_closed_state_and_remaining_minor() -> None:
@@ -137,8 +138,8 @@ def test_credit_balance_rejects_negative_adjustments() -> None:
 def test_dunning_open_run_is_idempotent_by_default() -> None:
     schedule_store = InMemoryDunningScheduleStore()
     orchestrator = DunningOrchestrator(store=schedule_store)
-    first = orchestrator.open_run(tenant_id='tenant-a', invoice_id='inv-9', started_at=datetime(2026, 4, 1, tzinfo=timezone.utc))
-    second = orchestrator.open_run(tenant_id='tenant-a', invoice_id='inv-9', started_at=datetime(2026, 4, 2, tzinfo=timezone.utc))
+    first = orchestrator.open_run(tenant_id='tenant-a', invoice_id='inv-9', started_at=datetime(2026, 4, 1, tzinfo=UTC))
+    second = orchestrator.open_run(tenant_id='tenant-a', invoice_id='inv-9', started_at=datetime(2026, 4, 2, tzinfo=UTC))
     assert first == second
 
 
@@ -147,8 +148,8 @@ def test_plan_change_rejects_cross_currency_without_fx() -> None:
         PlanChangePolicy().quote(
             current_plan=_plan(TenantPlan.STARTER, 29.0, 'USD'),
             next_plan=_plan(TenantPlan.GROWTH, 99.0, 'EUR'),
-            changed_at=datetime(2026, 4, 15, tzinfo=timezone.utc),
-            cycle=SubscriptionLifecycleService().activate(tenant_id='tenant-a', subscription_id='sub-1', plan_id='starter', activated_at=datetime(2026, 4, 1, tzinfo=timezone.utc)).cycle,
+            changed_at=datetime(2026, 4, 15, tzinfo=UTC),
+            cycle=SubscriptionLifecycleService().activate(tenant_id='tenant-a', subscription_id='sub-1', plan_id='starter', activated_at=datetime(2026, 4, 1, tzinfo=UTC)).cycle,
         )
     except ValueError:
         pass
@@ -170,7 +171,7 @@ def test_reconciliation_accepts_rate_map() -> None:
     )
     ledger.append(posting)
     rollup = UsageRollupBuilder().build_daily([
-        UsageRecord(tenant_id='tenant-a', meter_key='connector_calls', quantity=12, recorded_at=datetime(2026, 4, 9, tzinfo=timezone.utc))
+        UsageRecord(tenant_id='tenant-a', meter_key='connector_calls', quantity=12, recorded_at=datetime(2026, 4, 9, tzinfo=UTC))
     ])
     invoice = CommercialInvoiceEnvelope(invoice_id='inv-1', tenant_id='tenant-a', currency='USD', subtotal_minor=1000, tax_minor=200, total_minor=1200)
     report = BillingReconciliationService(ledger_store=ledger).reconcile(tenant_id='tenant-a', invoices=[invoice], usage_rollups=rollup, usage_rate_minor_by_meter={'connector_calls': 110})
@@ -203,7 +204,7 @@ def test_invoice_lifecycle_rejects_draft_payment_and_due_before_issue() -> None:
     else:
         raise AssertionError('expected draft payment to fail')
     try:
-        lifecycle.issue(draft, issued_at=datetime(2026, 4, 10, tzinfo=timezone.utc), due_at=datetime(2026, 4, 9, tzinfo=timezone.utc))
+        lifecycle.issue(draft, issued_at=datetime(2026, 4, 10, tzinfo=UTC), due_at=datetime(2026, 4, 9, tzinfo=UTC))
     except ValueError:
         pass
     else:
@@ -212,19 +213,19 @@ def test_invoice_lifecycle_rejects_draft_payment_and_due_before_issue() -> None:
 
 def test_subscription_renewal_starts_from_cycle_end_when_renewed_early() -> None:
     svc = SubscriptionLifecycleService()
-    envelope = svc.activate(tenant_id='tenant-a', subscription_id='sub-2', plan_id='growth', activated_at=datetime(2026, 4, 1, tzinfo=timezone.utc))
-    renewed = svc.renew_cycle(envelope, now=datetime(2026, 4, 15, tzinfo=timezone.utc))
+    envelope = svc.activate(tenant_id='tenant-a', subscription_id='sub-2', plan_id='growth', activated_at=datetime(2026, 4, 1, tzinfo=UTC))
+    renewed = svc.renew_cycle(envelope, now=datetime(2026, 4, 15, tzinfo=UTC))
     assert renewed.cycle.start_at == envelope.cycle.end_at
 
 
 def test_dunning_store_is_scoped_by_tenant_and_invoice() -> None:
     schedule_store = InMemoryDunningScheduleStore()
     orchestrator = DunningOrchestrator(store=schedule_store)
-    a = orchestrator.open_run(tenant_id='tenant-a', invoice_id='inv-1', started_at=datetime(2026, 4, 1, tzinfo=timezone.utc))
-    b = orchestrator.open_run(tenant_id='tenant-b', invoice_id='inv-1', started_at=datetime(2026, 4, 2, tzinfo=timezone.utc))
+    a = orchestrator.open_run(tenant_id='tenant-a', invoice_id='inv-1', started_at=datetime(2026, 4, 1, tzinfo=UTC))
+    b = orchestrator.open_run(tenant_id='tenant-b', invoice_id='inv-1', started_at=datetime(2026, 4, 2, tzinfo=UTC))
     assert a != b
-    assert orchestrator.due_actions(tenant_id='tenant-a', invoice_id='inv-1', now=datetime(2026, 4, 10, tzinfo=timezone.utc))
-    assert orchestrator.due_actions(tenant_id='tenant-b', invoice_id='inv-1', now=datetime(2026, 4, 10, tzinfo=timezone.utc))
+    assert orchestrator.due_actions(tenant_id='tenant-a', invoice_id='inv-1', now=datetime(2026, 4, 10, tzinfo=UTC))
+    assert orchestrator.due_actions(tenant_id='tenant-b', invoice_id='inv-1', now=datetime(2026, 4, 10, tzinfo=UTC))
 
 
 def test_reconciliation_flags_mixed_invoice_currency() -> None:
@@ -282,7 +283,7 @@ def test_dunning_store_rejects_action_scope_mismatch() -> None:
         invoice_id='inv-y',
         tenant_id='tenant-a',
         attempt_no=1,
-        execute_at=datetime(2026, 4, 10, tzinfo=timezone.utc),
+        execute_at=datetime(2026, 4, 10, tzinfo=UTC),
         channel='email',
         template_key='billing.dunning.attempt_1',
     )
@@ -352,7 +353,7 @@ def test_invoice_validate_enforces_state_specific_consistency() -> None:
             total_minor=1200,
             status=__import__('billing.commercial_cycle_contract', fromlist=['InvoiceLifecycleStatus']).InvoiceLifecycleStatus.PAID,
             paid_minor=1000,
-            issued_at=datetime(2026, 4, 1, tzinfo=timezone.utc),
+            issued_at=datetime(2026, 4, 1, tzinfo=UTC),
         ).validate()
     except ValueError:
         pass
@@ -362,7 +363,7 @@ def test_invoice_validate_enforces_state_specific_consistency() -> None:
 
 def test_subscription_validate_requires_canceled_at_for_canceled_status() -> None:
     cycle = SubscriptionLifecycleService().activate(
-        tenant_id='tenant-a', subscription_id='sub-cancel', plan_id='growth', activated_at=datetime(2026, 4, 1, tzinfo=timezone.utc)
+        tenant_id='tenant-a', subscription_id='sub-cancel', plan_id='growth', activated_at=datetime(2026, 4, 1, tzinfo=UTC)
     ).cycle
     try:
         __import__('billing.commercial_cycle_contract', fromlist=['SubscriptionCommercialEnvelope', 'SubscriptionLifecycleStatus']).SubscriptionCommercialEnvelope(
@@ -479,18 +480,18 @@ def test_payment_collection_replay_rejects_draft_invoice_even_with_existing_resu
 
 def test_dunning_due_actions_do_not_repeat_after_mark_executed() -> None:
     orchestrator = DunningOrchestrator(store=InMemoryDunningScheduleStore())
-    actions = orchestrator.open_run(tenant_id='tenant-a', invoice_id='inv-due-once', started_at=datetime(2026, 4, 1, tzinfo=timezone.utc))
-    due = orchestrator.due_actions(tenant_id='tenant-a', invoice_id='inv-due-once', now=datetime(2026, 4, 10, tzinfo=timezone.utc))
+    actions = orchestrator.open_run(tenant_id='tenant-a', invoice_id='inv-due-once', started_at=datetime(2026, 4, 1, tzinfo=UTC))
+    due = orchestrator.due_actions(tenant_id='tenant-a', invoice_id='inv-due-once', now=datetime(2026, 4, 10, tzinfo=UTC))
     assert due and due[0].attempt_no == actions[0].attempt_no
     orchestrator.mark_action_executed(tenant_id='tenant-a', invoice_id='inv-due-once', attempt_no=actions[0].attempt_no)
-    due_again = orchestrator.due_actions(tenant_id='tenant-a', invoice_id='inv-due-once', now=datetime(2026, 4, 10, tzinfo=timezone.utc))
+    due_again = orchestrator.due_actions(tenant_id='tenant-a', invoice_id='inv-due-once', now=datetime(2026, 4, 10, tzinfo=UTC))
     assert all(item.attempt_no != actions[0].attempt_no for item in due_again)
 
 
 def test_dunning_store_rejects_duplicate_attempt_numbers() -> None:
     store = InMemoryDunningScheduleStore()
     action = DunningAction(
-        tenant_id='tenant-a', invoice_id='inv-dup-attempt', attempt_no=1, execute_at=datetime(2026, 4, 2, tzinfo=timezone.utc), channel='email', template_key='billing.dunning.attempt_1'
+        tenant_id='tenant-a', invoice_id='inv-dup-attempt', attempt_no=1, execute_at=datetime(2026, 4, 2, tzinfo=UTC), channel='email', template_key='billing.dunning.attempt_1'
     )
     try:
         store.save(tenant_id='tenant-a', invoice_id='inv-dup-attempt', actions=(action, replace(action, channel='operator')))
@@ -544,7 +545,7 @@ def test_payment_collection_replay_detects_provider_mismatch() -> None:
     first = PaymentCollectionOrchestrator(provider=_Provider(), result_store=store)
     _, result = first.collect(invoice=invoice, idempotency_key='idem-provider')
     assert result.successful is True
-    
+
     @dataclass(frozen=True)
     class _OtherProvider(PaymentProviderContract):
         def provider_name(self) -> str:

@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Mapping
-
 
 CANON_RETRY_LEARNING_STORE = True
 
@@ -42,7 +41,7 @@ class RetryLearningSnapshot:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> 'RetryLearningSnapshot':
+    def from_dict(cls, payload: Mapping[str, Any]) -> RetryLearningSnapshot:
         return cls(
             tenant_id=_text(payload.get('tenant_id')),
             action_type=_text(payload.get('action_type')),

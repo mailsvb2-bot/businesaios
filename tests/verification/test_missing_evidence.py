@@ -1,5 +1,5 @@
-from runtime._internal.effect_types import EffectActionType
 from execution.verification.verification_engine import VerificationEngine, execution_receipt_evidence
+from runtime._internal.effect_types import EffectActionType
 
 
 def test_missing_external_evidence_blocks_verification() -> None:

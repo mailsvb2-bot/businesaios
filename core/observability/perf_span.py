@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 _SLA_BUTTON_BUDGET_MS: int = 300
 
@@ -33,13 +33,13 @@ def emit_span(
     decision_id: str | None = None,
     correlation_id: str | None = None,
     correlation_key: str | None = None,
-    extra: Optional[Dict[str, Any]] = None,
+    extra: dict[str, Any] | None = None,
 ) -> None:
     """Core span emission (no rolling track). Caller or perf.py wires rolling."""
     try:
         if event_log is None or not hasattr(event_log, "emit"):
             return
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "stage": str(stage),
             "duration_ms": int(max(0, int(duration_ms))),
         }
@@ -68,7 +68,7 @@ class Span:
     decision_id: str | None = None
     correlation_id: str | None = None
     correlation_key: str | None = None
-    extra: Optional[Dict[str, Any]] = None
+    extra: dict[str, Any] | None = None
 
     _t0_ns: int = 0
 

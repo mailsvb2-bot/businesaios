@@ -6,7 +6,11 @@ from execution.market_intelligence_data_quality import DataQualityGuard
 from execution.market_intelligence_incremental_sync import IncrementalSyncEngine
 from execution.market_intelligence_trend_engine import FileTrendStore, TemporalTrendEngine
 from runtime._internal.market_intelligence.http_transport import HttpRequest
-from runtime._internal.market_intelligence.provider_clients import MarketIntelligenceProviderClient, ProviderPlanRegistry, ProviderRequestPlan
+from runtime._internal.market_intelligence.provider_clients import (
+    MarketIntelligenceProviderClient,
+    ProviderPlanRegistry,
+    ProviderRequestPlan,
+)
 
 
 def test_build_url_preserves_existing_query_and_repeated_params() -> None:

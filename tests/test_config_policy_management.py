@@ -30,7 +30,7 @@ from tenancy.tenant_feature_flags import TenantFeatureFlags
 
 class _Resolver:
     def get(self, ref: SecretRef) -> bytes:
-        return f"resolved:{ref.secret_name}:{ref.version}".encode("utf-8")
+        return f"resolved:{ref.secret_name}:{ref.version}".encode()
 
 
 def test_runtime_config_store_noop_save_and_revision_increment() -> None:

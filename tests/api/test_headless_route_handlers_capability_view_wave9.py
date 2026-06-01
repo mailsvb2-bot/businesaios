@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from interfaces.api.headless_route_handlers import HeadlessRouteHandlers
 from application.headless.models import GoalExecutionReport, GoalExecutionStep
+from interfaces.api.headless_route_handlers import HeadlessRouteHandlers
 
 
 def test_execute_goal_response_exposes_normalized_capability_view(monkeypatch) -> None:

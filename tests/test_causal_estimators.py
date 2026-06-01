@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import math
-
 from core.causal.api import estimate_causal_effect
 from core.causal.types import CausalDataset, CausalQuery, CausalRow
 

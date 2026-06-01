@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+from application.decision.action_result import ActionExecutionResult
 from config.app_settings import AppSettings
 from config.validation import validate_app_settings
-from application.decision.action_result import ActionExecutionResult
 from core.economics.capital_engine import AllocationPlan, CapitalPolicy
+from core.governance.types import PolicyState
 from core.knowledge.contracts import KnowledgeReadPort, KnowledgeWritePort
 from core.learning_loop.service import DefaultLearningLoopService
 from core.pricing.stop_loss import StopLossConfig, StopLossPolicy, StopLossWindow
 from observability.structured_logging import StructuredLogger
 from runtime.boot.governance import build_governance_service
-from core.governance.types import PolicyState
 
 
 def test_compat_shims_import_and_build() -> None:

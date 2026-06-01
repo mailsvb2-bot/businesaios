@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from kernel.world_state import WorldStateV1
 from core.policies.telegram.helpers import ProposedAction, propose
+from kernel.world_state import WorldStateV1
 
 
 @dataclass

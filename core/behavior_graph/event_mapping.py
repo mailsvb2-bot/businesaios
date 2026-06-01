@@ -1,12 +1,12 @@
-from __future__ import annotations
-
 """Event -> behavior graph mapping.
 
 Heuristic-light and generic: creates a consistent structural view of an event stream.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Iterable
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,7 @@ class MappedEvent:
     user_id: str
     event_type: str
     timestamp_ms: int
-    entities: List[Tuple[str, str]]
+    entities: list[tuple[str, str]]
 
 
 ENTITY_HINT_KEYS = (
@@ -46,7 +46,7 @@ def _safe_str(v: Any) -> str:
     return s.strip()
 
 
-def map_event(e: Dict[str, Any]) -> MappedEvent | None:
+def map_event(e: dict[str, Any]) -> MappedEvent | None:
     if not isinstance(e, dict):
         return None
 
@@ -65,7 +65,7 @@ def map_event(e: Dict[str, Any]) -> MappedEvent | None:
     if not isinstance(payload, dict):
         payload = {}
 
-    entities: List[Tuple[str, str]] = []
+    entities: list[tuple[str, str]] = []
     for k in ENTITY_HINT_KEYS:
         if k in payload:
             val = _safe_str(payload.get(k))
@@ -78,7 +78,7 @@ def map_event(e: Dict[str, Any]) -> MappedEvent | None:
         entities.append((et, eid))
 
     seen = set()
-    uniq: List[Tuple[str, str]] = []
+    uniq: list[tuple[str, str]] = []
     for t, k in entities:
         kk = (str(t), str(k))
         if kk in seen:
@@ -95,7 +95,7 @@ def map_event(e: Dict[str, Any]) -> MappedEvent | None:
     )
 
 
-def map_events(events: Iterable[Dict[str, Any]]) -> list[MappedEvent]:
+def map_events(events: Iterable[dict[str, Any]]) -> list[MappedEvent]:
     out: list[MappedEvent] = []
     for e in events:
         me = map_event(e)

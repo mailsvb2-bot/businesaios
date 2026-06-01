@@ -7,7 +7,7 @@ from runtime.economics import normalize_objective
 from runtime.tenancy import as_tenant_id
 
 
-def build_autopilot_request(*, payload: Dict[str, Any], route: Any) -> AdsAutopilotRequest:
+def build_autopilot_request(*, payload: dict[str, Any], route: Any) -> AdsAutopilotRequest:
     p = payload or {}
     tenant_id = as_tenant_id(str(p.get("tenant_id") or ""))
     return AdsAutopilotRequest(

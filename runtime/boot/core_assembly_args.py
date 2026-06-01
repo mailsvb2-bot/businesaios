@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 CANON_BOOT_WIRING_ONLY = True
 
 
@@ -6,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from runtime.boot import Keyring, PolicySelector
-
 from runtime.execution.executor_state import RuntimeExecutorInfra
 
 
@@ -21,5 +21,5 @@ class CoreAssemblyArgs:
     handlers: Any
     runtime_infra: RuntimeExecutorInfra
     delivery_state: Any
-    model_registry: Optional[Any] = None
+    model_registry: Any | None = None
     issuer_id: str = "businesaios-core"

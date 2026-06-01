@@ -7,9 +7,8 @@ import uuid
 from decimal import Decimal
 from typing import Any, Dict, Tuple
 
-from runtime.platform.config.env_flags import env_str
-
 from runtime._internal.http_transport import HttpTransport
+from runtime.platform.config.env_flags import env_str
 
 from .http_client import http_json, safe_result
 
@@ -37,16 +36,16 @@ def create_payment(
     description: str,
     customer_id: str,
     idempotence_key: str | None = None,
-    metadata: Dict[str, Any] | None = None,
+    metadata: dict[str, Any] | None = None,
     timeout_s: int = 30,
     transport: HttpTransport | None = None,
-) -> Tuple[bool, Dict[str, Any]]:
+) -> tuple[bool, dict[str, Any]]:
     shop_id, secret, api_base = resolve_credentials()
     if not shop_id or not secret:
         return False, {"mode": "unavailable", "reason": "missing YOOKASSA_SHOP_ID/YOOKASSA_SECRET_KEY"}
 
     # Basic auth
-    auth = base64.b64encode(f"{shop_id}:{secret}".encode("utf-8")).decode("ascii")
+    auth = base64.b64encode(f"{shop_id}:{secret}".encode()).decode("ascii")
     headers = {
         "Authorization": f"Basic {auth}",
         "Content-Type": "application/json",
@@ -57,7 +56,7 @@ def create_payment(
 
     # amount must be string with 2 decimals
     amt = amount_rub.quantize(Decimal("0.01"))
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "amount": {"value": str(amt), "currency": "RUB"},
         "capture": True,
         "confirmation": {"type": "redirect", "return_url": env_str("YOOKASSA_RETURN_URL", "https://example.com/return")},
@@ -82,7 +81,7 @@ def get_payment_status(*, external_payment_id: str, timeout_s: int = 20, transpo
     if not shop_id or not secret:
         return "unknown"
 
-    auth = base64.b64encode(f"{shop_id}:{secret}".encode("utf-8")).decode("ascii")
+    auth = base64.b64encode(f"{shop_id}:{secret}".encode()).decode("ascii")
     headers = {
         "Authorization": f"Basic {auth}",
         "Content-Type": "application/json",

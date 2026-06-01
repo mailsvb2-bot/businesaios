@@ -1,4 +1,8 @@
-from runtime.execution.executor_state import RuntimeExecutorInfra, build_runtime_infra, build_executor_runtime_infra_from_runtime_infra
+from runtime.execution.executor_state import (
+    RuntimeExecutorInfra,
+    build_executor_runtime_infra_from_runtime_infra,
+    build_runtime_infra,
+)
 
 
 def test_build_runtime_infra_preserves_tenant_fields():

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from runtime.platform.support.contracts.evaluation import EvaluationResult
 
+
 class CanaryEval:
     def evaluate(self, candidate_id: str, payload) -> EvaluationResult:
         score = float(payload.get("canary_score", 0.0))

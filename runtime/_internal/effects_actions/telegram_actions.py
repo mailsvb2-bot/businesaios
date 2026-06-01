@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Sealed effect actions mixin.
 
 This module is INTERNAL to runtime/_internal.
@@ -8,11 +9,9 @@ No API changes to EffectsPort.
 from typing import Any, Dict, Optional
 
 from runtime._internal.effect_types import EffectActionType
-from runtime.security.runtime_asserts import assert_called_from_executor
-
-from runtime._internal.effects_actions.telegram.startup import telegram_self_check_effect
-from runtime._internal.effects_actions.telegram.messaging import send_message_effect
 from runtime._internal.effects_actions.telegram.media import send_audio_effect
+from runtime._internal.effects_actions.telegram.messaging import send_message_effect
+from runtime._internal.effects_actions.telegram.startup import telegram_self_check_effect
 from runtime._internal.effects_actions.telegram_actions_callbacks import (
     answer_callback_internal_effect,
     answer_callback_public_effect,
@@ -23,6 +22,7 @@ from runtime._internal.effects_actions.telegram_actions_transport import (
     send_chat_action_effect,
     send_message_transport_effect,
 )
+from runtime.security.runtime_asserts import assert_called_from_executor
 
 
 class TelegramEffectsMixin:
@@ -39,14 +39,14 @@ class TelegramEffectsMixin:
         user_id: str,
         text: str,
         tenant_id: str = "",
-        reply_markup: Optional[Dict[str, Any]] = None,
-        callback_query_id: Optional[str] = None,
-        track_event_type: Optional[str] = None,
-        track_payload: Optional[Dict[str, Any]] = None,
+        reply_markup: dict[str, Any] | None = None,
+        callback_query_id: str | None = None,
+        track_event_type: str | None = None,
+        track_payload: dict[str, Any] | None = None,
         channel: str = "telegram",
         priority: Any = "normal",
         critical: bool = True,
-        channel_policy: Optional[Dict[str, Any]] = None,
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any:
         return send_message_effect(
             self,
@@ -70,7 +70,7 @@ class TelegramEffectsMixin:
         *,
         chat_id: str,
         text: str,
-        reply_markup: Optional[Dict[str, Any]] = None,
+        reply_markup: dict[str, Any] | None = None,
         priority: Any = "normal",
         critical: bool = True,
     ) -> tuple[bool, dict[str, Any]]:

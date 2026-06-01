@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Mapping, Protocol
 
 from core.tenancy.normalization import require_tenant_id
-
 
 CANON_DISTRIBUTED_PLANNING_MEMORY_BACKEND = True
 
@@ -47,7 +46,7 @@ class PlanningMemorySnapshot:
         }
 
     @classmethod
-    def empty(cls, *, tenant_id: str, business_id: str) -> "PlanningMemorySnapshot":
+    def empty(cls, *, tenant_id: str, business_id: str) -> PlanningMemorySnapshot:
         return cls(
             tenant_id=require_tenant_id(tenant_id),
             business_id=str(business_id).strip(),
@@ -59,7 +58,7 @@ class PlanningMemorySnapshot:
         )
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "PlanningMemorySnapshot":
+    def from_dict(cls, payload: Mapping[str, Any]) -> PlanningMemorySnapshot:
         snapshot = cls(
             tenant_id=require_tenant_id(payload.get("tenant_id")),
             business_id=str(payload.get("business_id") or "").strip(),
@@ -94,7 +93,7 @@ class DistributedPlanningMemoryBackend:
             strategy_memory=dict(snapshot.strategy_memory),
             multi_goal_queue=dict(snapshot.multi_goal_queue),
             version=current_version + 1,
-            updated_at_utc=datetime.now(timezone.utc).isoformat(),
+            updated_at_utc=datetime.now(UTC).isoformat(),
         )
         persisted_version = self._port.put(
             document_id=stamped.document_id,

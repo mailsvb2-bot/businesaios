@@ -16,7 +16,6 @@ from typing import Iterable, Mapping
 from core.tenancy.normalization import require_tenant_id
 from runtime.queue.job_contract import normalize_now, utc_now
 
-
 CANON_RUNTIME_QUEUE_CAPABILITY_THROTTLE_POLICY = True
 
 

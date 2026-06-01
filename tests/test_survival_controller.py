@@ -1,6 +1,5 @@
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import pytest
 
@@ -46,7 +45,7 @@ def assert_verdict(
     *,
     allow_execution: bool,
     mode: SurvivalMode,
-    reason: Optional[str],
+    reason: str | None,
     trigger_rollback: bool,
     trigger_safe_offers: bool,
 ) -> None:

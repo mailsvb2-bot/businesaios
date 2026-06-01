@@ -3,18 +3,17 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any, Iterable, Mapping
 
-from contracts.action_impact_contract import ActionImpact, ActionCategory
-from governance.rbac_contract import ActorContext, RoleId
-from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest
+from contracts.action_impact_contract import ActionCategory, ActionImpact
 from execution.approval_execution_gate import ApprovalExecutionGate
-from execution.operator_override_store import build_default_operator_override_store
 from execution.approval_policy_engine import ApprovalPolicyEngine
+from execution.operator_override_store import build_default_operator_override_store
+from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest
 from governance.approval_store import PersistentApprovalStore
 from governance.approval_workflow import ApprovalWorkflow
 from governance.change_control_policy import ChangeControlPolicy
 from governance.control_plane_audit_log import GovernanceAuditEvent, PersistentGovernanceAuditLog
+from governance.rbac_contract import ActorContext, RoleId
 from governance.tenant_policy_overrides import PersistentTenantPolicyOverrideRegistry
-
 from runtime.execution.operational_budget_runtime import build_action_execution_context
 
 CANON_RUNTIME_GOVERNANCE_EXECUTION_GATE = True
@@ -183,11 +182,24 @@ def _emit_resume_event(*, executor: Any, env: Any, approval_id: str, override_id
         return
 
 
-def _governance_audit_log(executor: Any) -> PersistentGovernanceAuditLog:
-    audit_log = getattr(executor, "_governance_audit_log", None)
-    if audit_log is None:
-        audit_log = PersistentGovernanceAuditLog()
-        setattr(executor, "_governance_audit_log", audit_log)
+def _governance_audit_log(executor: Any, guard: Any | None = None):
+    approval_gate = getattr(executor, "_approval_execution_gate", None)
+    guard_workflow = getattr(guard, "_approval_workflow", None) if guard is not None else None
+    gate_workflow = getattr(approval_gate, "_approval_workflow", None) if approval_gate is not None else None
+
+    candidates = (
+        getattr(guard, "_audit_log", None) if guard is not None else None,
+        getattr(approval_gate, "_audit_log", None) if approval_gate is not None else None,
+        getattr(guard_workflow, "_audit_log", None) if guard_workflow is not None else None,
+        getattr(gate_workflow, "_audit_log", None) if gate_workflow is not None else None,
+        getattr(executor, "_governance_audit_log", None),
+    )
+    for audit_log in candidates:
+        if audit_log is not None and hasattr(audit_log, "append"):
+            return audit_log
+
+    audit_log = PersistentGovernanceAuditLog()
+    setattr(executor, "_governance_audit_log", audit_log)
     return audit_log
 
 
@@ -200,7 +212,6 @@ def _append_governance_audit(
     event_type: str | None = None,
     payload: Mapping[str, object] | None = None,
 ) -> None:
-    _ = guard
     try:
         audit_event = event
         if audit_event is None:
@@ -209,7 +220,7 @@ def _append_governance_audit(
                 tenant_id=str(tenant_id or "").strip() or "unknown",
                 payload=dict(payload or {}),
             )
-        _governance_audit_log(executor).append(audit_event)
+        _governance_audit_log(executor, guard=guard).append(audit_event)
     except Exception:
         return
 

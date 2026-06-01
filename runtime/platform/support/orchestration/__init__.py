@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+
 class ConcurrencyLimits:
     def allows(self, current: int, maximum: int) -> bool:
         return current < maximum

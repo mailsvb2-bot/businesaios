@@ -4,11 +4,13 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from kernel.world_state import WorldStateV1
-from application.memory.business_memory_state_adapter import BusinessMemoryStateAdapter
-from application.memory.business_operating_memory import project_business_memory_evidence, project_business_memory_profile
 from application.headless.models import GoalExecutionRequest
-
+from application.memory.business_memory_state_adapter import BusinessMemoryStateAdapter
+from application.memory.business_operating_memory import (
+    project_business_memory_evidence,
+    project_business_memory_profile,
+)
+from kernel.world_state import WorldStateV1
 
 CANON_HEADLESS_GOAL_MAPPER = True
 

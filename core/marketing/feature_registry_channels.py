@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from core.marketing.feature_registry_shared import FeatureSpec
 
 FEATURES = [

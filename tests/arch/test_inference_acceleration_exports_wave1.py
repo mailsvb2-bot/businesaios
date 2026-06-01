@@ -1,9 +1,9 @@
+from observability import InferenceAccelerationEvent, InferenceAccelerationLog
 from runtime.inference.providers import (
     InferenceProviderAccelerationProfileCatalog,
     ProviderBatchExecutionPolicy,
     ProviderMemoryTransferPolicy,
 )
-from observability import InferenceAccelerationEvent, InferenceAccelerationLog
 
 
 def test_inference_acceleration_exports_are_visible():

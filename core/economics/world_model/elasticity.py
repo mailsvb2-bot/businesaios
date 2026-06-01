@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Iterable
 
 from .types import DemandObservation
 
@@ -36,7 +36,7 @@ def point_elasticity_isoelastic(*, b: float) -> float:
     return float(b)
 
 
-def estimate_isoelastic_b(observations: Iterable[DemandObservation]) -> Optional[float]:
+def estimate_isoelastic_b(observations: Iterable[DemandObservation]) -> float | None:
     """Estimate b in log Q = log a + b log P."""
     xs = []
     ys = []
@@ -51,7 +51,7 @@ def estimate_isoelastic_b(observations: Iterable[DemandObservation]) -> Optional
         return None
     xbar = sum(xs) / len(xs)
     ybar = sum(ys) / len(ys)
-    num = sum((x - xbar) * (y - ybar) for x, y in zip(xs, ys))
+    num = sum((x - xbar) * (y - ybar) for x, y in zip(xs, ys, strict=False))
     den = sum((x - xbar) ** 2 for x in xs)
     if den < 1e-18:
         return None

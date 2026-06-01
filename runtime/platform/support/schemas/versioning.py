@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class SchemaVersioning:
     def __init__(self) -> None:
         self._versions: dict[str, int] = {}

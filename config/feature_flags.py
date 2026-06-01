@@ -9,7 +9,6 @@ from config.environment_matrix import normalize_environment_name
 from core.tenancy.normalization import normalize_tenant_id
 from tenancy.tenant_feature_flags import TenantFeatureFlags
 
-
 CANON_CONFIG_FEATURE_FLAGS = True
 
 
@@ -25,14 +24,14 @@ class FeatureFlagSnapshot:
             raise ValueError("scope_name is required")
         if not normalize_environment_name(self.environment):
             raise ValueError("environment is required")
-        for key in self.flags.keys():
+        for key in self.flags:
             if not str(key or "").strip():
                 raise ValueError("flag keys must be non-empty")
-        for key in self.variants.keys():
+        for key in self.variants:
             if not str(key or "").strip():
                 raise ValueError("variant keys must be non-empty")
 
-    def merged_with(self, other: "FeatureFlagSnapshot") -> "FeatureFlagSnapshot":
+    def merged_with(self, other: FeatureFlagSnapshot) -> FeatureFlagSnapshot:
         self.validate()
         other.validate()
         if normalize_environment_name(self.environment) != normalize_environment_name(other.environment):
@@ -76,7 +75,7 @@ class ConfigFeatureFlagResolver:
             if normalize_tenant_id(tenant_id)
         }
 
-    def with_tenant_flags(self, snapshot: TenantFeatureFlags) -> "ConfigFeatureFlagResolver":
+    def with_tenant_flags(self, snapshot: TenantFeatureFlags) -> ConfigFeatureFlagResolver:
         snapshot.validate()
         tenant_snapshots = dict(self._tenant_snapshots)
         tenant_snapshots[normalize_tenant_id(snapshot.tenant_id)] = snapshot

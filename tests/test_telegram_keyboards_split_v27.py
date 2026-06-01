@@ -1,5 +1,5 @@
-from core.ux.telegram_keyboards import kb_ads_apply_pending, kb_growth_menu, kb_main
 from core.users.roles import UserRoleInfo
+from core.ux.telegram_keyboards import kb_ads_apply_pending, kb_growth_menu, kb_main
 
 
 def test_ads_apply_pending_respects_can_apply_flag():

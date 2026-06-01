@@ -10,13 +10,13 @@ This is runner orchestration only:
 - mark delivered / retry / dead-letter
 """
 
-import os
 import logging
+import os
 import time
+from dataclasses import dataclass
 from typing import Any, Dict
 
 from core.tenancy.tenant import current_tenant_id
-from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +69,9 @@ def _normalize_webhook_job(raw: dict) -> dict:
         raise ValueError('MISSING_EVENT')
     return out
 
+from core.observability.silent import swallow
 from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import build_system_world_state
 from runtime.platform.config.env_flags import env_str
-from core.observability.silent import swallow
 
 
 @dataclass

@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from governance.rbac_contract import RoleId
 from entrypoints.api.auth_contract import AuthPrincipal
 from entrypoints.api.control_plane_security_guard import ControlPlaneSecurityGuard
 from entrypoints.api.request_context import RequestContext
+from governance.rbac_contract import RoleId
 
 
 def _principal() -> AuthPrincipal:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return AuthPrincipal(
         subject='owner-1',
         tenant_id='tenant-a',

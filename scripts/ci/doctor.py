@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from scripts.ci.doctor_checks import (
+    find_actionlint_workflow_violations,
     find_domain_coupling,
     find_empty_ci_files,
+    find_invalid_github_workflow_shapes,
     find_second_execution_imports,
     find_second_plan_order_definitions,
     find_unapproved_ci_shell_files,
@@ -33,6 +35,14 @@ def run_doctor() -> tuple[bool, str]:
     workflow_drift = find_workflows_without_single_entrypoint(root)
     if workflow_drift:
         return False, f"workflow entrypoint drift detected: {workflow_drift}"
+
+    workflow_shape_drift = find_invalid_github_workflow_shapes(root)
+    if workflow_shape_drift:
+        return False, f"github workflow yaml contract drift detected: {workflow_shape_drift}"
+
+    workflow_lint = find_actionlint_workflow_violations(root)
+    if workflow_lint:
+        return False, f"github workflow actionlint failed: {workflow_lint}"
 
     domain_coupling = find_domain_coupling(root)
     if domain_coupling:

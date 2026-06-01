@@ -13,7 +13,7 @@ from core.observability.silent import swallow
 from .contracts import GrowthGoalV1, GrowthHypothesisV1, GrowthSignalV1
 
 
-def generate_hypotheses(llm: Any, *, tenant_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int = 8, model: str = "") -> Tuple[GrowthHypothesisV1, ...]:
+def generate_hypotheses(llm: Any, *, tenant_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int = 8, model: str = "") -> tuple[GrowthHypothesisV1, ...]:
     try:
         req = _build_request(tenant_id=tenant_id, goal=goal, signals=signals, n=int(n), model=str(model or ""))
         resp = _generate_sync(llm, req)
@@ -94,7 +94,7 @@ def _generate_sync(llm: Any, req: LLMRequest) -> str:
 _JSON_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
 
 
-def _parse_json_array(text: str) -> List[Dict[str, Any]]:
+def _parse_json_array(text: str) -> list[dict[str, Any]]:
     raw = (text or "").strip()
     m = _JSON_FENCE_RE.search(raw)
     if m:
@@ -113,14 +113,14 @@ def _parse_json_array(text: str) -> List[Dict[str, Any]]:
         obj = obj["items"]
     if not isinstance(obj, list):
         raise ValueError("llm_output_not_array")
-    out: list[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for it in obj:
         if isinstance(it, dict):
             out.append(dict(it))
     return out
 
 
-def _coerce_hypothesis(d: Dict[str, Any], *, tenant_id: str, now_ms: int) -> Optional[GrowthHypothesisV1]:
+def _coerce_hypothesis(d: dict[str, Any], *, tenant_id: str, now_ms: int) -> GrowthHypothesisV1 | None:
     try:
         stage = str(d.get("stage") or "acquisition").strip().lower()
         channel = str(d.get("channel") or "organic").strip().lower()

@@ -4,7 +4,6 @@ from typing import Protocol
 
 from economics.contracts import TruthFragment
 
-
 CANON_RUNTIME_ECONOMIC_CORE_CONTRACTS = True
 
 

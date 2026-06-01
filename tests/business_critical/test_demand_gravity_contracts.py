@@ -1,11 +1,20 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
-from runtime.demand_gravity import DemandChannel, DemandSignal, DemandSignalCandidateProducer, DemandSignalKind, build_demand_gravity_admin_view
-from runtime.demand_gravity.no_second_brain import DemandGravitySecondBrainViolation, assert_payload_has_no_decision_fields
+from runtime.demand_gravity import (
+    DemandChannel,
+    DemandSignal,
+    DemandSignalCandidateProducer,
+    DemandSignalKind,
+    build_demand_gravity_admin_view,
+)
+from runtime.demand_gravity.no_second_brain import (
+    DemandGravitySecondBrainViolation,
+    assert_payload_has_no_decision_fields,
+)
 
 
 def _signal(*, raw: dict[str, object] | None = None, business_id: str = "biz-a") -> DemandSignal:
@@ -15,7 +24,7 @@ def _signal(*, raw: dict[str, object] | None = None, business_id: str = "biz-a")
         business_id=business_id,
         kind=DemandSignalKind.SEARCH_INTENT,
         channel=DemandChannel.GOOGLE_MAPS,
-        observed_at=datetime.now(timezone.utc),
+        observed_at=datetime.now(UTC),
         source_ref="source:1",
         normalized_text="coffee near me",
         confidence=0.8,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from runtime.canon import CANONICAL_DECISION_CORE_MODULE
 from learning.replay import PolicyMetadata
+from runtime.canon import CANONICAL_DECISION_CORE_MODULE
 
 
 def build_policy_metadata(*, policy_id: str, train_dataset_id: str, trained_at_ms: int) -> PolicyMetadata:

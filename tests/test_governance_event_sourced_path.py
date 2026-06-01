@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from core.ads.rl.policy_store import PolicyStore
 from core.governance.evaluators.attribution_maturity import AttributionMaturityGate
+from core.governance.guards.policy_update_gate import PolicyUpdateGate
 from core.governance.readers.event_sourced_path import (
     assert_governance_event_store_contract,
     inspect_governance_event_path,
 )
-from core.governance.guards.policy_update_gate import PolicyUpdateGate
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 

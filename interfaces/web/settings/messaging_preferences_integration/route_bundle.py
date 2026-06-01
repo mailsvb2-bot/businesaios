@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from interfaces.web.settings.messaging_preferences_integration.html_controller import HtmlController
 from interfaces.web.settings.common.http_payload_reader import read_payload
-from interfaces.web.settings.messaging_preferences_integration.page_controller import PageController
 from interfaces.web.settings.common.page_query import PageQuery
 from interfaces.web.settings.common.save_command import SaveCommand
+from interfaces.web.settings.common.tenant_reader import read_tenant_id
+from interfaces.web.settings.messaging_preferences_integration.html_controller import HtmlController
+from interfaces.web.settings.messaging_preferences_integration.page_controller import PageController
 from interfaces.web.settings.messaging_preferences_integration.save_controller import SaveController
 from interfaces.web.settings.messaging_preferences_integration.static_controller import StaticController
-from interfaces.web.settings.common.tenant_reader import read_tenant_id
 
 
 class MessagingPreferencesRouteBundle:

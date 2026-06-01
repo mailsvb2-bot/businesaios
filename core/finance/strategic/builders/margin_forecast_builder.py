@@ -9,4 +9,4 @@ class MarginForecastBuilder:
     def build(self, revenue: list[Decimal], costs: list[Decimal]) -> list[Decimal]:
         if len(revenue) != len(costs):
             raise ValueError("revenue and costs must have equal length")
-        return [q2(rev - cost) for rev, cost in zip(revenue, costs)]
+        return [q2(rev - cost) for rev, cost in zip(revenue, costs, strict=False)]

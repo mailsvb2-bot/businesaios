@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 from tenancy.tenant_admission_coordinator import LeaseStoreAdmissionBackend
 from tenancy.tenant_backend_clock_policy import TenantBackendClockPolicy
 from tenancy.tenant_metrics_event_log import TenantMetricsEventLog
 from tenancy.tenant_metrics_store import InMemoryTenantMetricsStore
 from tenancy.tenant_runtime_lease_recovery import TenantRuntimeLeaseRecoveryService, TenantRuntimeRecoveryPlan
-from tenancy.tenant_runtime_reconciliation import TenantRuntimeReconciler
 from tenancy.tenant_runtime_lease_store import InMemoryTenantRuntimeLeaseStore
+from tenancy.tenant_runtime_reconciliation import TenantRuntimeReconciler
 from tenancy.tenant_schema_version_guard import TenantSchemaVersionExpectation
 from tenancy.tenant_startup_selfcheck import TenantStartupSelfcheck
 
@@ -54,7 +54,7 @@ def test_startup_selfcheck_and_metrics_event_log() -> None:
     metrics = InMemoryTenantMetricsStore()
     log = TenantMetricsEventLog(store=metrics)
     log.emit_counter(tenant_id='tenant-a', event_name='startup_ok', labels={'component': 'tenant_ops'})
-    reader = StaticClockReader(now=datetime.now(timezone.utc))
+    reader = StaticClockReader(now=datetime.now(UTC))
     selfcheck = TenantStartupSelfcheck(lease_store=store, admission_backend=backend, clock_policy=TenantBackendClockPolicy(skew_tolerance_seconds=5))
     result = selfcheck.run(
         tenant_id='tenant-a',
@@ -71,7 +71,7 @@ def test_startup_selfcheck_and_metrics_event_log() -> None:
 def test_selfcheck_detects_parity_mismatch() -> None:
     runtime_store = InMemoryTenantRuntimeLeaseStore()
     admission_store = InMemoryTenantRuntimeLeaseStore()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     runtime_store.acquire(tenant_id='tenant-a', run_id='run-1', owner_id='worker-a', limit=3, ttl_seconds=60, now=now)
     admission_store.acquire(tenant_id='tenant-a', run_id='run-1', owner_id='worker-b', limit=3, ttl_seconds=60, now=now)
     backend = LeaseStoreAdmissionBackend(lease_store=admission_store)

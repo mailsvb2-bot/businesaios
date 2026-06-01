@@ -85,8 +85,8 @@ def choose_price_rub(
     base_price_rub: int,
     cfg: RLPricingConfig,
     now_ms: int | None = None,
-    context_key: Optional[str] = None,
-) -> Tuple[int, Dict[str, Any]]:
+    context_key: str | None = None,
+) -> tuple[int, dict[str, Any]]:
     """Choose a price point for an offer_arm.
 
     Returns (price_rub, debug).
@@ -95,7 +95,7 @@ def choose_price_rub(
     """
 
     base = int(max(1, base_price_rub))
-    debug: Dict[str, Any] = {
+    debug: dict[str, Any] = {
         "enabled": bool(cfg.enabled),
         "offer_arm": str(offer_arm),
         "base_price_rub": int(base),
@@ -167,14 +167,14 @@ def choose_price_rub(
 
     debug["candidates"] = [int(x) for x in candidates]
     debug["posterior_mean_conv"] = {
-        str(int(p)): float(m) for p, m in zip(candidates, selected["means"])
+        str(int(p)): float(m) for p, m in zip(candidates, selected["means"], strict=False)
     }
     debug["expected_revenue"] = {
         str(int(p)): float(r)
-        for p, r in zip(candidates, selected["expected_revenue"])
+        for p, r in zip(candidates, selected["expected_revenue"], strict=False)
     }
     debug["probs"] = {
-        str(int(p)): float(pr) for p, pr in zip(candidates, selected["probs"])
+        str(int(p)): float(pr) for p, pr in zip(candidates, selected["probs"], strict=False)
     }
     debug["choice"] = int(
         clamp_int(int(selected["choice"]), int(cfg.min_price_rub), int(cfg.max_price_rub))

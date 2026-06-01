@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict
 
-from core.admin.read_model import latency_brief, latency_breakdown, sla_breaches_brief
+from core.admin.read_model import latency_breakdown, latency_brief, sla_breaches_brief
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose_message
 

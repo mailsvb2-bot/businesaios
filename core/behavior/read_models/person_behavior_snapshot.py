@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from core.behavior.adapters.decisioncore_adapter import build_decisioncore_behavior_payload
 from core.behavior.assemblers.person_field_assembler import assemble_person_field
 from core.behavior.builders.event_spinor_builder import build_event_spinor
-from core.behavior.adapters.decisioncore_adapter import build_decisioncore_behavior_payload
 
 
 def build_person_behavior_snapshot(entity_id: str, events: list[Mapping[str, Any]]) -> dict[str, object]:

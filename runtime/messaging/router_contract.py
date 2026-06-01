@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 RUNTIME_MESSAGING_ROUTER_CONTRACT_VERSION = "RMR-CONTRACT-V1"
 
 

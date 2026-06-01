@@ -6,8 +6,7 @@ CANON_BOOT_WIRING_ONLY = True
 
 from typing import Any
 
-from runtime.boot import actions_registry
-from runtime.boot import EnvFlagProvider, Keyring, KillSwitch
+from runtime.boot import EnvFlagProvider, Keyring, KillSwitch, actions_registry
 from runtime.enforcement.rate_limit import RuntimeActionRateLimiter
 from runtime.guard import RuntimeGuard
 from survival.controller import SurvivalController

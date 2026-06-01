@@ -1,5 +1,7 @@
 
-import json, hashlib
+import hashlib
+import json
+
 
 def canonical_json_bytes(data: dict) -> bytes:
     return json.dumps(data, sort_keys=True, separators=(",", ":")).encode()

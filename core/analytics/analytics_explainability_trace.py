@@ -3,7 +3,11 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from core.contracts.analytics_explainability_trace import AnalyticsExplainabilityTrace, ExplainabilityEvidence, ExplainabilityReason
+from core.contracts.analytics_explainability_trace import (
+    AnalyticsExplainabilityTrace,
+    ExplainabilityEvidence,
+    ExplainabilityReason,
+)
 
 
 @dataclass(frozen=True)

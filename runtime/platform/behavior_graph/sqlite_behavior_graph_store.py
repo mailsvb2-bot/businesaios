@@ -3,7 +3,8 @@ from __future__ import annotations
 """Canonical sqlite behavior graph store.
 
 This module owns the SQLite implementation directly. Historical split modules
-(``*_part1``/``*_part2``) are no longer owners; the package installs compat
+(``*_part1``/``*_part2``) are no longer owners
+the package installs compat
 aliases for those imports. Keeping the full implementation here removes a real
 risk where the canonical surface pointed at a truncated part file.
 """
@@ -17,11 +18,11 @@ from contracts.behavior_graph import Edge, GraphSnapshot, Neighbor, Node, PathSt
 from observability.platform.observability.silent import swallow
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 
-
 CANON_BEHAVIOR_GRAPH_SQLITE_OWNER = True
 
 
-def finish_shortest_path(*, prev: dict[str, tuple[str, str, str, float]], src: str, dst: str) -> list[PathStep]:
+def finish_shortest_path(*, prev:
+    dict[str, tuple[str, str, str, float]], src: str, dst: str) -> list[PathStep]:
     if dst not in prev:
         return []
     steps: list[PathStep] = [
@@ -43,7 +44,8 @@ def finish_shortest_path(*, prev: dict[str, tuple[str, str, str, float]], src: s
     return steps
 
 
-def rollback_reset(*, db: sqlite3.Connection, tenant_id: str, scope: str) -> None:
+def rollback_reset(*, db:
+    sqlite3.Connection, tenant_id: str, scope: str) -> None:
     cur = db.cursor()
     try:
         cur.execute("DELETE FROM behavior_graph_edges WHERE tenant_id=? AND scope=?", (tenant_id, scope))
@@ -61,11 +63,12 @@ def rollback_reset(*, db: sqlite3.Connection, tenant_id: str, scope: str) -> Non
 class SqliteBehaviorGraphStore:
     """Durable behavior graph store (sqlite)."""
 
-    def __init__(self, path: str):
+    def __init__(self, path:
+        str):
         self._path = str(path)
         self._db: sqlite3.Connection | None = None
 
-    def __enter__(self) -> "SqliteBehaviorGraphStore":
+    def __enter__(self) -> SqliteBehaviorGraphStore:
         self._db = sqlite3.connect(self._path, timeout=5.0, check_same_thread=False)
         configure_sqlite(self._db, prod=is_prod_env())
         self._db.execute("PRAGMA journal_mode=WAL;")
@@ -131,7 +134,7 @@ class SqliteBehaviorGraphStore:
         built_at_ms: int,
         nodes: list[Node],
         edges: list[Edge],
-        meta: Dict[str, Any] | None = None,
+        meta: dict[str, Any] | None = None,
     ) -> None:
         assert self._db is not None
         tid = str(tenant_id).strip()
@@ -192,7 +195,8 @@ class SqliteBehaviorGraphStore:
                 swallow(__name__, "sqlite_behavior_graph.rollback")
             raise
 
-    def get_snapshot(self, *, tenant_id: str, scope: str) -> Optional[GraphSnapshot]:
+    def get_snapshot(self, *, tenant_id:
+        str, scope: str) -> GraphSnapshot | None:
         assert self._db is not None
         tid = str(tenant_id).strip()
         sc = str(scope).strip()
@@ -216,9 +220,12 @@ class SqliteBehaviorGraphStore:
         edges = [Edge(edge_id=r[0], edge_type=r[1], src=r[2], dst=r[3], weight=float(r[4]), props=(json.loads(r[5]) if r[5] else {})) for r in erows]
         return GraphSnapshot(tenant_id=tid, scope=sc, built_at_ms=built_at_ms, nodes=nodes, edges=edges, meta=meta)
 
-    def get_node(self, *, tenant_id: str, scope: str, node_id: str) -> Optional[Node]:
+    def get_node(self, *, tenant_id:
+        str, scope: str, node_id: str) -> Node | None:
         assert self._db is not None
-        tid = str(tenant_id).strip(); sc = str(scope).strip(); nid = str(node_id).strip()
+        tid = str(tenant_id).strip()
+        sc = str(scope).strip()
+        nid = str(node_id).strip()
         row = self._db.execute(
             "SELECT node_id,node_type,key,title,props_json FROM behavior_graph_nodes WHERE tenant_id=? AND scope=? AND node_id=?",
             (tid, sc, nid),
@@ -227,9 +234,12 @@ class SqliteBehaviorGraphStore:
             return None
         return Node(node_id=row[0], node_type=row[1], key=row[2], title=row[3], props=(json.loads(row[4]) if row[4] else {}))
 
-    def neighbors(self, *, tenant_id: str, scope: str, node_id: str, direction: str = "out", limit: int = 50, edge_type: str | None = None) -> list[Neighbor]:
+    def neighbors(self, *, tenant_id:
+        str, scope: str, node_id: str, direction: str = "out", limit: int = 50, edge_type: str | None = None) -> list[Neighbor]:
         assert self._db is not None
-        tid = str(tenant_id).strip(); sc = str(scope).strip(); nid = str(node_id).strip()
+        tid = str(tenant_id).strip()
+        sc = str(scope).strip()
+        nid = str(node_id).strip()
         d = str(direction or "out").strip().lower()
         lim = max(1, min(int(limit), 500))
         et = str(edge_type).strip() if edge_type else None
@@ -251,9 +261,13 @@ class SqliteBehaviorGraphStore:
             out.append(Neighbor(node_id=str(other), weight=float(r[4]), edge_type=str(r[1]), edge_id=str(r[0]), props=(json.loads(r[5]) if r[5] else {})))
         return out
 
-    def shortest_path(self, *, tenant_id: str, scope: str, src: str, dst: str, max_hops: int = 6) -> list[PathStep]:
+    def shortest_path(self, *, tenant_id:
+        str, scope: str, src: str, dst: str, max_hops: int = 6) -> list[PathStep]:
         assert self._db is not None
-        tid = str(tenant_id).strip(); sc = str(scope).strip(); s = str(src).strip(); t = str(dst).strip()
+        tid = str(tenant_id).strip()
+        sc = str(scope).strip()
+        s = str(src).strip()
+        t = str(dst).strip()
         mh = max(1, min(int(max_hops), 12))
         if s == t:
             return [PathStep(node_id=s, via_edge_id=None, via_edge_type=None, weight=0.0)]
@@ -280,7 +294,8 @@ class SqliteBehaviorGraphStore:
                 q.append((nxt, depth + 1))
         return finish_shortest_path(prev=prev, src=s, dst=t)
 
-    def reset(self, *, tenant_id: str, scope: str) -> None:
+    def reset(self, *, tenant_id:
+        str, scope: str) -> None:
         assert self._db is not None
         rollback_reset(db=self._db, tenant_id=str(tenant_id).strip(), scope=str(scope).strip())
 

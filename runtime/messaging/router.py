@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from runtime.tenancy import require_tenant_id
 from runtime.messaging.channel_normalizer import normalize_channel
+from runtime.tenancy import require_tenant_id
+
 from .inbound_message import InboundMessage
+from .router_contract import ConversationRoute
 from .router_extractors import (
     correlation_id_from_payload,
     external_user_ref_from_payload,
@@ -11,7 +13,6 @@ from .router_extractors import (
     text_from_payload,
     user_id_from_payload,
 )
-from .router_contract import ConversationRoute
 
 
 class UnifiedConversationRouter:

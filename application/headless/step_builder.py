@@ -3,12 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from application.effects.canonical_execution_feedback import canonical_execution_feedback
+from application.headless.models import GoalExecutionStep
 from contracts.action_result import ActionResult
 from contracts.executable_action import ExecutableAction
-from application.effects.canonical_execution_feedback import canonical_execution_feedback
 from execution.canonical_run_artifacts import canonical_goal_execution_step
-from application.headless.models import GoalExecutionStep
-
 
 CANON_HEADLESS_STEP_BUILDER = True
 

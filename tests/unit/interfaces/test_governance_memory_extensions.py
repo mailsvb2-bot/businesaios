@@ -1,6 +1,13 @@
 from __future__ import annotations
-from interfaces.api.governance_advanced_models import BusinessMemoryGovernanceSummaryRequest, DriftTrendRequest, PromoteScenarioBaselineRequest, RollbackTimelineRequest
+
+from interfaces.api.governance_advanced_models import (
+    BusinessMemoryGovernanceSummaryRequest,
+    DriftTrendRequest,
+    PromoteScenarioBaselineRequest,
+    RollbackTimelineRequest,
+)
 from interfaces.api.governance_advanced_route_handlers import GovernanceAdvancedRouteHandlers
+
 
 class StubGovernance:
     def promote_best_for_scenario(self, **kwargs): return {"baseline_name":"scenario/golden","source_run_id":"run-1","goal":"grow","business_id":"biz-1","tenant_id":"tenant-1","promoted_at_label":kwargs["label"],"metadata":{"via":"api"}}

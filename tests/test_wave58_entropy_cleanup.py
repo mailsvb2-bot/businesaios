@@ -5,11 +5,11 @@ import pytest
 from core.ai.decision_runtime import validate_and_gate_action
 from core.behavior.operator_catalogs.resolver import resolve_operator_context
 from core.offers.catalog_resolution import resolve_catalog
-from runtime.telegram_message_factory import resolve_tenant_id
+from runtime.autopilot_feedback_guard import AutopilotFeedbackGuardViolation
 from runtime.handlers.ads_autopilot.result_text import render_gate_error_text
 from runtime.handlers_messaging import _resolve_tenant_id
-from runtime.autopilot_feedback_guard import AutopilotFeedbackGuardViolation
 from runtime.self_driving_scheduler import tick_once
+from runtime.telegram_message_factory import resolve_tenant_id
 
 
 class _Events:

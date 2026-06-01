@@ -13,7 +13,7 @@ class ActionSpaceStats:
     truncated: bool = False
 
 
-def build_action_space(spec: AdsRLOptSpec, *, max_actions: int = 5000) -> Tuple[List[AdsRLAction], ActionSpaceStats]:
+def build_action_space(spec: AdsRLOptSpec, *, max_actions: int = 5000) -> tuple[list[AdsRLAction], ActionSpaceStats]:
     """Expand finite action space.
 
     Safety:
@@ -41,7 +41,7 @@ def build_action_space(spec: AdsRLOptSpec, *, max_actions: int = 5000) -> Tuple[
     if not objectives:
         objectives = [None]  # type: ignore[list-item]
 
-    actions: List[AdsRLAction] = []
+    actions: list[AdsRLAction] = []
     truncated = False
     for daily_budget, bid_cap, cpa_target, creative_id, audience_id, objective in product(
         budgets, bids, cpas, creatives, audiences, objectives

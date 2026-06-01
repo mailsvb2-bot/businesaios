@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from contracts.action_result import ActionResult
-from runtime.execution.executor_result import ExecutionResult
-from contracts.executable_action import ExecutableAction
 from application.headless.feedback import SimpleHeadlessFeedbackReader
+from contracts.action_result import ActionResult
+from contracts.executable_action import ExecutableAction
+from runtime.execution.executor_result import ExecutionResult
 
 
 def test_headless_feedback_preserves_capability_operator_view_from_action_payload() -> None:

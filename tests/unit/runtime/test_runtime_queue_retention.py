@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from runtime.queue.job_contract import JobDispatchRequest, JobState, utc_now
+from runtime.queue.job_contract import JobDispatchRequest, utc_now
 from runtime.queue.job_store import InMemoryJobStore
 from runtime.queue.job_store_sqlite import SqliteJobStore
 from runtime.queue.queue_retention import QueueRetentionManager, QueueRetentionPolicy

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Best-effort event-store helpers for read models.
 
 These helpers sit *above* the strict signature-safe helpers in
@@ -11,7 +9,9 @@ Why this layer exists:
 - failures should stay observable instead of becoming silent broad-except blocks.
 """
 
-from typing import Any, Iterable
+from __future__ import annotations
+
+from typing import Any
 
 from core.events.read_call import call_iter_events, call_latest_event, call_latest_events
 from core.observability.silent import swallow

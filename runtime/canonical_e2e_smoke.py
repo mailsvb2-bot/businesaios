@@ -7,10 +7,10 @@ and not an alternative business brain. It builds a synthetic no-op decision and
 runs it through the existing canonical durable-store contracts.
 """
 
-from contextlib import ExitStack
-from dataclasses import dataclass
 import time
 import uuid
+from contextlib import ExitStack
+from dataclasses import dataclass
 from typing import Any
 
 from core.ai.decision import Decision

@@ -5,16 +5,16 @@ from typing import Optional
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose, propose_message
 from core.ux.callbacks import (
-    CB_GROWTH_MENU,
-    CB_GROWTH_GENERATE,
-    CB_GROWTH_BACKLOG,
     CB_GROWTH_ACCEPT_PREFIX,
+    CB_GROWTH_BACKLOG,
+    CB_GROWTH_GENERATE,
+    CB_GROWTH_MENU,
     CB_GROWTH_REJECT_PREFIX,
 )
 from core.ux.telegram_keyboards import kb_growth_menu
 
 
-def handle_growth_strategy(ctx: TelegramCtx, *, user_id: str) -> Optional[ProposedAction]:
+def handle_growth_strategy(ctx: TelegramCtx, *, user_id: str) -> ProposedAction | None:
     cb = str(ctx.callback_data or "").strip()
 
     if cb == CB_GROWTH_MENU:

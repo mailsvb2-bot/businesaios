@@ -1,10 +1,10 @@
-from runtime.messaging_policy_events.event_factory import build_event
-from runtime.messaging_policy_events.inmemory_event_store import InMemoryMessagingPolicyEventStore
 from runtime.boot.web.runtime_web_service_builders import (
     build_messaging_policy_alerts_bundle,
     build_messaging_policy_dashboard_bundle,
     build_messaging_policy_trace_search_bundle,
 )
+from runtime.messaging_policy_events.event_factory import build_event
+from runtime.messaging_policy_events.inmemory_event_store import InMemoryMessagingPolicyEventStore
 
 
 def test_alert_bundle_returns_json():

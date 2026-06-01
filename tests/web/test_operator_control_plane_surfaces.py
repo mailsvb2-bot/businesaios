@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.web.components.autonomy_budget_panel import AutonomyBudgetPanel
 from app.web.components.dead_letter_panel import DeadLetterPanel
@@ -9,13 +9,17 @@ from app.web.components.recovery_panel import RecoveryPanel
 from app.web.components.run_control_panel import RunControlPanel
 from app.web.pages.admin import AdminPage
 from app.web.pages.runtime_alerts import RuntimeAlertsPage
-from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 from observability.slo_contract import SLIKind, SLOComparator, SLODefinition
+from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 from reliability.execution_reconciliation import ReconciliationReport
 from reliability.outbox_store import OutboxMessage, OutboxState
 from reliability.recovery_orchestrator import RecoveryPlan, TransportRecoveryResult
 from tenancy.tenant_contract import TenantQuotaCheck
-from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetVerdict, TenantExecutionUsage, TenantRuntimeLimitCheck
+from tenancy.tenant_execution_budget_guard import (
+    TenantExecutionBudgetVerdict,
+    TenantExecutionUsage,
+    TenantRuntimeLimitCheck,
+)
 
 
 @dataclass(frozen=True)
@@ -83,7 +87,7 @@ def test_run_control_panel_filters_cross_tenant_events_and_dedupes_controls() ->
 
 
 def test_dead_letter_and_recovery_panels_render_canonical_state() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     message = OutboxMessage(
         tenant_id='tenant-a',
         message_id='msg-1',
@@ -154,7 +158,7 @@ def test_admin_and_runtime_alert_pages_include_operator_sections() -> None:
         comparator=SLOComparator.GTE,
         target_value=0.95,
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     page = AdminPage().build_dashboard(
         tenant_id='tenant-a',
         tenant_records=(),

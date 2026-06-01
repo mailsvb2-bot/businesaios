@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
-from core.governance.evaluators.profit_metrics import ProfitMetricsService
 from core.ads.rl.dataset import Transition
+from core.governance.evaluators.profit_metrics import ProfitMetricsService
 
 
 @dataclass(frozen=True)
@@ -18,7 +17,7 @@ class RewardComputer:
         self._pm = profit_metrics
         self._w = window or RewardWindow()
 
-    def transition_for_decision(self, *, tenant_id: str, decision_id: str, lookback_days: int) -> Optional[Transition]:
+    def transition_for_decision(self, *, tenant_id: str, decision_id: str, lookback_days: int) -> Transition | None:
         pre = self._pm.profit_lookback(tenant_id=str(tenant_id), lookback_days=int(self._w.pre_days))
         post = self._pm.profit_lookback(tenant_id=str(tenant_id), lookback_days=int(self._w.post_days))
         reward_minor = int(post.profit_minor) - int(pre.profit_minor)

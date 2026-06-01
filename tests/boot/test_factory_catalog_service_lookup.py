@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from boot.factories import FACTORY_SERVICE_NAMES, FACTORY_FUNCTIONS, get_factory_for_service
+from boot.factories import FACTORY_FUNCTIONS, FACTORY_SERVICE_NAMES, get_factory_for_service
 from runtime.errors import RuntimeConfigurationError
 from runtime.service_names import RuntimeServiceName
 

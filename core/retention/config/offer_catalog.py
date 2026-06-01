@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """DEPRECATED bridge: retention offer catalog.
 
 Historically, v13 owned offer definitions under retention.config.* which caused
@@ -12,10 +10,12 @@ We keep this module ONLY to avoid breaking older imports.
 It must stay *lazy* and must not import OfferEngine/registries at import-time.
 """
 
-from typing import Any, Dict, Iterable, Iterator, Mapping, MutableMapping, Optional
+from __future__ import annotations
+
+from typing import Any, Iterable, Iterator, MutableMapping
 
 
-def _load_offers() -> Dict[str, Any]:
+def _load_offers() -> dict[str, Any]:
     # Lazy import to avoid cycles.
     from core.offers.catalogs.retention_catalog import OFFERS
 
@@ -24,9 +24,9 @@ def _load_offers() -> Dict[str, Any]:
 
 
 class _LazyOffersProxy(MutableMapping[str, Any]):
-    _loaded: Optional[Dict[str, Any]] = None
+    _loaded: dict[str, Any] | None = None
 
-    def _ensure(self) -> Dict[str, Any]:
+    def _ensure(self) -> dict[str, Any]:
         if self._loaded is None:
             self._loaded = _load_offers()
         return self._loaded

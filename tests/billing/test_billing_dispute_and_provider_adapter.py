@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from billing.commercial_cycle_contract import CommercialCollectionAttempt, CommercialCollectionResult
 from billing.dispute_orchestrator import DisputeOrchestrator, InMemoryDisputeStore, SqliteDisputeStore
 from billing.payment_provider_adapter import RoutingPaymentProviderAdapter
+from billing.payment_provider_capability import PaymentProviderCapabilities
 from billing.payment_provider_contract import PaymentCustomerProfile, PaymentProviderContract
 from billing.payment_provider_health_registry import PaymentProviderHealthRegistry
-from billing.payment_provider_capability import PaymentProviderCapabilities
 from billing.payment_provider_registry import PaymentProviderRegistration, PaymentProviderRegistry
 from billing.payment_provider_router import PaymentProviderRouter
 from billing.tax_policy_bridge import BillingTaxCountryPolicy, BillingTaxPolicyBridge, BillingTaxPolicyRegistry
@@ -79,14 +79,14 @@ def test_dispute_orchestrator_is_idempotent_and_sqlite_persistent(tmp_path) -> N
         invoice_id='inv-1',
         payload={'duplicate_flag': True, 'attribution_mismatch': True},
         idempotency_key='dsp-1',
-        opened_at=datetime(2026, 4, 10, 10, 0, tzinfo=timezone.utc),
+        opened_at=datetime(2026, 4, 10, 10, 0, tzinfo=UTC),
     )
     replayed = orchestrator.open_case(
         tenant_id='tenant-a',
         invoice_id='inv-1',
         payload={'duplicate_flag': True, 'attribution_mismatch': True},
         idempotency_key='dsp-1',
-        opened_at=datetime(2026, 4, 10, 10, 0, tzinfo=timezone.utc),
+        opened_at=datetime(2026, 4, 10, 10, 0, tzinfo=UTC),
     )
     assert replayed == opened
     assert store.get_by_idempotency(tenant_id='tenant-a', invoice_id='inv-1', idempotency_key='dsp-1') == opened

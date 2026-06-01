@@ -5,12 +5,12 @@ CANON_BOOT_WIRING_ONLY = True
 from pathlib import Path
 from typing import Any
 
-from runtime.platform.config.env_flags import env_path
-from runtime.tenancy.paths import TenantPaths
 from runtime.boot.ads_wiring import build_ads_runtime, build_ads_service
 from runtime.boot.builders import ads_rl as ads_rl_builder
 from runtime.boot.builders import campaign_builder as campaign_builder_builder
 from runtime.handlers.route_failure_support import normalized_tenant_id
+from runtime.platform.config.env_flags import env_path
+from runtime.tenancy.paths import TenantPaths
 
 
 def wire_ads_stack(*, tenant_id: str, repo_root: Path, event_store: Any, event_log: Any, logging_mod: Any, composer: Any) -> dict[str, Any]:

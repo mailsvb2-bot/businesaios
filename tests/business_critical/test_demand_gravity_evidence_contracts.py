@@ -1,8 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from runtime.demand_gravity import DemandChannel, DemandSignal, DemandSignalCandidateProducer, DemandSignalKind, build_demand_gravity_admin_view, build_decision_input
+from runtime.demand_gravity import (
+    DemandChannel,
+    DemandSignal,
+    DemandSignalCandidateProducer,
+    DemandSignalKind,
+    build_decision_input,
+    build_demand_gravity_admin_view,
+)
 
 
 def _candidate():
@@ -12,7 +19,7 @@ def _candidate():
         business_id="biz-a",
         kind=DemandSignalKind.SEARCH_INTENT,
         channel=DemandChannel.GOOGLE_MAPS,
-        observed_at=datetime.now(timezone.utc),
+        observed_at=datetime.now(UTC),
         source_ref="source:1",
         normalized_text="coffee near me",
         confidence=0.8,

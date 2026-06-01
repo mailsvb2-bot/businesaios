@@ -23,7 +23,7 @@ def handle_marketing_routes(
     legacy_prices: dict,
     bot_username: str,
     pm,
-) -> Optional[ProposedAction]:
+) -> ProposedAction | None:
     if ctx.callback_data == CB_SHARE_MENU:
         bot = (str(bot_username or "")).strip().lstrip("@")
         if not bot:

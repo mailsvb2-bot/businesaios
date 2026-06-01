@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+
 class BatchScoringJob:
     def run(self, handler, runtime, payloads: list[dict]) -> list[dict]:
         return [handler.handle(runtime, payload) for payload in payloads]

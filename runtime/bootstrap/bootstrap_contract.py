@@ -1,9 +1,11 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any, Mapping
+
 BOOTSTRAP_CONTRACT_VERSION = "sovereign-bootstrap-v3"
 class BootstrapMode(str, Enum):
     DEV = "dev"
@@ -94,7 +96,7 @@ class SovereignRuntime:
     environment: BootstrapEnvironment
     artifacts: BootstrapArtifacts
     attestation: BootstrapAttestation
-    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def services(self) -> tuple[str, ...]:

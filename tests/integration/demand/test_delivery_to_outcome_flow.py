@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from lead_outcomes import LeadOutcomeRegistry
-from lead_outcomes import LeadStatusTracker
-from lead_outcomes import LeadConversionTracker
-from lead_outcomes import LeadRevenueTracker
+from lead_outcomes import LeadConversionTracker, LeadOutcomeRegistry, LeadRevenueTracker, LeadStatusTracker
+
 
 def test_delivery_to_outcome_flow():
     registry = LeadOutcomeRegistry()

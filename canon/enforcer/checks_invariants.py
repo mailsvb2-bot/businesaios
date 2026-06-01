@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from canon.enforcer.rules import FORBIDDEN_SECOND_BRAIN_FILE_HINTS, REPO_ROOT, SYNONYM_NAMESPACE_PAIRS, iter_py_files, nontrivial_py_count, path_str
+from canon.enforcer.rules import (
+    FORBIDDEN_SECOND_BRAIN_FILE_HINTS,
+    REPO_ROOT,
+    SYNONYM_NAMESPACE_PAIRS,
+    iter_py_files,
+    nontrivial_py_count,
+    path_str,
+)
 
 
 def check_required_invariants(report, root: Path = REPO_ROOT) -> None:

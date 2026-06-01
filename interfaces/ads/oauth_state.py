@@ -11,7 +11,7 @@ and copy/paste drift across connectors.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 
 @dataclass(frozen=True)
@@ -21,7 +21,7 @@ class OAuthState:
 
 
 def build_state(*, tenant_id: str) -> str:
-    ts = int(datetime.now(timezone.utc).timestamp())
+    ts = int(datetime.now(UTC).timestamp())
     return f"{tenant_id}:{ts}"
 
 

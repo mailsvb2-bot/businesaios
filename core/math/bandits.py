@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
-from typing import Dict, List
 
 
 @dataclass
@@ -23,11 +22,11 @@ class UCB1:
       score_i = μ_i + sqrt( 2 ln(n) / n_i )
     """
 
-    def __init__(self, arms: List[str]):
+    def __init__(self, arms: list[str]):
         if not arms:
             raise ValueError("arms must be non-empty.")
         self.arms = list(arms)
-        self.stats: Dict[str, ArmStats] = {a: ArmStats() for a in self.arms}
+        self.stats: dict[str, ArmStats] = {a: ArmStats() for a in self.arms}
         self.total_pulls: int = 0
 
     def choose_arm(self) -> str:
@@ -60,14 +59,14 @@ class UCB1:
 class ThompsonBernoulli:
     """Thompson sampling for Bernoulli rewards using Beta(α, β)."""
 
-    def __init__(self, arms: List[str], *, alpha0: float = 1.0, beta0: float = 1.0):
+    def __init__(self, arms: list[str], *, alpha0: float = 1.0, beta0: float = 1.0):
         if not arms:
             raise ValueError("arms must be non-empty.")
         if alpha0 <= 0 or beta0 <= 0:
             raise ValueError("alpha0/beta0 must be > 0.")
         self.arms = list(arms)
-        self.alpha: Dict[str, float] = {a: float(alpha0) for a in self.arms}
-        self.beta: Dict[str, float] = {a: float(beta0) for a in self.arms}
+        self.alpha: dict[str, float] = {a: float(alpha0) for a in self.arms}
+        self.beta: dict[str, float] = {a: float(beta0) for a in self.arms}
 
     def choose_arm(self) -> str:
         best_a = self.arms[0]

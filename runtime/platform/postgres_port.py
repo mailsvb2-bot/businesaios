@@ -22,7 +22,7 @@ class PostgresPort:
         if not self.dsn or not str(self.dsn).strip():
             raise ValueError("POSTGRES_DSN is empty")
 
-    def __enter__(self) -> "PostgresPort":
+    def __enter__(self) -> PostgresPort:
         import psycopg  # type: ignore
 
         self._psycopg = psycopg

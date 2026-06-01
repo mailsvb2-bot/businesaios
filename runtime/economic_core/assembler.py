@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from economics.contracts import TruthFragment
 
-
 CANON_RUNTIME_ECONOMIC_CORE_ASSEMBLER = True
 
 

@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Canonical namespace alias map.
 
 These aliases document historical package names that are allowed to exist only
 as compatibility shells. New business logic should target the canonical path.
 """
+
+from __future__ import annotations
 
 from typing import Final
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from contracts.decisioning.reward_signal_contract import RewardSignalContract
 from application.world_state.world_state_assembler import assemble_world_state
+from contracts.decisioning.reward_signal_contract import RewardSignalContract
 from runtime.market.market_snapshot import MarketSnapshot
 
 

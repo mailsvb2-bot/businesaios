@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Mapping, Optional
+from typing import Mapping
 
 from config.experiments_defaults import DEFAULT_EXPERIMENT_DEFAULTS
-
 from core.experiments.enums import (
     ExperimentStatus,
     MetricDirection,
@@ -39,11 +38,11 @@ class ExperimentPlan:
     audience_key: str
     owner: str
     status: ExperimentStatus
-    variants: List[VariantSpec]
-    metrics: List[MetricDefinition]
+    variants: list[VariantSpec]
+    metrics: list[MetricDefinition]
     minimum_sample_size: int
-    overlap_keys: List[str] = field(default_factory=list)
-    metadata: Dict[str, str] = field(default_factory=dict)
+    overlap_keys: list[str] = field(default_factory=list)
+    metadata: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -78,7 +77,7 @@ class ExperimentResult:
     significant: bool
     risk_level: RiskLevel
     rollout_decision: RolloutDecision
-    notes: List[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -89,7 +88,7 @@ class EvaluationSummary:
     p_value: float
     risk_level: RiskLevel
     rollout_decision: RolloutDecision
-    reasons: List[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -109,7 +108,7 @@ class ExperimentResultView:
     significant: bool
     risk_level: RiskLevel
     rollout_decision: RolloutDecision
-    notes: List[str]
+    notes: list[str]
 
 
 # backward-compatible legacy surface
@@ -121,4 +120,4 @@ class Experiment:
 
 
 ExperimentMap = Mapping[str, ExperimentPlan]
-OptionalExperiment = Optional[ExperimentPlan]
+OptionalExperiment = ExperimentPlan | None

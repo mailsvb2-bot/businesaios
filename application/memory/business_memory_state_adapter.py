@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from kernel.world_state import WorldStateV1
 from application.memory.business_operating_memory import (
     BusinessMemoryPolicy,
     BusinessOperatingMemory,
@@ -13,7 +12,7 @@ from application.memory.business_operating_memory import (
     project_business_memory_meta_payloads,
     project_business_memory_state_context,
 )
-
+from kernel.world_state import WorldStateV1
 
 CANON_BUSINESS_MEMORY_STATE_ADAPTER = True
 

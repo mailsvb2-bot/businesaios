@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Tuple
+from typing import Iterable
 
 from core.experiments.builders.metric_set_builder import MetricSetBuilder
 from core.experiments.builders.variant_builder import VariantBuilder
 from core.experiments.enums import ExperimentStatus, MetricDirection, VariantRole
+from core.experiments.guards.plan_guard import ExperimentPlanGuard
 from core.experiments.ids import new_experiment_id
 from core.experiments.types import Experiment, ExperimentPlan
-from core.experiments.guards.plan_guard import ExperimentPlanGuard
 
 
 class ExperimentPlanBuilder:
@@ -29,11 +29,11 @@ class ExperimentPlanBuilder:
         subject_key: str,
         audience_key: str,
         owner: str,
-        variant_definitions: Iterable[Tuple[str, VariantRole, float]],
-        metric_definitions: Iterable[Tuple[str, MetricDirection, float, bool]],
+        variant_definitions: Iterable[tuple[str, VariantRole, float]],
+        metric_definitions: Iterable[tuple[str, MetricDirection, float, bool]],
         minimum_sample_size: int,
-        overlap_keys: List[str] | None = None,
-        metadata: Dict[str, str] | None = None,
+        overlap_keys: list[str] | None = None,
+        metadata: dict[str, str] | None = None,
     ) -> ExperimentPlan:
         plan = ExperimentPlan(
             experiment_id=new_experiment_id(),

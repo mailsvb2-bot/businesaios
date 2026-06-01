@@ -7,7 +7,6 @@ from typing import Any, Optional
 
 from core.events.log import EventLog
 
-
 _POLICY_EVENT_TYPE = "ads_rl_policy_snapshot@v1"
 _POLICY_SOURCE = "ads_rl"
 _POLICY_ID_DEFAULT = "ads.rl.policy.v1"
@@ -37,7 +36,7 @@ class PolicyStore:
         with self._lock:
             self._event_store = event_store
 
-    def get_latest(self, *, tenant_id: str) -> Optional[PolicySnapshot]:
+    def get_latest(self, *, tenant_id: str) -> PolicySnapshot | None:
         tenant_id = str(tenant_id)
         with self._lock:
             return self._load_latest_locked(tenant_id=tenant_id)
@@ -69,11 +68,11 @@ class PolicyStore:
                 )
             return snap
 
-    def _load_latest_locked(self, *, tenant_id: str) -> Optional[PolicySnapshot]:
+    def _load_latest_locked(self, *, tenant_id: str) -> PolicySnapshot | None:
         store = self._event_store
         if store is None or not hasattr(store, "iter_events"):
             return None
-        latest: Optional[PolicySnapshot] = None
+        latest: PolicySnapshot | None = None
         for ev in store.iter_events(tenant_id=str(tenant_id), start_ms=0, end_ms=None, event_type=_POLICY_EVENT_TYPE):
             snap = _snapshot_from_event(ev, tenant_id=str(tenant_id))
             if snap is None:
@@ -83,7 +82,7 @@ class PolicyStore:
         return latest
 
 
-def _snapshot_from_event(event: Any, *, tenant_id: str) -> Optional[PolicySnapshot]:
+def _snapshot_from_event(event: Any, *, tenant_id: str) -> PolicySnapshot | None:
     if not isinstance(event, dict):
         return None
     payload = event.get("payload") or {}

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-
 GROWTH_RECOMMENDATION_CONTRACT_VERSION = "GR-CONTRACT-V1"
 
 

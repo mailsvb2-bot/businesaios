@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 FORBIDDEN_DECISION_FRAGMENTS: tuple[str, ...] = (
     "choose_winner",
     "select_winner",

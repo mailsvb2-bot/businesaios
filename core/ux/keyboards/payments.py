@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from core.ux.callbacks import CB_MENU_MAIN, CB_SUB_MENU, CB_GIFT_CREATE, CB_GIFT_MENU
+from core.ux.callbacks import CB_GIFT_CREATE, CB_GIFT_MENU, CB_MENU_MAIN, CB_SUB_MENU
+
 from .common import mk
 
 
-def kb_gift_menu() -> Dict[str, Any]:
+def kb_gift_menu() -> dict[str, Any]:
     return mk(
         [
             [{"text": "🎁 Создать подарочную ссылку", "callback_data": CB_GIFT_CREATE}],
@@ -17,8 +18,8 @@ def kb_gift_menu() -> Dict[str, Any]:
     )
 
 
-def kb_tariffs(plans: List[Dict[str, Any]]) -> Dict[str, Any]:
-    rows: List[List[Dict[str, str]]] = []
+def kb_tariffs(plans: list[dict[str, Any]]) -> dict[str, Any]:
+    rows: list[list[dict[str, str]]] = []
     for p in plans:
         try:
             if not p.get("is_active", True):
@@ -37,7 +38,7 @@ def kb_tariffs(plans: List[Dict[str, Any]]) -> Dict[str, Any]:
     return mk(rows)
 
 
-def kb_sub(prices: Dict[str, int]) -> Dict[str, Any]:
+def kb_sub(prices: dict[str, int]) -> dict[str, Any]:
     order = [
         ("Утро — 5 дней", "sub:morning:5"),
         ("Утро — 20 дней", "sub:morning:20"),
@@ -46,7 +47,7 @@ def kb_sub(prices: Dict[str, int]) -> Dict[str, Any]:
         ("Утро+Вечер — 5 дней", "sub:both:5"),
         ("Утро+Вечер — 20 дней", "sub:both:20"),
     ]
-    rows: List[List[Dict[str, str]]] = []
+    rows: list[list[dict[str, str]]] = []
     for title, cb in order:
         price = prices.get(title)
         rows.append([{"text": f"{title} — {(str(price) + ' ₽') if price is not None else '? ₽'}", "callback_data": cb}])
@@ -54,7 +55,7 @@ def kb_sub(prices: Dict[str, int]) -> Dict[str, Any]:
     return mk(rows)
 
 
-def kb_pay_selected() -> Dict[str, Any]:
+def kb_pay_selected() -> dict[str, Any]:
     return mk(
         [
             [{"text": "💳 Оплатить выбранный тариф", "callback_data": "pay:selected"}],

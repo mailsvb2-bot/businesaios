@@ -6,14 +6,12 @@ import logging
 from typing import Any
 
 from runtime.decision import DecisionEnvelope
-from survival.controller import SurvivalVerdict
-
-from runtime.enforcement.rate_limit import RuntimeActionRateLimiter
 from runtime.enforcement.action_contracts import (
     validate_execute_plan_payload,
     validate_telegram_transport_payload,
 )
 from runtime.enforcement.idempotency_gate import verify_idempotency_gate as _verify_idempotency_gate
+from runtime.enforcement.rate_limit import RuntimeActionRateLimiter
 from runtime.enforcement.signature_gate import verify_signature_gate as _verify_signature_gate
 from runtime.guard_execution_support import (
     execute_once_runtime,
@@ -32,6 +30,7 @@ from runtime.guard_protocols import (
     SignatureVerifier,
 )
 from runtime.guard_reference import commit_reference_execution, verify_and_lock_reference
+from survival.controller import SurvivalVerdict
 
 logger = logging.getLogger("runtime.guard")
 

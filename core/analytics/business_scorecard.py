@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Iterable, Mapping, Sequence
 
 from core.contracts.business_scorecard import (
@@ -121,7 +121,7 @@ class BusinessAnalyticsService:
         for e in normalized:
             if not e.get('user_id') or e['timestamp_ms'] <= 0:
                 continue
-            day = datetime.fromtimestamp(e['timestamp_ms'] / 1000.0, tz=timezone.utc).strftime('%Y-%m-%d')
+            day = datetime.fromtimestamp(e['timestamp_ms'] / 1000.0, tz=UTC).strftime('%Y-%m-%d')
             per_user_days.setdefault(str(e['user_id']), set()).add(day)
         active_users = len(per_user_days)
         returning_users = sum(1 for ds in per_user_days.values() if len(ds) >= 2)

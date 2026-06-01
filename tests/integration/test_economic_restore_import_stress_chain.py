@@ -1,5 +1,5 @@
-from execution.economic_scope_lineage import EconomicScopeLineageGuard
 from execution.economic_replay_epoch_guard import EconomicReplayEpochGuard
+from execution.economic_scope_lineage import EconomicScopeLineageGuard
 
 
 def test_scope_lineage_allows_declared_migration() -> None:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 FORBIDDEN_RUNTIME_PACKET_PROVIDER_METHODS: tuple[str, ...] = (
     "decide",
     "route_decision",

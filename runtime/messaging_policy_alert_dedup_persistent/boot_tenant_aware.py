@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from runtime.messaging_policy_alert_subscriptions.notifier import MessagingPolicyAlertNotifier
-from runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service import TenantAwareAlertNotificationMarkSentService
-from runtime.messaging_policy_alert_dedup_persistent.tenant_notifier import TenantAwareDedupingMessagingPolicyAlertNotifier
+from runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service import (
+    TenantAwareAlertNotificationMarkSentService,
+)
+from runtime.messaging_policy_alert_dedup_persistent.tenant_notifier import (
+    TenantAwareDedupingMessagingPolicyAlertNotifier,
+)
 from runtime.messaging_policy_alert_dedup_persistent.tenant_store_factory import TenantScopedDedupStoreFactory
-from runtime.messaging_policy_alert_dedup_persistent.tenant_suppression_service import TenantAwareAlertNotificationSuppressionService
+from runtime.messaging_policy_alert_dedup_persistent.tenant_suppression_service import (
+    TenantAwareAlertNotificationSuppressionService,
+)
+from runtime.messaging_policy_alert_subscriptions.notifier import MessagingPolicyAlertNotifier
 
 
 def build_tenant_aware_persistent_deduping_alert_notifier(*, settings_gateway, cooldown_s: int = 3600):

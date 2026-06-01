@@ -32,7 +32,7 @@ class ChannelPreference:
         object.__setattr__(self, "verified", normalized_verified)
 
     @classmethod
-    def from_mapping(cls, value: dict[str, Any] | None) -> "ChannelPreference":
+    def from_mapping(cls, value: dict[str, Any] | None) -> ChannelPreference:
         data = dict(value or {})
         primary = str(data.get("primary") or "telegram")
         enabled_raw = data.get("enabled")

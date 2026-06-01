@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from core.ads.apply_gate import AdsApplyState, build_disable_ads_apply_plan, build_enable_ads_apply_plan
 from core.ads.apply_flow_codec import PENDING_KEY, compute_plan_idempotency_key, plan_summary_text
+from core.ads.apply_gate import AdsApplyState, build_disable_ads_apply_plan, build_enable_ads_apply_plan
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose, propose_message
 from core.ux.callbacks import (
+    CB_ADS_APPLY_CANCEL,
+    CB_ADS_APPLY_CONFIRM,
     CB_ADS_APPLY_DISABLE,
     CB_ADS_APPLY_ENABLE,
     CB_ADS_APPLY_MENU,
     CB_ADS_APPLY_PREVIEW,
-    CB_ADS_APPLY_CONFIRM,
-    CB_ADS_APPLY_CANCEL,
 )
 from core.ux.telegram_keyboards import kb_ads_apply_pending
 
 
-def _get_pending(settings: Dict[str, Any] | None) -> Dict[str, Any] | None:
+def _get_pending(settings: dict[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(settings, dict):
         return None
     p = settings.get(PENDING_KEY)
@@ -71,7 +71,7 @@ def handle_ads_apply(ctx: TelegramCtx, *, user_id: str) -> ProposedAction:
                 reply_markup={"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": CB_ADS_APPLY_MENU}]]},
                 callback_query_id=ctx.callback_query_id,
             )
-        idem = compute_plan_idempotency_key(pending)
+        _ = compute_plan_idempotency_key(pending)
         # Strict single-path: execution happens only via ads_apply_flow (pending confirm).
         return propose_message(
             user_id=str(user_id),

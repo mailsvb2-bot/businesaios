@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import argparse
+import sys
+from pathlib import Path
+
 """Create/refresh a production release manifest.
 
 Usage:
@@ -8,9 +12,7 @@ Usage:
 This script is deterministic and safe to run locally.
 """
 
-import argparse
-from pathlib import Path
-import sys
+
 sys.dont_write_bytecode = True
 
 ROOT = Path(__file__).resolve().parents[1]

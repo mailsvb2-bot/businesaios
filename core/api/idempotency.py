@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import time
 import hashlib
+import time
 from dataclasses import dataclass
-from typing import Protocol, Optional, Dict, Any
+from typing import Any, Dict, Optional, Protocol
 
 from core.tenancy.scope import TenantId
 
@@ -31,13 +31,13 @@ class IdempotencyKey:
 class IdempotencyRecord:
     status: str  # "in_progress" | "done" | "failed"
     created_at_ms: int
-    result: Optional[Dict[str, Any]] = None
+    result: dict[str, Any] | None = None
 
 
 class IdempotencyStore(Protocol):
     def try_begin(self, *, key: IdempotencyKey, ttl_ms: int) -> bool: ...
-    def get(self, *, key: IdempotencyKey) -> Optional[IdempotencyRecord]: ...
-    def mark_done(self, *, key: IdempotencyKey, result: Dict[str, Any]) -> None: ...
+    def get(self, *, key: IdempotencyKey) -> IdempotencyRecord | None: ...
+    def mark_done(self, *, key: IdempotencyKey, result: dict[str, Any]) -> None: ...
     def mark_failed(self, *, key: IdempotencyKey, reason: str) -> None: ...
 
 
@@ -45,7 +45,7 @@ class MemoryIdempotencyStore:
     """In-memory idempotency store (tests/dev)."""
 
     def __init__(self):
-        self._items: Dict[str, IdempotencyRecord] = {}
+        self._items: dict[str, IdempotencyRecord] = {}
 
     def _gc(self) -> None:
         now = int(time.time() * 1000)
@@ -74,11 +74,11 @@ class MemoryIdempotencyStore:
         )
         return True
 
-    def get(self, *, key: IdempotencyKey) -> Optional[IdempotencyRecord]:
+    def get(self, *, key: IdempotencyKey) -> IdempotencyRecord | None:
         self._gc()
         return self._items.get(key.normalized())
 
-    def mark_done(self, *, key: IdempotencyKey, result: Dict[str, Any]) -> None:
+    def mark_done(self, *, key: IdempotencyKey, result: dict[str, Any]) -> None:
         nk = key.normalized()
         r = self._items.get(nk)
         now = int(time.time() * 1000)

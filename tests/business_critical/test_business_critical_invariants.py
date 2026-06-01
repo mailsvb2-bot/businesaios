@@ -14,7 +14,6 @@ from application.business_autonomy.contracts import (
 )
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
 
-
 pytestmark = pytest.mark.asyncio
 
 

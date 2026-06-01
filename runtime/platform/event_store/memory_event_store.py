@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class MemoryEventStore(list):
     """Append-only in-memory event store for dev/tests.
 

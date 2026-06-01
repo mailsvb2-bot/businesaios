@@ -16,7 +16,7 @@ def clamp_int(x: int, lo: int, hi: int) -> int:
     return int(x)
 
 
-def build_candidates(*, base_price_rub: int, grid_radius_pct: float, grid_step_rub: int, min_price_rub: int, max_price_rub: int, observed_stats: Dict[int, Tuple[int, int]]) -> List[int]:
+def build_candidates(*, base_price_rub: int, grid_radius_pct: float, grid_step_rub: int, min_price_rub: int, max_price_rub: int, observed_stats: dict[int, tuple[int, int]]) -> list[int]:
     base = int(max(1, base_price_rub))
     lo = int(round(base * (1.0 - float(grid_radius_pct))))
     hi = int(round(base * (1.0 + float(grid_radius_pct))))

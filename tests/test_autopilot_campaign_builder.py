@@ -1,15 +1,14 @@
-from contracts.autopilot_contract import AutopilotContract, AutopilotConstraints
-
+from contracts.autopilot_contract import AutopilotConstraints, AutopilotContract
+from core.growth.campaign_builder.budgeting import CampaignBudgetPolicy
 from core.growth.campaign_builder.contracts import AutopilotCampaignBuildRequest
 from core.growth.campaign_builder.service import AutopilotCampaignBuilder
-from core.growth.campaign_builder.budgeting import CampaignBudgetPolicy
 from core.growth.campaign_builder.spec_codec import TrafficToAdsSpec
 from core.traffic.ads_spec_builder import AdsSpecBuilder
 from core.traffic.audience_selector import AudienceSelector
+from core.traffic.bid_manager import BidManager
 from core.traffic.budget_allocator import BudgetAllocator
 from core.traffic.campaign_factory import CampaignFactory
 from core.traffic.creative_generator import CreativeGenerator
-from core.traffic.bid_manager import BidManager
 from core.traffic.strategy_service import TrafficStrategyService
 
 

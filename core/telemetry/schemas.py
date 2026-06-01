@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from config.telemetry_event_policy import DEFAULT_TELEMETRY_EVENT_POLICY
-from typing import Any, Dict
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,7 @@ class LLMTrace:
     ok: bool = True
     error_code: str = ""
 
-    def to_event_payload(self) -> Dict[str, Any]:
+    def to_event_payload(self) -> dict[str, Any]:
         return {
             "tenant_id": self.tenant_id,
             "user_id": self.user_id,
@@ -74,10 +74,10 @@ class FunnelEvent:
     variant: str = ""
     price: float = DEFAULT_TELEMETRY_EVENT_POLICY.default_price
     currency: str = ""
-    meta: Dict[str, Any] | None = None
+    meta: dict[str, Any] | None = None
 
-    def to_event_payload(self) -> Dict[str, Any]:
-        d: Dict[str, Any] = {
+    def to_event_payload(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
             "tenant_id": self.tenant_id,
             "user_id": self.user_id,
             "correlation_id": self.correlation_id,

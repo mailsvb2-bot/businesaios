@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from core.knowledge.builders.lesson_builder import LessonBuilder
 from core.knowledge.builders.pattern_builder import PatternBuilder
@@ -10,7 +10,6 @@ from core.knowledge.repositories.memory_link_repository import EventStoreMemoryL
 from core.knowledge.repositories.pattern_repository import EventStorePatternRepository
 from core.knowledge.types import LessonDraft, MemoryLink, PatternDraft, TagSet
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
-
 
 
 def test_event_store_repositories_roundtrip() -> None:
@@ -28,7 +27,7 @@ def test_event_store_repositories_roundtrip() -> None:
             source_kind=SourceKind.EXPERIMENT,
             source_ref="exp-1",
             tags=TagSet.from_iterable(["pricing", "margin"]),
-            observed_at=datetime.now(tz=timezone.utc) - timedelta(days=1),
+            observed_at=datetime.now(tz=UTC) - timedelta(days=1),
             created_by="tester",
             evidence_refs=("e1",),
         )
@@ -55,7 +54,7 @@ def test_event_store_repositories_roundtrip() -> None:
         target_kind=KnowledgeKind.PATTERN,
         target_id=pattern.pattern_id,
         rationale="lesson supports pattern",
-        created_at=datetime.now(tz=timezone.utc),
+        created_at=datetime.now(tz=UTC),
         created_by="tester",
     )
     saved_link = link_repo.save(link)

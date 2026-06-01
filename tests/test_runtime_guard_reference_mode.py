@@ -1,5 +1,5 @@
 from runtime.guard import RuntimeGuard
-from survival.controller import SurvivalVerdict, SurvivalMode
+from survival.controller import SurvivalMode, SurvivalVerdict
 
 
 class _Survival:

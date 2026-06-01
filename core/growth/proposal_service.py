@@ -21,9 +21,9 @@ class GrowthProposalService:
         *,
         tenant_id: str,
         objective: str,
-        signals: Dict[str, Any],
-    ) -> List[Dict[str, Any]]:
-        proposals: List[Dict[str, Any]] = []
+        signals: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        proposals: list[dict[str, Any]] = []
         if float(signals.get("conversion_rate", 0.0) or 0.0) < 0.02:
             proposals.append(
                 {
@@ -50,7 +50,7 @@ class GrowthProposalService:
         decision_id: str,
         correlation_id: str,
         issuer_id: str,
-        proposals: Iterable[Dict[str, Any]],
+        proposals: Iterable[dict[str, Any]],
     ) -> int:
         queued = 0
         for proposal in proposals:

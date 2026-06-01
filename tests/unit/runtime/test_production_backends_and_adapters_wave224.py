@@ -1,5 +1,11 @@
-from application.business_autonomy.adapters.shopify_production_adapter import ShopifyCredentials, ShopifyProductionAdapter
-from application.business_autonomy.adapters.telegram_production_adapter import TelegramBotCredentials, TelegramProductionAdapter
+from application.business_autonomy.adapters.shopify_production_adapter import (
+    ShopifyCredentials,
+    ShopifyProductionAdapter,
+)
+from application.business_autonomy.adapters.telegram_production_adapter import (
+    TelegramBotCredentials,
+    TelegramProductionAdapter,
+)
 from observability.export_pipeline.clickhouse_exporter import ClickHouseExporter, ClickHouseExporterConfig
 from reliability.redis_idempotency_backend import RedisIdempotencyBackend, RedisIdempotencyConfig
 from runtime.backends.postgres_backend import ProductionPostgresBackend, ProductionPostgresBackendConfig

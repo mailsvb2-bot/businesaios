@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from runtime.platform.support.contracts.trajectory import Trajectory
+from runtime.platform.support.canon.ids import new_rollout_id
 from runtime.platform.support.contracts.episode import Episode
 from runtime.platform.support.contracts.rollout import RolloutResult
-from runtime.platform.support.canon.ids import new_rollout_id
+from runtime.platform.support.contracts.trajectory import Trajectory
 
 
 class Collector:

@@ -1,10 +1,13 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime, timezone
 from math import exp
 from typing import Dict, List
+
 from core.growth.attribution_models import AttributionModel, Touchpoint
 
-def compute_weights(tps: List[Touchpoint], model: AttributionModel) -> Dict[int, float]:
+
+def compute_weights(tps: list[Touchpoint], model: AttributionModel) -> dict[int, float]:
     if not tps:
         return {}
     if model == AttributionModel.FIRST_TOUCH:
@@ -15,7 +18,7 @@ def compute_weights(tps: List[Touchpoint], model: AttributionModel) -> Dict[int,
         w=1.0/len(tps)
         return {i:w for i in range(len(tps))}
     if model == AttributionModel.TIME_DECAY:
-        now=datetime.now(timezone.utc)
+        now=datetime.now(UTC)
         lam=0.35
         raw=[]
         for i,tp in enumerate(tps):
@@ -29,5 +32,5 @@ def compute_weights(tps: List[Touchpoint], model: AttributionModel) -> Dict[int,
 def _parse_iso(s: str) -> datetime:
     dt=datetime.fromisoformat(s)
     if dt.tzinfo is None:
-        dt=dt.replace(tzinfo=timezone.utc)
+        dt=dt.replace(tzinfo=UTC)
     return dt

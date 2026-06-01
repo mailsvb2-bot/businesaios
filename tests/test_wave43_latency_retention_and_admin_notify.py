@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from runtime.admin_state_support import send_optional_notification
-from core.admin.read_models.latency import latency_brief, latency_breakdown, sla_breaches_brief
+from core.admin.read_models.latency import latency_breakdown, latency_brief, sla_breaches_brief
 from core.admin.read_models.retention import retention_brief
+from runtime.admin_state_support import send_optional_notification
 
 
 class _EventStore:

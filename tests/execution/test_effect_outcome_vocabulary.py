@@ -1,4 +1,8 @@
-from application.effects.effect_outcome_vocabulary import normalize_outcome_payload, normalize_outcome_status, outcome_is_verified
+from application.effects.effect_outcome_vocabulary import (
+    normalize_outcome_payload,
+    normalize_outcome_status,
+    outcome_is_verified,
+)
 
 
 def test_normalize_outcome_status_collapses_verified_aliases() -> None:

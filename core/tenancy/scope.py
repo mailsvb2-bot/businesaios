@@ -5,11 +5,10 @@ from typing import NewType
 
 from config.env_flags import env_str
 
-
 TenantId = NewType("TenantId", str)
 
 
-def as_tenant_id(value: str | TenantId | "TenantScope") -> TenantId:
+def as_tenant_id(value: str | TenantId | TenantScope) -> TenantId:
     """Convert to TenantId with strict non-empty validation."""
     if isinstance(value, TenantScope):
         v = value.tenant_id
@@ -40,7 +39,7 @@ class TenantScope:
         object.__setattr__(self, "tenant_id", tid)
 
     @classmethod
-    def from_env(cls) -> "TenantScope":
+    def from_env(cls) -> TenantScope:
         tid = env_str("TENANT_ID", "").strip()
         if tid:
             return cls(tenant_id=tid)

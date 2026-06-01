@@ -5,6 +5,7 @@ from typing import Any, Mapping
 
 from runtime.platform.support.contracts.observation import Observation
 
+
 @dataclass(frozen=True)
 class ActionRequestDTO:
     observation: Mapping[str, Any]

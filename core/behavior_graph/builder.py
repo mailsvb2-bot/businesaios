@@ -1,25 +1,25 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Iterable
 
 from contracts.behavior_graph import Edge, EdgeType, Node, NodeType
 from core.behavior_graph.event_mapping import map_events
 from core.behavior_graph.ids import canonical_edge_id, canonical_node_id
 
 
-def _node(*, node_type: str, key: str, title: str, props: Dict[str, Any]) -> Node:
+def _node(*, node_type: str, key: str, title: str, props: dict[str, Any]) -> Node:
     nid = canonical_node_id(node_type=node_type, key=key)
     return Node(node_id=nid, node_type=str(node_type), key=str(key), title=str(title), props=dict(props or {}))
 
 
-def _edge(*, edge_type: str, src: str, dst: str, weight: float, props: Dict[str, Any], salt: str = "") -> Edge:
+def _edge(*, edge_type: str, src: str, dst: str, weight: float, props: dict[str, Any], salt: str = "") -> Edge:
     eid = canonical_edge_id(edge_type=edge_type, src=src, dst=dst, salt=salt)
     return Edge(edge_id=eid, edge_type=str(edge_type), src=str(src), dst=str(dst), weight=float(weight), props=dict(props or {}))
 
 
 def build_behavior_graph_from_events(
     *,
-    events: Iterable[Dict[str, Any]],
+    events: Iterable[dict[str, Any]],
     max_events: int = 5000,
     enable_sequence_edges: bool = True,
 ) -> tuple[list[Node], list[Edge], dict]:
@@ -51,7 +51,7 @@ def build_behavior_graph_from_events(
             props=merged_props,
         )
 
-    last_event_type_by_user: dict[str, Tuple[str, int]] = {}
+    last_event_type_by_user: dict[str, tuple[str, int]] = {}
 
     for me in mapped:
         user_key = f"{me.tenant_id}:{me.user_id}"

@@ -9,7 +9,7 @@ class EconomicsSnapshotId:
     value: str
 
     @classmethod
-    def new(cls) -> "EconomicsSnapshotId":
+    def new(cls) -> EconomicsSnapshotId:
         return cls(value=f"eco_snap_{uuid4().hex}")
 
 
@@ -18,5 +18,5 @@ class BudgetGuardEventId:
     value: str
 
     @classmethod
-    def new(cls) -> "BudgetGuardEventId":
+    def new(cls) -> BudgetGuardEventId:
         return cls(value=f"eco_guard_{uuid4().hex}")

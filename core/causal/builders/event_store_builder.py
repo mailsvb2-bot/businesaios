@@ -7,8 +7,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 from config.final_hidden_logic_policy import DEFAULT_CAUSAL_BUILDER_POLICY
 from core.causal.types import CausalDataset, CausalRow
 
-
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 def _now_ms() -> int:
@@ -83,8 +82,8 @@ class EventCausalBuilder:
         outcome_event: str,
         start_ms: int | None = None,
         end_ms: int | None = None,
-        outcome_value_path: Tuple[str, ...] = ("payload", "amount"),
-        covariate_extractors: Sequence[Tuple[str, Tuple[str, ...]]] = (),
+        outcome_value_path: tuple[str, ...] = ("payload", "amount"),
+        covariate_extractors: Sequence[tuple[str, tuple[str, ...]]] = (),
         max_events: int = DEFAULT_CAUSAL_BUILDER_POLICY.binary_dataset_max_events,
     ) -> CausalDataset:
         tid = _require_tenant_id(tenant_id)
@@ -92,7 +91,7 @@ class EventCausalBuilder:
         start = int(start_ms or (end - DEFAULT_CAUSAL_BUILDER_POLICY.default_lookback_days * DEFAULT_CAUSAL_BUILDER_POLICY.seconds_per_day * DEFAULT_CAUSAL_BUILDER_POLICY.milliseconds_per_second))
 
         # Collect treatment assignments (unit_id -> earliest treatment ts)
-        treated_at: Dict[str, int] = {}
+        treated_at: dict[str, int] = {}
         for ev in _iter_events_compat(event_store, tenant_id=tid, event_type=str(treatment_event), start_ms=start, end_ms=end):
             uid = str(ev.get(self.unit_id_key) or "").strip()
             if not uid:
@@ -107,11 +106,11 @@ class EventCausalBuilder:
                 break
 
         # Build outcome rows per unit. For robustness, we aggregate outcomes per unit over the window.
-        out_sum: Dict[str, float] = {}
-        out_ts: Dict[str, int] = {}
-        covs: Dict[str, Dict[str, Any]] = {}
+        out_sum: dict[str, float] = {}
+        out_ts: dict[str, int] = {}
+        covs: dict[str, dict[str, Any]] = {}
 
-        def _get_path(d: Mapping[str, Any], path: Tuple[str, ...]) -> Any:
+        def _get_path(d: Mapping[str, Any], path: tuple[str, ...]) -> Any:
             cur: Any = d
             for p in path:
                 if not isinstance(cur, Mapping):
@@ -135,7 +134,7 @@ class EventCausalBuilder:
             out_ts[uid] = max(int(out_ts.get(uid, DEFAULT_CAUSAL_BUILDER_POLICY.zero_timestamp)), ts)
 
             if covariate_extractors and uid not in covs:
-                cov: Dict[str, Any] = {}
+                cov: dict[str, Any] = {}
                 for name, pth in covariate_extractors:
                     cov[name] = _get_path(ev, pth)
                 covs[uid] = cov
@@ -145,7 +144,7 @@ class EventCausalBuilder:
 
         # Union of units.
         units = set(out_sum.keys()) | set(treated_at.keys())
-        rows: List[CausalRow] = []
+        rows: list[CausalRow] = []
         for uid in units:
             ts = int(out_ts.get(uid) or treated_at.get(uid) or start)
             treat = DEFAULT_CAUSAL_BUILDER_POLICY.unit_treated_value if uid in treated_at else DEFAULT_CAUSAL_BUILDER_POLICY.unit_control_value
@@ -168,7 +167,7 @@ class EventCausalBuilder:
         pre_end_ms: int,
         post_start_ms: int,
         post_end_ms: int,
-        outcome_value_path: Tuple[str, ...] = ("payload", "amount"),
+        outcome_value_path: tuple[str, ...] = ("payload", "amount"),
         max_events: int = DEFAULT_CAUSAL_BUILDER_POLICY.diff_in_diff_max_events,
     ) -> CausalDataset:
         """Build a DiD dataset with rows per unit per period."""
@@ -176,7 +175,7 @@ class EventCausalBuilder:
         tid = _require_tenant_id(tenant_id)
         treated = set(str(u) for u in treated_units)
 
-        def _get_path(d: Mapping[str, Any], path: Tuple[str, ...]) -> Any:
+        def _get_path(d: Mapping[str, Any], path: tuple[str, ...]) -> Any:
             cur: Any = d
             for p in path:
                 if not isinstance(cur, Mapping):
@@ -184,8 +183,8 @@ class EventCausalBuilder:
                 cur = cur.get(p)
             return cur
 
-        def _agg(start_ms: int, end_ms: int) -> Dict[str, float]:
-            sums: Dict[str, float] = {}
+        def _agg(start_ms: int, end_ms: int) -> dict[str, float]:
+            sums: dict[str, float] = {}
             c = 0
             for ev in _iter_events_compat(event_store, tenant_id=tid, event_type=str(outcome_event), start_ms=int(start_ms), end_ms=int(end_ms)):
                 uid = str(ev.get(self.unit_id_key) or "").strip()
@@ -206,7 +205,7 @@ class EventCausalBuilder:
         post = _agg(int(post_start_ms), int(post_end_ms))
 
         units = set(pre.keys()) | set(post.keys()) | set(treated)
-        rows: List[CausalRow] = []
+        rows: list[CausalRow] = []
         for uid in units:
             t = DEFAULT_CAUSAL_BUILDER_POLICY.unit_treated_value if uid in treated else DEFAULT_CAUSAL_BUILDER_POLICY.unit_control_value
             rows.append(CausalRow(unit_id=uid, timestamp_ms=int(pre_end_ms), treatment=t, outcome=float(pre.get(uid, DEFAULT_CAUSAL_BUILDER_POLICY.default_outcome_value)), covariates={"period": DEFAULT_CAUSAL_BUILDER_POLICY.pre_period_label}))

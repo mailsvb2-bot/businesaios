@@ -5,15 +5,13 @@ CANON_THIN_HANDLER = True
 
 from typing import Any, Dict
 
-from runtime.growth import GrowthGoalV1
-from runtime.growth import GrowthStrategyService
+from runtime.growth import GrowthGoalV1, GrowthStrategyService
 from runtime.ports.effects import EffectsPort
-
 
 ACTION_NAME = "growth_strategy_generate@v1"
 
 
-def handle_growth_strategy_generate(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any, llm: Any = None) -> Any:
+def handle_growth_strategy_generate(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any, llm: Any = None) -> Any:
     p = payload or {}
     tenant_id = str(p.get("tenant_id") or getattr(env, "tenant_id", "") or "")
     user_id = str(p.get("user_id") or "")
@@ -40,7 +38,7 @@ def handle_growth_strategy_generate(payload: Dict[str, Any], effects: EffectsPor
     )
 
 
-def _parse_goal(d: Dict[str, Any]) -> GrowthGoalV1:
+def _parse_goal(d: dict[str, Any]) -> GrowthGoalV1:
     try:
         if not isinstance(d, dict):
             return GrowthGoalV1()
@@ -79,5 +77,5 @@ def _render_plan(plan) -> str:
     return "\n".join(lines).strip()
 
 
-def _menu_markup() -> Dict[str, Any]:
+def _menu_markup() -> dict[str, Any]:
     return {"inline_keyboard": [[{"text": "📋 Backlog", "callback_data": "growth:backlog"}], [{"text": "🔁 Сгенерировать ещё", "callback_data": "growth:generate"}]]}

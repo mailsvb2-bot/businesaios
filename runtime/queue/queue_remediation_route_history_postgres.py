@@ -2,9 +2,9 @@ from __future__ import annotations
 
 """Postgres-backed route history for queue remediation surfaces."""
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
-import json
 
 from runtime.platform.postgres_port import PostgresPort
 from runtime.queue.job_contract import normalize_now
@@ -20,7 +20,7 @@ class PostgresQueueRemediationRouteHistoryStore:
     def __post_init__(self) -> None:
         self._port: PostgresPort | None = None
 
-    def __enter__(self) -> 'PostgresQueueRemediationRouteHistoryStore':
+    def __enter__(self) -> PostgresQueueRemediationRouteHistoryStore:
         self._port = PostgresPort(self.dsn, application_name=self.application_name).__enter__()
         self._init_schema()
         return self

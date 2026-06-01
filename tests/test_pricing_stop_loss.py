@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List
+from typing import Any, Iterable
 
 from core.pricing.stop_loss import StopLossConfig, should_apply_price
 
@@ -12,11 +12,11 @@ class _Ev:
     tenant_id: str
     user_id: str
     timestamp_ms: int
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
 
 
 class _FakeStore:
-    def __init__(self, events: List[_Ev]):
+    def __init__(self, events: list[_Ev]):
         self._events = list(events)
 
     def iter_events(
@@ -28,8 +28,8 @@ class _FakeStore:
         user_id: str | None = None,
         event_type: str | None = None,
         limit: int | None = None,
-    ) -> Iterable[Dict[str, Any]]:
-        out: List[Dict[str, Any]] = []
+    ) -> Iterable[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
         for e in self._events:
             if str(e.tenant_id) != str(tenant_id):
                 continue
@@ -55,7 +55,7 @@ def test_stop_loss_blocks_candidate_on_conv_drop() -> None:
     now_ms = 10_000_000
     t0 = now_ms - 60_000
 
-    events: List[_Ev] = []
+    events: list[_Ev] = []
 
     # Baseline 15000: 30 trials, 9 successes (30%)
     for i in range(30):
@@ -126,7 +126,7 @@ def test_stop_loss_allows_when_insufficient_trials() -> None:
     now_ms = 11_000_000
     t0 = now_ms - 60_000
 
-    events: List[_Ev] = []
+    events: list[_Ev] = []
     # Baseline has enough trials
     for i in range(30):
         uid = f"b{i}"
@@ -185,7 +185,7 @@ def test_stop_loss_cooldown_blocks_even_without_recomputing() -> None:
     now_ms = 12_000_000
     t0 = now_ms - 60_000
 
-    events: List[_Ev] = []
+    events: list[_Ev] = []
 
     # A recent stop-loss trigger event for this offer+segment should activate cooldown.
     events.append(
@@ -237,7 +237,7 @@ def test_stop_loss_cooldown_backoff_increases_window() -> None:
     base_h = 6
 
     # Two triggers in horizon -> effective cooldown = 12h.
-    events: List[_Ev] = [
+    events: list[_Ev] = [
         _Ev(
             event_type="pricing_stoploss_triggered",
             tenant_id="t1",
@@ -280,7 +280,7 @@ def test_stop_loss_cooldown_backoff_caps_at_max() -> None:
     base_h = 6
 
     # Three triggers -> 24h effective (6 * 2^(3-1) = 24), capped at 24.
-    events: List[_Ev] = [
+    events: list[_Ev] = [
         _Ev(
             event_type="pricing_stoploss_triggered",
             tenant_id="t1",

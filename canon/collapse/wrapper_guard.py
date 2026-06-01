@@ -74,7 +74,8 @@ def scan_legacy_wrappers(config: LegacyCanonConfig) -> tuple[WrapperViolation, .
                 if node.name in config.allowed_thin_wrapper_calls:
                     continue
                 if len(node.body) > config.max_thin_wrapper_function_body_statements:
-                    findings.append(WrapperViolation(relpath, node.lineno, node.name, FindingSeverity.CRITICAL, "wrapper function contains substantial body and can become a second brain")); continue
+                    findings.append(WrapperViolation(relpath, node.lineno, node.name, FindingSeverity.CRITICAL, "wrapper function contains substantial body and can become a second brain"))
+                    continue
                 if not all(_is_simple_forwarder_return(stmt) for stmt in node.body):
                     findings.append(WrapperViolation(relpath, node.lineno, node.name, FindingSeverity.CRITICAL, "wrapper function is not a pure forwarder"))
             elif isinstance(node, ast.ClassDef):

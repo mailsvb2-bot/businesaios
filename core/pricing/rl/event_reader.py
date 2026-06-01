@@ -3,15 +3,15 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List
 
 
-def iter_events(event_store: Any, *, tenant_id: str, start_ms: int, end_ms: int, event_type: str) -> Iterable[Dict[str, Any]]:
+def iter_events(event_store: Any, *, tenant_id: str, start_ms: int, end_ms: int, event_type: str) -> Iterable[dict[str, Any]]:
     it = getattr(event_store, "iter_events", None)
     if not callable(it):
         return ()
     return it(tenant_id=str(tenant_id), start_ms=int(start_ms), end_ms=int(end_ms), event_type=str(event_type))
 
 
-def collect_offer_shown(event_store: Any, *, tenant_id: str, offer_arm: str, start_ms: int, end_ms: int) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
+def collect_offer_shown(event_store: Any, *, tenant_id: str, offer_arm: str, start_ms: int, end_ms: int) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
     for ev in iter_events(event_store, tenant_id=tenant_id, start_ms=start_ms, end_ms=end_ms, event_type="offer_shown"):
         try:
             p = ev.get("payload") or {}
@@ -30,8 +30,8 @@ def collect_offer_shown(event_store: Any, *, tenant_id: str, offer_arm: str, sta
     return out
 
 
-def collect_offer_outcomes_index(event_store: Any, *, tenant_id: str, start_ms: int, end_ms: int) -> Dict[str, bool]:
-    out: Dict[str, bool] = {}
+def collect_offer_outcomes_index(event_store: Any, *, tenant_id: str, start_ms: int, end_ms: int) -> dict[str, bool]:
+    out: dict[str, bool] = {}
     for ev in iter_events(event_store, tenant_id=tenant_id, start_ms=start_ms, end_ms=end_ms, event_type="offer_outcome"):
         try:
             p = ev.get("payload") or {}
@@ -43,8 +43,8 @@ def collect_offer_outcomes_index(event_store: Any, *, tenant_id: str, start_ms: 
     return out
 
 
-def collect_trials_legacy(event_store: Any, *, tenant_id: str, offer_arm: str, start_ms: int, end_ms: int) -> List[Dict[str, Any]]:
-    trials: List[Dict[str, Any]] = []
+def collect_trials_legacy(event_store: Any, *, tenant_id: str, offer_arm: str, start_ms: int, end_ms: int) -> list[dict[str, Any]]:
+    trials: list[dict[str, Any]] = []
     for ev in iter_events(event_store, tenant_id=tenant_id, start_ms=start_ms, end_ms=end_ms, event_type="tariff_selected"):
         try:
             p = ev.get("payload") or {}
@@ -63,8 +63,8 @@ def collect_trials_legacy(event_store: Any, *, tenant_id: str, offer_arm: str, s
     return trials
 
 
-def collect_payments_index_legacy(event_store: Any, *, tenant_id: str, start_ms: int, end_ms: int) -> Dict[str, List[int]]:
-    payments_by_user: Dict[str, List[int]] = {}
+def collect_payments_index_legacy(event_store: Any, *, tenant_id: str, start_ms: int, end_ms: int) -> dict[str, list[int]]:
+    payments_by_user: dict[str, list[int]] = {}
     for ev in iter_events(event_store, tenant_id=tenant_id, start_ms=start_ms, end_ms=end_ms, event_type="payment_captured"):
         try:
             uid = str(ev.get("user_id") or "")

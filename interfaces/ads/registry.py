@@ -44,7 +44,7 @@ def normalize_ads_platform(platform: AdsPlatform | str) -> AdsPlatform:
 
 class AdsConnectorRegistry(Generic[TConnector]):
     def __init__(self) -> None:
-        self._items: Dict[AdsPlatform, TConnector] = {}
+        self._items: dict[AdsPlatform, TConnector] = {}
 
     def register(self, connector: TConnector, *, allow_replace: bool = False) -> None:
         platform = normalize_ads_platform(getattr(connector, 'platform', None))

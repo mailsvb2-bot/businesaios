@@ -54,8 +54,8 @@ class LatencySnapshot:
 class AnalyticsDiagnosis:
     overall_state: str
     score: float
-    reasons: List[str] = field(default_factory=list)
-    highlights: List[str] = field(default_factory=list)
+    reasons: list[str] = field(default_factory=list)
+    highlights: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -70,4 +70,4 @@ class BusinessScorecard:
     latency: LatencySnapshot
     diagnosis: AnalyticsDiagnosis
     generated_at_ms: int
-    metadata: Dict[str, str] = field(default_factory=dict)
+    metadata: dict[str, str] = field(default_factory=dict)

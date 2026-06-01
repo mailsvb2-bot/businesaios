@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Money helpers (canonical, deterministic).
 
 Rules:
@@ -7,6 +5,8 @@ Rules:
 - UI text must never display raw minor units.
 - This module contains ONLY pure helpers (no I/O).
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 

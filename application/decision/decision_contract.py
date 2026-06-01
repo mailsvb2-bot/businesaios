@@ -7,11 +7,11 @@ executable-action payload shaping for the recommendation-only application layer.
 It is intentionally not a sovereign decision issuer.
 """
 
+import shared.types as _shared_types
 from core.constraints.decision import DecisionConstraints
 from kernel.decision_candidate import DecisionCandidate
 from kernel.decision_request import DecisionRequest
 from kernel.decision_trace import DecisionTrace
-import shared.types as _shared_types
 
 NON_SOVEREIGN_ENGINE_ROLE = "recommendation_only"
 NON_SOVEREIGN_ENGINE_SURFACE = "core.application.decision_service.DecisionService"

@@ -6,19 +6,19 @@ the shared contracts used by runtime wiring.
 
 from .base import (
     AdsConnector,
-    AdsReadConnector,
-    AdsWriteConnector,
     AdsConnectorError,
     AdsObjectRef,
     AdsPlatform,
+    AdsReadConnector,
+    AdsWriteConnector,
     Campaign,
     ConnectedAccount,
     MetricPoint,
     OAuthAuthorizeURL,
 )
-from .google_ads_connector import GoogleAdsConnector, GoogleAdsConfig
+from .google_ads_connector import GoogleAdsConfig, GoogleAdsConnector
 from .read_service import AdsReadService
-from .registry import AdsConnectorRegistry, CONNECTORS
+from .registry import CONNECTORS, AdsConnectorRegistry
 from .token_store_adapter import AdsTokenStoreAdapter
 
 __all__ = [

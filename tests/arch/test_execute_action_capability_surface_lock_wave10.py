@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -52,7 +51,7 @@ def test_execute_action_stack_uses_canonical_durable_idempotency_bridge_when_ava
 
 
 def test_fastapi_execute_action_route_threads_header_identity() -> None:
-    text = (ROOT / 'adapters' / 'api' / 'fastapi' / 'router_adapter.py').read_text(encoding='utf-8')
+    _ = (ROOT / 'adapters' / 'api' / 'fastapi' / 'router_adapter.py').read_text(encoding='utf-8')
     public_routes = (ROOT / 'adapters' / 'api' / 'fastapi' / 'public_routes.py').read_text(encoding='utf-8')
     assert 'x-idempotency-key' in public_routes
     assert 'x-action-id' in public_routes

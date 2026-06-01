@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Iterable, List, Protocol, Sequence, Tuple
+from typing import Iterable, Protocol, Sequence
 
 from .types import DemandObservation
 
@@ -40,9 +40,9 @@ class IsoelasticDemandCurve:
         return float(self.b)
 
     @staticmethod
-    def calibrate(observations: Iterable[DemandObservation]) -> "IsoelasticDemandCurve":
-        xs: List[float] = []
-        ys: List[float] = []
+    def calibrate(observations: Iterable[DemandObservation]) -> IsoelasticDemandCurve:
+        xs: list[float] = []
+        ys: list[float] = []
         for o in observations:
             p = _clamp_pos(float(o.price.amount))
             q = _clamp_pos(float(o.units))
@@ -55,7 +55,7 @@ class IsoelasticDemandCurve:
 
         xbar = sum(xs) / len(xs)
         ybar = sum(ys) / len(ys)
-        num = sum((x - xbar) * (y - ybar) for x, y in zip(xs, ys))
+        num = sum((x - xbar) * (y - ybar) for x, y in zip(xs, ys, strict=False))
         den = sum((x - xbar) ** 2 for x in xs)
         b = num / den if den > 1e-18 else -1.0
         a = math.exp(ybar - b * xbar)
@@ -88,9 +88,9 @@ class LinearDemandCurve:
         return float(dqdp * p / q)
 
     @staticmethod
-    def calibrate(observations: Iterable[DemandObservation]) -> "LinearDemandCurve":
-        ps: List[float] = []
-        qs: List[float] = []
+    def calibrate(observations: Iterable[DemandObservation]) -> LinearDemandCurve:
+        ps: list[float] = []
+        qs: list[float] = []
         for o in observations:
             ps.append(float(o.price.amount))
             qs.append(float(o.units))
@@ -99,7 +99,7 @@ class LinearDemandCurve:
 
         pbar = sum(ps) / len(ps)
         qbar = sum(qs) / len(qs)
-        num = sum((p - pbar) * (q - qbar) for p, q in zip(ps, qs))
+        num = sum((p - pbar) * (q - qbar) for p, q in zip(ps, qs, strict=False))
         den = sum((p - pbar) ** 2 for p in ps)
         b = num / den if den > 1e-18 else -0.01
         a = qbar - b * pbar
@@ -116,9 +116,9 @@ class PiecewiseLinearDemandCurve:
     Extrapolates flat at ends (clamped to range).
     """
 
-    breakpoints: Tuple[Tuple[float, float], ...]
+    breakpoints: tuple[tuple[float, float], ...]
 
-    def _sorted(self) -> Tuple[Tuple[float, float], ...]:
+    def _sorted(self) -> tuple[tuple[float, float], ...]:
         return tuple(sorted(self.breakpoints, key=lambda x: x[0]))
 
     def predict_units(self, *, price: float) -> float:
@@ -130,7 +130,7 @@ class PiecewiseLinearDemandCurve:
             return float(max(0.0, pts[0][1]))
         if p >= pts[-1][0]:
             return float(max(0.0, pts[-1][1]))
-        for (p0, q0), (p1, q1) in zip(pts, pts[1:]):
+        for (p0, q0), (p1, q1) in zip(pts, pts[1:], strict=False):
             if p0 <= p <= p1:
                 t = (p - p0) / (p1 - p0) if p1 != p0 else 0.0
                 q = q0 + t * (q1 - q0)
@@ -148,7 +148,7 @@ class PiecewiseLinearDemandCurve:
         return float(dqdp * p / q)
 
     @staticmethod
-    def calibrate(observations: Sequence[DemandObservation], *, k: int = 6) -> "PiecewiseLinearDemandCurve":
+    def calibrate(observations: Sequence[DemandObservation], *, k: int = 6) -> PiecewiseLinearDemandCurve:
         """Fit by binning price into <=k quantiles and taking avg units."""
 
         if not observations:
@@ -156,12 +156,12 @@ class PiecewiseLinearDemandCurve:
 
         obs = sorted(observations, key=lambda o: float(o.price.amount))
         k = max(2, int(k))
-        bins: List[List[DemandObservation]] = [[] for _ in range(k)]
+        bins: list[list[DemandObservation]] = [[] for _ in range(k)]
         for i, o in enumerate(obs):
             idx = min(k - 1, int(i * k / max(1, len(obs))))
             bins[idx].append(o)
 
-        pts: List[Tuple[float, float]] = []
+        pts: list[tuple[float, float]] = []
         for b in bins:
             if not b:
                 continue

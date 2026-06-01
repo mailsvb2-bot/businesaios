@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any, Mapping
-from uuid import uuid4
 import json
 import os
 import tempfile
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any, Mapping
+from uuid import uuid4
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult
 
@@ -52,7 +52,7 @@ def business_autonomy_delayed_outcome_action_ledger_path() -> Path:
 
 
 def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _safe_mapping(value: object) -> dict[str, Any]:
@@ -140,7 +140,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
     action_ledger_path: Path | None = None
 
     @classmethod
-    def default(cls) -> "BusinessAutonomyDelayedOutcomeBridge":
+    def default(cls) -> BusinessAutonomyDelayedOutcomeBridge:
         return cls(
             path=business_autonomy_delayed_outcome_path(),
             state_path=business_autonomy_delayed_outcome_state_path(),
@@ -203,7 +203,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
         state = self._read_state()
         active = _safe_mapping(state.get("active"))
         active_before = len(active)
-        current = (now or _utc_now()).astimezone(timezone.utc)
+        current = (now or _utc_now()).astimezone(UTC)
         quarantined = _safe_mapping(state.get("quarantined"))
         quarantined_count = 0
         linked_outcome_ids: list[str] = []
@@ -228,7 +228,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
                 linked_outcome_ids.append(str(outcome_id))
                 continue
             if expected_dt.tzinfo is None:
-                expected_dt = expected_dt.replace(tzinfo=timezone.utc)
+                expected_dt = expected_dt.replace(tzinfo=UTC)
             if current > expected_dt:
                 self._checkpoint_run(run_id, "sweep:stale", pending_transition={"operation": "sweep", "outcome_id": str(outcome_id), "reason": "delayed_outcome_stale", "row": normalized, "quarantined_at_utc": current.isoformat(), "run_id": run_id})
                 self._move_to_quarantine(active=active, quarantined=quarantined, outcome_id=outcome_id, row=normalized, reason="delayed_outcome_stale", current=current, run_id=run_id)

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from runtime.security.runtime_asserts import assert_called_from_executor
 from runtime.observability.error_handling import swallow
+from runtime.security.runtime_asserts import assert_called_from_executor
 
 
 class EvolutionEffectsMixin:
@@ -18,7 +18,7 @@ class EvolutionEffectsMixin:
         correlation_id: str,
         user_id: str,
         job_kind: str,
-        payload: Optional[Dict[str, Any]] = None,
+        payload: dict[str, Any] | None = None,
     ) -> Any:
         assert_called_from_executor()
 

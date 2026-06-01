@@ -9,7 +9,6 @@ from core.economics.brain import EconomicBrain, EconomicReward, GrowthPolicy, LT
 from core.events.log import EventLog
 from core.reward.reward_engine import RewardEngine
 from core.utils.canonical import canonical_json_bytes, payload_hash
-
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 

@@ -3,15 +3,15 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from .base import AdsConnectorError
+from .connector_shared import resolve_secret_required
 from .oauth_helper import OAuthAppConfig
 from .ports import SecretVault
-from .connector_shared import resolve_secret_required
 
 
 def resolve_oauth_client_id(
     *,
-    oauth: Optional[OAuthAppConfig],
-    vault: Optional[SecretVault],
+    oauth: OAuthAppConfig | None,
+    vault: SecretVault | None,
     vault_key: str,
     connector_name: str,
     tenant_id: str | None = None,
@@ -27,8 +27,8 @@ def resolve_oauth_client_id(
 
 def resolve_oauth_client_secret(
     *,
-    oauth: Optional[OAuthAppConfig],
-    vault: Optional[SecretVault],
+    oauth: OAuthAppConfig | None,
+    vault: SecretVault | None,
     vault_key: str,
     connector_name: str,
     tenant_id: str | None = None,
@@ -44,8 +44,8 @@ def resolve_oauth_client_secret(
 
 def resolve_oauth_scope(
     *,
-    oauth: Optional[OAuthAppConfig],
-    vault: Optional[SecretVault],
+    oauth: OAuthAppConfig | None,
+    vault: SecretVault | None,
     vault_key: str,
     default: str,
     tenant_id: str | None = None,
@@ -82,7 +82,7 @@ async def disconnect_tokens_compat(
     )
 
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 from .base import ConnectedAccount
 
@@ -93,7 +93,7 @@ def build_connected_account(*, platform, account_id: str, display_name: str, sco
         account_id=str(account_id),
         display_name=str(display_name),
         scopes=[str(scope)],
-        created_at_iso=datetime.now(timezone.utc).isoformat(),
+        created_at_iso=datetime.now(UTC).isoformat(),
     )
 
 

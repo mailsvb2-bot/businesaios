@@ -5,7 +5,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from application.admin.platform_control_center.support import RiskRecommendation, architectural_score, code_navigation_payload, patch_code_for, patch_shape_for, patch_template_for, stop_condition_text
+from application.admin.platform_control_center.support import (
+    RiskRecommendation,
+    architectural_score,
+    code_navigation_payload,
+    patch_code_for,
+    patch_shape_for,
+    patch_template_for,
+    stop_condition_text,
+)
 
 CANON_PLATFORM_CONTROL_CENTER_REMEDIATION_WORKFLOW_ASSEMBLER = True
 

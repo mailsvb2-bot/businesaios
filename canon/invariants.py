@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import List
 
@@ -10,7 +11,7 @@ class CanonInvariant:
     severity: str = 'critical'
 
 
-def default_invariants() -> List[CanonInvariant]:
+def default_invariants() -> list[CanonInvariant]:
     return [
         CanonInvariant('single_decision_core', 'Only core.ai.decision_core.DecisionCore may issue final executable decisions.'),
         CanonInvariant('single_execution_contract', 'Every action must be represented as contracts.executable_action.ExecutableAction.'),

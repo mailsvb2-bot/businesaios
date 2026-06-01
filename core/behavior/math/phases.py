@@ -9,7 +9,7 @@ def phase_stability(phases: list[tuple[float, float, float, float]]) -> float:
     deltas: list[float] = []
     prev = phases[0]
     for current in phases[1:]:
-        for a, b in zip(prev, current):
+        for a, b in zip(prev, current, strict=False):
             deltas.append(abs(b - a))
         prev = current
     avg_delta = mean(deltas)
@@ -22,7 +22,7 @@ def oscillation_score(phases: list[tuple[float, float, float, float]]) -> float:
     changes = 0
     samples = 0
     for idx in range(2, len(phases)):
-        for a, b, c in zip(phases[idx - 2], phases[idx - 1], phases[idx]):
+        for a, b, c in zip(phases[idx - 2], phases[idx - 1], phases[idx], strict=False):
             left = b - a
             right = c - b
             if left == 0.0 or right == 0.0:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from runtime.knowledge import MemoryRetrieval
 from runtime.boot.knowledge_bundle import KnowledgeRuntimeBundle
+from runtime.knowledge import MemoryRetrieval
 
 CANON_THIN_HANDLER = True
 

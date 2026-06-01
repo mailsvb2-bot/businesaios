@@ -13,7 +13,7 @@ class EventStore(Protocol):
         tenant_id: str,
         event_type: str,
         limit: int = DEFAULT_ADS_AGGREGATES_POLICY.latest_events_limit,
-    ) -> Iterable[Dict[str, Any]]: ...
+    ) -> Iterable[dict[str, Any]]: ...
 
 
 @dataclass
@@ -24,10 +24,10 @@ class DailyAgg:
     conversions: int = DEFAULT_ADS_AGGREGATES_POLICY.default_conversions
     revenue: float = DEFAULT_ADS_AGGREGATES_POLICY.default_revenue
 
-    def cpa(self) -> Optional[float]:
+    def cpa(self) -> float | None:
         return (self.spend / self.conversions) if self.conversions > int(DEFAULT_ADS_AGGREGATES_POLICY.default_conversions) else None
 
-    def roas(self, *, policy: AdsAggregatesPolicy | None = None) -> Optional[float]:
+    def roas(self, *, policy: AdsAggregatesPolicy | None = None) -> float | None:
         policy = policy or DEFAULT_ADS_AGGREGATES_POLICY
         return (self.revenue / self.spend) if self.spend > float(policy.min_spend_for_roas) else None
 
@@ -37,8 +37,8 @@ class AdsAggregates:
         self._store = store
         self._policy = policy or DEFAULT_ADS_AGGREGATES_POLICY
 
-    def by_campaign_day(self, *, tenant_id: str, day_iso: str) -> Dict[str, DailyAgg]:
-        out: Dict[str, DailyAgg] = {}
+    def by_campaign_day(self, *, tenant_id: str, day_iso: str) -> dict[str, DailyAgg]:
+        out: dict[str, DailyAgg] = {}
         for ev in self._store.latest_events(
             tenant_id=tenant_id,
             event_type="ads_metrics_imported",

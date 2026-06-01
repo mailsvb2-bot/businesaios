@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-
-from core.llm.agent.agent import LLMAgent, LLMAgentConfig
 from core.llm.agent import LLMTaskContext, TaskType
+from core.llm.agent.agent import LLMAgent, LLMAgentConfig
 
 
 class FakeClient:

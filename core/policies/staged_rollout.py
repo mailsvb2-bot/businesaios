@@ -10,10 +10,10 @@ and must pass RuntimeGuard + DecisionLedger + RuntimeExecutor.
 """
 
 from dataclasses import dataclass
-
-from config.staged_rollout_policy import DEFAULT_STAGED_ROLLOUT_POLICY, StagedRolloutPolicy
 from enum import Enum
 from typing import Any, Dict, Iterable, Protocol
+
+from config.staged_rollout_policy import DEFAULT_STAGED_ROLLOUT_POLICY, StagedRolloutPolicy
 
 
 class RolloutStage(str, Enum):
@@ -23,7 +23,7 @@ class RolloutStage(str, Enum):
 
 
 class ShadowRunner(Protocol):
-    def run(self, policy: Any, live_stream: Iterable[Dict[str, Any]]) -> Dict[str, Any]: ...
+    def run(self, policy: Any, live_stream: Iterable[dict[str, Any]]) -> dict[str, Any]: ...
 
 
 class RolloutGuard:
@@ -34,7 +34,7 @@ class RolloutGuard:
 
     @staticmethod
     def allow_promotion(
-        metrics: Dict[str, Any],
+        metrics: dict[str, Any],
         *,
         policy: StagedRolloutPolicy = DEFAULT_STAGED_ROLLOUT_POLICY,
     ) -> bool:
@@ -57,7 +57,7 @@ class StagedRollout:
     shadow: ShadowRunner
     rollout_policy: StagedRolloutPolicy = DEFAULT_STAGED_ROLLOUT_POLICY
 
-    def evaluate(self, *, has_offline_candidate: bool, policy: Any, live_stream: Iterable[Dict[str, Any]]) -> RolloutStage:
+    def evaluate(self, *, has_offline_candidate: bool, policy: Any, live_stream: Iterable[dict[str, Any]]) -> RolloutStage:
         if not has_offline_candidate:
             return RolloutStage.OFFLINE
 

@@ -24,7 +24,7 @@ class RollbackPlanner:
     def build(self, ctx: SafetyActionContext) -> RollbackPlan:
         plan = self._registry.plan_for(ctx)
         action_id = canonical_action_id(action=ctx.action, tenant_id=ctx.tenant_id, payload=ctx.payload)
-        confirmation_token = hashlib.sha256(f"{ctx.tenant_id}:{action_id}:{ctx.action}".encode('utf-8')).hexdigest()
+        confirmation_token = hashlib.sha256(f"{ctx.tenant_id}:{action_id}:{ctx.action}".encode()).hexdigest()
         enriched = RollbackPlan(
             source_action=plan.source_action,
             steps=plan.steps,

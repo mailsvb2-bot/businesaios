@@ -13,8 +13,8 @@ def collect_trials(
     start_ms: int,
     end_ms: int,
     context_key: str,
-) -> List[Dict[str, Any]]:
-    trials: List[Dict[str, Any]] = []
+) -> list[dict[str, Any]]:
+    trials: list[dict[str, Any]] = []
     ctx = str(context_key or "").strip()
     for ev in iter_events(event_store, tenant_id=tenant_id, start_ms=start_ms, end_ms=end_ms, event_type="tariff_selected"):
         try:
@@ -35,8 +35,8 @@ def collect_trials(
     return trials
 
 
-def collect_payments_index(event_store: Any, *, tenant_id: str, start_ms: int, end_ms: int) -> Dict[str, List[int]]:
-    payments_by_user: Dict[str, List[int]] = {}
+def collect_payments_index(event_store: Any, *, tenant_id: str, start_ms: int, end_ms: int) -> dict[str, list[int]]:
+    payments_by_user: dict[str, list[int]] = {}
     for ev in iter_events(event_store, tenant_id=tenant_id, start_ms=start_ms, end_ms=end_ms, event_type="payment_captured"):
         try:
             uid = str(ev.get("user_id") or "")
@@ -50,8 +50,8 @@ def collect_payments_index(event_store: Any, *, tenant_id: str, start_ms: int, e
     return payments_by_user
 
 
-def stats_trials_successes(trials: List[Dict[str, Any]], payments_by_user: Mapping[str, List[int]], *, window_ms: int) -> Dict[int, Tuple[int, int]]:
-    stats: Dict[int, Tuple[int, int]] = {}
+def stats_trials_successes(trials: list[dict[str, Any]], payments_by_user: Mapping[str, list[int]], *, window_ms: int) -> dict[int, tuple[int, int]]:
+    stats: dict[int, tuple[int, int]] = {}
     for t in trials:
         uid = str(t.get("user_id") or "")
         amount = int(t.get("amount") or 0)
@@ -74,7 +74,7 @@ def stats_trials_successes(trials: List[Dict[str, Any]], payments_by_user: Mappi
     return stats
 
 
-def conv_and_rev_per_trial(trials_n: int, succ_n: int, price: int) -> Tuple[float, float]:
+def conv_and_rev_per_trial(trials_n: int, succ_n: int, price: int) -> tuple[float, float]:
     if trials_n <= 0:
         return 0.0, 0.0
     conv = float(succ_n) / float(trials_n)

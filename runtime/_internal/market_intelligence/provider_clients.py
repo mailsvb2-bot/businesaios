@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import hashlib
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -12,7 +12,6 @@ from runtime._internal.market_intelligence.pagination import PageCursor, PageRes
 from runtime._internal.market_intelligence.provider_runtime import ProviderRuntimeError, ProviderRuntimeFactory
 from runtime._internal.market_intelligence.recovery import MarketIntelligenceRecoveryController
 from runtime._internal.market_intelligence.state_store import SqliteMarketIntelligenceStateStore, SyncCheckpoint
-
 
 CANON_MARKET_INTELLIGENCE_PROVIDER_CLIENT = True
 _MAX_TOTAL_LIMIT = 5000
@@ -163,7 +162,7 @@ class MarketIntelligenceProviderClient:
                 'replay_key': preflight.replay_key,
                 'resume_cursor': preflight.resume_cursor,
             }
-        run_id = f'mi:{hashlib.sha1(f"{tenant_id}|{provider}|{scope_key}|{request_fingerprint}".encode("utf-8")).hexdigest()[:24]}'
+        run_id = f'mi:{hashlib.sha1(f"{tenant_id}|{provider}|{scope_key}|{request_fingerprint}".encode()).hexdigest()[:24]}'
         checkpoint_before = self.state_store.load_checkpoint(tenant_id=tenant_id, provider=provider, source_family=source_family, scope_key=scope_key)
         self.state_store.begin_run(
             run_id=run_id,

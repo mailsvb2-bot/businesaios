@@ -19,10 +19,13 @@ from canon.enforcer.rules import (
     REPO_ROOT,
     is_critical_path,
     iter_py_files,
-    iter_todo_lines as _iter_todo_lines,
     path_str,
     safe_read_text,
 )
+from canon.enforcer.rules import (
+    iter_todo_lines as _iter_todo_lines,
+)
+
 
 def check_ast_semantics(report: Any, root: Path = REPO_ROOT) -> None:
     for path in iter_py_files(root):

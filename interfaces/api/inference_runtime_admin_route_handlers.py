@@ -7,7 +7,6 @@ from core.tenancy.normalization import require_tenant_id
 from observability.inference_runtime_summary import InferenceRuntimeSummaryService
 from runtime.inference.provisioning.capacity_state_store import InferenceCapacityStateStore
 
-
 CANON_API_INFERENCE_RUNTIME_ADMIN_ROUTE_HANDLERS = True
 
 

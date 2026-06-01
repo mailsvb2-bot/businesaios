@@ -15,9 +15,8 @@ Actual deployment/rollback is executed ONLY via RuntimeExecutor after a Decision
 """
 
 import time
-
 from dataclasses import dataclass
-from typing import Dict, Iterable, Optional, Any
+from typing import Any, Dict, Iterable, Optional
 
 from config.final_hidden_logic_policy import DEFAULT_LEARNING_SYSTEM_POLICY
 from kernel.world_state import WorldStateV1
@@ -41,18 +40,18 @@ class BanditStats:
 
 class LearningSystem:
     def __init__(self, *, collapse_threshold: float = DEFAULT_LEARNING_SYSTEM_POLICY.default_collapse_threshold, ltv_collapse_threshold: float = DEFAULT_LEARNING_SYSTEM_POLICY.default_ltv_collapse_threshold, ltv_drop_pct: float = DEFAULT_LEARNING_SYSTEM_POLICY.default_ltv_drop_pct, min_samples: int = DEFAULT_LEARNING_SYSTEM_POLICY.default_min_samples, model_registry=None):
-        self._stats: Dict[str, BanditStats] = {}
+        self._stats: dict[str, BanditStats] = {}
         self._collapse_threshold = float(collapse_threshold)
         self._ltv_collapse_threshold = float(ltv_collapse_threshold)
         self._ltv_drop_pct = float(ltv_drop_pct)
-        self._last_ltv_mean: Dict[str, float] = {}
+        self._last_ltv_mean: dict[str, float] = {}
         self._min_samples = int(min_samples)
 
         # Optional offline contour: validated candidates are stored here.
         self._model_registry = model_registry
 
         # last proposal to avoid spamming
-        self._last_proposal_hash: Optional[str] = None
+        self._last_proposal_hash: str | None = None
 
     def observe_reward(self, *, policy_id: str, reward: float, ltv: float | None = None) -> None:
         s = self._stats.setdefault(policy_id, BanditStats())
@@ -61,9 +60,9 @@ class LearningSystem:
         if ltv is not None:
             s.ltv_sum += float(ltv)
 
-    def offline_replay(self, events: Iterable[dict]) -> Dict[str, BanditStats]:
-        stats: Dict[str, BanditStats] = {}
-        decision_to_policy: Dict[str, str] = {}
+    def offline_replay(self, events: Iterable[dict]) -> dict[str, BanditStats]:
+        stats: dict[str, BanditStats] = {}
+        decision_to_policy: dict[str, str] = {}
         for e in events:
             t = e.get("type")
             if t == "decision_issued":
@@ -78,14 +77,14 @@ class LearningSystem:
                 s.reward_sum += float(e.get("reward") or DEFAULT_LEARNING_SYSTEM_POLICY.zero_value)
         return stats
 
-    def pick_best_policy(self) -> Optional[str]:
+    def pick_best_policy(self) -> str | None:
         eligible = {pid: st for pid, st in self._stats.items() if st.n >= self._min_samples}
         if not eligible:
             return None
         best = max(eligible.items(), key=lambda kv: kv[1].mean)
         return best[0]
 
-    def maybe_propose_deployment(self) -> Optional[dict]:
+    def maybe_propose_deployment(self) -> dict | None:
         # 0) Prefer offline-validated candidate if present.
         if self._model_registry is not None:
             latest_validated = getattr(self._model_registry, "latest_validated", None)

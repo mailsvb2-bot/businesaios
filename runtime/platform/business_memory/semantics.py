@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 CANON_BUSINESS_MEMORY_SEMANTICS = True
 
 

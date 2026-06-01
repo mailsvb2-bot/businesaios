@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from runtime.tenancy import normalize_tenant_id, UNKNOWN_TENANT_ID
 from runtime.firewall.process_guard import require_effect_capability
+from runtime.tenancy import UNKNOWN_TENANT_ID, normalize_tenant_id
 
 
 class EffectsPort(ABC):
@@ -23,14 +23,14 @@ class EffectsPort(ABC):
         user_id: str,
         text: str,
         tenant_id: str = "",
-        reply_markup: Optional[Dict[str, Any]] = None,
-        callback_query_id: Optional[str] = None,
-        track_event_type: Optional[str] = None,
-        track_payload: Optional[Dict[str, Any]] = None,
+        reply_markup: dict[str, Any] | None = None,
+        callback_query_id: str | None = None,
+        track_event_type: str | None = None,
+        track_payload: dict[str, Any] | None = None,
         channel: str = "telegram",
         priority: Any = "normal",
         critical: bool = True,
-        channel_policy: Optional[Dict[str, Any]] = None,
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any:
         ...
 
@@ -44,7 +44,7 @@ class EffectsPort(ABC):
         amount: int,
         currency: str,
         provider: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Any:
         ...
 

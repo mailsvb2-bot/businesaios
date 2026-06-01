@@ -1,8 +1,11 @@
 from __future__ import annotations
-from typing import Any, Dict
-from core.growth.recommendations import AdsRecommendation, AdsObjectRef
 
-def reco_from_payload(p: Dict[str, Any]) -> AdsRecommendation:
+from typing import Any
+
+from core.growth.recommendations import AdsObjectRef, AdsRecommendation
+
+
+def reco_from_payload(p: dict[str, Any]) -> AdsRecommendation:
     t = p.get("target") or {}
     target = AdsObjectRef(
         platform=str(t.get("platform") or "other"),

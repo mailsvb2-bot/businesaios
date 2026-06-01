@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import logging
 
-from runtime.proofs import ACTION_PROOF_EVENT
-from runtime.observability.perf import watchdog_tick
-from runtime.execution.executor_recovery import finalize_if_already_executed
 from runtime.execution.entrypoint_context import run_with_bound_execution_context
-from runtime.execution.executor_result import ExecutionResult
 from runtime.execution.executor_commit import _decision_tenant_id, has_pending
+from runtime.execution.executor_recovery import finalize_if_already_executed
+from runtime.execution.executor_result import ExecutionResult
 from runtime.execution.outcome_persistence_lock import finalize_recovered_outcome
+from runtime.observability.perf import watchdog_tick
+from runtime.proofs import ACTION_PROOF_EVENT
 
 logger = logging.getLogger(__name__)
 

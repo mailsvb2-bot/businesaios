@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Retention ports.
 
 This module exists to keep core.retention independent from concrete storage
@@ -9,7 +7,9 @@ The production repo currently uses SqliteEventStore which provides these methods
 Core code MUST depend on this Protocol only (no platform_layer imports).
 """
 
-from typing import Any, Dict, Iterable, Iterator, Optional, Protocol, Tuple
+from __future__ import annotations
+
+from typing import Any, Iterable, Protocol
 
 
 class RetentionStore(Protocol):
@@ -23,7 +23,7 @@ class RetentionStore(Protocol):
         user_id: str | None = None,
         event_type: str | None = None,
         limit: int | None = None,
-    ) -> Iterable[Dict[str, Any]]: ...
+    ) -> Iterable[dict[str, Any]]: ...
 
     def latest_events(
         self,
@@ -32,7 +32,7 @@ class RetentionStore(Protocol):
         user_id: str | None = None,
         event_type: str | None = None,
         limit: int = 50,
-    ) -> Iterable[Dict[str, Any]]: ...
+    ) -> Iterable[dict[str, Any]]: ...
 
     # Retention feature snapshots
     def upsert_user_features_daily(
@@ -48,6 +48,6 @@ class RetentionStore(Protocol):
     # Bandit state
     def bandit_ensure_arm(self, *, tenant_id: str, arm: str, now_ms: int) -> None: ...
 
-    def bandit_get_arm(self, *, tenant_id: str, arm: str) -> Tuple[int, int]: ...
+    def bandit_get_arm(self, *, tenant_id: str, arm: str) -> tuple[int, int]: ...
 
     def bandit_update_arm(self, *, tenant_id: str, arm: str, success: bool, now_ms: int) -> None: ...

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Mapping, Optional
+from typing import Mapping
 
 
 @dataclass(frozen=True)
@@ -17,11 +17,11 @@ class MarketContext:
     currency: str = "USD"
 
     # Optional high-level segments (stringly typed, controlled upstream).
-    channel: Optional[str] = None   # e.g. "tg", "web", "ads"
-    geo: Optional[str] = None       # e.g. "NL", "DE"
-    device: Optional[str] = None    # e.g. "mobile", "desktop"
-    dow: Optional[int] = None       # day-of-week 0..6 (Mon=0)
-    hour: Optional[int] = None      # 0..23
+    channel: str | None = None   # e.g. "tg", "web", "ads"
+    geo: str | None = None       # e.g. "NL", "DE"
+    device: str | None = None    # e.g. "mobile", "desktop"
+    dow: int | None = None       # day-of-week 0..6 (Mon=0)
+    hour: int | None = None      # 0..23
 
 
 @dataclass(frozen=True)
@@ -40,9 +40,9 @@ class DemandObservation:
     # units sold / purchases count for the window
     units: float
     # exposure (impressions/visits) that generated demand; optional
-    exposure: Optional[float] = None
+    exposure: float | None = None
     # time window size in seconds for comparability (optional)
-    window_s: Optional[float] = None
+    window_s: float | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +69,6 @@ class FunnelObservation:
     """Aggregated funnel counts for a window, optionally per price point."""
 
     context: MarketContext
-    price: Optional[PricePoint]
+    price: PricePoint | None
     # stage -> count
     counts: Mapping[FunnelStage, float]

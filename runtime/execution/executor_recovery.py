@@ -9,10 +9,10 @@ for such actions.
 
 from typing import Any
 
-from runtime.proofs import ACTION_PROOF_EVENT
-from runtime.execution.executor_result import ExecutionResult
 from runtime.execution.executor_commit import _decision_tenant_id, status
+from runtime.execution.executor_result import ExecutionResult
 from runtime.execution.outcome_persistence_lock import finalize_recovered_outcome
+from runtime.proofs import ACTION_PROOF_EVENT
 
 
 def finalize_if_already_executed(*, executor: Any, outbox: Any, event_log: Any, env: Any) -> ExecutionResult | None:

@@ -4,7 +4,6 @@ from pathlib import Path
 
 from canon.runtime_string_literal_rules import FORBIDDEN_RUNTIME_SERVICE_NAME_LITERALS
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ALLOWED_PATH_FRAGMENTS = (
     "runtime/service_names.py",

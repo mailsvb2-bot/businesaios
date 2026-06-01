@@ -13,11 +13,10 @@ from typing import Any, Dict
 
 from runtime.platform.utils.canonical import canonical_json_bytes
 
-
 GENESIS = "GENESIS"
 
 
-def entry_hash(*, prev_hash: str, fields: Dict[str, Any]) -> str:
+def entry_hash(*, prev_hash: str, fields: dict[str, Any]) -> str:
     prev = (prev_hash or GENESIS).encode("utf-8")
     body = canonical_json_bytes(fields)
     return hashlib.sha256(prev + b"|" + body).hexdigest()

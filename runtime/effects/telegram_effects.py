@@ -15,11 +15,11 @@ class TelegramStartupReport:
     ok: bool
     code: str
     hint: str
-    getme: Dict[str, Any] | None = None
-    webhook: Dict[str, Any] | None = None
+    getme: dict[str, Any] | None = None
+    webhook: dict[str, Any] | None = None
 
 
-def classify_startup(getme: Dict[str, Any] | None, webhook: Dict[str, Any] | None) -> TelegramStartupReport:
+def classify_startup(getme: dict[str, Any] | None, webhook: dict[str, Any] | None) -> TelegramStartupReport:
     """Classify Telegram startup state from getMe + getWebhookInfo responses.
 
     Pure function. Must not embed network markers or tokens.

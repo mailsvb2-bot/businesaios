@@ -1,8 +1,8 @@
+from execution.economic_anchor_preservation import EconomicAnchorPreservationChecker
 from execution.economic_schema_validation import EconomicSchemaValidator
 from execution.economic_segment_validation import EconomicSegmentValidator
 from execution.economic_semantic_validation import EconomicSemanticValidator
 from execution.economic_split_brain_guard import EconomicSplitBrainGuard
-from execution.economic_anchor_preservation import EconomicAnchorPreservationChecker
 
 
 def test_schema_validator_rejects_legacy_bundle() -> None:

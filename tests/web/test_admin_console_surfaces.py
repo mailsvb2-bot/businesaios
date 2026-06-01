@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.web.components.approval_queue_card import ApprovalQueueCard
 from app.web.components.audit_log_table import AuditLogTable
@@ -10,8 +10,8 @@ from app.web.components.security_events_card import SecurityEventsCard
 from app.web.pages.admin import AdminPage
 from app.web.pages.approvals import ApprovalsPage
 from app.web.pages.connector_admin import ConnectorAdminPage
-from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 from observability.slo_contract import SLIKind, SLOComparator, SLODefinition
+from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
 
 
 @dataclass(frozen=True)
@@ -22,7 +22,7 @@ class _ApprovalRequest:
     subject_id: str = 'dep-1'
     requested_by: str = 'operator'
     reason: str = 'review'
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     expires_at: datetime | None = None
     required_role_groups: tuple[tuple[str, ...], ...] = (('admin',),)
     min_distinct_approvers: int = 1
@@ -45,7 +45,7 @@ class _AuditEvent:
     event_type: str = 'security.login'
     category: str = 'security'
     severity: str = 'critical'
-    emitted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    emitted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     actor_id: str = 'user-1'
     source_component: str = 'web'
     source_namespace: str = 'app.web'
@@ -71,8 +71,8 @@ class _Incident:
     trace_id: str | None = 'trace-1'
     rule_id: str | None = 'rule-1'
     summary: str = 'p95 high'
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     payload: dict[str, object] = field(default_factory=lambda: {'token': 'abc'})
 
 

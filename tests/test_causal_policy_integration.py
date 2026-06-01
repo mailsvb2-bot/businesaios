@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-import time
-
-from core.causal.evidence.from_events import build_daily_panel, estimate_effect_from_daily_panel, placebo_shift_treatment
 from core.ai.causal_guardrails import assess_causal_evidence
+from core.causal.evidence.from_events import (
+    build_daily_panel,
+    estimate_effect_from_daily_panel,
+    placebo_shift_treatment,
+)
 
 
 def _ev(day_index: int, event_type: str, payload: dict | None = None):

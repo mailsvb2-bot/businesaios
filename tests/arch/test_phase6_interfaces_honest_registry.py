@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from interfaces.crm import CONNECTORS as CRM_CONNECTORS, HubspotConnector
-from interfaces.platforms import CONNECTORS as PLATFORM_CONNECTORS, GoogleMapsConnector
-from interfaces.website import CONNECTORS as WEBSITE_CONNECTORS, SiteConnector
-
+from interfaces.crm import CONNECTORS as CRM_CONNECTORS
+from interfaces.crm import HubspotConnector
+from interfaces.platforms import CONNECTORS as PLATFORM_CONNECTORS
+from interfaces.platforms import GoogleMapsConnector
+from interfaces.website import CONNECTORS as WEBSITE_CONNECTORS
+from interfaces.website import SiteConnector
 
 ROOT = Path(__file__).resolve().parents[2]
 

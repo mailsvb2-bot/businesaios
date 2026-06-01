@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
-from ..contracts import PatternReader as PatternReaderContract, PatternRepository
+from ..contracts import PatternReader as PatternReaderContract
+from ..contracts import PatternRepository
 from ..types import Pattern
 
 

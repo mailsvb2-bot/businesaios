@@ -21,8 +21,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Tuple
 
 from config.behavior_impulse_policy import (
-    BehaviorImpulsePolicy,
     DEFAULT_IMPULSE_BOUNDS_POLICY,
+    BehaviorImpulsePolicy,
 )
 from core.retention.event_types import normalize_event_type
 
@@ -35,7 +35,7 @@ class Impulse:
     dP: float
     anti: float
 
-    def as_tuple(self) -> Tuple[float, float, float, float, float]:
+    def as_tuple(self) -> tuple[float, float, float, float, float]:
         return (float(self.dI), float(self.dT), float(self.dV), float(self.dP), float(self.anti))
 
 
@@ -54,19 +54,19 @@ MAX_STEP = DEFAULT_IMPULSE_BOUNDS_POLICY.max_step
 MAX_ANTI_STEP = DEFAULT_IMPULSE_BOUNDS_POLICY.max_anti_step
 
 
-def _event_impulses_from_policy(policy: BehaviorImpulsePolicy) -> Dict[str, Impulse]:
+def _event_impulses_from_policy(policy: BehaviorImpulsePolicy) -> dict[str, Impulse]:
     return {name: Impulse(*values) for name, values in policy.event_impulses.items()}
 
 
 DEFAULT_IMPULSE_POLICY = BehaviorImpulsePolicy()
-EVENT_IMPULSES: Dict[str, Impulse] = _event_impulses_from_policy(DEFAULT_IMPULSE_POLICY)
+EVENT_IMPULSES: dict[str, Impulse] = _event_impulses_from_policy(DEFAULT_IMPULSE_POLICY)
 
 
 def impulse_for_event(
     event: Mapping[str, Any],
     *,
     policy: BehaviorImpulsePolicy = DEFAULT_IMPULSE_POLICY,
-) -> Tuple[float, float, float, float, float]:
+) -> tuple[float, float, float, float, float]:
     """Return bounded (dI,dT,dV,dP,anti) for a canonical event.
 
     - Unknown events map to zeros (must not break runtime).

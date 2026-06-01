@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from billing.chargeback_orchestrator import ChargebackOrchestrator
@@ -178,7 +178,7 @@ def test_collection_replay_does_not_double_charge_on_updated_invoice() -> None:
         tax_minor=50,
         total_minor=350,
         status=__import__('billing.commercial_cycle_contract', fromlist=['InvoiceLifecycleStatus']).InvoiceLifecycleStatus.ISSUED,
-        issued_at=datetime(2026, 4, 10, tzinfo=timezone.utc),
+        issued_at=datetime(2026, 4, 10, tzinfo=UTC),
     )
 
     updated, result = orchestrator.collect(invoice=issued, idempotency_key='collect-1')
@@ -191,7 +191,7 @@ def test_collection_replay_does_not_double_charge_on_updated_invoice() -> None:
 
 
 def test_dunning_and_reconciliation_jobs_are_restart_safe_with_sqlite_run_store(tmp_path: Path) -> None:
-    now = datetime(2026, 4, 10, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 10, tzinfo=UTC)
     run_store = SqliteBillingJobRunStore(sqlite_path=str(tmp_path / 'job-runs.sqlite3'))
     metrics = TenantMetricsRegistry()
     orchestrator = DunningOrchestrator(metrics=metrics)

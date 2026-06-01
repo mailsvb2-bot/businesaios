@@ -30,7 +30,7 @@ def returns_literal_status_ok(node: ast.AST) -> bool:
     if not isinstance(node, ast.Return) or not isinstance(node.value, ast.Dict):
         return False
     pairs = {}
-    for k, v in zip(node.value.keys, node.value.values):
+    for k, v in zip(node.value.keys, node.value.values, strict=False):
         if isinstance(k, ast.Constant) and isinstance(k.value, str) and isinstance(v, ast.Constant):
             pairs[k.value] = v.value
     return pairs.get("status") == "ok"

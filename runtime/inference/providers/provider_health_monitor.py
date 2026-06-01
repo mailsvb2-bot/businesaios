@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from execution.inference_provider_contract import InferenceProvider, InferenceProviderHealth
 
-
 CANON_RUNTIME_INFERENCE_PROVIDER_HEALTH_MONITOR = True
 
 

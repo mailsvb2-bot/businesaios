@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from core.events.log import EventLog
-from runtime.platform.event_store.memory_event_store import MemoryEventStore
-from runtime.boot.finance_boot import build_finance_job_orchestrator, build_finance_job_registry, build_finance_job_specs, build_finance_runtime
+from runtime.boot.finance_boot import (
+    build_finance_job_orchestrator,
+    build_finance_job_registry,
+    build_finance_job_specs,
+    build_finance_runtime,
+)
 from runtime.finance.host_runtime_integration import bind_finance_into_host_runtime
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
 def test_finance_events_flow_into_host_event_log_and_observability() -> None:

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
@@ -8,7 +9,7 @@ class ExecutableAction:
     action_id: str
     action_type: str
     channel: str
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
     decision_id: str = ''
     correlation_id: str = ''
     objective_name: str = 'profit_adjusted_growth'
@@ -31,7 +32,7 @@ class ExecutableAction:
             issues.append('invalid:objective_name')
         return issues
 
-    def as_dict(self) -> Dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         return {
             'action_id': self.action_id,
             'action_type': self.action_type,

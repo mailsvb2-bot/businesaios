@@ -20,9 +20,9 @@ CANON_RUNTIME_ENTRYPOINT_THIN_SHIM = True
 CANON_RUNTIME_ENTRYPOINT_BOOTSTRAP_DELEGATES_TO_SOVEREIGN_BOOTSTRAP = True
 
 # Re-export public wiring helpers expected by main.py and tests.
-from runtime.bootstrap import bootstrap as _bootstrap
 from runtime.boot.system_builder import build_system
 from runtime.boot.telegram_runner import run_telegram
+from runtime.bootstrap import bootstrap as _bootstrap
 
 # Re-export WorldState for demo wrapper.
 from runtime.world_state import WorldStateV1

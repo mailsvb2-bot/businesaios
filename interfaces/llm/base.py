@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, Sequence, Optional, Dict, Any
+from typing import Any, Dict, Optional, Protocol, Sequence
 
 
 @dataclass(frozen=True)
@@ -13,7 +13,7 @@ class LLMMessage:
 @dataclass(frozen=True)
 class LLMResponse:
     text: str
-    raw: Optional[Dict[str, Any]] = None
+    raw: dict[str, Any] | None = None
 
 
 class LLMClient(Protocol):

@@ -6,7 +6,6 @@ from decimal import Decimal
 
 from core.finance.strategic.types import Scenario
 
-
 DEFAULT_STRATEGIC_FINANCE_SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
         name="defense",

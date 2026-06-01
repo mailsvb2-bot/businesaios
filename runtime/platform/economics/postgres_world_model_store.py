@@ -5,8 +5,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from storage.postgres_session import PostgresSessionFactory
 from runtime.platform.economics.world_model_store import WorldModelStorePort
+from storage.postgres_session import PostgresSessionFactory
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class PostgresWorldModelStore(WorldModelStorePort):
             )
             session.commit()
 
-    def get_active_payload(self, *, tenant_id: str, product_id: str) -> Optional[Dict[str, Any]]:
+    def get_active_payload(self, *, tenant_id: str, product_id: str) -> dict[str, Any] | None:
         tenant = str(tenant_id).strip()
         product = str(product_id).strip()
         if not tenant or not product:

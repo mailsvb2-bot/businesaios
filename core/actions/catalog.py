@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Action Catalog (single source of truth).
 
 The catalog stays canonical, but the entry definitions live in small grouped
@@ -7,7 +5,7 @@ modules so the contract is easier to audit and extend without growing another
 God module.
 """
 
-from typing import Dict
+from __future__ import annotations
 
 from core.ai.schema_registry import SchemaRegistry
 
@@ -15,8 +13,8 @@ from .catalog_entry import CatalogEntry
 from .catalog_groups import build_catalog_groups
 
 
-def build_catalog() -> Dict[str, CatalogEntry]:
-    catalog: Dict[str, CatalogEntry] = {}
+def build_catalog() -> dict[str, CatalogEntry]:
+    catalog: dict[str, CatalogEntry] = {}
     for group in build_catalog_groups():
         overlap = set(catalog) & set(group)
         if overlap:

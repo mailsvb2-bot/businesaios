@@ -1,4 +1,4 @@
-from .latency import latency_brief, latency_breakdown, sla_breaches_brief
+from .latency import latency_breakdown, latency_brief, sla_breaches_brief
 from .pricing import pricing_change_requests
 from .retention import health_brief, retention_brief
 from .traffic import (

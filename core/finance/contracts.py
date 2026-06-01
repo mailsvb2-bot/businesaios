@@ -7,7 +7,7 @@ from .contracts_builders import (
     ProfitSummaryBuilder,
     RevenueSummaryBuilder,
 )
-from .contracts_evaluators import PaymentFailureEvaluator, LiquidityRiskEvaluator, RevenueVolatilityEvaluator
+from .contracts_evaluators import LiquidityRiskEvaluator, PaymentFailureEvaluator, RevenueVolatilityEvaluator
 from .contracts_guards import LiquidityGuard, NegativeCashflowGuard, PayoutRiskGuard
 from .contracts_policies import PayoutPolicy, ReservePolicy
 from .contracts_readers import ExpenseReader, LedgerReader, PaymentReader, PayoutReader, RevenueReader

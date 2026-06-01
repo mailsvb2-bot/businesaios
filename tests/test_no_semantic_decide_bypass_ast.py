@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import ast
+import pathlib
+
 """Semantic bypass guardrails.
 
 Goal:
@@ -11,9 +14,6 @@ Notes:
   - Tests are excluded from this scan by design (they may use minimal stubs).
   - A small facade/proxy MAY call DecisionCore.decide; currently we allow main.py.
 """
-
-import ast
-import pathlib
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -65,7 +65,7 @@ def test_no_decide_definitions_outside_decision_core():
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == "decide":
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == "decide":
                 offenders.append(f"{path}:{node.lineno}: def decide")
     assert not offenders, "Forbidden decide() definitions found:\n" + "\n".join(offenders)
 

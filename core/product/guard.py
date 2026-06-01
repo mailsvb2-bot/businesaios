@@ -6,7 +6,7 @@ from core.product.guards.packaging_structure_guard import PackagingStructureGuar
 from core.product.guards.proposal_boundary_guard import ProposalBoundaryGuard
 from core.product.guards.roadmap_capacity_guard import RoadmapCapacityGuard
 from core.product.guards.tier_overlap_guard import TierOverlapGuard
-from core.product.types import GuardVerdict, FeatureRecord, PackagingProposal, RoadmapCapacity, RoadmapProposal
+from core.product.types import FeatureRecord, GuardVerdict, PackagingProposal, RoadmapCapacity, RoadmapProposal
 
 
 class ProductGuard:

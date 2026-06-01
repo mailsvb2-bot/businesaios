@@ -9,7 +9,6 @@ from config.runtime_environment import RuntimeEnvironment
 from config.system_config import SystemConfig
 from config.telegram_settings import TelegramSettings
 
-
 CANON_CONFIG_VALIDATION = True
 
 

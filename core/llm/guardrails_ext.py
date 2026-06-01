@@ -9,7 +9,7 @@ from typing import Optional
 class GuardrailResult:
     ok: bool
     reason: str = ""
-    fixed_text: Optional[str] = None
+    fixed_text: str | None = None
 
 
 _RE_URGENCY = re.compile(r"\b(только сегодня|последний шанс|срочно|немедленно|акция закончится)\b", re.I)

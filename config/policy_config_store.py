@@ -14,7 +14,6 @@ from config.config_versioning import ConfigVersion, ConfigVersioning, utc_now
 from core.tenancy.normalization import normalize_tenant_id
 from governance.persistence_codec import atomic_write_json, read_json_or_default, to_jsonable
 
-
 CANON_POLICY_CONFIG_STORE = True
 
 _POLICY_NAMESPACE = "policy_config"
@@ -53,7 +52,7 @@ class PolicyConfigSnapshot:
         if self.version is not None:
             self.version.validate()
 
-    def normalized(self) -> "PolicyConfigSnapshot":
+    def normalized(self) -> PolicyConfigSnapshot:
         return PolicyConfigSnapshot(
             policy_name=str(self.policy_name).strip(),
             tenant_id=_normalized_optional_tenant_id(self.tenant_id),
@@ -78,7 +77,7 @@ class PolicyConfigSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object]) -> "PolicyConfigSnapshot":
+    def from_dict(cls, payload: Mapping[str, object]) -> PolicyConfigSnapshot:
         item = dict(payload or {})
         version = None
         if isinstance(item.get("version"), Mapping):

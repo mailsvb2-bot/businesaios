@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import random
 
+
 def _boltzmann_choose(scores, temperature: float = 1.0) -> int:
     exps = [math.exp(s / temperature) for s in scores]
     total = sum(exps)

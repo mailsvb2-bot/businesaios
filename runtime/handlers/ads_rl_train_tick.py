@@ -6,24 +6,31 @@ CANON_THIN_HANDLER = True
 import logging
 from typing import Any, Dict, List
 
+from runtime.ads import (
+    DatasetBuilder,
+    OPEGate,
+    RewardComputer,
+    RewardWindow,
+    RLTrainer,
+    bind_runtime_state,
+    maturity_gate,
+    policy_store,
+)
+from runtime.governance import ProfitMetricsService
 from runtime.ports.effects import EffectsPort
 from runtime.tenancy import as_tenant_id
-
-from runtime.ads import bind_runtime_state, maturity_gate, policy_store
-from runtime.governance import ProfitMetricsService
-from runtime.ads import DatasetBuilder, OPEGate, RLTrainer, RewardComputer, RewardWindow
 
 logger = logging.getLogger(__name__)
 
 ACTION_NAME = "ads_rl_train_tick@v1"
 
 
-def handle_ads_rl_train_tick(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
+def handle_ads_rl_train_tick(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
     p = payload or {}
     bind_runtime_state(event_store=event_store)
     tenant_id = as_tenant_id(str(p.get("tenant_id") or ""))
     lookback_days = int(p.get("lookback_days") or 14)
-    decision_ids: List[str] = [str(x) for x in (p.get("decision_ids") or []) if str(x).strip()]
+    decision_ids: list[str] = [str(x) for x in (p.get("decision_ids") or []) if str(x).strip()]
 
     if not decision_ids:
         return effects.send_message(

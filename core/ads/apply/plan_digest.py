@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Stable digest for AdsPlan.
 
 We hash (platform, action, payload-json-stable) for each command.
@@ -8,16 +6,18 @@ This is used for idempotency keys and audit correlation.
 This module is PURE.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 
 def plan_digest(plan: Any) -> str:
     cmds = getattr(plan, "commands", None)
     if not isinstance(cmds, list):
         return "empty"
-    items: List[Tuple[str, str, str]] = []
+    items: list[tuple[str, str, str]] = []
     for c in cmds:
         try:
             platform = str(getattr(c, "platform", "") or "")

@@ -30,7 +30,7 @@ def _require_tenant_id(value: Any) -> str:
 class EventStoreUserDataSource:
     event_store: Any
 
-    def export(self, req) -> Iterable[Dict[str, Any]]:  # req is core.privacy.data_rights.DataExportRequest
+    def export(self, req) -> Iterable[dict[str, Any]]:  # req is core.privacy.data_rights.DataExportRequest
         tenant_id = _require_tenant_id(getattr(req, 'tenant_id', ''))
         user_id = str(getattr(req, 'user_id', '') or '')
         start_ms = int(getattr(req, 'start_ms', 0) or 0)

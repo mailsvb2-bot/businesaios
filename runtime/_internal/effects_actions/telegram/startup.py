@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import logging
 
-from runtime.observability.error_handling import swallow
-from runtime.platform.config.env_flags import env_str
 from runtime._internal.effects_clients.http_client import http_json as _http_json
 from runtime._internal.effects_clients.telegram_startup import classify_startup
+from runtime.observability.error_handling import swallow
+from runtime.platform.config.env_flags import env_str
 
 
 def _delete_webhook_fix_hint() -> str:

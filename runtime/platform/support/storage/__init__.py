@@ -10,6 +10,7 @@ from runtime.platform.support.storage.base_stores import ArtifactStore, DatasetS
 from runtime.platform.support.storage.generated_stores import *  # noqa: F403
 from runtime.platform.support.storage.generated_stores import STORE_TYPES, exported_names, module_basename, store_type
 
+
 class Store(Protocol):
     def put(self, key: str, value: object) -> None:
         ...

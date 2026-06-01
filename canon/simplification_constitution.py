@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Final, Iterable, Tuple
 
-
 CANON_SIMPLIFICATION_CONSTITUTION_VERSION: Final[str] = "1.0"
 
 
@@ -63,7 +62,7 @@ class SimplificationRule:
     description: str
 
 
-DECISION_DISCIPLINE_INVARIANTS: Final[Tuple[CanonInvariant, ...]] = (
+DECISION_DISCIPLINE_INVARIANTS: Final[tuple[CanonInvariant, ...]] = (
     CanonInvariant(
         name="single_decision_path",
         description=(
@@ -94,7 +93,7 @@ DECISION_DISCIPLINE_INVARIANTS: Final[Tuple[CanonInvariant, ...]] = (
     ),
 )
 
-SAFETY_INVARIANTS: Final[Tuple[CanonInvariant, ...]] = (
+SAFETY_INVARIANTS: Final[tuple[CanonInvariant, ...]] = (
     CanonInvariant(
         name="stop_loss_preserved",
         description="Stop-loss logic cannot be weakened, bypassed, or made optional.",
@@ -117,7 +116,7 @@ SAFETY_INVARIANTS: Final[Tuple[CanonInvariant, ...]] = (
     ),
 )
 
-OBSERVABILITY_INVARIANTS: Final[Tuple[CanonInvariant, ...]] = (
+OBSERVABILITY_INVARIANTS: Final[tuple[CanonInvariant, ...]] = (
     CanonInvariant(name="trace_ids_preserved", description="Trace ids must survive all critical paths."),
     CanonInvariant(
         name="correlation_ids_preserved",
@@ -134,7 +133,7 @@ OBSERVABILITY_INVARIANTS: Final[Tuple[CanonInvariant, ...]] = (
     ),
 )
 
-DOMAIN_BOUNDARY_INVARIANTS: Final[Tuple[CanonInvariant, ...]] = (
+DOMAIN_BOUNDARY_INVARIANTS: Final[tuple[CanonInvariant, ...]] = (
     CanonInvariant(
         name="no_domain_soup",
         description=(
@@ -148,7 +147,7 @@ DOMAIN_BOUNDARY_INVARIANTS: Final[Tuple[CanonInvariant, ...]] = (
     ),
 )
 
-SIMPLIFICATION_RULES: Final[Tuple[SimplificationRule, ...]] = (
+SIMPLIFICATION_RULES: Final[tuple[SimplificationRule, ...]] = (
     SimplificationRule(
         code="SIMPLIFY-001",
         title="Collapse form, not meaning",
@@ -162,7 +161,7 @@ SIMPLIFICATION_RULES: Final[Tuple[SimplificationRule, ...]] = (
         title="One real logic layer, one thin boundary adapter",
         description=(
             "After simplification the target area should converge toward one layer with real logic and one thin "
-            "boundary adapter. Neighboring layers that only relay the same payload must not remain." 
+            "boundary adapter. Neighboring layers that only relay the same payload must not remain."
         ),
     ),
     SimplificationRule(
@@ -258,7 +257,7 @@ SIMPLIFICATION_RULES: Final[Tuple[SimplificationRule, ...]] = (
     ),
 )
 
-ALL_CANON_INVARIANTS: Final[Tuple[CanonInvariant, ...]] = (
+ALL_CANON_INVARIANTS: Final[tuple[CanonInvariant, ...]] = (
     DECISION_DISCIPLINE_INVARIANTS
     + SAFETY_INVARIANTS
     + OBSERVABILITY_INVARIANTS

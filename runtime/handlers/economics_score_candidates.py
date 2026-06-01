@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from runtime.decisioning import CandidateCollection
-from runtime.decisioning import CandidateEnvelope
+from runtime.decisioning import CandidateCollection, CandidateEnvelope
 from runtime.economics import EconomicsScoringContext, EconomicsService
 
 CANON_THIN_HANDLER = True

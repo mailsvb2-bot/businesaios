@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Dict, Iterable, Optional, Protocol
 
 from core.growth.ads_config_fingerprint import ads_config_fingerprint
 
+
 class EventStore(Protocol):
-    def append(self, *, tenant_id: str, user_id: Optional[str], event_type: str, payload: Dict[str, Any]) -> None: ...
-    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 50) -> Iterable[Dict[str, Any]]: ...
+    def append(self, *, tenant_id: str, user_id: str | None, event_type: str, payload: dict[str, Any]) -> None: ...
+    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 50) -> Iterable[dict[str, Any]]: ...
 
 class AdsConfigAudit:
     EVENT_TYPE = "ads_config_fingerprint_changed"
@@ -34,7 +35,7 @@ class AdsConfigAudit:
                 payload={
                     "config_fp": fp,
                     "prev_fp": last_fp,
-                    "changed_at_iso": datetime.now(timezone.utc).isoformat(),
+                    "changed_at_iso": datetime.now(UTC).isoformat(),
                     "mode": getattr(ent.mode, "value", str(ent.mode)),
                 },
             )

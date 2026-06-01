@@ -42,7 +42,7 @@ async def provider_fetch_metrics_from_spec_adapter(
     account_id: str,
     access_token: str,
     level: str,
-    object_ids: Optional[Sequence[str]],
+    object_ids: Sequence[str] | None,
     date_from: date,
     date_to: date,
     spec: MetricReadSpec,
@@ -61,7 +61,7 @@ async def provider_fetch_metrics_from_spec_adapter(
     )
 
 
-def campaign_from_spec_adapter(*, platform: Any, account_id: str, row: Dict[str, Any], spec: CampaignReadSpec) -> Campaign:
+def campaign_from_spec_adapter(*, platform: Any, account_id: str, row: dict[str, Any], spec: CampaignReadSpec) -> Campaign:
     return campaign_from_row_with_spec(platform=platform, account_id=account_id, row=row, spec=spec)
 
 
@@ -70,7 +70,7 @@ def metric_from_spec_adapter(
     platform: Any,
     account_id: str,
     level: str,
-    row: Dict[str, Any],
+    row: dict[str, Any],
     spec: MetricReadSpec,
 ) -> MetricPoint:
     return metric_from_row_with_spec(platform=platform, account_id=account_id, level=level, row=row, spec=spec)
@@ -104,7 +104,7 @@ async def fetch_metrics_from_spec_adapter(
     tenant_id: str,
     account_id: str,
     level: str,
-    object_ids: Optional[Sequence[str]],
+    object_ids: Sequence[str] | None,
     date_from: date,
     date_to: date,
     get_access_token: Any,

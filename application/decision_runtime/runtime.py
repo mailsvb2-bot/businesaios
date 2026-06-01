@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping as AbcMapping
+from typing import Any
 
-from application.decision_runtime.gate import gate_action_or_raise
 from application.decision_policy.policy_stage import propose_action
+from application.decision_runtime.gate import gate_action_or_raise
 from application.decision_state.state_enrichment import (
     apply_causal_constraints,
     apply_price_constraints,
@@ -44,8 +44,8 @@ def _extract_decision_agi_payload(state: Any) -> dict[str, Any]:
 
 
 def build_trace(*, state: Any, issuer_id: str, envelope_version: int) -> tuple[str, Any, dict[str, Any]]:
-    from execution.agi_reasoning_contract import compact_goal_for_trace, compact_strategy_hint_for_trace
     from core.decision.ai_decision_trace import TraceBuilder
+    from execution.agi_reasoning_contract import compact_goal_for_trace, compact_strategy_hint_for_trace
 
     user_id = getattr(state, "user_id", "unknown") or "unknown"
     correlation_key = extract_correlation_key(state)

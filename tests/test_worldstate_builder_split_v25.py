@@ -1,6 +1,6 @@
+from interfaces.telegram.parsing.telegram_context import TelegramContext
 from interfaces.telegram.runtime.worldstate_causal import build_causal_evidence_from_event_window
 from interfaces.telegram.runtime.worldstate_overlays import build_overlays_from_context
-from interfaces.telegram.parsing.telegram_context import TelegramContext
 
 
 def test_worldstate_helpers_are_deterministic_for_empty_window():

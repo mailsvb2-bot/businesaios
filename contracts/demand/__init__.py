@@ -5,6 +5,7 @@ from typing import Any
 
 from shared.types import ensure_jsonable
 
+
 @dataclass(frozen=True, slots=True)
 class ClientBudget:
     currency: str = ""

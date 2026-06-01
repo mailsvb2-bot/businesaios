@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from runtime.governance import PolicyState
+
 from .governance_builder import build_governance_service
 
 CANON_BOOT_WIRING_ONLY = True

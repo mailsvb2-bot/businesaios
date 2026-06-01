@@ -84,7 +84,7 @@ def build_apply_payload(
     source_decision_id: str,
     source_correlation_id: str,
     source_issuer_id: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "tenant_id": tenant_id,
         "platform": platform,

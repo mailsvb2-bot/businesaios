@@ -15,7 +15,7 @@ class PostgresBehaviorGraphStore:
         self._dsn = str(dsn)
         self._port: PostgresPort | None = None
 
-    def __enter__(self) -> "PostgresBehaviorGraphStore":
+    def __enter__(self) -> PostgresBehaviorGraphStore:
         self._port = PostgresPort(self._dsn, application_name="businesaios-behavior-graph").__enter__()
         self._init_schema()
         return self
@@ -88,7 +88,7 @@ class PostgresBehaviorGraphStore:
         built_at_ms: int,
         nodes: list[Node],
         edges: list[Edge],
-        meta: Dict[str, Any] | None = None,
+        meta: dict[str, Any] | None = None,
     ) -> None:
         assert self._port is not None
         tid = str(tenant_id).strip()
@@ -146,7 +146,7 @@ class PostgresBehaviorGraphStore:
             self._port.rollback()
             raise
 
-    def get_snapshot(self, *, tenant_id: str, scope: str) -> Optional[GraphSnapshot]:
+    def get_snapshot(self, *, tenant_id: str, scope: str) -> GraphSnapshot | None:
         assert self._port is not None
         tid = str(tenant_id).strip()
         sc = str(scope).strip()
@@ -171,7 +171,7 @@ class PostgresBehaviorGraphStore:
         edges = [Edge(edge_id=r[0], edge_type=r[1], src=r[2], dst=r[3], weight=float(r[4]), props=(json.loads(r[5]) if r[5] else {})) for r in erows]
         return GraphSnapshot(tenant_id=tid, scope=sc, built_at_ms=built_at_ms, nodes=nodes, edges=edges, meta=meta)
 
-    def get_node(self, *, tenant_id: str, scope: str, node_id: str) -> Optional[Node]:
+    def get_node(self, *, tenant_id: str, scope: str, node_id: str) -> Node | None:
         assert self._port is not None
         tid = str(tenant_id).strip()
         sc = str(scope).strip()

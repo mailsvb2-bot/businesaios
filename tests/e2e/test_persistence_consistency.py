@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 import pytest
+
 from tests.e2e._assertions import assert_report_ledger_snapshot_consistency
 from tests.e2e._headless_harness import ScenarioStep, build_harness, make_request
 

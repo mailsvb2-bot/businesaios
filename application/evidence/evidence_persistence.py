@@ -1,21 +1,26 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, is_dataclass, replace
 import logging
+from dataclasses import dataclass, is_dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, Mapping, MutableMapping
 
+from application.effects.effect_outcome_vocabulary import normalize_outcome_status, outcome_is_verified
+from application.evidence.evidence_feedback_state import apply_feedback_to_world_state as _apply_feedback_world_state
+from execution.canonical_persistence_vocabulary import canonical_memory_record, canonical_persistence_outcome_record
 from execution.evidence_persistence_feedback import (
     compact_evidence_payload as _compact_evidence_payload,
+)
+from execution.evidence_persistence_feedback import (
     compact_verification_payload as _compact_verification_payload,
+)
+from execution.evidence_persistence_feedback import (
     persistence_key as _persistence_key,
+)
+from execution.evidence_persistence_feedback import (
     refs_from_verification as _refs_from_verification,
 )
 from execution.evidence_persistence_reliability import EvidencePersistenceReliabilitySupport
-from execution.canonical_persistence_vocabulary import canonical_memory_record, canonical_persistence_outcome_record
-from application.effects.effect_outcome_vocabulary import normalize_outcome_status, outcome_is_verified
-from application.evidence.evidence_feedback_state import apply_feedback_to_world_state as _apply_feedback_world_state
-
 
 CANON_EVIDENCE_PERSISTENCE = True
 CANON_MEMORY_EVIDENCE_PERSISTENCE = True

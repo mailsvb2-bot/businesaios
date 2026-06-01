@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class SchemaRegistry:
     def __init__(self) -> None:
         self._schemas: dict[str, dict] = {}

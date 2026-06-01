@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import time
 from dataclasses import dataclass
-from typing import Dict, Tuple
 
 
 @dataclass(frozen=True)
@@ -17,7 +16,7 @@ class MessageDedupe:
 
     def __init__(self, cfg: DedupeConfig) -> None:
         self._cfg = cfg
-        self._seen: Dict[Tuple[str, str, str], float] = {}
+        self._seen: dict[tuple[str, str, str], float] = {}
 
     def _now(self) -> float:
         return time.time()

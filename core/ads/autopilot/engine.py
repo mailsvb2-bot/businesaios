@@ -7,7 +7,7 @@ from core.ads.autopilot.campaign_builder import AdsAutopilotCampaignBuilder
 from core.ads.autopilot.contract import AdsAutopilotRequest, AdsAutopilotResponse
 from core.ads.autopilot.stop_loss_guard import StopLossGuard
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 class AdsAutopilotEngine:

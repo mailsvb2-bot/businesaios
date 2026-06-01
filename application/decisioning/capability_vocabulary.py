@@ -3,12 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple
 
+
 @dataclass(frozen=True)
 class Capability:
     name: str
     description: str
 
-CAPABILITIES: Tuple[Capability, ...] = (
+CAPABILITIES: tuple[Capability, ...] = (
     Capability("score", "compute candidate scores"),
     Capability("observe", "attach reward or metrics"),
     Capability("rank", "order candidates"),

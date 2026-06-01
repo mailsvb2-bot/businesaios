@@ -1,4 +1,9 @@
-from interfaces.messaging_runtime.telemetry import RuntimeTelemetryFacade, InMemoryTelemetrySink, AuditTrailStore, RuntimeAnomalyHooks
+from interfaces.messaging_runtime.telemetry import (
+    AuditTrailStore,
+    InMemoryTelemetrySink,
+    RuntimeAnomalyHooks,
+    RuntimeTelemetryFacade,
+)
 
 
 def test_runtime_telemetry_records_timestamp_and_anomaly_snapshot() -> None:

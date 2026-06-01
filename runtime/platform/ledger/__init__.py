@@ -24,8 +24,8 @@ __all__ = [
 
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .sqlite_ledger import SqliteLedger as SqliteLedger
     from .postgres_ledger import PostgresLedger as PostgresLedger
+    from .sqlite_ledger import SqliteLedger as SqliteLedger
 
 
 def __getattr__(name: str) -> Any:  # pragma: no cover

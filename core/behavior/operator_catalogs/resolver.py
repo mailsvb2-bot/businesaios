@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Mapping
 
 from core.tenancy.normalization import normalize_tenant_id
 
@@ -42,7 +42,7 @@ def resolve_operator_catalog_id(*, product: Mapping[str, Any] | None, tenant_id:
     return "default"
 
 
-def resolve_operator_context(*, product: Mapping[str, Any] | None, tenant_id: str | None = None) -> Dict[str, Any]:
+def resolve_operator_context(*, product: Mapping[str, Any] | None, tenant_id: str | None = None) -> dict[str, Any]:
     """Resolve operator context from product dict.
 
     Returns a dict that can be fed into DiracBehaviorModel.evolve(...) context.
@@ -51,7 +51,7 @@ def resolve_operator_context(*, product: Mapping[str, Any] | None, tenant_id: st
     modules = p.get("modules") if isinstance(p.get("modules"), Mapping) else {}
 
     # Optional overrides live next to the catalog ref.
-    overrides: Dict[str, Any] = {}
+    overrides: dict[str, Any] = {}
     for mod_key in ("behavior_os", "behavior_dirac"):
         mv = modules.get(mod_key)
         if isinstance(mv, Mapping):

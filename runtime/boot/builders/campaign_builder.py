@@ -24,16 +24,15 @@ from runtime.boot import (
     TrafficStrategyService,
     TrafficToAdsSpec,
 )
-
-from runtime.platform.config.env_flags import env_bool, env_float, env_str
 from runtime.llm import resolve_runtime_llm_settings
+from runtime.platform.config.env_flags import env_bool, env_float, env_str
 
 logger = logging.getLogger(__name__)
 
 
 def build_autopilot_campaign_builder(
     *,
-    llm_client: Optional[Any] = None,
+    llm_client: Any | None = None,
 ) -> AutopilotCampaignBuilder:
     """Build AutopilotCampaignBuilder.
 

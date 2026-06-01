@@ -3,10 +3,9 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from .contextual_bandit_policy import action_key
-from .contracts import AdsRLAction, AdsRLState, AdsRLSuggestion, AdsRLOptSpec
+from .contracts import AdsRLAction, AdsRLOptSpec, AdsRLState, AdsRLSuggestion
 
-
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 def build_seed(*, tenant_id: str, spec: AdsRLOptSpec, seed: str) -> str:

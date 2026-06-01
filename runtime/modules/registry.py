@@ -4,7 +4,6 @@ from typing import Dict, Iterable, Tuple
 
 from runtime.modules.module_protocol import RuntimeModule
 
-
 CANON_RUNTIME_MODULE_REGISTRY_OWNER = True
 
 
@@ -12,7 +11,7 @@ class ModuleRegistry:
     """Canonical mapping module_id -> module implementation."""
 
     def __init__(self, modules: Iterable[RuntimeModule]) -> None:
-        self._by_id: Dict[str, RuntimeModule] = {}
+        self._by_id: dict[str, RuntimeModule] = {}
         for module in modules:
             module_id = getattr(module, "module_id", None)
             if not module_id:
@@ -27,7 +26,7 @@ class ModuleRegistry:
         except KeyError as exc:
             raise KeyError(f"Unknown module_id: {module_id}") from exc
 
-    def list_ids(self) -> Tuple[str, ...]:
+    def list_ids(self) -> tuple[str, ...]:
         return tuple(sorted(self._by_id.keys()))
 
 

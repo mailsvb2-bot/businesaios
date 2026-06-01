@@ -4,12 +4,11 @@ import logging
 import time
 from typing import Any
 
-from runtime.world_model import extract_pinned_world_model_meta_from_payload
-from runtime.observability import log_exception_throttled
 from runtime.enforcement.world_model_pin_guard import enforce_world_model_pin_or_raise
 from runtime.events.world_model_events import build_world_model_pin_check_event
 from runtime.execution.executor_core import load_world
-
+from runtime.observability import log_exception_throttled
+from runtime.world_model import extract_pinned_world_model_meta_from_payload
 
 LOGGER = logging.getLogger(__name__)
 

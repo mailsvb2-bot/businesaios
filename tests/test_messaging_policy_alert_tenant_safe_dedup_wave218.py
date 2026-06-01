@@ -1,6 +1,8 @@
 from runtime.messaging_policy_alert_dedup.record import AlertNotificationDedupRecord
 from runtime.messaging_policy_alert_dedup_persistent.tenant_store_factory import TenantScopedDedupStoreFactory
-from runtime.messaging_policy_alert_dedup_persistent.tenant_suppression_service import TenantAwareAlertNotificationSuppressionService
+from runtime.messaging_policy_alert_dedup_persistent.tenant_suppression_service import (
+    TenantAwareAlertNotificationSuppressionService,
+)
 
 
 class _GW:

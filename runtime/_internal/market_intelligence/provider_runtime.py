@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import base64
 import os
+from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from contracts.platforms.market_intelligence_provider_catalog import (
@@ -20,7 +20,6 @@ from runtime._internal.market_intelligence.provider_contracts import (
     ProviderRequestContract,
     ProviderSchemaContract,
 )
-
 
 CANON_MARKET_INTELLIGENCE_PROVIDER_RUNTIME = True
 
@@ -193,7 +192,7 @@ class ProviderRuntimeFactory:
             password = self.secrets.read(auth.basic_password_ref)
             if not username or not password:
                 raise ProviderRuntimeError(ProviderErrorCode.AUTH_REQUIRED.value, 'missing provider basic auth credentials', provider=auth.provider)
-            raw = f'{username}:{password}'.encode('utf-8')
+            raw = f'{username}:{password}'.encode()
             headers['Authorization'] = f"Basic {base64.b64encode(raw).decode('ascii')}"
             return headers
         return headers

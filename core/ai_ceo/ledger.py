@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Growth Ledger adapter for AI CEO (read-only).
 
 AI CEO relies on ONE source of truth for money + growth KPIs.
@@ -13,8 +11,10 @@ It may read from:
 No side-effects.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.growth.today_ledger import build_today_kpi
 
@@ -42,7 +42,7 @@ def read_growth_snapshot(event_store: Any, *, tenant_id: str) -> GrowthSnapshotV
         return GrowthSnapshotV1()
 
 
-def to_dict(s: GrowthSnapshotV1) -> Dict[str, int]:
+def to_dict(s: GrowthSnapshotV1) -> dict[str, int]:
     return {
         "leads": int(s.leads),
         "spend_minor": int(s.spend_minor),

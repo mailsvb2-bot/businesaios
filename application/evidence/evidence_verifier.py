@@ -3,17 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from application.evidence.effect_evidence import EffectEvidenceBuilder
 from application.effects.effect_outcome_vocabulary import normalize_outcome_status, outcome_is_verified
 from application.effects.effect_verification_bridge import normalize_feedback_contract, normalize_router_evidence
+from application.evidence.effect_evidence import EffectEvidenceBuilder
 from execution.outcome_verifier import OutcomeExpectation, expectation_from_action
 from execution.verification.verification_engine import (
     VerificationEngine,
     connector_snapshot_evidence,
     execution_receipt_evidence,
+)
+from execution.verification.verification_engine import (
     router_evidence as verification_router_evidence,
 )
-
 
 CANON_EVIDENCE_VERIFIER = True
 

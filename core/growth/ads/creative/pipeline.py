@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import hashlib
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
-
-from core.llm.contracts import LLMClient, LLMMessage, LLMRequest
-from core.llm.templated import TemplatedLLM
 
 # Canonical integration points (avoid provider coupling / multiple truths).
 from core.ads.ads_service import AdsPlan, AdsService
 from core.llm.agent import LLMAgent, LLMTaskContext, TaskType
+from core.llm.contracts import LLMClient, LLMMessage, LLMRequest
+from core.llm.templated import TemplatedLLM
 
-from .models import CreativeCandidate, CreativeSelection, CreativeGuardrails
 from .guardrails import validate_creative
+from .models import CreativeCandidate, CreativeGuardrails, CreativeSelection
 from .prompting import CreativeBrief, build_messages
 
 
@@ -22,7 +20,7 @@ def _stable_id(*parts: str) -> str:
     return "cr_" + h[:16]
 
 
-def _parse_llm_text(text: str) -> Tuple[str, str, str, str]:
+def _parse_llm_text(text: str) -> tuple[str, str, str, str]:
     # Very forgiving parser:
     # try to extract lines prefixed by "Headline:" etc; else take first lines.
     headline = ""
@@ -97,10 +95,10 @@ def generate_candidates(
     offer_title: str,
     offer_details: str,
     city: str = "",
-    llm: Optional[LLMClient] = None,
+    llm: LLMClient | None = None,
     n: int = 3,
-    guardrails: Optional[CreativeGuardrails] = None,
-) -> List[CreativeCandidate]:
+    guardrails: CreativeGuardrails | None = None,
+) -> list[CreativeCandidate]:
     """
     Generate N creative candidates for an offer. Uses LLM if provided, else template fallback.
     """
@@ -110,7 +108,7 @@ def generate_candidates(
         llm = TemplatedLLM()
     g = guardrails or CreativeGuardrails()
 
-    out: List[CreativeCandidate] = []
+    out: list[CreativeCandidate] = []
     for i in range(n):
         brief = CreativeBrief(
             business_type=business_type,
@@ -176,15 +174,15 @@ def _score_candidate(c: CreativeCandidate, *, base: float = 0.1) -> float:
 
 def select_creative(
     *,
-    candidates: List[CreativeCandidate],
-    guardrails: Optional[CreativeGuardrails] = None,
+    candidates: list[CreativeCandidate],
+    guardrails: CreativeGuardrails | None = None,
 ) -> CreativeSelection:
     """
     Select a creative among candidates using heuristic score (bandit selection lives outside).
     This function is deterministic and safe.
     """
     g = guardrails or CreativeGuardrails()
-    scores: Dict[str, float] = {}
+    scores: dict[str, float] = {}
     ok_any = False
     for c in candidates:
         ok, _ = validate_creative(c, g)
@@ -224,11 +222,11 @@ class CreativePipeline:
         self._ads = ads
         self._cfg = cfg
 
-    def generate_creatives(self, ctx: LLMTaskContext) -> Dict[str, Any]:
+    def generate_creatives(self, ctx: LLMTaskContext) -> dict[str, Any]:
         res = self._llm.run_task(TaskType.ADS_CREATIVE_GENERATE, ctx)
         return {"text": res.text, "data": res.json, "meta": res.meta}
 
-    def critique_creatives(self, ctx: LLMTaskContext) -> Dict[str, Any]:
+    def critique_creatives(self, ctx: LLMTaskContext) -> dict[str, Any]:
         res = self._llm.run_task(TaskType.ADS_CREATIVE_CRITIQUE, ctx)
         return {"text": res.text, "data": res.json, "meta": res.meta}
 

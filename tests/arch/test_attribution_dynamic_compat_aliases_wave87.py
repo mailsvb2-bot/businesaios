@@ -3,8 +3,7 @@ from __future__ import annotations
 import importlib
 
 import attribution as attribution_root
-from attribution import catalog
-from attribution import ATTRIBUTION_COMPAT_EXPORTS
+from attribution import ATTRIBUTION_COMPAT_EXPORTS, catalog
 
 
 def test_attribution_root_is_thin_dynamic_facade() -> None:

@@ -7,16 +7,16 @@ or become an alternate decision surface.
 """
 
 import importlib
+import os
 from datetime import datetime
 from pathlib import Path
-import os
+
 sqlite3 = importlib.import_module("sqlite3")
 from threading import RLock
 
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_alerts import QueueAlert, QueueAlertSink
-
 
 CANON_RUNTIME_QUEUE_ALERT_STORE_SQLITE = True
 

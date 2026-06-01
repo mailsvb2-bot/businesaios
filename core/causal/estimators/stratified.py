@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Sequence, Tuple
+from typing import Any, Mapping, Sequence
 
 from core.causal.estimators.base import CausalEstimator, EstimatorResult, _counts
 from core.causal.math_utils import mean
 from core.causal.types import CausalDataset, EffectEstimate
 
-
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 def _stratum_key(cov: Mapping[str, Any], names: Sequence[str]) -> str:
-    parts: List[str] = []
+    parts: list[str] = []
     for n in names:
         v = cov.get(n)
         if v is None:
@@ -26,14 +25,14 @@ def _stratum_key(cov: Mapping[str, Any], names: Sequence[str]) -> str:
 class StratifiedEstimator(CausalEstimator):
     """Backdoor-like adjustment by exact stratification on selected covariates."""
 
-    covariate_names: Tuple[str, ...] = ()
+    covariate_names: tuple[str, ...] = ()
     min_group: int = 3
     method: str = "stratified_v1"
 
     def estimate(self, *, dataset: CausalDataset, estimand: str = "ATE") -> EstimatorResult:
         dataset.validate()
         names = tuple(self.covariate_names)
-        groups: Dict[str, List[tuple[float, float]]] = {}
+        groups: dict[str, list[tuple[float, float]]] = {}
         for r in dataset.rows:
             k = _stratum_key(r.covariates, names)
             groups.setdefault(k, []).append((float(r.treatment), float(r.outcome)))

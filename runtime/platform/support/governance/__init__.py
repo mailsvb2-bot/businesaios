@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol
 
+
 class ApprovalWorkflow:
     def approved(self, approvals: list[bool]) -> bool:
         return all(approvals) if approvals else False

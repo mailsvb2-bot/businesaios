@@ -56,7 +56,7 @@ class PricingWorldModel:
     def default(
         *,
         policy: PricingWorldModelPolicy = DEFAULT_PRICING_WORLD_MODEL_POLICY,
-    ) -> "PricingWorldModel":
+    ) -> PricingWorldModel:
         return PricingWorldModel(
             demand=IsoelasticDemandCurve(
                 a=policy.default_demand_scale,

@@ -16,8 +16,8 @@ from core.ai_ceo.planner_support import build_default_plan_steps
 
 
 def build_minimal_plan_steps(
-    *, tenant_id: str, user_id: str, snapshot: GrowthSnapshotV1, intent: Optional[CEOIntentV1]
-) -> List[CEOPlanStepV1]:
+    *, tenant_id: str, user_id: str, snapshot: GrowthSnapshotV1, intent: CEOIntentV1 | None
+) -> list[CEOPlanStepV1]:
     """Conservative default steps.
 
     Invariant:

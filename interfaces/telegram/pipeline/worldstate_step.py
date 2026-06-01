@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from typing import Any, Dict
+
 from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import build_world_state_for_telegram
 
 
-def build_worldstate(*, event_log: Any, ctx: Any, tenant_id: str, enrich: Dict[str, Any], resolved_product: Dict[str, Any], now_ms: int):
+def build_worldstate(*, event_log: Any, ctx: Any, tenant_id: str, enrich: dict[str, Any], resolved_product: dict[str, Any], now_ms: int):
     return build_world_state_for_telegram(
         event_store=event_log,
         ctx=ctx,

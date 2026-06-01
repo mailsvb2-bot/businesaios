@@ -13,4 +13,4 @@ class BudgetGuardTriggered:
     severity: str
     message: str
     occurred_at: datetime
-    details: Dict[str, Any] = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)

@@ -1,6 +1,9 @@
 from __future__ import annotations
+
 from datetime import date
+
 from tests.arch._canon_migration_registry_guard import load_registry
+
 
 def test_migration_registry_completed_entries_are_past_or_present() -> None:
     today = date.today()

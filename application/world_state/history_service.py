@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from contracts.decisioning.world_state_contract import WorldStateContract
 from application.world_state.history_metrics import scalarized_reward_delta, top_expected_value_delta
 from application.world_state.history_sample import HistorySample
 from application.world_state.history_summary import HistorySummary
 from application.world_state.history_window import HistoryWindow
+from contracts.decisioning.world_state_contract import WorldStateContract
 
 
 @dataclass

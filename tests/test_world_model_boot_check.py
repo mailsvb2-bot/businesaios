@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from bootstrap.world_model_boot_check import verify_boot_world_model_integrity
 from bootstrap.canonical_decision_world_model import CanonicalDecisionWorldModel
+from bootstrap.world_model_boot_check import verify_boot_world_model_integrity
 
 
 class DummyStore:

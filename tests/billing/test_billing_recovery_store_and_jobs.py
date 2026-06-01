@@ -1,19 +1,33 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from billing.chargeback_orchestrator import ChargebackCase
-from billing.commercial_cycle_contract import BillingCycleWindow, SubscriptionCommercialEnvelope, SubscriptionLifecycleStatus
+from billing.commercial_cycle_contract import (
+    BillingCycleWindow,
+    SubscriptionCommercialEnvelope,
+    SubscriptionLifecycleStatus,
+)
 from billing.dunning_orchestrator import DunningOrchestrator
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope
 from billing.ledger_event import LedgerEntry, LedgerPosting
 from billing.reconciliation_service import BillingReconciliationService
 from billing.recovery_store import SqliteChargebackStore, SqliteRefundStore
 from billing.refund_orchestrator import RefundResult
-from billing.scheduler import DunningRetryJob, InMemoryBillingJobLeaseStore, InMemoryBillingJobRunStore, InvoiceIssueJob, ReconciliationJob, RenewalJob, SqliteBillingJobLeaseStore, SqliteBillingJobRunStore, create_job_lease
+from billing.scheduler import (
+    DunningRetryJob,
+    InMemoryBillingJobLeaseStore,
+    InMemoryBillingJobRunStore,
+    InvoiceIssueJob,
+    ReconciliationJob,
+    RenewalJob,
+    SqliteBillingJobLeaseStore,
+    SqliteBillingJobRunStore,
+    create_job_lease,
+)
 from billing.sqlite_store import SqliteLedgerStore
 from billing.usage_rollup import UsageRollup
 
@@ -51,7 +65,7 @@ def test_sqlite_chargeback_store_persists_cases(tmp_path: Path) -> None:
 
 
 def test_renewal_job_renews_only_due_active_subscription() -> None:
-    now = datetime(2026, 4, 10, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 10, tzinfo=UTC)
     due_cycle = BillingCycleWindow(start_at=now - timedelta(days=31), end_at=now - timedelta(days=1), anchor='monthly')
     future_cycle = BillingCycleWindow(start_at=now - timedelta(days=5), end_at=now + timedelta(days=25), anchor='monthly')
     due = SubscriptionCommercialEnvelope(tenant_id='tenant-a', subscription_id='sub-due', plan_id='pro', status=SubscriptionLifecycleStatus.ACTIVE, cycle=due_cycle)
@@ -65,7 +79,7 @@ def test_renewal_job_renews_only_due_active_subscription() -> None:
 
 
 def test_invoice_issue_job_issues_drafts_once() -> None:
-    now = datetime(2026, 4, 10, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 10, tzinfo=UTC)
     draft = CommercialInvoiceEnvelope(tenant_id='tenant-a', invoice_id='inv-draft', currency='USD', subtotal_minor=100, tax_minor=20, total_minor=120)
     issued = CommercialInvoiceEnvelope(
         tenant_id='tenant-a',
@@ -85,7 +99,7 @@ def test_invoice_issue_job_issues_drafts_once() -> None:
 
 
 def test_dunning_retry_job_marks_due_actions_executed_once() -> None:
-    now = datetime(2026, 4, 10, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 10, tzinfo=UTC)
     orchestrator = DunningOrchestrator()
     orchestrator.open_run(tenant_id='tenant-a', invoice_id='inv-3', started_at=now - timedelta(days=10))
     job = DunningRetryJob(orchestrator=orchestrator, run_store=InMemoryBillingJobRunStore())
@@ -119,11 +133,11 @@ def test_reconciliation_job_is_stable_under_same_run_key(tmp_path: Path) -> None
         tax_minor=200,
         total_minor=1000,
         status=__import__('billing.commercial_cycle_contract', fromlist=['InvoiceLifecycleStatus']).InvoiceLifecycleStatus.ISSUED,
-        issued_at=datetime(2026, 4, 10, tzinfo=timezone.utc),
+        issued_at=datetime(2026, 4, 10, tzinfo=UTC),
     )
     usage = UsageRollup(tenant_id='tenant-a', meter_key='api.calls', window_key='2026-04-01', quantity=10.0)
-    first = job.run(tenant_id='tenant-a', invoices=(invoice,), usage_rollups=(usage,), now=datetime(2026, 4, 10, tzinfo=timezone.utc), run_key='recon-1', usage_rate_minor_by_meter={'api.calls': 100})
-    second = job.run(tenant_id='tenant-a', invoices=(invoice,), usage_rollups=(usage,), now=datetime(2026, 4, 10, tzinfo=timezone.utc), run_key='recon-1', usage_rate_minor_by_meter={'api.calls': 100})
+    first = job.run(tenant_id='tenant-a', invoices=(invoice,), usage_rollups=(usage,), now=datetime(2026, 4, 10, tzinfo=UTC), run_key='recon-1', usage_rate_minor_by_meter={'api.calls': 100})
+    second = job.run(tenant_id='tenant-a', invoices=(invoice,), usage_rollups=(usage,), now=datetime(2026, 4, 10, tzinfo=UTC), run_key='recon-1', usage_rate_minor_by_meter={'api.calls': 100})
     assert first.is_clean is True
     assert second.is_clean is True
 
@@ -152,8 +166,8 @@ def test_sqlite_job_run_store_persists_runs(tmp_path: Path) -> None:
         tenant_id='tenant-a',
         job_name='renewal',
         run_key='2026-04-10',
-        started_at=datetime(2026, 4, 10, tzinfo=timezone.utc),
-        finished_at=datetime(2026, 4, 10, tzinfo=timezone.utc),
+        started_at=datetime(2026, 4, 10, tzinfo=UTC),
+        finished_at=datetime(2026, 4, 10, tzinfo=UTC),
         metadata={'owner': 'test'},
     )
     store.save(run)
@@ -162,7 +176,7 @@ def test_sqlite_job_run_store_persists_runs(tmp_path: Path) -> None:
 
 
 def test_renewal_job_rejects_same_run_key_with_different_input() -> None:
-    now = datetime(2026, 4, 10, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 10, tzinfo=UTC)
     due_cycle = BillingCycleWindow(start_at=now - timedelta(days=31), end_at=now - timedelta(days=1), anchor='monthly')
     due = SubscriptionCommercialEnvelope(tenant_id='tenant-a', subscription_id='sub-due', plan_id='pro', status=SubscriptionLifecycleStatus.ACTIVE, cycle=due_cycle)
     changed = SubscriptionCommercialEnvelope(tenant_id='tenant-a', subscription_id='sub-due', plan_id='enterprise', status=SubscriptionLifecycleStatus.ACTIVE, cycle=due_cycle)
@@ -175,7 +189,7 @@ def test_renewal_job_rejects_same_run_key_with_different_input() -> None:
 
 def test_inmemory_job_lease_store_blocks_parallel_holder() -> None:
     store = InMemoryBillingJobLeaseStore()
-    observed = datetime.now(timezone.utc)
+    observed = datetime.now(UTC)
     first = create_job_lease(tenant_id='tenant-a', job_name='renewal', run_key='rk1', worker_id='worker-1', acquired_at=observed, lease_ttl=timedelta(days=1))
     store.acquire(first)
     import pytest
@@ -190,7 +204,7 @@ def test_inmemory_job_lease_store_blocks_parallel_holder() -> None:
 def test_sqlite_job_lease_store_persists_and_enforces_fencing(tmp_path: Path) -> None:
     db = str(tmp_path / 'job-leases.sqlite3')
     store = SqliteBillingJobLeaseStore(sqlite_path=db)
-    observed = datetime.now(timezone.utc)
+    observed = datetime.now(UTC)
     lease = create_job_lease(tenant_id='tenant-a', job_name='invoice_issue', run_key='rk2', worker_id='worker-1', acquired_at=observed, lease_ttl=timedelta(days=1))
     saved = store.acquire(lease)
     loaded = SqliteBillingJobLeaseStore(sqlite_path=db).get(tenant_id='tenant-a', job_name='invoice_issue', run_key='rk2')
@@ -202,7 +216,7 @@ def test_sqlite_job_lease_store_persists_and_enforces_fencing(tmp_path: Path) ->
 
 
 def test_renewal_job_honors_active_job_lease() -> None:
-    now = datetime(2026, 4, 10, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 10, tzinfo=UTC)
     due_cycle = BillingCycleWindow(start_at=now - timedelta(days=31), end_at=now - timedelta(days=1), anchor='monthly')
     due = SubscriptionCommercialEnvelope(tenant_id='tenant-a', subscription_id='sub-due', plan_id='pro', status=SubscriptionLifecycleStatus.ACTIVE, cycle=due_cycle)
     lease_store = InMemoryBillingJobLeaseStore()
@@ -216,7 +230,7 @@ def test_renewal_job_honors_active_job_lease() -> None:
 
 def test_job_lease_store_can_renew_fenced_lease() -> None:
     store = InMemoryBillingJobLeaseStore()
-    observed = datetime(2026, 4, 10, tzinfo=timezone.utc)
+    observed = datetime(2026, 4, 10, tzinfo=UTC)
     first = create_job_lease(tenant_id='tenant-a', job_name='renewal', run_key='rk-renew', worker_id='worker-1', acquired_at=observed, lease_ttl=timedelta(minutes=5))
     saved = store.acquire(first)
     renewed = store.renew(tenant_id='tenant-a', job_name='renewal', run_key='rk-renew', fencing_token=saved.fencing_token, acquired_at=observed + timedelta(minutes=4, seconds=30), lease_ttl=timedelta(minutes=5))
@@ -226,9 +240,9 @@ def test_job_lease_store_can_renew_fenced_lease() -> None:
 
 
 def test_refund_and_chargeback_stamp_lineage_metadata(tmp_path: Path) -> None:
-    from billing.refund_orchestrator import RefundOrchestrator
     from billing.chargeback_orchestrator import ChargebackOrchestrator
     from billing.payment_provider_contract import PaymentProviderContract
+    from billing.refund_orchestrator import RefundOrchestrator
     from runtime.monetization import MonetizationService
 
     class _RefundProvider(PaymentProviderContract):
@@ -238,7 +252,7 @@ def test_refund_and_chargeback_stamp_lineage_metadata(tmp_path: Path) -> None:
         def refund(self, *, invoice_id: str, tenant_id: str, amount_minor: int, currency: str, reason: str, metadata=None):
             return {'refund_id': 'rf-1', 'external_reference': 'ext-rf-1', 'provider_name': 'stripe'}
 
-    invoice = CommercialInvoiceEnvelope(tenant_id='tenant-a', invoice_id='inv-l1', currency='USD', subtotal_minor=100, tax_minor=0, total_minor=100, status=__import__('billing.commercial_cycle_contract', fromlist=['InvoiceLifecycleStatus']).InvoiceLifecycleStatus.PAID, issued_at=datetime(2026,4,10,tzinfo=timezone.utc), paid_minor=100, metadata={'provider_name_hint': 'stripe'})
+    invoice = CommercialInvoiceEnvelope(tenant_id='tenant-a', invoice_id='inv-l1', currency='USD', subtotal_minor=100, tax_minor=0, total_minor=100, status=__import__('billing.commercial_cycle_contract', fromlist=['InvoiceLifecycleStatus']).InvoiceLifecycleStatus.PAID, issued_at=datetime(2026,4,10,tzinfo=UTC), paid_minor=100, metadata={'provider_name_hint': 'stripe'})
     ledger = SqliteLedgerStore(sqlite_path=str(tmp_path / 'ledger.sqlite3'))
     refund_orch = RefundOrchestrator(provider=_RefundProvider(), ledger_store=ledger, monetization_service=MonetizationService(), refund_store=SqliteRefundStore(sqlite_path=str(tmp_path / 'refunds.sqlite3')) )
     updated_invoice, refund_result, _, _ = refund_orch.refund(invoice=invoice, user_id='u1', amount_minor=10, reason='goodwill', idempotency_key='idem-r1')

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 from core.math import ThompsonBernoulli
 
@@ -28,7 +27,7 @@ class CreativeThompsonBandit:
     - select() kept only as legacy compatibility wrapper
     """
 
-    def __init__(self, arms: List[CreativeArm]):
+    def __init__(self, arms: list[CreativeArm]):
         if not arms:
             raise ValueError("arms must be non-empty.")
         self.arms = list(arms)

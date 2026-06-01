@@ -2,13 +2,14 @@ from __future__ import annotations
 
 """Settings, state, demo and weather keyboards."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from core.ux.callbacks import CB_MENU_MAIN
+
 from .common import mk
 
 
-def kb_demo_kind() -> Dict[str, Any]:
+def kb_demo_kind() -> dict[str, Any]:
     return mk(
         [
             [{"text": "⏰ Утро", "callback_data": "demo_kind_work"}],
@@ -18,7 +19,7 @@ def kb_demo_kind() -> Dict[str, Any]:
     )
 
 
-def kb_weather() -> Dict[str, Any]:
+def kb_weather() -> dict[str, Any]:
     return mk(
         [
             [{"text": "🏙 Изменить город", "callback_data": "weather:city"}],
@@ -27,7 +28,7 @@ def kb_weather() -> Dict[str, Any]:
     )
 
 
-def kb_settings_menu() -> Dict[str, Any]:
+def kb_settings_menu() -> dict[str, Any]:
     return mk(
         [
             [{"text": "⏰ Время (утро)", "callback_data": "settings:time:work"}],
@@ -39,7 +40,7 @@ def kb_settings_menu() -> Dict[str, Any]:
     )
 
 
-def kb_state_menu() -> Dict[str, Any]:
+def kb_state_menu() -> dict[str, Any]:
     return mk(
         [
             [{"text": "⭐ Оценить состояние", "callback_data": "state:rate"}],
@@ -51,7 +52,7 @@ def kb_state_menu() -> Dict[str, Any]:
     )
 
 
-def kb_mood_rate() -> Dict[str, Any]:
+def kb_mood_rate() -> dict[str, Any]:
     row1 = [{"text": str(i), "callback_data": f"state:rate:{i}"} for i in range(0, 6)]
     row2 = [{"text": str(i), "callback_data": f"state:rate:{i}"} for i in range(6, 11)]
     return mk([row1, row2, [{"text": "⬅️ Назад", "callback_data": "settings:state"}]])

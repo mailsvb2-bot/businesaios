@@ -3,10 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from application.planning.strategy_memory import StrategyMemoryService
 from execution.goal_decomposition_engine import GoalDecompositionEngine
 from execution.goal_family_classifier import GoalFamilyClassifier
-from application.planning.strategy_memory import StrategyMemoryService
-
 
 CANON_LONG_HORIZON_PLANNER = True
 

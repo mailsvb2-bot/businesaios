@@ -5,8 +5,8 @@ from typing import Sequence
 
 from contracts.event_store import EventStore
 
-from ..types import Lesson, LessonQuery
 from ..serializers.knowledge_payload import deserialize_lesson, serialize_lesson
+from ..types import Lesson, LessonQuery
 from .event_store_codec import LESSON_EVENT_TYPE, append_knowledge_event, iter_knowledge_events
 
 

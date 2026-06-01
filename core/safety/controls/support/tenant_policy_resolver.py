@@ -4,9 +4,9 @@ from dataclasses import replace
 from typing import Any, Mapping
 
 from config.decision_safety_policy import (
+    DEFAULT_REWARD_GUARD_POLICY_DEFAULTS,
     DEFAULT_RISK_SCORE_GUARD_POLICY,
     DEFAULT_RISK_SCORER_POLICY,
-    DEFAULT_REWARD_GUARD_POLICY_DEFAULTS,
     DEFAULT_SAFETY_PROFILE_POLICY,
     RewardGuardPolicyDefaults,
     RiskScoreGuardPolicy,

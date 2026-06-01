@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 from core.economics.objective import DEFAULT_OBJECTIVE, normalize_objective
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 EXPECTED_AUTOPILOT_RUNTIME_ACTION = "ads_autopilot_tick@v1"
 EXPECTED_DECISION_ISSUER = "businesaios-core"
@@ -20,7 +20,7 @@ class AdsAutopilotConstraints:
     max_cpa_minor: int = 0
     min_roas_x1000: int = 0
 
-    allowed_platforms: List[str] = field(default_factory=list)
+    allowed_platforms: list[str] = field(default_factory=list)
 
     def validate(self) -> None:
         if int(self.max_daily_budget_minor) < 0:
@@ -42,7 +42,7 @@ class AdsAutopilotRequest:
 
     offer: Json = field(default_factory=dict)
     audience: Json = field(default_factory=dict)
-    channels: List[str] = field(default_factory=list)
+    channels: list[str] = field(default_factory=list)
 
     constraints: AdsAutopilotConstraints = field(default_factory=AdsAutopilotConstraints)
 

@@ -9,12 +9,12 @@ from runtime.executor import RuntimeExecutor
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope
 from tenancy.tenant_connector_scope import TenantConnectorScope
+from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetGuard
 from tenancy.tenant_feature_flags import TenantFeatureFlags
 from tenancy.tenant_memory_scope import TenantMemoryScope
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore, TenantPolicyBundle
 from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_runtime_limits import TenantRuntimeLimits
-from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetGuard
 
 
 @dataclass(frozen=True)

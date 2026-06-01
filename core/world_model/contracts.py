@@ -10,7 +10,6 @@ from core.world_model.types import (
     WorldSnapshotRequest,
 )
 
-
 WORLD_SNAPSHOT_SCHEMA_VERSION = "world_snapshot@v1"
 WORLD_SNAPSHOT_ROLE = "state_snapshot_only"
 WORLD_SNAPSHOT_DECISION_ISSUER = "none"

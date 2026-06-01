@@ -21,7 +21,7 @@ def compute_segment_observables(person_fields: list[PersonField]) -> dict[str, f
     coherence = [p.dynamic_observables.get("coherence_score", 0.0) for p in person_fields]
     return {
         "segment_trust_drift": clamp(mean([p.dynamic_observables.get("trust_velocity", 0.0) for p in person_fields])),
-        "segment_price_tension": clamp(mean([max(0.0, r - t) for r, t in zip(readiness, trust)])),
+        "segment_price_tension": clamp(mean([max(0.0, r - t) for r, t in zip(readiness, trust, strict=False)])),
         "segment_conversion_wave": clamp(mean([p.dynamic_observables.get("conversion_window_score", 0.0) for p in person_fields])),
         "segment_fatigue_index": clamp(mean(fatigue)),
         "segment_offer_saturation": clamp(mean([p.dynamic_observables.get("offer_repulsion_score", 0.0) for p in person_fields])),

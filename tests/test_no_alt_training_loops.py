@@ -1,7 +1,6 @@
 import pathlib
 import re
 
-
 # Guardrail: forbid alternative training loops in-repo.
 # IMPORTANT: use word-boundary regex to avoid false positives like "unit_profit(".
 FORBIDDEN_CALL_PATTERNS = [

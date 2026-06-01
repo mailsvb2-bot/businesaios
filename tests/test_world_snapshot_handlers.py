@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from core.world_model.builders.world_snapshot_builder import build_empty_world_snapshot
+from core.world_model.explainers.world_snapshot_explainer import explain_world_snapshot
 from core.world_model.service import WorldModelService
-from core.world_model.types import WorldModelBuildInput
+from core.world_model.types import WorldModelBuildInput, WorldSnapshotRequest
+from runtime.handlers.world_model_build import handle_world_model_build
 from runtime.handlers.world_snapshot_build import handle_world_snapshot_build
 from runtime.handlers.world_snapshot_explain import handle_world_snapshot_explain
 
@@ -26,10 +29,6 @@ def test_world_snapshot_handlers_are_thin_and_work() -> None:
     assert "summary" in explanation
 
 
-from core.world_model.builders.world_snapshot_builder import build_empty_world_snapshot
-from core.world_model.explainers.world_snapshot_explainer import explain_world_snapshot
-from core.world_model.types import WorldSnapshotRequest
-from runtime.handlers.world_model_build import handle_world_model_build
 
 
 class _DummyBuilder:

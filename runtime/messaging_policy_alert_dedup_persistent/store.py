@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from runtime.tenancy import normalize_tenant_id
 from runtime.messaging_policy_alert_dedup.record import AlertNotificationDedupRecord
 from runtime.messaging_policy_alert_dedup_persistent.settings_key_builder import build_settings_key
 from runtime.messaging_policy_alert_dedup_persistent.value_builder import build_dedup_value
 from runtime.messaging_policy_alert_dedup_persistent.value_parser import parse_dedup_value
+from runtime.tenancy import normalize_tenant_id
 
 
 class PersistentAlertNotificationDedupStore:

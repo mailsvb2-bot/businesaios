@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 FORBIDDEN_SNIPPETS = ('DecisionCore', 'business policy', 'world_state_adapter')
 
 

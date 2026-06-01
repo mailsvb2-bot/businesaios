@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from runtime.public_api_alias import install_public_api_alias
+
 """Canonical runtime tenancy normalization surface.
 
 Runtime code may normalize and validate tenant identifiers through this module
@@ -20,7 +21,7 @@ from core.tenancy.tenant import current_tenant_id
 from runtime.tenancy.contract import RUNTIME_TENANCY_PUBLIC_API, TENANCY_NORMALIZATION_CANON
 
 __all__ = [
-    'CANON_RUNTIME_TENANCY_NAMESPACE', 
+    'CANON_RUNTIME_TENANCY_NAMESPACE',
     "RUNTIME_TENANCY_PUBLIC_API",
     "TENANCY_NORMALIZATION_CANON",
     "UNKNOWN_TENANT_ID",

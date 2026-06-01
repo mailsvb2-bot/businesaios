@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Mapping
 
 from config.config_versioning import ConfigVersion
@@ -16,7 +16,7 @@ _POLICY_MANIFEST_SCHEMA_VERSION = 2
 
 
 def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True)

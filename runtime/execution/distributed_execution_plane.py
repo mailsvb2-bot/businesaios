@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from hashlib import sha256
 from typing import Any, Mapping, Protocol, Sequence
-import json
-
 
 CANON_DISTRIBUTED_EXECUTION_PLANE = True
 

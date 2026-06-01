@@ -10,7 +10,6 @@ from runtime.execution.execution_path_lock import (
     validate_and_lock_execution_path,
 )
 
-
 CANON_RUNTIME_DECISION_EXECUTION_SERVICE_OWNER = True
 CANON_RUNTIME_DECISION_EXECUTION_RUN_OWNER = True
 CANON_RUNTIME_DECISION_EXECUTION_BOUND_SERVICE_OWNER = True
@@ -30,7 +29,7 @@ def build_decision_execution_service(
     executor: RuntimeExecutorPort,
     *,
     keyring: Any | None = None,
-) -> "DecisionExecutionService":
+) -> DecisionExecutionService:
     return DecisionExecutionService(executor=executor, keyring=keyring)
 
 
@@ -38,7 +37,7 @@ def build_bound_decision_execution_service(
     *,
     executor: RuntimeExecutorPort,
     keyring: KeyringLike,
-) -> "DecisionExecutionService":
+) -> DecisionExecutionService:
     return build_decision_execution_service(executor=executor, keyring=keyring)
 
 
@@ -52,7 +51,7 @@ def build_bound_decision_execution_service_spec(
 
 def validate_and_run_decision_command(
     *,
-    service: "DecisionExecutionService",
+    service: DecisionExecutionService,
     command: Any,
 ) -> Any:
     return service.run(command)
@@ -63,7 +62,7 @@ class DecisionExecutionService:
         self._executor = executor
         self._keyring = keyring
 
-    def bind_keyring(self, keyring: Any) -> "DecisionExecutionService":
+    def bind_keyring(self, keyring: Any) -> DecisionExecutionService:
         self._keyring = keyring
         return self
 

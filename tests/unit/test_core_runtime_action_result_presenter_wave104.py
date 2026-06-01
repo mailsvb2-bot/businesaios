@@ -4,11 +4,11 @@ import importlib
 
 from application.decision.action_result import ActionExecutionResult
 from application.decision.action_result_presenter import present_action_execution_result
-from runtime.application.action_result_presenter import (
-    present_action_execution_result as compat_present_action_execution_result,
-)
 from runtime.application import (
     present_action_execution_result as public_present_action_execution_result,
+)
+from runtime.application.action_result_presenter import (
+    present_action_execution_result as compat_present_action_execution_result,
 )
 
 

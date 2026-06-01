@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
-import importlib.util
-
 
 _SPEC = importlib.util.spec_from_file_location(
     "runtime.handlers.ai_ceo_plan_file",

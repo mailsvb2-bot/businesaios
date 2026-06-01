@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 """Canonical config namespace with lazy public exports."""
 from importlib import import_module
 from typing import Any
+
 CANON_CONFIG_PUBLIC_API = True
 CANON_CONFIG_PACKAGE_OWNER = True
 _DIRECT_EXPORTS = {

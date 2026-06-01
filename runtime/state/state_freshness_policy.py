@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 from runtime.state.state_contract import StateObservation
 
-
 CANON_STATE_FRESHNESS_POLICY = True
 
 

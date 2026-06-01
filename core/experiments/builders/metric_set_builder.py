@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, List, Tuple
+from typing import Iterable
 
 from core.experiments.enums import MetricDirection
 from core.experiments.errors import ExperimentValidationError
@@ -8,8 +8,8 @@ from core.experiments.types import MetricDefinition
 
 
 class MetricSetBuilder:
-    def build(self, definitions: Iterable[Tuple[str, MetricDirection, float, bool]]) -> List[MetricDefinition]:
-        metrics: List[MetricDefinition] = []
+    def build(self, definitions: Iterable[tuple[str, MetricDirection, float, bool]]) -> list[MetricDefinition]:
+        metrics: list[MetricDefinition] = []
         seen: set[str] = set()
 
         for metric_key, direction, mde, guardrail in definitions:

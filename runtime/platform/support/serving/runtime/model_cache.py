@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class ModelCache:
     def __init__(self) -> None:
         self._cache: dict[str, object] = {}

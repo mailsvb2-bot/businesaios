@@ -12,7 +12,12 @@ from core.policies.telegram.handlers.autopilot import handle_autopilot
 from core.policies.telegram.handlers.gift import handle_gift
 from core.policies.telegram.handlers.growth_strategy import handle_growth_strategy
 from core.policies.telegram.handlers.offer_outcome import handle_offer_outcome
-from core.policies.telegram.helpers import ProposedAction, build_legacy_prices, choose_marketing_variant, propose_message
+from core.policies.telegram.helpers import (
+    ProposedAction,
+    build_legacy_prices,
+    choose_marketing_variant,
+    propose_message,
+)
 from core.policies.telegram.routes.command_routes import handle_command_routes
 from core.policies.telegram.routes.marketing_routes import handle_marketing_routes
 from core.policies.telegram.routes.settings_routes import handle_settings_routes
@@ -31,10 +36,10 @@ def _has_perm(ctx: TelegramCtx, perm: str) -> bool:
 
 def handle(ctx: TelegramCtx, *, default_price_rub: int, bot_username: str = "", gift_ttl_sec: int = 7 * 24 * 3600) -> ProposedAction:
     user_id = ctx.state.user_id or "anonymous"
-    role = UserRoleInfo.from_settings(ctx.settings if isinstance(ctx.settings, dict) else {})
+    _ = UserRoleInfo.from_settings(ctx.settings if isinstance(ctx.settings, dict) else {})
     legacy_prices = build_legacy_prices(default_price_rub=default_price_rub)
 
-    def pm(*, text: str, reply_markup: dict | None = None, track_event_type: str | None = None, track_payload: Dict | None = None) -> ProposedAction:
+    def pm(*, text: str, reply_markup: dict | None = None, track_event_type: str | None = None, track_payload: dict | None = None) -> ProposedAction:
         return propose_message(user_id=user_id, text=text, reply_markup=reply_markup, callback_query_id=ctx.callback_query_id, track_event_type=track_event_type, track_payload=track_payload)
 
     for handler in (

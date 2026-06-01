@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Protocol
+from typing import Protocol
 
 
 @dataclass(frozen=True)
@@ -12,5 +12,5 @@ class MarketingVariant:
 
 
 class MarketingLLM(Protocol):
-    def generate_variants(self, *, context: str, goal: str, n: int = 5) -> List[MarketingVariant]:
+    def generate_variants(self, *, context: str, goal: str, n: int = 5) -> list[MarketingVariant]:
         ...

@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Mapping
 
-from application.business_autonomy.contracts import BusinessExecutionEvidence, BusinessExecutionResult, ExecutionVerdict, BusinessGoalEnvelope
+from application.business_autonomy.contracts import (
+    BusinessExecutionEvidence,
+    BusinessExecutionResult,
+    BusinessGoalEnvelope,
+    ExecutionVerdict,
+)
 from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from application.business_autonomy.registry import RegisteredBusinessCapabilities
 from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
 from application.planning.distributed_planning_memory_backend import DistributedPlanningMemoryBackend
 from governance.control_plane_audit_log import GovernanceAuditEvent
-from storage.evidence_store import EvidenceRecord
 from storage.distributed_evidence_audit_backend import DistributedEvidenceStore, DistributedGovernanceAuditLog
+from storage.evidence_store import EvidenceRecord
 
 
 @dataclass(frozen=True)
@@ -109,7 +114,7 @@ class DistributedBusinessAutonomyEvidenceStore:
     backend: DistributedEvidenceStore
 
     def append_result(self, result: BusinessExecutionResult) -> EvidenceRecord:
-        created_at = datetime.now(timezone.utc)
+        created_at = datetime.now(UTC)
         record = EvidenceRecord(
             evidence_id=f"business-autonomy:{result.execution_id}",
             tenant_id=str(result.metadata.get("tenant_id") or result.business_id or "global"),
@@ -152,7 +157,7 @@ class DistributedBusinessPlanningMemorySink:
         business_id = str(request.business_id)
         goal_family = str(request.metadata.get("goal_family") or request.goal_type or "default")
         verified = result.verdict in {ExecutionVerdict.COMPLETED, ExecutionVerdict.SIMULATED}
-        snapshot = self.backend.merge_feedback(
+        _ = self.backend.merge_feedback(
             tenant_id=tenant_id,
             business_id=business_id,
             goal_plan_patch={
@@ -164,7 +169,7 @@ class DistributedBusinessPlanningMemorySink:
             strategy_patch={
                 "goal_family": goal_family,
                 "strategic_signal": "business_autonomy_execution",
-                "last_updated_at": datetime.now(timezone.utc).isoformat(),
+                "last_updated_at": datetime.now(UTC).isoformat(),
             },
             multi_goal_patch={
                 "active_goal_id": str(request.goal_id),

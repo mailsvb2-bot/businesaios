@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-
 budget_mod = pytest.importorskip("execution.action_budget_engine")
 perf_mod = pytest.importorskip("execution.performance_feedback_learning")
 

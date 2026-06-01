@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+from typing import Any
+
+from runtime.platform.config.yaml_loader import load_yaml
+
 """Validate offer catalogs in data/offer_catalogs.
 
 Why a script (not only tests):
@@ -10,25 +16,21 @@ This script is intentionally conservative: it checks the minimal structural
 requirements (catalog_id optional, offers list required, each offer has id).
 """
 
-import sys
-from pathlib import Path
-from typing import Any, Dict, List, Tuple
-
-from runtime.platform.config.yaml_loader import load_yaml
 
 
-def _err(code: str, path: Path, msg: str) -> Tuple[str, str, str]:
+
+def _err(code: str, path: Path, msg: str) -> tuple[str, str, str]:
     return (code, str(path), msg)
 
 
-def _load_yaml(path: Path) -> Dict[str, Any]:
+def _load_yaml(path: Path) -> dict[str, Any]:
     try:
         return load_yaml(path)
     except ValueError:
         raise ValueError("CATALOG_NOT_MAPPING")
 
 
-def _validate_catalog(doc: Dict[str, Any]) -> None:
+def _validate_catalog(doc: dict[str, Any]) -> None:
     if "catalog_id" in doc:
         if not isinstance(doc.get("catalog_id"), str) or not doc["catalog_id"].strip():
             raise ValueError("BAD_catalog_id")
@@ -60,7 +62,7 @@ def main() -> int:
         print(f"[offers-validate] OK (no dir): {base}")
         return 0
 
-    errors: List[Tuple[str, str, str]] = []
+    errors: list[tuple[str, str, str]] = []
     files = sorted(list(base.rglob("*.yaml")) + list(base.rglob("*.yml")))
     for p in files:
         try:

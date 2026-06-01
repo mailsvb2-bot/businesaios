@@ -4,7 +4,7 @@ import pytest
 
 from security.encryption_policy import EncryptionAlgorithm, EncryptionPolicy
 from security.secret_contract import SecretRef, SecretSource, SecretState
-from security.secret_vault import InMemorySecretVault
+from security.secret_vault import FileSecretVault, InMemorySecretVault, build_default_secret_vault
 
 
 def test_secret_vault_roundtrip_encrypts_and_preserves_metadata() -> None:
@@ -95,7 +95,6 @@ def test_secret_vault_refuses_fake_external_crypto_modes() -> None:
         vault.seed_plaintext(ref=ref, plaintext='not-pretending-to-do-aes')
 
 
-from security.secret_vault import FileSecretVault, build_default_secret_vault
 
 
 def test_file_secret_vault_roundtrip_persists_across_instances(tmp_path) -> None:

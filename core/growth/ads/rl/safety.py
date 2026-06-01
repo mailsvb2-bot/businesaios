@@ -4,7 +4,6 @@ import hashlib
 from dataclasses import dataclass
 
 import learning.rollout as _learning_rollout
-
 from config.ads_rl_policy import DEFAULT_ADS_RL_SAFETY_POLICY, AdsRLSafetyPolicy
 
 from .contracts import AdsRLAction, AdsRLOptSpec

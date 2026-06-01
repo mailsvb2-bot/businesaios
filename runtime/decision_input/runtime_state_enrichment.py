@@ -10,7 +10,6 @@ from runtime.decision_input.decision_core_adapter import adapt_packet_for_decisi
 from runtime.integration.decision_input_packet import DecisionInputPacket
 from runtime.runtime_observability import RuntimeObservability
 
-
 CANON_RUNTIME_STATE_ENRICHMENT_SERVICE_OWNER = True
 
 

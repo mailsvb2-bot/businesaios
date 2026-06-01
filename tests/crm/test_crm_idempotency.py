@@ -1,4 +1,5 @@
 import pytest
+
 from crm.upsert.crm_idempotency_policy import CrmIdempotencyPolicy
 
 

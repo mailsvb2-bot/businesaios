@@ -4,17 +4,21 @@ import logging
 from dataclasses import replace
 from typing import Any, Dict, List
 
+from core.causal.evidence.from_events import (
+    build_daily_panel,
+    estimate_effect_from_daily_panel,
+    placebo_shift_treatment,
+)
 from kernel.world_state import WorldStateV1
-from core.causal.evidence.from_events import build_daily_panel, estimate_effect_from_daily_panel, placebo_shift_treatment
 
 logger = logging.getLogger(__name__)
 
 
-def build_causal_evidence_from_event_window(events: List[Dict[str, Any]]) -> Dict[str, Any]:
+def build_causal_evidence_from_event_window(events: list[dict[str, Any]]) -> dict[str, Any]:
     evs = list(events or [])
     if not evs:
         return {}
-    out: Dict[str, Any] = {"schema_version": 1}
+    out: dict[str, Any] = {"schema_version": 1}
     pricing_panel = build_daily_panel(
         evs,
         treatment_event_types=("pricing_change_applied",),
@@ -57,7 +61,7 @@ def build_causal_evidence_from_event_window(events: List[Dict[str, Any]]) -> Dic
     return out
 
 
-def apply_causal_overlay(*, ws: WorldStateV1, events: List[Dict[str, Any]]) -> WorldStateV1:
+def apply_causal_overlay(*, ws: WorldStateV1, events: list[dict[str, Any]]) -> WorldStateV1:
     try:
         causal = build_causal_evidence_from_event_window(events)
         if not isinstance(causal, dict) or not causal:

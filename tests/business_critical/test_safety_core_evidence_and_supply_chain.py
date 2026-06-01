@@ -6,7 +6,6 @@ from pathlib import Path
 from application.business_autonomy.safety_core import build_safety_core_admin_surface
 from application.business_autonomy.safety_core_diagnostics import (
     LIVE_CONTRACT_VERSION,
-    build_safety_core_parity_evidence,
     evaluate_live_contract_case,
     write_safety_core_parity_evidence,
 )

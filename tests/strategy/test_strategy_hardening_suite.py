@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 from execution.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
+from execution.strategy.planner_memory import PlannerMemory
 from execution.strategy.planner_state_contract import StrategicGoalRecord
 from execution.strategy.portfolio_allocator import PortfolioAllocator
-from execution.strategy.planner_memory import PlannerMemory
+
+
 def _record(*, goal_id: str, planning_memory: dict, priority: int = 70, urgency: int = 70) -> StrategicGoalRecord:
     return StrategicGoalRecord(
         goal_id=goal_id,

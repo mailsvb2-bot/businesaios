@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
+from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 
 
 @dataclass(frozen=True)

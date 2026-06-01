@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 """Fail-closed top-level dependency drift check.
 
 The project intentionally keeps a small top-level dependency set. CI and Docker
@@ -8,7 +10,6 @@ that locked contract. This check is intentionally stdlib-only so it can run
 before dependencies are installed.
 """
 
-from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS = ROOT / "requirements.txt"

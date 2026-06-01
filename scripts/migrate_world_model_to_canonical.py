@@ -4,7 +4,6 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 
 @dataclass(frozen=True)
@@ -34,7 +33,7 @@ def migrate_file(path: Path) -> MigrationChange:
         return MigrationChange(path=str(path), changed=False, notes=["read_failed"])
 
     text = original
-    notes: List[str] = []
+    notes: list[str] = []
 
     match = IMPORT_PATTERN.search(text)
     if match:

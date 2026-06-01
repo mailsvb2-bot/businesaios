@@ -1,12 +1,13 @@
 from __future__ import annotations
+
 """SQLite DDL and migration helpers for SqliteEventStore.
 
 Extracted from sqlite_event_store.py to eliminate god-module.
 """
 
 import sqlite3
-from observability.platform.observability.silent import swallow
 
+from observability.platform.observability.silent import swallow
 
 # ---------------------------------------------------------------------------
 # DDL

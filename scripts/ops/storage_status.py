@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+from runtime.canonical_e2e_smoke import run_canonical_e2e_smoke
+from runtime.wiring import resolve_storage_config, storage_control_plane_status, storage_live_smoke_status
+
 """Server-side storage readiness/live-smoke CLI.
 
 Usage on the server:
@@ -12,20 +22,12 @@ Default mode is safe/read-only and does not open database connections. The
 initialize schemas, so they must be used only as explicit ops gates.
 """
 
-import argparse
-import json
-import os
-import sys
-from pathlib import Path
-from typing import Any
 
 try:
     from dotenv import load_dotenv
 except Exception:  # pragma: no cover - dependency is in requirements.lock.txt; kept defensive for bootstrap diagnostics.
     load_dotenv = None  # type: ignore[assignment]
 
-from runtime.canonical_e2e_smoke import run_canonical_e2e_smoke
-from runtime.wiring import resolve_storage_config, storage_control_plane_status, storage_live_smoke_status
 
 
 def _load_env_file(path: str | None) -> None:

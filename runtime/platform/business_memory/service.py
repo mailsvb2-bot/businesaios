@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from runtime.platform.business_memory.compactor import BusinessMemoryCompactor
-from runtime.platform.business_memory.policy import BusinessMemoryPolicy, DEFAULT_BUSINESS_MEMORY_POLICY
+from runtime.platform.business_memory.policy import DEFAULT_BUSINESS_MEMORY_POLICY, BusinessMemoryPolicy
 from runtime.platform.business_memory.projections import apply_step_feedback, merge_request_profile, to_runtime_context
 from runtime.platform.business_memory.second_brain_boundary import sanitize_business_memory_payload
 from runtime.platform.business_memory.store import FileBusinessMemoryStore

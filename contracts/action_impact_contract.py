@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Mapping
 
-
 CANON_ACTION_IMPACT_CONTRACT = True
 
 

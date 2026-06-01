@@ -6,7 +6,7 @@ from typing import Any, Dict
 def send_autopilot_message(
     *,
     effects,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     decision_id: str,
     correlation_id: str,
     text: str,

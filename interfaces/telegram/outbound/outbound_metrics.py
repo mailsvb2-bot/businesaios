@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Outbound queue metrics collector.
 
 Tracks latency per priority bucket (wait_ms, exec_ms) in a bounded ring.

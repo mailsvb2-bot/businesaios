@@ -7,13 +7,13 @@ core/policies/telegram/handlers/admin/ to avoid god-modules and hidden logic.
 """
 
 from core.policies.telegram.context import TelegramCtx
+from core.policies.telegram.handlers.admin.analytics import handle_analytics
 from core.policies.telegram.handlers.admin.commands import handle_admin_commands
-from core.policies.telegram.handlers.admin.menu import handle_admin_menu
-from core.policies.telegram.handlers.admin.roles_perms import handle_roles_perms
 from core.policies.telegram.handlers.admin.copywriter import handle_copywriter
 from core.policies.telegram.handlers.admin.evolution import handle_evolution
+from core.policies.telegram.handlers.admin.menu import handle_admin_menu
 from core.policies.telegram.handlers.admin.pricing import handle_pricing
-from core.policies.telegram.handlers.admin.analytics import handle_analytics
+from core.policies.telegram.handlers.admin.roles_perms import handle_roles_perms
 from core.policies.telegram.helpers import ProposedAction
 
 

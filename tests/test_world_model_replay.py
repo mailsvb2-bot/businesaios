@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 from application.decision_state.world_model_replay import replay_state_against_world_model
 from bootstrap.canonical_decision_world_model import CanonicalDecisionWorldModel
@@ -10,20 +10,20 @@ from bootstrap.canonical_decision_world_model import CanonicalDecisionWorldModel
 @dataclass(frozen=True)
 class FakeWorldState:
     schema_version: int
-    user: Dict[str, Any]
-    session: Dict[str, Any]
-    product: Dict[str, Any]
-    economy: Dict[str, Any]
+    user: dict[str, Any]
+    session: dict[str, Any]
+    product: dict[str, Any]
+    economy: dict[str, Any]
     timestamp_ms: int
     tenant_id: str = "tenant-1"
-    meta: Dict[str, Any] = field(default_factory=dict)
-    user_id: Optional[str] = None
+    meta: dict[str, Any] = field(default_factory=dict)
+    user_id: str | None = None
     safe_mode: bool = False
     capital: float = 0.0
     horizon_state: str = "stable"
-    behavior: Optional[Dict[str, Any]] = None
-    price_constraints: Optional[Dict[str, Any]] = None
-    deployment_proposal: Optional[Dict[str, Any]] = None
+    behavior: dict[str, Any] | None = None
+    price_constraints: dict[str, Any] | None = None
+    deployment_proposal: dict[str, Any] | None = None
     manual_override: bool = False
 
 

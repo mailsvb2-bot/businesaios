@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from core.observability.perf_span import (
     Span,
     emit_sla_violation,
-    emit_span as _emit_span_core,
     set_sla_budget_ms,
     sla_budget_ms,
+)
+from core.observability.perf_span import (
+    emit_span as _emit_span_core,
 )
 from core.observability.perf_utils import AutoAccelerator, stable_hash_01
 from core.observability.perf_watchdog import (
@@ -29,7 +31,7 @@ def emit_span(
     decision_id: str | None = None,
     correlation_id: str | None = None,
     correlation_key: str | None = None,
-    extra: Optional[Dict[str, Any]] = None,
+    extra: dict[str, Any] | None = None,
 ) -> None:
     """Emit span and feed rolling tracker."""
     rolling_track(

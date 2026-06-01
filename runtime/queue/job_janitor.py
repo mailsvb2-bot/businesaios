@@ -22,8 +22,8 @@ from runtime.queue.job_store import JobStore
 from runtime.queue.queue_leadership import QueueLeadershipCoordinator, QueueLeadershipReport
 
 if TYPE_CHECKING:
-    from runtime.queue.queue_observability import QueueObservabilityRegistry
     from runtime.queue.queue_janitor_history_sqlite import SqliteQueueJanitorHistoryStore
+    from runtime.queue.queue_observability import QueueObservabilityRegistry
 
 CANON_RUNTIME_QUEUE_JANITOR = True
 

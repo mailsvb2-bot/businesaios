@@ -3,7 +3,6 @@ from __future__ import annotations
 from interfaces.messaging._shared.provider_config import ProviderConfig
 from runtime.messaging.outbound_message import OutboundMessage
 
-
 NOOP_MODE = "configured_noop"
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+
 @dataclass(frozen=True)
 class AdsObjectRef:
     platform: str
@@ -16,6 +17,6 @@ class AdsRecommendation:
     title: str
     rationale: str
     target: AdsObjectRef
-    patch: Dict[str, Any]
-    expected_impact: Dict[str, Any]
-    risk_notes: Optional[str] = None
+    patch: dict[str, Any]
+    expected_impact: dict[str, Any]
+    risk_notes: str | None = None

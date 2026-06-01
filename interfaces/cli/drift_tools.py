@@ -13,7 +13,6 @@ from execution.headless_ledger import FileHeadlessLedger
 from execution.rollback_audit_timeline import RollbackAuditTimelineBuilder
 from execution.run_diff_builder import RunDiffBuilder
 
-
 CANON_HEADLESS_DRIFT_CLI = True
 
 

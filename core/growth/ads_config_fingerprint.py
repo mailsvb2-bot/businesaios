@@ -1,7 +1,10 @@
 from __future__ import annotations
-import hashlib, json
+
+import hashlib
+import json
 from dataclasses import asdict, is_dataclass
 from typing import Any
+
 
 def ads_config_fingerprint(*, ads_entitlements: Any, daily_limits: Any) -> str:
     payload = {"ads_entitlements": _to_plain(ads_entitlements), "daily_limits": _to_plain(daily_limits)}

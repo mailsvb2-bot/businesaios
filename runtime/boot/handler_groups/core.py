@@ -7,11 +7,11 @@ from runtime.handlers import ActionHandlerRegistry
 
 
 def register_core_handlers(*, handlers: ActionHandlerRegistry, ctx) -> None:
+    from runtime.boot.handler_groups.shared import get_ctx_value
     from runtime.handlers.ai_ceo_plan import handle_ai_ceo_plan
+    from runtime.handlers.growth_propose import handle_growth_propose
     from runtime.handlers.pricing_select import handle_pricing_select
     from runtime.handlers.reward_observe import handle_reward_observe
-    from runtime.handlers.growth_propose import handle_growth_propose
-    from runtime.boot.handler_groups.shared import get_ctx_value
 
     handlers.register(
         ACTION_AI_CEO_PLAN_V1,

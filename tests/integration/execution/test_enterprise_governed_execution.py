@@ -5,6 +5,10 @@ from dataclasses import dataclass
 import pytest
 from fastapi import HTTPException
 
+from entrypoints.api.auth_contract import AuthPrincipal
+from entrypoints.api.authz_dependencies import AuthzDependencyBundle
+from entrypoints.api.rbac_route_guards import RoutePermissionGuard
+from entrypoints.api.request_context import RequestContext
 from governance.permission_matrix import PermissionMatrix
 from governance.rbac_contract import Permission, RoleId
 from governance.rbac_policy import RbacPolicy
@@ -16,10 +20,6 @@ from infra.maintenance_mode import MaintenanceMode
 from infra.runtime_guardrails import RuntimeGuardrails
 from interfaces.api.action_models import ExecuteActionRequest, ExecuteActionResponse
 from interfaces.api.execute_action_with_control_plane import ExecuteActionWithControlPlane
-from entrypoints.api.rbac_route_guards import RoutePermissionGuard
-from entrypoints.api.auth_contract import AuthPrincipal
-from entrypoints.api.authz_dependencies import AuthzDependencyBundle
-from entrypoints.api.request_context import RequestContext
 from observability.action_audit_log import ActionAuditLog
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope

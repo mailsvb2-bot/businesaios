@@ -3,7 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from runtime.bootstrap.bootstrap_attestation import build_bootstrap_attestation
-from runtime.bootstrap.bootstrap_contract import BootstrapArtifacts, BootstrapAttestationPolicy, BootstrapEnvironment, BootstrapMode
+from runtime.bootstrap.bootstrap_contract import (
+    BootstrapArtifacts,
+    BootstrapAttestationPolicy,
+    BootstrapEnvironment,
+    BootstrapMode,
+)
 
 
 class _Snapshot:

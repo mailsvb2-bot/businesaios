@@ -5,8 +5,8 @@ import pytest
 from core.application.decision_service import DecisionService
 from core.policy.decision_history import DecisionHistory
 from core.policy.decision_publisher import DecisionPublisher
-from core.scorers.selector import DecisionSelector
 from core.policy.decision_validator import DecisionValidator
+from core.scorers.selector import DecisionSelector
 from demand_decision.canonical_decision_bridge import CanonicalDemandDecisionBridge
 from observability.decision_audit_log import DecisionAuditLog
 from observability.event_bus import EventBus

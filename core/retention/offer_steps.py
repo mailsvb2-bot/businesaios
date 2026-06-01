@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, Tuple
 
-from core.offers.engine import OfferEngine
 from core.observability.throttled_logger import exception_throttled
+from core.offers.engine import OfferEngine
 
 
 def cap_price_by_band(*, product: dict, price_rub: int, max_band: str | None) -> int:
@@ -45,7 +45,7 @@ def should_allow_offer(*, offer_engine: OfferEngine, cooldown_store: Any, state:
         return True
 
 
-def render_offer_payload(*, offer_engine: OfferEngine, state: Any, tenant_id: str, user_id: str, offer_id: str, price_rub: int, day_key: str, day_index: int, max_band: str | None, default_logger: Any) -> Tuple[str, str, Dict[str, Any], int]:
+def render_offer_payload(*, offer_engine: OfferEngine, state: Any, tenant_id: str, user_id: str, offer_id: str, price_rub: int, day_key: str, day_index: int, max_band: str | None, default_logger: Any) -> tuple[str, str, dict[str, Any], int]:
     try:
         product = getattr(state, "product", None) or {}
     except Exception:

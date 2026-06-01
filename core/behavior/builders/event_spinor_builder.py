@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Mapping
 
 from core.behavior.builders.base_spinor_factory import spinor_from_scores
@@ -12,9 +12,9 @@ def build_event_spinor(event: Mapping[str, Any]) -> MicroSpinor:
     event_id = str(event.get("event_id", "unknown"))
     entity_id = str(event.get("entity_id", "unknown"))
     operator_key = str(event.get("event_type", "message_open"))
-    started_at = event.get("timestamp") or datetime.now(timezone.utc)
+    started_at = event.get("timestamp") or datetime.now(UTC)
     if not isinstance(started_at, datetime):
-        started_at = datetime.now(timezone.utc)
+        started_at = datetime.now(UTC)
 
     base = spinor_from_scores(
         float(event.get("intent_score", 0.4)),

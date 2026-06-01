@@ -5,7 +5,6 @@ from typing import Any, Mapping, Protocol
 
 from application.decisioning.candidate_collection import CandidateCollection
 from application.decisioning.candidate_scores import CandidateScoreSet
-from kernel.decisioning.decision_types import RecommendationSet
 from core.economics.types import (
     CashflowSignal,
     CostSignal,
@@ -15,6 +14,7 @@ from core.economics.types import (
     SpendSignal,
     UnitEconomicsSnapshot,
 )
+from kernel.decisioning.decision_types import RecommendationSet
 
 
 @dataclass(frozen=True)

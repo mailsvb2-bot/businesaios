@@ -3,7 +3,6 @@ from __future__ import annotations
 from execution.inference_acceleration_contract import InferenceAccelerationProfile
 from execution.inference_capacity_contract import InferenceCapacityTier
 
-
 CANON_RUNTIME_INFERENCE_PROVIDER_ACCELERATION_PROFILE = True
 
 

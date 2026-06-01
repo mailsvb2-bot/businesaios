@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 from core.growth.strategy.service import GrowthStrategyService
+from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
 
 def test_generate_backlog_fallback_creates_hypotheses(tmp_path: Path):

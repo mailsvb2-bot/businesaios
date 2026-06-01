@@ -21,7 +21,7 @@ class TagSet:
     values: tuple[str, ...]
 
     @classmethod
-    def from_iterable(cls, values: Sequence[str]) -> "TagSet":
+    def from_iterable(cls, values: Sequence[str]) -> TagSet:
         normalized: list[str] = []
         seen: set[str] = set()
         for raw_value in values:

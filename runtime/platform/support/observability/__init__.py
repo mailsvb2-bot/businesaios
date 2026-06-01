@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from runtime.lazy_namespace import install_module_aliases
 from observability.logger import get_logger, log_kv
+from runtime.lazy_namespace import install_module_aliases
 
 CANON_RUNTIME_SUPPORT_OBSERVABILITY_NAMESPACE = True
 CANON_COMPAT_SHIM = True

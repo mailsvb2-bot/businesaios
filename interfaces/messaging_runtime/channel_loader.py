@@ -1,19 +1,17 @@
 from __future__ import annotations
 
-from interfaces.messaging.whatsapp import build_binding as build_whatsapp_binding
-from interfaces.messaging.sms import build_binding as build_sms_binding
 from interfaces.messaging.email import build_binding as build_email_binding
 from interfaces.messaging.messenger import build_binding as build_messenger_binding
-from interfaces.regional.viber import build_binding as build_viber_binding
-from interfaces.regional.line import build_binding as build_line_binding
-from interfaces.regional.wechat import build_binding as build_wechat_binding
-from interfaces.regional.kakaotalk import build_binding as build_kakaotalk_binding
-from interfaces.telegram.runtime_binding import build_binding as build_telegram_binding
-from interfaces.web.chat_widget.runtime_binding import build_binding as build_webchat_binding
-from interfaces.web.api_gateway import build_binding as build_api_gateway_binding
-
+from interfaces.messaging.sms import build_binding as build_sms_binding
+from interfaces.messaging.whatsapp import build_binding as build_whatsapp_binding
 from interfaces.messaging_runtime.channel_aliases import canonical_channel_name
-
+from interfaces.regional.kakaotalk import build_binding as build_kakaotalk_binding
+from interfaces.regional.line import build_binding as build_line_binding
+from interfaces.regional.viber import build_binding as build_viber_binding
+from interfaces.regional.wechat import build_binding as build_wechat_binding
+from interfaces.telegram.runtime_binding import build_binding as build_telegram_binding
+from interfaces.web.api_gateway import build_binding as build_api_gateway_binding
+from interfaces.web.chat_widget.runtime_binding import build_binding as build_webchat_binding
 
 BINDING_BUILDERS = {
     "telegram": build_telegram_binding,

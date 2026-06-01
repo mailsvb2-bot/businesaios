@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Sequence, Tuple
+from typing import Sequence
+
 
 @dataclass(frozen=True)
 class TransportResult:
-    allocation: List[List[float]]
+    allocation: list[list[float]]
     total_cost: float
 
 def solve_capacity_transport(
@@ -28,7 +29,7 @@ def solve_capacity_transport(
     remaining_demand = [float(x) for x in demand]
     allocation = [[0.0 for _ in range(n_cols)] for _ in range(n_rows)]
 
-    edges: List[Tuple[float, int, int]] = []
+    edges: list[tuple[float, int, int]] = []
     for i in range(n_rows):
         for j in range(n_cols):
             edges.append((float(cost_matrix[i][j]), i, j))

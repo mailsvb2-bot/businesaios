@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """Explicit compatibility wrapper with a real module file."""
 
-CANON_COMPAT_SHIM = True
+from __future__ import annotations
 
 from config import RiskThresholds as RiskThresholds
+
+CANON_COMPAT_SHIM = True
 
 __all__ = ['RiskThresholds']

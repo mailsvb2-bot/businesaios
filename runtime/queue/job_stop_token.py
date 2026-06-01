@@ -14,7 +14,6 @@ from threading import Event
 
 from runtime.queue.job_contract import normalize_now
 
-
 CANON_RUNTIME_QUEUE_STOP_TOKEN = True
 
 

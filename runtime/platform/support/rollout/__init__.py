@@ -5,6 +5,7 @@ from typing import Dict, Protocol
 
 from runtime.platform.support.contracts.rollout import RolloutResult
 
+
 class RolloutCollector(Protocol):
     def collect(self) -> RolloutResult:
         ...
@@ -23,7 +24,7 @@ class RolloutLimits:
 
 class RolloutLineage:
     def __init__(self) -> None:
-        self._parents: Dict[str, str] = {}
+        self._parents: dict[str, str] = {}
 
     def record(self, rollout_id: str, parent_rollout_id: str) -> None:
         self._parents[rollout_id] = parent_rollout_id
@@ -39,7 +40,7 @@ class RolloutMetrics:
 
 class RolloutRegistry:
     def __init__(self) -> None:
-        self._items: Dict[str, dict] = {}
+        self._items: dict[str, dict] = {}
 
     def register(self, rollout_id: str, payload: dict) -> None:
         self._items[rollout_id] = dict(payload)

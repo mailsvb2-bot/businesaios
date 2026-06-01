@@ -18,8 +18,8 @@ def build_pricing_change_payload(
     plans_path: str = "",
     override_path: str = "",
     override_persisted: bool = False,
-) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {"request_id": str(request_id or "")}
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"request_id": str(request_id or "")}
     if plan_id is not None:
         payload["plan_id"] = int(plan_id)
     if new_price is not None:
@@ -49,7 +49,7 @@ def emit_pricing_change_event(
     decision_id: str,
     correlation_id: str,
     admin_id: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
 ) -> None:
     event_log.emit(
         event_type=event_type,
@@ -82,7 +82,7 @@ def apply_pricing_change_effect(
     request_id: str | None = None,
     requested_by: str | None = None,
     reason: str | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     from runtime._internal.effects_domains.admin_pricing import (
         execute_plan_price_update,
         validate_pricing_change,
@@ -135,7 +135,7 @@ def request_pricing_change_effect(
     request_id: str,
     suggested_pricing_version: str | None = None,
     reason: str | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     pid = int(plan_id)
     price = int(new_price)
     rid = str(request_id)
@@ -174,7 +174,7 @@ def reject_pricing_change_effect(
     admin_id: str,
     request_id: str,
     reason: str | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     rid = str(request_id)
     rsn = str(reason or "").strip()
     emit_pricing_change_event(

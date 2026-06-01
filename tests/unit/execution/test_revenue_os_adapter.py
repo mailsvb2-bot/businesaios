@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from execution.revenue_os_adapter import RevenueOSAdapter
-from runtime.monetization import RevenuePaywallVariantInput, RevenuePlanInput, RevenuePricePointInput, RevenueSnapshotInput
+from runtime.monetization import (
+    RevenuePaywallVariantInput,
+    RevenuePlanInput,
+    RevenuePricePointInput,
+    RevenueSnapshotInput,
+)
 
 
 def _snapshot(**overrides):
     base = dict(
-        observed_at=datetime(2026, 4, 8, 8, 0, tzinfo=timezone.utc),
+        observed_at=datetime(2026, 4, 8, 8, 0, tzinfo=UTC),
         visitors=1000,
         trials_started=100,
         conversions=50,

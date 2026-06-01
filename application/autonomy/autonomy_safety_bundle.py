@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-from execution.runtime_keys import ACTION_BUDGET_KEY, KILL_SWITCH_KEY
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from execution.action_budget_engine import ActionBudgetEngine
-from execution.canonical_autonomy_safety import canonical_autonomy_safety_decision
-from execution.autonomy_audit import AutonomyAuditRecord
-from execution.autonomy_counters import AutonomyCounterResolver
 from application.autonomy.autonomy_kill_switch import FileAutonomyKillSwitchRegistry
 from application.autonomy.autonomy_tiers import evaluate_autonomy_tier
+from execution.action_budget_engine import ActionBudgetEngine
+from execution.autonomy_audit import AutonomyAuditRecord
+from execution.autonomy_counters import AutonomyCounterResolver
 from execution.blast_radius_guard import BlastRadiusGuard
 from execution.bounded_autonomy import BoundedAutonomyGuard
+from execution.canonical_autonomy_safety import canonical_autonomy_safety_decision
+from execution.runtime_keys import ACTION_BUDGET_KEY, KILL_SWITCH_KEY
 from execution.safe_self_driving import SafeSelfDrivingPolicy
-
 
 CANON_AUTONOMY_SAFETY_BUNDLE = True
 

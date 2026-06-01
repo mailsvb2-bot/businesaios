@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
-
 from dataclasses import dataclass, field
 from typing import Mapping
 
+CANON_COMPAT_SHIM = True
 
 CANON_ENVIRONMENT_MATRIX = True
 
@@ -38,7 +37,7 @@ class EnvironmentMatrixRow:
             raise ValueError("environment is required")
         if not str(self.deployment_tier or "").strip():
             raise ValueError("deployment_tier is required")
-        for key in self.default_feature_flags.keys():
+        for key in self.default_feature_flags:
             if not str(key or "").strip():
                 raise ValueError("default feature flag keys must be non-empty")
 
@@ -74,7 +73,7 @@ class EnvironmentMatrix:
         return row
 
     @classmethod
-    def default(cls) -> "EnvironmentMatrix":
+    def default(cls) -> EnvironmentMatrix:
         matrix = cls(
             rows=(
                 EnvironmentMatrixRow(

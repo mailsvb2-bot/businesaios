@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
-
 PACKAGE_ALIAS_EXPECTATIONS = {
     'attribution': {
         'attribution_engine': 'AttributionEngine',

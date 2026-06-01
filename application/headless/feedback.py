@@ -3,11 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from application.capability.capability_operator_view import merge_capability_views, normalize_capability_view
+from execution.business_operating_memory import (
+    project_business_memory_contract_bundle,
+    project_business_memory_feedback_snapshot,
+)
 from execution.evidence.router import EvidenceRouter, build_evidence_router
 from execution.outcome_normalizer import OutcomeNormalizer
-from application.capability.capability_operator_view import merge_capability_views, normalize_capability_view
-from execution.business_operating_memory import project_business_memory_contract_bundle, project_business_memory_feedback_snapshot
-
 
 CANON_HEADLESS_FEEDBACK_READER = True
 
@@ -51,7 +53,7 @@ class SimpleHeadlessFeedbackReader:
     evidence_router: EvidenceRouter = field(default_factory=build_evidence_router)
 
     @classmethod
-    def default(cls) -> "SimpleHeadlessFeedbackReader":
+    def default(cls) -> SimpleHeadlessFeedbackReader:
         return cls(outcome_normalizer=OutcomeNormalizer(), evidence_router=build_evidence_router())
 
     def read(

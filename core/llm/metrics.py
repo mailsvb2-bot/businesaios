@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Dict, List
 
 
 @dataclass
 class MetricSnapshot:
     ts_ms: int
-    counters: Dict[str, int]
-    latencies_ms: List[int]
+    counters: dict[str, int]
+    latencies_ms: list[int]
     tokens_total: int
 
 
@@ -17,8 +16,8 @@ class LLMMetrics:
     """Lightweight in-memory metrics (no new infra)."""
 
     def __init__(self, *, keep_last: int = 200) -> None:
-        self._c: Dict[str, int] = {}
-        self._lat: List[int] = []
+        self._c: dict[str, int] = {}
+        self._lat: list[int] = []
         self._tokens_total: int = 0
         self._keep_last = int(keep_last)
 

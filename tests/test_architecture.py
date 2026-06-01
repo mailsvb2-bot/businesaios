@@ -86,7 +86,7 @@ def test_no_private_internal_imports_outside_executor():
             continue
         tree = _parse(py)
         for node in ast.walk(tree):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
+            if isinstance(node, ast.Import | ast.ImportFrom):
                 if isinstance(node, ast.Import):
                     for n in node.names:
                         mod = n.name
@@ -102,7 +102,7 @@ def test_sdk_imports_only_in_private_effects_impl():
             continue
         tree = _parse(py)
         for node in ast.walk(tree):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
+            if isinstance(node, ast.Import | ast.ImportFrom):
                 bases = []
                 if isinstance(node, ast.Import):
                     bases = [n.name.split(".")[0] for n in node.names]

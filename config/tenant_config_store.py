@@ -14,7 +14,6 @@ from config.config_versioning import ConfigVersion, ConfigVersioning, utc_now
 from core.tenancy.normalization import require_tenant_id
 from governance.persistence_codec import atomic_write_json, read_json_or_default, to_jsonable
 
-
 CANON_TENANT_CONFIG_STORE = True
 
 _TENANT_NAMESPACE = "tenant_config"
@@ -43,19 +42,19 @@ class TenantConfigSnapshot:
         require_tenant_id(self.tenant_id)
         if self.updated_at.tzinfo is None:
             raise ValueError("updated_at must be timezone-aware")
-        for key in self.feature_flags.keys():
+        for key in self.feature_flags:
             if not str(key or "").strip():
                 raise ValueError("feature_flags keys must be non-empty")
-        for key in self.feature_variants.keys():
+        for key in self.feature_variants:
             if not str(key or "").strip():
                 raise ValueError("feature_variants keys must be non-empty")
-        for key in self.policy_overrides.keys():
+        for key in self.policy_overrides:
             if not str(key or "").strip():
                 raise ValueError("policy_overrides keys must be non-empty")
         if self.version is not None:
             self.version.validate()
 
-    def normalized(self) -> "TenantConfigSnapshot":
+    def normalized(self) -> TenantConfigSnapshot:
         return TenantConfigSnapshot(
             tenant_id=require_tenant_id(self.tenant_id),
             runtime_overrides=to_jsonable(dict(self.runtime_overrides)),
@@ -81,7 +80,7 @@ class TenantConfigSnapshot:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, object]) -> "TenantConfigSnapshot":
+    def from_dict(cls, payload: Mapping[str, object]) -> TenantConfigSnapshot:
         item = dict(payload or {})
         version = None
         if isinstance(item.get("version"), Mapping):

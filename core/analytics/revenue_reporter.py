@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Protocol, Any
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
 from config.revenue_report_policy import DEFAULT_REVENUE_REPORT_POLICY, RevenueReportPolicy
-from core.contracts.revenue_report import RevenueReport
-from core.analytics.revenue_metrics import EventStore, make_yesterday_window, aggregate_revenue_metrics
+from core.analytics.revenue_metrics import EventStore, aggregate_revenue_metrics, make_yesterday_window
 from core.analytics.roi_estimator import SimpleROIEstimator
+from core.contracts.revenue_report import RevenueReport
 
 
 class OfferAutopilot(Protocol):
@@ -22,7 +22,7 @@ class RevenueReporter:
     policy: RevenueReportPolicy = DEFAULT_REVENUE_REPORT_POLICY
 
     def build_daily_report(self, *, tenant_id: str, now_utc: datetime | None = None) -> RevenueReport:
-        now_utc = (now_utc or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        now_utc = (now_utc or datetime.now(UTC)).astimezone(UTC)
         window = make_yesterday_window(now_utc)
         events = self.store.latest_events(tenant_id=tenant_id, limit=self.policy.latest_events_limit)
         m = aggregate_revenue_metrics(events=events, window=window)

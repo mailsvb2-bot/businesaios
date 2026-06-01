@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from contracts.platforms.market_intelligence_advanced_contract import ProviderCursor
-
 
 CANON_MARKET_INTELLIGENCE_CURSOR_STORE = True
 

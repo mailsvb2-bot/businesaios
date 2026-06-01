@@ -10,9 +10,9 @@ No hidden second brain.
 
 import logging
 
-from runtime.tenancy import normalize_tenant_id, UNKNOWN_TENANT_ID
 from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.observability.error_handling import warning_throttled
+from runtime.tenancy import UNKNOWN_TENANT_ID, normalize_tenant_id
 
 log = logging.getLogger(__name__)
 

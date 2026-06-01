@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from acquisition import (
+    CANON_ACQUISITION_HEADLESS_ENTRYPOINT,
     AcquisitionFeasibilityRequest,
     AcquisitionHeadlessEntrypoint,
-    CANON_ACQUISITION_HEADLESS_ENTRYPOINT,
     create_acquisition_headless_entrypoint,
     evaluate_acquisition_payload,
 )

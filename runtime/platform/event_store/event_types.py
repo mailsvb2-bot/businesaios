@@ -25,7 +25,7 @@ ENTITLEMENT_GRANTED = "entitlement_granted"
 MESSAGE_SENT = "message_sent"
 MESSAGE_FAILED = "message_failed"
 
-KNOWN_EVENT_TYPES: Set[str] = {
+KNOWN_EVENT_TYPES: set[str] = {
     UI_CLICK,
     PAYWALL_OPENED,
     PAYWALL_CLOSED,
@@ -46,7 +46,7 @@ KNOWN_EVENT_TYPES: Set[str] = {
     MESSAGE_FAILED,
 }
 
-ALIASES: Dict[str, str] = {
+ALIASES: dict[str, str] = {
     "paywall_open": PAYWALL_OPENED,
     "paywall_close": PAYWALL_CLOSED,
     "offer_click_primary": OFFER_CLICKED,

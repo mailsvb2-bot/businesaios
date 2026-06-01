@@ -28,7 +28,7 @@ async def fetch_metrics_with_token(
     tenant_id: str,
     account_id: str,
     level: str,
-    object_ids: Optional[Sequence[str]],
+    object_ids: Sequence[str] | None,
     date_from: date,
     date_to: date,
     get_access_token: Callable[..., Awaitable[str]],

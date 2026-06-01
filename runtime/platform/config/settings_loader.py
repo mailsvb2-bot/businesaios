@@ -12,24 +12,23 @@ from typing import Optional
 
 from config.settings_models import (
     CoreSettings,
-    TelegramSettings,
     DatabaseSettings,
-    PaymentsSettings,
-    MarketingSettings,
     EvolutionSettings,
-    GuardSettings,
-    ReadModelSettings,
-    PricingConfig,
-    PerfSettings,
     GiftSettings,
+    GuardSettings,
+    MarketingSettings,
+    PaymentsSettings,
+    PerfSettings,
+    PricingConfig,
+    ReadModelSettings,
     Settings,
+    TelegramSettings,
 )
 from runtime.platform.config.env_flags import env_bool as _env_bool
 from runtime.platform.config.env_flags import env_int as _env_int
 from runtime.platform.config.env_flags import env_str as _env_str
 
-
-_SETTINGS_CACHE: Optional[Settings] = None
+_SETTINGS_CACHE: Settings | None = None
 
 
 def load_settings(*, force_reload: bool = False) -> Settings:

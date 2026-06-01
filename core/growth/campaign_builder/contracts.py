@@ -5,7 +5,7 @@ from typing import Any, Dict, Mapping
 
 from core.traffic.contracts import TrafficPlan
 
-Json = Dict[str, Any]
+Json = dict[str, Any]
 
 
 @dataclass(frozen=True)

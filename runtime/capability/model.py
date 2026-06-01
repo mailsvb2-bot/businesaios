@@ -13,7 +13,7 @@ from runtime.decision import DecisionEnvelope
 @dataclass(frozen=True)
 class Capability:
     name: str
-    required_secret_keys: List[str]
+    required_secret_keys: list[str]
 
 
 class CapabilityResolver:

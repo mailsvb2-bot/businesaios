@@ -44,7 +44,7 @@ class SqliteOutbox:
 
     def __init__(self, path: str):
         self._path = str(path)
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         try:
             self._lease_ms = int(env_int("OUTBOX_LEASE_MS", 60_000, lo=5_000, hi=10 * 60_000))
         except (TypeError, ValueError):
@@ -111,7 +111,7 @@ class SqliteOutbox:
         )
         self._conn.commit()
 
-    def list_pending(self, *, limit: int = 100) -> List[Dict[str, Any]]:
+    def list_pending(self, *, limit: int = 100) -> list[dict[str, Any]]:
         assert self._conn is not None
         self._reap_stale_delivering()
         cur = self._conn.execute(
@@ -135,10 +135,10 @@ class SqliteOutbox:
             for r in rows
         ]
 
-    def list_claimable(self, *, limit: int = 100) -> List[Dict[str, Any]]:
+    def list_claimable(self, *, limit: int = 100) -> list[dict[str, Any]]:
         return self.list_pending(limit=limit)
 
-    def get(self, decision_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, decision_id: str) -> dict[str, Any] | None:
         assert self._conn is not None
         cur = self._conn.execute(
             "SELECT decision_id, correlation_id, action, payload_json, created_at_ms, status, retry_count, next_attempt_at_ms, claimed_at_ms, delivered_at_ms "
@@ -197,7 +197,7 @@ class SqliteOutbox:
         )
         return cur.fetchone() is not None
 
-    def status(self, decision_id: str) -> Optional[str]:
+    def status(self, decision_id: str) -> str | None:
         assert self._conn is not None
         cur = self._conn.execute(
             "SELECT status FROM outbox WHERE decision_id = ? LIMIT 1",

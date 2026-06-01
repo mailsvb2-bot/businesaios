@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Optional
 
 from core.policies.telegram.context import TelegramCtx
@@ -8,7 +8,7 @@ from core.policies.telegram.helpers import ProposedAction, propose
 from core.ux.telegram_keyboards import kb_back_main
 
 
-def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> Optional[ProposedAction]:
+def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> ProposedAction | None:
     if ctx.cmd == "/help":
         return pm(
             text=(
@@ -35,7 +35,7 @@ def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> Optional[Pro
         )
         return pm(text=msg, reply_markup=kb_back_main())
     if ctx.cmd == "/boost":
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         key = f"revenue_sprint:{ctx.state.tenant_id}"
         try:
             state = dict((ctx.settings or {}).get(key) or {})
@@ -45,7 +45,7 @@ def handle_command_routes(ctx: TelegramCtx, *, user_id: str, pm) -> Optional[Pro
         active = False
         if isinstance(ends, str):
             try:
-                active = datetime.fromisoformat(ends.replace("Z", "+00:00")).astimezone(timezone.utc) > now
+                active = datetime.fromisoformat(ends.replace("Z", "+00:00")).astimezone(UTC) > now
             except Exception:
                 active = False
         if active:

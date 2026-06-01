@@ -13,16 +13,15 @@ IMPORTANT:
 - Feedback-loop guards are enforced before deploy proposals enter the DecisionCore.
 """
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import Optional
 
 from runtime.autopilot_feedback_guard import AutopilotFeedbackGuard, AutopilotFeedbackGuardViolation
-from runtime.governance.auto_deploy_guard import build_auto_deploy_guard_from_env
-from runtime.scheduler_parts.decision_request import request_scheduler_decision_execution
 from runtime.canon import CANONICAL_DECISION_CORE_MODULE
+from runtime.governance.auto_deploy_guard import build_auto_deploy_guard_from_env
 from runtime.observability.error_handling import warning_throttled
-
+from runtime.scheduler_parts.decision_request import request_scheduler_decision_execution
 
 _AUTODEPLOY_GUARD = build_auto_deploy_guard_from_env()
 _FEEDBACK_GUARD = AutopilotFeedbackGuard()
@@ -37,7 +36,7 @@ CANON_RUNTIME_SELF_DRIVING_SCHEDULER_REQUEST_HELPER_ONLY = True
 class SchedulerTickResult:
     ok: bool
     status: str
-    decision_id: Optional[str] = None
+    decision_id: str | None = None
 
 
 def tick_once(*, learning_system, decision_core, executor, decision_input_provider=None) -> SchedulerTickResult:

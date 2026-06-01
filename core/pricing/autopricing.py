@@ -33,10 +33,10 @@ def suggest_prices_for_plans(
     event_store: Any,
     *,
     tenant_id: str,
-    plans: Iterable[Dict[str, Any]],
+    plans: Iterable[dict[str, Any]],
     config: AutopricingConfig,
     context_key: str = "",
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Return {plan_id: suggested_price_rub} for active plans.
 
     - plan['price'] is treated as base price.
@@ -46,7 +46,7 @@ def suggest_prices_for_plans(
     if not config.enabled:
         return {}
 
-    out: Dict[str, int] = {}
+    out: dict[str, int] = {}
     for p in list(plans):
         if not isinstance(p, dict):
             continue

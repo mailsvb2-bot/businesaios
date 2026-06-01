@@ -3,7 +3,6 @@ from __future__ import annotations
 from execution.inference_acceleration_contract import InferenceBatchPlan
 from execution.inference_provider_contract import InferenceProvider
 
-
 CANON_RUNTIME_INFERENCE_PROVIDER_BATCH_EXECUTION_POLICY = True
 
 

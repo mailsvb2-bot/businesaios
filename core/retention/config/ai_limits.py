@@ -14,8 +14,8 @@ from core.retention.config.pricing_ladder import ALLOWED_DISCOUNTS_PCT
 
 @dataclass(frozen=True)
 class AiLimits:
-    allowed_arms: Tuple[str, ...]
-    allowed_discounts_pct: Tuple[int, ...]
+    allowed_arms: tuple[str, ...]
+    allowed_discounts_pct: tuple[int, ...]
 
 
 LIMITS: Final[AiLimits] = AiLimits(

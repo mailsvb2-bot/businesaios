@@ -10,8 +10,8 @@ from core.pricing.rl.event_reader import (
 )
 
 
-def stats_trials_successes_legacy(trials: List[Dict[str, Any]], payments_by_user: Dict[str, List[int]], *, window_ms: int) -> Tuple[Dict[int, Tuple[int, int]], int]:
-    stats: Dict[int, Tuple[int, int]] = {}
+def stats_trials_successes_legacy(trials: list[dict[str, Any]], payments_by_user: dict[str, list[int]], *, window_ms: int) -> tuple[dict[int, tuple[int, int]], int]:
+    stats: dict[int, tuple[int, int]] = {}
     succ_total = 0
     for t in trials:
         uid = str(t["user_id"])
@@ -34,8 +34,8 @@ def stats_trials_successes_legacy(trials: List[Dict[str, Any]], payments_by_user
     return stats, succ_total
 
 
-def collect_pricing_evidence(*, event_store: Any, tenant_id: str, offer_arm: str, start_ms: int, end_ms: int, window_ms: int, context_key: str = "") -> tuple[Dict[int, Tuple[int, int]], Dict[str, Any]]:
-    debug: Dict[str, Any] = {}
+def collect_pricing_evidence(*, event_store: Any, tenant_id: str, offer_arm: str, start_ms: int, end_ms: int, window_ms: int, context_key: str = "") -> tuple[dict[int, tuple[int, int]], dict[str, Any]]:
+    debug: dict[str, Any] = {}
     shown_all = collect_offer_shown(event_store, tenant_id=str(tenant_id), offer_arm=str(offer_arm), start_ms=start_ms, end_ms=end_ms)
     if context_key:
         shown = [s for s in shown_all if str(s.get("segment") or "").strip() == context_key]
@@ -44,7 +44,7 @@ def collect_pricing_evidence(*, event_store: Any, tenant_id: str, offer_arm: str
         shown = shown_all
     if shown:
         outcomes = collect_offer_outcomes_index(event_store, tenant_id=str(tenant_id), start_ms=start_ms, end_ms=end_ms)
-        stats: Dict[int, Tuple[int, int]] = {}
+        stats: dict[int, tuple[int, int]] = {}
         succ_total = 0
         for s in shown:
             price = int(s.get("amount") or 0)

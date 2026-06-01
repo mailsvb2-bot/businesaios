@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Callable, Dict
+from typing import Any, Callable
 
 from core.llm.contracts import LLMClient, LLMRequest, LLMResponse, LLMUsage
 
-
-GigaChatTransport = Callable[[str, str, Dict[str, Any], int], Dict[str, Any]]
+GigaChatTransport = Callable[[str, str, dict[str, Any], int], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -22,7 +21,7 @@ class GigaChatClient(LLMClient):
 
     def generate_sync(self, req: LLMRequest) -> LLMResponse:
         model = str(req.model or "").strip() or self.model
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": [
                 {"role": message.role, "content": str(message.content or "")[:8000]}
@@ -49,7 +48,7 @@ class GigaChatClient(LLMClient):
         return await asyncio.to_thread(self.generate_sync, req)
 
 
-def _extract_text(raw: Dict[str, Any]) -> str:
+def _extract_text(raw: dict[str, Any]) -> str:
     choices = raw.get("choices") or []
     if isinstance(choices, list) and choices:
         msg = (choices[0] or {}).get("message") or {}
@@ -57,7 +56,7 @@ def _extract_text(raw: Dict[str, Any]) -> str:
     return str(raw.get("output_text") or "").strip()
 
 
-def _extract_usage(raw: Dict[str, Any]) -> LLMUsage | None:
+def _extract_usage(raw: dict[str, Any]) -> LLMUsage | None:
     usage = raw.get("usage")
     if not isinstance(usage, dict):
         return None
@@ -67,7 +66,7 @@ def _extract_usage(raw: Dict[str, Any]) -> LLMUsage | None:
     return LLMUsage(prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
 
 
-def _extract_finish(raw: Dict[str, Any]) -> str:
+def _extract_finish(raw: dict[str, Any]) -> str:
     choices = raw.get("choices") or []
     if isinstance(choices, list) and choices:
         finish = (choices[0] or {}).get("finish_reason")

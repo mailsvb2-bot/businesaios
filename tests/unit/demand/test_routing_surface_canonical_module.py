@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from contracts.matching.match_candidate import MatchCandidate
 from matching import RoutingCandidateBuilder, RoutingCandidateRanker
 from matching.routing_surface import (
     RoutingCandidateBuilder as CanonicalRoutingCandidateBuilder,
+)
+from matching.routing_surface import (
     RoutingCandidateRanker as CanonicalRoutingCandidateRanker,
 )
-from contracts.matching.match_candidate import MatchCandidate
 
 
 def test_matching_package_exports_canonical_routing_surface() -> None:

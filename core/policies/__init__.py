@@ -6,7 +6,6 @@ DecisionCore remains the only decision point.
 
 from __future__ import annotations
 
-from core.scorers.bandit import EpsilonGreedyBandit
 from core.policies.canary import CanaryPolicyResolver as CanaryRouter
 from core.policies.deployer import AutoDeployer
 from core.policies.domain import PolicyRef, PolicyStatus, RolloutConfig
@@ -16,6 +15,7 @@ from core.policies.registry import PolicyRegistry
 from core.policies.rollout import SafeRolloutManager
 from core.policies.shadow import ShadowEvaluator
 from core.policies.trainer import OfflineTrainer
+from core.scorers.bandit import EpsilonGreedyBandit
 
 CANON_POLICY_PUBLIC_API = True
 

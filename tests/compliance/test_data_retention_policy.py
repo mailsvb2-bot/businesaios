@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -10,7 +10,7 @@ from compliance.data_retention_policy import DataRetentionPolicy, RetentionPolic
 
 def test_data_retention_policy_returns_expected_profile_behavior() -> None:
     policy = DataRetentionPolicy()
-    created_at = datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc)
+    created_at = datetime(2026, 3, 1, 12, 0, tzinfo=UTC)
 
     decision = policy.decide(profile='regulated_pii', created_at=created_at, legal_hold=True)
 

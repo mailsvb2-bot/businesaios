@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from reliability.execution_checkpoint_store import ExecutionCheckpoint, InMemoryExecutionCheckpointStore, utc_now as checkpoint_now
+from reliability.execution_checkpoint_store import ExecutionCheckpoint, InMemoryExecutionCheckpointStore
+from reliability.execution_checkpoint_store import utc_now as checkpoint_now
 from reliability.idempotency_contract import IdempotencyKey
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from reliability.outbox_store import InMemoryOutboxStore, OutboxMessage, OutboxState

@@ -7,8 +7,8 @@ module provides the thin winner-selection shell.
 """
 
 from config.system_config import OptimizationObjective
-from kernel.decision_candidate import DecisionCandidate
 from core.scorers.decision import DecisionCandidateScorer
+from kernel.decision_candidate import DecisionCandidate
 
 
 class DecisionSelector:

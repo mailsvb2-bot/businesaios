@@ -1,18 +1,22 @@
 from __future__ import annotations
 
-from execution.inference_capacity_contract import InferenceCapacityLimits, InferenceCapacityProfile, InferenceCapacityTier
+from execution.inference_capacity_contract import (
+    InferenceCapacityLimits,
+    InferenceCapacityProfile,
+    InferenceCapacityTier,
+)
 from execution.inference_provider_contract import InferenceRequest, InferenceResponse
 from runtime.inference.distributed.network_response_verifier import DistributedInferenceNetworkResponseVerifier
-from runtime.inference.distributed.node_attestation_contract import DistributedInferenceNodeAttestation, DistributedInferenceNodeAttestationPolicy
-from runtime.inference.distributed.node_result_consensus import DistributedInferenceNodeResultConsensus
 from runtime.inference.distributed.network_transport import DistributedInferenceNetworkTransport
 from runtime.inference.distributed.network_usage_meter import DistributedInferenceNetworkUsageMeter
-from runtime.inference.distributed.node_attestation_contract import DistributedInferenceNodeAttestation, DistributedInferenceNodeAttestationPolicy
+from runtime.inference.distributed.node_attestation_contract import (
+    DistributedInferenceNodeAttestation,
+    DistributedInferenceNodeAttestationPolicy,
+)
 from runtime.inference.distributed.node_registry import DistributedInferenceNode, DistributedInferenceNodeRegistry
 from runtime.inference.distributed.node_result_consensus import DistributedInferenceNodeResultConsensus
 from runtime.inference.distributed.node_selection_policy import DistributedInferenceNodeSelectionPolicy
 from runtime.inference.providers.base_provider import BaseInferenceProviderState, BaseInferenceProviderSupport
-
 
 CANON_RUNTIME_DISTRIBUTED_GPU_PROVIDER = True
 

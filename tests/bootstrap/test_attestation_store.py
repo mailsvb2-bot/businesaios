@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from runtime.bootstrap.bootstrap_attestation_store import persist_bootstrap_attestation
 from runtime.bootstrap.bootstrap_contract import (
@@ -26,7 +26,7 @@ def test_persist_bootstrap_attestation_writes_jsonl(tmp_path):
 
     attestation = BootstrapAttestation(
         boot_id="boot-1",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         mode=BootstrapMode.TEST,
         entrypoint="runtime.bootstrap.sovereign_bootstrap.bootstrap_runtime",
         process_bootstrap_module="runtime.bootstrap",

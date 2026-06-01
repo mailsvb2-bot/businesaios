@@ -54,9 +54,8 @@ def test_runtime_safety_controls_use_public_surface() -> None:
 
 
 def test_runtime_boundary_public_surfaces_export_expected_symbols() -> None:
-    from runtime.proofs.contract import PROOF_REGISTRY_CANON, RUNTIME_PROOFS_PUBLIC_API
     from runtime.proofs import ACTION_PROOF_EVENT
-    from runtime.safety.contract import RUNTIME_SAFETY_PUBLIC_API, SAFETY_CONTROLS_CANON
+    from runtime.proofs.contract import PROOF_REGISTRY_CANON, RUNTIME_PROOFS_PUBLIC_API
     from runtime.safety import (
         ControlDecision,
         ControlStatus,
@@ -65,6 +64,7 @@ def test_runtime_boundary_public_surfaces_export_expected_symbols() -> None:
         SafetyControlService,
         build_default_profile,
     )
+    from runtime.safety.contract import RUNTIME_SAFETY_PUBLIC_API, SAFETY_CONTROLS_CANON
     from runtime.tenancy import TenantId, TenantScope, as_tenant_id, current_tenant_id
     from runtime.world_model import (
         extract_pinned_world_model_meta_from_payload,

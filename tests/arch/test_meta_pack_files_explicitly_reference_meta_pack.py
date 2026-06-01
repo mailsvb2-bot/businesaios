@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from tests.arch._canon_meta_pack_guard import absolute
+
 
 def test_meta_pack_files_explicitly_reference_meta_pack() -> None:
     target_files = [

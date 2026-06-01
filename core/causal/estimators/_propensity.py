@@ -5,7 +5,7 @@ Both estimators used identical _fit_stratified_propensity + _key implementations
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from core.causal.types import CausalDataset
 
@@ -20,7 +20,7 @@ def fit_stratified_propensity(
     names: Sequence[str],
     *,
     smoothing: float = 1.0,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Fit stratified propensity p(T=1 | X=stratum) with optional Laplace smoothing.
 
     Args:
@@ -31,14 +31,14 @@ def fit_stratified_propensity(
     Returns:
         dict mapping stratum_key -> propensity in (0, 1)
     """
-    counts: Dict[str, List[float]] = {}
+    counts: dict[str, list[float]] = {}
     for r in dataset.rows:
         k = stratum_key(r.covariates, names)
         counts.setdefault(k, [0.0, 0.0])
         counts[k][0] += 1.0
         counts[k][1] += 1.0 if float(r.treatment) >= 0.5 else 0.0
 
-    out: Dict[str, float] = {}
+    out: dict[str, float] = {}
     for k, (n, nt) in counts.items():
         out[k] = (float(nt) + float(smoothing)) / (float(n) + 2.0 * float(smoothing))
     return out

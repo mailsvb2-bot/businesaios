@@ -5,6 +5,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from application.effects.effect_journal import FileEffectJournal
+from application.headless.feedback import SimpleHeadlessFeedbackReader
+from application.headless.models import GoalExecutionReport, GoalExecutionRequest
+from application.learning.retry_taxonomy import RetryTaxonomy
 from execution.business_operating_memory import (
     BusinessMemoryCompactor,
     BusinessMemoryPolicy,
@@ -14,7 +18,6 @@ from execution.capability_health_scoring import (
     CapabilityHealthScoringService,
     FileCapabilityHealthStore,
 )
-from application.effects.effect_journal import FileEffectJournal
 from execution.goal_plan_memory import (
     FileGoalPlanMemoryStore,
     GoalPlanMemoryService,
@@ -22,9 +25,7 @@ from execution.goal_plan_memory import (
 )
 from execution.goal_score import GoalScoreEngine
 from execution.headless_contract import HeadlessExecutionContract
-from application.headless.feedback import SimpleHeadlessFeedbackReader
 from execution.headless_ledger import FileHeadlessLedger
-from application.headless.models import GoalExecutionReport, GoalExecutionRequest
 from execution.headless_replay import HeadlessReplayEngine
 from execution.headless_state_store import FileHeadlessStateStore
 from execution.idempotency_guard import FileIdempotencyGuard
@@ -41,7 +42,6 @@ from execution.performance_feedback_learning import (
 )
 from execution.policy_explainer import PolicyExplainer
 from execution.retry_executor_policy import RetryExecutorPolicy
-from application.learning.retry_taxonomy import RetryTaxonomy
 from execution.scenario_goal_score import ScenarioGoalScoreEngine
 from runtime.execution.executor_result import ExecutionResult
 from runtime.platform.business_memory.service import BusinessMemoryService

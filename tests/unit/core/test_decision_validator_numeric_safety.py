@@ -1,5 +1,5 @@
-from core.contracts.decision_candidate import DecisionCandidate
 from core.constraints.decision import DecisionConstraints
+from core.contracts.decision_candidate import DecisionCandidate
 from core.policy.decision_validator import DecisionValidator
 
 

@@ -3,11 +3,11 @@ from __future__ import annotations
 import time
 from typing import Any, Mapping
 
-from runtime.observability.telemetry import telegram_api_span
+from runtime._internal.effects_actions.telegram.messaging_parts.tracking import emit_warning
 from runtime.messaging.bridge import get_multichannel_effects_bridge
 from runtime.messaging.delivery_result import DeliveryResult
+from runtime.observability.telemetry import telegram_api_span
 from runtime.platform.config.env_flags import env_float
-from runtime._internal.effects_actions.telegram.messaging_parts.tracking import emit_warning
 
 
 def _stable_metadata(msg) -> dict[str, Any]:

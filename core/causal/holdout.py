@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Holdout assignment (pure).
 
 Used for causal inference and safe experimentation:
 keep a stable control group to estimate uplift.
 """
+
+from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass

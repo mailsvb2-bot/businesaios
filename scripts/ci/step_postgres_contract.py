@@ -5,7 +5,11 @@ import json
 import os
 from typing import Any
 
-from runtime.platform.postgres_contract import REQUIRED_MIGRATIONS, REQUIRED_SCHEMA_OBJECTS, PostgresRuntimeProof, evaluate_postgres_contract
+from runtime.platform.postgres_contract import (
+    REQUIRED_SCHEMA_OBJECTS,
+    PostgresRuntimeProof,
+    evaluate_postgres_contract,
+)
 from runtime.platform.postgres_port import PostgresPort
 from scripts.ci.paths import repo_root
 

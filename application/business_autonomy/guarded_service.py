@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from pathlib import Path
 import json
 import os
+from datetime import UTC, datetime, timezone
+from pathlib import Path
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult, ExecutionVerdict
 from application.business_autonomy.guards import (
@@ -292,7 +292,7 @@ def _distributed_append_dir() -> Path:
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _conflict_key(*, tenant_id: str, business_id: str, document: str) -> str:

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 CANON_BOOT_WIRING_ONLY = True
 
 import logging

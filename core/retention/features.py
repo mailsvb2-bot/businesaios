@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any
 
-from core.retention.event_types import normalize_event_type, is_known
+from core.retention.event_types import is_known, normalize_event_type
 
 
 @dataclass(frozen=True)
@@ -35,9 +34,9 @@ def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 def compute_features(
     *,
-    events_d1: List[Dict[str, Any]],
-    events_d7: List[Dict[str, Any]],
-    events_d30: List[Dict[str, Any]],
+    events_d1: list[dict[str, Any]],
+    events_d7: list[dict[str, Any]],
+    events_d30: list[dict[str, Any]],
     latest_mood: int | None,
     now_ms: int,
 ) -> FeatureVector:

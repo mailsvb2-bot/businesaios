@@ -27,7 +27,12 @@ from runtime.state.state_contract import (
 )
 from runtime.state.state_delta_log import FileStateDeltaLog
 from runtime.state.state_freshness_policy import FieldFreshnessPolicy, FreshnessDecision, StateFreshnessPolicy
-from runtime.state.state_provenance import merge_evidence_refs, normalize_evidence_refs, provenance_hash, provenance_payload
+from runtime.state.state_provenance import (
+    merge_evidence_refs,
+    normalize_evidence_refs,
+    provenance_hash,
+    provenance_payload,
+)
 from runtime.state.state_snapshot_store import FileStateSnapshotStore, snapshot_from_dict
 from runtime.state.state_synthesis_engine import (
     CANON_STATE_SYNTHESIS_ENGINE,

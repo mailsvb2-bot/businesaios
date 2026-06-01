@@ -4,9 +4,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from execution.headless_contract import HeadlessExecutionContract
 from application.headless.models import GoalExecutionRequest
 from execution.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
+from execution.headless_contract import HeadlessExecutionContract
 from runtime.execution.executor_result import ExecutionResult
 
 
@@ -44,7 +44,7 @@ class StubPolicyExplainer:
         summary: str = "ok"
         factors: tuple[str, ...] = ()
 
-    def explain(self, *, state: Any, envelope: Any) -> "_Explanation":
+    def explain(self, *, state: Any, envelope: Any) -> _Explanation:
         return self._Explanation()
 
 

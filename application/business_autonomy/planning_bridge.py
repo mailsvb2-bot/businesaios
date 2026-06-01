@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
-import os
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult
 from application.planning.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPlannerService
-
 
 _CANON_PLANNING_HORIZON_PRIORITY = {
     'now': 100,
@@ -30,7 +29,7 @@ class BusinessAutonomyPlanningBridge:
     store: FileMultiGoalPlannerStore
 
     @classmethod
-    def default(cls) -> 'BusinessAutonomyPlanningBridge':
+    def default(cls) -> BusinessAutonomyPlanningBridge:
         return cls(store=FileMultiGoalPlannerStore(root_dir=business_autonomy_multi_goal_runtime_dir()))
 
     def publish_execution(self, *, request: BusinessExecutionRequest, result: BusinessExecutionResult) -> None:

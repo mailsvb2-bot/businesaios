@@ -89,9 +89,8 @@ class PolicyTrustChain:
     def verify_lineage(self, *, tenant_id: str, policy_scope: str) -> bool:
         expected_parent_fingerprint = ''
         expected_chain_hash = ''
-        expected_index = 0
         chain = self.lineage(tenant_id=tenant_id, policy_scope=policy_scope)
-        for record in chain:
+        for expected_index, record in enumerate(chain):
             if str(record.parent_fingerprint or '') != expected_parent_fingerprint:
                 return False
             if int(record.chain_index) != expected_index:
@@ -117,7 +116,6 @@ class PolicyTrustChain:
                 return False
             expected_parent_fingerprint = str(record.fingerprint)
             expected_chain_hash = str(record.chain_hash)
-            expected_index += 1
         snapshot = self.latest_snapshot(tenant_id=tenant_id, policy_scope=policy_scope)
         if snapshot is not None:
             latest = chain[-1] if chain else None

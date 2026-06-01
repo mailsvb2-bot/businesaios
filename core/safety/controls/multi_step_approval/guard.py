@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 
 from ..action_catalog import ActionSafetyCatalog, build_default_action_catalog
 from ..action_context import SafetyActionContext
@@ -46,8 +46,8 @@ class MultiStepApprovalGuard:
             try:
                 expiry = datetime.fromisoformat(str(ticket.expires_at))
                 if expiry.tzinfo is None:
-                    expiry = expiry.replace(tzinfo=timezone.utc)
-                if expiry <= datetime.now(timezone.utc):
+                    expiry = expiry.replace(tzinfo=UTC)
+                if expiry <= datetime.now(UTC):
                     return ControlDecision(control=self.control_name, status=ControlStatus.BLOCK, reason='approval_expired', details={'action_id': action_id})
             except Exception:
                 pass

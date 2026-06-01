@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol, Sequence
 
-
 CANON_UNIFIED_OPERATOR_ADMIN_PLANE = True
 
 

@@ -4,7 +4,11 @@ import observability.logger as root_logging
 import runtime.platform.support.observability.logging as runtime_logging
 from observability.platform.logging import (
     CANON_PLATFORM_LOGGING_PUBLIC_API,
+)
+from observability.platform.logging import (
     get_logger as platform_get_logger,
+)
+from observability.platform.logging import (
     log_kv as platform_log_kv,
 )
 

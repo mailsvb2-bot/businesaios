@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from infrastructure.observability.redaction import redact_dict
 from infrastructure.secrets.runtime import get_secret, register_runtime_secret
@@ -47,7 +47,7 @@ def test_secret_vault_roundtrip_and_credential_scope() -> None:
     vault.seed_plaintext(ref=ref, plaintext='hello')
     scope = ConnectorSecretScope((SecretScopeBinding(tenant_id='t1', connector_id='crm', allowed_secret_names=('api_token',)),))
     manager = CredentialManager(vault=vault, connector_scope=scope)
-    handle = CredentialHandle(ref=ref, connector_id='crm', created_at=datetime.now(timezone.utc))
+    handle = CredentialHandle(ref=ref, connector_id='crm', created_at=datetime.now(UTC))
     assert manager.resolve(handle) == 'hello'
 
 
@@ -63,14 +63,16 @@ def test_request_signer_and_webhook_verifier() -> None:
     verifier = WebhookSignatureVerifier(key_provider=provider)
     body = b'{"ok":true}'
     key = provider.get_active_for(purpose=KeyPurpose.WEBHOOK_VERIFICATION, tenant_id='t1', connector_id='crm')
-    import base64, hashlib, hmac
+    import base64
+    import hashlib
+    import hmac
     sig = base64.b64encode(hmac.new(key.secret_bytes, body, hashlib.sha256).digest()).decode('ascii')
     result = verifier.verify(headers={'X-Signature': sig}, body=body, tenant_id='t1', connector_id='crm')
     assert result.verified is True
 
 
 def test_session_token_and_sandbox_policies() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session_verdict = SessionPolicy().evaluate(created_at=now - timedelta(minutes=10), last_seen_at=now - timedelta(minutes=1), now=now)
     assert session_verdict.allowed is True
     token_verdict = TokenPolicy(required_scopes=('read',)).evaluate(

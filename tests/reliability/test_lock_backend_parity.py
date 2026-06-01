@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Callable
 
 import pytest
 
 from reliability.distributed_lock import InMemoryDistributedLock
 
-UTC = timezone.utc
+UTC = UTC
 
 
 def _t(second: int = 0) -> datetime:

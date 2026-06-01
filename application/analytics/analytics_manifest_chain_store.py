@@ -27,7 +27,7 @@ class SqliteAnalyticsManifestChainStore:
         self._session_factory = SqliteSessionFactory(self._path, wal=True, busy_timeout_ms=5000, synchronous="NORMAL")
         self._session = None
 
-    def __enter__(self) -> "SqliteAnalyticsManifestChainStore":
+    def __enter__(self) -> SqliteAnalyticsManifestChainStore:
         self._session = self._session_factory.open().__enter__()
         self._init_schema()
         return self

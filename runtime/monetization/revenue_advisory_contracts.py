@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Mapping
 
 CANON_RUNTIME_MONETIZATION_REVENUE_ADVISORY_CONTRACTS = True
@@ -9,8 +9,8 @@ CANON_RUNTIME_MONETIZATION_REVENUE_ADVISORY_CONTRACTS = True
 
 def ensure_utc_timestamp(value: datetime) -> datetime:
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +60,7 @@ class RevenueSnapshotInput:
     active_subscribers: int
     trial_subscribers: int = 0
 
-    def normalized_copy(self) -> 'RevenueSnapshotInput':
+    def normalized_copy(self) -> RevenueSnapshotInput:
         return RevenueSnapshotInput(
             observed_at=ensure_utc_timestamp(self.observed_at),
             visitors=max(0, int(self.visitors)),

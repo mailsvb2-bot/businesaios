@@ -58,7 +58,7 @@ class Diagnostics:
     budget_minor_7d: int = 0
     budget_currency: str = "EUR"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "what": self.what,
             "avg_check_minor": int(self.avg_check_minor or 0),
@@ -71,7 +71,7 @@ class Diagnostics:
         }
 
     @staticmethod
-    def from_dict(d: Mapping[str, Any] | None) -> "Diagnostics":
+    def from_dict(d: Mapping[str, Any] | None) -> Diagnostics:
         d = dict(d or {})
         try:
             hc = HasClientsChoice(str(d.get("has_clients") or HasClientsChoice.UNKNOWN.value))

@@ -5,15 +5,15 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import List, Optional
 
+from config.ads_aggregates_policy import DEFAULT_ADS_AGGREGATES_POLICY
 from config.ads_rules_policy import DEFAULT_ADS_RULES_POLICY, AdsRulesPolicy
 from core.growth.ads_aggregates import AdsAggregates
-from config.ads_aggregates_policy import DEFAULT_ADS_AGGREGATES_POLICY
-from core.growth.recommendations import AdsRecommendation, AdsObjectRef
+from core.growth.recommendations import AdsObjectRef, AdsRecommendation
 
 
 @dataclass(frozen=True)
 class RuleTargets:
-    target_cpa: Optional[float] = None
+    target_cpa: float | None = None
     min_conversions_for_scale: int = DEFAULT_ADS_RULES_POLICY.min_conversions_for_scale
     scale_step_pct: float = DEFAULT_ADS_RULES_POLICY.scale_step_pct
     stop_loss_spend: float = DEFAULT_ADS_RULES_POLICY.stop_loss_spend
@@ -25,10 +25,10 @@ class RulesBasedRecommendationEngine:
         self._cfg = cfg
         self._policy = policy or DEFAULT_ADS_RULES_POLICY
 
-    def propose(self, *, tenant_id: str, platform: str, account_id: str) -> List[AdsRecommendation]:
+    def propose(self, *, tenant_id: str, platform: str, account_id: str) -> list[AdsRecommendation]:
         day = (date.today() - timedelta(days=int(self._policy.yesterday_days_offset))).isoformat()
         by_campaign = self._aggs.by_campaign_day(tenant_id=tenant_id, day_iso=day)
-        recs: List[AdsRecommendation] = []
+        recs: list[AdsRecommendation] = []
 
         for cid, agg in by_campaign.items():
             if agg.spend >= self._cfg.stop_loss_spend and agg.conversions <= DEFAULT_ADS_AGGREGATES_POLICY.default_conversions:

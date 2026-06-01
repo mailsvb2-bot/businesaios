@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from runtime.tenancy import normalize_tenant_scope
 from runtime.messaging_policy_trace.group_records import group_records
 from runtime.messaging_policy_trace.summary_builder import MessagingPolicyTraceSummaryBuilder
 from runtime.messaging_policy_trace.summary_sort import sort_summaries_desc
+from runtime.tenancy import normalize_tenant_scope
 
 
 class MessagingPolicyTraceSearchService:

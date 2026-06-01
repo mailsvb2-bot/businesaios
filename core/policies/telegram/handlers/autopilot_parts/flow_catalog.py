@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from core.tenancy.normalization import normalize_tenant_id_or_unknown
 from core.observability.structured_logging import log_exception_throttled
 from core.offers.offer_catalog_resolver import OfferCatalogKey, OfferCatalogResolver
+from core.tenancy.normalization import normalize_tenant_id_or_unknown
 
 
 def resolve_offer_choices(ctx, *, default_price_rub: int) -> list[tuple[str, str, int]]:

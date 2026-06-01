@@ -4,12 +4,13 @@ import logging
 from typing import Any, Dict, Iterable
 
 from core.observability.throttled_logger import exception_throttled
+
 from .shared import safe_json
 
 logger = logging.getLogger(__name__)
 
 
-def apply_audio_features(*, vec: Dict[str, float], events: Iterable[Dict[str, Any]], tenant_id: str, user_id: str) -> None:
+def apply_audio_features(*, vec: dict[str, float], events: Iterable[dict[str, Any]], tenant_id: str, user_id: str) -> None:
     audio_sent = [e for e in events if str(e.get("event_type")) == "audio_sent"]
     vec["audio_plays_d1"] = float(len(audio_sent))
 

@@ -4,7 +4,7 @@ from core.behavior.contracts.micro_spinor import MicroSpinor
 from core.behavior.math.complex4 import Complex4
 from core.behavior.math.invariants import anti_field_from_magnitudes, coherence_from_spinors, engagement_from_spinor
 from core.behavior.math.phases import oscillation_score, phase_stability
-from core.behavior.math.vector_ops import clamp, mean
+from core.behavior.math.vector_ops import clamp
 
 
 def compute_person_observables(micro_spinors: list[MicroSpinor]) -> dict[str, float]:

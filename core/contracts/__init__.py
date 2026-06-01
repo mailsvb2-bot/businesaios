@@ -11,12 +11,12 @@ from importlib import import_module
 
 from kernel.decision_candidate import DecisionCandidate
 from kernel.decision_context import DecisionContext
-from kernel.decision_request import DecisionRequest
-from kernel.decision_result import DecisionResult
 from kernel.decision_reason import DecisionReason
 from kernel.decision_rejection import DecisionRejection
-from kernel.decision_trace import DecisionTrace
+from kernel.decision_request import DecisionRequest
+from kernel.decision_result import DecisionResult
 from kernel.decision_space import DecisionSpace
+from kernel.decision_trace import DecisionTrace
 
 __all__ = [
     'DecisionCandidate', 'DecisionContext', 'DecisionRequest', 'DecisionResult',

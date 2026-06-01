@@ -10,7 +10,12 @@ connector call sites.
 from typing import Any, Dict, Sequence
 
 from .base import AdsObjectRef, AdsPlatform, Campaign, MetricPoint
-from .connector_mapping_support import parse_metric_day, parse_optional_budget, resolve_first_nonempty, resolve_first_present
+from .connector_mapping_support import (
+    parse_metric_day,
+    parse_optional_budget,
+    resolve_first_nonempty,
+    resolve_first_present,
+)
 from .connector_shared import as_float, as_int, as_optional_float, as_optional_int, safe_ratio
 
 
@@ -18,7 +23,7 @@ def build_campaign_from_row(
     *,
     platform: AdsPlatform,
     account_id: str,
-    row: Dict[str, Any],
+    row: dict[str, Any],
     connector_name: str,
     id_keys: Sequence[str],
     budget_keys: Sequence[str],
@@ -53,7 +58,7 @@ def build_metric_point_from_row(
     platform: AdsPlatform,
     account_id: str,
     level: str,
-    row: Dict[str, Any],
+    row: dict[str, Any],
     connector_name: str,
     object_id_keys: Sequence[str],
     day_keys: Sequence[str],

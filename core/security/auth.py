@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, Optional, Dict, Any, Iterable
+from typing import Any, Dict, Iterable, Optional, Protocol
 
 from core.tenancy.scope import TenantId
 
@@ -11,7 +11,7 @@ class AuthContext:
     tenant_id: TenantId
     subject: str  # user_id / service_id
     scopes: tuple[str, ...] = ()
-    claims: Dict[str, Any] | None = None
+    claims: dict[str, Any] | None = None
 
     def has_scope(self, scope: str) -> bool:
         s = (scope or "").strip()
@@ -26,7 +26,7 @@ class AuthContext:
 class AuthProvider(Protocol):
     """Extract auth context from a transport-specific request context."""
 
-    def authenticate(self, request_ctx: Any) -> Optional[AuthContext]: ...
+    def authenticate(self, request_ctx: Any) -> AuthContext | None: ...
 
 
 class AuthRequired(RuntimeError):
@@ -37,7 +37,7 @@ class AuthForbidden(RuntimeError):
     pass
 
 
-def require_auth(ctx: Optional[AuthContext]) -> AuthContext:
+def require_auth(ctx: AuthContext | None) -> AuthContext:
     if ctx is None:
         raise AuthRequired("AUTH_REQUIRED")
     if not str(ctx.subject or "").strip():
@@ -45,7 +45,7 @@ def require_auth(ctx: Optional[AuthContext]) -> AuthContext:
     return ctx
 
 
-def require_scope(ctx: Optional[AuthContext], scope: str) -> AuthContext:
+def require_scope(ctx: AuthContext | None, scope: str) -> AuthContext:
     auth = require_auth(ctx)
     normalized = str(scope or "").strip()
     if not normalized:

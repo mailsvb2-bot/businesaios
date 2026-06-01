@@ -3,14 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import learning.rollout as _learning_rollout
 from config.ads_rl_policy import DEFAULT_ADS_RL_SERVICE_POLICY, AdsRLServicePolicy
 from core.ads.ads_service import AdsService
-import learning.rollout as _learning_rollout
 
 from .action_space import build_action_space
-from .contracts import AdsRLAction, AdsRLState, AdsRLSuggestion, AdsRLOptSpec
 from .contextual_bandit_policy import UCB1Policy
+from .contracts import AdsRLAction, AdsRLOptSpec, AdsRLState, AdsRLSuggestion
 from .experience_store import AdsRLExperienceStore
+from .plan_builder import to_ads_plan
 from .reward import compute_reward
 from .safety import decide_safety
 from .service_support import (
@@ -22,7 +23,6 @@ from .service_support import (
     suggestion_to_public,
 )
 from .state_builder import build_state_from_ads_metrics
-from .plan_builder import to_ads_plan
 
 
 @dataclass(frozen=True)

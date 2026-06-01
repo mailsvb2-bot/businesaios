@@ -1,13 +1,13 @@
 import builtins
 import contextlib
 import contextvars
-import inspect
 import importlib.abc
+import inspect
 import sys
 from types import FrameType
 from typing import Optional
-from runtime.observability.error_handling import swallow
 
+from runtime.observability.error_handling import swallow
 
 # Modules that are considered "real-world integrations" and must be reachable ONLY via
 # runtime.executor -> (private effects impl) (hermetic runtime law).
@@ -80,14 +80,14 @@ def _infer_caller_module() -> str:
     # Walk the stack and pick the first "user" frame that is not importlib and not this module.
     # This is more robust than inspect.stack()[2], which can yield "unknown" on some setups.
     try:
-        frame: Optional[FrameType] = sys._getframe(1)
+        frame: FrameType | None = sys._getframe(1)
     except Exception:
         frame = None
 
     while frame is not None:
         g = frame.f_globals or {}
         mod = g.get("__name__", "") or ""
-        file = g.get("__file__", "") or ""
+        _ = g.get("__file__", "") or ""
         if mod and not mod.startswith(("importlib", "runtime.firewall.import_guard")):
             return mod
         # Skip builtins and C-frames

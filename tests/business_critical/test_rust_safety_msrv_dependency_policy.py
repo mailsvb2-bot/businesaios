@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-
 ROOT = Path("rust")
 CRATE = ROOT / "businessaios_safety_core"
 CARGO_TOML = CRATE / "Cargo.toml"

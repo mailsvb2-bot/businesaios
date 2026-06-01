@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Literal, Optional
 
 SprintStatus = Literal["not_started", "active", "completed", "paused", "failed"]
@@ -19,12 +19,12 @@ class RevenueSprintConfig:
 @dataclass
 class RevenueSprintState:
     status: SprintStatus = "not_started"
-    started_at_utc: Optional[datetime] = None
-    ends_at_utc: Optional[datetime] = None
+    started_at_utc: datetime | None = None
+    ends_at_utc: datetime | None = None
     day_index: int = 0
 
-    def start(self, *, now_utc: datetime, days: int) -> "RevenueSprintState":
-        now_utc = now_utc.astimezone(timezone.utc)
+    def start(self, *, now_utc: datetime, days: int) -> RevenueSprintState:
+        now_utc = now_utc.astimezone(UTC)
         self.status = "active"
         self.started_at_utc = now_utc
         self.ends_at_utc = now_utc + timedelta(days=int(days))
@@ -34,4 +34,4 @@ class RevenueSprintState:
     def is_active(self, *, now_utc: datetime) -> bool:
         if self.status != "active" or not self.ends_at_utc:
             return False
-        return now_utc.astimezone(timezone.utc) < self.ends_at_utc
+        return now_utc.astimezone(UTC) < self.ends_at_utc

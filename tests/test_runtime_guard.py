@@ -1,6 +1,7 @@
 import pytest
 
-from runtime.guard import DecisionEnvelopeRef as DecisionEnvelope, RuntimeGuard
+from runtime.guard import DecisionEnvelopeRef as DecisionEnvelope
+from runtime.guard import RuntimeGuard
 from runtime.inmemory_ledger import InMemoryLedger
 from survival.controller import SurvivalController, SurvivalMetrics
 

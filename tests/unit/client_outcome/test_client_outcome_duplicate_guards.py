@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from billing.client_outcome_dispute_service import ClientOutcomeDisputeService
 from billing.client_outcome_dispute_store import ClientOutcomeDisputeStore, ClientOutcomeReversalStore
@@ -20,7 +20,7 @@ def _service() -> ClientOutcomeDisputeService:
 
 
 def test_duplicate_open_dispute_reuses_same_case() -> None:
-    now = datetime(2026, 4, 14, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 14, 12, 0, 0, tzinfo=UTC)
     service = _service()
     record = BillableClientRecord(
         record_id='billable:1', tenant_id='tenant-1', business_id='biz-1', order_id='order-1', lead_id='lead-1',
@@ -39,7 +39,7 @@ def test_duplicate_open_dispute_reuses_same_case() -> None:
 
 
 def test_duplicate_reverse_reuses_existing_reversal_payload() -> None:
-    now = datetime(2026, 4, 14, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 4, 14, 12, 0, 0, tzinfo=UTC)
     service = _service()
     record = BillableClientRecord(
         record_id='billable:1', tenant_id='tenant-1', business_id='biz-1', order_id='order-1', lead_id='lead-1',

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Dict, Iterable, List
 
 from config.scoring_behavior_policy import (
@@ -11,11 +11,10 @@ from config.scoring_behavior_policy import (
 
 from .shared import day_key_from_ms, pct
 
-
 SESSION_GAP_MS = DEFAULT_RETENTION_ACTIVITY_POLICY.session_gap_ms
 
 
-def _sessions_from(events: List[Dict[str, Any]], *, policy: RetentionActivityPolicy) -> int:
+def _sessions_from(events: list[dict[str, Any]], *, policy: RetentionActivityPolicy) -> int:
     timestamps = sorted([int(e.get("timestamp_ms") or 0) for e in events if int(e.get("timestamp_ms") or 0) > 0])
     if not timestamps:
         return 0
@@ -28,14 +27,14 @@ def _sessions_from(events: List[Dict[str, Any]], *, policy: RetentionActivityPol
     return int(n)
 
 
-def _count(events: Iterable[Dict[str, Any]], event_type: str) -> int:
+def _count(events: Iterable[dict[str, Any]], event_type: str) -> int:
     return int(sum(1 for event in events if str(event.get("event_type")) == str(event_type)))
 
 
 def apply_activity_features(
     *,
-    vec: Dict[str, float],
-    events: List[Dict[str, Any]],
+    vec: dict[str, float],
+    events: list[dict[str, Any]],
     store: Any,
     tenant_id: str,
     user_id: str,
@@ -57,8 +56,8 @@ def apply_activity_features(
     timestamps = [int(e.get("timestamp_ms") or 0) for e in events_sorted if int(e.get("timestamp_ms") or 0) > 0]
 
     sessions_d1 = 0
-    session_lengths_s: List[float] = []
-    click_intervals_ms: List[int] = []
+    session_lengths_s: list[float] = []
+    click_intervals_ms: list[int] = []
     if timestamps:
         sessions_d1 = 1
         session_start = timestamps[0]
@@ -97,7 +96,7 @@ def apply_activity_features(
         nss = max(1, len(session_starts))
         night = morning = evening = weekend = 0
         for ts in session_starts:
-            dt = datetime.fromtimestamp(ts / 1000.0, tz=timezone.utc)
+            dt = datetime.fromtimestamp(ts / 1000.0, tz=UTC)
             h = int(dt.hour)
             wd = int(dt.weekday())
             if wd >= 5:
@@ -134,7 +133,7 @@ def apply_activity_features(
             if int(current - prev) >= int(policy.session_gap_ms):
                 session_starts30.append(current)
             prev = current
-    gaps_s = [max(0.0, float(b - a) / 1000.0) for a, b in zip(session_starts30, session_starts30[1:])]
+    gaps_s = [max(0.0, float(b - a) / 1000.0) for a, b in zip(session_starts30, session_starts30[1:], strict=False)]
     vec["session_gap_mean_s"] = float(sum(gaps_s) / max(1, len(gaps_s))) if gaps_s else 0.0
     vec["session_gap_p50_s"] = float(pct(gaps_s, 0.50)) if gaps_s else 0.0
     if ts30:

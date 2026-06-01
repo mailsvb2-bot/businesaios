@@ -6,6 +6,7 @@ from .client import Client, TransportPort
 from .dto import SDKRequest
 from .errors import SDKError
 
+
 class ActionClient(Client):
     def act(self, payload: dict[str, Any]) -> Any:
         return self.request("/action", payload)

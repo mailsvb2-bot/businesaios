@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from contextlib import suppress
 from pathlib import Path
 
 from scripts.ci.paths import repo_root
@@ -56,14 +57,10 @@ def _remove_empty_dirs(path: Path, *, stop_at: Path) -> None:
     if not path.exists() or path == stop_at:
         return
     for child in sorted((p for p in path.rglob("*") if p.is_dir()), reverse=True):
-        try:
+        with suppress(OSError):
             child.rmdir()
-        except OSError:
-            pass
-    try:
+    with suppress(OSError):
         path.rmdir()
-    except OSError:
-        pass
 
 
 def _ci_demo_env() -> dict[str, str]:

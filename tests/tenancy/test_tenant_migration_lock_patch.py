@@ -5,8 +5,8 @@ from datetime import timedelta
 import pytest
 
 from tenancy.tenant_migration_lock import TenantMigrationLockService
-from tenancy.tenant_migration_lock_sqlite import SQLiteTenantMigrationLockBackend
 from tenancy.tenant_migration_lock_backend import utc_now
+from tenancy.tenant_migration_lock_sqlite import SQLiteTenantMigrationLockBackend
 
 
 def test_sqlite_tenant_migration_lock_is_exclusive(tmp_path) -> None:

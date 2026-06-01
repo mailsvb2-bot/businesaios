@@ -32,17 +32,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from canon.canon_ai_enforcer import run_enforcer
-
 from scripts.certify_helpers import (
-    TRUTHY,
     CertificationReport,
     analyze_god_objects_and_complexity,
     check_god_modules,
     detect_policy_divergence_signals,
     find_network_imports_outside_sealed,
 )
-
-
 
 
 def prune_generated_release_artifacts(root: Path) -> None:
@@ -58,13 +54,7 @@ def find_forbidden_release_artifacts(root: Path) -> list[str]:
         if not p.exists():
             continue
         rel = p.relative_to(root).as_posix()
-        if "__pycache__" in p.parts:
-            bad.append(rel)
-        elif p.suffix == ".pyc":
-            bad.append(rel)
-        elif rel.startswith("runtime/data/demo/") and p.suffix == ".db":
-            bad.append(rel)
-        elif rel.startswith("runtime/data/test/") and p.suffix == ".db":
+        if "__pycache__" in p.parts or p.suffix == ".pyc" or rel.startswith("runtime/data/demo/") and p.suffix == ".db" or rel.startswith("runtime/data/test/") and p.suffix == ".db":
             bad.append(rel)
     return bad
 

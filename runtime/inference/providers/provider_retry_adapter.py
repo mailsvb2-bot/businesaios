@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from time import sleep
 from typing import Callable, TypeVar
 
-
 CANON_RUNTIME_INFERENCE_PROVIDER_RETRY_ADAPTER = True
 _T = TypeVar('_T')
 

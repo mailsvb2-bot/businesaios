@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Callable, Dict
+from typing import Any, Callable
 
 from config.final_hidden_logic_policy import DEFAULT_ANTHROPIC_PROVIDER_POLICY
 from core.llm.contracts import LLMClient, LLMMessage, LLMRequest, LLMResponse, LLMUsage
 
-
-AnthropicTransport = Callable[[str, str, Dict[str, Any], int], Dict[str, Any]]
+AnthropicTransport = Callable[[str, str, dict[str, Any], int], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -24,7 +23,7 @@ class AnthropicClient(LLMClient):
 
     def generate_sync(self, req: LLMRequest) -> LLMResponse:
         model = str(req.model or "").strip() or self.model
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model,
             "max_tokens": int(req.max_tokens or DEFAULT_ANTHROPIC_PROVIDER_POLICY.default_max_tokens),
             "temperature": float(req.temperature or DEFAULT_ANTHROPIC_PROVIDER_POLICY.default_temperature),
@@ -69,7 +68,7 @@ def _anthropic_messages(messages: list[LLMMessage]) -> list[dict[str, Any]]:
     return out or [{"role": DEFAULT_ANTHROPIC_PROVIDER_POLICY.default_user_role, "content": DEFAULT_ANTHROPIC_PROVIDER_POLICY.empty_content}]
 
 
-def _extract_text(raw: Dict[str, Any]) -> str:
+def _extract_text(raw: dict[str, Any]) -> str:
     parts = raw.get("content") or []
     if isinstance(parts, list):
         texts: list[str] = []
@@ -83,7 +82,7 @@ def _extract_text(raw: Dict[str, Any]) -> str:
     return str(raw.get("output_text") or DEFAULT_ANTHROPIC_PROVIDER_POLICY.empty_content).strip()
 
 
-def _extract_usage(raw: Dict[str, Any]) -> LLMUsage | None:
+def _extract_usage(raw: dict[str, Any]) -> LLMUsage | None:
     usage = raw.get("usage")
     if not isinstance(usage, dict):
         return None
@@ -93,7 +92,7 @@ def _extract_usage(raw: Dict[str, Any]) -> LLMUsage | None:
     return LLMUsage(prompt_tokens=pt, completion_tokens=ct, total_tokens=tt)
 
 
-def _extract_finish(raw: Dict[str, Any]) -> str:
+def _extract_finish(raw: dict[str, Any]) -> str:
     return str(raw.get("stop_reason") or raw.get("finish_reason") or DEFAULT_ANTHROPIC_PROVIDER_POLICY.default_stop_reason)
 
 

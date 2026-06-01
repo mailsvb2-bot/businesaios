@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from core.experiments.types import EvaluationSummary, VariantMetricSnapshot
 from core.experiments.guards.experiment_state_guard import ExperimentStateGuard
 from core.experiments.guards.metric_membership_guard import MetricMembershipGuard
 from core.experiments.guards.result_consistency_guard import ResultConsistencyGuard
+from core.experiments.types import EvaluationSummary, VariantMetricSnapshot
 
 
 def build_evaluation_summary(*, plan, result, unsafe_rollout_guard) -> EvaluationSummary:

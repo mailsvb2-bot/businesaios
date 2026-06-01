@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from .contracts import AdsRLOptSpec, AdsRLState
 
@@ -12,7 +12,7 @@ def _platform(name: str) -> str:
 
 def build_state_from_ads_metrics(*, ads_service, tenant_id: str, spec: AdsRLOptSpec) -> AdsRLState:
     now_ms = int(time.time() * 1000)
-    dt = datetime.fromtimestamp(now_ms / 1000.0, tz=timezone.utc)
+    dt = datetime.fromtimestamp(now_ms / 1000.0, tz=UTC)
     query = {
         "platform": str(spec.platform),
         "campaign_id": str(spec.campaign_id),

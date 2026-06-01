@@ -2,10 +2,21 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from contracts.action_impact_contract import ActionCategory
+from execution.approval_execution_gate import build_execution_subject_fingerprint
+from execution.operator_override_contract import (
+    OperatorOverrideDecision,
+    OperatorOverrideRecord,
+    OperatorOverrideRequest,
+    OperatorOverrideResolution,
+    OperatorOverrideStatus,
+)
+from execution.operator_override_store import InMemoryOperatorOverrideStore
 from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest
 from governance.approval_store import InMemoryApprovalStore
 from governance.approval_workflow import ApprovalWorkflow
 from governance.change_control_policy import ChangeControlPolicy
+from governance.control_plane_audit_log import PersistentGovernanceAuditLog
 from governance.emergency_stop_guard import EmergencyStopGuard
 from governance.kill_switch_registry import KillSwitchRegistry
 from governance.permission_matrix import PermissionMatrix
@@ -15,10 +26,6 @@ from governance.role_catalog import RoleCatalog
 from governance.sox_like_action_guard import SoxLikeActionGuard
 from governance.tenant_policy_overrides import TenantPolicyOverrideRegistry
 from runtime.execution.governance_runtime import GovernanceExecutionBlocked, review_governance_execution
-from execution.approval_execution_gate import build_execution_subject_fingerprint
-from execution.operator_override_contract import OperatorOverrideDecision, OperatorOverrideRecord, OperatorOverrideRequest, OperatorOverrideResolution, OperatorOverrideStatus
-from execution.operator_override_store import InMemoryOperatorOverrideStore
-from contracts.action_impact_contract import ActionCategory
 
 
 class _Events:
@@ -394,7 +401,6 @@ def test_governance_runtime_emits_resume_hint_and_resume_ready_events() -> None:
     assert resume_ready[-1]['payload']['resume']['approval_id'] == approval_id
 
 
-from governance.control_plane_audit_log import PersistentGovernanceAuditLog
 
 
 def test_governance_runtime_persists_resume_audit_events(tmp_path) -> None:

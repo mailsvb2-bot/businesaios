@@ -6,30 +6,31 @@ from typing import Any, Dict, List
 
 from core.users.roles import UserRoleInfo
 from core.ux.callbacks import (
-    CB_AUTOPILOT_MENU,
-    CB_AUTOPILOT_DASHBOARD_TODAY,
+    CB_ADS_APPLY_CANCEL,
+    CB_ADS_APPLY_CONFIRM,
+    CB_ADS_APPLY_MENU,
+    CB_ADS_APPLY_PREVIEW,
     CB_AUTOPILOT_DASHBOARD_AUTOPILOT,
     CB_AUTOPILOT_DASHBOARD_TASKS,
+    CB_AUTOPILOT_DASHBOARD_TODAY,
+    CB_AUTOPILOT_MENU,
+    CB_GROWTH_BACKLOG,
+    CB_GROWTH_GENERATE,
     CB_MENU_MAIN,
-    CB_PROFIT_SPRINT_START,
-    CB_PROFIT_SPRINT_LEAD_INBOX,
+    CB_PROFIT_SPRINT_LEAD_ADS,
     CB_PROFIT_SPRINT_LEAD_CALLS,
+    CB_PROFIT_SPRINT_LEAD_INBOX,
     CB_PROFIT_SPRINT_LEAD_SITE,
     CB_PROFIT_SPRINT_LEAD_SOCIAL,
-    CB_PROFIT_SPRINT_LEAD_ADS,
-    CB_ADS_APPLY_PREVIEW,
-    CB_ADS_APPLY_CONFIRM,
-    CB_ADS_APPLY_CANCEL,
-    CB_ADS_APPLY_MENU,
-    CB_GROWTH_GENERATE,
-    CB_GROWTH_BACKLOG,
+    CB_PROFIT_SPRINT_START,
 )
+
 from .common import mk
 
 
-def kb_autopilot_menu(*, role: UserRoleInfo | None = None) -> Dict[str, Any]:
+def kb_autopilot_menu(*, role: UserRoleInfo | None = None) -> dict[str, Any]:
     r = (role or UserRoleInfo("owner")).role
-    rows: List[List[Dict[str, str]]] = []
+    rows: list[list[dict[str, str]]] = []
     if r in ("owner", "operator"):
         rows.append([{"text": "🚀 Запустить: +прибыль за 7 дней", "callback_data": CB_PROFIT_SPRINT_START}])
     rows.extend(
@@ -45,7 +46,7 @@ def kb_autopilot_menu(*, role: UserRoleInfo | None = None) -> Dict[str, Any]:
     return mk(rows)
 
 
-def kb_profit_sprint_lead_sources() -> Dict[str, Any]:
+def kb_profit_sprint_lead_sources() -> dict[str, Any]:
     return mk(
         [
             [{"text": "Входящие сообщения", "callback_data": CB_PROFIT_SPRINT_LEAD_INBOX}],
@@ -57,8 +58,8 @@ def kb_profit_sprint_lead_sources() -> Dict[str, Any]:
     )
 
 
-def kb_ads_apply_pending(*, can_apply: bool = True) -> Dict[str, Any]:
-    rows: List[List[Dict[str, str]]] = [
+def kb_ads_apply_pending(*, can_apply: bool = True) -> dict[str, Any]:
+    rows: list[list[dict[str, str]]] = [
         [{"text": "👀 Предпросмотр плана", "callback_data": CB_ADS_APPLY_PREVIEW}],
     ]
     if can_apply:
@@ -70,7 +71,7 @@ def kb_ads_apply_pending(*, can_apply: bool = True) -> Dict[str, Any]:
     return mk(rows)
 
 
-def kb_growth_menu() -> Dict[str, Any]:
+def kb_growth_menu() -> dict[str, Any]:
     return mk(
         [
             [{"text": "🔁 Сгенерировать backlog", "callback_data": CB_GROWTH_GENERATE}],

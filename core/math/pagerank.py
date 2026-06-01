@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Mapping, Sequence
+from typing import Mapping, Sequence
 
 
 def pagerank(
@@ -9,7 +9,7 @@ def pagerank(
     d: float = 0.85,
     iters: int = 50,
     tol: float = 1e-10,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """PageRank-like:
       PR(A) = (1-d)/N + d * Σ PR(i)/L(i)
     """

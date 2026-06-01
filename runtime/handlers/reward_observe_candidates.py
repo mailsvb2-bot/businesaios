@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from runtime.decisioning import CandidateCollection
-from runtime.decisioning import CandidateEnvelope
-from runtime.reward import RewardObservationContext
-from runtime.reward import RewardService
+from runtime.decisioning import CandidateCollection, CandidateEnvelope
+from runtime.reward import RewardObservationContext, RewardService
 
 CANON_THIN_HANDLER = True
 

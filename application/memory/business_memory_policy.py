@@ -5,7 +5,6 @@ from typing import Any, Mapping, Sequence
 
 from runtime.platform.business_memory.second_brain_boundary import sanitize_business_memory_payload
 
-
 CANON_BUSINESS_MEMORY_POLICY = True
 
 

@@ -6,15 +6,15 @@ Extracted from runtime/_internal/_effects_impl.py without changing behavior.
 """
 
 import base64
-import json
 import hmac
+import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
 from runtime.observability.error_handling import swallow
-from runtime.tenancy import normalize_tenant_id
 from runtime.platform.config.env_flags import env_str
+from runtime.tenancy import normalize_tenant_id
 
 
 def _extract_webhook_tenant_id(raw: dict[str, Any]) -> str:
@@ -55,6 +55,8 @@ def start_yookassa_webhook_server_in_thread(
 
     from runtime.payments import (
         parse_yookassa_notification as parse_notification,
+    )
+    from runtime.payments import (
         verify_yookassa_webhook as verify_webhook,
     )
 

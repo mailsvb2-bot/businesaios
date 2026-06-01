@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from acquisition import evaluate_acquisition_payload
 from advisory import (
-    AcquisitionExplanation,
-    AcquisitionRecommendation,
     CANON_ADVISORY_ACQUISITION_RECOMMENDATION_BUILDER,
     CANON_ADVISORY_ACQUISITION_RESULT_PROJECTION,
+    AcquisitionExplanation,
+    AcquisitionRecommendation,
     build_acquisition_recommendations,
     explain_acquisition_result,
 )

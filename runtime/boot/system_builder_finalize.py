@@ -1,23 +1,23 @@
 from __future__ import annotations
+
 CANON_BOOT_WIRING_ONLY = True
 
 
 from pathlib import Path
-
-from runtime.platform.app_paths import runtime_data_dir
-from runtime.platform.config.env_flags import env_path
 from typing import Any
 
 from bootstrap.finalize_runtime_args import FinalizeRuntimeArgs
+from runtime.platform.app_paths import runtime_data_dir
+from runtime.platform.config.env_flags import env_path
 
 
 def finalize_runtime_system(*, args: FinalizeRuntimeArgs):
-    from runtime.platform.outbox.delivery_state import open_delivery_state
-    from runtime.boot.boot_core_assembly import build_core_assembly
     from bootstrap.world_model_self_check import run_world_model_self_check
+    from runtime.boot.boot_core_assembly import build_core_assembly
     from runtime.boot.boot_ml_job import build_ml_job
-    from runtime.boot.web.runtime_web_attach import attach_runtime_web_bundle
     from runtime.boot.core_assembly_args import CoreAssemblyArgs
+    from runtime.boot.web.runtime_web_attach import attach_runtime_web_bundle
+    from runtime.platform.outbox.delivery_state import open_delivery_state
 
     delivery_db_path = str(env_path("DELIVERY_DB_PATH", str(runtime_data_dir() / "delivery_state.db")))
     delivery_state = args.stack.enter_context(open_delivery_state(delivery_db_path))

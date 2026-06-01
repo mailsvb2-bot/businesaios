@@ -10,8 +10,10 @@ from core.retention.config.ai_limits import LIMITS, is_allowed_arm
 from core.retention.config.offer_catalog import OFFERS
 from core.retention.config.pricing_ladder import (
     WINDOWS,
-    base_price_for_arm as ladder_base_price_for_arm,
     window_for_arm,
+)
+from core.retention.config.pricing_ladder import (
+    base_price_for_arm as ladder_base_price_for_arm,
 )
 from core.retention.ports import RetentionStore
 
@@ -118,9 +120,9 @@ def arm_already_shown_in_window(
 def build_candidates(
     *,
     day_index: int,
-    prices: Optional[dict] = None,
+    prices: dict | None = None,
     policy: RetentionArmsPolicy = DEFAULT_RETENTION_ARMS_POLICY,
-) -> tuple[list[tuple[str, float]], Optional[int]]:
+) -> tuple[list[tuple[str, float]], int | None]:
     candidates: list[tuple[str, float]] = []
     w30 = WINDOWS.get("offer_30")
     if w30 and w30.day_from <= day_index <= w30.day_to:
@@ -135,7 +137,7 @@ def build_candidates(
     return candidates, None
 
 
-def base_price_for_arm(offer_arm: str, prices: Optional[Dict[str, Any]] = None) -> Optional[int]:
+def base_price_for_arm(offer_arm: str, prices: dict[str, Any] | None = None) -> int | None:
     canonical = ladder_base_price_for_arm(str(offer_arm), prices=prices)
     if canonical is not None:
         return canonical
@@ -153,7 +155,7 @@ def filter_candidate_arms(
     user_id: str,
     candidates: list[tuple[str, float]],
     now_ms: int,
-    debug: Dict[str, Any],
+    debug: dict[str, Any],
     logger=None,
     policy: RetentionArmsPolicy = DEFAULT_RETENTION_ARMS_POLICY,
 ) -> list[tuple[str, float]]:
@@ -180,7 +182,7 @@ def filter_candidate_arms(
     return filtered
 
 
-def _coerce_payload(payload: Any) -> Dict[str, Any]:
+def _coerce_payload(payload: Any) -> dict[str, Any]:
     p = payload or {}
     if isinstance(p, str):
         try:

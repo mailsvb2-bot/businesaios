@@ -1,14 +1,17 @@
 from __future__ import annotations
+
 import json
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Mapping
+
 from runtime.bootstrap.bootstrap_contract import (
     BootstrapAuditEvent,
     BootstrapEnvironment,
     BootstrapStatus,
 )
+
 
 def _audit_path(env: BootstrapEnvironment) -> Path:
     return env.runtime_dir / "bootstrap" / "audit_trail.jsonl"
@@ -21,7 +24,7 @@ def build_bootstrap_audit_event(
     details: Mapping[str, str] | None = None,
 ) -> BootstrapAuditEvent:
     return BootstrapAuditEvent(
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         status=status,
         code=code,
         message=message,

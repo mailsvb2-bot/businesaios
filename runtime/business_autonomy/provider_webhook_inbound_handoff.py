@@ -5,7 +5,6 @@ from typing import Any, Mapping
 from runtime.messaging.inbound_message import InboundMessage
 from runtime.messaging.inbound_to_world_state import map_inbound_to_world_state
 
-
 CANON_PROVIDER_WEBHOOK_INBOUND_HANDOFF = True
 
 

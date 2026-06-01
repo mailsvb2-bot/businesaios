@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from execution.closed_loop_orchestrator import ClosedLoopCycleInput, ClosedLoopOrchestrator
+
 
 def _cycle(action, **kwargs):
     return ClosedLoopOrchestrator().run_cycle(cycle_input=ClosedLoopCycleInput(action=action, world_state=kwargs.pop("world_state", {"meta": {}}), execution_receipt=kwargs.pop("execution_receipt", {"status": "executed"}), feedback=kwargs.pop("feedback", {}), router_evidence=kwargs.pop("router_evidence", {}), requested_tier=kwargs.pop("requested_tier", "supervised"), current_tier=kwargs.pop("current_tier", "supervised"), **kwargs))

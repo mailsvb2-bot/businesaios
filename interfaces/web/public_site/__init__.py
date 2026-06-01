@@ -1,4 +1,4 @@
-from .dto import PublicSitePayload, PublicCapabilityPayload
+from .dto import PublicCapabilityPayload, PublicSitePayload
 from .landing_manifest import PUBLIC_SITE_MANIFEST
 from .routes import PUBLIC_SITE_ROUTES
 

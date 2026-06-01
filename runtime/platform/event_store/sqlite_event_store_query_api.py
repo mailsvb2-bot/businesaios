@@ -9,7 +9,7 @@ import runtime.platform.event_store.sqlite_read_queries as _rq
 class SqliteEventStoreQueryApi:
     """Read/query API for SqliteEventStore."""
 
-    _db: Optional[sqlite3.Connection]
+    _db: sqlite3.Connection | None
 
     def iter_events(
         self,
@@ -19,7 +19,7 @@ class SqliteEventStoreQueryApi:
         end_ms=None,
         event_type=None,
         user_id=None,
-    ) -> Iterable[Dict[str, Any]]:
+    ) -> Iterable[dict[str, Any]]:
         assert self._db is not None
         return _rq.iter_events(
             self._db,
@@ -36,7 +36,7 @@ class SqliteEventStoreQueryApi:
         tenant_id: str = "default",
         user_id=None,
         event_types=None,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         assert self._db is not None
         return _rq.latest_event(
             self._db,
@@ -53,7 +53,7 @@ class SqliteEventStoreQueryApi:
         event_type=None,
         event_types=None,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         assert self._db is not None
         return _rq.latest_events(
             self._db,

@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
-from config.yaml_loader_shared import load_yaml
 from config.env_flags import env_str
-
+from config.yaml_loader_shared import load_yaml
 from contracts.autopilot_contract import (
     AutopilotConstraints,
     AutopilotContract,

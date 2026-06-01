@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from governance.rbac_contract import RoleId
-from entrypoints.api.api_key_policy import ApiKeyPolicy, InMemoryApiKeyStore
 from adapters.api.fastapi.auth_dependencies import AuthDependencyBundle, CompositeAuthPolicy
+from entrypoints.api.api_key_policy import ApiKeyPolicy, InMemoryApiKeyStore
 from entrypoints.api.auth_contract import AuthPrincipal
 from entrypoints.api.jwt_policy import JwtClaims, JwtPolicy
 from entrypoints.api.request_context import RequestContext
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 from entrypoints.api.tenant_route_guards import TenantRouteGuard
+from governance.rbac_contract import RoleId
 
 
 def _request(headers: dict[str, str] | None = None) -> Request:
@@ -56,7 +56,7 @@ def test_auth_dependencies_fail_closed_when_transport_not_encrypted() -> None:
 
 
 def test_tenant_route_guard_uses_security_guard_for_binding_mismatch() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     principal = AuthPrincipal(
         subject='alice',
         tenant_id='tenant-a',

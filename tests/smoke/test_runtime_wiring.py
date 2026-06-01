@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from application.decisioning.decision_core_input_bridge import build_decision_core_enrichment
 from runtime.runtime_boot import boot_runtime
 from runtime.service_names import RuntimeServiceName
-from application.decisioning.decision_core_input_bridge import build_decision_core_enrichment
 
 EXPECTED_SERVICES = (
     RuntimeServiceName.ARCHITECTURE_WATCH,

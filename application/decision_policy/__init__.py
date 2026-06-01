@@ -1,7 +1,9 @@
 """Decision policy namespace with lazy exports."""
 from __future__ import annotations
-from typing import Any
+
 import importlib
+from typing import Any
+
 _EXPORT_MAP = {
     "propose_action": "application.decision_policy.policy_stage",
     "allowed_price_band": "application.decision_policy.pricing",

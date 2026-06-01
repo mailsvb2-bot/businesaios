@@ -14,9 +14,14 @@ dedicated gateway with guardrails + audit.
 from datetime import date
 from typing import Iterable, Optional, Sequence
 
-from interfaces.ads.base import Campaign, MetricPoint, OAuthAuthorizeURL, ConnectedAccount
-from interfaces.ads.base import AdsPlatform, AdsReadConnector
-
+from interfaces.ads.base import (
+    AdsPlatform,
+    AdsReadConnector,
+    Campaign,
+    ConnectedAccount,
+    MetricPoint,
+    OAuthAuthorizeURL,
+)
 from interfaces.ads.registry import AdsConnectorRegistry
 
 
@@ -56,7 +61,7 @@ class AdsReadService:
         platform: AdsPlatform,
         account_id: str,
         level: str,
-        object_ids: Optional[Sequence[str]],
+        object_ids: Sequence[str] | None,
         date_from: date,
         date_to: date,
     ) -> Iterable[MetricPoint]:

@@ -59,7 +59,7 @@ async def http_post_compat(
     platform: AdsPlatform,
     url: str,
     headers: dict[str, str],
-    data: Optional[dict[str, Any]] = None,
+    data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     post = getattr(http, "post", None)
     if callable(post):
@@ -82,7 +82,7 @@ async def http_get_compat(
     platform: AdsPlatform,
     url: str,
     headers: dict[str, str],
-    params: Optional[dict[str, Any]] = None,
+    params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     get = getattr(http, "get", None)
     if callable(get):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, Tuple
 
 
-def gate_action_or_raise(*, action: str, payload: Dict[str, Any], tenant_id: str, user_id: str, event_log: Any, trace: Any) -> Tuple[bool, str, Dict[str, Any]]:
+def gate_action_or_raise(*, action: str, payload: dict[str, Any], tenant_id: str, user_id: str, event_log: Any, trace: Any) -> tuple[bool, str, dict[str, Any]]:
     from application.decision_policy.safety import gate_decision_action
 
     gate_ok, gate_reason, gate_debug = gate_decision_action(

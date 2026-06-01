@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from execution.canonical_persistence_vocabulary import canonical_run_persistence_vocabulary
 from application.memory.business_operating_memory import project_business_memory_governance_summary
-
+from execution.canonical_persistence_vocabulary import canonical_run_persistence_vocabulary
 
 CANON_BUSINESS_MEMORY_GOVERNANCE = True
 

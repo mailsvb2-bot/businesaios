@@ -16,7 +16,7 @@ class ProductRegistry:
     """Single source of product contracts (no forks; product = config + modules)."""
 
     def __init__(self, contracts: Iterable[ProductContract]) -> None:
-        self._by_id: Dict[str, ProductContract] = {}
+        self._by_id: dict[str, ProductContract] = {}
         for c in contracts:
             c.validate()
             if c.product_id in self._by_id:
@@ -29,5 +29,5 @@ class ProductRegistry:
         except KeyError as e:
             raise KeyError(f"Unknown product_id: {product_id}") from e
 
-    def list_ids(self) -> Tuple[str, ...]:
+    def list_ids(self) -> tuple[str, ...]:
         return tuple(sorted(self._by_id.keys()))

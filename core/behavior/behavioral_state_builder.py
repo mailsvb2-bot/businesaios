@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence
+from typing import Any, Mapping, Sequence
 
 from core.behavior.dirac_behavior import Complex4, DiracBehaviorModel
 from core.behavior.operator_catalogs import resolve_operator_context
@@ -9,7 +9,7 @@ from core.behavior.operator_policy_catalogs import OperatorPolicyContext
 from core.tenancy.normalization import normalize_tenant_id
 
 
-def _infer_funnel_stage(events: Sequence[Mapping[str, Any]]) -> Optional[str]:
+def _infer_funnel_stage(events: Sequence[Mapping[str, Any]]) -> str | None:
     """Best-effort funnel stage inference.
 
     Priority:
@@ -41,7 +41,7 @@ def _infer_funnel_stage(events: Sequence[Mapping[str, Any]]) -> Optional[str]:
     return None
 
 
-def _infer_actor_role(events: Sequence[Mapping[str, Any]]) -> Optional[str]:
+def _infer_actor_role(events: Sequence[Mapping[str, Any]]) -> str | None:
     for ev in reversed(list(events or [])):
         payload = ev.get("payload") or {}
         if isinstance(payload, Mapping):
@@ -76,7 +76,7 @@ class BehavioralStateBuilder:
         *,
         product: Mapping[str, Any] | None = None,
         tenant_id: str | None = None,
-        policy_context: Optional[OperatorPolicyContext] = None,
+        policy_context: OperatorPolicyContext | None = None,
         safe_mode: bool | None = None,
     ) -> Mapping[str, Any]:
         model = DiracBehaviorModel()
@@ -101,7 +101,7 @@ class BehavioralStateBuilder:
 
         # Policy telemetry: the operator application path may write into this dict
         # (denied_operator_key -> count). This is purely diagnostic.
-        policy_denials: Dict[str, int] = {}
+        policy_denials: dict[str, int] = {}
         ctx0["policy_denials"] = policy_denials
         ctx0["safe_mode"] = bool(safe_mode)
 
@@ -109,7 +109,7 @@ class BehavioralStateBuilder:
         ctx = {"anti": 0.0, **ctx0}
         _, obs = model.evolve(psi=psi0, events=list(events or []), now_ms=None, context=ctx)
 
-        out: Dict[str, Any] = {
+        out: dict[str, Any] = {
             "engagement_score": float(obs.get("engagement_score", 0.0)),
             "reaction_speed_ms": None,
             "hesitation_score": float(obs.get("hesitation_score", 0.0)),
@@ -146,7 +146,7 @@ class BehavioralStateBuilder:
         *,
         product: Mapping[str, Any] | None = None,
         tenant_id: str | None = None,
-        policy_context: Optional[OperatorPolicyContext] = None,
+        policy_context: OperatorPolicyContext | None = None,
         safe_mode: bool | None = None,
     ) -> Mapping[str, Any]:
         """Backward-compatible adapter for existing callers.

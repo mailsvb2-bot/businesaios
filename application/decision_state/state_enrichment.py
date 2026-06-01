@@ -18,7 +18,7 @@ def _attach_world_model_explainability(state: Any) -> Any:
     return attach_world_model_explainability(state)
 
 
-def _pricing_constraints_from_state(state: Any) -> Dict[str, Any]:
+def _pricing_constraints_from_state(state: Any) -> dict[str, Any]:
     return pricing_constraints_from_state(state)
 
 

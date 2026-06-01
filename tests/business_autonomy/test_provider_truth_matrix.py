@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from application.business_autonomy.provider_catalog import PROVIDERS
-from application.business_autonomy.provider_truth_matrix import build_provider_truth_matrix, provider_truth_map, summarize_provider_truth
+from application.business_autonomy.provider_truth_matrix import (
+    build_provider_truth_matrix,
+    provider_truth_map,
+    summarize_provider_truth,
+)
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 

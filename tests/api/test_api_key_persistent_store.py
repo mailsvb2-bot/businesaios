@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from governance.rbac_contract import RoleId
 from entrypoints.api.api_key_policy import ApiKeyPolicy, PersistentApiKeyStore, RequestAuthentication
+from governance.rbac_contract import RoleId
 
 
 def test_persistent_api_key_store_roundtrip(tmp_path) -> None:

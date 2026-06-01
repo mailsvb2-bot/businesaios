@@ -1,8 +1,9 @@
 from governance.constitution import Constitution, ConstitutionViolation
-from governance.evolution_gate import EvolutionGate, PolicyMetrics, EvolutionRejected
-from governance.time_scale import TimeScale, TIME_SCALE_RULES
-from governance.survival_controller import SurvivalController, GovernanceHealthState
-from governance.self_driving_loop import SelfDrivingLoop, RollbackController, PolicyMetrics as LoopMetrics
+from governance.evolution_gate import EvolutionGate, EvolutionRejected, PolicyMetrics
+from governance.self_driving_loop import PolicyMetrics as LoopMetrics
+from governance.self_driving_loop import RollbackController, SelfDrivingLoop
+from governance.survival_controller import GovernanceHealthState, SurvivalController
+from governance.time_scale import TIME_SCALE_RULES, TimeScale
 
 
 def test_constitution_requires_envelope():

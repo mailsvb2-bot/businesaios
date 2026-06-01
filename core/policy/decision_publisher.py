@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from kernel.decision_result import DecisionResult
 from observability.decision_audit_log import DecisionAuditLog
 from observability.event_bus import EventBus

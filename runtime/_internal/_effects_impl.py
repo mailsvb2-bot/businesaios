@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """
 PRIVATE IMPLEMENTATION of EffectsPort.
 SECURITY / ARCHITECTURE:
@@ -12,38 +13,42 @@ PAYMENTS NOTE:
 """
 from dataclasses import dataclass
 from typing import Any, Dict
+
 from runtime._internal.llm_transport import (
     llm_generate_anthropic,
     llm_generate_gigachat,
     llm_generate_openai_compat,
     llm_generate_yandexgpt,
 )
+from runtime.effects.telegram_effects import classify_startup
+from runtime.observability.error_handling import swallow
 from runtime.observability.telemetry import telegram_api_span
 from runtime.observability.tracing import get_correlation_key
-from runtime.observability.error_handling import swallow
-from runtime.effects.telegram_effects import classify_startup
+from runtime.platform.delivery_state import DeliveryState
 from runtime.ports.effects import EffectsPort
 from runtime.security.runtime_asserts import assert_called_from_executor
-from .effects_domains.user_state import UserStateEffectsMixin
-from .effects_domains.tracking import TrackingEffectsMixin
-from .effects_domains.admin_state import AdminStateEffectsMixin
-from .effects_domains.marketing import MarketingEffectsMixin
-from .effects_domains.evolution import EvolutionEffectsMixin
-from .effects_actions.telegram_actions import TelegramEffectsMixin
-from .effects_actions.weather_actions import WeatherEffectsMixin
-from .effects_actions.payments_actions import PaymentsEffectsMixin
+
+from .effect_router import EffectRouter
 from .effects_actions.llm_actions import LLMEffectsMixin
 from .effects_actions.offer_patch_actions import OfferPatchEffectsMixin
+from .effects_actions.payments_actions import PaymentsEffectsMixin
 from .effects_actions.policy_actions import PolicyEffectsMixin
-from runtime.platform.delivery_state import DeliveryState
+from .effects_actions.telegram_actions import TelegramEffectsMixin
+from .effects_actions.weather_actions import WeatherEffectsMixin
+from .effects_core import initialize_effects_runtime_state, throttled_emit_error
+from .effects_domains.admin_state import AdminStateEffectsMixin
+from .effects_domains.evolution import EvolutionEffectsMixin
+from .effects_domains.marketing import MarketingEffectsMixin
+from .effects_domains.tracking import TrackingEffectsMixin
+from .effects_domains.user_state import UserStateEffectsMixin
 from .effects_servers import (
     start_health_server_in_thread,
     start_yookassa_webhook_server_in_thread,
 )
 from .effects_transport import HTTPResponse, http_get, http_post, url_with_params
-from .effects_core import initialize_effects_runtime_state, throttled_emit_error
-from .effect_router import EffectRouter
 from .http_transport import HttpTransport, build_http_transport
+
+
 def _telegram_api_base() -> str:
     from runtime.platform.config.env_flags import env_str
     return env_str("TELEGRAM_API_BASE", "https://api.telegram.org").strip().rstrip("/")
@@ -60,14 +65,14 @@ class Effects(UserStateEffectsMixin, TrackingEffectsMixin, AdminStateEffectsMixi
     messaging_policy_read_service: Any | None = None
     http_transport: HttpTransport | None = None
     effect_router: EffectRouter | None = None
-    _last_sent: Dict[str, float] = None  # type: ignore[assignment]
+    _last_sent: dict[str, float] = None  # type: ignore[assignment]
     _fail_count: int = 0
-    _telegram_me: Dict[str, Any] | None = None
+    _telegram_me: dict[str, Any] | None = None
     _telegram_webhook_cleared: bool = False
     _telegram_startup_checked: bool = False
-    _last_err_ms: Dict[str, int] | None = None
-    _audio_delivery_keys: Dict[str, float] | None = None
-    _last_audio_sent_at: Dict[str, float] | None = None
+    _last_err_ms: dict[str, int] | None = None
+    _audio_delivery_keys: dict[str, float] | None = None
+    _last_audio_sent_at: dict[str, float] | None = None
     _audio_lock: Any | None = None
     _min_audio_interval_s: float = 0.7
     def __post_init__(self):
@@ -81,7 +86,7 @@ class Effects(UserStateEffectsMixin, TrackingEffectsMixin, AdminStateEffectsMixi
             if getattr(self.effect_router, "outbound_queue", None) is None:
                 self.effect_router.outbound_queue = self.telegram_outbound_queue
         initialize_effects_runtime_state(self)
-    def _throttled_emit_err(self, key: str, *, event_type: str, payload: Dict[str, Any]) -> None:
+    def _throttled_emit_err(self, key: str, *, event_type: str, payload: dict[str, Any]) -> None:
         throttled_emit_error(
             event_log=self.event_log,
             cache=self._last_err_ms,

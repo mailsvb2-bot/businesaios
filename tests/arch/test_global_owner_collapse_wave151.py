@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
-
 OWNER_PACKAGES = {
     'boot.factories': {
         'build_architecture_watch_service',

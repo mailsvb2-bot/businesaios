@@ -15,10 +15,10 @@ class EventStoreLike(Protocol):
         end_ms: int | None = None,
         event_type: str | None = None,
         user_id: str | None = None,
-    ) -> Iterable[Dict[str, Any]]: ...
+    ) -> Iterable[dict[str, Any]]: ...
 
 
-def compute_entitlements(*, event_store: EventStoreLike, tenant_id: str = "default", user_id: str) -> Dict[str, Any]:
+def compute_entitlements(*, event_store: EventStoreLike, tenant_id: str = "default", user_id: str) -> dict[str, Any]:
     """Compute entitlements for a user from events.
 
     MVP rules:
@@ -27,7 +27,7 @@ def compute_entitlements(*, event_store: EventStoreLike, tenant_id: str = "defau
     uid = str(user_id)
     wm = watermark_for(event_store, tenant_id=str(tenant_id), user_id=uid, event_types=("access_granted",))
 
-    def _compute() -> Dict[str, Any]:
+    def _compute() -> dict[str, Any]:
         # Fast-path: if there is any access_granted with full_access=True.
         ev = best_effort_latest_event(
             event_store=event_store,

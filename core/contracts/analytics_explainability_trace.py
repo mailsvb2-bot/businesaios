@@ -18,13 +18,13 @@ class ExplainabilityReason:
     reason_id: str
     severity: str
     summary: str
-    evidence_ids: List[str] = field(default_factory=list)
+    evidence_ids: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class AnalyticsExplainabilityTrace:
     tenant_id: str
     trace_kind: str
-    reasons: List[ExplainabilityReason] = field(default_factory=list)
-    evidence: Dict[str, ExplainabilityEvidence] = field(default_factory=dict)
+    reasons: list[ExplainabilityReason] = field(default_factory=list)
+    evidence: dict[str, ExplainabilityEvidence] = field(default_factory=dict)
     generated_at_ms: int = 0

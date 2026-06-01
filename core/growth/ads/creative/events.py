@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import asdict
-from datetime import datetime, timezone
-from typing import Dict, Any
+from datetime import UTC, datetime, timezone
+from typing import Any, Dict
 
 from .models import CreativeSelection
 
 
 def now_utc_iso() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def event_creative_generated(
@@ -18,7 +18,7 @@ def event_creative_generated(
     user_id: str,
     session_id: str,
     selection: CreativeSelection,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Event payload for event_store: event_type=ads_creative_generated"""
     return {
         "schema_v": 1,

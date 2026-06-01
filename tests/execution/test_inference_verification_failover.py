@@ -1,8 +1,8 @@
 from execution.inference_capacity_contract import InferenceCapacityTier
 from execution.inference_capacity_policy import InferenceCapacityPolicyContext
-from execution.inference_provider_contract import InferenceRequest
-from execution.inference_dispatch_orchestrator import InferenceDispatchOrchestrator
 from execution.inference_capacity_router import InferenceCapacityRouter
+from execution.inference_dispatch_orchestrator import InferenceDispatchOrchestrator
+from execution.inference_provider_contract import InferenceRequest
 from runtime.inference.providers.cpu_fallback_provider import CPUFallbackProvider
 from runtime.inference.providers.local_gpu_provider import LocalGPUProvider
 

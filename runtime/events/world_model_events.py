@@ -7,10 +7,10 @@ def build_world_model_pinned_event(
     *,
     decision_id: str,
     user_id: str,
-    world_model_meta: Dict[str, Any] | None,
+    world_model_meta: dict[str, Any] | None,
     issuer_id: str,
     timestamp_ms: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "type": "decision.world_model_pinned",
         "decision_id": str(decision_id),
@@ -25,10 +25,10 @@ def build_world_model_pin_check_event(
     *,
     decision_id: str,
     user_id: str,
-    check_result: Dict[str, Any],
+    check_result: dict[str, Any],
     issuer_id: str,
     timestamp_ms: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     return {
         "type": "decision.world_model_pin_checked",
         "decision_id": str(decision_id),

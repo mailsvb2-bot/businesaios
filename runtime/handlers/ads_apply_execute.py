@@ -13,8 +13,6 @@ No business decisions here.
 
 from typing import Any, Dict
 
-from runtime.ports.effects import EffectsPort
-
 from runtime.ads import AdsApplyEngine, bind_runtime_state, maturity_gate
 from runtime.governance import ActuationRegistry
 from runtime.handlers.ads_apply_helpers import (
@@ -26,15 +24,18 @@ from runtime.handlers.ads_apply_helpers import (
 from runtime.handlers.ads_apply_route import AutopilotApplyRouteViolation, extract_ads_apply_route
 from runtime.handlers.route_failure_support import (
     best_effort_route_ids as _best_effort_route_ids,
+)
+from runtime.handlers.route_failure_support import (
     blocked_error_payload,
     safe_route_blocked_text,
 )
+from runtime.ports.effects import EffectsPort
 
 ACTION_NAME = "ads_apply_execute@v1"
 
 
 
-def handle_ads_apply_execute(payload: Dict[str, Any], effects: EffectsPort, env: Any, *, engine: AdsApplyEngine | None, event_store: Any | None = None) -> Any:
+def handle_ads_apply_execute(payload: dict[str, Any], effects: EffectsPort, env: Any, *, engine: AdsApplyEngine | None, event_store: Any | None = None) -> Any:
     ActuationRegistry.register(domain="ads.apply", controller_id=ACTION_NAME, source=__file__)
     ActuationRegistry.assert_single_executor(domain="ads.apply")
 

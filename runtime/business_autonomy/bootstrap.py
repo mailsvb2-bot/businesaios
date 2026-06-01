@@ -2,23 +2,44 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from application.business_autonomy.adapters.ads_production_adapters import (
+    GoogleAdsProductionAdapter,
+    MetaAdsProductionAdapter,
+    TiktokAdsProductionAdapter,
+)
 from application.business_autonomy.adapters.api_business_adapter import ApiBusinessChannelAdapter
 from application.business_autonomy.adapters.backoffice_adapter import BackofficeChannelAdapter
 from application.business_autonomy.adapters.campaign_ads_adapter import CampaignAdsChannelAdapter
 from application.business_autonomy.adapters.chatbot_adapter import ChatbotChannelAdapter
 from application.business_autonomy.adapters.commerce_adapter import CommerceChannelAdapter
-from application.business_autonomy.adapters.website_adapter import WebsiteChannelAdapter
+from application.business_autonomy.adapters.commerce_production_adapters import (
+    AmazonMarketplaceProductionAdapter,
+    EbayMarketplaceProductionAdapter,
+    EtsyMarketplaceProductionAdapter,
+    OzonMarketplaceProductionAdapter,
+    WildberriesMarketplaceProductionAdapter,
+    WooCommerceProductionAdapter,
+)
+from application.business_autonomy.adapters.crm_production_adapters import (
+    CallTrackingProductionAdapter,
+    HubSpotProductionAdapter,
+)
+from application.business_autonomy.adapters.messaging_production_adapters import (
+    EmailProductionAdapter,
+    SmsProductionAdapter,
+    WhatsAppProductionAdapter,
+)
 from application.business_autonomy.adapters.shopify_production_adapter import ShopifyProductionAdapter
 from application.business_autonomy.adapters.telegram_production_adapter import TelegramProductionAdapter
-from application.business_autonomy.adapters.ads_production_adapters import GoogleAdsProductionAdapter, MetaAdsProductionAdapter, TiktokAdsProductionAdapter
-from application.business_autonomy.adapters.commerce_production_adapters import AmazonMarketplaceProductionAdapter, EbayMarketplaceProductionAdapter, EtsyMarketplaceProductionAdapter, OzonMarketplaceProductionAdapter, WildberriesMarketplaceProductionAdapter, WooCommerceProductionAdapter
-from application.business_autonomy.adapters.crm_production_adapters import CallTrackingProductionAdapter, HubSpotProductionAdapter
-from application.business_autonomy.adapters.messaging_production_adapters import EmailProductionAdapter, SmsProductionAdapter, WhatsAppProductionAdapter
-from application.business_autonomy.adapters.website_production_adapters import WebflowProductionAdapter, WordpressProductionAdapter
+from application.business_autonomy.adapters.website_adapter import WebsiteChannelAdapter
+from application.business_autonomy.adapters.website_production_adapters import (
+    WebflowProductionAdapter,
+    WordpressProductionAdapter,
+)
 from application.business_autonomy.business_connector_framework import (
     ConnectorOnboardingService,
     StaticTrustOnboarding,
@@ -32,7 +53,6 @@ from application.business_autonomy.guarded_service import BusinessAutonomyGuarde
 from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingMode
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
 from application.business_autonomy.operator_admin_plane import UnifiedOperatorAdminPlane
-from application.business_autonomy.provider_admin_service import ProviderAdminService
 from application.business_autonomy.persistence import (
     PersistentBusinessApprovalGate,
     PersistentBusinessAutonomyIdempotencyStore,
@@ -40,10 +60,14 @@ from application.business_autonomy.persistence import (
     PersistentBusinessPlanningMemorySink,
 )
 from application.business_autonomy.policy import BusinessAutonomyPolicy, BusinessTrustPolicy
+from application.business_autonomy.provider_admin_service import ProviderAdminService
 from application.business_autonomy.registry import BusinessAdapterRegistry, RegisteredBusinessCapabilities
 from application.business_autonomy.service import BusinessAutonomyService
 from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
-from runtime.business_autonomy.fleet_read_model import BusinessAutonomyFleetReadModel
+from application.planning.distributed_planning_memory_backend import DistributedPlanningMemoryBackend
+from execution.distributed_operator_override_backend import DistributedOperatorOverrideStore
+from governance.distributed_approval_backend import DistributedApprovalStore
+from reliability.distributed_idempotency_backend import DistributedIdempotencyStore
 from runtime.business_autonomy.distributed_runtime_views import (
     DistributedBusinessAutonomyAudit,
     DistributedBusinessAutonomyEvidenceStore,
@@ -60,15 +84,12 @@ from runtime.business_autonomy.distributed_state import (
     FilePlanningMemoryDocumentPort,
     FileRegionRouteState,
 )
-from governance.distributed_approval_backend import DistributedApprovalStore
-from execution.distributed_operator_override_backend import DistributedOperatorOverrideStore
-from reliability.distributed_idempotency_backend import DistributedIdempotencyStore
-from storage.distributed_evidence_audit_backend import DistributedEvidenceStore, DistributedGovernanceAuditLog
-from application.planning.distributed_planning_memory_backend import DistributedPlanningMemoryBackend
 from runtime.business_autonomy.execution_support import build_execution_runtime, ensure_business_route
+from runtime.business_autonomy.fleet_read_model import BusinessAutonomyFleetReadModel
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import build_default_secret_vault
+from storage.distributed_evidence_audit_backend import DistributedEvidenceStore, DistributedGovernanceAuditLog
 
 
 @dataclass(frozen=True)
@@ -207,7 +228,7 @@ class BusinessAutonomyFileSurfaceMirror:
     root_dir: Path
 
     @classmethod
-    def from_data_dir(cls) -> "BusinessAutonomyFileSurfaceMirror":
+    def from_data_dir(cls) -> BusinessAutonomyFileSurfaceMirror:
         from os import getenv
         data_dir = Path(str(getenv('DATA_DIR', 'data') or 'data'))
         return cls(root_dir=data_dir / 'business_autonomy')
@@ -250,14 +271,14 @@ class BusinessAutonomyFileSurfaceMirror:
                 'goal_id': result.goal_id,
                 'verdict': result.verdict.value,
                 'metadata': dict(result.metadata or {}),
-                'recorded_at_utc': datetime.now(timezone.utc).isoformat(),
+                'recorded_at_utc': datetime.now(UTC).isoformat(),
             }, sort_keys=True) + '\n')
         return None
 
     def record_execution(self, *, request, result: BusinessExecutionResult) -> None:
         self.root_dir.mkdir(parents=True, exist_ok=True)
         tenant_id = str(request.metadata.get('tenant_id') or result.metadata.get('tenant_id') or 'global')
-        recorded_at = datetime.now(timezone.utc).isoformat()
+        recorded_at = datetime.now(UTC).isoformat()
         row = {
             'tenant_id': tenant_id,
             'business_id': request.business_id,

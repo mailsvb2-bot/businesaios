@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from governance.control_plane_audit_log import GovernanceAuditEvent, PersistentGovernanceAuditLog
 
@@ -13,7 +13,7 @@ def test_persistent_governance_audit_log_appends_jsonl(tmp_path) -> None:
         GovernanceAuditEvent(
             event_type="approval_requested",
             tenant_id="tenant-a",
-            emitted_at=datetime.now(timezone.utc),
+            emitted_at=datetime.now(UTC),
             payload={"approval_id": "ap-1", "status": "requested"},
         )
     )
@@ -21,7 +21,7 @@ def test_persistent_governance_audit_log_appends_jsonl(tmp_path) -> None:
         GovernanceAuditEvent(
             event_type="approval_decision_recorded",
             tenant_id="tenant-a",
-            emitted_at=datetime.now(timezone.utc),
+            emitted_at=datetime.now(UTC),
             payload={"approval_id": "ap-1", "status": "approved"},
         )
     )

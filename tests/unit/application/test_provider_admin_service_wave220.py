@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService, StaticTrustOnboarding
-from application.business_autonomy.provider_admin_service import ProviderAdminService
+from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
-from runtime.business_autonomy.bootstrap import StaticGovernanceEnablement, StaticPersistenceSurface, _build_typed_channel_registry
+from application.business_autonomy.provider_admin_service import ProviderAdminService
+from runtime.business_autonomy.bootstrap import (
+    StaticGovernanceEnablement,
+    StaticPersistenceSurface,
+    _build_typed_channel_registry,
+)
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore, FileRegionRouteState
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
-from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import InMemorySecretVault
 

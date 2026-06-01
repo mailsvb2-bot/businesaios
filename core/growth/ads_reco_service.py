@@ -6,13 +6,14 @@ from core.growth.ads_config_fingerprint import ads_config_fingerprint
 from core.growth.ads_reco_cache import AdsRecommendationCache
 from core.growth.recommendations import AdsRecommendation
 
+
 class AdsRecoService:
     def __init__(self, *, engine: Any, cache: AdsRecommendationCache, entitlements_provider: Any):
         self._engine = engine
         self._cache = cache
         self._ent = entitlements_provider
 
-    def propose_and_cache(self, *, tenant_id: str, user_id: Optional[str], platform: str, account_id: str) -> List[AdsRecommendation]:
+    def propose_and_cache(self, *, tenant_id: str, user_id: str | None, platform: str, account_id: str) -> list[AdsRecommendation]:
         ent = self._ent.get_ads_entitlements(tenant_id)
         lim = self._ent.get_daily_limits(tenant_id)
         fp = ads_config_fingerprint(ads_entitlements=ent, daily_limits=lim)

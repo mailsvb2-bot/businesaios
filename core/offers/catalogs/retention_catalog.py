@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Tuple
 
-from core.offers.offer_types import OfferCatalog, OfferEligibility, OfferRender, OfferSummary
 from core.observability.silent import swallow
+from core.offers.offer_types import OfferCatalog, OfferEligibility, OfferRender, OfferSummary
 
 CATALOG_ID: str = "retention_legacy"
 
@@ -14,11 +14,11 @@ class Offer:
     arm: str
     title: str
     base_price_rub: int
-    entitlements: List[Tuple[str, int]]
+    entitlements: list[tuple[str, int]]
 
 
 # Stable retention offer IDs preserved for existing pricing flows.
-OFFERS: Dict[str, Offer] = {
+OFFERS: dict[str, Offer] = {
     "offer_30": Offer(
         arm="offer_30",
         title="30 дней",
@@ -40,7 +40,7 @@ OFFERS: Dict[str, Offer] = {
 }
 
 
-def build_catalog() -> Dict[str, Offer]:
+def build_catalog() -> dict[str, Offer]:
     return dict(OFFERS)
 
 

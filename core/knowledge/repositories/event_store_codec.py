@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any, Iterable, Mapping
 
 from contracts.event_store import EventRecord, EventStoreReader, EventStoreWriter, iter_events_strict
-
 
 KNOWLEDGE_STREAM_USER_ID = "knowledge"
 LESSON_EVENT_TYPE = "knowledge.lesson.saved.v1"
@@ -13,7 +12,7 @@ MEMORY_LINK_EVENT_TYPE = "knowledge.memory_link.saved.v1"
 
 
 def utc_now_ms() -> int:
-    return int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+    return int(datetime.now(tz=UTC).timestamp() * 1000)
 
 
 def append_knowledge_event(

@@ -2,17 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from kernel.world_state import WorldStateV1
+from core.observability.silent import swallow
+from core.policies.product_domains.retention_domain import RetentionDomainPolicyV1
+from core.policies.product_domains.sales_domain import SalesDomainPolicyV1
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction
-from core.policies.telegram.router import handle
-from core.retention.decision_adapter import RetentionDecisionAdapter
 from core.policies.telegram.retention_integration import apply_retention_constraints_to_state, merge_retention_plan
+from core.policies.telegram.router import handle
 from core.policies.telegram.unified_policy_context import extract_session_fields, extract_user_fields
-
-from core.policies.product_domains.sales_domain import SalesDomainPolicyV1
-from core.policies.product_domains.retention_domain import RetentionDomainPolicyV1
-from core.observability.silent import swallow
+from core.retention.decision_adapter import RetentionDecisionAdapter
+from kernel.world_state import WorldStateV1
 
 
 @dataclass

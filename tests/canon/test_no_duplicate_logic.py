@@ -6,7 +6,6 @@ from canon.legacy.architecture_lock_tests import build_lock_config
 from canon.legacy.duplicate_detector import scan_duplicate_logic
 from canon.legacy.god_module_detector import scan_god_modules
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Protocol, Optional
+from typing import Any, Dict, Iterable, Optional, Protocol
 
 from core.events.read_model_support import best_effort_latest_event
 from core.read_model.cache import global_cache, watermark_for
@@ -15,10 +15,10 @@ class EventStoreLike(Protocol):
         end_ms: int | None = None,
         event_type: str | None = None,
         user_id: str | None = None,
-    ) -> Iterable[Dict[str, Any]]: ...
+    ) -> Iterable[dict[str, Any]]: ...
 
 
-def latest_payment_status(*, event_store: EventStoreLike, tenant_id: str = "default", user_id: str) -> Dict[str, Any]:
+def latest_payment_status(*, event_store: EventStoreLike, tenant_id: str = "default", user_id: str) -> dict[str, Any]:
     """Return latest known payment status for user.
 
     This is a best-effort event-sourced read model.
@@ -31,9 +31,9 @@ def latest_payment_status(*, event_store: EventStoreLike, tenant_id: str = "defa
         event_types=("payment_created", "payment_succeeded", "payment_failed", "payment_captured"),
     )
 
-    def _compute() -> Dict[str, Any]:
+    def _compute() -> dict[str, Any]:
         # Fast-path: prefer DB-side latest-event lookup if available.
-        latest: Optional[Dict[str, Any]] = best_effort_latest_event(
+        latest: dict[str, Any] | None = best_effort_latest_event(
             event_store=event_store,
             where='core/payments/read_model.latest_payment_status',
             tenant_id=str(tenant_id),

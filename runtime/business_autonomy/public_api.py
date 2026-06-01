@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from application.business_autonomy.persistence import PersistentBusinessAutonomyAudit
-
-from observability.audit_export_service import AuditExportService
-from observability.metrics import InMemoryMetrics
-from observability.tenant_metrics_registry import TenantMetricsRegistry
 from application.business_autonomy.operationalization import (
-    BusinessAutonomyMetrics,
     BusinessActiveActiveQuorumService,
+    BusinessAutonomyMetrics,
     BusinessChaosExecutionService,
     BusinessFinalReadinessReportBuilder,
     BusinessInvariantEnforcementService,
@@ -16,8 +11,11 @@ from application.business_autonomy.operationalization import (
     BusinessRecoveryChaosMatrix,
     BusinessWorkflowRuntimeStub,
 )
+from application.business_autonomy.persistence import PersistentBusinessAutonomyAudit
+from observability.audit_export_service import AuditExportService
+from observability.metrics import InMemoryMetrics
+from observability.tenant_metrics_registry import TenantMetricsRegistry
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
-
 
 _STACK: dict | None = None
 

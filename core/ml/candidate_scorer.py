@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from application.decisioning.candidate_scores import CandidateScoreSet
-from kernel.decisioning.candidate_types import CandidateScore
 from core.ml.contracts import MlCandidateScorer, MlScoringContext
+from kernel.decisioning.candidate_types import CandidateScore
 
 
 class MlCandidateScorerImpl(MlCandidateScorer):

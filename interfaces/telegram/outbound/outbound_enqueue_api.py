@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Typed enqueue helpers and legacy compatibility wrappers.
 
 Responsibility:
@@ -35,9 +36,9 @@ class OutboundEnqueueApiMixin:
         self,
         *,
         method: str,
-        chat_id: Optional[int],
+        chat_id: int | None,
         fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
         critical: bool = False,
     ) -> bool:
         return self.enqueue(
@@ -49,9 +50,9 @@ class OutboundEnqueueApiMixin:
         self,
         *,
         method: str,
-        chat_id: Optional[int],
+        chat_id: int | None,
         fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
         critical: bool = True,
     ) -> bool:
         return self.enqueue(
@@ -63,9 +64,9 @@ class OutboundEnqueueApiMixin:
         self,
         *,
         method: str,
-        chat_id: Optional[int],
+        chat_id: int | None,
         fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
         critical: bool = True,
     ) -> bool:
         return self.enqueue(
@@ -77,9 +78,9 @@ class OutboundEnqueueApiMixin:
         self,
         *,
         method: str,
-        chat_id: Optional[int],
+        chat_id: int | None,
         fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
         critical: bool = True,
     ) -> bool:
         return self.enqueue(
@@ -91,9 +92,9 @@ class OutboundEnqueueApiMixin:
         self,
         *,
         method: str,
-        chat_id: Optional[int],
+        chat_id: int | None,
         fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
     ) -> bool:
         return enqueue_best_effort_with_suppression(
             self,
@@ -109,9 +110,9 @@ class OutboundEnqueueApiMixin:
         self,
         *,
         method: str,
-        chat_id: Optional[int],
+        chat_id: int | None,
         fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
     ) -> bool:
         return enqueue_best_effort_with_suppression(
             self,
@@ -127,9 +128,9 @@ class OutboundEnqueueApiMixin:
         self,
         *,
         method: str,
-        chat_id: Optional[int],
+        chat_id: int | None,
         fn: Callable[[], Any],
-        meta: Optional[Dict[str, Any]] = None,
+        meta: dict[str, Any] | None = None,
     ) -> bool:
         return enqueue_best_effort_with_suppression(
             self,

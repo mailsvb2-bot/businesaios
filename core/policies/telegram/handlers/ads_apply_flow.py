@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Thin routing shim for ads apply flow callbacks.
 
 Previously this module duplicated preview/confirm/cancel logic that also

@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable
 
-PriorityArg = Union[int, str]
+PriorityArg = int | str
 
 
 @dataclass
@@ -20,14 +20,14 @@ class OutboundTask:
     # When the task was enqueued (monotonic ns)
     enqueue_t_ns: int
     method: str
-    chat_id: Optional[int]
+    chat_id: int | None
     fn: Callable[[], Any]
     created_at: float
-    meta: Dict[str, Any]
+    meta: dict[str, Any]
     # Logical kind/label (ux/system/payments/marketing/bulk/analytics/normal)
     kind: str = "normal"
     # Completion (used by call())
-    done: Optional[threading.Event] = None
-    result_box: Optional[Dict[str, Any]] = None
+    done: threading.Event | None = None
+    result_box: dict[str, Any] | None = None
     # If False: best-effort (may be dropped under overload).
     critical: bool = True

@@ -8,7 +8,7 @@ from typing import Optional
 class SqliteEventStoreSettingsApi:
     """Settings API for SqliteEventStore."""
 
-    _db: Optional[sqlite3.Connection]
+    _db: sqlite3.Connection | None
 
     def get_setting(self, *, tenant_id: str, key: str):
         assert self._db is not None

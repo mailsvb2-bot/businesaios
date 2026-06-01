@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class RewardClipper:
     def __init__(self, low: float = -1.0, high: float = 1.0) -> None:
         self._low = low

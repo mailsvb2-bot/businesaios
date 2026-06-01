@@ -7,8 +7,7 @@ Provider I/O MUST be passed as an injected port (implemented in runtime effects)
 """
 
 from datetime import datetime, timedelta
-from typing import Protocol, Iterable, Dict, Any
-
+from typing import Any, Dict, Iterable, Protocol
 
 RECONCILE_WINDOW_MIN = 30
 
@@ -21,7 +20,7 @@ class EventStoreLike(Protocol):
         start_ms: int = 0,
         end_ms: int | None = None,
         event_type: str | None = None,
-    ) -> Iterable[Dict[str, Any]]: ...
+    ) -> Iterable[dict[str, Any]]: ...
 
 
 class LedgerEffectMarkPort(Protocol):

@@ -27,11 +27,11 @@ class EntryPolicy:
     Keep it declarative. Runtime wiring consumes it.
     """
 
-    entrypoints: Tuple[str, ...]  # e.g. ("telegram", "webapp")
+    entrypoints: tuple[str, ...]  # e.g. ("telegram", "webapp")
     default_entrypoint: str
     requires_auth: bool = True
     requires_entitlement: bool = False
-    required_entitlements: Tuple[str, ...] = ()
+    required_entitlements: tuple[str, ...] = ()
 
     def validate(self) -> None:
         if not self.entrypoints:
@@ -48,8 +48,8 @@ class Offer:
     title: str
     price_minor: int  # cents/kopeks
     currency: str
-    period_days: Optional[int] = None  # None for one-time
-    tags: Tuple[str, ...] = ()
+    period_days: int | None = None  # None for one-time
+    tags: tuple[str, ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
@@ -58,12 +58,12 @@ class OfferCatalog:
     """Declarative catalog: "what we can sell" (not how we decide)."""
 
     catalog_id: str
-    offers: Tuple[Offer, ...]
+    offers: tuple[Offer, ...]
 
     def validate(self) -> None:
         if not self.catalog_id:
             raise ValueError("OfferCatalog.catalog_id is required")
-        seen: Set[str] = set()
+        seen: set[str] = set()
         for o in self.offers:
             if not o.offer_id:
                 raise ValueError("Offer.offer_id is required")
@@ -92,18 +92,18 @@ class TelemetryField:
 @dataclass(frozen=True)
 class TelemetryEventSpec:
     event_type: str
-    fields: Tuple[TelemetryField, ...]
+    fields: tuple[TelemetryField, ...]
 
 
 @dataclass(frozen=True)
 class TelemetrySchema:
     schema_id: str
-    events: Tuple[TelemetryEventSpec, ...]
+    events: tuple[TelemetryEventSpec, ...]
 
     def validate(self) -> None:
         if not self.schema_id:
             raise ValueError("TelemetrySchema.schema_id is required")
-        etypes: Set[str] = set()
+        etypes: set[str] = set()
         for ev in self.events:
             if not ev.event_type:
                 raise ValueError("TelemetryEventSpec.event_type is required")
@@ -116,7 +116,7 @@ class TelemetrySchema:
 class EntitlementsSpec:
     """Declares entitlement keys used by this product."""
 
-    keys: Tuple[str, ...]
+    keys: tuple[str, ...]
 
     def validate(self) -> None:
         if len(set(self.keys)) != len(self.keys):
@@ -132,10 +132,10 @@ class ModuleSpec:
 
 @dataclass(frozen=True)
 class ModulesSpec:
-    modules: Tuple[ModuleSpec, ...]
+    modules: tuple[ModuleSpec, ...]
 
     def validate(self) -> None:
-        seen: Set[str] = set()
+        seen: set[str] = set()
         for m in self.modules:
             if not m.module_id:
                 raise ValueError("ModuleSpec.module_id is required")

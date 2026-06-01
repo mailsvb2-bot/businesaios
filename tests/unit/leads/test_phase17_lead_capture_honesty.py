@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from leads.lead_capture_facade import LeadCaptureFacade
 from leads import LeadRouter
+from leads.lead_capture_facade import LeadCaptureFacade
 
 
 def test_lead_capture_facade_is_honest_capture_surface() -> None:

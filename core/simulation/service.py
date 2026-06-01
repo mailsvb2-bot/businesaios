@@ -16,5 +16,5 @@ def simulate_scenario(scenario: ScenarioInput) -> ScenarioOutcome:
     )
 
 
-def score_step(*, action: str, payload: Dict[str, Any], snapshot: Dict[str, Any]) -> SimScore:
+def score_step(*, action: str, payload: dict[str, Any], snapshot: dict[str, Any]) -> SimScore:
     return evaluate_step_score(action=action, payload=payload, snapshot=snapshot)

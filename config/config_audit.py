@@ -6,19 +6,18 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
 from typing import Mapping
 
 from governance.persistence_codec import ensure_parent_dir, to_jsonable
 
-
 CANON_CONFIG_AUDIT = True
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 @dataclass(frozen=True)
@@ -129,7 +128,7 @@ class PersistentConfigAuditLog:
             "version_id": event.version_id,
             "correlation_id": event.correlation_id,
             "payload": to_jsonable(dict(event.payload)),
-            "emitted_at": event.emitted_at.astimezone(timezone.utc).isoformat(),
+            "emitted_at": event.emitted_at.astimezone(UTC).isoformat(),
         }
 
 

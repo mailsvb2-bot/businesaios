@@ -13,6 +13,7 @@ from typing import Any
 
 from runtime.health.server import HealthSnapshot
 
+
 def _effects_impl():
     # Avoid literal string to satisfy hermetic/iron tests while keeping path canonical.
     mod_name = "runtime._internal" + "._effects_impl"

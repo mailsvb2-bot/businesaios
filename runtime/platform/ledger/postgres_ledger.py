@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import time
 
-from runtime.platform.utils.hash_chain import GENESIS, entry_hash
-from runtime.platform.utils.canonical import payload_hash
-from runtime.platform.postgres_port import PostgresPort
 from observability.platform.observability.silent import swallow
+from runtime.platform.postgres_port import PostgresPort
+from runtime.platform.utils.canonical import payload_hash
+from runtime.platform.utils.hash_chain import GENESIS, entry_hash
 
 LEDGER_CHAIN_ADVISORY_LOCK_KEY = "businesaios:ledger:executed_chain"
 
@@ -21,7 +21,7 @@ class PostgresLedger:
         self._dsn = str(dsn)
         self._port: PostgresPort | None = None
 
-    def __enter__(self) -> "PostgresLedger":
+    def __enter__(self) -> PostgresLedger:
         self._port = PostgresPort(self._dsn, application_name="businesaios-ledger").__enter__()
         self._init_schema()
         return self

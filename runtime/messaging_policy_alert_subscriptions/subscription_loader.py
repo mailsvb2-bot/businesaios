@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from runtime.tenancy import normalize_tenant_scope
 from runtime.messaging_policy_alert_subscriptions.settings_key import SETTING_KEY
 from runtime.messaging_policy_alert_subscriptions.subscription_collection import parse_subscription_list
+from runtime.tenancy import normalize_tenant_scope
 
 
 def load_alert_subscriptions(*, settings_gateway, tenant_id: str) -> tuple:

@@ -17,8 +17,8 @@ class SecretVault(Protocol):
 
 
 class TokenStore(Protocol):
-    async def put(self, *, tenant_id: str, platform: AdsPlatform, account_id: str, token: Dict[str, Any]) -> None: ...
-    async def get(self, *, tenant_id: str, platform: AdsPlatform, account_id: str) -> Optional[Dict[str, Any]]: ...
+    async def put(self, *, tenant_id: str, platform: AdsPlatform, account_id: str, token: dict[str, Any]) -> None: ...
+    async def get(self, *, tenant_id: str, platform: AdsPlatform, account_id: str) -> dict[str, Any] | None: ...
     async def delete(self, *, tenant_id: str, platform: AdsPlatform, account_id: str) -> None: ...
 
 
@@ -27,14 +27,14 @@ class HTTPClient(Protocol):
         self,
         url: str,
         *,
-        headers: Dict[str, str],
-        params: Optional[Dict[str, str]] = None,
-    ) -> Dict[str, Any]: ...
+        headers: dict[str, str],
+        params: dict[str, str] | None = None,
+    ) -> dict[str, Any]: ...
 
     async def post(
         self,
         url: str,
         *,
-        headers: Dict[str, str],
-        data: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]: ...
+        headers: dict[str, str],
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]: ...

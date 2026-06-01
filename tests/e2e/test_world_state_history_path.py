@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from contracts.decisioning.world_state_contract import WorldStateContract
 from application.world_state.history_service import WorldStateHistoryService
 from application.world_state.history_window import HistoryWindow
+from contracts.decisioning.world_state_contract import WorldStateContract
 
 
 def _state(ts: int, scalarized_value: float, ev: float) -> WorldStateContract:

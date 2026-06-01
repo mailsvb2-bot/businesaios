@@ -34,6 +34,8 @@ def _load_process_bootstrap_owner() -> Any:
 def _load_sovereign_bootstrap() -> Any:
     from runtime.bootstrap.sovereign_bootstrap import (
         bootstrap_runtime as _bootstrap_runtime,
+    )
+    from runtime.bootstrap.sovereign_bootstrap import (
         get_bootstrapped_runtime as _get_runtime,
     )
 

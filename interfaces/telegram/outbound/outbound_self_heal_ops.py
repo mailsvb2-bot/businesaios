@@ -9,7 +9,6 @@ from core.observability.errors import log_exception_throttled
 from core.observability.silent import swallow
 from interfaces.telegram.outbound.outbound_self_heal_payloads import self_heal_payload
 
-
 log = logging.getLogger(__name__)
 
 

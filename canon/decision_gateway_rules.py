@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 FORBIDDEN_DECISION_GATEWAY_METHODS: tuple[str, ...] = (
     "decide",
     "select_winner",

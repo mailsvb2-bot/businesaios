@@ -8,7 +8,7 @@ from execution.multi_goal_planner import FileMultiGoalPlannerStore, MultiGoalPla
 
 def test_capability_health_requires_identity(tmp_path) -> None:
     service = CapabilityHealthScoringService(store=FileCapabilityHealthStore(root_dir=tmp_path / 'health'))
-    invalid_tenant_id = str()
+    invalid_tenant_id = ''
     with pytest.raises(ValueError):
         service.update_after_step(tenant_id=invalid_tenant_id, capability_key='launch_campaign', feedback={})
 

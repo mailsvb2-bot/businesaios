@@ -31,7 +31,7 @@ class FeatureSpec:
     default: float = 0.0
 
 
-FEATURE_KEYS: List[str] = (
+FEATURE_KEYS: list[str] = (
     SESSIONS_KEYS
     + CLICKS_KEYS
     + AUDIO_KEYS
@@ -44,14 +44,14 @@ assert len(FEATURE_KEYS) == 200
 assert len(set(FEATURE_KEYS)) == 200
 
 
-FEATURES: List[FeatureSpec] = [FeatureSpec(k, 0.0) for k in FEATURE_KEYS]
+FEATURES: list[FeatureSpec] = [FeatureSpec(k, 0.0) for k in FEATURE_KEYS]
 
 
-def default_vector() -> Dict[str, float]:
+def default_vector() -> dict[str, float]:
     return {k: 0.0 for k in FEATURE_KEYS}
 
 
-def ensure_complete(vec: Dict[str, float]) -> Dict[str, float]:
+def ensure_complete(vec: dict[str, float]) -> dict[str, float]:
     """Fill missing keys with defaults (deterministic)."""
     out = default_vector()
     for k, v in (vec or {}).items():

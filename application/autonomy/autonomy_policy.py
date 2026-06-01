@@ -5,7 +5,6 @@ from typing import Any, Mapping
 
 from application.autonomy.autonomy_tiers import ALLOWED_AUTONOMY_TIERS
 
-
 CANON_AUTONOMY_POLICY = True
 
 

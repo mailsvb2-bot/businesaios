@@ -12,7 +12,6 @@ from typing import Any, Mapping
 
 from runtime.runtime_observability import RuntimeObservability
 
-
 CANON_MANAGED_RUNTIME_PLANE = True
 CANON_MANAGED_RUNTIME_PLANE_NO_DECISION_LOGIC = True
 

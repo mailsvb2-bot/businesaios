@@ -7,23 +7,29 @@ from runtime.handlers import ActionHandlerRegistry
 
 
 def register_growth_handlers(*, handlers: ActionHandlerRegistry, event_store, behavior_graph_store, marketing_llm) -> None:
-    from runtime.handlers.profit_sprint_onboarding import (
-        handle_onboarding_start as _ps_start,
-        handle_onboarding_text as _ps_text,
-        handle_onboarding_lead_source as _ps_lead,
-    )
-    from runtime.handlers.growth_strategy_generate import handle_growth_strategy_generate as _growth_generate
-    from runtime.handlers.growth_strategy_backlog import handle_growth_strategy_backlog as _growth_backlog
-    from runtime.handlers.growth_strategy_state import (
-        handle_growth_strategy_accept as _growth_accept,
-        handle_growth_strategy_reject as _growth_reject,
-    )
     from runtime.handlers.behavior_graph import (
         handle_behavior_graph_build,
         handle_behavior_graph_neighbors,
         handle_behavior_graph_node,
         handle_behavior_graph_path,
         handle_behavior_graph_reset,
+    )
+    from runtime.handlers.growth_strategy_backlog import handle_growth_strategy_backlog as _growth_backlog
+    from runtime.handlers.growth_strategy_generate import handle_growth_strategy_generate as _growth_generate
+    from runtime.handlers.growth_strategy_state import (
+        handle_growth_strategy_accept as _growth_accept,
+    )
+    from runtime.handlers.growth_strategy_state import (
+        handle_growth_strategy_reject as _growth_reject,
+    )
+    from runtime.handlers.profit_sprint_onboarding import (
+        handle_onboarding_lead_source as _ps_lead,
+    )
+    from runtime.handlers.profit_sprint_onboarding import (
+        handle_onboarding_start as _ps_start,
+    )
+    from runtime.handlers.profit_sprint_onboarding import (
+        handle_onboarding_text as _ps_text,
     )
 
     handlers.register("profit_sprint_onboarding_start@v1", lambda payload, effects, env: _ps_start(payload, effects, env, event_store=event_store))

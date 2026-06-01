@@ -3,14 +3,13 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-
-from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
-from runtime.platform.config.env_flags import env_int
 import time
 import uuid
 from typing import Any, Dict, List, Optional
-from observability.platform.observability.silent import swallow
 
+from observability.platform.observability.silent import swallow
+from runtime.platform.config.env_flags import env_int
+from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 
 DDL = """
 PRAGMA journal_mode=WAL;
@@ -43,7 +42,7 @@ class SqlitePaymentOutbox:
 
     def __init__(self, path: str):
         self._path = str(path)
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
 
         # Inflight lease (ms): if worker crashes, jobs are re-queued after this time.
         try:
@@ -52,7 +51,7 @@ class SqlitePaymentOutbox:
             self._lease_ms = 60000
         self._lease_ms = max(5_000, min(10 * 60_000, int(self._lease_ms)))
 
-    def __enter__(self) -> "SqlitePaymentOutbox":
+    def __enter__(self) -> SqlitePaymentOutbox:
         os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
         self._conn = sqlite3.connect(self._path)
         configure_sqlite(self._conn, prod=is_prod_env())
@@ -73,7 +72,7 @@ class SqlitePaymentOutbox:
         except (AssertionError, sqlite3.Error):
             return False
 
-    def enqueue_once(self, *, dedupe_key: str, payload: Dict[str, Any]) -> str:
+    def enqueue_once(self, *, dedupe_key: str, payload: dict[str, Any]) -> str:
         assert self._conn is not None
         now = int(time.time() * 1000)
         jid = str(uuid.uuid4())
@@ -89,7 +88,7 @@ class SqlitePaymentOutbox:
         row = cur.fetchone()
         return str(row[0]) if row else jid
 
-    def list_pending(self, *, limit: int = 50) -> List[Dict[str, Any]]:
+    def list_pending(self, *, limit: int = 50) -> list[dict[str, Any]]:
         assert self._conn is not None
         now = int(time.time() * 1000)
         # Reap stale inflight jobs back to pending (crash-safe lease).
@@ -108,7 +107,7 @@ class SqlitePaymentOutbox:
             (now, int(limit)),
         )
         rows = cur.fetchall()
-        out: List[Dict[str, Any]] = []
+        out: list[dict[str, Any]] = []
         for r in rows:
             out.append(
                 {
@@ -158,7 +157,7 @@ class SqlitePaymentOutbox:
 
     # ---- terminal idempotency (heavy-load safe) ----
 
-    def terminal_status(self, external_id: str) -> Optional[str]:
+    def terminal_status(self, external_id: str) -> str | None:
         """Return terminal_status if already emitted for external_id."""
         assert self._conn is not None
         cur = self._conn.execute(

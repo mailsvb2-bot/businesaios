@@ -8,7 +8,6 @@ from __future__ import annotations
 import ast
 import pathlib
 
-
 PROD_DIRS = {
     "core",
     "governance",

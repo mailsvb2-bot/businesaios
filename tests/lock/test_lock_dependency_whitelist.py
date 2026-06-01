@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ALLOWED_IMPORT_PREFIXES = (
     "core.",
     "kernel.",

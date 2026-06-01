@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, Protocol
+from typing import Any, Iterable, Protocol
 
 from config.growth_trust_policy import DEFAULT_GROWTH_TRUST_POLICY, GrowthTrustPolicy
 
 
 class EventStore(Protocol):
-    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 2000) -> Iterable[Dict[str, Any]]: ...
+    def latest_events(self, *, tenant_id: str, event_type: str, limit: int = 2000) -> Iterable[dict[str, Any]]: ...
 
 
 @dataclass

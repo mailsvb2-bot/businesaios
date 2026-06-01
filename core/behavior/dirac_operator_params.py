@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+from typing import Any, Mapping
 
 from core.behavior.dirac_operator_keys import required_operator_keys
 from core.behavior.operator_catalogs import OperatorCatalogKey, OperatorCatalogResolver
@@ -11,7 +11,7 @@ from core.observability.silent import swallow
 from core.tenancy.normalization import normalize_tenant_id
 
 
-def resolve_operator_params(ctx: Mapping[str, Any]) -> Dict[str, Any]:
+def resolve_operator_params(ctx: Mapping[str, Any]) -> dict[str, Any]:
     """Resolve effective operator params from catalog + overrides."""
     from core.behavior.dirac_operator_math import clamp
 
@@ -41,7 +41,7 @@ def resolve_operator_params(ctx: Mapping[str, Any]) -> Dict[str, Any]:
     k_it = clamp(float(ov.get("k_it", cat.k_it)), 0.0, 0.20)
     anti_drain = clamp(float(ov.get("anti_drain", cat.anti_drain)), 0.0, 0.35)
 
-    es: Dict[str, float] = dict(getattr(cat, "event_scales", {}) or {})
+    es: dict[str, float] = dict(getattr(cat, "event_scales", {}) or {})
     ov_es = ov.get("event_scales")
     if isinstance(ov_es, Mapping):
         for k, v in dict(ov_es).items():
