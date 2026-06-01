@@ -9,6 +9,9 @@ from runtime.production_boot_contract import ProductionBootProbe, assert_product
 from scripts.ci.step_production_boot import run as run_production_boot
 
 
+_VALID_CONTRACT_DSN = "postgresql://user:pass@db.internal.invalid:5432/businesaios"
+
+
 def test_ci_profile_is_advisory_only_not_production_ready(monkeypatch) -> None:
     monkeypatch.delenv("ENV", raising=False)
     monkeypatch.delenv("APP_ENV", raising=False)
@@ -43,7 +46,7 @@ def test_production_with_required_contract_is_satisfied_but_not_production_ready
         {
             "ENV": "production",
             "APP_PROFILE": "api",
-            "DATABASE_URL": "postgresql://example.invalid/db",
+            "DATABASE_URL": _VALID_CONTRACT_DSN,
             "POSTGRES_RUNTIME_ENABLED": "1",
             "RUN_MIGRATIONS_BEFORE_START": "1",
             "BAIOS_REQUIRE_QUALITY_TOOLS": "release",
