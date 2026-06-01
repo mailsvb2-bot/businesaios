@@ -11,6 +11,16 @@ class ProductionBootStatus(str, Enum):
     ADVISORY_ONLY = "advisory_only"
 
 
+_PLACEHOLDER_MARKERS = (
+    "change-me",
+    "replace_with",
+    "placeholder",
+    "example",
+    "dummy",
+    "todo",
+)
+
+
 @dataclass(frozen=True)
 class ProductionBootProbe:
     env: str
@@ -19,6 +29,14 @@ class ProductionBootProbe:
     postgres_enabled: bool
     migrations_required: bool
     release_quality_tools_required: bool
+    database_url_placeholder: bool = False
+    telegram_token_placeholder: bool = False
+    webhook_secret_placeholder: bool = False
+    control_plane_key_placeholder: bool = False
+    secret_backend_placeholder: bool = False
+    key_provider_placeholder: bool = False
+    sqlite_secret_backend_in_prod: bool = False
+    sqlite_key_provider_in_prod: bool = False
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> ProductionBootProbe:
@@ -26,8 +44,8 @@ class ProductionBootProbe:
         profile = str(env.get("APP_PROFILE") or env.get("RUN_MODE") or "api").strip().lower() or "api"
         database_url = str(env.get("DATABASE_URL") or env.get("POSTGRES_DSN") or "").strip()
         postgres_enabled = str(
-            env.get("POSTGRES_RUNTIME_ENABLED") or env.get("POSTGRES_EVENT_STORE_ENABLED") or ""
-        ).strip().lower() in {"1", "true", "yes", "enabled"}
+            env.get("POSTGRES_RUNTIME_ENABLED") or env.get("POSTGRES_EVENT_STORE_ENABLED") or env.get("METRO_DB_ENGINE") or ""
+        ).strip().lower() in {"1", "true", "yes", "enabled", "postgres", "postgresql"}
         migrations_required = str(
             env.get("MIGRATIONS_REQUIRED") or env.get("RUN_MIGRATIONS_BEFORE_START") or "1"
         ).strip().lower() not in {"0", "false", "no", "disabled"}
@@ -37,6 +55,8 @@ class ProductionBootProbe:
             "yes",
             "release",
         }
+        secret_backend = str(env.get("BUSINESAIOS_SECRET_VAULT_BACKEND") or "").strip()
+        key_provider = str(env.get("BUSINESAIOS_KEY_PROVIDER_BACKEND") or "").strip()
         return cls(
             env=runtime_env,
             app_profile=profile,
@@ -44,7 +64,22 @@ class ProductionBootProbe:
             postgres_enabled=postgres_enabled,
             migrations_required=migrations_required,
             release_quality_tools_required=release_quality,
+            database_url_placeholder=_looks_placeholder(database_url),
+            telegram_token_placeholder=_looks_placeholder(str(env.get("TELEGRAM_BOT_TOKEN") or "")),
+            webhook_secret_placeholder=_looks_placeholder(str(env.get("TELEGRAM_WEBHOOK_SECRET") or "")),
+            control_plane_key_placeholder=_looks_placeholder(str(env.get("CONTROL_PLANE_API_KEY") or "")),
+            secret_backend_placeholder=_looks_placeholder(secret_backend),
+            key_provider_placeholder=_looks_placeholder(key_provider),
+            sqlite_secret_backend_in_prod=secret_backend.lower() == "sqlite",
+            sqlite_key_provider_in_prod=key_provider.lower() == "sqlite",
         )
+
+
+def _looks_placeholder(value: str) -> bool:
+    normalized = str(value or "").strip().lower()
+    if not normalized:
+        return False
+    return any(marker in normalized for marker in _PLACEHOLDER_MARKERS)
 
 
 def evaluate_production_boot(probe: ProductionBootProbe) -> dict[str, object]:
@@ -56,12 +91,28 @@ def evaluate_production_boot(probe: ProductionBootProbe) -> dict[str, object]:
     if is_production:
         if not probe.database_url_present:
             violations.append("production_database_url_required")
+        if probe.database_url_placeholder:
+            violations.append("production_database_url_placeholder_forbidden")
         if not probe.postgres_enabled:
             violations.append("production_postgres_enablement_required")
         if not probe.migrations_required:
             violations.append("production_migrations_must_run_before_start")
         if not probe.release_quality_tools_required:
             warnings.append("release_quality_tools_not_required_in_env")
+        if probe.telegram_token_placeholder:
+            violations.append("production_telegram_token_placeholder_forbidden")
+        if probe.webhook_secret_placeholder:
+            violations.append("production_webhook_secret_placeholder_forbidden")
+        if probe.control_plane_key_placeholder:
+            violations.append("production_control_plane_key_placeholder_forbidden")
+        if probe.secret_backend_placeholder:
+            violations.append("production_secret_backend_placeholder_forbidden")
+        if probe.key_provider_placeholder:
+            violations.append("production_key_provider_placeholder_forbidden")
+        if probe.sqlite_secret_backend_in_prod:
+            violations.append("production_sqlite_secret_backend_forbidden")
+        if probe.sqlite_key_provider_in_prod:
+            violations.append("production_sqlite_key_provider_forbidden")
     else:
         warnings.append("non_production_profile_advisory_only")
     production_contract_satisfied = is_production and not violations
@@ -82,6 +133,14 @@ def evaluate_production_boot(probe: ProductionBootProbe) -> dict[str, object]:
         "postgres_enabled": probe.postgres_enabled,
         "migrations_required": probe.migrations_required,
         "release_quality_tools_required": probe.release_quality_tools_required,
+        "database_url_placeholder": probe.database_url_placeholder,
+        "telegram_token_placeholder": probe.telegram_token_placeholder,
+        "webhook_secret_placeholder": probe.webhook_secret_placeholder,
+        "control_plane_key_placeholder": probe.control_plane_key_placeholder,
+        "secret_backend_placeholder": probe.secret_backend_placeholder,
+        "key_provider_placeholder": probe.key_provider_placeholder,
+        "sqlite_secret_backend_in_prod": probe.sqlite_secret_backend_in_prod,
+        "sqlite_key_provider_in_prod": probe.sqlite_key_provider_in_prod,
         "violations": violations,
         "warnings": warnings,
         "production_boot_contract_satisfied": production_contract_satisfied,
