@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any
 
 from application.business_autonomy.channel_contracts import ChannelIdentity, ChannelKind
 from core.tenancy.normalization import require_tenant_id
