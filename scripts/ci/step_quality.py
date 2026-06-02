@@ -12,6 +12,8 @@ from scripts.ci.paths import repo_root
 from scripts.ci.subprocess_io import run_command
 
 _CRITICAL_RUFF_SELECT = ("E9", "F63", "F7", "F82")
+_TARGETED_STRICT_DEBT_SELECT = ("E402", "F401", "UP035")
+_MAX_DEBT_SAMPLES = 50
 
 
 def _iter_python_files(path: Path):
@@ -82,6 +84,61 @@ def _ruff_base_args(*, targets: tuple[Path, ...], config: Path) -> list[str]:
     return args
 
 
+def _targeted_debt_report(*, targets: tuple[Path, ...], config: Path) -> dict[str, object]:
+    args = [
+        *_ruff_base_args(targets=targets, config=config),
+        "--select",
+        ",".join(_TARGETED_STRICT_DEBT_SELECT),
+        "--output-format",
+        "json",
+    ]
+    outcome = run_command(args, env={"PYTHONNOUSERSITE": "1"}, timeout=180)
+    raw = outcome.stdout.strip() or "[]"
+    try:
+        findings = json.loads(raw)
+    except json.JSONDecodeError:
+        return {
+            "targeted_strict_debt_select": list(_TARGETED_STRICT_DEBT_SELECT),
+            "targeted_strict_debt_measured": False,
+            "targeted_strict_debt_counts": {},
+            "targeted_strict_debt_samples": [],
+            "targeted_strict_debt_error": "ruff_json_output_parse_failed",
+        }
+    counts = {code: 0 for code in _TARGETED_STRICT_DEBT_SELECT}
+    samples: list[dict[str, object]] = []
+    root = repo_root()
+    for item in findings:
+        code = str(item.get("code") or "")
+        if code not in counts:
+            continue
+        counts[code] += 1
+        if len(samples) >= _MAX_DEBT_SAMPLES:
+            continue
+        filename = str(item.get("filename") or "")
+        try:
+            path = Path(filename).resolve().relative_to(root).as_posix()
+        except ValueError:
+            path = filename
+        location = item.get("location") or {}
+        samples.append(
+            {
+                "code": code,
+                "path": path,
+                "row": location.get("row"),
+                "column": location.get("column"),
+                "message": item.get("message"),
+            }
+        )
+    return {
+        "targeted_strict_debt_select": list(_TARGETED_STRICT_DEBT_SELECT),
+        "targeted_strict_debt_measured": True,
+        "targeted_strict_debt_counts": counts,
+        "targeted_strict_debt_total": sum(counts.values()),
+        "targeted_strict_debt_samples": samples,
+        "targeted_strict_debt_sample_limit": _MAX_DEBT_SAMPLES,
+    }
+
+
 def _ruff_check() -> tuple[bool, str, dict[str, object]]:
     root = repo_root()
     targets = _quality_target_paths(root)
@@ -112,6 +169,8 @@ def _ruff_check() -> tuple[bool, str, dict[str, object]]:
         payload["status"] = "blocked"
         payload["violations"] = ["ruff_critical_baseline_failed"]
         return False, "ruff critical baseline failed", payload
+
+    payload.update(_targeted_debt_report(targets=targets, config=config))
 
     if _strict_ruff_required():
         strict = run_command(_ruff_base_args(targets=targets, config=config), env={"PYTHONNOUSERSITE": "1"}, timeout=180)
