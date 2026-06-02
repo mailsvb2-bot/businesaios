@@ -6,8 +6,6 @@ Prevents file-per-store fan-out where dozens of modules only defined an empty
 subclass of one of the two base store types.
 """
 
-from typing import Dict, Type
-
 from runtime.platform.support.storage.base_stores import ArtifactStore, DatasetStore
 
 _STORE_SPECS: dict[str, tuple[str, type]] = {
