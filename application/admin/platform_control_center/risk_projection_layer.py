@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from application.admin.platform_control_center.support import (
     BLOCK_EXCLUDE,
