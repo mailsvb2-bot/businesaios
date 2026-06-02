@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from application.analytics.analytics_delivery_service import AnalyticsDeliveryService
 from application.analytics.fleet_analytics_coordinator import FleetAnalyticsCoordinator
