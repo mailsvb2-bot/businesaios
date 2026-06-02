@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
 from application.analytics.dashboard_service import ApplicationAnalyticsDashboardService
 from core.analytics.analytics_rollup import AnalyticsRollupService
