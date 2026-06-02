@@ -79,6 +79,18 @@ class SnapshotDiffService:
                 per_block.setdefault(block, []).append({
                     'captured_at_utc': captured,
                     'risk_score': int(block_row.get('risk_score') or 0),
-                    'maturity': str(block_row.get('maturity') or ''),
+                    'maturity': str(block_row.get('maturity') or 'unknown'),
+                    'python_lines': int(block_row.get('python_lines') or 0),
                 })
-        return [{'block': block, 'history': rows} for block, rows in sorted(per_block.items())]
+        rows: list[dict[str, Any]] = []
+        for block, history_rows in sorted(per_block.items()):
+            latest = history_rows[-1]
+            maturity_score = {'strong': 90, 'watch': 65, 'needs_work': 35}.get(latest['maturity'], 50)
+            rows.append({
+                'block': block,
+                'latest_maturity': latest['maturity'],
+                'latest_risk_score': latest['risk_score'],
+                'maturity_score': maturity_score,
+                'history': history_rows,
+            })
+        return rows[:80]
