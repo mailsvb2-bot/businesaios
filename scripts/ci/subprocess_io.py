@@ -24,9 +24,12 @@ class CommandOutcome:
 def _base_env() -> dict[str, str]:
     # Keep CI subprocesses hermetic. The execution environment can contain
     # platform-specific CUA_DD/Jupyter variables that make pytest children hang
-    # at shutdown; do not leak them into project gates.
+    # at shutdown; do not leak them into project gates. Dynamic linker paths are
+    # intentionally preserved because actions/setup-python on self-hosted Linux
+    # runners can provide Python builds whose `sys.executable` depends on a
+    # colocated libpython shared object.
     env: dict[str, str] = {}
-    for key in ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "TMPDIR"):
+    for key in ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "TMPDIR", "LD_LIBRARY_PATH"):
         if key in os.environ:
             env[key] = os.environ[key]
     env["PYTHONUNBUFFERED"] = "1"
