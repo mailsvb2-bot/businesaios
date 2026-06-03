@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from importlib import import_module
-from typing import Callable
 
 from scripts.ci import step_ids as _step_ids
 from scripts.ci.doctor import run_doctor
@@ -78,4 +78,9 @@ def handler_for_step(name: str) -> StepHandler:
     raise KeyError(f"unknown step: {name}")
 
 
-__all__ = ["StepHandler", "handler_for_step"]
+def registered_step_names() -> tuple[str, ...]:
+    return tuple(_REGISTRY)
+
+
+def all_step_names() -> tuple[str, ...]:
+    return tuple(sorted((*_REGISTRY.keys(), "postgres-migrations", "container-runtime", "staging-runtime")))
