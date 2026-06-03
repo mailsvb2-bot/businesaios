@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Tuple
+from typing import Tuple
+from collections.abc import Iterable
 
 from kernel.decisioning.candidate_types import CandidateScore
 

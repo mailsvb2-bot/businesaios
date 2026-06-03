@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from application.business_autonomy.contracts import BusinessExecutionRequest
 from application.capability.capability_execution_verdict import CapabilityExecutionVerdictBuilder

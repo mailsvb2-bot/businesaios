@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 
 def build_architecture_state(values: Mapping[str, float]) -> dict[str, float]:

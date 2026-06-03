@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from collections.abc import Iterable
 
 from application.business_autonomy.channel_contracts import ChannelIdentity, TypedChannelAdapter
 

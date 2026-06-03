@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 
 def detect_hidden_choice(values: Sequence[Any]) -> bool:

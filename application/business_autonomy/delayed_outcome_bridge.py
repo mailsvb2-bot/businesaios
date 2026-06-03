@@ -6,7 +6,8 @@ import tempfile
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 from uuid import uuid4
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult

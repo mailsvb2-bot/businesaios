@@ -5,7 +5,8 @@ import os
 import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from application.memory.business_memory_compactor import BusinessMemoryCompactor
 from application.memory.business_memory_lock import FileBusinessMemoryLock

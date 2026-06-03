@@ -7,7 +7,7 @@ surfaces thin. They are pure domain transforms only: no runtime wiring,
 no side effects, and no decision issuance.
 """
 
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 from core.reward_bridge.reward_signal_builder import build_reward_signal
 from runtime.explainability import build_reward_reasons, to_lines

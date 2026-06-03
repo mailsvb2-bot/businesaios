@@ -3,7 +3,8 @@ from __future__ import annotations
 """Canonical headless gateway for executing finalized autonomy envelopes."""
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from runtime.execution.execution_path_lock import (
     ExecutionPathLockError,

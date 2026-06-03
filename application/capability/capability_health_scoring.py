@@ -5,7 +5,8 @@ import os
 import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from application.capability.capability_health_policy import CapabilityHealthPolicy
 from application.capability.capability_matrix import CapabilityMatrix

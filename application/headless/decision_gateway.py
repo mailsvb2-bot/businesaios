@@ -3,7 +3,8 @@ from __future__ import annotations
 """Canonical headless gateway for issuing decisions on one path."""
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from runtime.decision_path_lock import (
     DecisionPathLockError,

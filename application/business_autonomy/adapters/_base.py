@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from collections.abc import Sequence
 
 from application.business_autonomy.channel_contracts import (
     ChannelCapabilityDescriptor,

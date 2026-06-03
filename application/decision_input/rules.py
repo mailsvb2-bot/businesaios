@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from importlib import import_module
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 
 def assert_safe_recommendations(recommendations: Sequence[object]) -> None:

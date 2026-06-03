@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Protocol
+from collections.abc import Mapping, Sequence
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult
 

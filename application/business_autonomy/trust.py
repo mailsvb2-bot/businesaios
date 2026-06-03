@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Mapping
+from typing import Dict
+from collections.abc import Mapping
 
 
 class BusinessTrustTier(str, Enum):

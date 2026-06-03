@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from application.business_autonomy.integration_capability_catalog import (
     CapabilitySurface,

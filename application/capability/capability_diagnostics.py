@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from application.capability.capability_fallback_contract import CapabilityFallbackDecision
 from application.capability.capability_matrix import CapabilityRecord
