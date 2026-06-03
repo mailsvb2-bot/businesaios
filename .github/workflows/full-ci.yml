@@ -11,7 +11,7 @@ on:
 
 jobs:
   full-gate:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, businesaios]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
