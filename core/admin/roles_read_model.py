@@ -9,7 +9,8 @@ Strict tenant contract:
 - no silent defaults inside iter_events
 """
 
-from typing import Any, Dict, Iterable, List, Set
+from typing import Any, Dict, List, Set
+from collections.abc import Iterable
 
 ROLE_ADMIN = "admin"
 ROLE_MARKETING = "marketing"

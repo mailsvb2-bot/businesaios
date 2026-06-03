@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Iterable
+from collections.abc import Iterable
 
 
 def pareto_top_share(values: Iterable[float], top_fraction: float = 0.2) -> float:

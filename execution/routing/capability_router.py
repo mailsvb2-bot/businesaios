@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 from execution.action_capability_matrix import get_action_capability
 from execution.routing.capability_cost_model import CapabilityCostModel
 from execution.routing.capability_latency_model import CapabilityLatencyModel

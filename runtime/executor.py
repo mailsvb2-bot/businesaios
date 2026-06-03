@@ -21,7 +21,8 @@ import logging
 import os
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from application.autonomy.autonomy_safety_bundle import AutonomySafetyBundle
 from application.evidence.evidence_verifier import EvidenceVerifier

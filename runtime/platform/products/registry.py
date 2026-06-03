@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Tuple
+from collections.abc import Iterable
 
 from contracts.product_contract import ProductContract
 

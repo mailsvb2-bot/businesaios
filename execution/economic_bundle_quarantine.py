@@ -4,7 +4,8 @@ import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Mapping, Protocol
+from typing import Any, Protocol
+from collections.abc import Mapping
 
 CANON_ECONOMIC_BUNDLE_QUARANTINE = True
 

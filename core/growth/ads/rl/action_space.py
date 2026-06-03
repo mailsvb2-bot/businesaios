@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import product
-from typing import Iterable, List, Sequence, Tuple
+from typing import List, Tuple
+from collections.abc import Iterable, Sequence
 
 from .contracts import AdsRLAction, AdsRLOptSpec
 

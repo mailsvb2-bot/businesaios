@@ -17,7 +17,8 @@ replays a deterministic action (price point).
 """
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from config.pricing_retention_policy import (
     DEFAULT_PRICING_OFF_POLICY_DEFAULTS,

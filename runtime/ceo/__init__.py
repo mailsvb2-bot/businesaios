@@ -8,7 +8,8 @@ an extra re-export file around.
 """
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from core.actions import build_schema_registry
 from runtime.actions import ACTION_EXECUTE_PLAN_V1

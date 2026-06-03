@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from collections.abc import Mapping
 
 from contracts.action_impact_contract import CostSource
 from core.safety.operational.action_spec import ActionCostPolicy
@@ -64,4 +64,4 @@ class ActionCostModel:
 __all__ = [
     "ActionCostModel",
     "ActionCostResult",
-]
+]

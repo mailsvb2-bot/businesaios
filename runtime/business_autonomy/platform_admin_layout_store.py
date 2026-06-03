@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from core.tenancy.normalization import require_tenant_id
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore

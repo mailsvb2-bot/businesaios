@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 from runtime.monetization import RevenueAdvisoryService
 from runtime.monetization import RevenueDecisionEnvelope

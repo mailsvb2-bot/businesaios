@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Mapping
+from collections.abc import Mapping
 
 from .enums import ExpenseCategory, FinanceSnapshotStatus, PaymentStatus, PayoutStatus
 from .ids import FinanceSnapshotId

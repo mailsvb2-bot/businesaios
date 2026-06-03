@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping, Protocol
+from typing import Any, Protocol
+from collections.abc import Mapping
 
 from observability.audit_export_service import AuditExportService
 from runtime.business_autonomy.distributed_state import FileDistributedEvidenceAppendPort

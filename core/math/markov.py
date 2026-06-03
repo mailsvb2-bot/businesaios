@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 
 def estimate_transition_counts(sequences: Iterable[list[str]]) -> dict[tuple[str, str], int]:

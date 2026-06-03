@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from contracts.action_impact_contract import ActionExecutionContext, ActionImpact
 from execution.operator_override_contract import build_operator_override_subject_fingerprint

@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import hashlib
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from contracts.platforms.market_intelligence_advanced_contract import ProviderCursor
 from execution.market_intelligence_cursor_store import PersistentMarketIntelligenceCursorStore

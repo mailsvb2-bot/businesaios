@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 import re
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 
 CANON_MARKET_INTELLIGENCE_PATTERN_EXTRACTOR = True

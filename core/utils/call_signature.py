@@ -7,7 +7,8 @@ masking internal provider errors as signature mismatches.
 """
 
 from inspect import Parameter, signature
-from typing import Any, Callable, Iterable
+from typing import Any, Callable
+from collections.abc import Iterable
 
 CANON_CALL_SIGNATURE_HELPERS = True
 

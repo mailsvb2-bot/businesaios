@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timezone
-from typing import Iterable
+from collections.abc import Iterable
 
 from execution.optimization.adaptation_metrics import build_scorecard
 from execution.optimization.feedback_pipeline import AdaptationObservation

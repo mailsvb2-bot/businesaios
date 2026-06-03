@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Optional
+from collections.abc import Mapping
 
 from core.behavior.operator_catalogs.models import OperatorCatalog, catalog_from_raw
 from core.behavior.operator_catalogs.yaml_loader import YamlOperatorCatalogLoader

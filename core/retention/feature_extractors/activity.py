@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import time
 from datetime import UTC, datetime, timezone
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
+from collections.abc import Iterable
 
 from config.scoring_behavior_policy import (
     DEFAULT_RETENTION_ACTIVITY_POLICY,

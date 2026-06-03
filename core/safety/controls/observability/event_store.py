@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timezone
 from pathlib import Path
 from threading import RLock
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 

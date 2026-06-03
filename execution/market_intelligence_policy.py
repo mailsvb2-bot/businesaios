@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from contracts.platforms.market_intelligence_contract import SOURCE_FAMILIES, normalize_source_family
 from execution.market_intelligence_models import MarketIntelligenceIngestionRequest

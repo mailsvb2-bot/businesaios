@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 
 CANON_MARKET_INTELLIGENCE_OBSERVABILITY = True

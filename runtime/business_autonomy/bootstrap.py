@@ -4,7 +4,8 @@ import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
+from collections.abc import Mapping, Sequence
 
 from application.business_autonomy.adapters.ads_production_adapters import (
     GoogleAdsProductionAdapter,

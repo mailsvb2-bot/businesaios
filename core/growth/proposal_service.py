@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
+from collections.abc import Iterable
 
 from core.actions.names import ACTION_GROWTH_PROPOSAL_APPLY_V1
 from kernel.decisioning.route_contract import canonical_runtime_route

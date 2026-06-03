@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, List, Sequence
+from typing import List
+from collections.abc import Iterable, Sequence
 
 from canon.authority_registry import CANONICAL_AUTHORITY_OWNERS
 from canon.sealed_effect_policy import FORBIDDEN_EXTERNAL_EFFECT_LIBRARIES, SEALED_EFFECT_PREFIXES

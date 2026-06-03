@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from config.scoring_behavior_policy import DEFAULT_PLANNER_MEMORY_POLICY, PlannerMemoryPolicy
 

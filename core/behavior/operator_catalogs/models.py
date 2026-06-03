@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from config.final_hidden_logic_policy import DEFAULT_OPERATOR_CATALOG_POLICY
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from runtime.messaging.inbound_decision_gateway import MessagingInboundDecisionGateway, process_inbound_gateway_message
 from runtime.messaging.inbound_message import InboundMessage

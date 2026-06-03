@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.economic_backend_authority import EconomicBackendAuthorityResolver
 from execution.economic_split_brain_guard import EconomicSplitBrainGuard

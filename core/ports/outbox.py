@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Iterable, Protocol
+from typing import Protocol
+from collections.abc import Iterable
 
 
 class OutboxPort(Protocol):

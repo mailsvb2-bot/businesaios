@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.optimization.adaptive_optimizer import AdaptiveOptimizer
 from execution.optimization.adaptive_strategy_bridge import AdaptiveStrategyBridge

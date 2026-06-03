@@ -8,7 +8,8 @@ not re-implement span wiring locally.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from runtime.observability.tracing import correlation_key_scope, span_with_sla
 

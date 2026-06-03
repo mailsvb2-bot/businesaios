@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Sequence
+from typing import List
+from collections.abc import Sequence
 
 from canon.sealed_effect_policy import EFFECT_LITERAL_MARKERS, SEALED_EFFECT_PREFIXES
 from tools.canon_audit.contracts import ArchitectureViolation

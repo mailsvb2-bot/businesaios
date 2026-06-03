@@ -1,7 +1,8 @@
 """Reader protocols for knowledge domain."""
 from __future__ import annotations
 
-from typing import Protocol, Sequence
+from typing import Protocol
+from collections.abc import Sequence
 
 from ..types import (
     Lesson,

@@ -6,7 +6,8 @@ These functions are deterministic and side-effect free.
 """
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from contracts.autopilot_contract import AutopilotContract
 

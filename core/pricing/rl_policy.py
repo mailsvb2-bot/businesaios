@@ -11,7 +11,8 @@ that expect a 'choose_action' shape.
 """
 
 import random
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 
 class RLPricePolicy:

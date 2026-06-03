@@ -4,7 +4,7 @@ import base64
 import hashlib
 import hmac
 from dataclasses import dataclass
-from typing import Mapping
+from collections.abc import Mapping
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookContract

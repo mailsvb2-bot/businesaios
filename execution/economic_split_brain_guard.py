@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from hashlib import sha256
 import json
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 CANON_ECONOMIC_SPLIT_BRAIN_GUARD = True
 

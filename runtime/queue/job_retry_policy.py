@@ -8,7 +8,7 @@ It classifies errors only to decide retry delay / dead-letter outcome.
 
 from dataclasses import dataclass
 from random import randint
-from typing import Iterable
+from collections.abc import Iterable
 
 from runtime.queue.job_contract import JobRecord
 

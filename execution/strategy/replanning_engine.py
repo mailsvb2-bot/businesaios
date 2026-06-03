@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 CANON_REPLANNING_ENGINE = True
 class ReplanningEngine:
     def classify_feedback(self, *, feedback: Mapping[str, Any] | None) -> dict[str, Any]:

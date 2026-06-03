@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Protocol
+from typing import Any, Dict, Protocol
+from collections.abc import Iterable
 
 from core.events.read_model_support import best_effort_latest_event
 from core.read_model.cache import global_cache, watermark_for

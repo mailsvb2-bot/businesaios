@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Iterable
+from collections.abc import Iterable
 from execution.strategy.planner_state_contract import StrategicGoalRecord
 CANON_DEPENDENCY_GRAPH = True
 @dataclass(frozen=True)

@@ -3,7 +3,7 @@ from __future__ import annotations
 """Final owner for runtime boot surface."""
 
 from dataclasses import dataclass
-from typing import Mapping
+from collections.abc import Mapping
 
 from bootstrap.bootstrap_config_surface import BootstrapConfigSurface, build_bootstrap_config_surface
 from bootstrap.security_boot_surface import SecurityBootSurface, build_security_boot_surface

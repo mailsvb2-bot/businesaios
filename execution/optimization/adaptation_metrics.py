@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import sqrt
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
 from config.scoring_behavior_policy import DEFAULT_ADAPTATION_METRICS_POLICY
 
 

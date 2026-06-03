@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, is_dataclass
 from pathlib import Path
-from typing import Any, Mapping, Protocol
+from typing import Any, Protocol
+from collections.abc import Mapping
 
 from core.ai.policy_registry import PolicyRegistry
 from runtime.platform.support.contracts.action import Action

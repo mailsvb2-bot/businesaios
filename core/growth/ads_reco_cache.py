@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, Optional, Protocol
+from typing import Any, Dict, Optional, Protocol
+from collections.abc import Iterable
 
 
 class EventStore(Protocol):

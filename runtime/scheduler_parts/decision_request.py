@@ -7,7 +7,8 @@ proposal/world-state -> decision input packet -> runtime decision gateway -> exe
 It contains no raw decision logic and does not construct alternate decision owners.
 """
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from runtime.decision_gateway import execute_runtime_decision
 from runtime.decision_input.runtime_packet_provider import maybe_build_decision_input_packet

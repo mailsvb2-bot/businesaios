@@ -11,7 +11,8 @@ Design goals:
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional
+from collections.abc import Sequence
 
 
 @dataclass(frozen=True)

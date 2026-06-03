@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from collections.abc import Sequence
 
 from config.final_hidden_logic_policy import DEFAULT_KNOWLEDGE_DEDUPLICATION_POLICY
 

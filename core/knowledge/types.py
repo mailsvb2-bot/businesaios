@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from config.world_model_defaults import DEFAULT_WORLD_MODEL_DEFAULTS
 

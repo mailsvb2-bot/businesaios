@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, Tuple
+from typing import Dict, Tuple
+from collections.abc import Iterable
 
 from runtime.modules.module_protocol import RuntimeModule
 

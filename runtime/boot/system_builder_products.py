@@ -4,7 +4,7 @@ CANON_BOOT_WIRING_ONLY = True
 
 
 from dataclasses import dataclass
-from typing import Mapping
+from collections.abc import Mapping
 
 from bootstrap.product_boot import BootProductContext, ProductBoot
 from contracts.product_contract import ProductContract

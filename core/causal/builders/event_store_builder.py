@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+from collections.abc import Iterable, Mapping, Sequence
 
 from config.final_hidden_logic_policy import DEFAULT_CAUSAL_BUILDER_POLICY
 from core.causal.types import CausalDataset, CausalRow

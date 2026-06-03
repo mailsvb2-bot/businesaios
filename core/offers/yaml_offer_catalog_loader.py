@@ -11,7 +11,8 @@ raw mapping specs instead of OfferCatalog objects.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from core.offers.catalogs.yaml_catalog_loader import (
     load_all_yaml_offer_catalog_specs,

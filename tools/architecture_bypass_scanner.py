@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import ast
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 CANON_ARCHITECTURE_BYPASS_SCANNER = True
 

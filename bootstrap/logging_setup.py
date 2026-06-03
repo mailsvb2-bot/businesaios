@@ -12,7 +12,7 @@ No side-effects on import. Call explicitly from runtime.bootstrap.bootstrap().
 import logging
 import os
 import re
-from typing import Iterable
+from collections.abc import Iterable
 
 from runtime.platform.config.env_flags import env_str
 

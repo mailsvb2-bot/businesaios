@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from execution.error_family_classifier import ErrorFamilyClassifier
 from application.learning.failure_pattern_detector import FailureEvent

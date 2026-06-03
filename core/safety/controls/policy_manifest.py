@@ -5,7 +5,8 @@ import hmac
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timezone
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from config.config_versioning import ConfigVersion
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from contracts.action_impact_contract import ActionCategory, ActionImpact
 from execution.approval_execution_gate import ApprovalExecutionGate

@@ -7,7 +7,8 @@ import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.optimization.noise_guard import NoiseMemory
 from config.risk_evaluation_policy import DEFAULT_PERFORMANCE_PROFILE_POLICY

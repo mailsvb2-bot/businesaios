@@ -18,7 +18,7 @@ Staging contract:
 import ast
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
 
 CANON_AUDIT_TOOL_VERSION = "2026-05-11.p2"

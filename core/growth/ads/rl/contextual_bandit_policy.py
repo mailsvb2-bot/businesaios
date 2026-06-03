@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from .contracts import AdsRLAction, AdsRLState
 from .policy import AdsRLPolicy, PolicyDecision

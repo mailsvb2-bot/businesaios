@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from core.admin.read_models.common_support import iter_events_bounded, resolve_now_ms, supports_kwarg
 

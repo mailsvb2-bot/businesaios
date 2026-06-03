@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from core.behavior.assemblers.org_field_assembler import assemble_org_field
 from core.behavior.assemblers.person_field_assembler import assemble_person_field

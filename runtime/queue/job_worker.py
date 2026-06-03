@@ -10,7 +10,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from threading import Event, Thread
-from typing import Any, Callable, Iterator, Mapping
+from typing import Any, Callable
+from collections.abc import Iterator, Mapping
 
 from core.tenancy.normalization import require_tenant_id
 from runtime.queue.job_contract import JobRecord, JobResult, normalize_now

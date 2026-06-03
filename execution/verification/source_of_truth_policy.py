@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Iterable
+from collections.abc import Iterable
 from execution.verification.evidence_types import EvidenceItem
 CANON_SOURCE_OF_TRUTH_POLICY = True
 def _priority(item: EvidenceItem) -> tuple[int, float, float]:

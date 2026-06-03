@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping
+from collections.abc import Mapping
 
 from execution.effectors.market_intelligence._base import MarketIntelEffectorBase
 from execution.market_intelligence_connector_resolver import MarketIntelligenceConnectorResolver

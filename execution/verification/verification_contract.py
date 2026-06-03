@@ -1,7 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 from execution.verification.evidence_types import EvidenceItem, normalize_evidence_kind, normalize_evidence_status
 CANON_VERIFICATION_CONTRACT = True
 def _utc_now() -> datetime:

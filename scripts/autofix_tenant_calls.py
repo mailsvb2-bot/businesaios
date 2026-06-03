@@ -5,7 +5,7 @@ import difflib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
 EXCLUDE_DIRS = {
     ".git",

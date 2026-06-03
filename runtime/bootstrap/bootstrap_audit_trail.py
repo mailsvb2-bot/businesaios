@@ -4,7 +4,7 @@ import json
 from dataclasses import asdict
 from datetime import UTC, datetime, timezone
 from pathlib import Path
-from typing import Mapping
+from collections.abc import Mapping
 
 from runtime.bootstrap.bootstrap_contract import (
     BootstrapAuditEvent,

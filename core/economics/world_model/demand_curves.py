@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Iterable, Protocol, Sequence
+from typing import Protocol
+from collections.abc import Iterable, Sequence
 
 from .types import DemandObservation
 

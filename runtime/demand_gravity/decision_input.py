@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from runtime.demand_gravity.admin_view import serialize_demand_candidate
 from runtime.demand_gravity.contracts import DemandCandidate

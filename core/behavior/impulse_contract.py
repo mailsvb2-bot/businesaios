@@ -18,7 +18,8 @@ Products may override via configuration, but must keep bounds.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Tuple
+from typing import Any, Dict, Tuple
+from collections.abc import Mapping
 
 from config.behavior_impulse_policy import (
     DEFAULT_IMPULSE_BOUNDS_POLICY,

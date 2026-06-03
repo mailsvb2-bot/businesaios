@@ -13,7 +13,8 @@ live adapters.
 import importlib.util
 import json
 import sys
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from runtime.platform.event_store.append_contract import AppendEvent, normalize_append_event
 from runtime.platform.postgres_port import PostgresPort

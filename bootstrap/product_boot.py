@@ -4,7 +4,8 @@ CANON_BOOT_WIRING_ONLY = True
 
 from dataclasses import dataclass
 from importlib import import_module
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from bootstrap.route_surface import attach_route_surface
 from contracts.product_contract import ProductContract

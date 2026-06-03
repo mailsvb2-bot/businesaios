@@ -1,7 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 from execution.verification.delayed_verification_retry import DelayedVerificationRetry
 from execution.verification.evidence_correlation import EvidenceCorrelation, EvidenceCorrelationResult
 from execution.verification.evidence_persistence import VerificationEvidencePersistence

@@ -4,7 +4,8 @@ from dataclasses import dataclass
 import hashlib
 import math
 import re
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 
 CANON_MARKET_INTELLIGENCE_DATA_QUALITY = True

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from runtime.execution.executor_commit import _decision_tenant_id, get_delivery_info
 

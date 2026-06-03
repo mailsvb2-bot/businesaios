@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from hashlib import sha256
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 import json
 
 CANON_ECONOMIC_LINEAGE_LOCK = True

@@ -6,7 +6,8 @@ Even when Ads Connector is enabled, budget is enforced here.
 """
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from config.growth_budget_guardrails_policy import (
     DEFAULT_GROWTH_BUDGET_GUARDRAILS_POLICY,

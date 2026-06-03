@@ -6,7 +6,8 @@ CANON_BOOT_CLUSTER_FINAL_OWNER = True
 import ast
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List
+from typing import List
+from collections.abc import Iterable
 
 
 @dataclass(frozen=True)

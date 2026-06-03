@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable, Protocol
+from typing import Protocol
+from collections.abc import Iterable
 
 from .action_context import SafetyActionContext
 from .control_result import ControlDecision, ControlStatus

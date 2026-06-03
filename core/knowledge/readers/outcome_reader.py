@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from ..contracts import OutcomeReader as OutcomeReaderContract
 from ..types import OutcomeFact

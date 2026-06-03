@@ -151,7 +151,7 @@ def _runtime_append_dir():
 
 def _read_distributed_conflicts_from_data_dir(*, limit: int) -> Sequence[Mapping[str, Any]]:
     import json
-    from typing import Mapping as TypingMapping
+    from collections.abc import Mapping as TypingMapping
 
     path = _runtime_append_dir() / 'distributed_state_conflicts_state.json'
     if not path.exists():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from runtime.messaging_policy.delivery_snapshot import DeliverySnapshot
 from runtime.messaging_policy.unanswered_snapshot import UnansweredSnapshot

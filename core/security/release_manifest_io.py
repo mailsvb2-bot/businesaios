@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
 from core.security.release_runtime_surface import is_runtime_release_excluded
 

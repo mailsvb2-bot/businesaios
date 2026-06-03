@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from execution.runtime_keys import ACTION_BUDGET_KEY
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 
 CANON_RECENT_ACTIONS = True

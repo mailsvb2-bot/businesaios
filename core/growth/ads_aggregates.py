@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Optional, Protocol
+from typing import Any, Dict, Optional, Protocol
+from collections.abc import Iterable
 
 from config.ads_aggregates_policy import DEFAULT_ADS_AGGREGATES_POLICY, AdsAggregatesPolicy
 

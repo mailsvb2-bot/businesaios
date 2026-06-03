@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timezone
 from decimal import Decimal
-from typing import Mapping
+from collections.abc import Mapping
 from uuid import uuid4
 
 CANON_RUNTIME_MONETIZATION_CONTRACTS = True

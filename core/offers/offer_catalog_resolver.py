@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from config.env_flags import env_path
 from core.offers.catalog_identity import LEGACY_OFFER_CATALOG_ID, normalize_catalog_id, product_catalog_candidates

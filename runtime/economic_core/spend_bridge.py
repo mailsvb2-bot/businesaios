@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 from economics.contracts import TruthFragment
 from spend.public_api import build_spend_fact_from_client_outcome

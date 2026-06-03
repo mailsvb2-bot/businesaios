@@ -12,7 +12,8 @@ import json
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Mapping, Protocol
+from typing import Any, Protocol
+from collections.abc import Mapping
 
 from core.tenancy.normalization import require_tenant_id
 from governance.rbac_contract import RoleId

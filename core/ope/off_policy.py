@@ -10,7 +10,7 @@ Inputs are simple dict-like mappings to avoid tight coupling.
 """
 
 from dataclasses import dataclass
-from typing import Iterable, Mapping
+from collections.abc import Iterable, Mapping
 
 
 @dataclass(frozen=True)

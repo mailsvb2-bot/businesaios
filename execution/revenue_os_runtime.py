@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 from execution.revenue_os_adapter import RevenueDecisionEnvelope, RevenueOSAdapter
 from runtime.monetization import RevenueAdvisoryStoreWiring, build_revenue_advisory_store_wiring

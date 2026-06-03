@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.action_verification_policy import determine_external_confirmation_mode
 from execution.effect_evidence import EffectEvidenceBuilder, EffectEvidenceBundle

@@ -3,7 +3,7 @@ from __future__ import annotations
 """Final owner for system boot surface."""
 
 from dataclasses import dataclass
-from typing import Mapping
+from collections.abc import Mapping
 
 from adapters.api.fastapi.dependencies import FastAPIDependencyContainer
 from bootstrap.app_boot_result import AppBootResult

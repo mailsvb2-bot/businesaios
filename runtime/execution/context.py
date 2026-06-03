@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextvars
 from contextlib import contextmanager
-from typing import Iterator
+from collections.abc import Iterator
 
 _IN_EXECUTOR: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "runtime.executor._IN_EXECUTOR",

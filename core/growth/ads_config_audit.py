@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timezone
-from typing import Any, Dict, Iterable, Optional, Protocol
+from typing import Any, Dict, Optional, Protocol
+from collections.abc import Iterable
 
 from core.growth.ads_config_fingerprint import ads_config_fingerprint
 

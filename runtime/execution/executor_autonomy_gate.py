@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from types import SimpleNamespace
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from core.tenancy.normalization import require_tenant_id
 from runtime.decision import DecisionEnvelope

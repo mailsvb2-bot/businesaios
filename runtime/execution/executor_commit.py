@@ -10,7 +10,8 @@ No business logic lives here.
 """
 
 import importlib
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from reliability.outbox_store import OutboxMessage, OutboxState, canonical_payload_digest
 

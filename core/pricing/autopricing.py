@@ -16,7 +16,8 @@ safe-by-construction when used in read-only mode.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, List, Optional
+from collections.abc import Iterable
 
 from core.pricing.rl_picker import RLPricingConfig, choose_price_rub
 from core.pricing.stop_loss import StopLossConfig, should_apply_price

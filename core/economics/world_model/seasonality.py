@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from collections.abc import Iterable
 
 from config.economics_world_model_policy import (
     DEFAULT_DOW_SEASONALITY_POLICY,

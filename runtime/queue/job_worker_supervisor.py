@@ -13,7 +13,7 @@ It must not introduce queue policy or a second decision center.
 
 from dataclasses import dataclass
 from threading import Lock, Thread
-from typing import Iterable
+from collections.abc import Iterable
 
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.job_stop_token import JobStopToken

@@ -12,7 +12,8 @@ This is intentionally dumb and explicit.
 """
 
 from dataclasses import dataclass
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
+from collections.abc import Mapping
 
 UserRole = Literal["owner", "marketer", "operator"]
 

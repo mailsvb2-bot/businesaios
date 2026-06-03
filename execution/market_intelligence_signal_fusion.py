@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from difflib import SequenceMatcher
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from contracts.platforms.market_intelligence_advanced_contract import UnifiedSignal
 from execution.market_intelligence_advanced_models import EntityCandidate
