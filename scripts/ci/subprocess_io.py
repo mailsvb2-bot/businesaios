@@ -4,9 +4,9 @@ import os
 import shlex
 import subprocess
 import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence
 
 from scripts.ci.paths import repo_root
 
@@ -38,6 +38,7 @@ def _base_env() -> dict[str, str]:
     env["PYTHONNOUSERSITE"] = "1"
     env["PYTHONPATH"] = str(repo_root())
     return env
+
 
 def run_command(
     command: Sequence[str],
@@ -121,17 +122,7 @@ def run_pytest(args: Sequence[str], *, timeout: float | None = None) -> CommandO
         command = [sys.executable, "-c", wrapper, *args_with_plugins[2:]]
     else:
         command = [sys.executable, *args_with_plugins]
-    return run_command(
-        command,
-        env={"PYTHONNOUSERSITE": "1", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"},
-        timeout=timeout,
-    )
+    return run_command(command, timeout=timeout)
 
 
-__all__ = [
-    "CommandOutcome",
-    "PYTEST_REQUIRED_PLUGINS",
-    "run_command",
-    "run_python",
-    "run_pytest",
-]
+__all__ = ["CommandOutcome", "run_command", "run_python", "run_pytest"]

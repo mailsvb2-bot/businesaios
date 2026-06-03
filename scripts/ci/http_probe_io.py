@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from typing import Mapping
+from collections.abc import Mapping
 
 CANON_CI_HTTP_PROBE_IO = True
 
