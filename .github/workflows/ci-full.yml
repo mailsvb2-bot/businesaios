@@ -4,7 +4,7 @@ on:
   pull_request:
 jobs:
   full-311:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, businesaios]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,7 +25,7 @@ jobs:
           path: artifacts/ci
           if-no-files-found: warn
   full-312:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, businesaios]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
