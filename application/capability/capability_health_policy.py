@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timezone
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 CANON_CAPABILITY_HEALTH_POLICY = True
 

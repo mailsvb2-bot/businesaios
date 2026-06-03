@@ -5,7 +5,8 @@ import os
 import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from application.planning.long_horizon_planner import LongHorizonPlanner
 from execution.goal_family_classifier import GoalFamilyClassifier

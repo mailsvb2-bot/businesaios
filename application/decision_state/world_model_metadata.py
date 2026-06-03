@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Optional
+from collections.abc import Mapping
 
 
 def _jsonable(value: Any) -> Any:

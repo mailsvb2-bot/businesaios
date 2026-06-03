@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 from application.world_state.boundary_rules import assert_world_state_boundary
 from application.world_state.creative_state_builder import build_creative_state

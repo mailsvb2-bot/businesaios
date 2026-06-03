@@ -5,7 +5,8 @@ import os
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 CANON_RETRY_LEARNING_STORE = True
 

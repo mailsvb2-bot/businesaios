@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Optional
+from collections.abc import Mapping
 
 from application.business_autonomy.channel_adapter_registry import TypedChannelAdapterRegistry
 from application.business_autonomy.channel_backed_adapter import ChannelBackedBusinessAdapter

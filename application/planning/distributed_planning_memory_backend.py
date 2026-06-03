@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timezone
-from typing import Any, Mapping, Protocol
+from typing import Any, Protocol
+from collections.abc import Mapping
 
 from core.tenancy.normalization import require_tenant_id
 

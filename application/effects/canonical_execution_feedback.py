@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from application.effects.effect_outcome_vocabulary import normalize_outcome_status, outcome_is_verified
 

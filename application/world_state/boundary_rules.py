@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from importlib import import_module
-from typing import Mapping
+from collections.abc import Mapping
 
 
 def assert_world_state_boundary(advisory_flags: Mapping[str, str]) -> None:

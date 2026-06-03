@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence, Tuple
+from typing import Tuple
+from collections.abc import Sequence
 
 
 @dataclass(frozen=True)

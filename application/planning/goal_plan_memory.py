@@ -5,7 +5,8 @@ import os
 import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 CANON_GOAL_PLAN_MEMORY = True
 GOAL_PLAN_SCHEMA_VERSION = 1

@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, is_dataclass, replace
 from datetime import UTC, datetime
-from typing import Any, Mapping, MutableMapping
+from typing import Any
+from collections.abc import Mapping, MutableMapping
 
 from application.effects.effect_outcome_vocabulary import normalize_outcome_status, outcome_is_verified
 from application.evidence.evidence_feedback_state import apply_feedback_to_world_state as _apply_feedback_world_state

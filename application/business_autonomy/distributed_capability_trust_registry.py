@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timezone
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Protocol
+from collections.abc import Mapping, Sequence
 
 from application.business_autonomy.contracts import BusinessCapability, CapabilityKind
 from application.business_autonomy.registry import RegisteredBusinessCapabilities

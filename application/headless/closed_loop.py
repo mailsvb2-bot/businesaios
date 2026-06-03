@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Mapping
+from typing import TYPE_CHECKING, Any
+from collections.abc import Mapping
 
 if TYPE_CHECKING:  # pragma: no cover
     from contracts.action_result import ActionResult

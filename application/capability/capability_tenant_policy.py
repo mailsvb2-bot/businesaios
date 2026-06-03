@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from application.autonomy.autonomy_tiers import ALLOWED_AUTONOMY_TIERS
 from application.capability.capability_matrix import CapabilityRecord
