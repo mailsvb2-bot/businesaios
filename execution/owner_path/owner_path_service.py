@@ -1,7 +1,8 @@
 from __future__ import annotations
 import json
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 from application.memory.business_operating_memory import project_business_memory_governance_summary
 from execution.owner_path.owner_path_contract import OWNER_PATH_STAGES, OwnerPathSnapshot
 CANON_OWNER_PATH_SERVICE = True

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import replace
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 from execution.strategy.dependency_graph import DependencyGraph
 from execution.strategy.goal_conflict_resolver import GoalConflictResolver
 from execution.strategy.goal_decomposer import GoalDecomposer

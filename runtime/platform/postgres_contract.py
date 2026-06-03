@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Mapping
+from collections.abc import Mapping
 
 from runtime.execution.crash_window_recovery_contract import CrashWindowRecoveryAction
 

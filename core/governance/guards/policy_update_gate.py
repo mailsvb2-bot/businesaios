@@ -3,7 +3,8 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from threading import Lock
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Optional
+from collections.abc import Iterable
 
 from core.events.log import EventLog
 

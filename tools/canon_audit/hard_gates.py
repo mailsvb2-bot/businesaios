@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import List, Sequence
+from typing import List
+from collections.abc import Sequence
 
 from tools.canon_audit.contracts import ArchitectureViolation, HardGateResult
 

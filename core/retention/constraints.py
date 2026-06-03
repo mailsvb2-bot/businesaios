@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+from typing import Any, Dict
+from collections.abc import Mapping
 
 
 def constraints_from_retention_features(features: Mapping[str, Any]) -> dict[str, Any]:

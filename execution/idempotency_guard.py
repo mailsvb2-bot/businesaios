@@ -5,7 +5,8 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from reliability.idempotency_contract import IdempotencyDecision, IdempotencyKey, IdempotencyResolution
 from reliability.idempotency_scope import build_headless_scope

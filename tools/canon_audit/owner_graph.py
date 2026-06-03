@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from typing import Dict, List, Sequence
+from typing import Dict, List
+from collections.abc import Sequence
 
 from tools.canon_audit.contracts import ArchitectureViolation
 from tools.canon_audit.import_graph import collect_python_files, module_name_from_path

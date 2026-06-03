@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Mapping
+from typing import TYPE_CHECKING, Callable
+from collections.abc import Mapping
 
 if TYPE_CHECKING:
     from runtime.boot.finance_boot import StrategicFinanceRuntime

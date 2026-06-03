@@ -9,7 +9,7 @@ and the public actions registry do not each grow their own competing tables.
 
 CANON_BOOT_WIRING_ONLY = True
 
-from typing import Iterable, Sequence
+from collections.abc import Iterable, Sequence
 
 SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("admin_set_perm@v1", "runtime.handlers_ops:handle_admin_set_perm", True, "admin", 60, 60),

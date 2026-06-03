@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 from core.behavior.math.complex4 import Complex4
 from core.behavior.math.vector_ops import clamp

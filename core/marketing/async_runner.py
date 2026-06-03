@@ -6,7 +6,8 @@ Delegates to the shared canonical bridge so marketing code does not drift from
 other sync entrypoints such as runtime boot/apply surfaces.
 """
 
-from typing import Awaitable, TypeVar
+from typing import TypeVar
+from collections.abc import Awaitable
 
 import shared.asyncio_bridge as _shared_asyncio_bridge
 

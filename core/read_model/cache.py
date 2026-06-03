@@ -5,7 +5,8 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Hashable, TypeVar
+from typing import Any, Callable, TypeVar
+from collections.abc import Hashable
 
 from config.env_flags import env_float
 from config.read_model_cache_policy import (

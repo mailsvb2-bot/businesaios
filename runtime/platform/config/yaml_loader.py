@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from config.yaml_loader_shared import YamlLoadResult
 from config.yaml_loader_shared import load_yaml as _shared_load_yaml

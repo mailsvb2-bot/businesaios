@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from enum import StrEnum
 from time import time
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from runtime._internal.effect_types import EffectActionType, require_effect_action_type
 

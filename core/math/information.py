@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Iterable
+from collections.abc import Iterable
 
 
 def entropy(probabilities: Iterable[float], *, base: float = 2.0) -> float:

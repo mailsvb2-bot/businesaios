@@ -9,7 +9,8 @@ intentionally small and deterministic.
 
 import json
 import sqlite3
-from typing import Any, Dict, Iterable, List, Sequence
+from typing import Any, Dict, List
+from collections.abc import Iterable, Sequence
 
 from .sqlite_helpers import _exclusive_end_ms, _row_to_event
 

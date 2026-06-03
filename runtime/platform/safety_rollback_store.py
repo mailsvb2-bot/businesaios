@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
 from sqlite3 import Connection
-from typing import Iterator
+from collections.abc import Iterator
 
 from core.safety.controls.rollback_engine.models import (
     RollbackAction,

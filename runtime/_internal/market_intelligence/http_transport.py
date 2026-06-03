@@ -6,7 +6,8 @@ import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from runtime._internal.http_transport import sync_request, url_with_params
 

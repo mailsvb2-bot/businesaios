@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
-from typing import Callable, List, Sequence, Tuple
+from typing import Callable, List, Tuple
+from collections.abc import Sequence
 
 
 @dataclass(frozen=True)

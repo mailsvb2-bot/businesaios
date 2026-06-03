@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from core.behavior.dirac_operator_keys import required_operator_keys
 from core.behavior.operator_catalogs import OperatorCatalogKey, OperatorCatalogResolver

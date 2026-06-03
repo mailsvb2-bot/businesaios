@@ -8,7 +8,8 @@ one-shot operator override path. It never creates a second decision path.
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 from uuid import uuid4
 
 from contracts.action_impact_contract import ActionExecutionContext, ActionImpact

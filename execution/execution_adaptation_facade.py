@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.autonomy_learning_context_policy import AutonomyLearningContextPolicy
 from execution.capability_health_policy import CapabilityHealthPolicy

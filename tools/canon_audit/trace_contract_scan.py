@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
-from typing import List, Sequence, Set
+from typing import List, Set
+from collections.abc import Sequence
 
 from canon.trace_contracts import CANONICAL_TRACE_STAGES
 from tools.canon_audit.contracts import ArchitectureViolation

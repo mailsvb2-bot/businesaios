@@ -12,7 +12,8 @@ import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from core.tenancy.normalization import require_tenant_id
 

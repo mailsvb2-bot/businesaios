@@ -9,7 +9,8 @@ Core code MUST depend on this Protocol only (no platform_layer imports).
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Protocol
+from typing import Any, Protocol
+from collections.abc import Iterable
 
 
 class RetentionStore(Protocol):

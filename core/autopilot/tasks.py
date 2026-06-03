@@ -6,7 +6,8 @@ Autopilot should always output 1-3 concrete tasks for the owner.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping
+from typing import Any, Dict, List
+from collections.abc import Mapping
 
 
 @dataclass(frozen=True)

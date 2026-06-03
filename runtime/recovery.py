@@ -10,7 +10,8 @@ logic or alternate execution workflow.
 
 import logging
 from types import SimpleNamespace
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from runtime.execution.executor_commit import (
     _decision_tenant_id,

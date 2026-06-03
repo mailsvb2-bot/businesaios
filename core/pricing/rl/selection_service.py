@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
+from collections.abc import Iterable
 
 from core.pricing.rl.guard import PricingSelectionContext
 from core.pricing.rl.scoring import score_candidates

@@ -6,7 +6,8 @@ No dependency on Span/emit_span; safe to import from anywhere.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from config.observability_perf_policy import DEFAULT_OBSERVABILITY_PERF_POLICY, ObservabilityPerfPolicy
 

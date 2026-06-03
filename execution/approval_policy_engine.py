@@ -8,7 +8,8 @@ It never chooses actions and never bypasses governance.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from contracts.action_impact_contract import ActionCategory, ActionExecutionContext, ActionImpact
 from governance.change_control_policy import ChangeControlDecision, ChangeControlPolicy

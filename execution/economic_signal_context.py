@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.channel_roi_memory import ChannelROIMemory
 from execution.pre_action_economic_forecast import PreActionEconomicForecastBuilder

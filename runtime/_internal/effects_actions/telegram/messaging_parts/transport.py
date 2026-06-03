@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from runtime._internal.effects_actions.telegram.messaging_parts.tracking import emit_warning
 from runtime.messaging.bridge import get_multichannel_effects_bridge

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Iterable
+from collections.abc import Iterable
 
 from contracts.platforms.market_intelligence_advanced_contract import UnifiedSignal
 

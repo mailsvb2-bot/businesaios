@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
+from typing import List, Optional
+from collections.abc import Iterable
 
 from .experience_store import RLStep
 
@@ -85,7 +86,7 @@ def _propensity(step: RLStep) -> float:
 
 
 from dataclasses import dataclass
-from typing import Sequence
+from collections.abc import Sequence
 
 
 @dataclass(frozen=True)

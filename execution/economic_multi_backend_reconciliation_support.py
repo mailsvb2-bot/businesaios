@@ -2,7 +2,8 @@ from __future__ import annotations
 
 """Support owner for execution.economic_multi_backend_reconciliation."""
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.economic_backend_authority import EconomicBackendAuthorityResolver
 from execution.economic_split_brain_guard import EconomicSplitBrainGuard

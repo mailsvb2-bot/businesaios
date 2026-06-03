@@ -7,7 +7,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from sqlite3 import IntegrityError
-from typing import Iterator
+from collections.abc import Iterator
 
 from billing.commercial_cycle_contract import CommercialCollectionResult
 from billing.ledger_event import LedgerEntry, LedgerPosting

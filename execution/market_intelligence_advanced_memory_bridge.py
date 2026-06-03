@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from contracts.platforms.market_intelligence_advanced_contract import OpportunityEvidence, UnifiedSignal
 

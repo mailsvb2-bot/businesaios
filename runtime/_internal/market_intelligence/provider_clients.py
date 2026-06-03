@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable
+from collections.abc import Mapping
 
 from contracts.platforms.market_intelligence_advanced_contract import ProviderCursor
 from runtime._internal.market_intelligence.cursor_store import FileProviderCursorStore

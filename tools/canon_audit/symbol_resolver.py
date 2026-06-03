@@ -3,7 +3,8 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, Sequence
+from typing import Dict, Optional
+from collections.abc import Sequence
 
 from tools.canon_audit.import_graph import collect_python_files, module_name_from_path
 from tools.canon_audit.symbol_table import build_symbol_tables

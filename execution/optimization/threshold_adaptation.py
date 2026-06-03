@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Iterable
+from collections.abc import Iterable
 
 from execution.optimization.adaptation_metrics import bounded_delta, clamp, ewma
 from execution.optimization.feedback_pipeline import AdaptationObservation

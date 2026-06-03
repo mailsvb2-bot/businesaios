@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 ADS_APPLY_SETTING_KEY = "ads:apply_enabled"
 ADS_APPLY_ENABLED_SINCE_MS_KEY = "ads:apply_enabled_since_ms"

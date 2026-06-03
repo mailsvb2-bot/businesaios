@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import time
-from typing import Any, Callable, Mapping
+from typing import Any, Callable
+from collections.abc import Mapping
 
 from execution.market_intelligence_business_memory_bridge import MarketIntelligenceBusinessMemoryBridge
 from execution.market_intelligence_circuit_breaker import MarketIntelligenceCircuitBreaker

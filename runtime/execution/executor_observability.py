@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from connectors.platform.connector_observability import ConnectorExecutionEvent
 from observability.execution_trace_contract import DecisionTraceEvent

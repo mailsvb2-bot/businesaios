@@ -8,7 +8,8 @@ planning, provider ranking, or any alternate decision path.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from runtime.runtime_observability import RuntimeObservability
 

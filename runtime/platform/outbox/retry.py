@@ -10,7 +10,8 @@ Deterministic orchestration layer:
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, Iterable, Protocol
+from typing import Any, Dict, Protocol
+from collections.abc import Iterable
 
 from reliability.dead_letter_policy import DeadLetterPolicy
 from reliability.outbox_store import OutboxMessage

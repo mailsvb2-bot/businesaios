@@ -14,7 +14,8 @@ Design:
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Optional, Protocol, Tuple
+from typing import Any, Dict, Optional, Protocol, Tuple
+from collections.abc import Iterable
 
 from core.events.log import EventLog
 from core.events.read_call import call_latest_event, call_latest_events

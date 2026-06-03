@@ -15,7 +15,8 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from runtime.platform._delivery_state_codec import merge_metadata as _merge_metadata
 from runtime.platform._delivery_state_codec import metadata_json as _metadata_json

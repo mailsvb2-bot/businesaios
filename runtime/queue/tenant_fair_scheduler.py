@@ -11,7 +11,7 @@ Operational only:
 
 from dataclasses import dataclass
 from threading import RLock
-from typing import Iterable
+from collections.abc import Iterable
 
 from core.tenancy.normalization import require_tenant_id
 from runtime.queue.job_contract import normalize_now

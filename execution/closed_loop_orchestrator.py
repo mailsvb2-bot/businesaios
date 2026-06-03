@@ -12,7 +12,8 @@ from execution.economic_schema_migration_matrix import EconomicSchemaMigrationMa
 
 from contextlib import nullcontext
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 from pathlib import Path
 import hashlib
 import json

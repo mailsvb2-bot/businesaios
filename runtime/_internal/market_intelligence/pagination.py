@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any, Callable
+from collections.abc import Iterable, Mapping
 
 CANON_MARKET_INTELLIGENCE_PAGINATION = True
 

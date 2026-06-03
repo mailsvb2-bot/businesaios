@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timezone
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from application.business_autonomy.provider_admin_contract import ProviderActivationStatus
 from core.tenancy.normalization import require_tenant_id

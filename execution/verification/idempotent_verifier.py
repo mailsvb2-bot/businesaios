@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from hashlib import sha256
-from typing import Iterable
+from collections.abc import Iterable
 from execution.verification.evidence_types import EvidenceItem
 from execution.verification.verification_contract import VerificationDecision, VerificationRequest
 CANON_IDEMPOTENT_VERIFIER = True

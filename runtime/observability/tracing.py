@@ -10,7 +10,8 @@ Goals:
 
 import contextvars
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any
+from collections.abc import Iterator
 
 from runtime.observability.error_handling import swallow
 from runtime.observability.perf import Span, emit_sla_violation

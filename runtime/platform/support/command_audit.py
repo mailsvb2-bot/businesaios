@@ -9,7 +9,7 @@ This module makes those invocations inspectable instead of only printing to stde
 import json
 import os
 from pathlib import Path
-from typing import Mapping
+from collections.abc import Mapping
 
 
 def _audit_path() -> Path | None:

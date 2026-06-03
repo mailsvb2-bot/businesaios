@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping
+from collections.abc import Mapping
 
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from runtime.business_autonomy.provider_probe_observability_payload import (

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Set
+from typing import Dict, List, Set
+from collections.abc import Iterable
 
 from canon.module_manifests import DEFAULT_CANON_MODULE_MANIFESTS, CanonModuleManifest
 from tools.canon_audit.contracts import SymbolRef

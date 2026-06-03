@@ -3,7 +3,8 @@ from __future__ import annotations
 import base64
 import os
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from contracts.platforms.market_intelligence_provider_catalog import (
     PROVIDER_ALIASES,

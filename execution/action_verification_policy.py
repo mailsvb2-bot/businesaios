@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 CANON_ACTION_VERIFICATION_POLICY = True
 _MODES = {"auto", "required", "not_required"}

@@ -2,7 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 CANON_VERIFICATION_EVIDENCE_TYPES = True
 EVIDENCE_KIND_EXECUTION_RECEIPT = "execution_receipt"
 EVIDENCE_KIND_ROUTER_RESULT = "router_result"

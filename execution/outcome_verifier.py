@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.effect_evidence import EffectEvidenceBundle
 from application.effects.effect_outcome_vocabulary import normalize_outcome_status, outcome_is_verified

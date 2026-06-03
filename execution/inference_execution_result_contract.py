@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping
+from collections.abc import Mapping
 
 from execution.inference_provider_contract import InferenceResponse
 from execution.inference_result_verifier import InferenceVerificationOutcome

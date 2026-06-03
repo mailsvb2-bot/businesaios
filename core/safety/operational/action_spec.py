@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping
+from collections.abc import Mapping
 
 from contracts.action_impact_contract import ActionCategory
 
@@ -59,4 +59,4 @@ class ActionOperationalSpec:
 __all__ = [
     "ActionCostPolicy",
     "ActionOperationalSpec",
-]
+]

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.action_budget_engine import ActionBudgetDecision, ActionBudgetEngine
 from governance.economic.action_economics_model import (

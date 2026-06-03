@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from click_economics.public_api import (
     build_click_billable_fact_contract_from_client_outcome,

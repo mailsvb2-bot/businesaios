@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Iterable, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
+from collections.abc import Iterable
 
 from runtime.queue.backpressure_policy import BackpressurePolicy, BackpressureVerdict
 from runtime.queue.job_contract import JobState, normalize_now

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Iterable
+from collections.abc import Iterable
 from execution.verification.evidence_types import EvidenceItem
 CANON_EVIDENCE_CORRELATION = True
 @dataclass(frozen=True, slots=True)

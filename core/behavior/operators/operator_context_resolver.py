@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from core.behavior.operators.operator_runtime_context import OperatorRuntimeContext
 from core.tenancy.normalization import normalize_tenant_id

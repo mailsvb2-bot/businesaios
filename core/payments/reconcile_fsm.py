@@ -11,7 +11,8 @@ Keep it minimal: the actual IO happens in effects_impl.
 """
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Optional
+from collections.abc import Mapping
 
 
 @dataclass(frozen=True)

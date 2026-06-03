@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
 RUNTIME_RELEASE_EXCLUDE_DIR_NAMES = {
     '.git',

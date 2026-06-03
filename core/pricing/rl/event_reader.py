@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
+from collections.abc import Iterable
 
 
 def iter_events(event_store: Any, *, tenant_id: str, start_ms: int, end_ms: int, event_type: str) -> Iterable[dict[str, Any]]:

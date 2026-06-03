@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Mapping
+from typing import Callable
+from collections.abc import Mapping
 
 from interfaces.market_intelligence.adspy import AdspyConnector
 from interfaces.market_intelligence.ahrefs import AhrefsConnector

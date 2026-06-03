@@ -13,7 +13,8 @@ logging / observability entirely.
 import logging
 import time
 import uuid
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from runtime.observability import bind
 

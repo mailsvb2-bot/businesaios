@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping, Tuple
+from typing import Any, Tuple
+from collections.abc import Mapping
 
 from runtime.modules.decision_service_contract import build_decision_service_descriptor
 from runtime.modules.module_protocol import ModuleWiringContext, ProductRuntimeView

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Mapping
+from collections.abc import Mapping
 from uuid import uuid4
 
 from runtime.monetization.contracts import (

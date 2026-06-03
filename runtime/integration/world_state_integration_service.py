@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from collections.abc import Mapping
 
 from runtime.advisory.autonomy_advisory_packet import AutonomyAdvisoryPacket
 from runtime.creative import CreativeIntelligenceSnapshot

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Iterable
+from collections.abc import Iterable
 from execution.strategy.planner_state_contract import StrategicGoalRecord
 CANON_PORTFOLIO_ALLOCATOR = True
 class PortfolioAllocator:

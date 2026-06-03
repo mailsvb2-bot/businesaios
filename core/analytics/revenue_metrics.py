@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Any, Iterable, Protocol
+from typing import Any, Protocol
+from collections.abc import Iterable
 
 from config.revenue_metrics_policy import DEFAULT_REVENUE_METRICS_POLICY, RevenueMetricsPolicy
 from core.contracts.event_types import OFFER_CLICKED, OFFER_SHOWN, PURCHASE_FAILED, PURCHASE_SUCCESS

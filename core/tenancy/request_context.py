@@ -17,7 +17,8 @@ Fallback behavior:
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from typing import Iterator, Optional
+from typing import Optional
+from collections.abc import Iterator
 
 from core.tenancy.scope import TenantId, as_tenant_id
 from core.tenancy.tenant import current_tenant_id

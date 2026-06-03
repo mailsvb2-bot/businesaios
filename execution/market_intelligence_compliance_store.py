@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import os
 from threading import RLock
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from governance.persistence_codec import atomic_write_json, read_json_or_default
 

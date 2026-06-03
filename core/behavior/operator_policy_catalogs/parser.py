@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from core.behavior.operator_policy_catalogs.models import OperatorPolicyCatalog, OperatorPolicyRule
 from core.behavior.operators.operator_keys import ALL_OPERATOR_KEYS

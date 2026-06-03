@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timezone
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from core.tenancy.normalization import normalize_tenant_scope
 from core.utils.call_signature import accepts_keyword

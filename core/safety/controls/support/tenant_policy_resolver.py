@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from config.decision_safety_policy import (
     DEFAULT_REWARD_GUARD_POLICY_DEFAULTS,

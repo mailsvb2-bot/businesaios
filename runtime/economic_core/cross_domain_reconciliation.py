@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 CANON_RUNTIME_ECONOMIC_CORE_CROSS_DOMAIN_RECONCILIATION = True
 

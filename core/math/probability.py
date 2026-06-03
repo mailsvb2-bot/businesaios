@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from collections.abc import Mapping
 
 
 def bayes(p_b_given_a: float, p_a: float, p_b: float) -> float:

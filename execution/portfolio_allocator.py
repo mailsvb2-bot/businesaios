@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.business_roi_registry import BusinessROIRegistry
 from execution.capital_allocation_policy import CapitalAllocationPolicy

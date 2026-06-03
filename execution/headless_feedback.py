@@ -6,7 +6,8 @@ Kept as a thin file because arch locks inspect this exact path. The capability
 view must be merged from action payload and normalized output only.
 """
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.capability_operator_view import merge_capability_views, normalize_capability_view
 from application.headless.feedback import CANON_HEADLESS_FEEDBACK_READER, SimpleHeadlessFeedbackReader

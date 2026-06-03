@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from runtime.messaging_capability.channel_health import ChannelHealth

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from typing import Iterable
+from collections.abc import Iterable
 
 from contracts.platforms.market_intelligence_advanced_contract import OpportunityEvidence, UnifiedSignal
 from execution.market_intelligence_scoring import EvidenceScoringEngine

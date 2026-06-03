@@ -5,7 +5,8 @@ CANON_BOOT_WIRING_ONLY = True
 
 
 from types import SimpleNamespace
-from typing import Any, Mapping, MutableMapping
+from typing import Any
+from collections.abc import Mapping, MutableMapping
 
 
 def attach_route_surface(

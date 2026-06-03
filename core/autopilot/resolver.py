@@ -8,7 +8,8 @@ Source of truth:
 - config/autopilot/default.yaml
 """
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from core.autopilot.loader import load_autopilot_contract_from_env
 

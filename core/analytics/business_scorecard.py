@@ -4,7 +4,8 @@ import math
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
+from collections.abc import Iterable, Mapping, Sequence
 
 from core.contracts.business_scorecard import (
     AnalyticsDiagnosis,

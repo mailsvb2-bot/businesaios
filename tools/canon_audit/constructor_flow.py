@@ -3,7 +3,8 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional
+from collections.abc import Sequence
 
 from tools.canon_audit.import_graph import collect_python_files, module_name_from_path
 from tools.canon_audit.symbol_resolver import ResolvedRef, build_bindings_index, resolve_local_name

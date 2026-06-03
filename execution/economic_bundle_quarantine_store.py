@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Mapping, Protocol
+from typing import Any, Protocol
+from collections.abc import Mapping
 
 CANON_ECONOMIC_BUNDLE_QUARANTINE_STORE = True
 

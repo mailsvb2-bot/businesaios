@@ -6,7 +6,8 @@ import json
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 CANON_PLATFORM_SECURITY_SQLITE_STORES = True
 

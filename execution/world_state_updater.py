@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, is_dataclass, replace
 from datetime import UTC, datetime
-from typing import Any, Mapping, MutableMapping
+from typing import Any
+from collections.abc import Mapping, MutableMapping
 
 from application.effects.canonical_execution_feedback import canonical_execution_feedback, canonical_world_state_row
 

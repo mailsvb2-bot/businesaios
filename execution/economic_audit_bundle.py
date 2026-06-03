@@ -4,7 +4,8 @@ import json
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from execution.economic_bundle_quarantine import NoOpEconomicBundleQuarantine, build_quarantine_record
 from execution.economic_export_manifest import build_economic_export_manifest, manifest_payload_for_digest, validate_economic_export_manifest

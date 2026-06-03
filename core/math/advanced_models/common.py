@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Sequence
+from collections.abc import Sequence
 
 
 def require_non_empty(name: str, values: Sequence[object]) -> None:

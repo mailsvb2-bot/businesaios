@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from storage.audit_store import AuditRecord, InMemoryAuditStore
 from storage.evidence_store import EvidenceRecord, InMemoryEvidenceStore

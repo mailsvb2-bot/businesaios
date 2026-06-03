@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any, Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping
 
 from execution.optimization.feedback_pipeline import AdaptationObservation, FeedbackPipeline
 from execution.optimization.noise_guard import FeedbackNoiseGuard

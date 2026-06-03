@@ -6,7 +6,7 @@ from collections.abc import MutableMapping
 from contextlib import contextmanager
 from pathlib import Path
 from sqlite3 import Connection
-from typing import Iterator
+from collections.abc import Iterator
 
 from core.safety.controls.multi_step_approval.models import ApprovalTicket, ApprovalWorkflowState
 from runtime.platform.safety_sqlite_migrations import SafetySqliteMigrator, SchemaMigrationPlan

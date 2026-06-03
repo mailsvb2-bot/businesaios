@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from reliability.execution_checkpoint_store import ExecutionCheckpoint
 from reliability.idempotency_contract import IdempotencyKey, IdempotencyResolution

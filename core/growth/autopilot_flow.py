@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Any, Dict, Iterable
+from typing import Any, Dict
+from collections.abc import Iterable
 
 from core.actions.action_names import ADS_APPLY_EXECUTE_V1
 from core.ads.autopilot.contract import EXPECTED_DECISION_ISSUER

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping, Optional, Set
+from typing import Optional, Set
+from collections.abc import Iterable, Mapping
 
 
 @dataclass(frozen=True)

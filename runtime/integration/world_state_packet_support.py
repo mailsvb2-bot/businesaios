@@ -7,7 +7,7 @@ existing single canonical packet-building route. They do not issue decisions
 and do not contain alternate runtime wiring.
 """
 
-from typing import Mapping
+from collections.abc import Mapping
 
 from core.world_state.packet_enrichment import (
     build_advisory_notes,
