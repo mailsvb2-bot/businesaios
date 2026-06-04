@@ -19,21 +19,24 @@ def _safe_path_part(value: str) -> str:
     return clean or "unknown"
 
 
+def _github_actions_path_suffix() -> str:
+    parts = (
+        os.environ.get("GITHUB_RUN_ID", "run"),
+        os.environ.get("GITHUB_RUN_ATTEMPT", "attempt"),
+        os.environ.get("GITHUB_JOB", "job"),
+        str(os.getpid()),
+    )
+    return "-".join(_safe_path_part(part) for part in parts)
+
+
 def _pytest_bin_dir() -> Path:
     explicit = os.getenv("BUSINESAIOS_PYTEST_BIN_DIR")
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        base = Path(explicit or os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
+        return base / _github_actions_path_suffix()
+
     if explicit:
         return Path(explicit)
-
-    if os.environ.get("GITHUB_ACTIONS") == "true":
-        base = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
-        parts = (
-            os.environ.get("GITHUB_RUN_ID", "run"),
-            os.environ.get("GITHUB_RUN_ATTEMPT", "attempt"),
-            os.environ.get("GITHUB_JOB", "job"),
-            str(os.getpid()),
-        )
-        suffix = "-".join(_safe_path_part(part) for part in parts)
-        return base / "businesaios_pytest_bin" / suffix
 
     return Path(tempfile.gettempdir()) / "businesaios_pytest_bin"
 
