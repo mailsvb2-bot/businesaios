@@ -4,6 +4,7 @@ import builtins
 import os
 import shutil
 import sys
+import tempfile
 import textwrap
 from pathlib import Path
 
@@ -11,7 +12,34 @@ sys.dont_write_bytecode = True
 os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
 
 ROOT = Path(__file__).resolve().parent
-PYTEST_BIN_DIR = Path(os.getenv("BUSINESAIOS_PYTEST_BIN_DIR", "/tmp/businesaios_pytest_bin"))
+
+
+def _safe_path_part(value: str) -> str:
+    clean = "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "-" for ch in value.strip())
+    return clean or "unknown"
+
+
+def _github_actions_path_suffix() -> str:
+    parts = (
+        os.environ.get("GITHUB_RUN_ID", "run"),
+        os.environ.get("GITHUB_RUN_ATTEMPT", "attempt"),
+        os.environ.get("GITHUB_JOB", "job"),
+        str(os.getpid()),
+    )
+    return "-".join(_safe_path_part(part) for part in parts)
+
+
+def _pytest_bin_dir() -> Path:
+    explicit = os.getenv("BUSINESAIOS_PYTEST_BIN_DIR")
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        base = Path(explicit or os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
+        return base / _github_actions_path_suffix()
+
+    if explicit:
+        return Path(explicit)
+
+    return Path(tempfile.gettempdir()) / "businesaios_pytest_bin"
+
 
 class _CompatDecisionService:
     """Test-only compatibility stub for historical bare `_DecisionService()` fixtures.
@@ -24,9 +52,11 @@ class _CompatDecisionService:
     def issue(self, *args, **kwargs):
         return None
 
+
 def _install_test_builtins() -> None:
     if not hasattr(builtins, '_DecisionService'):
         builtins._DecisionService = _CompatDecisionService
+
 
 def _install_hermetic_python_wrappers() -> None:
     """Ensure pytest-spawned `python` children do not import host sitecustomize.
@@ -39,7 +69,8 @@ def _install_hermetic_python_wrappers() -> None:
     current pytest interpreter is not replaced.
     """
 
-    PYTEST_BIN_DIR.mkdir(parents=True, exist_ok=True)
+    pytest_bin_dir = _pytest_bin_dir()
+    pytest_bin_dir.mkdir(parents=True, exist_ok=True)
     site_paths = [p for p in sys.path if p and 'site-packages' in p]
     pythonpath = os.pathsep.join([str(ROOT), *site_paths])
     target = str(Path(sys.executable).resolve())
@@ -56,13 +87,14 @@ def _install_hermetic_python_wrappers() -> None:
         """
     )
     for name in ('python', 'python3'):
-        path = PYTEST_BIN_DIR / name
+        path = pytest_bin_dir / name
         path.write_text(wrapper, encoding='utf-8')
         path.chmod(0o755)
     current_path = os.environ.get('PATH', '')
-    prefix = str(PYTEST_BIN_DIR)
+    prefix = str(pytest_bin_dir)
     if not current_path.startswith(prefix + os.pathsep):
         os.environ['PATH'] = prefix + os.pathsep + current_path
+
 
 def _unlink_matching_files(base: Path, patterns: tuple[str, ...]) -> None:
     if not base.exists():
@@ -76,6 +108,7 @@ def _unlink_matching_files(base: Path, patterns: tuple[str, ...]) -> None:
                     path.unlink()
             except FileNotFoundError:
                 pass
+
 
 def _remove_runtime_artifacts() -> None:
     transient_dirs = (
@@ -100,14 +133,17 @@ def _remove_runtime_artifacts() -> None:
             except FileNotFoundError:
                 pass
 
+
 def pytest_sessionstart(session) -> None:  # type: ignore[no-untyped-def]
     _install_test_builtins()
     _install_hermetic_python_wrappers()
     _remove_runtime_artifacts()
 
+
 def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untyped-def]
     if os.environ.get('BUSINESAIOS_SESSION_FINISH_CLEANUP', '').strip() == '1':
         _remove_runtime_artifacts()
+
 
 def _item_requests_runtime_artifact_cleanup(item) -> bool:  # type: ignore[no-untyped-def]
     """Return True only for tests that explicitly request artifact cleanup."""
@@ -116,9 +152,11 @@ def _item_requests_runtime_artifact_cleanup(item) -> bool:  # type: ignore[no-un
         return True
     return item.get_closest_marker("runtime_artifacts") is not None
 
+
 def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
     if _item_requests_runtime_artifact_cleanup(item):
         _remove_runtime_artifacts()
+
 
 def pytest_runtest_teardown(item, nextitem) -> None:  # type: ignore[no-untyped-def]
     if _item_requests_runtime_artifact_cleanup(item):

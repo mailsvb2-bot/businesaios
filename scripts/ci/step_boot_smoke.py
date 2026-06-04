@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -17,16 +18,41 @@ def _write_artifact(payload: dict[str, object]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
+def _safe_path_part(value: str) -> str:
+    clean = "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "-" for ch in value.strip())
+    return clean or "unknown"
+
+
+def _boot_smoke_root() -> Path:
+    explicit = os.environ.get("BAIOS_BOOT_SMOKE_ROOT")
+    if explicit:
+        return Path(explicit)
+
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        parts = (
+            os.environ.get("GITHUB_RUN_ID", "run"),
+            os.environ.get("GITHUB_RUN_ATTEMPT", "attempt"),
+            os.environ.get("GITHUB_JOB", "job"),
+            str(os.getpid()),
+        )
+        suffix = "-".join(_safe_path_part(part) for part in parts)
+        return Path("/tmp") / "businesaios-boot-smoke" / suffix
+
+    return Path("/tmp") / "businesaios-boot-smoke"
+
+
 def _prepare_boot_smoke_env() -> None:
     """Keep the smoke deterministic without changing production semantics."""
+
+    root = _boot_smoke_root()
 
     os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
     os.environ.setdefault("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "1")
     os.environ.setdefault("APP_PROFILE", "api")
     os.environ.setdefault("ENV", "ci")
     os.environ.setdefault("RUN_MODE", "demo")
-    os.environ.setdefault("DATA_DIR", "/tmp/businesaios-boot-smoke/data/ci-demo-tenant")
-    os.environ.setdefault("RUNTIME_DIR", "/tmp/businesaios-boot-smoke/runtime")
+    os.environ.setdefault("DATA_DIR", str(root / "data" / "ci-demo-tenant"))
+    os.environ.setdefault("RUNTIME_DIR", str(root / "runtime"))
 
 
 def _route_paths(app: object) -> set[str]:

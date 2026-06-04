@@ -4,7 +4,7 @@ on:
   pull_request:
 jobs:
   fast:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, businesaios]
     strategy:
       fail-fast: false
       matrix:
@@ -19,4 +19,27 @@ jobs:
       - run: python scripts/ci/check_requirements_lock.py
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock.txt
-      - run: python -m scripts.ci.cli --gate fast
+      - name: Run canonical fast CI gate
+        env:
+          BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ matrix.python-version }}
+        run: python -m scripts.ci.cli --gate fast
+      - name: Show fast gate diagnostics
+        if: failure()
+        run: |
+          echo "== CI artifacts =="
+          find artifacts/ci -maxdepth 4 -type f -print 2>/dev/null || true
+          echo "== Failure summaries =="
+          for f in artifacts/ci/summaries/*.failure-summary.txt; do
+            [ -f "$f" ] || continue
+            echo "--- $f ---"
+            cat "$f"
+          done
+          echo "== Boot smoke artifact =="
+          [ -f artifacts/ci/boot_smoke.json ] && cat artifacts/ci/boot_smoke.json || true
+      - name: Upload fast gate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-fast-${{ matrix.python-version }}-artifacts
+          path: artifacts/ci
+          if-no-files-found: warn

@@ -13,6 +13,23 @@ from scripts.ci.paths import repo_root
 DEFAULT_TIMEOUT_SECONDS = float(os.environ.get("CI_STEP_TIMEOUT_SECONDS", "90"))
 PYTEST_REQUIRED_PLUGINS = ("pytest_asyncio.plugin",)
 
+PRESERVED_ENV_KEYS = (
+    "PATH",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "TZ",
+    "TMPDIR",
+    "LD_LIBRARY_PATH",
+    "GITHUB_ACTIONS",
+    "GITHUB_RUN_ID",
+    "GITHUB_RUN_ATTEMPT",
+    "GITHUB_JOB",
+    "RUNNER_TEMP",
+    "BAIOS_BOOT_SMOKE_ROOT",
+    "BUSINESAIOS_PYTEST_BIN_DIR",
+)
+
 
 @dataclass(frozen=True)
 class CommandOutcome:
@@ -24,9 +41,12 @@ class CommandOutcome:
 def _base_env() -> dict[str, str]:
     # Keep CI subprocesses hermetic. The execution environment can contain
     # platform-specific CUA_DD/Jupyter variables that make pytest children hang
-    # at shutdown; do not leak them into project gates.
+    # at shutdown; do not leak them into project gates. Dynamic linker paths and
+    # a narrowly-scoped GitHub runner context are intentionally preserved so
+    # self-hosted jobs can use runner-local Python builds and job-scoped temp
+    # directories without falling back to shared /tmp paths.
     env: dict[str, str] = {}
-    for key in ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "TMPDIR"):
+    for key in PRESERVED_ENV_KEYS:
         if key in os.environ:
             env[key] = os.environ[key]
     env["PYTHONUNBUFFERED"] = "1"
