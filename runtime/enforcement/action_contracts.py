@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+_ALLOWED_INLINE_PLAN_ACTIONS = frozenset({"noop@v1"})
+
 
 def extract_ids(payload: Any) -> tuple[str, str]:
     if not isinstance(payload, dict):
@@ -35,11 +37,13 @@ def validate_execute_plan_payload(*, action: str, payload: Any, schemas: Any) ->
         step_action = str(step.get("action") or "")
         if not step_action:
             raise RuntimeError("MISSING_EXECUTE_PLAN_STEP_ACTION")
+        if step_action == "execute_plan@v1":
+            raise RuntimeError("NESTED_EXECUTE_PLAN_FORBIDDEN")
+        if step_action not in _ALLOWED_INLINE_PLAN_ACTIONS:
+            raise RuntimeError("EXECUTE_PLAN_STEP_REQUIRES_SEPARATE_DECISION_ENVELOPE")
         step_ver = int(step.get("action_schema_version") or 0)
         if step_ver <= 0:
             raise RuntimeError("MISSING_EXECUTE_PLAN_STEP_VERSION")
-        if step_action == "execute_plan@v1":
-            raise RuntimeError("NESTED_EXECUTE_PLAN_FORBIDDEN")
         step_payload = {k: v for k, v in step.items() if k not in {"action", "action_schema_version"}}
         schemas.validate(step_action, step_payload, version=step_ver)
 
