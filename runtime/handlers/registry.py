@@ -6,6 +6,8 @@ from typing import Any, Callable
 
 from runtime.ports.effects import EffectsPort
 
+_ALLOWED_INLINE_PLAN_ACTIONS = frozenset({"noop@v1"})
+
 
 class ActionHandlerRegistry:
     def __init__(self) -> None:
@@ -41,6 +43,8 @@ class ActionHandlerRegistry:
             step_action = str(step.get('action'))
             if step_action == 'execute_plan@v1':
                 raise ValueError('nested execute_plan@v1 is forbidden')
+            if step_action not in _ALLOWED_INLINE_PLAN_ACTIONS:
+                raise RuntimeError('EXECUTE_PLAN_STEP_REQUIRES_SEPARATE_DECISION_ENVELOPE')
             step_payload = {k:v for k,v in step.items() if k not in {'action','action_schema_version'}}
             out.append(self.dispatch(step_action, step_payload, effects, env))
         return out
