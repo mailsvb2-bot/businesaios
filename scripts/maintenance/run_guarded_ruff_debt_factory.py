@@ -10,7 +10,7 @@ It keeps the workflow local and cost-free:
 5. commits and pushes only when the full gate is green;
 6. creates/updates a PR with `gh` only when GitHub CLI is authenticated.
 
-It does not enable unsafe Ruff fixes and relies on the guarded factory profile
+It does not enable unsafe Ruff fixes and relies on guarded factory profiles
 for preserving public API surfaces, including the F401 no-autofix rule.
 """
 
@@ -33,6 +33,18 @@ RUNTIME_ARTIFACT_PATHS = (
     "rust/businessaios_safety_core/target",
     "security/process_owner_security_audit.jsonl",
 )
+PROFILE_MODULES = {
+    "typing-compat": "scripts.maintenance.ruff_debt_factory_typing_compat",
+    "imports-compat": "scripts.maintenance.ruff_debt_factory_imports_compat",
+}
+PROFILE_BRANCH_PREFIXES = {
+    "typing-compat": "debt/ruff-typing-compat",
+    "imports-compat": "debt/ruff-imports-compat",
+}
+PROFILE_TITLES = {
+    "typing-compat": "chore: reduce Ruff typing debt via guarded factory",
+    "imports-compat": "chore: reduce Ruff import-order debt via guarded factory",
+}
 
 
 @dataclass(frozen=True)
@@ -95,10 +107,6 @@ def ensure_clean_tree() -> None:
         raise SystemExit("working tree is dirty after cleanup; refusing to continue:\n" + status)
 
 
-def current_branch() -> str:
-    return run(["git", "branch", "--show-current"], check=True).stdout.strip()
-
-
 def current_head() -> str:
     return run(["git", "rev-parse", "HEAD"], check=True).stdout.strip()
 
@@ -121,9 +129,10 @@ def full_gate(path_stdout: Path, path_stderr: Path) -> CommandResult:
 
 
 def run_factory(profile: str) -> None:
-    if profile != "typing-compat":
-        raise SystemExit(f"unsupported profile: {profile}")
-    result = run([sys.executable, "-m", "scripts.maintenance.ruff_debt_factory_typing_compat"])
+    module_name = PROFILE_MODULES.get(profile)
+    if module_name is None:
+        raise SystemExit(f"unsupported profile: {profile}; supported={sorted(PROFILE_MODULES)}")
+    result = run([sys.executable, "-m", module_name])
     write(ARTIFACT_DIR / "factory.stdout.txt", result.stdout)
     write(ARTIFACT_DIR / "factory.stderr.txt", result.stderr)
     if result.returncode != 0:
@@ -168,9 +177,9 @@ def create_or_update_pr(branch_name: str, base_branch: str, title: str, body_pat
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run guarded Ruff debt factory locally on the server.")
-    parser.add_argument("--profile", default="typing-compat", choices=("typing-compat",))
+    parser.add_argument("--profile", default="typing-compat", choices=tuple(sorted(PROFILE_MODULES)))
     parser.add_argument("--base", default="main")
-    parser.add_argument("--branch", default="", help="Debt branch. Default: debt/ruff-typing-compat/<timestamp>")
+    parser.add_argument("--branch", default="", help="Debt branch. Default: debt/ruff-<profile>/<timestamp>")
     parser.add_argument("--no-push", action="store_true", help="Do not push branch even if gate is green.")
     parser.add_argument("--no-pr", action="store_true", help="Do not create/update PR even if gh is authenticated.")
     return parser.parse_args()
@@ -179,8 +188,10 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
-    branch_name = args.branch or f"debt/ruff-typing-compat/{timestamp()}"
+    branch_prefix = PROFILE_BRANCH_PREFIXES[str(args.profile)]
+    branch_name = args.branch or f"{branch_prefix}/{timestamp()}"
     base_branch = str(args.base)
+    title = PROFILE_TITLES[str(args.profile)]
 
     emit("[server-factory] fetching base branch")
     run(["git", "fetch", "origin", base_branch], check=True)
@@ -216,7 +227,7 @@ def main() -> int:
     clean_runtime_artifacts()
 
     run(["git", "add", "-A"], check=True)
-    run(["git", "commit", "-m", "chore: reduce Ruff typing debt via guarded factory"], check=True)
+    run(["git", "commit", "-m", title], check=True)
     head_sha = current_head()
 
     summary = {
@@ -249,7 +260,7 @@ def main() -> int:
             f"Head SHA: `{head_sha}`\n"
             f"Changed files: `{len(files)}`\n",
         )
-        create_or_update_pr(branch_name, base_branch, "chore: reduce Ruff typing debt via guarded factory", body_path)
+        create_or_update_pr(branch_name, base_branch, title, body_path)
 
     emit("[server-factory] done")
     return 0
