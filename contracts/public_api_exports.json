@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "exports": [
+    {
+      "module": "canon",
+      "names": [
+        "EnforcerReport",
+        "Violation",
+        "run_enforcer"
+      ]
+    },
+    {
+      "module": "canon.canon_ai_enforcer",
+      "names": [
+        "EnforcerReport",
+        "Violation",
+        "run_enforcer"
+      ]
+    },
+    {
+      "module": "interfaces.ads.base",
+      "names": [
+        "AdsConnector",
+        "AdsConnectorError",
+        "AdsObjectRef",
+        "AdsPlatform",
+        "AdsReadConnector",
+        "AdsWriteConnector",
+        "Campaign",
+        "ConnectedAccount",
+        "MetricPoint",
+        "OAuthAuthorizeURL"
+      ]
+    },
+    {
+      "module": "tools.project_tree",
+      "names": [
+        "ProjectTreeEntry",
+        "ProjectTreeResult",
+        "ProjectTreeSummary",
+        "build_project_tree",
+        "main",
+        "render_project_tree_json",
+        "render_project_tree_text"
+      ]
+    }
+  ]
+}
