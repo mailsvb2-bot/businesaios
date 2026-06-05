@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from collections.abc import Iterable
+from pathlib import Path
 
 
 def _repo_root() -> Path:

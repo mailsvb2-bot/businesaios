@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
-from collections.abc import Iterable, Sequence
 
 PROJECT_ROOT_PREFIXES = (
     "application",

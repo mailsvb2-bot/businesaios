@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.ci.pytest_tools import run_pytest_with_report
 import scripts.ci.step_production_boot as step_production_boot
-
+from scripts.ci.pytest_tools import run_pytest_with_report
 
 _VALID_CONTRACT_DSN = "postgresql://user:pass@db.internal.invalid:5432/businesaios"
 

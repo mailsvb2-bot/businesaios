@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pathlib
 import re
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from re import Pattern
-from collections.abc import Iterable, Iterator
 
 # Small infra primitive:
 # - repo-wide scanning by line regex

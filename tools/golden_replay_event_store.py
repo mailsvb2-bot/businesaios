@@ -4,8 +4,8 @@ import argparse
 import json
 from typing import Any, Dict, List, Optional
 
-from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 from core.behavior.behavioral_state_builder import BehavioralStateBuilder
+from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
 
 def _normalize_event(e: dict[str, Any]) -> dict[str, Any]:

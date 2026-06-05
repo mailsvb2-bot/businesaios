@@ -16,10 +16,9 @@ Staging contract:
 """
 
 import ast
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Iterable
-
 
 CANON_AUDIT_TOOL_VERSION = "2026-05-11.p2"
 MAX_REPORTED_ITEMS = 25
