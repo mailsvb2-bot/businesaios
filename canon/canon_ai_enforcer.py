@@ -13,6 +13,8 @@ from canon.enforcer.checks_invariants import (
 from canon.enforcer.reporting import EnforcerReport, Violation
 from canon.enforcer.rules import REPO_ROOT
 
+__all__ = ["EnforcerReport", "Violation", "main", "run_enforcer"]
+
 
 def run_enforcer(root: str | Path = REPO_ROOT) -> EnforcerReport:
     root = Path(root)
