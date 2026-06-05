@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
 
 from tools.canon_audit.call_graph import CallEdge
 from tools.canon_audit.contracts import ArchitectureViolation
@@ -21,13 +20,25 @@ ROUTE_EXPECTATIONS = (
 )
 
 
-def scan_route_expectations(edges: List[CallEdge]) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def scan_route_expectations(edges: list[CallEdge]) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for edge in edges:
         caller_module = edge.caller_fqname.split(":")[0]
         callee_module = edge.callee_ref.split(":")[0]
         for spec in ROUTE_EXPECTATIONS:
-            if caller_module == spec.caller_prefix or caller_module.startswith(spec.caller_prefix + "."):
-                if any(callee_module == p or callee_module.startswith(p + ".") for p in spec.forbidden_callee_prefixes):
-                    violations.append(ArchitectureViolation("CANON_ROUTE_FORBIDDEN_CALL", f"Route violation [{spec.label}]: {edge.caller_fqname} -> {edge.callee_ref}", caller_module))
+            caller_matches = caller_module == spec.caller_prefix or caller_module.startswith(
+                spec.caller_prefix + "."
+            )
+            callee_forbidden = any(
+                callee_module == prefix or callee_module.startswith(prefix + ".")
+                for prefix in spec.forbidden_callee_prefixes
+            )
+            if caller_matches and callee_forbidden:
+                violations.append(
+                    ArchitectureViolation(
+                        "CANON_ROUTE_FORBIDDEN_CALL",
+                        f"Route violation [{spec.label}]: {edge.caller_fqname} -> {edge.callee_ref}",
+                        caller_module,
+                    )
+                )
     return violations
