@@ -1,0 +1,3 @@
+runner=typing-compat
+created_by=chatgpt
+purpose=trigger guarded ruff debt factory
