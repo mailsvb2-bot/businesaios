@@ -20,6 +20,12 @@ on:
         required: true
         default: true
         type: boolean
+  push:
+    branches:
+      - "debt/ruff-factory-trigger/**"
+    paths:
+      - ".github/ruff-debt-factory-trigger.txt"
+      - ".github/workflows/ruff-debt-factory.yml"
 
 permissions:
   contents: write
@@ -33,6 +39,7 @@ jobs:
     name: Run guarded Ruff debt factory
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, 'chore: reduce Ruff debt via guarded factory') }}
 
     steps:
       - name: Checkout
@@ -45,6 +52,19 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve workflow parameters
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "FACTORY_RUNNER=${{ inputs.runner }}" >> "$GITHUB_ENV"
+            echo "FACTORY_BRANCH=${{ inputs.branch_name }}" >> "$GITHUB_ENV"
+            echo "FACTORY_OPEN_PR=${{ inputs.open_pr }}" >> "$GITHUB_ENV"
+          else
+            echo "FACTORY_RUNNER=typing-compat" >> "$GITHUB_ENV"
+            echo "FACTORY_BRANCH=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+            echo "FACTORY_OPEN_PR=true" >> "$GITHUB_ENV"
+          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -74,12 +94,12 @@ jobs:
         id: factory
         run: |
           set -euo pipefail
-          case "${{ inputs.runner }}" in
+          case "${FACTORY_RUNNER}" in
             typing-compat)
               python -m scripts.maintenance.ruff_debt_factory_typing_compat
               ;;
             *)
-              echo "Unknown runner: ${{ inputs.runner }}" >&2
+              echo "Unknown runner: ${FACTORY_RUNNER}" >&2
               exit 2
               ;;
           esac
@@ -109,25 +129,25 @@ jobs:
         if: success() && env.NO_CHANGES == '0'
         run: |
           set -euo pipefail
-          BRANCH="${{ inputs.branch_name }}"
-          git switch -c "$BRANCH"
+          BRANCH="${FACTORY_BRANCH}"
+          git switch -C "$BRANCH"
           git add -A
           git commit -m "chore: reduce Ruff debt via guarded factory"
           git push --force-with-lease origin "$BRANCH"
 
       - name: Open or update PR
-        if: success() && env.NO_CHANGES == '0' && inputs.open_pr
+        if: success() && env.NO_CHANGES == '0' && env.FACTORY_OPEN_PR == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          BRANCH="${{ inputs.branch_name }}"
+          BRANCH="${FACTORY_BRANCH}"
           TITLE="chore: reduce Ruff debt via guarded factory"
           BODY_FILE="pr_body.md"
           {
             echo "## Guarded Ruff debt factory"
             echo
-            echo "Runner: \`${{ inputs.runner }}\`"
+            echo "Runner: \`${FACTORY_RUNNER}\`"
             echo "Branch: \`$BRANCH\`"
             echo
             echo "Safety constraints:"
@@ -153,7 +173,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ruff-debt-factory-${{ inputs.runner }}
+          name: ruff-debt-factory-${{ env.FACTORY_RUNNER }}
           path: |
             ruff_before.txt
             ruff_after.txt
