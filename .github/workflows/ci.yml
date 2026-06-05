@@ -24,11 +24,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.lock.txt
-      - name: Run canonical fast CI gate
+      - name: Run canonical business-critical CI gate
         env:
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ matrix.python-version }}
-        run: python -m scripts.ci.cli --gate fast
-      - name: Upload fast gate artifacts
+        run: python -m scripts.ci.cli --gate business-critical
+      - name: Upload business-critical gate artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
