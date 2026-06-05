@@ -119,7 +119,7 @@ class SqliteLedger:
                 self._db.rollback()
             except Exception:
                 swallow(__name__, 'runtime/platform/ledger/sqlite_ledger.py')
-            return False
+            raise
 
     def is_executed(self, decision_id: str) -> bool:
         assert self._db is not None
