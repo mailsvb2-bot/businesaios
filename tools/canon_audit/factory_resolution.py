@@ -9,8 +9,8 @@ from tools.canon_audit.contracts import ArchitectureViolation
 MARKERS = ("factory", "builder", "provider", "registry", "container", "resolver", "service_locator")
 
 
-def scan_factory_resolution_risks(constructor_edges: List[ConstructorEdge]) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def scan_factory_resolution_risks(constructor_edges: list[ConstructorEdge]) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for edge in constructor_edges:
         lowered_scope = edge.caller_scope.lower()
         lowered_target = edge.target_ref.lower()

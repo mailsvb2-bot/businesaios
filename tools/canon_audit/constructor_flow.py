@@ -15,7 +15,7 @@ class ConstructorEdge:
     caller_module: str
     caller_scope: str
     target_ref: str
-    assigned_name: Optional[str]
+    assigned_name: str | None
     file_path: Path
     lineno: int
 
@@ -23,25 +23,25 @@ class ConstructorEdge:
 @dataclass
 class _Frame:
     qualname: str
-    local_bindings: Dict[str, ResolvedRef] = field(default_factory=dict)
+    local_bindings: dict[str, ResolvedRef] = field(default_factory=dict)
 
 
 class _Collector(ast.NodeVisitor):
-    def __init__(self, module_name: str, file_path: Path, bindings_index: Dict[str, object]) -> None:
+    def __init__(self, module_name: str, file_path: Path, bindings_index: dict[str, object]) -> None:
         self.module_name = module_name
         self.file_path = file_path
         self.bindings_index = bindings_index
-        self.scope: List[str] = []
-        self.frames: List[_Frame] = []
-        self.edges: List[ConstructorEdge] = []
+        self.scope: list[str] = []
+        self.frames: list[_Frame] = []
+        self.edges: list[ConstructorEdge] = []
 
     def _current_scope(self) -> str:
         return ".".join(self.scope) if self.scope else "<module>"
 
-    def _frame(self) -> Optional[_Frame]:
+    def _frame(self) -> _Frame | None:
         return self.frames[-1] if self.frames else None
 
-    def _resolve_expr(self, node: ast.expr) -> Optional[ResolvedRef]:
+    def _resolve_expr(self, node: ast.expr) -> ResolvedRef | None:
         frame = self._frame()
         if isinstance(node, ast.Name):
             if frame and node.id in frame.local_bindings:
@@ -105,9 +105,9 @@ class _Collector(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def build_constructor_flow(root: Path, include_paths: Sequence[str] | None = None) -> List[ConstructorEdge]:
+def build_constructor_flow(root: Path, include_paths: Sequence[str] | None = None) -> list[ConstructorEdge]:
     bindings_index = build_bindings_index(root, include_paths=include_paths)
-    edges: List[ConstructorEdge] = []
+    edges: list[ConstructorEdge] = []
     for file_path in collect_python_files(root, include_paths=include_paths):
         module_name = module_name_from_path(root, file_path)
         text = file_path.read_text(encoding="utf-8")

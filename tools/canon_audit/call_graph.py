@@ -21,27 +21,27 @@ class CallEdge:
 @dataclass
 class _Frame:
     qualname: str
-    local_bindings: Dict[str, ResolvedRef] = field(default_factory=dict)
+    local_bindings: dict[str, ResolvedRef] = field(default_factory=dict)
 
 
 class _Collector(ast.NodeVisitor):
-    def __init__(self, module_name: str, file_path: Path, bindings_index: Dict[str, object]) -> None:
+    def __init__(self, module_name: str, file_path: Path, bindings_index: dict[str, object]) -> None:
         self.module_name = module_name
         self.file_path = file_path
         self.bindings_index = bindings_index
-        self.scope: List[str] = []
-        self.frames: List[_Frame] = []
-        self.edges: List[CallEdge] = []
+        self.scope: list[str] = []
+        self.frames: list[_Frame] = []
+        self.edges: list[CallEdge] = []
 
-    def _current_fqname(self) -> Optional[str]:
+    def _current_fqname(self) -> str | None:
         if not self.scope:
             return None
         return f"{self.module_name}:{'.'.join(self.scope)}"
 
-    def _frame(self) -> Optional[_Frame]:
+    def _frame(self) -> _Frame | None:
         return self.frames[-1] if self.frames else None
 
-    def _resolve_expr(self, node: ast.expr) -> Optional[ResolvedRef]:
+    def _resolve_expr(self, node: ast.expr) -> ResolvedRef | None:
         frame = self._frame()
         if isinstance(node, ast.Name):
             if frame and node.id in frame.local_bindings:
@@ -109,9 +109,9 @@ class _Collector(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def build_call_graph(root: Path, include_paths: Sequence[str] | None = None) -> List[CallEdge]:
+def build_call_graph(root: Path, include_paths: Sequence[str] | None = None) -> list[CallEdge]:
     bindings_index = build_bindings_index(root, include_paths=include_paths)
-    edges: List[CallEdge] = []
+    edges: list[CallEdge] = []
     for file_path in collect_python_files(root, include_paths=include_paths):
         module_name = module_name_from_path(root, file_path)
         text = file_path.read_text(encoding="utf-8")

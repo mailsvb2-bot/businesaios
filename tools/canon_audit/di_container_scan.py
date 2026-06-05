@@ -11,8 +11,8 @@ from tools.canon_audit.import_graph import collect_python_files, module_name_fro
 MARKERS = ("container", "service_locator", "registry", "provider_map", "bindings", "injector", "resolver", "wiring")
 
 
-def scan_di_container_antipatterns(root: Path, include_paths: Sequence[str] | None = None) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def scan_di_container_antipatterns(root: Path, include_paths: Sequence[str] | None = None) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for file_path in collect_python_files(root, include_paths=include_paths):
         module_name = module_name_from_path(root, file_path)
         text = file_path.read_text(encoding="utf-8")

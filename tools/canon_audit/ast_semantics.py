@@ -26,8 +26,8 @@ def _looks_like_business_name(name: str) -> bool:
     return any(m in lowered for m in ("score", "penalty", "threshold", "confidence", "risk", "bonus", "weight", "window", "limit", "budget"))
 
 
-def scan_hidden_semantic_numeric_heuristics(root: Path, include_paths: Sequence[str] | None = None) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def scan_hidden_semantic_numeric_heuristics(root: Path, include_paths: Sequence[str] | None = None) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for file_path in collect_python_files(root, include_paths=include_paths):
         module_name = module_name_from_path(root, file_path)
         if _is_allowed(module_name):

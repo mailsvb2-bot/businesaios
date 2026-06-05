@@ -6,8 +6,8 @@ from tools.canon_audit.constructor_flow import ConstructorEdge
 from tools.canon_audit.contracts import ArchitectureViolation
 
 
-def scan_provider_wiring(constructor_edges: List[ConstructorEdge]) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def scan_provider_wiring(constructor_edges: list[ConstructorEdge]) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for edge in constructor_edges:
         caller = edge.caller_module
         target = edge.target_ref.split(":")[0]

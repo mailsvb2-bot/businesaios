@@ -45,7 +45,7 @@ def _matches_include_paths(file_path: Path, root: Path, include_paths: Sequence[
     return any(rel == prefix or rel.startswith(prefix.rstrip('/') + '/') for prefix in include_paths)
 
 
-def collect_python_files(root: Path, include_paths: Sequence[str] | None = None) -> List[Path]:
+def collect_python_files(root: Path, include_paths: Sequence[str] | None = None) -> list[Path]:
     ignored = {".venv", "__pycache__", ".git", ".mypy_cache", ".pytest_cache", ".ruff_cache"}
     return sorted(
         p
@@ -54,11 +54,11 @@ def collect_python_files(root: Path, include_paths: Sequence[str] | None = None)
     )
 
 
-def parse_imports_for_file(root: Path, file_path: Path) -> List[ImportEdge]:
+def parse_imports_for_file(root: Path, file_path: Path) -> list[ImportEdge]:
     source_module = module_name_from_path(root, file_path)
     text = file_path.read_text(encoding="utf-8")
     tree = ast.parse(text, filename=str(file_path))
-    edges: List[ImportEdge] = []
+    edges: list[ImportEdge] = []
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -80,8 +80,8 @@ def parse_imports_for_file(root: Path, file_path: Path) -> List[ImportEdge]:
     return edges
 
 
-def build_import_graph(root: Path, include_paths: Sequence[str] | None = None) -> List[ImportEdge]:
-    edges: List[ImportEdge] = []
+def build_import_graph(root: Path, include_paths: Sequence[str] | None = None) -> list[ImportEdge]:
+    edges: list[ImportEdge] = []
     for file_path in collect_python_files(root, include_paths=include_paths):
         edges.extend(parse_imports_for_file(root, file_path))
     return edges
@@ -91,19 +91,19 @@ def _is_internal(name: str) -> bool:
     return any(name == p or name.startswith(p + ".") for p in PROJECT_ROOT_PREFIXES)
 
 
-def internal_import_edges(edges: Iterable[ImportEdge]) -> List[ImportEdge]:
+def internal_import_edges(edges: Iterable[ImportEdge]) -> list[ImportEdge]:
     return [e for e in edges if _is_internal(e.source) and _is_internal(e.target)]
 
 
-def detect_cycles(edges: Iterable[ImportEdge]) -> List[Tuple[str, ...]]:
-    adjacency: Dict[str, Set[str]] = {}
+def detect_cycles(edges: Iterable[ImportEdge]) -> list[tuple[str, ...]]:
+    adjacency: dict[str, set[str]] = {}
     for edge in edges:
         adjacency.setdefault(edge.source, set()).add(edge.target)
 
-    visited: Set[str] = set()
-    active: Set[str] = set()
-    stack: List[str] = []
-    cycles: List[Tuple[str, ...]] = []
+    visited: set[str] = set()
+    active: set[str] = set()
+    stack: list[str] = []
+    cycles: list[tuple[str, ...]] = []
 
     def dfs(node: str) -> None:
         visited.add(node)
@@ -122,7 +122,7 @@ def detect_cycles(edges: Iterable[ImportEdge]) -> List[Tuple[str, ...]]:
         if node not in visited:
             dfs(node)
 
-    result: List[Tuple[str, ...]] = []
+    result: list[tuple[str, ...]] = []
     seen = set()
     for cycle in cycles:
         if cycle not in seen:

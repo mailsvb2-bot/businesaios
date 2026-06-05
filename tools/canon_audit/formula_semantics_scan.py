@@ -24,8 +24,8 @@ def _contains_formula(node: ast.AST) -> bool:
     return False
 
 
-def scan_formula_semantics_outside_policy(root: Path, include_paths: Sequence[str] | None = None) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def scan_formula_semantics_outside_policy(root: Path, include_paths: Sequence[str] | None = None) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for file_path in collect_python_files(root, include_paths=include_paths):
         module_name = module_name_from_path(root, file_path)
         if any(module_name == p or module_name.startswith(p + ".") for p in ALLOWED_PREFIXES):

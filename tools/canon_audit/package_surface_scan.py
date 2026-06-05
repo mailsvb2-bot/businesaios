@@ -14,8 +14,8 @@ def scan_package_root_surfaces(
     export_threshold: int = 20,
     import_threshold: int = 25,
     include_paths: Sequence[str] | None = None,
-) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for file_path in collect_python_files(root, include_paths=include_paths):
         if file_path.name != "__init__.py":
             continue
