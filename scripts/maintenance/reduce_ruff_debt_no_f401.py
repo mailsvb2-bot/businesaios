@@ -7,23 +7,20 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from scripts.ci.config import project_shape_config
-
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "artifacts" / "ci" / "ruff_debt_reduction_no_f401"
 
+# This runner intentionally matches the canonical full debt command:
+#     python -m ruff check .
+#
 # F401 is intentionally excluded from auto-fix. In this repository many imports
 # are public API re-exports in __init__.py, *_surface.py, base.py and canonical
 # compatibility modules. Removing them can break runtime boot while looking like
 # a harmless style cleanup.
 AUTO_FIX_SELECT = "E,I,UP,SIM,B007,B009,B010,B013,B014,B023,B026,B904"
 AUTO_FIX_IGNORE = "F401"
-
-
-def _targets() -> list[str]:
-    cfg = project_shape_config(ROOT)
-    return [str(ROOT / target) for target in cfg.quality_targets]
+TARGETS = ["."]
 
 
 def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
@@ -35,8 +32,8 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def _ruff_json(name: str, targets: list[str]) -> list[dict[str, Any]]:
-    proc = _run([sys.executable, "-m", "ruff", "check", *targets, "--output-format", "json"])
+def _ruff_json(name: str) -> list[dict[str, Any]]:
+    proc = _run([sys.executable, "-m", "ruff", "check", *TARGETS, "--output-format", "json"])
     _write(ARTIFACTS / f"{name}.json", proc.stdout)
     _write(ARTIFACTS / f"{name}.stderr.txt", proc.stderr)
     if proc.returncode not in {0, 1}:
@@ -55,15 +52,14 @@ def _summary(items: list[dict[str, Any]]) -> dict[str, Any]:
 
 def main() -> int:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    targets = _targets()
-    before = _ruff_json("before", targets)
+    before = _ruff_json("before")
 
     fix = _run([
         sys.executable,
         "-m",
         "ruff",
         "check",
-        *targets,
+        *TARGETS,
         "--fix",
         "--select",
         AUTO_FIX_SELECT,
@@ -75,12 +71,14 @@ def main() -> int:
     if fix.returncode not in {0, 1}:
         raise SystemExit(f"ruff fix failed: {fix.returncode}\n{fix.stderr}")
 
-    after = _ruff_json("after", targets)
+    after = _ruff_json("after")
     gate = _run([sys.executable, "-m", "scripts.ci.cli", "--gate", "full"])
     _write(ARTIFACTS / "gate_full.stdout.txt", gate.stdout)
     _write(ARTIFACTS / "gate_full.stderr.txt", gate.stderr)
 
     report = {
+        "debt_command": "python -m ruff check .",
+        "autofix_command": f"python -m ruff check . --fix --select {AUTO_FIX_SELECT} --ignore {AUTO_FIX_IGNORE}",
         "autofix_select": AUTO_FIX_SELECT,
         "autofix_ignore": AUTO_FIX_IGNORE,
         "f401_autofix_applied": False,
