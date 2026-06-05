@@ -13,9 +13,9 @@ The transform is intentionally conservative and line-based. It only rewrites
 simple `from typing import ...` lines and leaves all runtime logic untouched.
 """
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
-import sys
 
 ABC_NAMES = {
     "AbstractSet",
@@ -60,11 +60,19 @@ class FileChange:
     moved: tuple[str, ...]
 
 
+def _emit_stdout(message: str) -> None:
+    sys.stdout.write(message + "\n")
+
+
+def _emit_stderr(message: str) -> None:
+    sys.stderr.write(message + "\n")
+
+
 def _split_import_names(line: str) -> list[str] | None:
     prefix = "from typing import "
     if not line.startswith(prefix):
         return None
-    tail = line[len(prefix):].strip()
+    tail = line[len(prefix) :].strip()
     if "(" in tail or ")" in tail or "#" in tail:
         return None
     return [part.strip() for part in tail.split(",") if part.strip()]
@@ -108,10 +116,10 @@ def main(argv: list[str] | None = None) -> int:
     scope_arg = args[0] if args else "application"
     scope = (REPO_ROOT / scope_arg).resolve()
     if REPO_ROOT not in scope.parents and scope != REPO_ROOT:
-        print(f"scope escapes repository root: {scope_arg}", file=sys.stderr)
+        _emit_stderr(f"scope escapes repository root: {scope_arg}")
         return 2
     if not scope.exists():
-        print(f"scope does not exist: {scope_arg}", file=sys.stderr)
+        _emit_stderr(f"scope does not exist: {scope_arg}")
         return 2
     changes: list[FileChange] = []
     for path in _iter_python_files(scope):
@@ -122,8 +130,8 @@ def main(argv: list[str] | None = None) -> int:
         path.write_text(rewritten, encoding="utf-8")
         changes.append(FileChange(path=path.relative_to(REPO_ROOT).as_posix(), moved=moved))
     for change in changes:
-        print(f"{change.path}: moved {', '.join(change.moved)}")
-    print(f"changed_files={len(changes)}")
+        _emit_stdout(f"{change.path}: moved {', '.join(change.moved)}")
+    _emit_stdout(f"changed_files={len(changes)}")
     return 0
 
 
