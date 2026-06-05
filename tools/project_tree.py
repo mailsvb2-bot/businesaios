@@ -7,12 +7,12 @@ choose policies, execute actions, or participate in DecisionCore flow.
 """
 
 import argparse
+import json
+import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
-import json
 from pathlib import Path
-import sys
 
 CANON_PROJECT_TREE_TOOL = True
 CANON_PROJECT_TREE_TOOL_NO_RUNTIME_ASSEMBLY = True
@@ -60,7 +60,7 @@ class ProjectTreeEntry:
     name: str
     kind: str
     depth: int
-    children: tuple["ProjectTreeEntry", ...] = field(default_factory=tuple)
+    children: tuple[ProjectTreeEntry, ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict[str, object]:
         return {
