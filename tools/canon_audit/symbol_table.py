@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
-from collections.abc import Sequence
 
 from tools.canon_audit.import_graph import collect_python_files, module_name_from_path
 
@@ -24,14 +23,14 @@ class ExportedSymbol:
 @dataclass
 class ModuleSymbolTable:
     module_name: str
-    exports_by_name: Dict[str, List[ExportedSymbol]] = field(default_factory=dict)
+    exports_by_name: dict[str, list[ExportedSymbol]] = field(default_factory=dict)
 
 
 class _Collector(ast.NodeVisitor):
     def __init__(self, module_name: str) -> None:
         self.module_name = module_name
-        self.scope: List[str] = []
-        self.exports: List[ExportedSymbol] = []
+        self.scope: list[str] = []
+        self.exports: list[ExportedSymbol] = []
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         qualname = ".".join(self.scope + [node.name])
@@ -55,8 +54,10 @@ class _Collector(ast.NodeVisitor):
         self.scope.pop()
 
 
-def build_symbol_tables(root: Path, include_paths: Sequence[str] | None = None) -> Dict[str, ModuleSymbolTable]:
-    result: Dict[str, ModuleSymbolTable] = {}
+def build_symbol_tables(
+    root: Path, include_paths: Sequence[str] | None = None
+) -> dict[str, ModuleSymbolTable]:
+    result: dict[str, ModuleSymbolTable] = {}
     for file_path in collect_python_files(root, include_paths=include_paths):
         module_name = module_name_from_path(root, file_path)
         text = file_path.read_text(encoding="utf-8")
