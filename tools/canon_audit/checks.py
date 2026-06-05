@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import List
-from collections.abc import Iterable, Sequence
 
 from canon.authority_registry import CANONICAL_AUTHORITY_OWNERS
 from canon.sealed_effect_policy import FORBIDDEN_EXTERNAL_EFFECT_LIBRARIES, SEALED_EFFECT_PREFIXES
@@ -17,7 +17,13 @@ from tools.canon_audit.factory_resolution import scan_factory_resolution_risks
 from tools.canon_audit.formal_owner_lock import validate_formal_owner_lock
 from tools.canon_audit.formula_semantics_scan import scan_formula_semantics_outside_policy
 from tools.canon_audit.hard_gates import evaluate_hard_gates
-from tools.canon_audit.import_graph import PROJECT_ROOT_PREFIXES, ImportEdge, build_import_graph, detect_cycles, internal_import_edges
+from tools.canon_audit.import_graph import (
+    PROJECT_ROOT_PREFIXES,
+    ImportEdge,
+    build_import_graph,
+    detect_cycles,
+    internal_import_edges,
+)
 from tools.canon_audit.noop_detector import scan_noop_functions
 from tools.canon_audit.owner_graph import detect_export_name_collisions
 from tools.canon_audit.owner_misuse_scan import scan_owner_misuse

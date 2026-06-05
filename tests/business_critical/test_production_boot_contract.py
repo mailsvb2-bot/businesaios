@@ -8,7 +8,6 @@ import pytest
 from runtime.production_boot_contract import ProductionBootProbe, assert_production_boot_ready, evaluate_production_boot
 from scripts.ci.step_production_boot import run as run_production_boot
 
-
 _VALID_CONTRACT_DSN = "postgresql://user:pass@db.internal.invalid:5432/businesaios"
 
 

@@ -9,11 +9,11 @@ canon audit; it is a small, deterministic CI guard that keeps new code from
 reintroducing obvious second-brain / raw-effect paths.
 """
 
-from dataclasses import dataclass
-from pathlib import Path
 import ast
 import re
 from collections.abc import Iterable
+from dataclasses import dataclass
+from pathlib import Path
 
 CANON_ARCHITECTURE_BYPASS_SCANNER = True
 

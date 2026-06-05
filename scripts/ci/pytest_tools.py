@@ -5,7 +5,6 @@ import json
 from scripts.ci.paths import coverage_dir, junit_dir, reports_dir
 from scripts.ci.subprocess_io import CommandOutcome, run_pytest
 
-
 _MAX_FAILURE_MESSAGE_CHARS = 4000
 
 

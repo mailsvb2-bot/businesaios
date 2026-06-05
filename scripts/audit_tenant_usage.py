@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Iterable
 
 EXCLUDE_DIRS = {
     '.git', '.venv', 'venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache',

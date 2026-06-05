@@ -4,7 +4,6 @@ import importlib
 import json
 from pathlib import Path
 
-
 CONTRACT_PATH = Path("contracts/public_api_exports.json")
 
 

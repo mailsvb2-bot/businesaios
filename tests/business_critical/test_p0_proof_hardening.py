@@ -9,7 +9,6 @@ import scripts.ci.step_production_boot as step_production_boot
 from scripts.ci.contracts import ExecutionReport, StepResult
 from scripts.ci.coverage_report import write_ci_execution_summary_xml
 
-
 _VALID_CONTRACT_DSN = "postgresql://user:pass@db.internal.invalid:5432/businesaios"
 
 
