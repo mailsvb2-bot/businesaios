@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from core.llm.contracts import LLMClient, LLMRequest, LLMResponse, LLMUsage
 

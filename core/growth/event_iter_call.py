@@ -5,7 +5,8 @@ from __future__ import annotations
 Avoids masking provider bugs as signature mismatches when reading event ranges.
 """
 
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 from collections.abc import Iterable
 
 from core.utils.call_signature import accepts_keywords as _accepts_keywords

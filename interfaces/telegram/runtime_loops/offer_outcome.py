@@ -15,7 +15,8 @@ Invariants:
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
+from collections.abc import Iterable
 
 from core.observability.silent import swallow
 from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import build_system_world_state

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any, Optional
+from collections.abc import Iterable, Sequence
 
 from .read_adapter import read_rows
 

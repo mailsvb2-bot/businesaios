@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Dict
+from typing import Any, Dict
+from collections.abc import Callable
 
 
 def resolve_runtime_oauth_value(*, explicit: str | None, resolver: Callable[[], str], default: str = "") -> str:

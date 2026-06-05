@@ -12,7 +12,8 @@ dedicated gateway with guardrails + audit.
 """
 
 from datetime import date
-from typing import Iterable, Optional, Sequence
+from typing import Optional
+from collections.abc import Iterable, Sequence
 
 from interfaces.ads.base import (
     AdsPlatform,

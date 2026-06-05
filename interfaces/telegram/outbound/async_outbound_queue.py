@@ -5,7 +5,8 @@ import itertools
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Dict, Optional
+from typing import Any, Dict, Optional
+from collections.abc import Awaitable, Callable
 
 from core.observability.errors import log_exception_throttled
 from core.ratelimit.token_bucket import AsyncTokenBucket

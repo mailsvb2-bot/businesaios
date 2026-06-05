@@ -7,7 +7,8 @@ same token persistence + ConnectedAccount assembly flow. They do not contain
 business decisions; they only normalize connector I/O.
 """
 
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
+from collections.abc import Iterable, Mapping, Sequence
 
 from .base import AdsConnectorError, AdsPlatform, ConnectedAccount
 from .connector_oauth_helpers import build_connected_account

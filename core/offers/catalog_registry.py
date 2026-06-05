@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, Union
+from typing import Dict, Union
+from collections.abc import Callable
 
 from config.env_flags import env_bool, env_path
 from config.yaml_loader_shared import load_yaml

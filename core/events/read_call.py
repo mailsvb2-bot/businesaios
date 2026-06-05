@@ -6,7 +6,8 @@ Prevents false fallback behavior where an internal ``TypeError`` from the
 store implementation could be mistaken for a signature mismatch.
 """
 
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 from collections.abc import Iterable
 
 from core.utils.call_signature import accepted_kwargs as _accepted_kwargs

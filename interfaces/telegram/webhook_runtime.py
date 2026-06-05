@@ -4,7 +4,8 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from interfaces.telegram.runner_components import build_runner_components
 from interfaces.telegram.runner_loop import run_periodic_loops

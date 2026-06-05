@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from interfaces.common.canonical_connector_contract import canonical_connector_contract
 from interfaces.common.connector_health import ConnectorHealth

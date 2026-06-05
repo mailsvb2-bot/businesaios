@@ -2,7 +2,8 @@ from __future__ import annotations
 
 """Helpers for read-only demo connectors that are intentionally not live integrations."""
 
-from typing import Any, Dict, Mapping
+from typing import Any, Dict
+from collections.abc import Mapping
 
 DEMO_CONNECTOR_REASON = 'connector_not_bundled'
 

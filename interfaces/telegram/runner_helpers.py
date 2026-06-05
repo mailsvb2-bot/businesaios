@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from core.observability.silent import swallow
 from runtime.boot.env import env_float, env_int
