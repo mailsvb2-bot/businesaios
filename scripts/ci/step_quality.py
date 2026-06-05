@@ -4,11 +4,12 @@ import ast
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 
 from scripts.ci.config import project_shape_config
 from scripts.ci.paths import repo_root
-from scripts.ci.subprocess_io import run_python
+from scripts.ci.subprocess_io import run_command
 
 
 _RUFF_REQUIRED_VALUES = {"1", "true", "yes", "release", "required", "strict", "on"}
@@ -98,11 +99,11 @@ def _ruff_check() -> tuple[bool, str, dict[str, object]]:
         return True, "ruff unavailable only because quality tools are explicitly non-required", payload
 
     payload["ruff_available"] = True
-    args = ["-m", "ruff", "check", *(str(target) for target in targets)]
+    args = [sys.executable, "-m", "ruff", "check", *(str(target) for target in targets)]
     if config.exists():
         args.extend(["--config", str(config)])
 
-    outcome = run_python(args, timeout=180)
+    outcome = run_command(args, env={"PYTHONNOUSERSITE": "1"}, timeout=180)
     passed = outcome.returncode == 0
     payload["full_ruff_passed"] = passed
     payload["claims_full_ruff_clean"] = passed
