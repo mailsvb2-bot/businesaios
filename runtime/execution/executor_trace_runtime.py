@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from dataclasses import replace
-from typing import Any
+from typing import Any, Callable
 from collections.abc import Mapping
 
 from observability.distributed_trace_context import trace_context_from_envelope, trace_context_scope
@@ -158,7 +158,7 @@ def execute_with_trace(*, executor, env: DecisionEnvelope) -> ExecutionResult:
             raise
 
 
-def execute_core_flow(*, executor, env: DecisionEnvelope, depth: int, timescale) -> ExecutionResult:
+def execute_core_flow(*, executor, env: DecisionEnvelope, depth: int, timescale, preflight_fn: Callable[..., None] = preflight_and_verify) -> ExecutionResult:
     reliability = getattr(executor, '_reliability', None)
     payload = executor._safe_dict(getattr(getattr(env, 'decision', None), 'payload', {}) or {})
     isolation_cm = executor._tenant_runtime_context(env=env, payload=payload)
@@ -185,7 +185,7 @@ def execute_core_flow(*, executor, env: DecisionEnvelope, depth: int, timescale)
             resolution_result = executor._apply_reliability_gate(env)
             if resolution_result is not None:
                 return resolution_result
-            preflight_and_verify(executor=executor, env=env, timescale=timescale)
+            preflight_fn(executor=executor, env=env, timescale=timescale)
             budget_verdict = executor._enforce_runtime_budget_and_blast_radius(env)
             result = executor._dispatch(env, depth=depth, enqueue=True)
             record_execution_outcome(
