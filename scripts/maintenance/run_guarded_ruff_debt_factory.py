@@ -35,16 +35,19 @@ RUNTIME_ARTIFACT_PATHS = (
 )
 PROFILE_MODULES = {
     "typing-compat": "scripts.maintenance.ruff_debt_factory_typing_compat",
+    "typing-core-compat": "scripts.maintenance.ruff_debt_factory_typing_core_compat",
     "imports-compat": "scripts.maintenance.ruff_debt_factory_imports_compat",
     "simple-compat": "scripts.maintenance.ruff_debt_factory_simple_compat",
 }
 PROFILE_BRANCH_PREFIXES = {
     "typing-compat": "debt/ruff-typing-compat",
+    "typing-core-compat": "debt/ruff-typing-core-compat",
     "imports-compat": "debt/ruff-imports-compat",
     "simple-compat": "debt/ruff-simple-compat",
 }
 PROFILE_TITLES = {
     "typing-compat": "chore: reduce Ruff typing debt via guarded factory",
+    "typing-core-compat": "chore: reduce Ruff core typing debt via guarded factory",
     "imports-compat": "chore: reduce Ruff import-order debt via guarded factory",
     "simple-compat": "chore: reduce Ruff simple-rule debt via guarded factory",
 }
