@@ -5,35 +5,35 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Any
 
 from core.behavior.behavioral_state_builder import BehavioralStateBuilder
+from runtime.platform.config.env_flags import env_str
 from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 from runtime.tenancy import normalize_tenant_id
-from runtime.platform.config.env_flags import env_str
 
 
-def _normalize_event(e: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_event(event: dict[str, Any]) -> dict[str, Any]:
     # Ensure stable keys and shapes for replay.
     return {
-        "event_type": str(e.get("event_type") or ""),
-        "timestamp_ms": int(e.get("timestamp_ms") or 0),
-        "payload": e.get("payload") if isinstance(e.get("payload"), dict) else {},
-        "source": str(e.get("source") or ""),
-        "user_id": str(e.get("user_id") or ""),
-        "tenant_id": str(e.get("tenant_id") or ""),
+        "event_type": str(event.get("event_type") or ""),
+        "timestamp_ms": int(event.get("timestamp_ms") or 0),
+        "payload": event.get("payload") if isinstance(event.get("payload"), dict) else {},
+        "source": str(event.get("source") or ""),
+        "user_id": str(event.get("user_id") or ""),
+        "tenant_id": str(event.get("tenant_id") or ""),
     }
 
 
 def _sha256_json(obj: Any) -> str:
-    s = json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+    payload = json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _load_golden(path: str) -> Dict[str, Any]:
+def _load_golden(path: str) -> dict[str, Any]:
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
     except FileNotFoundError:
         data = {"schema_version": 1, "cases": {}}
     if int(data.get("schema_version") or 0) != 1:
@@ -43,11 +43,13 @@ def _load_golden(path: str) -> Dict[str, Any]:
     return data
 
 
-def _write_golden(path: str, data: Dict[str, Any]) -> None:
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, sort_keys=True, indent=2)
-        f.write("\n")
+def _write_golden(path: str, data: dict[str, Any]) -> None:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(data, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 @dataclass(frozen=True)
@@ -78,25 +80,30 @@ def pick_user_and_window(
     tid = normalize_tenant_id(tenant_id)
     if not tid:
         raise SystemExit("[TENANT_SCOPED_GOLDEN] tenant_id is required")
-    w = max(1, int(window_ms))
+    window = max(1, int(window_ms))
     event_limit = max(1, min(int(event_limit), 5000))
     max_users = max(1, min(int(max_users), 1000))
 
-    with SqliteEventStore(str(db_path)) as es:
-        candidates: List[Tuple[str, int]] = es.recent_user_ids(tenant_id=tid, start_ms=0, end_ms=None, limit=max_users)
+    with SqliteEventStore(str(db_path)) as event_store:
+        candidates: list[tuple[str, int]] = event_store.recent_user_ids(
+            tenant_id=tid,
+            start_ms=0,
+            end_ms=None,
+            limit=max_users,
+        )
     if not candidates:
         raise SystemExit(f"[TENANT_SCOPED_GOLDEN] no users found for tenant_id={tid!r}")
 
     user_id, last_ts = candidates[0]
     end_ms = int(last_ts)
-    start_ms = max(0, end_ms - w)
+    start_ms = max(0, end_ms - window)
 
     return TenantScopedReplaySpec(
         tenant_id=tid,
         user_id=str(user_id),
         start_ms=int(start_ms),
         end_ms=int(end_ms),
-        window_ms=w,
+        window_ms=window,
         event_limit=event_limit,
     )
 
@@ -105,18 +112,18 @@ def extract_trace(
     *,
     db_path: str,
     spec: TenantScopedReplaySpec,
-) -> List[Dict[str, Any]]:
-    trace: List[Dict[str, Any]] = []
-    with SqliteEventStore(str(db_path)) as es:
-        for ev in es.iter_events(
+) -> list[dict[str, Any]]:
+    trace: list[dict[str, Any]] = []
+    with SqliteEventStore(str(db_path)) as event_store:
+        for event in event_store.iter_events(
             tenant_id=str(spec.tenant_id),
             user_id=str(spec.user_id),
             start_ms=int(spec.start_ms),
             end_ms=int(spec.end_ms),
         ):
-            trace.append(_normalize_event(ev))
+            trace.append(_normalize_event(event))
 
-    trace = sorted(trace, key=lambda x: int(x.get("timestamp_ms") or 0))
+    trace = sorted(trace, key=lambda item: int(item.get("timestamp_ms") or 0))
     if spec.event_limit and len(trace) > int(spec.event_limit):
         trace = trace[-int(spec.event_limit) :]
     return trace
@@ -124,35 +131,50 @@ def extract_trace(
 
 def replay_trace(
     *,
-    trace: List[Dict[str, Any]],
+    trace: list[dict[str, Any]],
     tenant_id: str,
-    product: Optional[Dict[str, Any]] = None,
+    product: dict[str, Any] | None = None,
     safe_mode: bool = False,
-) -> Dict[str, Any]:
-    b = BehavioralStateBuilder()
-    return dict(b.build(trace, product=product or {}, tenant_id=str(tenant_id), safe_mode=bool(safe_mode)))
+) -> dict[str, Any]:
+    builder = BehavioralStateBuilder()
+    return dict(builder.build(trace, product=product or {}, tenant_id=str(tenant_id), safe_mode=bool(safe_mode)))
+
+
+def _write_json(path: str, payload: object) -> None:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _write_text(path: str, payload: str) -> None:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(payload, encoding="utf-8")
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--db", required=True, help="Path to sqlite events db")
-    ap.add_argument("--tenant", default=env_str("TENANT_ID", "default"))
-    ap.add_argument("--window-ms", type=int, default=15 * 60 * 1000)
-    ap.add_argument("--max-users", type=int, default=50)
-    ap.add_argument("--event-limit", type=int, default=200)
-    ap.add_argument("--out-trace", default="artifacts/tenant_scoped_golden_trace.json")
-    ap.add_argument("--out-snapshot", default="artifacts/tenant_scoped_golden_snapshot.json")
-    ap.add_argument("--out-meta", default="artifacts/tenant_scoped_golden_meta.json")
-    ap.add_argument("--out-hash", default="artifacts/tenant_scoped_golden_snapshot.sha256")
-    ap.add_argument("--safe-mode", action="store_true")
-    ap.add_argument("--freeze-golden", action="store_true", help="Write snapshot hash into golden json")
-    ap.add_argument(
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--db", required=True, help="Path to sqlite events db")
+    parser.add_argument("--tenant", default=env_str("TENANT_ID", "default"))
+    parser.add_argument("--window-ms", type=int, default=15 * 60 * 1000)
+    parser.add_argument("--max-users", type=int, default=50)
+    parser.add_argument("--event-limit", type=int, default=200)
+    parser.add_argument("--out-trace", default="artifacts/tenant_scoped_golden_trace.json")
+    parser.add_argument("--out-snapshot", default="artifacts/tenant_scoped_golden_snapshot.json")
+    parser.add_argument("--out-meta", default="artifacts/tenant_scoped_golden_meta.json")
+    parser.add_argument("--out-hash", default="artifacts/tenant_scoped_golden_snapshot.sha256")
+    parser.add_argument("--safe-mode", action="store_true")
+    parser.add_argument("--freeze-golden", action="store_true", help="Write snapshot hash into golden json")
+    parser.add_argument(
         "--golden-file",
         default="tests/golden/tenant_scoped_golden.json",
         help="Path to golden json file",
     )
-    ap.add_argument("--golden-case", default="tenant_scoped_live_v1", help="Case name in golden json")
-    args = ap.parse_args()
+    parser.add_argument("--golden-case", default="tenant_scoped_live_v1", help="Case name in golden json")
+    args = parser.parse_args()
 
     spec = pick_user_and_window(
         db_path=args.db,
@@ -162,8 +184,8 @@ def main() -> int:
         event_limit=int(args.event_limit),
     )
     trace = extract_trace(db_path=args.db, spec=spec)
-    snap = replay_trace(trace=trace, tenant_id=spec.tenant_id, product={}, safe_mode=bool(args.safe_mode))
-    snap_hash = _sha256_json(snap)
+    snapshot = replay_trace(trace=trace, tenant_id=spec.tenant_id, product={}, safe_mode=bool(args.safe_mode))
+    snapshot_hash = _sha256_json(snapshot)
 
     meta = {
         "tenant_id": spec.tenant_id,
@@ -173,26 +195,21 @@ def main() -> int:
         "window_ms": spec.window_ms,
         "event_limit": spec.event_limit,
         "event_count": len(trace),
-        "snapshot_sha256": snap_hash,
+        "snapshot_sha256": snapshot_hash,
         "safe_mode": bool(args.safe_mode),
     }
 
-    os.makedirs(os.path.dirname(args.out_trace) or ".", exist_ok=True)
-    with open(args.out_trace, "w", encoding="utf-8") as f:
-        json.dump(trace, f, ensure_ascii=False, sort_keys=True, indent=2)
-    with open(args.out_snapshot, "w", encoding="utf-8") as f:
-        json.dump(snap, f, ensure_ascii=False, sort_keys=True, indent=2)
-    with open(args.out_meta, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, sort_keys=True, indent=2)
-    with open(args.out_hash, "w", encoding="utf-8") as f:
-        f.write(snap_hash + "\n")
+    _write_json(args.out_trace, trace)
+    _write_json(args.out_snapshot, snapshot)
+    _write_json(args.out_meta, meta)
+    _write_text(args.out_hash, snapshot_hash + "\n")
 
     if bool(args.freeze_golden):
         data = _load_golden(str(args.golden_file))
         cases = data.get("cases")
         assert isinstance(cases, dict)
         cases[str(args.golden_case)] = {
-            "snapshot_sha256": snap_hash,
+            "snapshot_sha256": snapshot_hash,
             "meta": {
                 "tenant_id": spec.tenant_id,
                 "user_id": spec.user_id,
