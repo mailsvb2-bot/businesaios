@@ -45,13 +45,13 @@ def preflight_and_verify(*args, **kwargs):
 
 
 def execute_core_flow(*, executor, env, depth, timescale):
-    original = getattr(trace_runtime, 'preflight_and_verify', None)
-    trace_runtime.preflight_and_verify = preflight_and_verify
-    try:
-        return trace_runtime.execute_core_flow(executor=executor, env=env, depth=depth, timescale=timescale)
-    finally:
-        if original is not None:
-            trace_runtime.preflight_and_verify = original
+    return trace_runtime.execute_core_flow(
+        executor=executor,
+        env=env,
+        depth=depth,
+        timescale=timescale,
+        preflight_fn=preflight_and_verify,
+    )
 
 
 def executor_context(*args, **kwargs):
