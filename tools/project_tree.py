@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Repository tree inspection helper.
 
 This is an engineering/debugging tool only. It does not assemble runtime,
 choose policies, execute actions, or participate in DecisionCore flow.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
