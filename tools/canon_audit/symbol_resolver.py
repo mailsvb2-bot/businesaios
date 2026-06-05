@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
-from collections.abc import Sequence
 
 from tools.canon_audit.import_graph import collect_python_files, module_name_from_path
 from tools.canon_audit.symbol_table import build_symbol_tables
@@ -13,7 +12,7 @@ from tools.canon_audit.symbol_table import build_symbol_tables
 @dataclass(frozen=True)
 class ResolvedRef:
     module_name: str
-    symbol_name: Optional[str]
+    symbol_name: str | None
 
     @property
     def pretty(self) -> str:
@@ -23,10 +22,10 @@ class ResolvedRef:
 @dataclass
 class ModuleBindings:
     module_name: str
-    aliases: Dict[str, ResolvedRef] = field(default_factory=dict)
+    aliases: dict[str, ResolvedRef] = field(default_factory=dict)
 
 
-def _resolve_relative_module(module_name: str, is_init: bool, level: int, target_module: Optional[str]) -> str:
+def _resolve_relative_module(module_name: str, is_init: bool, level: int, target_module: str | None) -> str:
     parts = module_name.split(".")
     if not is_init:
         parts = parts[:-1]
@@ -36,9 +35,11 @@ def _resolve_relative_module(module_name: str, is_init: bool, level: int, target
     return ".".join(base)
 
 
-def build_bindings_index(root: Path, include_paths: Sequence[str] | None = None) -> Dict[str, ModuleBindings]:
+def build_bindings_index(
+    root: Path, include_paths: Sequence[str] | None = None
+) -> dict[str, ModuleBindings]:
     tables = build_symbol_tables(root, include_paths=include_paths)
-    index: Dict[str, ModuleBindings] = {}
+    index: dict[str, ModuleBindings] = {}
 
     for file_path in collect_python_files(root, include_paths=include_paths):
         module_name = module_name_from_path(root, file_path)
@@ -53,7 +54,12 @@ def build_bindings_index(root: Path, include_paths: Sequence[str] | None = None)
                     bindings.aliases[local] = ResolvedRef(alias.name, None)
             elif isinstance(node, ast.ImportFrom):
                 if node.level:
-                    target_module = _resolve_relative_module(module_name, file_path.name == "__init__.py", node.level, node.module)
+                    target_module = _resolve_relative_module(
+                        module_name,
+                        file_path.name == "__init__.py",
+                        node.level,
+                        node.module,
+                    )
                 else:
                     if not node.module:
                         continue
@@ -70,7 +76,11 @@ def build_bindings_index(root: Path, include_paths: Sequence[str] | None = None)
     return index
 
 
-def resolve_local_name(module_name: str, local_name: str, bindings_index: Dict[str, ModuleBindings]) -> Optional[ResolvedRef]:
+def resolve_local_name(
+    module_name: str,
+    local_name: str,
+    bindings_index: dict[str, ModuleBindings],
+) -> ResolvedRef | None:
     module_bindings = bindings_index.get(module_name)
     if module_bindings is None:
         return None
