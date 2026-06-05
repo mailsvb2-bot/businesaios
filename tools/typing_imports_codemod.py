@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Safe codemod for UP035-style typing imports.
 
 This script rewrites deprecated ABC imports from `typing` to `collections.abc`.
@@ -12,6 +10,8 @@ Use on a maintenance branch, then review the diff and run the normal full gates:
 The transform is intentionally conservative and line-based. It only rewrites
 simple `from typing import ...` lines and leaves all runtime logic untouched.
 """
+
+from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
