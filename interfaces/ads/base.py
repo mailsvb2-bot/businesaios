@@ -88,7 +88,6 @@ class MetricPoint:
     raw: dict[str, Any] | None = None
 
 
-
 class AdsReadConnector(Protocol):
     """Read-only subset of the connector contract.
 
@@ -139,3 +138,16 @@ class AdsConnector(AdsWriteConnector, Protocol):
 
     platform: AdsPlatform
 
+
+__all__ = [
+    "AdsConnector",
+    "AdsConnectorError",
+    "AdsObjectRef",
+    "AdsPlatform",
+    "AdsReadConnector",
+    "AdsWriteConnector",
+    "Campaign",
+    "ConnectedAccount",
+    "MetricPoint",
+    "OAuthAuthorizeURL",
+]
