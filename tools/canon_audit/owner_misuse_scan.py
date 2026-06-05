@@ -8,8 +8,8 @@ from tools.canon_audit.contracts import ArchitectureViolation
 from tools.canon_audit.registry import ManifestRegistry
 
 
-def scan_owner_misuse(edges: List[CallEdge], registry: ManifestRegistry) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def scan_owner_misuse(edges: list[CallEdge], registry: ManifestRegistry) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
 
     decision_owner = CANONICAL_AUTHORITY_OWNERS[CanonAuthority.DECISION]
     effect_owner = CANONICAL_AUTHORITY_OWNERS[CanonAuthority.EFFECT]

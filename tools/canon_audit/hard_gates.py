@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from tools.canon_audit.contracts import ArchitectureViolation, HardGateResult
 
 
-def evaluate_hard_gates(violations: Sequence[ArchitectureViolation]) -> List[HardGateResult]:
+def evaluate_hard_gates(violations: Sequence[ArchitectureViolation]) -> list[HardGateResult]:
     codes = [v.code for v in violations]
 
     def gate(name: str, passed: bool, message: str) -> HardGateResult:

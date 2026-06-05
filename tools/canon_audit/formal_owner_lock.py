@@ -6,8 +6,8 @@ from tools.canon_audit.contracts import ArchitectureViolation
 from tools.canon_audit.registry import ManifestRegistry
 
 
-def validate_formal_owner_lock(registry: ManifestRegistry) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def validate_formal_owner_lock(registry: ManifestRegistry) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for canonical_key, refs in registry.public_symbol_index().items():
         if len(refs) != 1:
             violations.append(ArchitectureViolation("CANON_FORMAL_OWNER_LOCK", f"Canonical export '{canonical_key}' must have exactly one owner, got {[r.fqname for r in refs]}", canonical_key))

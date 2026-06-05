@@ -39,9 +39,9 @@ def _fp(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
-def scan_policy_duplication_and_leakage(root: Path, include_paths: Sequence[str] | None = None) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
-    snippets: List[NumericSnippet] = []
+def scan_policy_duplication_and_leakage(root: Path, include_paths: Sequence[str] | None = None) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
+    snippets: list[NumericSnippet] = []
 
     for file_path in collect_python_files(root, include_paths=include_paths):
         module_name = module_name_from_path(root, file_path)
@@ -57,7 +57,7 @@ def scan_policy_duplication_and_leakage(root: Path, include_paths: Sequence[str]
                     if not _is_allowed(module_name):
                         violations.append(ArchitectureViolation("CANON_POLICY_LEAKAGE", f"Policy-like numeric snippet outside semantic owner: {rendered}", module_name))
 
-    by_fp: Dict[str, List[NumericSnippet]] = {}
+    by_fp: dict[str, list[NumericSnippet]] = {}
     for s in snippets:
         by_fp.setdefault(s.fingerprint, []).append(s)
     for fp, refs in by_fp.items():

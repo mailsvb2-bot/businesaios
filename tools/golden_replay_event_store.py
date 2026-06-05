@@ -8,7 +8,7 @@ from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 from core.behavior.behavioral_state_builder import BehavioralStateBuilder
 
 
-def _normalize_event(e: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_event(e: dict[str, Any]) -> dict[str, Any]:
     # Ensure stable keys and shapes for replay.
     out = {
         "event_type": str(e.get("event_type") or ""),
@@ -21,8 +21,8 @@ def _normalize_event(e: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def extract_trace(*, db_path: str, tenant_id: str, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
-    trace: List[Dict[str, Any]] = []
+def extract_trace(*, db_path: str, tenant_id: str, user_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    trace: list[dict[str, Any]] = []
     with SqliteEventStore(db_path) as es:
         for ev in es.iter_events(tenant_id=str(tenant_id), user_id=str(user_id), start_ms=0, end_ms=None):
             trace.append(_normalize_event(ev))
@@ -32,7 +32,7 @@ def extract_trace(*, db_path: str, tenant_id: str, user_id: str, limit: int = 50
     return trace
 
 
-def replay_trace(*, trace: List[Dict[str, Any]], product: Optional[Dict[str, Any]] = None, tenant_id: str = "default", safe_mode: bool = False) -> Dict[str, Any]:
+def replay_trace(*, trace: list[dict[str, Any]], product: dict[str, Any] | None = None, tenant_id: str = "default", safe_mode: bool = False) -> dict[str, Any]:
     b = BehavioralStateBuilder()
     return dict(b.build(trace, product=product or {}, tenant_id=str(tenant_id), safe_mode=bool(safe_mode)))
 

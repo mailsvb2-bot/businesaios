@@ -13,8 +13,8 @@ def _is_sealed(module_name: str) -> bool:
     return any(module_name == p or module_name.startswith(p + ".") for p in SEALED_EFFECT_PREFIXES)
 
 
-def scan_effect_literals_outside_seal(root: Path, include_paths: Sequence[str] | None = None) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def scan_effect_literals_outside_seal(root: Path, include_paths: Sequence[str] | None = None) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for file_path in collect_python_files(root, include_paths=include_paths):
         module_name = module_name_from_path(root, file_path)
         if _is_sealed(module_name):

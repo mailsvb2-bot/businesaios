@@ -25,8 +25,8 @@ class SymbolRef:
     module: str
     export_name: str
     canonical_key: str
-    file_path: Optional[Path] = None
-    lineno: Optional[int] = None
+    file_path: Path | None = None
+    lineno: int | None = None
 
     @property
     def fqname(self) -> str:
@@ -37,6 +37,6 @@ class SymbolRef:
 class ArchitectureReport:
     raw_score_100: float
     admission_score_100: float
-    violations: Tuple[ArchitectureViolation, ...]
-    hard_gates: Tuple[HardGateResult, ...]
+    violations: tuple[ArchitectureViolation, ...]
+    hard_gates: tuple[HardGateResult, ...]
     passed: bool

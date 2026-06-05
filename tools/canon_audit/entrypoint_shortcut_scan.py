@@ -6,8 +6,8 @@ from tools.canon_audit.call_graph import CallEdge
 from tools.canon_audit.contracts import ArchitectureViolation
 
 
-def scan_entrypoint_runtime_shortcuts(call_edges: List[CallEdge]) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def scan_entrypoint_runtime_shortcuts(call_edges: list[CallEdge]) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for edge in call_edges:
         caller_module = edge.caller_fqname.split(":")[0]
         callee_module = edge.callee_ref.split(":")[0]

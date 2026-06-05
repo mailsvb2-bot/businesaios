@@ -20,8 +20,8 @@ FORBIDDEN_NAMES = (
 )
 
 
-def scan_path_lock_bypasses(root: Path, include_paths: Sequence[str] | None = None) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def scan_path_lock_bypasses(root: Path, include_paths: Sequence[str] | None = None) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for file_path in collect_python_files(root, include_paths=include_paths):
         module_name = module_name_from_path(root, file_path)
         tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))

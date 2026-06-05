@@ -50,16 +50,16 @@ def _is_internal_import(target: str) -> bool:
     return _startswith_any(target, PROJECT_ROOT_PREFIXES)
 
 
-def check_no_compat(registry: ManifestRegistry) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def check_no_compat(registry: ManifestRegistry) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for manifest in registry.all():
         if manifest.is_compat and not ALLOW_COMPAT:
             violations.append(ArchitectureViolation("CANON_NO_COMPAT", "Compat modules are forbidden by the hard Canon.", manifest.module_name))
     return violations
 
 
-def check_single_authority_owner(registry: ManifestRegistry) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def check_single_authority_owner(registry: ManifestRegistry) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     authority_index = registry.authority_index()
     for authority_name, expected_owner in CANONICAL_AUTHORITY_OWNERS.items():
         owners = authority_index.get(authority_name.value, set())
@@ -68,16 +68,16 @@ def check_single_authority_owner(registry: ManifestRegistry) -> List[Architectur
     return violations
 
 
-def check_single_public_owner(registry: ManifestRegistry) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def check_single_public_owner(registry: ManifestRegistry) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for canonical_key, refs in sorted(registry.public_symbol_index().items()):
         if len(refs) > 1:
             violations.append(ArchitectureViolation("CANON_SINGLE_OWNER", f"Canonical public export '{canonical_key}' has multiple owners: {[r.fqname for r in refs]}", canonical_key))
     return violations
 
 
-def check_manifest_import_rules(registry: ManifestRegistry, import_edges: Iterable[ImportEdge]) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def check_manifest_import_rules(registry: ManifestRegistry, import_edges: Iterable[ImportEdge]) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     manifests = {m.module_name: m for m in registry.all()}
     for edge in import_edges:
         manifest = manifests.get(edge.source)
@@ -90,8 +90,8 @@ def check_manifest_import_rules(registry: ManifestRegistry, import_edges: Iterab
     return violations
 
 
-def check_sealed_effects(import_edges: Iterable[ImportEdge]) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def check_sealed_effects(import_edges: Iterable[ImportEdge]) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for edge in import_edges:
         root_name = edge.target.split(".")[0]
         if root_name in FORBIDDEN_EXTERNAL_EFFECT_LIBRARIES:
@@ -100,8 +100,8 @@ def check_sealed_effects(import_edges: Iterable[ImportEdge]) -> List[Architectur
     return violations
 
 
-def check_import_cycles(import_edges: Iterable[ImportEdge]) -> List[ArchitectureViolation]:
-    violations: List[ArchitectureViolation] = []
+def check_import_cycles(import_edges: Iterable[ImportEdge]) -> list[ArchitectureViolation]:
+    violations: list[ArchitectureViolation] = []
     for cycle in detect_cycles(internal_import_edges(import_edges)):
         if len(cycle) > 2:
             violations.append(ArchitectureViolation("CANON_IMPORT_CYCLE", f"Internal import cycle detected: {' -> '.join(cycle)}", cycle[0]))
@@ -153,8 +153,8 @@ def _is_meta_safe_subject(subject: str) -> bool:
     return any(subject == prefix or subject.startswith(prefix + ".") for prefix in META_SAFE_PREFIXES)
 
 
-def _filter_operational_false_positives(violations: Sequence[ArchitectureViolation]) -> List[ArchitectureViolation]:
-    filtered: List[ArchitectureViolation] = []
+def _filter_operational_false_positives(violations: Sequence[ArchitectureViolation]) -> list[ArchitectureViolation]:
+    filtered: list[ArchitectureViolation] = []
     for violation in violations:
         if violation.code == "CANON_AST_EXPORT_COLLISION":
             continue
@@ -172,8 +172,8 @@ def _filter_operational_false_positives(violations: Sequence[ArchitectureViolati
         filtered.append(violation)
     return filtered
 
-def _dedupe_violations(violations: Sequence[ArchitectureViolation]) -> List[ArchitectureViolation]:
-    deduped: List[ArchitectureViolation] = []
+def _dedupe_violations(violations: Sequence[ArchitectureViolation]) -> list[ArchitectureViolation]:
+    deduped: list[ArchitectureViolation] = []
     seen = set()
     for violation in violations:
         key = (violation.code, violation.subject, violation.message)
@@ -189,7 +189,7 @@ def run_canon_checks(project_root: Path, registry: ManifestRegistry | None = Non
     call_edges = build_call_graph(project_root, include_paths=include_paths)
     constructor_edges = build_constructor_flow(project_root, include_paths=include_paths)
 
-    violations: List[ArchitectureViolation] = []
+    violations: list[ArchitectureViolation] = []
     violations.extend(check_no_compat(registry))
     violations.extend(check_single_authority_owner(registry))
     violations.extend(check_single_public_owner(registry))
