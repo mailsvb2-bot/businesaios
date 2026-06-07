@@ -2,7 +2,8 @@ from __future__ import annotations
 
 """Canonical provider service layer for public LLM builders."""
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
+from collections.abc import Callable
 
 from config.llm_provider_policy import DEFAULT_LLM_PROVIDER_POLICY, LLMProviderPolicy
 

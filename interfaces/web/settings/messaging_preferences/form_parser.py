@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.messaging.settings import canonical_channel_preference_value

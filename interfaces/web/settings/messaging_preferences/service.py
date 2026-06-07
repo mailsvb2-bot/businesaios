@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from interfaces.web.settings.messaging_preferences.form_parser import parse_preference_form
 from runtime.messaging.settings import SETTING_KEY

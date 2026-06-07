@@ -6,7 +6,8 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 PriorityArg = int | str
 

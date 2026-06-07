@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Dict, Iterable, Optional, Sequence
+from typing import Any, Dict, Optional
+from collections.abc import Iterable, Sequence
 
 from .base import Campaign, MetricPoint
 from .connector_read_ops_support import fetch_metrics_via_token, list_campaigns_via_token

@@ -7,7 +7,7 @@ callers inject persistence via a `store` callable.
 """
 
 import secrets
-from typing import Callable
+from collections.abc import Callable
 
 from core.security.keyring import Keyring
 

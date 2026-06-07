@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 from shared.alias_modules import register_alias_modules as _register_alias_modules
 
