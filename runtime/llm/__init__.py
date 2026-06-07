@@ -4,7 +4,8 @@ from runtime.public_api_alias import install_public_api_alias
 
 """Canonical runtime surface for LLM contracts and provider factory helpers."""
 
-from typing import Callable, Dict, Optional
+from typing import Optional
+from collections.abc import Callable
 
 from core.llm import (
     LLMClient,

@@ -4,7 +4,7 @@ import json
 import os
 import sqlite3
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 

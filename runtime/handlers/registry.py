@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import importlib
 from inspect import Parameter, signature
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from runtime.ports.effects import EffectsPort
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 """Decision archive contract and test-safe in-memory implementation."""
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Protocol
+from typing import Optional, Protocol
 
 from core.ai.decision import DecisionEnvelope
 

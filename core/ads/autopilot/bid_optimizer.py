@@ -3,7 +3,7 @@ from __future__ import annotations
 """Ads bid adjustment heuristic. NOT the platform DecisionCore. optimize() here is bid-delta only; platform: core.ai.decision_core."""
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any
 
 from config.scoring_behavior_policy import DEFAULT_BID_OPTIMIZATION_POLICY
 

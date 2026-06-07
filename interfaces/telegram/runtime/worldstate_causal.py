@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
-from typing import Any, Dict, List
+from typing import Any
 
 from core.causal.evidence.from_events import (
     build_daily_panel,

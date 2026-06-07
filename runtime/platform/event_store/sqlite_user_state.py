@@ -9,7 +9,7 @@ Extracted from sqlite_event_store.py.
 
 import json
 import sqlite3
-from typing import Any, Dict
+from typing import Any
 
 from observability.platform.observability.silent import swallow
 

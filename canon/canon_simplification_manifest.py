@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final, Iterable
+from typing import Final
+from collections.abc import Iterable
 
 from canon.simplification_constitution import SIMPLIFICATION_RULES
 

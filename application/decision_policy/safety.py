@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple
+from typing import Any
 
 from config.env_flags import env_int
 from core.safety.blast_radius import BlastRadiusPolicy, allow_action

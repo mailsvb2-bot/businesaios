@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 from .constants import BOOT_WIRING_LINE_LIMIT
 from .domain_discovery import line_count, read_text_safe, rel

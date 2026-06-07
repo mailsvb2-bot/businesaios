@@ -8,7 +8,8 @@ application-facing adapters delegate to one already-owned transition call
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 CANON_RUNTIME_APPLICATION_DECISION_TRANSITION_SINGLE_OWNER = True
 CANON_RUNTIME_APPLICATION_DECISION_TRANSITION_FAIL_CLOSED = True

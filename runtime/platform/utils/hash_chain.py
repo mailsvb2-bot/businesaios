@@ -9,7 +9,7 @@ platform_layer to keep the adapter layer independent from the core package.
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Dict
+from typing import Any
 
 from runtime.platform.utils.canonical import canonical_json_bytes
 

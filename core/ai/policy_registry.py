@@ -12,7 +12,7 @@ IMPORTANT:
   generic registry mechanics do not fork into another local engine.
 """
 
-from typing import Optional, Tuple
+from typing import Optional
 
 from core.ai._policy_registry_store import PolicyRegistryStore
 from core.policies.registry import PolicyRegistry as _MetaPolicyRegistry

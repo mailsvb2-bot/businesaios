@@ -14,7 +14,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 from core.tenancy.tenant import current_tenant_id
 

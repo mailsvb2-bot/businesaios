@@ -2,7 +2,7 @@ from __future__ import annotations
 
 CANON_THIN_HANDLER = True
 
-from typing import Any, Dict
+from typing import Any
 
 from runtime.actions import ACTION_PRICING_SELECT_V1
 from runtime.decisioning import DecisionRouteViolation, extract_strict_route_from_envelope

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Callable
 from collections.abc import Mapping
 
 from runtime.finance.job_spec import FinanceJobSpec

@@ -6,7 +6,7 @@ This file groups effect handlers by domain modules.
 """
 
 from types import MappingProxyType
-from typing import Callable, Dict
+from collections.abc import Callable
 from collections.abc import Mapping
 
 ActionHandler = Callable[..., object]

@@ -6,7 +6,7 @@ This module is INTERNAL to runtime/_internal.
 No API changes to EffectsPort.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 

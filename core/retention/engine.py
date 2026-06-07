@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from config.pricing_retention_policy import (
     DEFAULT_RETENTION_ENGINE_POLICY,

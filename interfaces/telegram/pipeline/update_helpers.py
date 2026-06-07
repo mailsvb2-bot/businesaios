@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from core.behavior.behavioral_state_builder import BehavioralStateBuilder
 from core.behavior.constraints import price_constraints_from_behavior

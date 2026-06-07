@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Tuple
 
 from core.ai_ceo.contracts import CEOPlanStepV1
 from core.ai_ceo.ledger import GrowthSnapshotV1

@@ -8,7 +8,7 @@ All irreversible actions must still go through DecisionCore -> Runtime.
 This module provides tiny helper(s) that can be used by UI flows.
 """
 
-from typing import List, Optional
+from typing import Optional
 
 from core.ai_ceo.contracts import CEOIntentV1, CEOPlanStepV1
 from core.ai_ceo.ledger import GrowthSnapshotV1

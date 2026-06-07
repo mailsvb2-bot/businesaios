@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Set
 
 from config.env_flags import env_bool, env_csv
 

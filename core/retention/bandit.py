@@ -12,7 +12,6 @@ A/B exploration stable.
 
 import random
 import time
-from typing import List, Tuple
 
 from core.retention.ports import RetentionStore
 

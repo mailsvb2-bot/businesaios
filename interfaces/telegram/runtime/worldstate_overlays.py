@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, replace
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from interfaces.telegram.parsing.telegram_context import TelegramContext, extract_telegram_user_id
 from kernel.world_state import WorldStateV1

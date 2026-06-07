@@ -5,7 +5,6 @@ and compute a structured snapshot. No I/O, no threading, no side-effects.
 """
 from __future__ import annotations
 
-from typing import Dict
 
 
 def percentile(values: list[float], p: float) -> float:

@@ -9,7 +9,7 @@ These are intentionally dumb. They only execute decided steps via EffectsPort.
 The business logic remains in core/profit_sprint/* and decision policies.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from runtime.ads import AdsApplyState, AdsPlan, plan_digest
 from runtime.idempotency import make_idempotency_key

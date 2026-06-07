@@ -25,7 +25,7 @@ IMPORTANT:
 """
 
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from core.events.log import EventLog
 from core.tenancy.scope import TenantScope

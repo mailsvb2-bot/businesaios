@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from collections.abc import Iterable, Sequence
 
 from .base import Campaign, MetricPoint

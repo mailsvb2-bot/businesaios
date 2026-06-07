@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Safety gate wrapper for DecisionCore."""
 
-from typing import Any, Dict, Tuple
+from typing import Any
 
 
 def gate_action_or_raise(*, action: str, payload: dict[str, Any], tenant_id: str, user_id: str, event_log: Any, trace: Any) -> tuple[bool, str, dict[str, Any]]:

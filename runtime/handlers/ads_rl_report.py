@@ -3,7 +3,7 @@ from __future__ import annotations
 CANON_THIN_HANDLER = True
 
 
-from typing import Any, Dict
+from typing import Any
 
 from runtime.ads import bind_runtime_state, policy_store
 from runtime.ports.effects import EffectsPort

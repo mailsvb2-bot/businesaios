@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from runtime._internal.effects_domains.admin_state_helpers import emit_user_setting_reset
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict
 
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.handlers.admin_handlers import handle_admin

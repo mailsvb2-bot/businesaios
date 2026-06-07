@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 from runtime.actions import ACTION_ADS_AUTOPILOT_TICK_V1
 from runtime.decisioning import (

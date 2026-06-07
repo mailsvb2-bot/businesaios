@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from runtime.boot.finance_boot import StrategicFinanceRuntime, register_finance_runtime
 

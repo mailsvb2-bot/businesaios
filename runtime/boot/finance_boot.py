@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 from collections.abc import MutableMapping
 
 from runtime.boot.finance_boot_registry import (

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import runtime.platform.event_store.sqlite_retention as _ret
 import runtime.platform.event_store.sqlite_user_state as _us

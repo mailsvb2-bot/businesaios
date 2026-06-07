@@ -8,7 +8,7 @@ This module MUST NOT start Telegram runtime.
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from bootstrap.health_server import start_health_server
 from bootstrap.mode_gate import startup_summary, validate_run_mode

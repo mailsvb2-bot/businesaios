@@ -5,7 +5,7 @@ import os
 import sqlite3
 import time
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from observability.platform.observability.silent import swallow
 from runtime.platform.config.env_flags import env_int

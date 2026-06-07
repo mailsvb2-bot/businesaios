@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from .contracts import ScenarioInput, ScenarioOutcome, SimScore
 from .evaluators.downside_risk_evaluator import evaluate_downside_risk

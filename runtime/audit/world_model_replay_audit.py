@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from runtime.enforcement.world_model_pin_guard import check_world_model_pin
 from runtime.world_model import extract_pinned_world_model_meta_from_payload, replay_state_against_world_model

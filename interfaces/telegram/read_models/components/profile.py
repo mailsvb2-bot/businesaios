@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any
 
 
 def load_user_profile(event_store: Any, *, tenant_id: str, user_id: str) -> tuple[dict[str, Any], str, Any, list[Any]]:

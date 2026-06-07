@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from config.spend_ledger_policy import DEFAULT_SPEND_LEDGER_POLICY, SpendLedgerPolicy
 from core.events.read_call import call_iter_events, call_latest_events

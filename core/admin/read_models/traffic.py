@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Set
+from typing import Any
 
 from core.admin.read_models.traffic_support import (
     iter_events_window,

@@ -8,7 +8,8 @@ Historical helper APIs remain available as transitional ABI only.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
 from collections.abc import Mapping
 
 from bootstrap.decision_core_contract import RuntimeDecisionCorePort as DecisionIssuer

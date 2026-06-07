@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import Lock
-from typing import Dict, List, Tuple
 
 
 @dataclass(frozen=True)

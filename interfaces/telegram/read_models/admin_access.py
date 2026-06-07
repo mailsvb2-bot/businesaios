@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from interfaces.telegram.read_models.components.admin_metrics import load_admin_metrics
 from runtime.platform.config.env_flags import env_csv

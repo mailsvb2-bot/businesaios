@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Tariff, subscription and payment keyboards."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from core.ux.callbacks import CB_GIFT_CREATE, CB_GIFT_MENU, CB_MENU_MAIN, CB_SUB_MENU
 

@@ -4,7 +4,8 @@ import importlib
 import json as _json
 import os
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Optional
+from collections.abc import Callable
 
 
 def _socket_module():

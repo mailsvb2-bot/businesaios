@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 
 def unwrap_call_result(*, method: str, done: Any, box: dict[str, Any], timeout_s: float) -> Any:

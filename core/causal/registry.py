@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
 
 from core.causal.estimators.base import CausalEstimator
 from core.causal.estimators.diff_in_diff import DiffInDiffEstimator

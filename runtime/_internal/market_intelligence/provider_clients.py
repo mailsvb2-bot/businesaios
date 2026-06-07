@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 from collections.abc import Mapping
 
 from contracts.platforms.market_intelligence_advanced_contract import ProviderCursor

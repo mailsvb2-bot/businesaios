@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
-from typing import Mapping
+from collections.abc import Mapping
 
 from governance.persistence_codec import ensure_parent_dir, to_jsonable
 

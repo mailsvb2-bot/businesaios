@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, Set
 
 # Canonical vocabulary used by:
 # - runtime telemetry

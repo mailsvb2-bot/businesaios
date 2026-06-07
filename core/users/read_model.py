@@ -11,7 +11,7 @@ Why:
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from core.events.read_model_support import (
     best_effort_iter_events,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any
 
 
 def back_markup(callback_data: str) -> dict[str, list[list[dict[str, str]]]]:

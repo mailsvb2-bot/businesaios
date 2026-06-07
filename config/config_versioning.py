@@ -6,7 +6,8 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Mapping
+from typing import Any
+from collections.abc import Mapping
 
 from governance.persistence_codec import to_jsonable
 

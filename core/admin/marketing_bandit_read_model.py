@@ -34,7 +34,7 @@ Output:
   {step_key: {'a': {'alpha': .., 'beta': ..}, 'b': {...}}}
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from config.marketing_bandit_policy import DEFAULT_MARKETING_BANDIT_POLICY, MarketingBanditPolicy
 from core.admin.marketing_bandit_read_model_support import resolve_window_bounds

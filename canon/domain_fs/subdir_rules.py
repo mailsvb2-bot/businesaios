@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 from .constants import ALLOWED_SUBDIRS
 from .domain_discovery import is_transient_path, rel

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterator
+from collections.abc import Iterator
 
 from .constants import CANON_DOMAIN_MARKER, STRATEGIC_DOMAIN_NAMES
 

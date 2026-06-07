@@ -6,7 +6,7 @@ Each function is a small, testable primitive.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 
 def validate_payment_amount(amount: Any, *, currency: str = "RUB") -> float:

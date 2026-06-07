@@ -3,7 +3,6 @@ from __future__ import annotations
 """Canonical pricing RL scoring helpers."""
 
 import math
-from typing import List
 
 
 def softmax_probs(values: list[float], *, temperature: float) -> list[float]:
