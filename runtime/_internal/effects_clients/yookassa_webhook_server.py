@@ -7,7 +7,6 @@ Extracted from runtime/_internal/_effects_impl.py without changing behavior.
 
 import base64
 import hmac
-import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any

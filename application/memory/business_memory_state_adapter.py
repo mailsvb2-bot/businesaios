@@ -10,7 +10,6 @@ from application.memory.business_operating_memory import (
     canonicalize_business_memory_payload,
     project_business_memory_contract_bundle,
     project_business_memory_meta_payloads,
-    project_business_memory_state_context,
 )
 from kernel.world_state import WorldStateV1
 

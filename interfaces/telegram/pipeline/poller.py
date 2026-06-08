@@ -9,7 +9,7 @@ No SDK or network imports live here.
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from core.observability.silent import swallow
 from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import build_system_world_state

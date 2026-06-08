@@ -14,7 +14,6 @@ from application.autonomy.autonomy_stop_policy import AutonomyStopPolicy
 from execution.business_operating_memory import project_business_memory_contract_bundle
 from execution.headless_request_fingerprint import build_headless_request_fingerprint
 from execution.headless_trace import HeadlessTrace
-from execution.runtime_keys import ACTION_BUDGET_KEY
 from execution.safe_self_driving import SafeSelfDrivingPolicy
 
 CANON_HEADLESS_AUTONOMY_LOOP = True

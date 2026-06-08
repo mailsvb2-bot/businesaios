@@ -8,7 +8,6 @@ from core.behavior.constraints import price_constraints_from_behavior
 from core.telemetry.behavioral import BehaviorTelemetryV1
 from core.tenancy.request_context import bind_tenant, get_tenant_id
 from interfaces.telegram.pipeline.enrichment_step import build_economy
-from interfaces.telegram.pipeline.ingress_warning import emit_ingress_warning
 from interfaces.telegram.pipeline.tenant_resolution import resolve_tenant_for_update
 from interfaces.telegram.pipeline.worldstate_step import build_worldstate
 from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import apply_telegram_overlays

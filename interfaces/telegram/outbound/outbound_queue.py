@@ -16,7 +16,7 @@ Architecture (each file = single responsibility):
 import itertools
 import queue
 import threading
-from typing import Any, Optional
+from typing import Any
 from collections.abc import Callable
 
 from interfaces.telegram.outbound.outbound_alerter import OutboundAlerterMixin
@@ -31,7 +31,7 @@ from interfaces.telegram.outbound.outbound_queue_support import (
     enqueue_with_warning,
     unwrap_queue_call,
 )
-from interfaces.telegram.outbound.outbound_self_heal import SelfHealConfig, SelfHealController
+from interfaces.telegram.outbound.outbound_self_heal import SelfHealController
 from interfaces.telegram.outbound.outbound_self_heal_config import build_self_heal_config
 from interfaces.telegram.outbound.outbound_types import OutboundTask, PriorityArg
 from interfaces.telegram.outbound.outbound_worker import OutboundWorkerMixin

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .contextual_bandit_policy import action_key
-from .contracts import AdsRLAction, AdsRLOptSpec, AdsRLState, AdsRLSuggestion
+from .contracts import AdsRLOptSpec, AdsRLState, AdsRLSuggestion
 
 Json = dict[str, Any]
 

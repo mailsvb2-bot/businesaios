@@ -26,7 +26,7 @@ from core.ads.apply_engine_prechecks import (
     check_rate_limit,
     evaluate_gate_and_feedback,
 )
-from core.ads.apply_gate import AdsApplyState, assert_ads_apply_allowed
+from core.ads.apply_gate import AdsApplyState
 from core.ads.hardening.kill_switch import AdsKillSwitch
 from core.ads.hardening.rate_limiter import AdsRateLimiter
 from core.api.idempotency import IdempotencyStore

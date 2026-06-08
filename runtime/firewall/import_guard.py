@@ -5,7 +5,6 @@ import importlib.abc
 import inspect
 import sys
 from types import FrameType
-from typing import Optional
 
 from runtime.observability.error_handling import swallow
 

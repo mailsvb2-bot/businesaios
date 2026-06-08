@@ -11,7 +11,7 @@ and copy/paste drift across connectors.
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 
 
 @dataclass(frozen=True)

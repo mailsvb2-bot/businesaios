@@ -6,7 +6,6 @@ from typing import Any
 from runtime.actions import ACTION_ADS_AUTOPILOT_TICK_V1
 from runtime.decisioning import (
     DecisionRouteViolation,
-    canonical_runtime_route,
     extract_strict_route_from_envelope,
 )
 

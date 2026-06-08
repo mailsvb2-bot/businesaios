@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict
-from typing import Any, Optional
+from typing import Any
 
 from core.events.log import EventLog
 from core.tenancy.scope import TenantScope

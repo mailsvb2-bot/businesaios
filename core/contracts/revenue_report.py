@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Optional
 
 from config.revenue_contract_policy import DEFAULT_REVENUE_CONTRACT_POLICY
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from core.ux.callbacks import CB_CEO_MENU, CB_CEO_PLAN, CB_CEO_RUN, CB_MENU_MAIN
+from core.ux.callbacks import CB_CEO_PLAN, CB_CEO_RUN, CB_MENU_MAIN
 
 
 def kb_ai_ceo_menu(*, can_run: bool) -> dict:

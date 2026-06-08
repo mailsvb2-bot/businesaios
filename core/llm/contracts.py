@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Optional, Protocol
+from typing import Any, Literal, Protocol
 
 Role = Literal["system", "user", "assistant"]
 

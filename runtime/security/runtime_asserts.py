@@ -6,4 +6,3 @@ Single source of truth lives in runtime.executor.
 This module remains as a stable import path for effects implementations.
 """
 
-from runtime.executor import assert_called_from_executor

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Optional
-from collections.abc import Iterable, Sequence
+from typing import Any
+from collections.abc import Sequence
 
 from .base import AdsConnectorError
 

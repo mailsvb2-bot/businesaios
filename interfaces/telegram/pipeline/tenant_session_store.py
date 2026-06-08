@@ -15,7 +15,6 @@ Safety stance:
 
 import time
 from dataclasses import dataclass
-from typing import Optional
 
 from core.tenancy.scope import TenantId, as_tenant_id
 

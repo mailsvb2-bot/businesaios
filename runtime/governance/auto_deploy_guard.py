@@ -11,7 +11,6 @@ No side-effects.
 
 import time
 from dataclasses import dataclass
-from typing import Optional
 
 from runtime.platform.config.env_flags import env_bool, env_int, env_str
 

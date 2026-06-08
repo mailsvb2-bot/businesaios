@@ -7,7 +7,6 @@ from core.product.types import (
     FeatureRecord,
     FeatureScore,
     PackagingProposal,
-    ProductFeature,
     RoadmapCapacity,
     RoadmapProposal,
 )

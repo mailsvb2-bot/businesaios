@@ -25,7 +25,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 
 class WebhookAuthError(RuntimeError):

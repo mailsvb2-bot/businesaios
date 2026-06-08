@@ -15,7 +15,6 @@ IMPORTANT:
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 
 from runtime.autopilot_feedback_guard import AutopilotFeedbackGuard, AutopilotFeedbackGuardViolation
 from runtime.canon import CANONICAL_DECISION_CORE_MODULE

@@ -8,7 +8,6 @@ Why separate module:
 - Prevents accidental divergence ("two lines" for offer callbacks)
 """
 
-from typing import Optional
 
 from core.offers.offer_callbacks import outcome_event_type, parse_offer_callback
 from core.policies.telegram.context import TelegramCtx

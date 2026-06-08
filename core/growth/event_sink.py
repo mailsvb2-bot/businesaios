@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from core.events.log import EventLog
 from core.tenancy.normalization import require_tenant_id

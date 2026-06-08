@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 # Canonical integration points (avoid provider coupling / multiple truths).
 from core.ads.ads_service import AdsPlan, AdsService

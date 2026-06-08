@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from collections.abc import Mapping

@@ -52,8 +52,8 @@ def enforce_daily_budget(*, policy: BudgetPolicy, spend_minor_today: int) -> Bud
 # ---- Ads write guardrails (Stage 2/3) ----
 
 from dataclasses import dataclass as _dc
-from datetime import UTC, datetime, timezone
-from typing import Optional, Protocol
+from datetime import UTC, datetime
+from typing import Protocol
 
 
 class EventSink(Protocol):

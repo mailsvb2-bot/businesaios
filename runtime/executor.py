@@ -41,7 +41,7 @@ from runtime.execution import executor_effect_delivery as _executor_effect_deliv
 from runtime.execution.correlation import extract_correlation_key
 from runtime.execution.executor_audit import emit_effect_window as _executor_audit_helper
 from runtime.execution.executor_bindings import apply_executor_state
-from runtime.execution.executor_commit import _decision_tenant_id, get_delivery_info
+from runtime.execution.executor_commit import _decision_tenant_id
 from runtime.execution.executor_core import enforce_safe_mode as _executor_core_helper
 from runtime.execution.executor_observability import (
     append_decision_trace as append_executor_decision_trace,
@@ -51,9 +51,6 @@ from runtime.execution.executor_observability import (
 )
 from runtime.execution.executor_observability import (
     record_connector_runtime_event as record_executor_connector_runtime_event,
-)
-from runtime.execution.executor_observability import (
-    record_inference_budget_burn as record_executor_inference_budget_burn,
 )
 from runtime.execution.executor_observability import (
     record_inference_runtime_event as record_executor_inference_runtime_event,
@@ -424,8 +421,3 @@ __all__ = ['CANON_RUNTIME_EXECUTION_GATEWAY', 'RuntimeExecutor', 'assert_called_
 # The implementation stays runtime-internal; entrypoints import only from this
 # executor surface to preserve one guarded execution contract and prevent
 # route-level provider dispatch logic from becoming a second execution brain.
-from runtime._internal.economic_execution_contract import (
-    SealedEconomicExecutionContract,
-    build_click_provider_dispatch_execution_contract,
-    build_spend_runtime_execution_contract,
-)

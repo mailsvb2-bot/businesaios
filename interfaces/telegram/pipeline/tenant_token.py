@@ -10,7 +10,6 @@ Supported formats:
 We intentionally keep parsing dumb and explicit.
 """
 
-from typing import Optional
 
 
 def parse_tenant_token(text: str) -> str | None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Optional
+from typing import Any
 
 MAX_I64 = 2**63 - 1
 

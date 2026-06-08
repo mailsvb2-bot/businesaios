@@ -8,7 +8,7 @@ Runtime/UI can depend on this module without importing `core.*`.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 
 class NodeType(str, Enum):

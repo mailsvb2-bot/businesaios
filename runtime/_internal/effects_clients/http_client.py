@@ -13,11 +13,10 @@ IMPORTANT:
 import json
 import logging
 import threading
-from typing import Any, Optional
+from typing import Any
 
 from runtime._internal.http_transport import HttpTransport, build_http_transport
 from runtime._internal.http_transport import url_with_params as _canonical_url_with_params
-from runtime.observability.error_handling import swallow
 
 logger = logging.getLogger(__name__)
 

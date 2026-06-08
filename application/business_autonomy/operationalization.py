@@ -7,7 +7,6 @@ from collections.abc import Mapping, Sequence
 from observability.audit_export_service import AuditExportService
 from observability.metrics import InMemoryMetrics
 from observability.metrics_exporter import MetricsExporter
-from observability.slo_contract import SLIKind
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from runtime.platform.support.governance import AuditLog
 from runtime.platform.support.orchestration import (

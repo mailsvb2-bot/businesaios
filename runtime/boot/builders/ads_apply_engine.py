@@ -11,7 +11,7 @@ Single public function: build_ads_apply_engine()
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from runtime.platform.config.env_flags import env_bool, env_float, env_int
 

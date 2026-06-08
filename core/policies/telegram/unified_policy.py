@@ -7,7 +7,7 @@ from core.policies.product_domains.retention_domain import RetentionDomainPolicy
 from core.policies.product_domains.sales_domain import SalesDomainPolicyV1
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction
-from core.policies.telegram.retention_integration import apply_retention_constraints_to_state, merge_retention_plan
+from core.policies.telegram.retention_integration import apply_retention_constraints_to_state
 from core.policies.telegram.router import handle
 from core.policies.telegram.unified_policy_context import extract_session_fields, extract_user_fields
 from core.retention.decision_adapter import RetentionDecisionAdapter

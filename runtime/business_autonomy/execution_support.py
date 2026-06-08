@@ -9,7 +9,6 @@ from runtime.execution.distributed_execution_plane import (
     GlobalGovernorVerdict,
     HashRingShardMap,
     QueueSlice,
-    ReplayRecoveryPort,
 )
 from runtime.execution.region_ownership_plane import RegionOwnershipPlane, RegionRoute
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from core.ads.apply.audit import build_audit_event
 from core.ads.apply.contract import AdsApplyRequest, AdsApplyResult

@@ -10,7 +10,7 @@ WorldState building is handled elsewhere (runtime reducers).
 
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 
 def extract_telegram_user_id(update: dict) -> int | None:

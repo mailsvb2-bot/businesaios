@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
 
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose

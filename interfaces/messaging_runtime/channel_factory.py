@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 
 from .capabilities import get_capabilities
 from .channel_binding import ChannelBinding

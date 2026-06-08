@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 from collections.abc import Iterable
 
 from .experience_store import RLStep

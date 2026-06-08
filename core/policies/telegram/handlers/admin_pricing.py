@@ -6,7 +6,6 @@ Extracted from telegram router to prevent router from becoming a god-module
 and to make the pricing governance flow testable and auditable.
 """
 
-from typing import Optional
 from collections.abc import Callable
 
 from core.policies.telegram.context import TelegramCtx

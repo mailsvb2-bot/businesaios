@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 from config.ads_policy_defaults import (
     DEFAULT_ADS_AUTOPILOT_POLICY_DEFAULTS,

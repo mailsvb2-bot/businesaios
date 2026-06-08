@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any
 from collections.abc import Mapping
 
-from core.offers.models import OfferRule
 from core.offers.offer_types import OfferCatalog, OfferEligibility, OfferRender, OfferSummary
 
 

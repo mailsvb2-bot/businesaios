@@ -13,7 +13,6 @@ IMPORTANT:
 """
 
 import time
-from typing import Optional
 
 from learning.replay import FeedbackLoopFirewall
 from ml.policy_promotion_guard import PolicyPromotionGuard

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from dataclasses import replace
-from typing import Any
 from collections.abc import Callable
 from collections.abc import Mapping
 

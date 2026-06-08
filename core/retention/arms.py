@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import random
-from typing import Any, Optional
+from typing import Any
 
 from config.retention_arms_policy import DEFAULT_RETENTION_ARMS_POLICY, RetentionArmsPolicy
 from core.observability.throttled_logger import exception_throttled
-from core.retention.config.ai_limits import LIMITS, is_allowed_arm
+from core.retention.config.ai_limits import is_allowed_arm
 from core.retention.config.offer_catalog import OFFERS
 from core.retention.config.pricing_ladder import (
     WINDOWS,

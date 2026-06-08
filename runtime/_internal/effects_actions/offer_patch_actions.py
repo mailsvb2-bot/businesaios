@@ -18,7 +18,6 @@ from runtime._internal.effects_actions.offer_patch_apply_support import (
     summarize_patch_application,
 )
 from runtime.observability.error_handling import swallow
-from runtime.platform.config.yaml_loader import load_yaml
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 

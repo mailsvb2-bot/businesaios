@@ -31,7 +31,7 @@ with explicit probabilities.
 
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from config.pricing_retention_policy import DEFAULT_RL_PRICING_DEFAULTS
 from core.pricing.rl.candidates import build_candidates, clamp_int

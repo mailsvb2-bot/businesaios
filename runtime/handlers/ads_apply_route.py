@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from runtime.actions import ACTION_ADS_APPLY_EXECUTE_V1
 from runtime.decisioning import (
     DecisionRouteViolation,
-    canonical_runtime_route,
     extract_strict_route_from_envelope,
 )
 

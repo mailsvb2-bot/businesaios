@@ -6,7 +6,7 @@ These are intentionally simple and derived from event log.
 They power the Telegram "dashboards".
 """
 
-from typing import Any, Optional
+from typing import Any
 from collections.abc import Mapping
 
 from core.autopilot.read_model_support import (

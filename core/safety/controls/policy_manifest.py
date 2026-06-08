@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from collections.abc import Mapping
 

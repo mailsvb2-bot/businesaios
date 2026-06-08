@@ -14,19 +14,8 @@ PAYMENTS NOTE:
 from dataclasses import dataclass
 from typing import Any
 
-from runtime._internal.llm_transport import (
-    llm_generate_anthropic,
-    llm_generate_gigachat,
-    llm_generate_openai_compat,
-    llm_generate_yandexgpt,
-)
-from runtime.effects.telegram_effects import classify_startup
-from runtime.observability.error_handling import swallow
-from runtime.observability.telemetry import telegram_api_span
-from runtime.observability.tracing import get_correlation_key
 from runtime.platform.delivery_state import DeliveryState
 from runtime.ports.effects import EffectsPort
-from runtime.security.runtime_asserts import assert_called_from_executor
 
 from .effect_router import EffectRouter
 from .effects_actions.llm_actions import LLMEffectsMixin
@@ -41,11 +30,6 @@ from .effects_domains.evolution import EvolutionEffectsMixin
 from .effects_domains.marketing import MarketingEffectsMixin
 from .effects_domains.tracking import TrackingEffectsMixin
 from .effects_domains.user_state import UserStateEffectsMixin
-from .effects_servers import (
-    start_health_server_in_thread,
-    start_yookassa_webhook_server_in_thread,
-)
-from .effects_transport import HTTPResponse, http_get, http_post, url_with_params
 from .http_transport import HttpTransport, build_http_transport
 
 

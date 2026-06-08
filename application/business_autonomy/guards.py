@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from application.business_autonomy.contracts import BusinessExecutionRequest
 from application.business_autonomy.safety_core import SafetyRuntimePolicy, validate_blast_radius, validate_budget

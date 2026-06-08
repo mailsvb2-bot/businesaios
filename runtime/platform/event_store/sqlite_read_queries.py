@@ -7,7 +7,6 @@ and keeps all read-only query helpers in one place. The implementation is
 intentionally small and deterministic.
 """
 
-import json
 import sqlite3
 from typing import Any
 from collections.abc import Iterable, Sequence

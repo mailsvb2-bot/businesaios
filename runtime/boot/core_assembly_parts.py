@@ -3,7 +3,7 @@ from __future__ import annotations
 CANON_BOOT_WIRING_ONLY = True
 
 
-from typing import Any, Optional
+from typing import Any
 
 from learning.registry import ArtifactRegistry
 from runtime.boot import (

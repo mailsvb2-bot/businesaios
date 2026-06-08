@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose

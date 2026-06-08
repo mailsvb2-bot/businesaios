@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from runtime.events import EventLog
 from runtime.finance.event_publisher import PublishedFinanceEvent
