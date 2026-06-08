@@ -11,7 +11,7 @@ production-hard core.ads.apply_engine.AdsApplyEngine.
 No business decisions here.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from runtime.ads import AdsApplyEngine, bind_runtime_state, maturity_gate
 from runtime.governance import ActuationRegistry

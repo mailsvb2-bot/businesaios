@@ -15,7 +15,7 @@ import asyncio
 import logging
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from collections.abc import Callable
 
 from interfaces.telegram.outbound.async_outbound_queue import AsyncTelegramOutboundQueue

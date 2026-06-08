@@ -10,7 +10,7 @@ Selection itself happens in policy (deterministic hash).
 The chosen variant is logged via send_message@v1 track_event_type.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from core.read_model.cache import global_cache, watermark_for
 

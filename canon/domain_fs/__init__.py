@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, List
+from collections.abc import Iterable
 
 from .boot_rules import scan_boot_wiring_only
 from .constants import (

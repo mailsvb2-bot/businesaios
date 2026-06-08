@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from core.causal.bootstrap import bootstrap_ci
 from core.causal.registry import EstimatorRegistry, default_registry

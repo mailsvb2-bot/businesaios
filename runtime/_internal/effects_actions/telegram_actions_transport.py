@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 from runtime._internal.effects_actions.telegram.transport import (
     telegram_send_audio_transport,

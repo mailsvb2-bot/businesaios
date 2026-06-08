@@ -7,7 +7,7 @@ Why:
   - Keep connector modules small and focused on normalization logic.
 """
 
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Optional, Protocol
 
 from .base import AdsPlatform
 

@@ -15,7 +15,7 @@ This file is intentionally boring and explicit.
 CANON_BOOT_WIRING_ONLY = True
 
 from dataclasses import dataclass
-from typing import Literal, Set
+from typing import Literal
 from collections.abc import Iterator
 
 from runtime.boot.actions_catalog import (

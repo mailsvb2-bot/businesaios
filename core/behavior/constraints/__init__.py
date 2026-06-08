@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Deterministic constraints derived from behavioral observables."""
 
-from typing import Any, Dict
+from typing import Any
 from collections.abc import Mapping
 
 

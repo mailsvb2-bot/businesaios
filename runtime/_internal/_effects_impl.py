@@ -12,7 +12,7 @@ PAYMENTS NOTE:
   business order id (see core.payments.provider.idempotence_key_for_order).
 """
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 from runtime._internal.llm_transport import (
     llm_generate_anthropic,

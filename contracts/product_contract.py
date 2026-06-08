@@ -15,7 +15,8 @@ Compatibility shims:
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Optional, Protocol, Set, Tuple
+from typing import Any, Optional, Protocol
+from collections.abc import Mapping
 
 from contracts.economics_config import EconomicsConfigV1
 

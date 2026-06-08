@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List
+from collections.abc import Iterable
 
 WORLD_MODEL_CANON_VERSION = "WM-CONTRACT-V1"
 

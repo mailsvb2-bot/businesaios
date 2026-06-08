@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Mapping
+from collections.abc import Mapping
 
 CANON_ACTION_IMPACT_CONTRACT = True
 

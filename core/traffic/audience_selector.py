@@ -11,7 +11,6 @@ the creative generator returns them alongside the creative.
 """
 
 from dataclasses import dataclass
-from typing import List
 
 from core.traffic.contracts import TrafficAudience
 

@@ -3,7 +3,8 @@ from __future__ import annotations
 CANON_COMPAT_SHIM = True
 
 from dataclasses import dataclass, field
-from typing import Mapping, Protocol
+from typing import Protocol
+from collections.abc import Mapping
 
 from security.secret_contract import SecretRef
 

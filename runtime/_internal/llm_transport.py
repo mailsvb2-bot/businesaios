@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from runtime._internal.http_transport import sync_post_json
 from runtime.observability.error_handling import swallow

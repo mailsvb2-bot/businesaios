@@ -13,7 +13,6 @@ It is a computable translation of the chat spec:
 """
 
 import math
-from typing import Dict
 
 
 def sigmoid(x: float) -> float:

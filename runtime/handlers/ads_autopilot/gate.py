@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from threading import Lock
-from typing import Any, Dict
+from typing import Any
 
 from runtime.governance import PolicyUpdateGate, PolicyUpdateGateError
 from runtime.tenancy import as_tenant_id

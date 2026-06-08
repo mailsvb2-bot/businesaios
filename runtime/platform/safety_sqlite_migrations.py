@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from typing import Callable
+from collections.abc import Callable
 
 CANON_PLATFORM_SAFETY_SQLITE_MIGRATIONS = True
 

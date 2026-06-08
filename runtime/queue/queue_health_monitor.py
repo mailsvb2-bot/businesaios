@@ -9,7 +9,7 @@ mutate queue execution state and must never become a second brain.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable
+from collections.abc import Callable
 
 from core.tenancy.normalization import require_tenant_id
 from runtime.queue.backpressure_monitor import BackpressureMonitor, QueueBackpressureReport, TenantPressureReader

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from core.retention.offer_steps import render_offer_payload, should_allow_offer
 from core.tenancy.normalization import normalize_tenant_id

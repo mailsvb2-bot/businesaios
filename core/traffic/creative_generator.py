@@ -14,7 +14,7 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, List, Tuple
+from typing import Any
 
 from core.llm.agent.parse import extract_json_block
 from core.traffic.contracts import TrafficCreative

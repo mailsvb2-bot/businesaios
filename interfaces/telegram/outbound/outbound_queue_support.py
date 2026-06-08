@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from collections.abc import Callable
 
 from interfaces.telegram.outbound.outbound_call_result import unwrap_call_result

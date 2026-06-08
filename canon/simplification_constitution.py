@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Final, Iterable, Tuple
+from typing import Final
+from collections.abc import Iterable
 
 CANON_SIMPLIFICATION_CONSTITUTION_VERSION: Final[str] = "1.0"
 

@@ -6,7 +6,8 @@ Keeps the runtime/core execution surface on one explicit path for
 observability binding and executor-context activation.
 """
 
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 CANON_RUNTIME_EXECUTION_ENTRYPOINT_CONTEXT = True
 

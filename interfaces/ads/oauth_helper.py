@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Optional
 
 from interfaces.ads.errors import ValidationError
 from runtime.effects import url_with_params

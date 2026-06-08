@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from collections.abc import Mapping
 
 from core.behavior.operator_catalogs.models import OperatorCatalog, catalog_from_raw

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from datetime import UTC, datetime, timezone
-from typing import Any, Dict, List
+from typing import Any
 from collections.abc import Iterable
 
 from config.scoring_behavior_policy import (

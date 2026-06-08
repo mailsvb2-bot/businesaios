@@ -5,7 +5,8 @@ from __future__ import annotations
 import inspect
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Optional
+from collections.abc import Callable
 from collections.abc import Mapping
 
 from runtime._internal.http_transport import HttpTransport, build_http_transport

@@ -6,7 +6,7 @@ Currently supports OpenAI-compatible /responses endpoint.
 Kept internal to runtime/_internal.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_str

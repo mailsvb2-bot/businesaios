@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Callable
+from collections.abc import Callable
 
 from runtime.messaging.outbound_message import OutboundMessage
 from runtime.messaging_policy.policy_plan import PolicyPlan

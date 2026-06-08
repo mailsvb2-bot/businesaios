@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Protocol
+from typing import Any, Protocol
 from collections.abc import Iterable
 
 from core.events.read_model_support import best_effort_latest_event

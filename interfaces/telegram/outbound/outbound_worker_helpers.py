@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from interfaces.telegram.outbound.outbound_types import OutboundTask
 from interfaces.telegram.outbound.rate_limit import TokenBucket

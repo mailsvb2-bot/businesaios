@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from runtime.platform.economics.world_model_store import WorldModelStorePort
 from storage.postgres_session import PostgresSessionFactory

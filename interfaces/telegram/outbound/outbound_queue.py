@@ -16,7 +16,7 @@ Architecture (each file = single responsibility):
 import itertools
 import queue
 import threading
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from collections.abc import Callable
 
 from interfaces.telegram.outbound.outbound_alerter import OutboundAlerterMixin

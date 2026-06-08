@@ -3,7 +3,7 @@ from __future__ import annotations
 """Canonical evaluation surface with compat alias submodules."""
 
 from dataclasses import dataclass
-from typing import Dict, Protocol
+from typing import Protocol
 from collections.abc import Iterable, Mapping
 
 from runtime.platform.support.contracts.evaluation import EvaluationResult

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from core.api.idempotency import IdempotencyKey
 from core.tenancy.scope import TenantId

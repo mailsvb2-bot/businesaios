@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Dict, Protocol
+from typing import Any, Protocol
 
 
 class EventAppendProtocol(Protocol):

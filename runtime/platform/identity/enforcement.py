@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol, Tuple
+from typing import Protocol
 
 from runtime.platform.identity.entitlements import AccessController, AccessDecision
 

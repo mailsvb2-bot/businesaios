@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 from core.observability.silent import swallow
 from core.policies.telegram.helpers import ProposedAction, choose_marketing_variant, propose, propose_message

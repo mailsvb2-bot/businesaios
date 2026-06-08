@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from runtime.firewall.process_guard import require_effect_capability
 from runtime.tenancy import UNKNOWN_TENANT_ID, normalize_tenant_id

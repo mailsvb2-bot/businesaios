@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, List
 
 from core.marketing.feature_registry_autopilot import FEATURES as AUTOPILOT_FEATURES
 from core.marketing.feature_registry_campaigns import FEATURES as CAMPAIGN_FEATURES

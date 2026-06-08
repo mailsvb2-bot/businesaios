@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import replace
-from typing import Any, Dict, List
+from typing import Any
 from collections.abc import Iterable
 
 from core._safe_logging import log_fallback

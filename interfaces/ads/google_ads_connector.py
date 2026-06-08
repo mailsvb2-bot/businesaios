@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from collections.abc import Iterable, Sequence
 
 from interfaces.common.auth_session import AuthSession

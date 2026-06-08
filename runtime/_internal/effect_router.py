@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 from collections.abc import Awaitable
 
 from runtime._internal.effect_evidence_contract import effect_result_to_evidence, evidence_contract_fields

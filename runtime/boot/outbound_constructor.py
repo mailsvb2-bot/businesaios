@@ -3,7 +3,8 @@ from __future__ import annotations
 """Canonical constructor-call discipline for outbound queue boot wiring."""
 
 import importlib
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 CANON_BOOT_WIRING_ONLY = True
 CANON_OUTBOUND_CONSTRUCTOR_CALL = True

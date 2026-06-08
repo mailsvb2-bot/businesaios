@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """Sealed transport helpers extracted from ``runtime._internal._effects_impl``."""
-from typing import Any, Dict
+from typing import Any
 
 from runtime._internal.http_transport import HTTPResponse, sync_get, sync_post_json
 from runtime._internal.http_transport import url_with_params as _url_with_params

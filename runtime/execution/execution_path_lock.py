@@ -10,7 +10,8 @@ It must not become a second execution engine.
 
 import importlib
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 CANON_EXECUTION_PATH_LOCK_SINGLE_OWNER = True
 CANON_EXECUTION_PATH_LOCK_FAIL_CLOSED = True

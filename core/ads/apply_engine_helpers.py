@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Optional, Protocol
 
 
 class AdsApplyPort(Protocol):

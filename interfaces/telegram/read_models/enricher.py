@@ -16,7 +16,7 @@ This module is READ-ONLY:
 import logging
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from core.observability.errors import log_exception_throttled
 from core.observability.perf import AutoAccelerator, rolling_latency_summary

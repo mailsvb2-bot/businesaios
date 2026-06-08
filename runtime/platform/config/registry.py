@@ -8,7 +8,7 @@ access point so boot/runtime code avoids parallel config paths.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Type
+from typing import Any
 
 from runtime.platform.config.env_tenant_config import EnvTenantConfigStore
 from runtime.platform.config.feature_flags import FeatureFlags

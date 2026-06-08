@@ -7,7 +7,7 @@ This module contains only pure helpers and thin orchestration.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 
 @dataclass

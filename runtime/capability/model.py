@@ -5,7 +5,6 @@ It only maps canonical actions to abstract capabilities.
 """
 
 from dataclasses import dataclass
-from typing import List
 
 from runtime.decision import DecisionEnvelope
 

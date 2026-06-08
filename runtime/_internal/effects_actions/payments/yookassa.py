@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Any, Dict, Tuple
+from typing import Any
 
 from runtime._internal.effect_types import EffectActionType
 from runtime._internal.effects_clients.yookassa_webhook_server import (

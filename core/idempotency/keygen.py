@@ -11,7 +11,7 @@ Canonical external API still lives under core.api.idempotency_keygen.
 
 import hashlib
 import json
-from typing import Any, Dict
+from typing import Any
 
 
 def make_idempotency_key(payload: dict[str, Any]) -> str:

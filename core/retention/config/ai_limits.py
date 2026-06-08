@@ -7,7 +7,7 @@ AI may choose only from predefined offer arms and discount values.
 """
 
 from dataclasses import dataclass
-from typing import Final, Tuple
+from typing import Final
 
 from core.retention.config.pricing_ladder import ALLOWED_DISCOUNTS_PCT
 

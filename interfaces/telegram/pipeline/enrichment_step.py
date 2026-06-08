@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 
 def build_economy(*, enrich: dict[str, Any]) -> dict[str, Any]:

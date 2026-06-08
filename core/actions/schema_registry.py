@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 from core.actions.action_names import ADS_APPLY_EXECUTE_V1
 

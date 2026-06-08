@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
 
 from .contracts import TrafficAudience, TrafficBudget, TrafficCampaignSpec, TrafficCreative, TrafficObjective
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from runtime.ads import AdsAutopilotConstraints, AdsAutopilotRequest
 from runtime.economics import normalize_objective

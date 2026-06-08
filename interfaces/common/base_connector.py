@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any
 
 from interfaces.common.auth_session import AuthSession
 from interfaces.common.canonical_connector_contract import canonical_connector_contract

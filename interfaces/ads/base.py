@@ -14,7 +14,7 @@ remain behind explicit entitlement checks and budget guardrails.
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Optional, Protocol
 from collections.abc import Iterable, Sequence
 
 from .errors import AdsConnectorError

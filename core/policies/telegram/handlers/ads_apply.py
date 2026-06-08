@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from core.ads.apply_flow_codec import PENDING_KEY, compute_plan_idempotency_key, plan_summary_text
 from core.ads.apply_gate import AdsApplyState, build_disable_ads_apply_plan, build_enable_ads_apply_plan

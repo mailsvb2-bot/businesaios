@@ -7,7 +7,6 @@ This module remains import-safe for the repository bypass guard.
 """
 
 import importlib
-from typing import Dict
 
 
 def _effects_impl():

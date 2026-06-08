@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Admin and staff keyboards."""
 
-from typing import Any, Dict
+from typing import Any
 
 from core.ux.callbacks import CB_MENU_MAIN
 

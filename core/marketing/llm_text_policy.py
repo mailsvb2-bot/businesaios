@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Tuple
 
 from core.llm.guardrails import enforce_single_message, forbid_phrases, require_max_chars
 from core.llm.guardrails_ext import enforce_price_exact, forbid_manipulation_claims

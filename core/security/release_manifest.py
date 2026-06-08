@@ -20,7 +20,6 @@ Design constraints:
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 from core.security.release_manifest_io import iter_release_files, sha256_file
 

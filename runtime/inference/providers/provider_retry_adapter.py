@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from time import sleep
-from typing import Callable, TypeVar
+from typing import TypeVar
+from collections.abc import Callable
 
 CANON_RUNTIME_INFERENCE_PROVIDER_RETRY_ADAPTER = True
 _T = TypeVar('_T')

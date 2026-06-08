@@ -15,7 +15,6 @@ We intentionally store features as JSON (vector), not as 200 SQL columns:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List
 
 from core.retention.feature_registry_audio import KEYS as AUDIO_KEYS
 from core.retention.feature_registry_clicks import KEYS as CLICKS_KEYS

@@ -7,7 +7,7 @@ copy-paste while keeping provider-specific field precedence explicit in the
 connector call sites.
 """
 
-from typing import Any, Dict
+from typing import Any
 from collections.abc import Sequence
 
 from .base import AdsObjectRef, AdsPlatform, Campaign, MetricPoint

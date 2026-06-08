@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
 
 # Tier‑Ω FINAL: multi‑region signatures (minimal, production-shaped).
 # Real deployment should use KMS/HSM per region; here we model it as HMAC per region secret.

@@ -7,7 +7,7 @@ parse -> dedupe -> rate limit -> enrich -> worldstate -> decide -> execute
 """
 
 import time
-from typing import Any, Dict
+from typing import Any
 
 from core.behavior.behavioral_state_builder import BehavioralStateBuilder
 from core.observability.perf import Span

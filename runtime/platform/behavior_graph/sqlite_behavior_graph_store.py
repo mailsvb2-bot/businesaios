@@ -12,7 +12,7 @@ risk where the canonical surface pointed at a truncated part file.
 import json
 import sqlite3
 from collections import deque
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from contracts.behavior_graph import Edge, GraphSnapshot, Neighbor, Node, PathStep
 from observability.platform.observability.silent import swallow

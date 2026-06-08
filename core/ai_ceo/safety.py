@@ -6,7 +6,7 @@ This module contains *policy* checks only. No side effects.
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from config.env_flags import env_bool, env_int
 

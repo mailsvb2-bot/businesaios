@@ -29,7 +29,7 @@ legacy import path ``core.offers.offer_engine`` is now served from ``core.offers
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 from collections.abc import Mapping
 
 from core.marketing.variants import choose_variant as choose_marketing_variant

@@ -6,7 +6,7 @@ This module is INTERNAL to runtime/_internal.
 No API changes to EffectsPort.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from runtime._internal.effect_types import EffectActionType
 from runtime._internal.effects_actions.telegram.media import send_audio_effect
