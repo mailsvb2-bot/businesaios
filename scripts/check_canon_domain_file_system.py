@@ -8,15 +8,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from canon.domain_fs import (
-    findings_as_dicts,
-    scan_boot_wiring_only,
-    scan_canon_domain_file_system,
-    scan_thin_runtime_handlers,
-)
-
-
 def main() -> int:
+    from canon.domain_fs import (
+        findings_as_dicts,
+        scan_boot_wiring_only,
+        scan_canon_domain_file_system,
+        scan_thin_runtime_handlers,
+    )
+
     root = ROOT
     findings=[]
     findings.extend(scan_canon_domain_file_system(root))

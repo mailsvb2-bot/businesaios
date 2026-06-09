@@ -8,13 +8,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from formal.proof_obligations import (
-    try_prove_runtime_decision_gate,
-    verify_runtime_decision_model,
-)
-
-
 def main() -> int:
+    from formal.proof_obligations import (
+        try_prove_runtime_decision_gate,
+        verify_runtime_decision_model,
+    )
+
     model_result = verify_runtime_decision_model()
     smt_result = try_prove_runtime_decision_gate()
     model_expectation_ok = model_result["checked_cases"] == 32 and bool(model_result["failing_cases"]) and model_result["passing_cases"] < model_result["checked_cases"]
