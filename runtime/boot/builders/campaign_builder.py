@@ -10,7 +10,7 @@ targeting interests instead of a hardcoded template.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from runtime.boot import (
     AdsSpecBuilder,

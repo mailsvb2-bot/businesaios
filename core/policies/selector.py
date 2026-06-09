@@ -7,7 +7,6 @@ state. This module must not compute actions or execute effects.
 """
 
 import logging
-from typing import Optional
 
 from config.decision_safety_policy import DEFAULT_POLICY_SELECTOR_POLICY, PolicySelectorPolicy
 from core.observability.errors import log_exception_throttled

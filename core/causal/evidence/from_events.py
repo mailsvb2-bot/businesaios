@@ -12,11 +12,11 @@ This is intentionally conservative: it is evidence, not a 'second brain'.
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 from collections.abc import Iterable
 
 from core.causal.api import estimate_causal_effect
-from core.causal.types import CausalDataset, CausalQuery, CausalRow, EffectEstimate
+from core.causal.types import CausalDataset, CausalQuery, CausalRow
 
 Json = dict[str, Any]
 

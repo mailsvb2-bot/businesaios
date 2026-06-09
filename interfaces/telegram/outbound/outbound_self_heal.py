@@ -13,7 +13,6 @@ Legacy imports from ``_outbound_selfheal`` are preserved as thin re-exports.
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
 from collections.abc import Callable
 
 from interfaces.telegram.outbound.outbound_self_heal_ops import (

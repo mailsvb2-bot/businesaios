@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from config.strategic_growth_policy import DEFAULT_GROWTH_STRATEGY_SERVICE_POLICY, GrowthStrategyServicePolicy
 

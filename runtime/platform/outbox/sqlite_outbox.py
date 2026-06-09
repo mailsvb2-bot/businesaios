@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import time
-from typing import Any, Optional
+from typing import Any
 
 from runtime.platform.config.env_flags import env_int
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env

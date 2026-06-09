@@ -10,8 +10,7 @@ No network IO.
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
-from collections.abc import Mapping
+from typing import Any
 
 
 @dataclass(frozen=True)

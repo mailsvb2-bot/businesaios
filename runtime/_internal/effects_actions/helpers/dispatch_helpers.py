@@ -5,7 +5,7 @@ Extracted from RuntimeExecutor._dispatch (Patch 06).
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 
 def extract_user_id_from_payload(payload: Any) -> str:

@@ -4,7 +4,7 @@ import importlib
 import json as _json
 import os
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 from collections.abc import Callable
 
 

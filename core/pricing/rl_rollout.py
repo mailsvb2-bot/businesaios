@@ -12,7 +12,6 @@ This module is pure.
 
 import hashlib
 from dataclasses import dataclass
-from typing import Optional
 
 from core.flags.provider import FeatureFlagProvider, FlagContext
 

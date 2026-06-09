@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Any, Optional
+from typing import Any
 from collections.abc import Iterable
 
 import runtime.platform.event_store.sqlite_read_queries as _rq

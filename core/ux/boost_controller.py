@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 
 from core.contracts.revenue_sprint import RevenueSprintConfig, RevenueSprintState

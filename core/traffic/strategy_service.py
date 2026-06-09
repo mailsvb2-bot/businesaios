@@ -11,7 +11,6 @@ Otherwise (plain CreativeGenerator), audience falls back to heuristic-only.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 from core.traffic.audience_selector import AudienceSelector
 from core.traffic.bid_manager import BidManager

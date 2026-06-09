@@ -4,7 +4,7 @@ CANON_BOOT_WIRING_ONLY = True
 
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from runtime.boot import Keyring, PolicySelector
 from runtime.execution.executor_state import RuntimeExecutorInfra

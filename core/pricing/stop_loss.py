@@ -6,7 +6,7 @@ Canonical facade over focused stop-loss helpers.
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from config.pricing_retention_policy import (
     DEFAULT_PRICING_STOP_LOSS_POLICY,

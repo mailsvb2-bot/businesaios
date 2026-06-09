@@ -12,7 +12,7 @@ from reliability.execution_checkpoint_store import (
     ExecutionCheckpointStore,
     JsonlExecutionCheckpointStore,
 )
-from reliability.idempotency_contract import IdempotencyKey, IdempotencyResolution
+from reliability.idempotency_contract import IdempotencyKey
 from reliability.idempotency_scope import build_idempotency_key, build_runtime_request_scope
 from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
 from reliability.idempotency_store import JsonlIdempotencyStore

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import Protocol
 
 from config.growth_entitlements_policy import DEFAULT_GROWTH_ENTITLEMENTS_POLICY, GrowthEntitlementsPolicy
 from core.ads.policy import AdsEntitlements, AdsMode, AutopilotLimits

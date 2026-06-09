@@ -3,13 +3,12 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from config.pricing_retention_policy import (
     DEFAULT_RETENTION_ENGINE_POLICY,
     RetentionEnginePolicy,
 )
-from core.retention.config.pricing_ladder import WINDOWS
 from core.retention.ports import RetentionStore
 from core.tenancy.normalization import normalize_tenant_scope
 

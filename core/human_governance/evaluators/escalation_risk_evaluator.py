@@ -5,7 +5,6 @@ from config.risk_evaluation_policy import (
     EscalationRiskPolicy,
 )
 
-from ..enums import RiskLevel
 from ..types import ApprovalState, ReviewItem
 
 

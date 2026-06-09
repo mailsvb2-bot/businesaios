@@ -5,7 +5,7 @@ import hmac
 import json
 import os
 from dataclasses import dataclass
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 
 from ..action_context import SafetyActionContext
 from ..action_identity import stable_payload

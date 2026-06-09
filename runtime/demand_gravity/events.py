@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any, Protocol
 from collections.abc import Mapping

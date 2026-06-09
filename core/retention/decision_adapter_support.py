@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from core.observability.errors import log_exception_throttled
 from core.observability.throttled_logger import exception_throttled

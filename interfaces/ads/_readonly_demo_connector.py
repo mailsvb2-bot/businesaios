@@ -3,7 +3,6 @@ from __future__ import annotations
 """Read-only demo ads connector. Production must use a real provider (Meta/Yandex/VK/Telegram Ads)."""
 
 from datetime import date
-from typing import Optional
 from collections.abc import AsyncIterator, Sequence
 
 from interfaces.ads.base import AdsConnector

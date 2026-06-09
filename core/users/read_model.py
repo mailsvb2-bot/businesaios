@@ -10,8 +10,7 @@ Why:
 - TelegramRunner can enrich WorldState.user from these read models.
 """
 
-from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from core.events.read_model_support import (
     best_effort_iter_events,

@@ -7,7 +7,6 @@ Kept separate from the main router to avoid a God-module.
 
 import secrets
 import time
-from typing import Optional
 from collections.abc import Callable
 
 from core.policies.telegram.context import TelegramCtx

@@ -10,7 +10,7 @@ Depends on the core `enqueue()` method supplied by TelegramOutboundQueue.
 """
 
 import warnings
-from typing import Any, Optional
+from typing import Any
 from collections.abc import Callable
 
 from interfaces.telegram.outbound.outbound_enqueue_helpers import (

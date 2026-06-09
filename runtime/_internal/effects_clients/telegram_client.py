@@ -3,9 +3,8 @@ from __future__ import annotations
 """Sealed transport: Telegram Bot API client."""
 
 import inspect
-import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 from collections.abc import Callable
 from collections.abc import Mapping
 

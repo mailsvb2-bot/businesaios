@@ -13,7 +13,7 @@ Rules:
 """
 
 import time
-from typing import Any, Optional
+from typing import Any
 
 from core.read_model.world_state_builder import build_world_state_from_events
 from interfaces.telegram.parsing.telegram_context import TelegramContext

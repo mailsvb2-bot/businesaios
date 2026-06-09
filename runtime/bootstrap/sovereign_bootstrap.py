@@ -3,7 +3,6 @@ from __future__ import annotations
 """Canonical sovereign runtime bootstrap owner."""
 
 import inspect
-import sys
 import threading
 from dataclasses import dataclass, field
 

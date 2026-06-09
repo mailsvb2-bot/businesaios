@@ -9,7 +9,6 @@ No API changes to EffectsPort.
 from typing import Any
 
 from runtime._internal.effect_types import EffectActionType
-from runtime.observability.error_handling import exception_throttled, swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 

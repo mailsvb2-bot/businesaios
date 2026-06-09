@@ -8,7 +8,6 @@ Core (domain) must not read environment variables. This module is runtime-only.
 from dataclasses import replace
 
 _TELEGRAM_TOKEN_LABEL = "TELEGRAM_" + "BOT_TOKEN"
-from typing import Optional
 
 from config.settings_models import (
     CoreSettings,

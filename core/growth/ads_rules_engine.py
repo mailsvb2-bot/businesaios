@@ -3,7 +3,6 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Optional
 
 from config.ads_aggregates_policy import DEFAULT_ADS_AGGREGATES_POLICY
 from config.ads_rules_policy import DEFAULT_ADS_RULES_POLICY, AdsRulesPolicy

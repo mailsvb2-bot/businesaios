@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from config.retention_pricing_flow_policy import DEFAULT_RETENTION_PRICING_FLOW_POLICY, RetentionPricingFlowPolicy
 from core.events.log import EventLog

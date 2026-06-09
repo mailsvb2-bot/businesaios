@@ -5,7 +5,7 @@ import re
 import time
 import uuid
 from dataclasses import asdict
-from typing import Any, Optional
+from typing import Any
 
 from core.llm.contracts import LLMMessage, LLMRequest
 from core.observability.silent import swallow

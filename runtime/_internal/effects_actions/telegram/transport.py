@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from runtime._internal.effect_types import EffectActionType
 from runtime._internal.router_support import execute_effect_action_sync

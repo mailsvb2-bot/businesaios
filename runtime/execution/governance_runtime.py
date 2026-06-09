@@ -15,7 +15,7 @@ from governance.change_control_policy import ChangeControlPolicy
 from governance.control_plane_audit_log import PersistentGovernanceAuditLog
 from governance.rbac_contract import ActorContext, RoleId
 from governance.tenant_policy_overrides import PersistentTenantPolicyOverrideRegistry
-from runtime.execution.governance_runtime_support import _append_governance_audit, _governance_audit_log
+from runtime.execution.governance_runtime_support import _append_governance_audit
 from runtime.execution.operational_budget_runtime import build_action_execution_context
 
 CANON_RUNTIME_GOVERNANCE_EXECUTION_GATE = True

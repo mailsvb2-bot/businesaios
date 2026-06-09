@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from collections.abc import Mapping
 
 from bootstrap.product_boot import BootProductContext, ProductBoot
-from contracts.product_contract import ProductContract
 from products import load_all_product_contracts
 from runtime.platform.products.registry import ProductRegistry
 

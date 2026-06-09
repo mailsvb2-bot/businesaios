@@ -16,7 +16,7 @@ No side effects.
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from config.causal_guardrails_policy import (
     DEFAULT_CAUSAL_GUARDRAILS_POLICY,

@@ -12,7 +12,7 @@ Core must not import sqlite implementations at module import time.
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclass(frozen=True)

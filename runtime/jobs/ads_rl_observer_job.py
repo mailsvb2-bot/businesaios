@@ -13,7 +13,7 @@ This job is intentionally NOT started automatically.
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from runtime.ads import ObserveTickResult, observe_tick_once
 

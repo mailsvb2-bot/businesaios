@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .contracts import TrafficBudget
 
 
 @dataclass(frozen=True)

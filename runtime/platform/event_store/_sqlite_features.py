@@ -4,7 +4,6 @@ Pure functions taking an open sqlite3.Connection.
 """
 from __future__ import annotations
 
-from typing import Optional
 
 
 def upsert_user_features_daily(

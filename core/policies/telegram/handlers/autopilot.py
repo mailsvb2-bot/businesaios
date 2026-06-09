@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from core.autopilot.stop_loss import StopLossState
 from core.observability.throttled_logger import exception_throttled

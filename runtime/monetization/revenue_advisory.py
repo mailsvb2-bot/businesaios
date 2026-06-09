@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from advisory.revenue_os import PaywallVariant, PricePoint, RevenueOSFacade, RevenueSnapshot, SubscriptionPlan
 from runtime.monetization.contracts import utc_now
@@ -13,7 +13,6 @@ from runtime.monetization.revenue_advisory_contracts import (
     RevenueExperimentSurface,
     RevenuePaywallVariantInput,
     RevenuePlanInput,
-    RevenuePricePointInput,
     RevenueSnapshotInput,
 )
 

@@ -6,7 +6,6 @@ from pathlib import Path
 
 from runtime.execution.crash_window_recovery_contract import ExecutionCrashWindowState, required_recovery_action
 from runtime.platform.postgres_contract import (
-    REQUIRED_MIGRATIONS,
     REQUIRED_SCHEMA_OBJECTS,
     PostgresRuntimeProof,
     evaluate_postgres_contract,

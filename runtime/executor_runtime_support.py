@@ -29,14 +29,13 @@ from runtime.execution.reliability_runtime import RuntimeReliability, build_runt
 from runtime.executor_effects import build_runtime_executor_effects
 from runtime.queue.backpressure_policy import BackpressurePolicy
 from runtime.queue.job_dead_letter_store import (
-    InMemoryJobDeadLetterStore,
     JobDeadLetterStore,
     build_default_job_dead_letter_store,
 )
 from runtime.queue.job_dispatcher import JobDispatcher
 from runtime.queue.job_retry_policy import JobRetryPolicy
 from runtime.queue.job_scheduler import JobScheduler
-from runtime.queue.job_store import InMemoryJobStore, JobStore, build_default_job_store
+from runtime.queue.job_store import JobStore, build_default_job_store
 from runtime.queue.job_worker import JobRunner, JobWorker
 from runtime.queue.rate_limit_guard import RateLimitGuard
 from runtime.queue.throttle_policy import ThrottlePolicy

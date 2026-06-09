@@ -9,7 +9,7 @@ Per System TZ:
 
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 from runtime.observability.error_handling import exception_throttled
 

@@ -8,7 +8,6 @@ No API changes to EffectsPort.
 
 from runtime._internal.effect_types import EffectActionType
 from runtime._internal.effects_actions.llm_completion_support import (
-    call_marketing_llm,
     emit_marketing_llm_error,
     emit_marketing_llm_success,
     read_provider_and_model,

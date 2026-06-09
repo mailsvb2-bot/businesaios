@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Optional
 
 from core.retention.feature_extractors.activity import apply_activity_features
 from core.retention.feature_extractors.audio import apply_audio_features

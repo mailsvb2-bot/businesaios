@@ -8,7 +8,6 @@ Extracted from sqlite_event_store.py.
 
 import sqlite3
 
-from observability.platform.observability.silent import swallow
 
 
 def upsert_user_features_daily(

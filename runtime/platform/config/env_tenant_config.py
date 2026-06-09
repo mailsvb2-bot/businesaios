@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
 
 from runtime.platform.config.env_flags import env_str
 

@@ -10,7 +10,7 @@ Important: this module must NOT import network libraries.
 All network I/O is executed via runtime.effects -> sealed runtime/_internal.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from runtime.llm import (
     LLMAgent,

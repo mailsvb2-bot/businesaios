@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from core.growth.ads_config_fingerprint import ads_config_fingerprint
 from core.growth.ads_reco_cache import AdsRecommendationCache

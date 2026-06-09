@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from runtime.queue._sqlite_job_store_codec import iso_datetime
-from runtime.queue.job_contract import JobRecord, JobState, normalize_now
+from runtime.queue.job_contract import JobState, normalize_now
 from runtime.queue.queue_store_policy import DEFAULT_QUEUE_STORE_POLICY
 
 

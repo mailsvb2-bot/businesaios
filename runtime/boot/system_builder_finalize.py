@@ -3,8 +3,6 @@ from __future__ import annotations
 CANON_BOOT_WIRING_ONLY = True
 
 
-from pathlib import Path
-from typing import Any
 
 from bootstrap.finalize_runtime_args import FinalizeRuntimeArgs
 from runtime.platform.app_paths import runtime_data_dir

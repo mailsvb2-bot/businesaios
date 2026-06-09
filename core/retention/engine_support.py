@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from config.env_flags import env_float, env_int
 from config.pricing_retention_policy import (

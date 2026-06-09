@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from core.autopilot.guardrails import evaluate_stop_loss, evaluate_stop_loss_window
 from core.autopilot.read_model import business_metrics_window

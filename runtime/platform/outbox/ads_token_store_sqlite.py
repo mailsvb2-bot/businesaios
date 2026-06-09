@@ -5,7 +5,6 @@ import sqlite3
 import threading
 from dataclasses import asdict
 from pathlib import Path
-from typing import Optional
 
 from connectors.platform.ads.token_store import AdsTokenStore, OAuthToken
 

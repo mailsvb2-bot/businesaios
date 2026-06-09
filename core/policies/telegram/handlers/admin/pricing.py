@@ -9,7 +9,6 @@ from core.policies.telegram.handlers.admin.pricing_support import (
     pending_requests_view,
     pricing_approve_request_payload,
     pricing_edit_request_payload,
-    pricing_session_payload,
 )
 from core.policies.telegram.helpers import ProposedAction, propose
 from core.ux.telegram_keyboards import kb_back_main, kb_staff_menu

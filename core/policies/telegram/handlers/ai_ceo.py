@@ -10,11 +10,11 @@ Routing contract:
 - callback ceo:run  -> execute_plan@v1 with CEO steps
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from core.ai_ceo import autonomy_from_env, build_plan, read_growth_snapshot, render_plan_text
 from core.policies.telegram.context import TelegramCtx
-from core.policies.telegram.helpers import ProposedAction, propose, propose_message
+from core.policies.telegram.helpers import ProposedAction, propose
 from core.ux.callbacks import CB_CEO_MENU, CB_CEO_PLAN, CB_CEO_RUN
 from core.ux.telegram_keyboards import kb_ai_ceo_menu
 

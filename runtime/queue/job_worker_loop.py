@@ -6,7 +6,6 @@ This layer repeatedly invokes the canonical worker tick.
 It is intentionally operational-only and must not add planning logic.
 """
 
-import time
 from dataclasses import dataclass
 from datetime import datetime
 

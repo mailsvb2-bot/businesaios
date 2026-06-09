@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 from contracts.behavior_graph import Edge, GraphSnapshot, Neighbor, Node, PathStep
-from observability.platform.observability.silent import swallow
 from runtime.platform.postgres_port import PostgresPort
 
 

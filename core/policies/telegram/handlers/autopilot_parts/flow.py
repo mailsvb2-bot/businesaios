@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
 
 from core.observability.structured_logging import log_exception_throttled
 from core.policies.telegram.handlers.autopilot_parts.flow_diag import handle_diag_text

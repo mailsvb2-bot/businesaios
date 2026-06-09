@@ -29,22 +29,20 @@ legacy import path ``core.offers.offer_engine`` is now served from ``core.offers
 """
 
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 from collections.abc import Mapping
 
 from core.marketing.variants import choose_variant as choose_marketing_variant
-from core.observability.silent import swallow
 from core.offers.catalog_registry import OfferCatalogRegistry, default_offer_catalog_registry
 from core.offers.catalog_resolution import resolve_catalog
 from core.offers.cooldown_policy import allow_offer_by_cooldown
 from core.offers.eligibility import check_offer_eligibility
-from core.offers.models import OfferSpec, OfferVariant
+from core.offers.models import OfferSpec
 from core.offers.offer_catalog_resolver import OfferCatalogResolver
 from core.offers.offer_keyboards import offer_outcome_kb
 from core.offers.offer_types import OfferRender
 from core.offers.selection_policy import choose_band as _choose_band
-from core.offers.selection_policy import choose_offer_variant, eligible
-from core.offers.selection_policy import choose_slot as _choose_slot
+from core.offers.selection_policy import choose_offer_variant
 from core.offers.selection_policy import clamp_band as _clamp_band
 
 

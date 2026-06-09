@@ -6,14 +6,12 @@ from typing import Any
 
 from application.evidence.evidence_roundtrip import EvidenceRoundtripVerifier
 from application.governance.canonical_governance_decision import (
-    canonical_baseline_selection_decision,
     canonical_promotion_decision,
     canonical_rollback_recommendation_decision,
 )
 from application.governance.canonical_governance_evidence import canonical_governance_evidence
 from application.governance.canonical_governance_timeline import canonical_governance_timeline
 from application.governance.canonical_scenario_governance import (
-    canonical_scenario_catalog_entry,
     canonical_scenario_selection_outcome,
 )
 from application.memory.business_memory_governance import BusinessMemoryGovernanceGate

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Mapping
 
-from application.capability.capability_operator_view import merge_capability_views, normalize_capability_view
+from application.capability.capability_operator_view import merge_capability_views
 from execution.business_operating_memory import (
     project_business_memory_contract_bundle,
     project_business_memory_feedback_snapshot,
