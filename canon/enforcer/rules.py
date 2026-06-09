@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from collections.abc import Iterable, Sequence
+from pathlib import Path
 
 REPO_ROOT = Path('.')
 PY_DIRS_TO_SCAN = ["core", "runtime", "interfaces", "runtime.platform", "governance", "canon"]

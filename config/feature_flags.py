@@ -2,8 +2,8 @@ from __future__ import annotations
 
 CANON_COMPAT_SHIM = True
 
-from dataclasses import dataclass, field
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 
 from config.environment_matrix import normalize_environment_name
 from core.tenancy.normalization import normalize_tenant_id
