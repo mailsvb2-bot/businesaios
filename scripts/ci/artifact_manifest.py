@@ -8,10 +8,9 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.security.release_runtime_surface import iter_runtime_release_files
-
-
 def iter_project_files(root: Path):
+    from core.security.release_runtime_surface import iter_runtime_release_files
+
     yield from iter_runtime_release_files(root)
 
 

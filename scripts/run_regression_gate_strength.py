@@ -8,17 +8,16 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from formal.proof_obligations import try_prove_runtime_decision_gate, verify_runtime_decision_model
-from formal.regression_gate import (
-    evaluate_mutation_strength,
-    replay_cases_from_corpus,
-    replay_runtime_decision,
-    run_project_snapshot_bundle,
-    run_replay_suite,
-)
-
-
 def main() -> int:
+    from formal.proof_obligations import try_prove_runtime_decision_gate, verify_runtime_decision_model
+    from formal.regression_gate import (
+        evaluate_mutation_strength,
+        replay_cases_from_corpus,
+        replay_runtime_decision,
+        run_project_snapshot_bundle,
+        run_replay_suite,
+    )
+
     cases = replay_cases_from_corpus()
     replay = run_replay_suite(cases, replay_runtime_decision)
     mutation = evaluate_mutation_strength(cases, replay_runtime_decision)
