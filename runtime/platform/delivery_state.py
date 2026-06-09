@@ -23,7 +23,7 @@ from runtime.platform._delivery_state_codec import metadata_json as _metadata_js
 from runtime.platform._delivery_state_codec import normalize_receipt_row as _normalize_receipt_row
 from runtime.platform.app_paths import runtime_data_dir
 from runtime.platform.config.env_flags import env_path
-from runtime.platform.delivery_state_policy import DEFAULT_DELIVERY_STATE_POLICY
+from runtime.platform.delivery_state_policy import DEFAULT_DELIVERY_STATE_POLICY, DeliveryStatePolicy
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 
 FINALIZED_PHASE = DEFAULT_DELIVERY_STATE_POLICY.finalized_phase
