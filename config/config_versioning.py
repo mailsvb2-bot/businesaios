@@ -4,10 +4,10 @@ CANON_COMPAT_SHIM = True
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
-from collections.abc import Mapping
 
 from governance.persistence_codec import to_jsonable
 

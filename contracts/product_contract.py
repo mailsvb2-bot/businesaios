@@ -14,9 +14,9 @@ Compatibility shims:
   Lock-tests ensure this module remains the only definition site.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
-from collections.abc import Mapping
 
 from contracts.economics_config import EconomicsConfigV1
 

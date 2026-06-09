@@ -3,12 +3,12 @@ from __future__ import annotations
 CANON_COMPAT_SHIM = True
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from threading import RLock
 from typing import Any
-from collections.abc import Mapping
 
 from config.config_audit import ConfigAuditEvent, PersistentConfigAuditLog
 from config.config_versioning import ConfigVersion, ConfigVersioning, utc_now

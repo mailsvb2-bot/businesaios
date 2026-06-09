@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Iterable
 
 from canon.collapse.decision_path_map import FindingSeverity, LegacyCanonConfig
 from canon.collapse.synonym_entity_registry import find_canonical_for

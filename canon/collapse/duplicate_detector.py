@@ -3,9 +3,9 @@ from __future__ import annotations
 import ast
 import copy
 import hashlib
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Iterable
 
 from canon.collapse.decision_path_map import FindingSeverity, LegacyCanonConfig
 
