@@ -19,8 +19,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.security.release_runtime_surface import iter_runtime_release_files
-
 DEFAULT_OUTPUT = ROOT.parent / 'BUSINESAIOS_RUNTIME_RELEASE.zip'
 
 
@@ -32,8 +30,9 @@ def _resolve_output(argv: list[str]) -> Path:
     return DEFAULT_OUTPUT.resolve()
 
 
-
 def build_release_zip(*, repo_root: Path, out_zip: Path) -> int:
+    from core.security.release_runtime_surface import iter_runtime_release_files
+
     repo_root = Path(repo_root).resolve()
     out_zip = Path(out_zip).resolve()
     files = [(path.relative_to(repo_root).as_posix(), path) for path in iter_runtime_release_files(repo_root)]
@@ -53,7 +52,6 @@ def build_release_zip(*, repo_root: Path, out_zip: Path) -> int:
 
     print(f'OK: wrote {out_zip} ({len(files)} files)')
     return 0
-
 
 
 def main(argv: list[str] | None = None) -> int:
