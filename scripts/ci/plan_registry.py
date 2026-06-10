@@ -46,6 +46,7 @@ def allowed_gates() -> tuple[str, ...]:
         "fast",
         "full",
         "business-critical",
+        "targeted-domain",
         "coverage",
         "rust-safety",
         "rust-deps",
@@ -132,6 +133,14 @@ def _coverage_common(gate: str) -> ExecutionPlan:
 def plan_for_gate(gate: str) -> ExecutionPlan:
     if gate == "doctor":
         return _plan("doctor", "assert-project-shape", "dependency-lock", "doctor-check")
+    if gate == "targeted-domain":
+        return _plan(
+            "targeted-domain",
+            "assert-project-shape",
+            "dependency-lock",
+            "doctor-check",
+            "targeted-domain-tests",
+        )
     if gate == "business-critical":
         return _business_critical_common("business-critical")
     if gate == "coverage":

@@ -106,6 +106,7 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             ".github/workflows/full-ci.yml",
             ".github/workflows/release-gates.yml",
             ".github/workflows/release.yml",
+            ".github/workflows/targeted-domain-ci.yml",
         ),
         matrix_python_versions=("3.11", "3.12"),
     )
