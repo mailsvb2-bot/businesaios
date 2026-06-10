@@ -8,7 +8,6 @@ from crm.providers.common.crm_provider_store import CrmProviderStore
 from crm.providers.hubspot.hubspot_api_config import HubSpotApiConfig
 from crm.providers.hubspot.hubspot_auth_adapter import HubSpotAuthAdapter
 
-
 DEFAULT_PIPELINE = CrmPipeline(
     pipeline_key='hubspot_default',
     display_name='HubSpot Default',

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Mapping
+
 from config.risk_evaluation_policy import DEFAULT_FRAUD_RISK_TRACKER_POLICY
 
 

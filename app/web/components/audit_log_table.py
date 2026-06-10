@@ -10,7 +10,6 @@ from core.tenancy.normalization import normalize_tenant_id, require_tenant_id
 from security.audit_redaction_policy import AuditRedactionPolicy
 from shared.kinded_payloads import build_kinded_payload
 
-
 CANON_WEB_AUDIT_LOG_TABLE = True
 _MAX_LIMIT = 1000
 

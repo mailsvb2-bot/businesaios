@@ -3,15 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from app.web.components import ApprovalQueueCard
-from app.web.components import QueueHealthCard
-from app.web.components import QueueRemediationAuditCard
-from app.web.components import QueueRemediationHooksCard
-from app.web.components import RuntimeAlertsCard
-from app.web.components import QueueRemediationAnalyticsCard
+from app.web.components import (
+    ApprovalQueueCard,
+    QueueHealthCard,
+    QueueRemediationAnalyticsCard,
+    QueueRemediationAuditCard,
+    QueueRemediationHooksCard,
+    RuntimeAlertsCard,
+)
 from core.tenancy.normalization import require_tenant_id
 from shared.kinded_payloads import build_kinded_payload
-
 
 CANON_WEB_QUEUE_OPS_PAGE = True
 

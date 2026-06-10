@@ -8,7 +8,6 @@ from crm.providers.common.crm_provider_store import CrmProviderStore
 from crm.providers.pipedrive.pipedrive_api_config import PipedriveApiConfig
 from crm.providers.pipedrive.pipedrive_auth_adapter import PipedriveAuthAdapter
 
-
 DEFAULT_PIPELINE = CrmPipeline(
     pipeline_key='pipedrive_default',
     display_name='Pipedrive Default',

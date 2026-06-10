@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
-from runtime.platform.billing_recovery_store import SCHEMA_VERSION, PlatformSqliteChargebackStore, PlatformSqliteRefundStore
+from runtime.platform.billing_recovery_store import (
+    SCHEMA_VERSION,
+    PlatformSqliteChargebackStore,
+    PlatformSqliteRefundStore,
+)
 
 if TYPE_CHECKING:
     from billing.chargeback_orchestrator import ChargebackCase

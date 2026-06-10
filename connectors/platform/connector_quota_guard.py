@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from core.tenancy.normalization import require_tenant_id
 from tenancy.tenant_quota_guard import QuotaDimension, TenantQuotaGuard
 
-
 CANON_CONNECTOR_QUOTA_GUARD = True
 
 

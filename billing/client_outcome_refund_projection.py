@@ -6,7 +6,6 @@ from typing import Any, Mapping
 from billing.client_outcome_reversal_contract import ClientOutcomeReversalRecord
 from lead_outcomes.client_outcome_contract import BillableClientRecord
 
-
 CANON_CLIENT_OUTCOME_REFUND_PROJECTION = True
 
 

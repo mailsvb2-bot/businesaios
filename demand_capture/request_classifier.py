@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class RequestClassifier:
     def classify(self, text: str) -> str:
         lowered = str(text).lower()

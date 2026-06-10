@@ -8,7 +8,14 @@ from advisory.revenue_os.action_mapper import RevenueActionMapper, RevenueAction
 from advisory.revenue_os.approval_policy import ApprovalSummary, RevenueApprovalPolicy
 from advisory.revenue_os.audit_events import RevenueAuditEvent
 from advisory.revenue_os.churn_model import ChurnModel, ChurnProjection
-from advisory.revenue_os.contracts import PaywallVariant, RevenueDecisionIntent, RevenueExperiment, RevenueSnapshot, SubscriptionPlan, _required_text
+from advisory.revenue_os.contracts import (
+    PaywallVariant,
+    RevenueDecisionIntent,
+    RevenueExperiment,
+    RevenueSnapshot,
+    SubscriptionPlan,
+    _required_text,
+)
 from advisory.revenue_os.experiment_engine import RevenueExperimentEngine
 from advisory.revenue_os.experiment_registry import ExperimentRegistry, InMemoryExperimentRegistry
 from advisory.revenue_os.feature_flags import RevenueFeatureFlags

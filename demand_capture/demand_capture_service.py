@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+from demand_capture.channel_origin_mapper import ChannelOriginMapper
+from demand_capture.contact_extractor import ContactExtractor
 from demand_capture.demand_event_ingestion import DemandEventIngestion
-from demand_capture.request_parser import RequestParser
-from demand_capture.request_normalizer import RequestNormalizer
+from demand_capture.geo_extractor import GeoExtractor
+from demand_capture.origin_tracker import OriginTracker
 from demand_capture.request_deduplicator import RequestDeduplicator
 from demand_capture.request_enricher import RequestEnricher
-from demand_capture.origin_tracker import OriginTracker
-from demand_capture.channel_origin_mapper import ChannelOriginMapper
+from demand_capture.request_normalizer import RequestNormalizer
+from demand_capture.request_parser import RequestParser
 from demand_capture.session_linker import SessionLinker
-from demand_capture.contact_extractor import ContactExtractor
-from demand_capture.geo_extractor import GeoExtractor
 from demand_capture.time_window_extractor import TimeWindowExtractor
+
 
 class DemandCaptureService:
     def __init__(self) -> None:

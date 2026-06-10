@@ -4,10 +4,7 @@ from dataclasses import dataclass
 from typing import Mapping
 
 from billing.plan_contract import BillingPlanSpec
-from runtime.monetization import MonetizationPlan
-from runtime.monetization import MonetizationService
-from runtime.monetization import TaxContext
-from runtime.monetization import UsageInvoiceRequest
+from runtime.monetization import MonetizationPlan, MonetizationService, TaxContext, UsageInvoiceRequest
 
 CANON_BILLING_MONETIZATION_ADAPTER = True
 

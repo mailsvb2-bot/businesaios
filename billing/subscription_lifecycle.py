@@ -3,8 +3,13 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timedelta
 
-from billing.commercial_cycle_contract import BillingCycleWindow, SubscriptionCommercialEnvelope, SubscriptionLifecycleStatus, next_cycle_window, utc_now
-
+from billing.commercial_cycle_contract import (
+    BillingCycleWindow,
+    SubscriptionCommercialEnvelope,
+    SubscriptionLifecycleStatus,
+    next_cycle_window,
+    utc_now,
+)
 
 CANON_BILLING_SUBSCRIPTION_LIFECYCLE = True
 

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from runtime.service_names import RuntimeServiceName
-
-from demand_os.demand_os_registry import DemandOsRegistry
 from demand_os.demand_os_readiness import evaluate_readiness
+from demand_os.demand_os_registry import DemandOsRegistry
 from demand_os.demand_os_service import DemandOperatingSystemService
+from runtime.service_names import RuntimeServiceName
 
 
 def boot_demand_os(registry: DemandOsRegistry) -> DemandOperatingSystemService:

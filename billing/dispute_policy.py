@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping
 
-
 CANON_BILLING_DISPUTE_POLICY = True
 
 

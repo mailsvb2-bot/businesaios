@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 from interfaces.ads.base import AdsConnector, AdsConnectorError
 from interfaces.ads.registry import AdsConnectorRegistry
 
-
 Json = Dict[str, Any]
 
 

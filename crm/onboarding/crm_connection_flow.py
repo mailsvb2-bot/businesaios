@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from crm.crm_connection_contract import CrmConnectionRef
 from crm.onboarding.crm_connection_result import CrmConnectionResult
-from crm.onboarding.crm_provider_connection_metadata import extract_provider_connection_metadata
 from crm.onboarding.crm_connection_state_machine import CrmConnectionStateMachine
 from crm.onboarding.crm_connection_verifier import CrmConnectionVerifier
 from crm.onboarding.crm_credential_binding import CrmCredentialBinding
@@ -11,6 +10,7 @@ from crm.onboarding.crm_oauth_contract import (
     CrmOAuthStartRequest,
 )
 from crm.onboarding.crm_oauth_state_store import InMemoryCrmOAuthStateStore
+from crm.onboarding.crm_provider_connection_metadata import extract_provider_connection_metadata
 from security.integrations.crm_audit_redaction_policy import CrmAuditRedactionPolicy
 from security.integrations.crm_secret_binding import CrmSecretBinding
 from security.integrations.crm_token_binding_policy import CrmTokenBindingPolicy

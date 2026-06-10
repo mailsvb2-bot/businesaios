@@ -3,11 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from app.web.components import AuditLogTable
-from app.web.components import SecurityEventsCard
+from app.web.components import AuditLogTable, SecurityEventsCard
 from core.tenancy.normalization import require_tenant_id
 from shared.kinded_payloads import build_kinded_payload
-
 
 CANON_WEB_SECURITY_PAGE = True
 

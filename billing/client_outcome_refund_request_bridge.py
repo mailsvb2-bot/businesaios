@@ -6,7 +6,6 @@ from typing import Any, Mapping
 
 from billing.refund_orchestrator import RefundRequest
 
-
 CANON_CLIENT_OUTCOME_REFUND_REQUEST_BRIDGE = True
 
 

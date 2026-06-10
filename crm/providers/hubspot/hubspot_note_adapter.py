@@ -4,8 +4,8 @@ from crm.crm_connection_contract import CrmConnectionRef
 from crm.crm_note_contract import CrmNote
 from crm.providers.common.crm_http_client import CrmHttpRequest
 from crm.providers.common.crm_provider_store import CrmProviderStore
-from crm.providers.hubspot.hubspot_auth_adapter import HubSpotAuthAdapter
 from crm.providers.hubspot.hubspot_api_config import HubSpotApiConfig
+from crm.providers.hubspot.hubspot_auth_adapter import HubSpotAuthAdapter
 
 
 class HubSpotNoteAdapter:

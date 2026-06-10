@@ -6,7 +6,6 @@ from typing import Mapping
 
 from core.tenancy.normalization import require_tenant_id
 
-
 CANON_BILLING_LEDGER_EVENT = True
 
 

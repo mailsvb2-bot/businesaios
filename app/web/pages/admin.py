@@ -8,27 +8,28 @@ Thin composition only. It assembles already-built cards from canonical stores.
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from app.web.components import AnalyticsDashboardCard
-from app.web.components import ApprovalQueueCard
-from app.web.components import AutonomyBudgetPanel
-from app.web.components import CapabilityDiagnosticsCard
-from app.web.components import DeadLetterPanel
-from app.web.components import ExecutionTraceCard
-from app.web.components import MonetizationDashboardCard
-from app.web.components import PolicyOverrideCard
-from app.web.components import RevenueAdvisoryCard
-from app.web.components import ClientOutcomeDashboardCard
-from app.web.components import QuotaUsageCard
-from app.web.components import RecoveryPanel
-from app.web.components import RunControlPanel
-from app.web.components import RuntimeAlertsCard
-from app.web.components import SecurityEventsCard
-from app.web.components import SLOStatusCard
-from app.web.components import TenantSelector
+from app.web.components import (
+    AnalyticsDashboardCard,
+    ApprovalQueueCard,
+    AutonomyBudgetPanel,
+    CapabilityDiagnosticsCard,
+    ClientOutcomeDashboardCard,
+    DeadLetterPanel,
+    ExecutionTraceCard,
+    MonetizationDashboardCard,
+    PolicyOverrideCard,
+    QuotaUsageCard,
+    RecoveryPanel,
+    RevenueAdvisoryCard,
+    RunControlPanel,
+    RuntimeAlertsCard,
+    SecurityEventsCard,
+    SLOStatusCard,
+    TenantSelector,
+)
 from core.tenancy.normalization import require_tenant_id
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from shared.kinded_payloads import build_kinded_payload
-
 
 CANON_WEB_ADMIN_PAGE = True
 

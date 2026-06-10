@@ -8,7 +8,6 @@ from typing import Any, Mapping
 from core.tenancy.normalization import require_tenant_id
 from shared.kinded_payloads import build_kinded_payload
 
-
 CANON_WEB_QUOTA_USAGE_CARD = True
 
 

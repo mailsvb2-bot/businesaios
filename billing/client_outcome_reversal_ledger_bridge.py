@@ -3,9 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from billing.ledger_event import LedgerEntry, LedgerPosting
 from billing.client_outcome_reversal_contract import ClientOutcomeReversalRecord
-
+from billing.ledger_event import LedgerEntry, LedgerPosting
 
 CANON_CLIENT_OUTCOME_REVERSAL_LEDGER_BRIDGE = True
 

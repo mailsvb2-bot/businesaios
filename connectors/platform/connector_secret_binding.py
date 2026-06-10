@@ -6,7 +6,6 @@ from typing import Mapping
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_contract import SecretRef
 
-
 CANON_CONNECTOR_SECRET_BINDING = True
 
 

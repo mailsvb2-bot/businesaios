@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import json
 
 from shared.numbers import coerce_float
 from shared.result import Result
 
+from .outcome_math import OutcomeMathSupport
 from .registry import ArtifactRegistry, ModelArtifact, _stable_hash
 from .replay import EventStore
-from .outcome_math import OutcomeMathSupport
+
 
 @dataclass(frozen=True)
 class DatasetSnapshot:

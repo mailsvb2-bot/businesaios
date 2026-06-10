@@ -1,27 +1,30 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-import hashlib
-import json
 from typing import Iterable, Iterator, Mapping, Protocol
 
-from billing.commercial_cycle_contract import utc_now
+from billing.commercial_cycle_contract import ReconciliationDrift, utc_now
 from billing.dunning_orchestrator import DunningOrchestrator
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
 from billing.reconciliation_service import BillingReconciliationService, ReconciliationReport
-from billing.commercial_cycle_contract import ReconciliationDrift
+from billing.scheduler.lease import (
+    BillingJobLeaseStoreContract,
+    InMemoryBillingJobLeaseStore,
+    SqliteBillingJobLeaseStore,
+    create_job_lease,
+)
 from billing.subscription_lifecycle import SubscriptionCommercialEnvelope, SubscriptionLifecycleService
 from billing.usage_rollup import UsageRollup
-from billing.scheduler.lease import BillingJobLeaseStoreContract, InMemoryBillingJobLeaseStore, SqliteBillingJobLeaseStore, create_job_lease
 from core.tenancy.normalization import require_tenant_id
 from runtime.platform.billing_scheduler_job_store import (
     CANON_PLATFORM_BILLING_SCHEDULER_JOB_STORE,
-    PlatformSqliteBillingJobRunStore,
     SCHEMA_VERSION,
+    PlatformSqliteBillingJobRunStore,
 )
-
 
 CANON_BILLING_SCHEDULER_JOBS = True
 

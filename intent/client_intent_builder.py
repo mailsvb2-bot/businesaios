@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-from contracts.demand import ClientIntent
-from contracts.demand import ClientRequest
-from intent.intent_feature_builder import IntentFeatureBuilder
-from intent.service_type_detector import ServiceTypeDetector
-from intent.urgency_detector import UrgencyDetector
+from contracts.demand import ClientIntent, ClientRequest
 from intent.budget_sensitivity_detector import BudgetSensitivityDetector
-from intent.quality_preference_detector import QualityPreferenceDetector
-from intent.location_constraint_detector import LocationConstraintDetector
-from intent.repeat_purchase_detector import RepeatPurchaseDetector
 from intent.high_value_intent_detector import HighValueIntentDetector
-from intent.trust_need_detector import TrustNeedDetector
 from intent.intent_confidence import compute_confidence
 from intent.intent_explainer import IntentExplainer
+from intent.intent_feature_builder import IntentFeatureBuilder
+from intent.location_constraint_detector import LocationConstraintDetector
+from intent.quality_preference_detector import QualityPreferenceDetector
+from intent.repeat_purchase_detector import RepeatPurchaseDetector
+from intent.service_type_detector import ServiceTypeDetector
+from intent.trust_need_detector import TrustNeedDetector
+from intent.urgency_detector import UrgencyDetector
+
 
 class ClientIntentBuilder:
     def __init__(self) -> None:

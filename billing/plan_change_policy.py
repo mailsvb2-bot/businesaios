@@ -7,7 +7,6 @@ from typing import Mapping
 from billing.plan_contract import BillingPlanSpec
 from billing.subscription_lifecycle import SubscriptionLifecycleService
 
-
 CANON_BILLING_PLAN_CHANGE_POLICY = True
 
 

@@ -9,9 +9,8 @@ from connectors.platform.connector_capability_contract import (
 )
 from interfaces.common.base_connector import BaseConnector
 from interfaces.common.connector_health import ConnectorHealth
-from interfaces.common.connector_result import ConnectorResult
 from interfaces.common.connector_maturity import ConnectorMaturity as LegacyConnectorMaturity
-
+from interfaces.common.connector_result import ConnectorResult
 
 CANON_PLATFORM_CONNECTOR_CONTRACT = True
 

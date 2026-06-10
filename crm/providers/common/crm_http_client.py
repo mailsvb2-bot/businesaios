@@ -5,8 +5,6 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 
-from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
-
 from crm.providers.common.crm_http_errors import (
     CrmAuthenticationError,
     CrmHttpErrorContext,
@@ -17,6 +15,7 @@ from crm.providers.common.crm_http_errors import (
 )
 from crm.providers.common.crm_rate_limit_policy import CrmRateLimitPolicy
 from crm.providers.common.crm_retry_policy import CrmRetryPolicy
+from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
 
 
 def _load_internal_attr(module_name: str, attr_name: str) -> Any:

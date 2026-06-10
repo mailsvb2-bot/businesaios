@@ -8,7 +8,6 @@ from app.web.components.inference_tier_panel import InferenceTierPanel
 from app.web.components.provider_health_panel import InferenceProviderHealthPanel
 from core.tenancy.normalization import require_tenant_id
 
-
 CANON_WEB_INFERENCE_CAPACITY_PAGE = True
 
 

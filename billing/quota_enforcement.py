@@ -3,13 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping
 
+from billing.quota_policy import EffectiveQuotaPolicy, QuotaPolicyResolver
+from billing.usage_meter import UsageMeterContract
 from core.tenancy.normalization import require_tenant_id
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from tenancy.tenant_quota_guard import TenantQuotaGuard
-
-from billing.quota_policy import EffectiveQuotaPolicy, QuotaPolicyResolver
-from billing.usage_meter import UsageMeterContract
-
 
 CANON_QUOTA_ENFORCEMENT = True
 

@@ -8,7 +8,6 @@ from billing.client_outcome_reversal_ledger_bridge import ClientOutcomeReversalL
 from billing.ledger_event import LedgerPosting
 from billing.ledger_store import LedgerStoreContract
 
-
 CANON_CLIENT_OUTCOME_REVERSAL_POSTING_SERVICE = True
 
 

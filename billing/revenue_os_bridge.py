@@ -4,10 +4,12 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from billing.plan_contract import BillingPlanSpec
-from runtime.monetization import RevenuePaywallVariantInput
-from runtime.monetization import RevenuePlanInput
-from runtime.monetization import RevenuePricePointInput
-from runtime.monetization import RevenueSnapshotInput
+from runtime.monetization import (
+    RevenuePaywallVariantInput,
+    RevenuePlanInput,
+    RevenuePricePointInput,
+    RevenueSnapshotInput,
+)
 
 CANON_BILLING_REVENUE_OS_BRIDGE = True
 

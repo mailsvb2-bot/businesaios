@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class DemandDecisionAudit:
     def __init__(self) -> None:
         self._rows: list[dict[str, object]] = []

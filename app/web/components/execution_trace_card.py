@@ -13,7 +13,6 @@ from core.tenancy.normalization import normalize_tenant_id, require_tenant_id
 from security.payload_redaction import PayloadRedactor
 from shared.kinded_payloads import build_kinded_payload
 
-
 CANON_WEB_EXECUTION_TRACE_CARD = True
 _MAX_LIMIT = 1000
 

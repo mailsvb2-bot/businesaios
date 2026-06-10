@@ -3,13 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from app.web.components import PolicyOverrideCard
-from app.web.components import QuotaUsageCard
-from app.web.components import TenantSelector
+from app.web.components import PolicyOverrideCard, QuotaUsageCard, TenantSelector
 from core.tenancy.normalization import normalize_tenant_id, require_tenant_id
 from shared.kinded_payloads import build_kinded_payload
 from tenancy.tenant_policy_store import TenantPolicyBundle
-
 
 CANON_WEB_TENANTS_PAGE = True
 

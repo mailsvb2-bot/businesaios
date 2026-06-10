@@ -13,7 +13,6 @@ from runtime.platform.billing_scheduler_lease_store import (
     PlatformSqliteBillingJobLeaseStore,
 )
 
-
 CANON_BILLING_JOB_LEASES = True
 
 

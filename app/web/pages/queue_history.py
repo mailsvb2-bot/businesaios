@@ -3,13 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from app.web.components import QueueAlertHistoryCard
-from app.web.components import QueueRollupTimelineCard
-from app.web.components import QueueRemediationAuditCard
-from app.web.components import QueueRemediationAnalyticsCard
+from app.web.components import (
+    QueueAlertHistoryCard,
+    QueueRemediationAnalyticsCard,
+    QueueRemediationAuditCard,
+    QueueRollupTimelineCard,
+)
 from core.tenancy.normalization import require_tenant_id
 from shared.kinded_payloads import build_kinded_payload
-
 
 CANON_WEB_QUEUE_HISTORY_PAGE = True
 

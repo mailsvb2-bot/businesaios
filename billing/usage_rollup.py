@@ -7,7 +7,6 @@ from typing import Iterable, Mapping
 from billing.usage_meter import UsageRecord
 from core.tenancy.normalization import require_tenant_id
 
-
 CANON_BILLING_USAGE_ROLLUP = True
 
 

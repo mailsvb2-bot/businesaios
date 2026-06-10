@@ -8,7 +8,6 @@ from core.tenancy.normalization import require_tenant_id
 from governance.approval_contract import ApprovalStoreContract
 from shared.kinded_payloads import build_kinded_payload
 
-
 CANON_WEB_APPROVALS_PAGE = True
 
 

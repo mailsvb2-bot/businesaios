@@ -7,7 +7,6 @@ from app.web.components import PolicyOverrideCard
 from core.tenancy.normalization import require_tenant_id
 from shared.kinded_payloads import build_kinded_payload
 
-
 CANON_WEB_POLICY_OVERRIDES_PAGE = True
 
 

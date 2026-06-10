@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Mapping
 
-
 CANON_BILLING_PAYMENT_PROVIDER_CAPABILITY = True
 ALLOWED_PROVIDER_OPERATIONS = frozenset({'ensure_customer', 'collect', 'refund'})
 

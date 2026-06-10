@@ -5,7 +5,6 @@ from typing import Mapping
 
 from runtime.monetization import MonetizationService, TaxBreakdown, TaxContext
 
-
 CANON_BILLING_TAX_POLICY_BRIDGE = True
 
 

@@ -11,6 +11,7 @@ from core.math.advanced_models import (
     solve_capacity_transport,
 )
 
+
 @dataclass(frozen=True)
 class MatchMathSummary:
     graph_scores: dict[str, float]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class ChannelDeliveryAdapter:
     def send(self, adapter: object, *, request, decision) -> dict[str, object]:
         deliver = getattr(adapter, "deliver", None)

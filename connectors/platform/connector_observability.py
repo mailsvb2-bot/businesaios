@@ -7,7 +7,6 @@ from typing import Mapping
 from observability.action_audit_log import ActionAuditLog, build_default_action_audit_log
 from observability.metrics import InMemoryMetrics
 
-
 CANON_CONNECTOR_OBSERVABILITY = True
 
 

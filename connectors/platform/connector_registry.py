@@ -6,7 +6,6 @@ from typing import Iterable
 from connectors.platform.connector_capability_contract import ConnectorCapabilityDescriptor
 from connectors.platform.connector_contract import PlatformConnector
 
-
 CANON_CONNECTOR_REGISTRY = True
 
 

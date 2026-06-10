@@ -3,13 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping
 
+from billing.plan_contract import BillingMeterKey
+from billing.quota_enforcement import QuotaEnforcementDecision, QuotaEnforcer
+from billing.usage_meter import UsageMeterContract, UsageRecord
 from core.tenancy.normalization import require_tenant_id
 from tenancy.tenant_quota_guard import QuotaDimension
-
-from billing.plan_contract import BillingMeterKey
-from billing.quota_enforcement import QuotaEnforcer, QuotaEnforcementDecision
-from billing.usage_meter import UsageMeterContract, UsageRecord
-
 
 CANON_CONNECTOR_USAGE_METER = True
 

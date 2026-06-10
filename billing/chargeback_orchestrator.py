@@ -7,13 +7,12 @@ from uuid import uuid4
 
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope
 from billing.ledger_event import LedgerEntry, LedgerPosting, utc_now
-from billing.lineage import derive_lineage_metadata
 from billing.ledger_store import LedgerStoreContract
+from billing.lineage import derive_lineage_metadata
 from billing.recovery_store import ChargebackStoreContract
 from core.tenancy.normalization import require_tenant_id
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from runtime.monetization import ChargebackRecord, MonetizationService
-
 
 CANON_BILLING_CHARGEBACK_ORCHESTRATOR = True
 

@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 from connectors.platform.connector_registry import ConnectorRegistry
 
-
 CANON_CONNECTOR_VERSION_REGISTRY = True
 
 

@@ -5,9 +5,8 @@ from typing import Dict, Iterable, Mapping
 
 from interfaces.ads.base import AdsConnector, AdsPlatform
 from interfaces.ads.capabilities import AdsCapabilities
-from interfaces.common.connector_capabilities import ConnectorCapabilities
 from interfaces.ads.registry import CONNECTORS as ADS_INTERFACE_CONNECTORS
-
+from interfaces.common.connector_capabilities import ConnectorCapabilities
 
 CANON_ADS_PLATFORM_REGISTRY = True
 

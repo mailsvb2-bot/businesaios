@@ -3,15 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from app.web.components import CapabilityDiagnosticsCard
-from app.web.components import DeadLetterPanel
-from app.web.components import RecoveryPanel
-from app.web.components import RuntimeAlertsCard
-from app.web.components import SLOStatusCard
+from app.web.components import (
+    CapabilityDiagnosticsCard,
+    DeadLetterPanel,
+    RecoveryPanel,
+    RuntimeAlertsCard,
+    SLOStatusCard,
+)
 from core.tenancy.normalization import require_tenant_id
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from shared.kinded_payloads import build_kinded_payload
-
 
 CANON_WEB_RUNTIME_ALERTS_PAGE = True
 

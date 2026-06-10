@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from hashlib import sha256
+import json
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-import json
+from hashlib import sha256
 from typing import Mapping, Protocol
 from uuid import uuid4
 
@@ -13,7 +13,6 @@ from billing.lineage import derive_lineage_metadata
 from core.tenancy.normalization import require_tenant_id
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from runtime.platform.billing_dispute_store import DISPUTE_SCHEMA_VERSION, PlatformSqliteDisputeStore
-
 
 CANON_BILLING_DISPUTE_ORCHESTRATOR = True
 

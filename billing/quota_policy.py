@@ -3,12 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping
 
+from billing.plan_contract import TenantPlanStoreContract
 from core.tenancy.normalization import require_tenant_id
 from tenancy.tenant_billing_scope import BillingMode
 from tenancy.tenant_contract import TenantPolicyStoreContract
-
-from billing.plan_contract import TenantPlanStoreContract
-
 
 CANON_QUOTA_POLICY = True
 

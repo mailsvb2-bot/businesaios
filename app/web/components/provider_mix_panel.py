@@ -7,7 +7,6 @@ from core.tenancy.normalization import require_tenant_id
 from security.payload_redaction import PayloadRedactor
 from shared.kinded_payloads import build_kinded_payload
 
-
 CANON_WEB_PROVIDER_MIX_PANEL = True
 
 

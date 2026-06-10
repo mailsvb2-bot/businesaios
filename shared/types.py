@@ -1,8 +1,9 @@
 from __future__ import annotations
+
+import uuid
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Mapping
-import uuid
 
 
 def utc_now() -> datetime:

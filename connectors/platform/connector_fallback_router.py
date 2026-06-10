@@ -6,7 +6,6 @@ from connectors.platform.connector_health_monitor import ConnectorHealthMonitor
 from connectors.platform.connector_registry import ConnectorRegistry, ConnectorRegistryEntry
 from connectors.platform.connector_version_registry import ConnectorVersionRegistry
 
-
 CANON_CONNECTOR_FALLBACK_ROUTER = True
 
 

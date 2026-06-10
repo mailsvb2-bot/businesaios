@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import Mapping, Any
+from typing import Any, Mapping
 
 from billing.dispute_policy import DisputeClassification, DisputePolicy
 from lead_outcomes.client_outcome_contract import BillableClientRecord
-
 
 CANON_CLIENT_OUTCOME_DISPUTE_CLASSIFICATION_BRIDGE = True
 

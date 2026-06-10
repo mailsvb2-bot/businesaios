@@ -8,7 +8,6 @@ from billing.plan_contract import BillingPlanSpec
 from billing.usage_meter import UsageRecord
 from tenancy.tenant_billing_scope import TenantBillingScope
 
-
 CANON_INVOICE_EVENT_MAPPER = True
 
 

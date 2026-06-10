@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Mapping, Sequence
 
 from config.system_config import OptimizationObjective
-from kernel.decision_candidate import DecisionCandidate
 from core.math.advanced_models import DemandSource, LinearThompsonBandit, demand_potential, optimal_price_from_grid
 from growth.budget_engine import BudgetEngine
 from growth.campaign_engine import CampaignEngine
@@ -18,8 +17,9 @@ from growth.core.signal_support import (
 )
 from growth.creative_engine import CreativeEngine
 from growth.engine_contract import GROWTH_PLAN_KIND, build_package, normalize_payload
+from kernel.decision_candidate import DecisionCandidate
 from ml.common.feature_vector import FeatureVector
-from ml.scoring import RiskScoreModel, RevenuePotentialModel
+from ml.scoring import RevenuePotentialModel, RiskScoreModel
 from observability.growth_events import emit as emit_growth_event
 
 

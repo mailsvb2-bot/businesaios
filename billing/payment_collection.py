@@ -8,7 +8,6 @@ from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycl
 from billing.payment_provider_contract import PaymentProviderContract
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 
-
 CANON_BILLING_PAYMENT_COLLECTION = True
 
 

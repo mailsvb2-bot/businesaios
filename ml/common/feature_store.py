@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Dict, Mapping
+
 from ml.common.feature_vector import FeatureVector
 
 

@@ -10,7 +10,6 @@ from app.web.components.manual_capacity_override_panel import ManualCapacityOver
 from app.web.components.provider_mix_panel import ProviderMixPanel
 from core.tenancy.normalization import require_tenant_id
 
-
 CANON_WEB_INFERENCE_RUNTIME_ADMIN_PAGE = True
 
 

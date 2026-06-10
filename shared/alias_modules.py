@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import sys
 from importlib import import_module
 from types import ModuleType
 from typing import Mapping
-import sys
 
 
 def _ensure_alias_module(*, package_name: str, module_name: str, doc_suffix: str) -> ModuleType:

@@ -8,7 +8,6 @@ from billing.payment_provider_contract import PaymentProviderContract
 from billing.payment_provider_health_registry import PaymentProviderHealthRegistry
 from billing.payment_provider_registry import PaymentProviderRegistry
 
-
 CANON_BILLING_PAYMENT_PROVIDER_ROUTER = True
 
 

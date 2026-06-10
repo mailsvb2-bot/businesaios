@@ -15,7 +15,6 @@ from reliability.outbox_store import OutboxState
 from security.payload_redaction import PayloadRedactor
 from shared.kinded_payloads import build_kinded_payload
 
-
 CANON_WEB_DEAD_LETTER_PANEL = True
 _MAX_ROWS = 1000
 

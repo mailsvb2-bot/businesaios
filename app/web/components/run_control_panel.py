@@ -14,7 +14,6 @@ from core.tenancy.normalization import normalize_tenant_id, require_tenant_id
 from security.payload_redaction import PayloadRedactor
 from shared.kinded_payloads import build_kinded_payload
 
-
 CANON_WEB_RUN_CONTROL_PANEL = True
 _MAX_CONTROLS = 32
 _MAX_EVENTS = 500

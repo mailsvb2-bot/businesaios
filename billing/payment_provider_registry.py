@@ -6,7 +6,6 @@ from typing import Iterable, Mapping
 from billing.payment_provider_capability import PaymentProviderCapabilities
 from billing.payment_provider_contract import PaymentProviderContract
 
-
 CANON_BILLING_PAYMENT_PROVIDER_REGISTRY = True
 
 

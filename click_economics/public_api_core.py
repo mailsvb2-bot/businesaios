@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from economics.contracts import BillableFact
+
 from .contracts import ClickBillableFact, ClickCommercialFact
 
 

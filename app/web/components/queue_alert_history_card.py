@@ -9,7 +9,6 @@ from typing import Any, Iterable, Mapping
 from core.tenancy.normalization import normalize_tenant_id, require_tenant_id
 from shared.kinded_payloads import build_kinded_payload
 
-
 CANON_WEB_QUEUE_ALERT_HISTORY_CARD = True
 
 

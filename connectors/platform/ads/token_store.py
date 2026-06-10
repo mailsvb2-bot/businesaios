@@ -4,7 +4,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional, Protocol
 
-
 CANON_ADS_TOKEN_STORE_CONTRACT = True
 
 

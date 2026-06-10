@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 CANON_ECONOMIC_TRUTH_FRAGMENT = True
 
 

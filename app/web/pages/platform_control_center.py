@@ -3,7 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from app.web.components import PlatformAdminForms, PlatformAdminLiveRenderers, PlatformAdminShell, PlatformAdminWorkspace
+from app.web.components import (
+    PlatformAdminForms,
+    PlatformAdminLiveRenderers,
+    PlatformAdminShell,
+    PlatformAdminWorkspace,
+)
 from core.tenancy.normalization import require_tenant_id
 from shared.kinded_payloads import build_kinded_payload
 

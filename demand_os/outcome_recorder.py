@@ -3,11 +3,13 @@ from __future__ import annotations
 import time
 
 from config.execution_contract import is_canonical_decision_path
-from lead_outcomes import LeadConversionTracker
-from lead_outcomes import LeadOutcomeRegistry
-from lead_outcomes import LeadRevenueTracker
-from lead_outcomes import LeadStatusTracker
-from lead_outcomes import OutcomeTimeline
+from lead_outcomes import (
+    LeadConversionTracker,
+    LeadOutcomeRegistry,
+    LeadRevenueTracker,
+    LeadStatusTracker,
+    OutcomeTimeline,
+)
 from observability.demand import emit_outcome_events as emit_outcome_event
 from routing_execution.delivery_status import delivered_at_ms_for_status, persisted_delivery_status
 from shared.numbers import coerce_float, coerce_int

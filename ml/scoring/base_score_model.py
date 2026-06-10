@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Mapping
+
 from ml.common.feature_vector import FeatureVector
 from ml.common.score_output import ScoreOutput
 from shared.numbers import coerce_float

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Callable, Dict, Generic, List, Optional, Protocol, Sequence, Tuple, TypeVar
 import math
 import random
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Generic, List, Optional, Protocol, Sequence, Tuple, TypeVar
 
 from contracts.event_store import EventStoreReader, iter_events_strict
 

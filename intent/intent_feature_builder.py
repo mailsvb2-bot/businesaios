@@ -1,6 +1,7 @@
 from __future__ import annotations
-from contracts.demand import ClientIntentSignal
-from contracts.demand import ClientRequest
+
+from contracts.demand import ClientIntentSignal, ClientRequest
+
 
 class IntentFeatureBuilder:
     def build(self, request: ClientRequest) -> tuple[ClientIntentSignal, ...]:

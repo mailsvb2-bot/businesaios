@@ -3,10 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
+from application.capability.capability_operator_view import normalize_capability_view
 from core.tenancy.normalization import normalize_tenant_id, require_tenant_id
 from shared.kinded_payloads import build_kinded_payload
-from application.capability.capability_operator_view import normalize_capability_view
-
 
 CANON_WEB_CAPABILITY_DIAGNOSTICS_CARD = True
 

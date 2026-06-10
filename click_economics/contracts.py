@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 CANON_CLICK_ECONOMICS_CONTRACT = True
 
 

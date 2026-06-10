@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from config.execution_contract import CANONICAL_DECISION_PATH, CANONICAL_OPTIMIZATION_TARGET, DEFAULT_DELIVERY_CHANNEL
+from config.risk_evaluation_policy import DEFAULT_CANONICAL_DECISION_BRIDGE_POLICY
 from config.routing_limits import MAX_RUNNER_UPS
 from contracts.matching.routing_decision import RoutingDecision
-from kernel.decision_candidate import DecisionCandidate
 from core.constraints.decision import DecisionConstraints
+from demand_decision.decision_package_validator import DecisionPackageValidator
+from kernel.decision_candidate import DecisionCandidate
 from kernel.decision_request import DecisionRequest
 from kernel.decision_space import DecisionSpace
-from demand_decision.decision_package_validator import DecisionPackageValidator
 from shared.numbers import coerce_float
-from config.risk_evaluation_policy import DEFAULT_CANONICAL_DECISION_BRIDGE_POLICY
 
 
 class CanonicalDemandDecisionBridge:

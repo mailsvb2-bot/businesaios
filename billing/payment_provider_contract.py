@@ -3,10 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Mapping, Protocol
 
-from core.tenancy.normalization import require_tenant_id
-
 from billing.commercial_cycle_contract import CommercialCollectionAttempt, CommercialCollectionResult
-
+from core.tenancy.normalization import require_tenant_id
 
 CANON_BILLING_PAYMENT_PROVIDER_CONTRACT = True
 

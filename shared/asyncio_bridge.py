@@ -7,9 +7,9 @@ an awaitable. It prevents silent divergence between different ad-hoc wrappers
 scattered across boot/runtime/marketing code.
 """
 
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import Awaitable, TypeVar
-import asyncio
 
 T = TypeVar("T")
 

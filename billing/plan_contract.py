@@ -6,7 +6,6 @@ from typing import Mapping, Protocol
 
 from tenancy.tenant_contract import TenantPlan, utc_now
 
-
 CANON_BILLING_PLAN_CONTRACT = True
 
 

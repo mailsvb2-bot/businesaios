@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from contracts.demand import ClientRequest
+
 
 class RequestEnricher:
     def enrich(self, request: ClientRequest, *, origin: str, geo: str, time_window: str, contact: str) -> ClientRequest:

@@ -8,7 +8,6 @@ from billing.ledger_store import LedgerStoreContract
 from core.tenancy.normalization import require_tenant_id
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 
-
 CANON_BILLING_SPEND_GUARD = True
 
 

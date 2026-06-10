@@ -3,15 +3,14 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from dataclasses import dataclass, field
 import threading
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Mapping
 
 from connectors.platform.connector_registry import ConnectorRegistry
 from interfaces.common.connector_health import ConnectorHealth
-
 
 CANON_CONNECTOR_HEALTH_MONITOR = True
 

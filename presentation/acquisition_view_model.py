@@ -10,7 +10,6 @@ from advisory import (
     render_acquisition_explanation,
 )
 
-
 CANON_PRESENTATION_ACQUISITION_VIEW_MODEL = True
 
 

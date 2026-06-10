@@ -10,6 +10,7 @@ from core.math.advanced_models import (
     q_learning_update,
 )
 
+
 @dataclass
 class OutcomeMathSupport:
     q_table: Dict[Hashable, Dict[Hashable, float]] = field(default_factory=dict)

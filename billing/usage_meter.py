@@ -7,7 +7,6 @@ from typing import Iterable, Mapping, Protocol
 from core.tenancy.normalization import require_tenant_id
 from tenancy.tenant_contract import utc_now
 
-
 CANON_USAGE_METER = True
 
 

@@ -8,7 +8,6 @@ from billing.payment_provider_contract import PaymentCustomerProfile, PaymentPro
 from billing.payment_provider_registry import PaymentProviderRegistry
 from billing.payment_provider_router import PaymentProviderRouter
 
-
 CANON_BILLING_PAYMENT_PROVIDER_ADAPTER = True
 
 

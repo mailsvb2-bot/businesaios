@@ -5,8 +5,7 @@ from typing import Any, Mapping, Protocol
 
 from billing.lineage import invoice_lineage_root
 from core.tenancy.normalization import require_tenant_id
-from runtime.queue import JobDispatchRequest, JobDispatcher, JobPriority
-
+from runtime.queue import JobDispatcher, JobDispatchRequest, JobPriority
 
 CANON_BILLING_QUEUE_BRIDGE = True
 _ALLOWED_BILLING_JOBS = frozenset({'renewal', 'invoice_issue', 'dunning_retry', 'reconciliation'})

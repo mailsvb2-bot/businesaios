@@ -1,13 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol
-import hashlib
-import json
 
 from runtime.platform.config.env_flags import env_path, env_str
-
 
 MODEL_REGISTRY_BACKEND_ENV = "MODEL_REGISTRY_BACKEND"
 MODEL_REGISTRY_BACKEND_SQLITE = "sqlite"

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from application.headless.models import CEOParticipation, GoalExecutionRequest
 
-
 CANON_REAL_HEADLESS_SCENARIOS = True
 
 

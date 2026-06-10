@@ -4,11 +4,10 @@ from config.execution_contract import CANONICAL_OPTIMIZATION_TARGET
 from matching.candidate_builder import MatchBundleBuilder, MatchCandidateBuilder
 from matching.filters import MatchFilters
 from matching.match_audit import MatchAudit
+from matching.math_router import MatchMathSummary, MathAwareMatchRouter
 from matching.ranking import MatchRanking
 from observability.demand import emit_match_events as emit_match_event
 from supply_state.live_state_snapshot import to_snapshot
-
-from matching.math_router import MatchMathSummary, MathAwareMatchRouter
 
 
 class MatchEngine:

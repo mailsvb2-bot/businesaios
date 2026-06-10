@@ -12,7 +12,6 @@ from billing.client_outcome_refund_window_policy import ClientOutcomeRefundWindo
 from billing.dispute_policy import DisputePolicy
 from lead_outcomes.client_outcome_contract import BillableClientRecord
 
-
 CANON_CLIENT_OUTCOME_DISPUTE_SERVICE = True
 
 

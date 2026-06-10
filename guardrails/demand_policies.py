@@ -16,8 +16,8 @@ from config.demand_thresholds import (
     NO_RESPONSE_RATE_LIMIT,
     REPUTATION_FLOOR,
 )
-from guardrails._threshold_primitives import greater_equal, less_equal, less_than, score_or_zero
 from config.risk_evaluation_policy import DEFAULT_FRAUD_PATTERN_RISK_POLICY
+from guardrails._threshold_primitives import greater_equal, less_equal, less_than, score_or_zero
 
 
 class DemandDecisionGuard:

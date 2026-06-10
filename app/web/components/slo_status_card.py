@@ -9,7 +9,6 @@ from core.tenancy.normalization import require_tenant_id
 from observability.slo_contract import SLOComparator
 from shared.kinded_payloads import build_kinded_payload
 
-
 CANON_WEB_SLO_STATUS_CARD = True
 
 

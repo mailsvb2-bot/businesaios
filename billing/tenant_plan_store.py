@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from billing.plan_contract import BillingPlanBinding, BillingPlanSpec, TenantPlanStoreContract
 from core.tenancy.normalization import require_tenant_id
 from tenancy.tenant_contract import TenantPlan
-
-from billing.plan_contract import BillingPlanBinding, BillingPlanSpec, TenantPlanStoreContract
-
 
 CANON_TENANT_PLAN_STORE = True
 

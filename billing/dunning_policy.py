@@ -7,7 +7,6 @@ from typing import Mapping
 from billing.commercial_cycle_contract import DunningAction, utc_now
 from core.tenancy.normalization import require_tenant_id
 
-
 CANON_BILLING_DUNNING_POLICY = True
 
 

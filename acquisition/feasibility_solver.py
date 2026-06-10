@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from config.scoring_behavior_policy import AcquisitionFeasibilityPolicy, DEFAULT_ACQUISITION_FEASIBILITY_POLICY
 from acquisition.budget_optimizer import BudgetOptimizer, BudgetOptimizerInputs, BudgetRecommendation
 from acquisition.cac_model import CacInputs, CacSnapshot, CustomerAcquisitionCostModel
 from acquisition.funnel_model import FunnelModel, FunnelSnapshot, FunnelStage
 from acquisition.timeline_estimator import TimelineEstimate, TimelineEstimator, TimelineEstimatorInputs
+from config.scoring_behavior_policy import DEFAULT_ACQUISITION_FEASIBILITY_POLICY, AcquisitionFeasibilityPolicy
 from shared.numbers import coerce_float, coerce_int
 
 CANON_ACQUISITION_FEASIBILITY_SOLVER = True

@@ -8,11 +8,11 @@ from typing import Optional, Sequence
 
 from compliance.base import ComplianceControl, ComplianceValidationError, PolicyMetadata
 from compliance.evidence_export_contract import (
+    EvidenceExporter,
     EvidenceExportFormat,
     EvidenceExportManifest,
     EvidenceExportRequest,
     EvidenceExportResult,
-    EvidenceExporter,
     EvidenceRecord,
 )
 from compliance.pii_guard import PIIGuard

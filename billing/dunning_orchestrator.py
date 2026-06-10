@@ -7,7 +7,6 @@ from billing.commercial_cycle_contract import DunningAction, utc_now
 from billing.dunning_policy import DunningPolicy
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 
-
 CANON_BILLING_DUNNING_ORCHESTRATOR = True
 
 

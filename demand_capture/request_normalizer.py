@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from contracts.demand import ClientRequest
+
 
 class RequestNormalizer:
     def normalize(self, request: ClientRequest) -> ClientRequest:

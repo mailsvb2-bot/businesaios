@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 _ALLOWED = {
     'pending': {'oauth_started', 'failed'},
     'oauth_started': {'authorized', 'failed'},

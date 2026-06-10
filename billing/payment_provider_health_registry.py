@@ -6,7 +6,6 @@ from typing import Mapping
 
 from billing.commercial_cycle_contract import utc_now
 
-
 CANON_BILLING_PAYMENT_PROVIDER_HEALTH_REGISTRY = True
 
 
