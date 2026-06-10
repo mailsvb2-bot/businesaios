@@ -31,7 +31,4 @@ jobs:
       - name: Run targeted domain CI
         env:
           TARGETED_CI_BASE: origin/${{ github.base_ref || 'main' }}
-          TARGETED_CI_REQUIRE_DOMAIN_TESTS: "0"
-          TARGETED_CI_PYTEST_TIMEOUT_SECONDS: "900"
-          TARGETED_CI_COMPILE_TIMEOUT_SECONDS: "420"
-        run: python scripts/ci/targeted_domain_ci.py --base "$TARGETED_CI_BASE"
+        run: python -m scripts.ci.cli --gate targeted-domain
