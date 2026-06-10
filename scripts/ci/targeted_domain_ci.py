@@ -19,7 +19,15 @@ DOMAIN_KEYWORDS = {
     "shared_registry": ("shared", "schema", "registry", "contract"),
 }
 DOMAIN_ROOTS = {
-    "billing": ("billing/", "click_economics/", "economics/", "spend/"),
+    "billing": (
+        "billing/",
+        "click_economics/",
+        "economics/",
+        "spend/",
+        "core/payments/",
+        "core/economics/",
+        "core/billing/",
+    ),
     "app_web": ("app/web/", "presentation/"),
     "connectors_crm": ("connectors/", "crm/"),
     "demand_routing_supply": ("demand_", "intent/", "matching/", "routing/", "routing_execution/", "supply_"),
