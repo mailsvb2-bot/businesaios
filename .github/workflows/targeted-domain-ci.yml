@@ -1,0 +1,37 @@
+name: targeted-domain-ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  targeted-domain-ci:
+    runs-on: [self-hosted, linux, x64, businesaios]
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: requirements.lock.txt
+      - name: Verify dependency lock
+        run: python scripts/ci/check_requirements_lock.py
+      - name: Install locked dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.lock.txt
+      - name: Fetch base ref for targeted diff
+        run: git fetch --no-tags --prune origin ${{ github.base_ref || 'main' }}
+      - name: Run targeted domain CI
+        env:
+          TARGETED_CI_BASE: origin/${{ github.base_ref || 'main' }}
+          TARGETED_CI_REQUIRE_DOMAIN_TESTS: "0"
+          TARGETED_CI_PYTEST_TIMEOUT_SECONDS: "900"
+          TARGETED_CI_COMPILE_TIMEOUT_SECONDS: "420"
+        run: python scripts/ci/targeted_domain_ci.py --base "$TARGETED_CI_BASE"
