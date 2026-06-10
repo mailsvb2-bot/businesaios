@@ -25,20 +25,9 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
 
-from runtime.platform.config.env_flags import env_bool
-
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
-from canon.canon_ai_enforcer import run_enforcer
-from scripts.certify_helpers import (
-    CertificationReport,
-    analyze_god_objects_and_complexity,
-    check_god_modules,
-    detect_policy_divergence_signals,
-    find_network_imports_outside_sealed,
-)
 
 
 def prune_generated_release_artifacts(root: Path) -> None:
@@ -47,6 +36,7 @@ def prune_generated_release_artifacts(root: Path) -> None:
             shutil.rmtree(p, ignore_errors=True)
     for p in list(root.rglob("*.pyc")):
         p.unlink(missing_ok=True)
+
 
 def find_forbidden_release_artifacts(root: Path) -> list[str]:
     bad: list[str] = []
@@ -59,7 +49,15 @@ def find_forbidden_release_artifacts(root: Path) -> list[str]:
     return bad
 
 
-def certify_repo(root: str | Path) -> CertificationReport:
+def certify_repo(root: str | Path):
+    from scripts.certify_helpers import (
+        CertificationReport,
+        analyze_god_objects_and_complexity,
+        check_god_modules,
+        detect_policy_divergence_signals,
+        find_network_imports_outside_sealed,
+    )
+
     r = Path(root).resolve()
     prune_generated_release_artifacts(r)
     report = CertificationReport()
@@ -106,6 +104,9 @@ def check_decision_core() -> None:
 
 
 def main() -> int:
+    from canon.canon_ai_enforcer import run_enforcer
+    from runtime.platform.config.env_flags import env_bool
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", default=".", help="Repository root")
     parser.add_argument("--strict", action="store_true", help="Fail on any certification warning")

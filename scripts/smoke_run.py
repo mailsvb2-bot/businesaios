@@ -10,10 +10,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.ci.subprocess_io import run_command
-
 
 def _run(label: str, env_patch: dict[str, str], argv: list[str]) -> int:
+    from scripts.ci.subprocess_io import run_command
+
     env = os.environ.copy()
     temp_root = Path(tempfile.mkdtemp(prefix=f"businesaios_smoke_{label}_"))
     data_dir = temp_root / "data"
