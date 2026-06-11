@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from importlib import import_module
 
 from scripts.ci import step_ids as _step_ids
 from scripts.ci.doctor import run_doctor
@@ -11,8 +10,8 @@ from scripts.ci.step_boot_smoke import run as run_boot_smoke
 from scripts.ci.step_build_artifact import run as run_build_artifact
 from scripts.ci.step_business_critical_tests import run as run_business_critical_tests
 from scripts.ci.step_canon_audit import run as run_canon_audit
-from scripts.ci.step_targeted_domain_tests import run as run_targeted_domain_tests
 from scripts.ci.step_code_coverage import run as run_code_coverage
+from scripts.ci.step_container_runtime import run as run_container_runtime
 from scripts.ci.step_demo_e2e_smoke import run as run_demo_e2e_smoke
 from scripts.ci.step_dependency_lock import run as run_dependency_lock
 from scripts.ci.step_import_smoke import run as run_import_smoke
@@ -20,11 +19,14 @@ from scripts.ci.step_integration_tests import run as run_integration_tests
 from scripts.ci.step_lock_tests import run as run_lock_tests
 from scripts.ci.step_postgres_contract import run as run_postgres_contract
 from scripts.ci.step_postgres_live import run as run_postgres_live
+from scripts.ci.step_postgres_migrations import run as run_postgres_migrations
 from scripts.ci.step_production_boot import run as run_production_boot
 from scripts.ci.step_project_shape import run as run_project_shape
 from scripts.ci.step_quality import run as run_quality
 from scripts.ci.step_rust_safety_core import run as run_rust_safety_core
 from scripts.ci.step_rust_supply_chain import run as run_rust_supply_chain
+from scripts.ci.step_staging_runtime import run as run_staging_runtime
+from scripts.ci.step_targeted_domain_tests import run as run_targeted_domain_tests
 from scripts.ci.step_unit_tests import run as run_unit_tests
 from scripts.ci.step_verify_release import run as run_verify_release
 
@@ -51,32 +53,19 @@ _REGISTRY: dict[str, StepHandler] = {
     _step_ids.rust_safety_core(): run_rust_safety_core,
     _step_ids.rust_supply_chain(): run_rust_supply_chain,
     _step_ids.postgres_contract(): run_postgres_contract,
+    _step_ids.postgres_migrations(): run_postgres_migrations,
     _step_ids.postgres_live(): run_postgres_live,
+    _step_ids.container_runtime(): run_container_runtime,
+    _step_ids.staging_runtime(): run_staging_runtime,
     _step_ids.production_boot(): run_production_boot,
     _step_ids.verify_release(): run_verify_release,
     _step_ids.build_artifact(): run_build_artifact,
 }
 
 
-def _lazy_handler(name: str) -> StepHandler | None:
-    known_steps = {
-        "-".join(("postgres", "migrations")): ("postgres", "migrations"),
-        "-".join(("container", "runtime")): ("container", "runtime"),
-        "-".join(("staging", "runtime")): ("staging", "runtime"),
-    }
-    parts = known_steps.get(name)
-    if parts is None:
-        return None
-    module_name = ".".join(("scripts", "ci", "step_" + "_".join(parts)))
-    return getattr(import_module(module_name), "run")
-
-
 def handler_for_step(name: str) -> StepHandler:
     if name in _REGISTRY:
         return _REGISTRY[name]
-    lazy = _lazy_handler(name)
-    if lazy is not None:
-        return lazy
     raise KeyError(f"unknown step: {name}")
 
 
@@ -85,4 +74,4 @@ def registered_step_names() -> tuple[str, ...]:
 
 
 def all_step_names() -> tuple[str, ...]:
-    return tuple(sorted((*_REGISTRY.keys(), "postgres-migrations", "container-runtime", "staging-runtime")))
+    return tuple(sorted(_REGISTRY.keys()))
