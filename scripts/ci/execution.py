@@ -25,17 +25,36 @@ _PROOF_ENV_KEYS = (
     "STAGING_RUNTIME_PROOF_REQUIRED",
 )
 
+_RELEASE_RUNTIME_ENV_KEYS = (
+    "ENV",
+    "APP_ENV",
+    "APP_PROFILE",
+    "POSTGRES_RUNTIME_ENABLED",
+    "POSTGRES_EVENT_STORE_ENABLED",
+    "RUN_MIGRATIONS_BEFORE_START",
+    "POSTGRES_APPLY_MIGRATIONS",
+)
+
 
 @contextmanager
 def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
     quality_key = "BAIOS_REQUIRE_QUALITY_TOOLS"
     previous_quality = os.environ.get(quality_key)
     previous_proof = {key: os.environ.get(key) for key in _PROOF_ENV_KEYS}
+    previous_release_runtime = {key: os.environ.get(key) for key in _RELEASE_RUNTIME_ENV_KEYS}
     if step_name == "quality-check" and gate in {"release", "pre-release"}:
         os.environ[quality_key] = "release"
     if requires_release_proof_environment(gate=gate, step_name=step_name):
         for key in _PROOF_ENV_KEYS:
             os.environ[key] = "1"
+        os.environ.setdefault("ENV", "production")
+        os.environ.setdefault("APP_ENV", "production")
+        os.environ.setdefault("APP_PROFILE", "api")
+        os.environ.setdefault("POSTGRES_RUNTIME_ENABLED", "1")
+        os.environ.setdefault("POSTGRES_EVENT_STORE_ENABLED", "1")
+        os.environ.setdefault("RUN_MIGRATIONS_BEFORE_START", "1")
+        os.environ.setdefault("POSTGRES_APPLY_MIGRATIONS", "1")
+        os.environ[quality_key] = "release"
     try:
         yield
     finally:
@@ -44,6 +63,11 @@ def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
         else:
             os.environ[quality_key] = previous_quality
         for key, value in previous_proof.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        for key, value in previous_release_runtime.items():
             if value is None:
                 os.environ.pop(key, None)
             else:
