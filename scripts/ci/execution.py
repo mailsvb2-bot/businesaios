@@ -33,6 +33,7 @@ _RELEASE_RUNTIME_ENV_KEYS = (
     "POSTGRES_EVENT_STORE_ENABLED",
     "RUN_MIGRATIONS_BEFORE_START",
     "POSTGRES_APPLY_MIGRATIONS",
+    "BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK",
 )
 
 
@@ -42,6 +43,8 @@ def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
     previous_quality = os.environ.get(quality_key)
     previous_proof = {key: os.environ.get(key) for key in _PROOF_ENV_KEYS}
     previous_release_runtime = {key: os.environ.get(key) for key in _RELEASE_RUNTIME_ENV_KEYS}
+    if gate in {"release", "pre-release"} and step_name == "dependency-lock":
+        os.environ["BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK"] = "1"
     if step_name == "quality-check" and gate in {"release", "pre-release"}:
         os.environ[quality_key] = "release"
     if requires_release_proof_environment(gate=gate, step_name=step_name):
