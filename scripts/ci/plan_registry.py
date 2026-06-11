@@ -29,6 +29,8 @@ def _production_boot_step() -> str:
 
 def _release_proof_steps() -> tuple[str, ...]:
     return (
+        "postgres-contract",
+        _pg_migrations_step(),
         _pg_live_step(),
         _container_runtime_step(),
         _staging_runtime_step(),
