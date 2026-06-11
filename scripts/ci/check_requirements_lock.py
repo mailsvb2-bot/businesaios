@@ -1,19 +1,26 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
-"""Fail-closed top-level dependency drift check.
+"""Fail-closed dependency lock contract.
 
-The project intentionally keeps a small top-level dependency set. CI and Docker
-install from requirements.lock.txt, so requirements.txt must not drift away from
-that locked contract. This check is intentionally stdlib-only so it can run
-before dependencies are installed.
+The lightweight default check preserves the historical top-level drift guard.
+Release/pre-release gates additionally require the lock file to represent a real
+transitive lock. A top-level-only lock is useful for development consistency, but
+it is not enough evidence for production reproducibility.
 """
 
 
 ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENTS = ROOT / "requirements.txt"
 LOCK = ROOT / "requirements.lock.txt"
+
+_TOP_LEVEL_ONLY_MARKERS = (
+    "Locked top-level dependencies",
+    "Transitive dependency locking can be added later",
+    "top-level dependency set",
+)
 
 
 def _normalized_lines(path: Path) -> set[str]:
@@ -31,6 +38,21 @@ def _normalized_lines(path: Path) -> set[str]:
     return items
 
 
+def _release_lock_required() -> bool:
+    return str(os.getenv("BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "release",
+        "required",
+    }
+
+
+def _lock_is_top_level_only(path: Path) -> bool:
+    text = path.read_text(encoding="utf-8")
+    return any(marker in text for marker in _TOP_LEVEL_ONLY_MARKERS)
+
+
 def main() -> int:
     requirements = _normalized_lines(REQUIREMENTS)
     locked = _normalized_lines(LOCK)
@@ -46,6 +68,10 @@ def main() -> int:
             print("extra_in_lock:")
             for item in extra_in_lock:
                 print(f"  - {item}")
+        return 1
+    if _release_lock_required() and _lock_is_top_level_only(LOCK):
+        print("requirements lock is top-level-only; release requires a transitive lock")
+        print("regenerate requirements.lock.txt with pip-tools/uv/poetry and remove top-level-only markers")
         return 1
     print(f"requirements lock is in sync ({len(locked)} top-level dependencies)")
     return 0
