@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import runtime.execution.context as execution_context
 import runtime.execution.executor_trace_runtime as trace_runtime
 from runtime.decision import DecisionEnvelope
+from runtime.execution.context import assert_called_from_executor, executor_context
 from runtime.execution.executor_autonomy_gate import (
     deny_autonomy_execution as executor_deny_autonomy_execution,
 )
@@ -52,14 +52,6 @@ def execute_core_flow(*, executor, env, depth, timescale):
         timescale=timescale,
         preflight_fn=preflight_and_verify,
     )
-
-
-def executor_context(*args, **kwargs):
-    return execution_context.executor_context(*args, **kwargs)
-
-
-def assert_called_from_executor(*args, **kwargs):
-    return execution_context.assert_called_from_executor(*args, **kwargs)
 
 
 def _ensure_tenant_runtime_contracts(self, tenant_id: str) -> None:
