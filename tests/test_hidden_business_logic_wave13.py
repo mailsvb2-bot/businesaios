@@ -4,8 +4,8 @@ from canon.canon_ai_enforcer import run_enforcer
 from core.ads.hardening.circuit_breaker import AdsCircuitBreaker
 from core.causal.builders.event_store_builder import EventCausalBuilder
 from core.knowledge.mappers.lesson_deduplicator import LessonDeduplicator
+from core.llm import build_anthropic_client
 from core.llm.contracts import LLMRequest
-from core.llm.providers.anthropic import build_anthropic
 from core.strategic_horizon.engine import StrategicMode
 from core.strategic_horizon.vector_math import select_horizon
 
@@ -38,11 +38,11 @@ def test_wave13_strategic_horizon_policy_surface_stays_canonical() -> None:
 
 
 def test_wave13_anthropic_builder_keeps_defaults() -> None:
-    client = build_anthropic(
+    client = build_anthropic_client(
         transport=lambda *_args, **_kwargs: {"content": [{"text": "ok"}], "usage": {"input_tokens": 1, "output_tokens": 2}},
         base_url="https://example.test",
         api_key="k",
-        model="claude-test",
+        default_model="claude-test",
     )
     out = client.generate_sync(LLMRequest(model="", messages=[]))
     assert out.content == 'ok'
