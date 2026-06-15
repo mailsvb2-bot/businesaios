@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical route handlers for business autonomy operational visibility."""
 
 from dataclasses import dataclass, field
@@ -9,7 +7,11 @@ from collections.abc import Mapping
 from application.business_autonomy.delayed_outcome_bridge import BusinessAutonomyDelayedOutcomeBridge
 from application.business_autonomy.safety_core import build_safety_core_admin_surface
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
-from runtime.business_autonomy.public_api import build_business_autonomy_operationalization
+from runtime.business_autonomy.public_api import (
+    build_business_autonomy_operationalization,
+    get_business_trust_profile,
+    get_registered_business_capabilities,
+)
 from runtime.demand_gravity.admin_view import build_demand_gravity_admin_view
 
 CANON_API_BUSINESS_AUTONOMY_ROUTE_HANDLERS = True
@@ -129,48 +131,17 @@ class BusinessAutonomyRouteHandlers:
         return {"business_id": business_id, "execution_verdict": dict(alignment.execution_verdict), "normalized_request": dict(alignment.normalized_request)}
 
     def get_registered_capabilities(self, business_id: str) -> dict[str, Any]:
-        service = self.stack.get("guarded_service")
-        if service is None:
-            service = build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
-        autonomy_service = getattr(service, "_autonomy_service", None)
-        policy = getattr(autonomy_service, "_autonomy_policy", None)
-        registry = getattr(policy, "_capability_registry", None)
-        try:
-            entry = registry.get(business_id) if registry is not None else None
-        except Exception:
-            entry = None
-        if entry is None:
-            service = build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
-            autonomy_service = getattr(service, "_autonomy_service", None)
-            policy = getattr(autonomy_service, "_autonomy_policy", None)
-            registry = getattr(policy, "_capability_registry", None)
-            try:
-                entry = registry.get(business_id) if registry is not None else None
-            except Exception:
-                entry = None
-        capabilities = [] if entry is None else [{"kind": item.kind.value, "enabled": item.enabled, "confidence": item.confidence, "notes": item.notes} for item in entry.capabilities]
-        return {"business_id": business_id, "capabilities": capabilities}
+        return get_registered_business_capabilities(
+            business_id=business_id,
+            service=self.stack.get("guarded_service"),
+        )
 
     def get_trust_profile(self, business_id: str) -> dict[str, Any]:
-        service = self.stack.get("guarded_service")
-        if service is None:
-            service = build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
-        snapshot = self._trust_snapshot_from_service(service=service, business_id=business_id)
-        if snapshot is None or getattr(snapshot, "business_id", None) != business_id:
-            service = build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
-            snapshot = self._trust_snapshot_from_service(service=service, business_id=business_id)
-        if snapshot is None:
-            return {"business_id": business_id, "trust_tier": "unknown", "score": 0.0, "reasons": []}
-        return {"business_id": snapshot.business_id, "trust_tier": snapshot.trust_tier.value, "score": snapshot.score, "reasons": list(snapshot.reasons), "metadata": dict(snapshot.metadata or {})}
+        return get_business_trust_profile(
+            business_id=business_id,
+            service=self.stack.get("guarded_service"),
+        )
 
-    @staticmethod
-    def _trust_snapshot_from_service(*, service: object, business_id: str):
-        trust_policy = getattr(service, "_trust_policy", None)
-        registry = getattr(trust_policy, "_trust_registry", None)
-        try:
-            return registry.get(business_id) if registry is not None else None
-        except Exception:
-            return None
 
 
 def build_business_autonomy_route_handlers(*, stack: Mapping[str, Any] | None = None) -> BusinessAutonomyRouteHandlers:

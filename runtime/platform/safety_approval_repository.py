@@ -1,22 +1,66 @@
-from __future__ import annotations
-
 import json
+from dataclasses import dataclass, field
 import sqlite3
+from enum import Enum
 from collections.abc import MutableMapping
 from contextlib import contextmanager
 from pathlib import Path
 from sqlite3 import Connection
 from collections.abc import Iterator
 
-from core.safety.controls.multi_step_approval.models import ApprovalTicket, ApprovalWorkflowState
 from runtime.platform.safety_sqlite_migrations import SafetySqliteMigrator, SchemaMigrationPlan
+
+class ApprovalWorkflowState(str, Enum):
+    REQUESTED = "requested"
+    PENDING = "pending"
+    PARTIALLY_APPROVED = "partially_approved"
+    APPROVED = "approved"
+    EXECUTED = "executed"
+    REJECTED = "rejected"
+    EXPIRED = "expired"
+    CANCELLED = "cancelled"
+    SUPERSEDED = "superseded"
+
+
+@dataclass(frozen=True)
+class ApprovalTicket:
+    action_id: str
+    approvals: tuple[str, ...] = field(default_factory=tuple)
+    state: object = ApprovalWorkflowState.PENDING
+    rejections: tuple[str, ...] = field(default_factory=tuple)
+    requested_by: str = ""
+    expires_at: str = ""
+    required_approvals: int = 0
+    escalation_level: int = 0
+    version: int = 0
+    lease_owner: str = ""
+    fencing_token: int = 0
+
+    def __post_init__(self) -> None:
+        raw_state = getattr(self.state, "value", self.state)
+        object.__setattr__(self, "action_id", str(self.action_id))
+        object.__setattr__(self, "approvals", tuple(self.approvals or ()))
+        object.__setattr__(self, "state", self.state if isinstance(self.state, ApprovalWorkflowState) else ApprovalWorkflowState(str(raw_state or "pending")))
+        object.__setattr__(self, "rejections", tuple(self.rejections or ()))
+        object.__setattr__(self, "requested_by", str(self.requested_by or ""))
+        object.__setattr__(self, "expires_at", str(self.expires_at or ""))
+        object.__setattr__(self, "required_approvals", int(self.required_approvals or 0))
+        object.__setattr__(self, "escalation_level", int(self.escalation_level or 0))
+        object.__setattr__(self, "version", int(self.version or 0))
+        object.__setattr__(self, "lease_owner", str(self.lease_owner or ""))
+        object.__setattr__(self, "fencing_token", int(self.fencing_token or 0))
+
+    @property
+    def approved(self) -> bool:
+        return self.state in {ApprovalWorkflowState.APPROVED, ApprovalWorkflowState.EXECUTED}
+
 
 CANON_PLATFORM_SAFETY_APPROVAL_REPOSITORY = True
 SCHEMA_VERSION = 6
 
 
 class _ApprovalTicketMap(MutableMapping[str, ApprovalTicket]):
-    def __init__(self, repo: PlatformSqliteApprovalRepository) -> None:
+    def __init__(self, repo: 'PlatformSqliteApprovalRepository') -> None:
         self._repo = repo
 
     def __getitem__(self, key: str) -> ApprovalTicket:

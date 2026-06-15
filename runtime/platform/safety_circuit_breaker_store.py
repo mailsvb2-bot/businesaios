@@ -1,13 +1,17 @@
-from __future__ import annotations
-
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 from sqlite3 import Connection
 from collections.abc import Iterator
 
-from core.safety.controls.circuit_breaker.models import CircuitBreakerState
 from runtime.platform.safety_sqlite_migrations import SafetySqliteMigrator, SchemaMigrationPlan
+
+class CircuitBreakerState:
+    def __init__(self, *, key: str, consecutive_failures: int = 0, opened: bool = False) -> None:
+        self.key = str(key)
+        self.consecutive_failures = int(consecutive_failures)
+        self.opened = bool(opened)
+
 
 CANON_PLATFORM_SAFETY_CIRCUIT_BREAKER_STORE = True
 SCHEMA_VERSION = 2

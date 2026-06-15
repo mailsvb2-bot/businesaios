@@ -1,5 +1,12 @@
-from interfaces.web.common.http_response import HttpResponse
+from dataclasses import dataclass
+from typing import Mapping
 
-CANON_DEBUG_HTTP_RESPONSE_SHIM = True
 
-__all__ = ["CANON_DEBUG_HTTP_RESPONSE_SHIM", "HttpResponse"]
+@dataclass(frozen=True)
+class HttpResponse:
+    status_code: int
+    body: object
+    headers: Mapping[str, str] | None = None
+
+
+__all__ = ["HttpResponse"]

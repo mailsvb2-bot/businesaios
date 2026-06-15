@@ -1,20 +1,26 @@
-from __future__ import annotations
 
 import json
 import sqlite3
+from enum import Enum
 from contextlib import contextmanager
-from dataclasses import asdict
 from pathlib import Path
 from sqlite3 import Connection
 from collections.abc import Iterator
 
-from core.safety.controls.rollback_engine.models import (
-    RollbackAction,
-    RollbackExecutionState,
-    RollbackPlan,
-    RollbackReceipt,
-    RollbackReconciliationState,
-)
+class _RollbackRecord:
+    def __init__(self, **values):
+        self.__dict__.update(values)
+
+
+class RollbackExecutionState(str, Enum):
+    PLANNED='planned'; CONFIRMED='confirmed'; EXECUTING='executing'; PARTIAL='partial'; EXECUTED='executed'; COMPLETED='completed'; FAILED='failed'
+
+
+class RollbackReconciliationState(str, Enum):
+    PENDING='pending'; VERIFIED='verified'; DRIFTED='drifted'
+
+
+RollbackAction = RollbackReceipt = RollbackPlan = _RollbackRecord
 from runtime.platform.safety_sqlite_migrations import SafetySqliteMigrator, SchemaMigrationPlan
 
 CANON_PLATFORM_SAFETY_ROLLBACK_STORE = True
@@ -110,7 +116,7 @@ class PlatformSqliteRollbackPlanStore:
                     json.dumps(_serialize_plan(plan), sort_keys=True),
                     str(plan.execution_state.value if hasattr(plan.execution_state, 'value') else plan.execution_state),
                     str(plan.confirmation_token or ''),
-                    json.dumps([asdict(item) for item in plan.receipts], sort_keys=True),
+                    json.dumps([_serialize_receipt(item) for item in plan.receipts], sort_keys=True),
                     str(plan.reconciliation_state.value if hasattr(plan.reconciliation_state, 'value') else plan.reconciliation_state),
                     str(plan.reconciliation_error or ''),
                     next_version,
@@ -161,7 +167,7 @@ class PlatformSqliteRollbackPlanStore:
                     json.dumps(_serialize_plan(plan), sort_keys=True),
                     str(plan.execution_state.value if hasattr(plan.execution_state, 'value') else plan.execution_state),
                     str(plan.confirmation_token or ''),
-                    json.dumps([asdict(item) for item in plan.receipts], sort_keys=True),
+                    json.dumps([_serialize_receipt(item) for item in plan.receipts], sort_keys=True),
                     str(plan.reconciliation_state.value if hasattr(plan.reconciliation_state, 'value') else plan.reconciliation_state),
                     str(plan.reconciliation_error or ''),
                     next_version,
@@ -228,6 +234,15 @@ def _serialize_plan(plan: RollbackPlan) -> dict[str, object]:
         'version': int(plan.version or 0),
         'lease_owner': str(plan.lease_owner or ''),
         'fencing_token': int(plan.fencing_token or 0),
+    }
+
+
+def _serialize_receipt(item) -> dict[str, object]:
+    return {
+        'step_index': int(getattr(item, 'step_index', 0) or 0),
+        'action': str(getattr(item, 'action', '') or ''),
+        'status': str(getattr(item, 'status', '') or ''),
+        'details': dict(getattr(item, 'details', {}) or {}),
     }
 
 

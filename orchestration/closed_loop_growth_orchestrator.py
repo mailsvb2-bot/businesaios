@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from orchestration.signal_opportunity_bridge import SignalToOpportunityFlow
 from orchestration.opportunity_decision_bridge import OpportunityToDecisionFlow
 from execution.decision_execution_bridge import DecisionToExecutionFlow

@@ -35,7 +35,7 @@ def test_fastapi_router_builds_one_canonical_execute_action_stack_when_dependenc
 
 
 def test_execute_action_stack_centralizes_wrapper_composition() -> None:
-    text = (ROOT / 'interfaces' / 'api' / 'execute_action_api_stack.py').read_text(encoding='utf-8')
+    text = (ROOT / 'entrypoints' / 'api' / 'execute_action_api_stack.py').read_text(encoding='utf-8')
     bundle = (ROOT / 'entrypoints' / 'api' / 'execute_action_stack_bundle.py').read_text(encoding='utf-8')
     assert 'ExecuteActionHandler -> reliability guards -> control-plane envelope' in text
     assert 'build_execute_action_guarded_handler(' in bundle
@@ -43,7 +43,7 @@ def test_execute_action_stack_centralizes_wrapper_composition() -> None:
 
 
 def test_execute_action_stack_uses_canonical_durable_idempotency_bridge_when_available() -> None:
-    text = (ROOT / 'interfaces' / 'api' / 'execute_action_api_stack.py').read_text(encoding='utf-8')
+    text = (ROOT / 'entrypoints' / 'api' / 'execute_action_api_stack.py').read_text(encoding='utf-8')
     bridge = (ROOT / 'entrypoints' / 'api' / 'execute_action_idempotency_store.py').read_text(encoding='utf-8')
     assert 'build_api_execute_action_idempotency_store' in text
     assert 'DurableExecuteActionIdempotencyStore' in bridge
@@ -100,7 +100,7 @@ def test_execute_action_idempotency_truth_path_handles_in_progress_duplicates_ca
 
 
 def test_execute_action_stack_default_uses_canonical_reliability_idempotency_store() -> None:
-    stack = (ROOT / 'interfaces' / 'api' / 'execute_action_api_stack.py').read_text(encoding='utf-8')
+    stack = (ROOT / 'entrypoints' / 'api' / 'execute_action_api_stack.py').read_text(encoding='utf-8')
     bridge = (ROOT / 'entrypoints' / 'api' / 'execute_action_idempotency_store.py').read_text(encoding='utf-8')
     assert 'ReliabilityInMemoryIdempotencyStore' in stack
     assert 'return build_api_execute_action_idempotency_store(ReliabilityInMemoryIdempotencyStore())' in stack

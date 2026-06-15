@@ -10,6 +10,7 @@ from interfaces.api.health_handler import HealthHandler
 from observability.metrics import InMemoryMetrics
 
 
+
 @dataclass(frozen=True)
 class _RuntimeStub:
     metrics: InMemoryMetrics = field(default_factory=InMemoryMetrics)

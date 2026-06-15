@@ -47,6 +47,11 @@ def allowed_gates() -> tuple[str, ...]:
         "full",
         "business-critical",
         "targeted-domain",
+        "integrity",
+        "integrity-cargo",
+        "test-quality",
+        "test-collection",
+        "all-tests",
         "coverage",
         "rust-safety",
         "rust-deps",
@@ -140,6 +145,49 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "dependency-lock",
             "doctor-check",
             "targeted-domain-tests",
+        )
+    if gate == "integrity":
+        return _plan(
+            "integrity",
+            "assert-project-shape",
+            "dependency-lock",
+            "doctor-check",
+            "integrity-auditor",
+        )
+    if gate == "test-quality":
+        return _plan(
+            "test-quality",
+            "assert-project-shape",
+            "dependency-lock",
+            "doctor-check",
+            "test-quality",
+        )
+    if gate == "test-collection":
+        return _plan(
+            "test-collection",
+            "assert-project-shape",
+            "dependency-lock",
+            "doctor-check",
+            "test-quality",
+            "test-collection",
+        )
+    if gate == "integrity-cargo":
+        return _plan(
+            "integrity-cargo",
+            "assert-project-shape",
+            "dependency-lock",
+            "doctor-check",
+            "integrity-cargo-tests",
+        )
+    if gate == "all-tests":
+        return _plan(
+            "all-tests",
+            "assert-project-shape",
+            "dependency-lock",
+            "doctor-check",
+            "test-quality",
+            "test-collection",
+            "all-tests",
         )
     if gate == "business-critical":
         return _business_critical_common("business-critical")

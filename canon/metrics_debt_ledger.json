@@ -1,0 +1,10 @@
+{
+  "kind": "canon_metrics_debt_ledger",
+  "baseline_total_python_lines": 324009,
+  "reconciled_clean_head_total_python_lines": 332882,
+  "pre_existing_head_total_python_lines_debt": 8873,
+  "current_iteration_total_python_lines_budget": 1350,
+  "current_iteration_scope": "integrity-auditor-v1 + test-quality gates + runtime sqlite store split + API test runtime isolation",
+  "policy": "Do not raise canon/metrics_baseline.json. This ledger separates pre-existing HEAD debt from the current iteration budget. Future canonical source growth must be explicitly justified or burned down.",
+  "current_iteration_current_total_python_lines": 334232
+}

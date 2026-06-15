@@ -20,6 +20,11 @@ def unit_tests() -> str: return _s('unit','-tests')
 def integration_tests() -> str: return _s('integration','-tests')
 def business_critical_tests() -> str: return _s('business','-critical','-tests')
 def targeted_domain_tests() -> str: return _s('targeted','-domain','-tests')
+def integrity_auditor() -> str: return _s('integrity','-auditor')
+def integrity_cargo_tests() -> str: return _s('integrity','-cargo','-tests')
+def test_quality() -> str: return _s('test','-quality')
+def test_collection() -> str: return _s('test','-collection')
+def all_tests() -> str: return _s('all','-tests')
 def code_coverage() -> str: return _s('code','-coverage')
 def rust_safety_core() -> str: return _s('rust','-safety','-core')
 def rust_supply_chain() -> str: return _s('rust','-supply','-chain')
@@ -34,12 +39,12 @@ def all_step_names() -> tuple[str, ...]:
     return (
         project_shape(), dependency_lock(), doctor(), import_smoke(), boot_smoke(), demo_e2e_smoke(), quality(),
         canon_audit(), architecture_bypass_scan(), async_test_contract(), lock_tests(), unit_tests(), integration_tests(),
-        business_critical_tests(), targeted_domain_tests(), code_coverage(), rust_safety_core(), rust_supply_chain(), postgres_contract(), postgres_live(), production_boot(), verify_release(), build_artifact(),
+        business_critical_tests(), targeted_domain_tests(), integrity_auditor(), integrity_cargo_tests(), test_quality(), test_collection(), all_tests(), code_coverage(), rust_safety_core(), rust_supply_chain(), postgres_contract(), postgres_live(), production_boot(), verify_release(), build_artifact(),
     )
 
 
 __all__ = [
     'project_shape', 'dependency_lock', 'doctor', 'import_smoke', 'boot_smoke', 'demo_e2e_smoke', 'quality',
     'canon_audit', 'architecture_bypass_scan', 'async_test_contract', 'lock_tests', 'unit_tests', 'integration_tests',
-    'business_critical_tests', 'targeted_domain_tests', 'code_coverage', 'rust_safety_core', 'rust_supply_chain', 'postgres_contract', 'postgres_live', 'production_boot', 'verify_release', 'build_artifact', 'all_step_names',
+    'business_critical_tests', 'targeted_domain_tests', 'integrity_auditor', 'integrity_cargo_tests', 'test_quality', 'test_collection', 'all_tests', 'code_coverage', 'rust_safety_core', 'rust_supply_chain', 'postgres_contract', 'postgres_live', 'production_boot', 'verify_release', 'build_artifact', 'all_step_names',
 ]

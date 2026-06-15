@@ -13,6 +13,8 @@ PAYMENTS NOTE:
 """
 from dataclasses import dataclass
 from typing import Any
+from runtime.observability.telemetry import CANON_RUNTIME_TELEMETRY_OWNER as _CANON_RUNTIME_TELEMETRY_OWNER
+CANON_RUNTIME_OBSERVABILITY_OWNER = _CANON_RUNTIME_TELEMETRY_OWNER
 
 from runtime.platform.delivery_state import DeliveryState
 from runtime.ports.effects import EffectsPort

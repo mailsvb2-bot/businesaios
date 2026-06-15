@@ -1,26 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib import import_module
-
 from runtime.economic_core import EconomicAdminReadService
 from entrypoints.api.economic_routes import service as economic_service
 
+from runtime.executor import build_click_provider_dispatch_execution_contract, build_spend_runtime_execution_contract
+
 CANON_ECONOMIC_ROUTE_HANDLERS = True
-
-
-def _economic_executor_exports() -> tuple[object, object]:
-    module = import_module("runtime.executor")
-    return (
-        getattr(module, "build_click_provider_dispatch_execution_contract"),
-        getattr(module, "build_spend_runtime_execution_contract"),
-    )
-
-
-(
-    build_click_provider_dispatch_execution_contract,
-    build_spend_runtime_execution_contract,
-) = _economic_executor_exports()
 
 
 @dataclass(frozen=True, slots=True)

@@ -15,6 +15,8 @@ from runtime.handler_loader import import_internal_attr
 
 log = logging.getLogger('runtime.telegram_webhook')
 
+CANON_BOOT_WIRING_ONLY = True
+
 
 def _load_internal_attr(module_name: str, attr_name: str) -> Any:
     return import_internal_attr(module_name, attr_name)
