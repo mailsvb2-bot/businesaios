@@ -373,7 +373,7 @@ class PublicSurfaceSecurityGuard:
             'geo_velocity': bool(metadata.get('geo_velocity') or False),
             'admin_surface': spec.action is SecurityAction.ADMIN,
             'bulk_operation': isinstance(payload.get('run_ids'), list) and len(payload.get('run_ids') or []) > 10,
-            'long_horizon_request': int(payload.get('max_steps') or 1) > 10,
+            'extended_planning_request': int(payload.get('max_steps') or 1) > 10,
         }
 
 
