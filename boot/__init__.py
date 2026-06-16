@@ -15,6 +15,8 @@ CANON_BOOT_PUBLIC_API_DIRECT_RUNTIME_TYPE_EXPORT = True
 CANON_BOOT_PACKAGE_DIRECT_BOOTSTRAP_COMPOSE_RUNTIME = True
 CANONICAL_OWNER_BOOTSTRAP_PUBLIC_API = "bootstrap.compose"
 CANON_BOOT_PACKAGE_ALIAS_OWNER = True
+CANON_BOOT_PACKAGE_DIRECT_RUNTIME_BUILDER_OWNER = "runtime.bootstrap.runtime_builder"
+CANON_BOOT_PACKAGE_SOVEREIGN_OWNER_THROUGH_RUNTIME_BOOTSTRAP = "runtime.bootstrap"
 
 _COMPAT_ALIAS_MAP = {
     "app_boot_contracts": "bootstrap.app_boot_contracts",
@@ -39,8 +41,8 @@ _COMPAT_ALIAS_MAP = {
 _EXPORT_MAP = {
     "BuiltRuntime": ("runtime.bootstrap", "BuiltRuntime"),
     "build_runtime": ("bootstrap.compose", "build_runtime"),
-    "bootstrap_runtime": ("runtime.bootstrap.sovereign_bootstrap", "bootstrap_runtime"),
-    "get_bootstrapped_runtime": ("runtime.bootstrap.sovereign_bootstrap", "get_bootstrapped_runtime"),
+    "bootstrap_runtime": ("runtime.bootstrap", "bootstrap_runtime"),
+    "get_bootstrapped_runtime": ("runtime.bootstrap", "get_bootstrapped_runtime"),
     "BootFacade": ("boot.facade", "BootFacade"),
     "build_app_boot_surface": ("bootstrap.app_boot_surface", "build_app_boot_surface"),
     "build_http_boot_surface": ("bootstrap.http_boot_surface", "build_http_boot_surface"),
@@ -75,7 +77,7 @@ def _load_attr(module_name: str, attr_name: str):
 
 
 def bootstrap_runtime(*args, **kwargs):
-    return _load_attr("runtime.bootstrap.sovereign_bootstrap", "bootstrap_runtime")(*args, **kwargs)
+    return _load_attr("runtime.bootstrap", "bootstrap_runtime")(*args, **kwargs)
 
 
 def build_runtime(*args, **kwargs):
