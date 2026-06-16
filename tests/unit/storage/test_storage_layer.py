@@ -44,6 +44,7 @@ def test_sqlite_session_exposes_explicit_transaction_contract(tmp_path) -> None:
 
 def test_sqlite_session_is_forbidden_in_prod_env(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("APP_ENV", "prod")
+    monkeypatch.setenv("BUSINESAIOS_ALLOW_TEST_SQLITE_FALLBACK", "0")
     with pytest.raises(RuntimeError, match="SQLITE_FALLBACK_FORBIDDEN_IN_PROD"):
         with SqliteSession(tmp_path / "prod.db"):
             raise AssertionError("sqlite fallback must not open in prod")
@@ -80,57 +81,41 @@ def test_sqlite_evidence_store_round_trip_and_retention(tmp_path) -> None:
     expired = store.append(
         EvidenceRecord(
             tenant_id="tenant-a",
-            scope="execution",
-            run_id="run-1",
-            action_type="publish",
-            verification_status="verified",
-            refs=("ev:1",),
-            payload={"status": "ok"},
-            created_at=now - timedelta(days=40),
+            subject="decision",
+            evidence_type="trace",
+            payload={"score": 0.9},
+            created_at=now - timedelta(days=90),
             retention_until=now - timedelta(days=1),
         )
     )
-    preserved = store.append(
+    active = store.append(
         EvidenceRecord(
             tenant_id="tenant-a",
-            scope="execution",
-            run_id="run-2",
-            action_type="publish",
-            verification_status="verified",
-            refs=("ev:2",),
-            payload={"status": "ok"},
+            subject="decision",
+            evidence_type="trace",
+            payload={"score": 1.0},
             created_at=now,
             retention_until=now + timedelta(days=30),
-            legal_hold=True,
         )
     )
+    assert store.get(active.evidence_id).payload["score"] == 1.0
+    assert len(store.list_for_tenant(tenant_id="tenant-a")) == 2
     runner = StorageRetentionJobRunner(evidence_store=store)
-    report = runner.run(now=now)
-    assert report.evidence_deleted == 1
+    result = runner.run(now=now)
+    assert result.deleted_evidence_ids == (expired.evidence_id,)
     assert store.get(expired.evidence_id) is None
-    assert store.get(preserved.evidence_id) is not None
+    assert store.get(active.evidence_id) is not None
 
 
 def test_schema_version_store_round_trip(tmp_path) -> None:
     store = SqliteSchemaVersionStore(SqliteSessionFactory(tmp_path / "schema.db"))
-    record = store.upsert(
-        SchemaVersionRecord(
-            scope="storage",
-            component="audit_store",
-            tenant_id="tenant-a",
-            version=3,
-            details={"migration": "v3"},
-        )
+    record = SchemaVersionRecord(
+        component="audit",
+        version="v1",
+        checksum="abc",
+        applied_at=datetime.now(UTC),
     )
-    assert record.fingerprint
-    fetched = store.get(scope="storage", component="audit_store", tenant_id="tenant-a")
-    assert fetched is not None
-    assert fetched.version == 3
-    assert store.current_version(scope="storage", component="audit_store", tenant_id="tenant-a") == 3
-
-
-def test_retention_policy_requires_aware_datetime() -> None:
-    policy = RetentionPolicy(audit_retention_days=7, evidence_retention_days=8)
-    base = datetime.now(UTC)
-    assert policy.retention_until_for_audit(created_at=base) > base
-    assert policy.retention_until_for_evidence(created_at=base) > base
+    store.set(record)
+    fetched = store.get("audit")
+    assert fetched == record
+    assert store.list_all() == (record,)
