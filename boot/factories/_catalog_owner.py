@@ -125,8 +125,16 @@ FACTORY_FUNCTIONS: Final[dict[str, Callable[..., object]]] = {
     name: globals()[name]
     for name in LOCAL_FACTORY_FUNCTION_NAMES
 }
-
 FACTORY_SERVICE_NAMES: Final[dict[str, str]] = dict(CATALOG_BACKED_FACTORY_NAMES)
+
+
+def get_factory_for_service(service_name: str) -> Callable[..., object]:
+    try:
+        factory_name = FACTORY_SERVICE_NAMES[str(service_name)]
+        return FACTORY_FUNCTIONS[factory_name]
+    except KeyError as exc:
+        raise RuntimeConfigurationError(f'Factory catalog drift: no factory for runtime service {service_name!r}') from exc
+
 
 _missing_factories = sorted(
     factory_name
@@ -153,6 +161,7 @@ __all__ = [
     'COMPAT_FACTORY_EXPORTS',
     'FACTORY_FUNCTIONS',
     'FACTORY_SERVICE_NAMES',
+    'get_factory_for_service',
     'build_architecture_watch_service',
     'build_autonomy_advisor_service',
     'build_creative_intelligence_service',
