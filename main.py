@@ -14,6 +14,8 @@ import time
 from importlib import import_module
 from typing import Any
 
+from runtime.boot.env import env_bool, env_guard_production_mode, env_str
+
 CANON_MAIN_RUNTIME_ENTRYPOINT = True
 CANON_MAIN_USES_RUNTIME_ENTRYPOINT_SHIM = True
 CANON_MAIN_NO_LEGACY_BOOT_IMPORTS = True
@@ -24,10 +26,6 @@ CANON_MAIN_DEMO_E2E_SMOKE_OPT_IN = True
 
 def _telegram_ep() -> Any:
     return import_module("runtime.entrypoints.telegram_longpoll")
-
-
-def _env() -> Any:
-    return import_module("runtime.boot.env")
 
 
 def _canonical_env() -> Any:
@@ -61,11 +59,11 @@ log = logging.getLogger("businesaios.main")
 
 
 def _env_str(name: str, default: str = "") -> str:
-    return _env().env_str(name, default)
+    return env_str(name, default)
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
-    return _env().env_bool(name, default)
+    return env_bool(name, default)
 
 
 def _resolve_runtime_tenant_id(event_log: Any) -> str:
@@ -118,19 +116,18 @@ def _run_demo_e2e_smoke() -> None:
 
 
 def main() -> None:
-    env = _env()
-    env.env_guard_production_mode()
+    env_guard_production_mode()
 
     configure_structured_logging, exception_throttled = _observability()
     try:
-        configure_structured_logging(enabled=env.env_bool("STRUCTURED_LOGS", False), level=env.env_str("LOG_LEVEL", "INFO"))
+        configure_structured_logging(enabled=env_bool("STRUCTURED_LOGS", False), level=env_str("LOG_LEVEL", "INFO"))
     except (ImportError, AttributeError, TypeError, ValueError, KeyError, OSError, RuntimeError) as e:
         exception_throttled(log, key="main.configure_structured_logging", msg=f"main: configure_structured_logging failed: {e}")
         normalize_env = _canonical_env().normalize_env
-        if normalize_env(env.env_str("APP_ENV", env.env_str("ENV", "dev"))) == "prod":
+        if normalize_env(env_str("APP_ENV", env_str("ENV", "dev"))) == "prod":
             raise
 
-    run_mode = (env.env_str("RUN_MODE", "") or env.env_str("MODE", "demo") or "demo").strip().lower()
+    run_mode = (env_str("RUN_MODE", "") or env_str("MODE", "demo") or "demo").strip().lower()
 
     mode_gate = _mode_gate()
     mode_gate.validate_run_mode(run_mode)
@@ -142,7 +139,6 @@ def main() -> None:
 
         evolution_main()
         return
-
     if run_mode == "demo":
         if _env_bool("DEMO_E2E_SMOKE", False):
             _run_demo_e2e_smoke()
@@ -161,11 +157,11 @@ def main() -> None:
         tenant_id = _resolve_runtime_tenant_id(event_log)
     except (AttributeError, TypeError, ValueError) as e:
         exception_throttled(log, key="main.tenant_id", msg=f"event_log wiring failed: {e}")
-        tenant_id = env.env_str("TENANT_ID", "").strip()
+        tenant_id = env_str("TENANT_ID", "").strip()
     if not tenant_id:
         exception_throttled(log, key="main.tenant_id", msg="boot failure: tenant_id missing (event_log has no tenant_id and TENANT_ID env unset)")
         normalize_env = _canonical_env().normalize_env
-        if normalize_env(env.env_str("APP_ENV", env.env_str("ENV", "dev"))) == "prod":
+        if normalize_env(env_str("APP_ENV", env_str("ENV", "dev"))) == "prod":
             raise RuntimeError("boot failure: tenant_id required")
 
     from runtime.boot.tenant_hard_gate import hard_gate
