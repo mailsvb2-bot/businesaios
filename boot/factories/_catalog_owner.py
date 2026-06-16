@@ -4,7 +4,6 @@ from typing import Callable, Final
 
 from boot.runtime_service_specs import CATALOG_BACKED_FACTORY_NAMES
 from runtime.errors import RuntimeConfigurationError
-from runtime.constructor_tokens import runtime_construction_token
 from runtime.runtime_observability import RuntimeObservability
 from runtime.service_names import RuntimeServiceName
 from runtime.integration.runtime_packet_provider import RuntimePacketProvider
@@ -23,7 +22,7 @@ from runtime.market.market_watch_service import MarketWatchService
 from runtime.market.market_trend_engine import MarketTrendEngine
 from runtime.structure.structure_watch_service import StructureWatchService
 from runtime.integration.world_state_integration_service import WorldStateIntegrationService
-from boot.registrations.register_decision_core import RuntimeDecisionExecutionService
+from boot.factories.decision_core_factory import build_runtime_decision_execution_service
 
 COMPAT_FACTORY_EXPORTS: Final[dict[str, str]] = {
     'build_architecture_watch_service': 'architecture_watch_factory',
@@ -54,17 +53,6 @@ def build_creative_intelligence_service(*, observability: RuntimeObservability) 
     return CreativeIntelligenceService(observability=observability)
 
 
-
-def build_runtime_decision_execution_service(
-    *,
-    governance_chain: object,
-    action_executor: object,
-) -> RuntimeDecisionExecutionService:
-    return RuntimeDecisionExecutionService(
-        governance_chain=governance_chain,
-        action_executor=action_executor,
-        _construction_token=runtime_construction_token(),
-    )
 
 def build_decision_gateway(
     *,
@@ -161,30 +149,21 @@ if _unmapped_factories:
         + ', '.join(_unmapped_factories)
     )
 
-
-def get_factory_for_service(service_name: str) -> Callable[..., object]:
-    try:
-        factory_name = FACTORY_SERVICE_NAMES[service_name]
-    except KeyError as exc:
-        raise RuntimeConfigurationError(
-            f"No runtime factory registered for service '{service_name}'."
-        ) from exc
-
-    try:
-        return FACTORY_FUNCTIONS[factory_name]
-    except KeyError as exc:
-        raise RuntimeConfigurationError(
-            f"Factory catalog drift: '{factory_name}' is missing from FACTORY_FUNCTIONS."
-        ) from exc
-
-
-__all__ = (
-    tuple(sorted((*LOCAL_FACTORY_FUNCTION_NAMES, *COMPAT_FACTORY_EXPORTS)))
-    + (
-        'COMPAT_FACTORY_EXPORTS',
-        'FACTORY_FUNCTIONS',
-        'FACTORY_SERVICE_NAMES',
-        'LOCAL_FACTORY_FUNCTION_NAMES',
-        'get_factory_for_service',
-    )
-)
+__all__ = [
+    'COMPAT_FACTORY_EXPORTS',
+    'FACTORY_FUNCTIONS',
+    'FACTORY_SERVICE_NAMES',
+    'build_architecture_watch_service',
+    'build_autonomy_advisor_service',
+    'build_creative_intelligence_service',
+    'build_decision_gateway',
+    'build_runtime_decision_execution_service',
+    'build_decision_input_service',
+    'build_diffusion_watch_service',
+    'build_flow_watch_service',
+    'build_market_watch_service',
+    'build_runtime_packet_provider',
+    'build_runtime_state_enrichment_service',
+    'build_structure_watch_service',
+    'build_world_state_integration_service',
+]
