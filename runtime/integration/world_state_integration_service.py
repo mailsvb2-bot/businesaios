@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from runtime.advisory.autonomy_advisory_packet import AutonomyAdvisoryPacket
 from runtime.creative import CreativeIntelligenceSnapshot
@@ -10,20 +10,17 @@ from runtime.integration.decision_input_packet import DecisionInputPacket
 from runtime.integration.fallback_policy import FallbackPolicy
 from runtime.integration.world_state_packet_support import (
     build_advisory_notes,
-    build_reward_signal_from_world_view,
+    build_world_state_reward_signal,
     emit_world_state_materialized_trace,
     emit_world_state_observed_trace,
     emit_world_state_packet_metrics,
-    empty_creative_snapshot,
     materialize_world_state_packet,
     resolve_world_state_inputs,
 )
 from runtime.market.market_snapshot import MarketSnapshot
 from runtime.runtime_observability import RuntimeObservability
 from runtime.state import StateSynthesisEngine
-from runtime.world_state import (
-    WorldStateHistoryService,
-)
+from runtime.world_state import WorldStateHistoryService
 
 
 def _record_world_state_trace(*, observability: RuntimeObservability, generated_at_ms: int, synthesized_state) -> None:
@@ -71,13 +68,9 @@ class WorldStateIntegrationService:
             state_synthesis_engine=self.state_synthesis_engine,
         )
         synthesized_state = resolved["synthesized_state"]
-        reward_signal = build_reward_signal_from_world_view(
+        reward_signal = build_world_state_reward_signal(
             creative_snapshots=creative_snapshots,
-            architecture_state=resolved["architecture_state"],
-            structure_state=resolved["structure_state"],
-            flow_state=resolved["flow_state"],
-            market_snapshot=resolved["market_snapshot"],
-            fallback_snapshot=empty_creative_snapshot(),
+            resolved=resolved,
         )
         advisory_notes = build_advisory_notes(
             synthesized_state=synthesized_state,
