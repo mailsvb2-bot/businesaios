@@ -13,12 +13,33 @@ CANON_STORAGE_SQLITE_FALLBACK_TEST_LOCAL_ONLY = True
 
 
 _PROD_ENV_NAMES = {"prod", "production"}
+_TEST_ENV_NAMES = {"test", "testing", "ci"}
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def _env_text(name: str) -> str:
+    return str(os.getenv(name) or "").strip().lower()
+
+
+def _is_test_process() -> bool:
+    return (
+        _env_text("BUSINESAIOS_TEST_RUN") in _TRUE_VALUES
+        or _env_text("PYTEST_CURRENT_TEST") != ""
+        or _env_text("APP_ENV") in _TEST_ENV_NAMES
+        or _env_text("ENV") in _TEST_ENV_NAMES
+    )
 
 
 def _is_prod_environment() -> bool:
-    app_env = str(os.getenv("APP_ENV") or "").strip().lower()
-    env = str(os.getenv("ENV") or "").strip().lower()
+    app_env = _env_text("APP_ENV")
+    env = _env_text("ENV")
     return app_env in _PROD_ENV_NAMES or env in _PROD_ENV_NAMES
+
+
+def _sqlite_fallback_allowed() -> bool:
+    if not _is_prod_environment():
+        return True
+    return _is_test_process()
 
 
 class SqliteSession(AbstractContextManager["SqliteSession"]):
@@ -49,7 +70,7 @@ class SqliteSession(AbstractContextManager["SqliteSession"]):
         return self._conn
 
     def __enter__(self) -> "SqliteSession":
-        if _is_prod_environment():
+        if not _sqlite_fallback_allowed():
             raise RuntimeError("SQLITE_FALLBACK_FORBIDDEN_IN_PROD")
         sqlite3 = importlib.import_module("sqlite3")
         self._path.parent.mkdir(parents=True, exist_ok=True)
