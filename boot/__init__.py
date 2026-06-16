@@ -37,14 +37,14 @@ _COMPAT_ALIAS_MAP = {
 }
 
 _EXPORT_MAP = {
-    "BuiltRuntime": ("runtime.bootstrap.runtime_builder", "BuiltRuntime"),
-    "build_runtime": ("runtime.bootstrap.runtime_builder", "build_runtime"),
+    "BuiltRuntime": ("runtime.bootstrap", "BuiltRuntime"),
+    "build_runtime": ("bootstrap.compose", "build_runtime"),
     "bootstrap_runtime": ("runtime.bootstrap.sovereign_bootstrap", "bootstrap_runtime"),
     "get_bootstrapped_runtime": ("runtime.bootstrap.sovereign_bootstrap", "get_bootstrapped_runtime"),
     "BootFacade": ("boot.facade", "BootFacade"),
     "build_app_boot_surface": ("bootstrap.app_boot_surface", "build_app_boot_surface"),
     "build_http_boot_surface": ("bootstrap.http_boot_surface", "build_http_boot_surface"),
-    "boot_application": ("bootstrap.app_boot_surface", "build_app_boot_surface"),
+    "boot_application": ("bootstrap.app_boot", "boot_application"),
     "boot_http_app": ("bootstrap.http_boot_surface", "build_http_boot_surface"),
     "get_boot_facade": ("boot.facade", "get_boot_facade"),
 }
@@ -79,11 +79,11 @@ def bootstrap_runtime(*args, **kwargs):
 
 
 def build_runtime(*args, **kwargs):
-    return _load_attr("runtime.bootstrap.runtime_builder", "build_runtime")(*args, **kwargs)
+    return _load_attr("bootstrap.compose", "build_runtime")(*args, **kwargs)
 
 
 def boot_application(*args, **kwargs):
-    return _load_attr("bootstrap.app_boot_surface", "build_app_boot_surface")(*args, **kwargs).result
+    return _load_attr("bootstrap.app_boot", "boot_application")(*args, **kwargs)
 
 
 def boot_http_app(*args, **kwargs):
