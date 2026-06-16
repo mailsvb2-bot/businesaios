@@ -13,3 +13,4 @@ if str(ROOT) not in sys.path:
 # explicit test-local process so unit storage tests can exercise sqlite contracts.
 os.environ["BUSINESAIOS_TEST_RUN"] = "1"
 os.environ["BUSINESAIOS_TESTS_CONFTEST_LOADED"] = "1"
+os.environ["BUSINESAIOS_ALLOW_TEST_SQLITE_FALLBACK"] = "1"
