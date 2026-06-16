@@ -5,76 +5,21 @@ CANON_BOOT_WIRING_ONLY = True
 from dataclasses import dataclass
 from pathlib import Path
 
-from interfaces.web.debug.messaging_policy_alerts.route_bundle import MessagingPolicyAlertsRouteBundle
-from interfaces.web.debug.messaging_policy_dashboard.route_bundle import MessagingPolicyDashboardRouteBundle
-from interfaces.web.debug.messaging_policy_observability_nav.route_bundle import (
-    MessagingPolicyObservabilityNavRouteBundle,
-)
-from interfaces.web.debug.messaging_policy_snapshot.route_bundle import MessagingPolicySnapshotRouteBundle
-from interfaces.web.debug.messaging_policy_trace_search.route_bundle import MessagingPolicyTraceSearchRouteBundle
-from interfaces.web.settings.alert_subscriptions_integration.route_bundle import AlertSubscriptionsRouteBundle
-from interfaces.web.settings.messaging_preferences_integration.route_bundle import MessagingPreferencesRouteBundle
 from runtime.boot.web.messaging_policy_alert_subscription_service import (
     build_messaging_policy_alert_subscription_service,
 )
 from runtime.boot.web.messaging_policy_service_graph import build_messaging_policy_service_graph
 from runtime.boot.web.runtime_web_build_args import RuntimeWebBuildArgs
+from runtime.boot.web.runtime_web_route_bundle_builders import (
+    build_alert_subscriptions_bundle,
+    build_messaging_policy_alerts_bundle,
+    build_messaging_policy_dashboard_bundle,
+    build_messaging_policy_observability_nav_bundle,
+    build_messaging_policy_snapshot_bundle,
+    build_messaging_policy_trace_search_bundle,
+    build_messaging_preferences_bundle,
+)
 from runtime.boot.web.runtime_web_routed_services import RuntimeWebRoutedServices
-from runtime.messaging_policy_alerts.service import MessagingPolicyAlertService
-from runtime.messaging_policy_dashboard.service import MessagingPolicyDashboardService
-from runtime.messaging_policy_trace.search_service import MessagingPolicyTraceSearchService
-from runtime.messaging_policy_trace.search_store import MessagingPolicyTraceSearchStore
-
-
-class _MessagingPolicyAlertsRouteBundle(MessagingPolicyAlertsRouteBundle):
-    def __init__(self, *, alert_service):
-        super().__init__(alert_service=alert_service)
-        self.alert_service = alert_service
-
-
-class _MessagingPolicyDashboardRouteBundle(MessagingPolicyDashboardRouteBundle):
-    def __init__(self, *, dashboard_service):
-        super().__init__(dashboard_service=dashboard_service)
-        self.dashboard_service = dashboard_service
-        self._dashboard_service = dashboard_service
-
-
-class _MessagingPolicyTraceSearchRouteBundle(MessagingPolicyTraceSearchRouteBundle):
-    def __init__(self, *, search_service):
-        super().__init__(search_service=search_service)
-        self.search_service = search_service
-        self._trace_search_service = search_service
-
-
-def build_alert_subscriptions_bundle(*, project_root: Path, settings_gateway):
-    return AlertSubscriptionsRouteBundle(project_root=project_root, settings_gateway=settings_gateway)
-
-
-def build_messaging_preferences_bundle(*, project_root: Path, settings_gateway):
-    return MessagingPreferencesRouteBundle(project_root=project_root, settings_gateway=settings_gateway)
-
-
-def build_messaging_policy_observability_nav_bundle():
-    return MessagingPolicyObservabilityNavRouteBundle()
-
-
-def build_messaging_policy_snapshot_bundle(*, read_service):
-    return MessagingPolicySnapshotRouteBundle(read_service=read_service)
-
-
-def build_messaging_policy_trace_search_bundle(*, event_store):
-    search_store = MessagingPolicyTraceSearchStore(event_store=event_store)
-    search_service = MessagingPolicyTraceSearchService(search_store=search_store)
-    return _MessagingPolicyTraceSearchRouteBundle(search_service=search_service)
-
-
-def build_messaging_policy_dashboard_bundle(*, trace_search_service):
-    dashboard_service = MessagingPolicyDashboardService(trace_search_service=trace_search_service)
-    return _MessagingPolicyDashboardRouteBundle(dashboard_service=dashboard_service)
-
-
-def build_messaging_policy_alerts_bundle(*, dashboard_service):
-    return _MessagingPolicyAlertsRouteBundle(alert_service=MessagingPolicyAlertService(dashboard_service=dashboard_service))
 
 
 @dataclass(frozen=True)
@@ -149,7 +94,7 @@ def build_runtime_web_event_parts(*, args) -> RuntimeWebEventParts:
     )
     return RuntimeWebEventParts(
         messaging_policy_trace_search_bundle=build_messaging_policy_trace_search_bundle(
-            event_store=args.messaging_policy_event_store,
+            trace_search_service=graph.trace_search_service,
         ),
         messaging_policy_dashboard_bundle=build_messaging_policy_dashboard_bundle(
             trace_search_service=graph.trace_search_service,
@@ -160,8 +105,8 @@ def build_runtime_web_event_parts(*, args) -> RuntimeWebEventParts:
         messaging_policy_trace_search_service=graph.trace_search_service,
         messaging_policy_dashboard_service=graph.dashboard_service,
         messaging_policy_alert_service=graph.alert_service,
-        messaging_policy_alert_subscription_service=built['service'],
-        messaging_policy_alert_notifier_stack=built['notifier_stack'],
+        messaging_policy_alert_subscription_service=built["service"],
+        messaging_policy_alert_notifier_stack=built["notifier_stack"],
     )
 
 
