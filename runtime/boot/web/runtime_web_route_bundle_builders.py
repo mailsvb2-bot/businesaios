@@ -64,17 +64,4 @@ def build_messaging_policy_dashboard_bundle(*, trace_search_service: MessagingPo
 
 
 def build_messaging_policy_alerts_bundle(*, dashboard_service: MessagingPolicyDashboardService):
-    return _MessagingPolicyAlertsRouteBundle(
-        alert_service=MessagingPolicyAlertService(dashboard_service=dashboard_service)
-    )
-
-
-__all__ = [
-    "build_alert_subscriptions_bundle",
-    "build_messaging_preferences_bundle",
-    "build_messaging_policy_observability_nav_bundle",
-    "build_messaging_policy_snapshot_bundle",
-    "build_messaging_policy_trace_search_bundle",
-    "build_messaging_policy_dashboard_bundle",
-    "build_messaging_policy_alerts_bundle",
-]
+    return _MessagingPolicyAlertsRouteBundle(alert_service=MessagingPolicyAlertService(dashboard_service=dashboard_service))
