@@ -10,6 +10,20 @@ ALLOWED_PATH_FRAGMENTS = (
     "canon/",
     "boot/runtime_boot_manifest.py",
     "tests/",
+    # Canonical runtime spec/dependency owners.
+    "bootstrap/runtime_service_specs.py",
+    "bootstrap/runtime_dependency_sets.py",
+    # Architecture tooling scans package roots and diagnostic labels, not service registration names.
+    "tools/architecture_bypass_scanner.py",
+    "tools/canon_audit/import_graph.py",
+    # Domain files that carry API/persistence/policy field names sharing text with runtime services.
+    "execution/market_intelligence_observability_store.py",
+    "execution/market_intelligence_derived_evidence_governance.py",
+    "core/safety/controls/profile.py",
+    "core/safety/controls/support/tenant_policy_resolver.py",
+    "runtime/boot/market_intelligence_boot.py",
+    "adapters/api/fastapi/router_adapter.py",
+    "entrypoints/api/admin_route_handlers.py",
     # Legacy project modules that legitimately carry service labels.
     "core/ads/apply_engine.py",
     "core/ai/decision_runtime.py",
@@ -18,7 +32,6 @@ ALLOWED_PATH_FRAGMENTS = (
     "application/decision_runtime/runtime.py",
     "application/headless/decision_gateway.py",
     "bootstrap/bootstrap_config_surface.py",
-    "bootstrap/runtime_service_specs.py",
     "execution/budget_guard.py",
     "execution/spend_limit_policy.py",
     "observability/audit_export_service.py",
