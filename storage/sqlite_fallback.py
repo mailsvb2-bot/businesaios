@@ -30,6 +30,10 @@ def _is_test_process() -> bool:
     )
 
 
+def _test_sqlite_fallback_allowed() -> bool:
+    return _is_test_process() and _env_text("BUSINESAIOS_ALLOW_TEST_SQLITE_FALLBACK") in _TRUE_VALUES
+
+
 def _is_prod_environment() -> bool:
     app_env = _env_text("APP_ENV")
     env = _env_text("ENV")
@@ -39,7 +43,7 @@ def _is_prod_environment() -> bool:
 def _sqlite_fallback_allowed() -> bool:
     if not _is_prod_environment():
         return True
-    return _is_test_process()
+    return _test_sqlite_fallback_allowed()
 
 
 class SqliteSession(AbstractContextManager["SqliteSession"]):
