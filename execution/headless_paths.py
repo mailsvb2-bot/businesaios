@@ -7,14 +7,26 @@ import os
 CANON_HEADLESS_RUNTIME_PATHS = True
 CANON_HEADLESS_RUNTIME_PATHS_SINGLE_OWNER = True
 
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def _env(name: str) -> str:
+    return str(os.getenv(name, "")).strip()
+
+
+def _is_test_process() -> bool:
+    return _env("BUSINESAIOS_TEST_RUN").lower() in _TRUE_VALUES or bool(_env("PYTEST_CURRENT_TEST"))
+
 
 def _resolve_headless_root(*, root_dir: str | Path | None = None) -> Path:
     if root_dir is not None:
         return Path(root_dir)
-    env_root = str(os.getenv("BUSINESAIOS_HEADLESS_ROOT", "")).strip()
+    env_root = _env("BUSINESAIOS_HEADLESS_ROOT")
     if env_root:
         return Path(env_root)
-    env_data = str(os.getenv("BUSINESAIOS_DATA_DIR", "")).strip()
+    if _is_test_process():
+        return Path(".runtime")
+    env_data = _env("BUSINESAIOS_DATA_DIR")
     if env_data:
         return Path(env_data)
     return Path(".runtime")
