@@ -46,7 +46,7 @@ _EXPORT_MAP = {
     "BootFacade": ("boot.facade", "BootFacade"),
     "build_app_boot_surface": ("bootstrap.app_boot_surface", "build_app_boot_surface"),
     "build_http_boot_surface": ("bootstrap.http_boot_surface", "build_http_boot_surface"),
-    "boot_application": ("bootstrap.app_boot", "boot_application"),
+    "boot_application": ("bootstrap.app_boot_surface", "build_app_boot_surface"),
     "boot_http_app": ("bootstrap.http_boot_surface", "build_http_boot_surface"),
     "get_boot_facade": ("boot.facade", "get_boot_facade"),
 }
@@ -85,7 +85,7 @@ def build_runtime(*args, **kwargs):
 
 
 def boot_application(*args, **kwargs):
-    return _load_attr("bootstrap.app_boot", "boot_application")(*args, **kwargs)
+    return _load_attr("bootstrap.app_boot_surface", "build_app_boot_surface")(*args, **kwargs).result
 
 
 def boot_http_app(*args, **kwargs):
