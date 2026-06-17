@@ -5,6 +5,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 
+from runtime.effects import encode_form_body, url_with_params
 from runtime.firewall.import_guard import ALLOW_INTERNAL_IMPORT
 
 from crm.providers.common.crm_http_errors import (
@@ -132,16 +133,12 @@ class CrmHttpClient:
             return request_spec.raw_body
         if request_spec.form_body is not None:
             headers.setdefault('Content-Type', 'application/x-www-form-urlencoded')
-            pairs: list[tuple[str, str]] = []
+            pairs: dict[str, object] = {}
             for key, value in request_spec.form_body.items():
                 if value is None:
                     continue
-                if isinstance(value, (list, tuple)):
-                    for item in value:
-                        pairs.append((str(key), str(item)))
-                else:
-                    pairs.append((str(key), str(value)))
-            return self._encode_form_pairs(pairs)
+                pairs[str(key)] = value
+            return encode_form_body(pairs)
         if request_spec.json_body is not None:
             headers.setdefault('Content-Type', 'application/json')
             return json.dumps(request_spec.json_body).encode('utf-8')
@@ -152,26 +149,7 @@ class CrmHttpClient:
         url = f'{self._base_url}{clean_path}'
         if not params:
             return url
-        pairs: list[tuple[str, str]] = []
-        for key, value in params.items():
-            if value is None:
-                continue
-            if isinstance(value, (list, tuple)):
-                for item in value:
-                    pairs.append((str(key), str(item)))
-            else:
-                pairs.append((str(key), str(value)))
-        return f'{url}?{self._encode_query_pairs(pairs)}'
-
-    @staticmethod
-    def _encode_form_pairs(pairs: list[tuple[str, str]]) -> bytes:
-        urllib_parse = __import__('urllib.parse', fromlist=['urlencode'])
-        return urllib_parse.urlencode(pairs).encode('utf-8')
-
-    @staticmethod
-    def _encode_query_pairs(pairs: list[tuple[str, str]]) -> str:
-        urllib_parse = __import__('urllib.parse', fromlist=['urlencode'])
-        return str(urllib_parse.urlencode(pairs))
+        return url_with_params(url=url, params=dict(params))
 
     @staticmethod
     def _try_json(text: str) -> object | None:
