@@ -6,8 +6,13 @@ from collections.abc import Mapping
 from execution.verification.evidence_types import EvidenceItem, normalize_evidence_kind, normalize_evidence_status
 CANON_VERIFICATION_CONTRACT = True
 
+_EPOCH_UTC = datetime(1970, 1, 1, tzinfo=UTC)
+
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+def _stable_decided_at() -> datetime:
+    return _EPOCH_UTC
 
 def _text(value: object) -> str:
     return str(value or "").strip()
@@ -88,8 +93,7 @@ class VerificationRequest:
     ) -> "VerificationRequest":
         payload = _safe_dict(action)
         requested_at = _parse_datetime(payload.get("requested_at") or payload.get("observed_at")) or _utc_now()
-        deadline_raw = payload.get("verification_deadline")
-        deadline = _parse_datetime(deadline_raw)
+        deadline = _parse_datetime(payload.get("verification_deadline"))
         return cls(
             action_id=_text(payload.get("action_id")),
             action_type=_text(payload.get("action_type")),
@@ -173,7 +177,7 @@ class VerificationDecision:
     delayed: bool = False
     timed_out: bool = False
     decision_fingerprint: str = ""
-    decided_at: datetime = field(default_factory=_utc_now)
+    decided_at: datetime = field(default_factory=_stable_decided_at)
     policy_snapshot: dict[str, Any] = field(default_factory=dict)
     summary: dict[str, Any] = field(default_factory=dict)
     def to_dict(self) -> dict[str, Any]:
