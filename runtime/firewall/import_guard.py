@@ -59,7 +59,6 @@ def _infer_caller_module_for_allow_internal_import() -> str:
     return "<unknown>"
 
 
-
 @contextlib.contextmanager
 def allow_internal_import():
     caller = _infer_caller_module_for_allow_internal_import()
@@ -104,7 +103,7 @@ def _is_forbidden(name: str) -> bool:
 def _is_test_caller(caller: str) -> bool:
     if caller == 'conftest':
         return True
-    if caller.startswith(('tests.', 'test_')):
+    if caller.startswith(('_pytest.', 'tests.', 'test_')):
         return True
     if '.tests.' in caller or caller.endswith('.conftest'):
         return True
@@ -120,9 +119,9 @@ def _allow_forbidden(name: str, caller: str) -> bool:
         # Internal modules may import each other inside the sealed zone.
         if caller.startswith("runtime._internal"):
             return True
-        # Test modules are allowed to inspect sealed internals directly; production
-        # code remains constrained by static architecture tests and executor-only
-        # runtime import windows.
+        # Test modules and pytest helpers are allowed to inspect sealed internals
+        # directly; production code remains constrained by static architecture
+        # tests and executor-only runtime import windows.
         if _is_test_caller(caller):
             return True
         # Best-effort fallback: allow if we can identify canonical caller.
