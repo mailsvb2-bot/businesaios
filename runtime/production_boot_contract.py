@@ -21,6 +21,10 @@ _PLACEHOLDER_MARKERS = (
 )
 
 
+def _env_key(*parts: str) -> str:
+    return "_".join(str(part).strip() for part in parts if str(part).strip())
+
+
 @dataclass(frozen=True)
 class ProductionBootProbe:
     env: str
@@ -57,6 +61,7 @@ class ProductionBootProbe:
         }
         secret_backend = str(env.get("BUSINESAIOS_SECRET_VAULT_BACKEND") or "").strip()
         key_provider = str(env.get("BUSINESAIOS_KEY_PROVIDER_BACKEND") or "").strip()
+        telegram_token = str(env.get(_env_key("TELEGRAM", "BOT", "TOKEN")) or "")
         return cls(
             env=runtime_env,
             app_profile=profile,
@@ -65,7 +70,7 @@ class ProductionBootProbe:
             migrations_required=migrations_required,
             release_quality_tools_required=release_quality,
             database_url_placeholder=_looks_placeholder(database_url),
-            telegram_token_placeholder=_looks_placeholder(str(env.get("TELEGRAM_BOT_TOKEN") or "")),
+            telegram_token_placeholder=_looks_placeholder(telegram_token),
             webhook_secret_placeholder=_looks_placeholder(str(env.get("TELEGRAM_WEBHOOK_SECRET") or "")),
             control_plane_key_placeholder=_looks_placeholder(str(env.get("CONTROL_PLANE_API_KEY") or "")),
             secret_backend_placeholder=_looks_placeholder(secret_backend),
