@@ -23,17 +23,21 @@ from execution.verification.verification_contract import (
 )
 from execution.verification.verification_timeout_policy import VerificationTimeoutPolicy, VerificationTimeoutState
 CANON_VERIFICATION_ENGINE = True
+
 def _text(value: object) -> str:
     return str(value or "").strip()
+
 def _safe_dict(value: object) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
     return {}
+
 def _safe_float(value: object, *, default: float = 0.0) -> float:
     try:
         return float(value)
     except (TypeError, ValueError):
         return float(default)
+
 def _unique_refs(evidence: Iterable[EvidenceItem]) -> tuple[str, ...]:
     seen: set[str] = set()
     ordered: list[str] = []
@@ -43,6 +47,7 @@ def _unique_refs(evidence: Iterable[EvidenceItem]) -> tuple[str, ...]:
                 seen.add(ref)
                 ordered.append(ref)
     return tuple(ordered)
+
 @dataclass(frozen=True, slots=True)
 class VerificationEngineResult:
     request: dict[str, Any]
@@ -66,6 +71,7 @@ class VerificationEngineResult:
             "retry_plan": dict(self.retry_plan),
             "persistence": dict(self.persistence),
         }
+
 class VerificationEngine:
     def __init__(
         self,
@@ -83,6 +89,7 @@ class VerificationEngine:
         self._retry = retry or DelayedVerificationRetry()
         self._persistence = persistence or VerificationEvidencePersistence()
         self._idempotent_verifier = idempotent_verifier or IdempotentVerifier()
+
     def verify(
         self,
         *,
@@ -182,6 +189,7 @@ class VerificationEngine:
             retry_plan=retry_plan.to_dict(),
             persistence=persistence.to_dict(),
         )
+
     def _normalize_evidence(self, *, action: Mapping[str, Any], evidence: Iterable[EvidenceItem | Mapping[str, Any]] | None) -> tuple[EvidenceItem, ...]:
         action_payload = _safe_dict(action)
         action_id = _text(action_payload.get("action_id"))
@@ -198,6 +206,7 @@ class VerificationEngine:
             payload.setdefault("action_type", action_type)
             rows.append(evidence_item_from_mapping(payload))
         return tuple(rows)
+
     def _select_unique_evidence(self, correlation: EvidenceCorrelationResult) -> tuple[EvidenceItem, ...]:
         selected: list[EvidenceItem] = []
         seen: set[str] = set()
@@ -208,6 +217,7 @@ class VerificationEngine:
                 seen.add(item.evidence_id)
                 selected.append(item)
         return tuple(selected)
+
     def _decide(
         self,
         *,
@@ -345,7 +355,9 @@ class VerificationEngine:
             policy_snapshot=policy.to_dict(),
             summary=summary,
         )
+
 def execution_receipt_evidence(*, action_id: str, action_type: str, ok: bool, status: str = "", source: str = "executor", confidence: float = 1.0, payload: Mapping[str, Any] | None = None) -> EvidenceItem:
+    payload_map = dict(payload or {})
     return EvidenceItem(
         evidence_id="",
         action_id=action_id,
@@ -354,9 +366,12 @@ def execution_receipt_evidence(*, action_id: str, action_type: str, ok: bool, st
         kind=EVIDENCE_KIND_EXECUTION_RECEIPT,
         status=status or ("observed" if ok else "failed"),
         confidence=confidence if ok else 0.0,
-        payload=dict(payload or {}),
+        payload=payload_map,
+        observed_at=payload_map.get("observed_at"),
     )
+
 def router_evidence(*, action_id: str, action_type: str, verified: bool, status: str = "", source: str = "effect_router", external_refs: tuple[str, ...] | list[str] = (), confidence: float = 1.0, payload: Mapping[str, Any] | None = None) -> EvidenceItem:
+    payload_map = dict(payload or {})
     effective_status = status or ("verified" if verified else "failed")
     if effective_status == "pending":
         effective_confidence = min(float(confidence), 0.49)
@@ -371,9 +386,12 @@ def router_evidence(*, action_id: str, action_type: str, verified: bool, status:
         status=effective_status,
         external_refs=tuple(external_refs),
         confidence=effective_confidence,
-        payload=dict(payload or {}),
+        payload=payload_map,
+        observed_at=payload_map.get("observed_at"),
     )
+
 def connector_snapshot_evidence(*, action_id: str, action_type: str, verified: bool, source: str, external_refs: tuple[str, ...] | list[str] = (), status: str = "", confidence: float = 1.0, payload: Mapping[str, Any] | None = None) -> EvidenceItem:
+    payload_map = dict(payload or {})
     return EvidenceItem(
         evidence_id="",
         action_id=action_id,
@@ -383,8 +401,10 @@ def connector_snapshot_evidence(*, action_id: str, action_type: str, verified: b
         status=status or ("verified" if verified else "failed"),
         external_refs=tuple(external_refs),
         confidence=confidence if verified else 0.0,
-        payload=dict(payload or {}),
+        payload=payload_map,
+        observed_at=payload_map.get("observed_at"),
     )
+
 __all__ = [
     "CANON_VERIFICATION_ENGINE",
     "VerificationEngineResult",
