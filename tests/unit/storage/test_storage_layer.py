@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -17,6 +19,38 @@ from storage import (
 )
 from storage.schema_version_store import SchemaVersionRecord
 from storage.tenant_partitioning import build_partition_key, describe_tenant_partition, normalize_storage_tenant_id
+
+
+_ALLOWED_LEGACY_FACTORY_PREFIXES = (
+    "tests/",
+    "migrations/",
+    "storage/migrations/",
+    "adapters/",
+    "interfaces/import",
+    "tools/",
+)
+
+
+def _python_files() -> list[Path]:
+    blocked_parts = {".git", ".venv", "venv", "__pycache__", "node_modules"}
+    return [path for path in Path(".").rglob("*.py") if not any(part in blocked_parts for part in path.parts)]
+
+
+def test_storage_legacy_factories_are_boundary_only() -> None:
+    offenders: list[str] = []
+    for path in _python_files():
+        rel = path.as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=rel)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if not isinstance(func, ast.Attribute) or func.attr != "from_legacy":
+                continue
+            if rel.startswith(_ALLOWED_LEGACY_FACTORY_PREFIXES):
+                continue
+            offenders.append(f"{rel}:{node.lineno}")
+    assert not offenders, "Storage legacy factories must stay at compatibility boundaries:\n" + "\n".join(offenders)
 
 
 def test_tenant_partitioning_normalizes_global() -> None:
