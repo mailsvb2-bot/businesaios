@@ -16,10 +16,9 @@ from storage.tenant_partitioning import normalize_storage_tenant_id
 
 
 CANON_STORAGE_SCHEMA_VERSION_STORE = True
-CANON_STORAGE_SCHEMA_VERSION_LEGACY_CHECKSUM_API = True
+CANON_STORAGE_SCHEMA_VERSION_EXPLICIT_LEGACY_FACTORY = True
 
 
-_MISSING = object()
 _VERSION_NUMBER_RE = re.compile(r"\d+")
 
 
@@ -39,7 +38,7 @@ def _coerce_version(value: object) -> int:
     return 0
 
 
-@dataclass(frozen=True, init=False)
+@dataclass(frozen=True)
 class SchemaVersionRecord:
     scope: str
     component: str
@@ -50,27 +49,30 @@ class SchemaVersionRecord:
     applied_by: str = "system"
     details: Mapping[str, Any] = field(default_factory=dict)
 
-    def __init__(
-        self,
+    @classmethod
+    def from_legacy(
+        cls,
         *,
         component: str,
         version: int | str,
+        checksum: str | None = None,
         scope: str = "storage",
         tenant_id: str = "global",
         fingerprint: str = "",
-        applied_at: datetime | object = _MISSING,
+        applied_at: datetime | None = None,
         applied_by: str = "system",
         details: Mapping[str, Any] | None = None,
-        checksum: str | None = None,
-    ) -> None:
-        object.__setattr__(self, "scope", str(scope or "storage").strip() or "storage")
-        object.__setattr__(self, "component", str(component).strip())
-        object.__setattr__(self, "version", _coerce_version(version))
-        object.__setattr__(self, "tenant_id", tenant_id)
-        object.__setattr__(self, "fingerprint", str(fingerprint or checksum or "").strip())
-        object.__setattr__(self, "applied_at", utc_now() if applied_at is _MISSING else applied_at)
-        object.__setattr__(self, "applied_by", applied_by)
-        object.__setattr__(self, "details", dict(details or {}))
+    ) -> "SchemaVersionRecord":
+        return cls(
+            scope=str(scope or "storage").strip() or "storage",
+            component=str(component).strip(),
+            version=_coerce_version(version),
+            tenant_id=tenant_id,
+            fingerprint=str(fingerprint or checksum or "").strip(),
+            applied_at=applied_at or utc_now(),
+            applied_by=applied_by,
+            details=dict(details or {}),
+        )
 
     def validate(self) -> None:
         if not str(self.scope or "").strip():
@@ -293,7 +295,7 @@ class PostgresSchemaVersionStore(_PersistentSchemaVersionStore):
 
 __all__ = [
     "CANON_STORAGE_SCHEMA_VERSION_STORE",
-    "CANON_STORAGE_SCHEMA_VERSION_LEGACY_CHECKSUM_API",
+    "CANON_STORAGE_SCHEMA_VERSION_EXPLICIT_LEGACY_FACTORY",
     "SchemaVersionRecord",
     "InMemorySchemaVersionStore",
     "SqliteSchemaVersionStore",
