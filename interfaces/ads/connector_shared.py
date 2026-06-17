@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 from typing import Any
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 
 from .base import AdsConnectorError, AdsPlatform
 from .connector_value_coercion import as_float, as_int, as_optional_float, as_optional_int, safe_ratio
@@ -32,6 +33,12 @@ def _stable_jsonable(value: Any) -> Any:
     return value
 
 
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
 def vault_get_secret(vault: Any | None, *, tenant_id: str | None, key: str) -> str | None:
     if vault is None:
         return None
@@ -46,6 +53,114 @@ def vault_get_secret(vault: Any | None, *, tenant_id: str | None, key: str) -> s
         except TypeError:
             pass
     return _normalize_secret_value(getter(key))
+
+
+def _first_present(raw: Mapping[str, Any], keys: Iterable[str]) -> Any:
+    for key in keys:
+        value = raw.get(key)
+        if value not in (None, "", [], ()):  # keep 0 valid
+            return value
+    return None
+
+
+def _first_scalar(value: Any) -> str:
+    if isinstance(value, Mapping):
+        for candidate in ("id", "account_id", "customer_id", "advertiser_id"):
+            found = value.get(candidate)
+            if found not in (None, "", [], ()):  # keep 0 valid
+                return str(found).strip()
+        return ""
+    if isinstance(value, (list, tuple, set)):
+        values = [str(item).strip() for item in value if str(item).strip()]
+        if len(values) == 1:
+            return values[0]
+        return ""
+    return str(value).strip() if value not in (None, "") else ""
+
+
+def pending_account_id_from_raw(
+    *,
+    tenant_id: str,
+    raw: Mapping[str, Any],
+    candidate_keys: Sequence[str],
+    pending_prefix: str,
+) -> str:
+    payload = dict(raw or {})
+    value = _first_present(payload, candidate_keys)
+    if value is None and isinstance(payload.get("data"), Mapping):
+        value = _first_present(payload["data"], candidate_keys)
+    scalar = _first_scalar(value)
+    if scalar:
+        return scalar
+    return f"{str(pending_prefix).strip()}:{str(tenant_id).strip() or 'default'}"
+
+
+async def tokens_put_compat(
+    *,
+    tokens: Any,
+    tenant_id: str,
+    platform: AdsPlatform,
+    account_id: str,
+    access_token: str,
+    scope: str,
+    connector_name: str,
+) -> None:
+    if tokens is None:
+        raise AdsConnectorError(f"{connector_name}: token store is not configured")
+    payload = {
+        "tenant_id": str(tenant_id),
+        "platform": str(platform.value),
+        "account_id": str(account_id),
+        "access_token": str(access_token),
+        "scope": str(scope),
+    }
+    for method_name in ("put_token", "put", "save", "set", "store"):
+        method = getattr(tokens, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            await _maybe_await(method(**payload))
+            return
+        except TypeError:
+            try:
+                await _maybe_await(method(str(tenant_id), str(platform.value), str(account_id), str(access_token), str(scope)))
+                return
+            except TypeError:
+                continue
+    raise AdsConnectorError(f"{connector_name}: token store must expose put_token/put/save/set/store")
+
+
+async def tokens_get_access_token_compat(
+    *,
+    tokens: Any,
+    tenant_id: str,
+    platform: AdsPlatform,
+    account_id: str,
+) -> str:
+    if tokens is None:
+        raise AdsConnectorError("connector token store is not configured")
+    payload = {
+        "tenant_id": str(tenant_id),
+        "platform": str(platform.value),
+        "account_id": str(account_id),
+    }
+    for method_name in ("get_access_token", "access_token", "get_token", "get", "load"):
+        method = getattr(tokens, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            value = await _maybe_await(method(**payload))
+        except TypeError:
+            try:
+                value = await _maybe_await(method(str(tenant_id), str(platform.value), str(account_id)))
+            except TypeError:
+                continue
+        if isinstance(value, Mapping):
+            value = value.get("access_token") or value.get("token")
+        token = _normalize_secret_value(value)
+        if token:
+            return token
+    raise AdsConnectorError("connector token store returned no access_token")
 
 
 async def http_post_compat(
@@ -174,6 +289,9 @@ def summarize_rows(rows: list[dict[str, Any]]) -> tuple[float, int, float, int]:
 
 __all__ = [
     "vault_get_secret",
+    "pending_account_id_from_raw",
+    "tokens_put_compat",
+    "tokens_get_access_token_compat",
     "http_post_compat",
     "http_get_compat",
     "resolve_url_with_default",
