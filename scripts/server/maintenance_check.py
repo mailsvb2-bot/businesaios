@@ -17,15 +17,19 @@ CACHE_DIR_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
 ARTIFACT_SUFFIXES = (
     ".pyc",
     ".pyo",
+    ".lock",
     ".sqlite",
     ".sqlite3",
     ".sqlite-wal",
     ".sqlite-shm",
+    ".sqlite3-wal",
+    ".sqlite3-shm",
     ".db",
     ".db-wal",
     ".db-shm",
     ".zip",
 )
+GENERATED_FILE_SUFFIXES = (".jsonl", ".log", ".tmp", ".bak", ".bak2")
 NEVER_DESCEND = {".git", ".venv", "venv", "node_modules"}
 LOCAL_RUNNER_DIR_NAMES = {"actions-runner-businesaios"}
 GENERATED_DIR_PREFIXES = (
@@ -115,8 +119,12 @@ def clean_local_artifacts(root: Path, *, dry_run: bool = False, deep_clean: bool
         for dirname in list(dirnames):
             path = current_path / dirname
             rel = relpath(root, path)
-            should_remove = dirname in CACHE_DIR_NAMES or (rel_current == Path(".") and dirname in LOCAL_RUNNER_DIR_NAMES)
-            if deep_clean and dirname == "target" and "rust" in rel.parts:
+            should_remove = (
+                dirname in CACHE_DIR_NAMES
+                or (rel_current == Path(".") and dirname in LOCAL_RUNNER_DIR_NAMES)
+                or (dirname == "target" and "rust" in rel.parts)
+            )
+            if deep_clean and dirname == "target":
                 should_remove = True
             if not should_remove:
                 continue
@@ -134,9 +142,11 @@ def clean_local_artifacts(root: Path, *, dry_run: bool = False, deep_clean: bool
             if rel in tracked:
                 continue
             suffix_match = filename.endswith(ARTIFACT_SUFFIXES)
-            empty_generated = path.exists() and path.is_file() and path.stat().st_size == 0 and under_any(rel, GENERATED_DIR_PREFIXES)
+            generated_dir = under_any(rel, GENERATED_DIR_PREFIXES)
+            generated_file = generated_dir and filename.endswith(GENERATED_FILE_SUFFIXES)
+            empty_generated = path.exists() and path.is_file() and path.stat().st_size == 0 and generated_dir
             repo_report = under_any(rel, (Path("runtime/data/reports"),))
-            should_remove = suffix_match or empty_generated or repo_report
+            should_remove = suffix_match or generated_file or empty_generated or repo_report
             if not should_remove:
                 continue
             removed.append(str(rel))
