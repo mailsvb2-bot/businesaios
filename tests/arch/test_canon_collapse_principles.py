@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 
@@ -22,6 +23,22 @@ CANON_BOUNDARY_LOCKS = (
 
 def _read(rel: str) -> str:
     return (PROJECT_ROOT / rel).read_text(encoding="utf-8")
+
+
+def _tree(rel: str) -> ast.AST:
+    return ast.parse(_read(rel), filename=rel)
+
+
+def _calls_function(tree: ast.AST, name: str) -> bool:
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Name) and func.id == name:
+            return True
+        if isinstance(func, ast.Attribute) and func.attr == name:
+            return True
+    return False
 
 
 def _count_metrics():
@@ -126,14 +143,18 @@ def test_decision_envelope_shape_is_owned_by_decision_path_lock() -> None:
 
 
 def test_runtime_gateways_do_not_bypass_decision_path_lock() -> None:
-    runtime_gateway = _read("runtime/decision_gateway.py")
-    headless_gateway = _read("application/headless/decision_gateway.py")
-    assert "from runtime.decision_path_lock import issue_locked_decision" in runtime_gateway
-    assert "issue_locked_decision(" in runtime_gateway
-    assert "from runtime.decision_path_lock import DecisionPathLockError, issue_locked_decision" in headless_gateway
-    assert "issue_locked_decision(" in headless_gateway
-    assert ".issue(enriched_state)" not in runtime_gateway
-    assert "for attribute_name in ('optimize', 'issue', 'decide')" not in headless_gateway
+    runtime_gateway_text = _read("runtime/decision_gateway.py")
+    headless_gateway_text = _read("application/headless/decision_gateway.py")
+    runtime_gateway_tree = _tree("runtime/decision_gateway.py")
+    headless_gateway_tree = _tree("application/headless/decision_gateway.py")
+
+    assert "from runtime.decision_path_lock import issue_locked_decision" in runtime_gateway_text
+    assert _calls_function(runtime_gateway_tree, "issue_locked_decision")
+    assert "from runtime.decision_path_lock import" in headless_gateway_text
+    assert "issue_locked_decision" in headless_gateway_text
+    assert _calls_function(headless_gateway_tree, "issue_locked_decision")
+    assert ".issue(enriched_state)" not in runtime_gateway_text
+    assert "for attribute_name in ('optimize', 'issue', 'decide')" not in headless_gateway_text
 
 
 def test_server_maintenance_reports_stay_outside_repo_by_default() -> None:
