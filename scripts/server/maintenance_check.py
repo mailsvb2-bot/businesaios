@@ -27,6 +27,7 @@ ARTIFACT_SUFFIXES = (
     ".zip",
 )
 NEVER_DESCEND = {".git", ".venv", "venv", "node_modules"}
+LOCAL_RUNNER_DIR_NAMES = {"actions-runner-businesaios"}
 GENERATED_DIR_PREFIXES = (
     Path(".runtime"),
     Path("runtime/data/reports"),
@@ -114,7 +115,7 @@ def clean_local_artifacts(root: Path, *, dry_run: bool = False, deep_clean: bool
         for dirname in list(dirnames):
             path = current_path / dirname
             rel = relpath(root, path)
-            should_remove = dirname in CACHE_DIR_NAMES
+            should_remove = dirname in CACHE_DIR_NAMES or (rel_current == Path(".") and dirname in LOCAL_RUNNER_DIR_NAMES)
             if deep_clean and dirname == "target" and "rust" in rel.parts:
                 should_remove = True
             if not should_remove:
@@ -259,50 +260,33 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--last", type=int, default=4, help="How many previous reports to summarize.")
     parser.add_argument("--no-clean", action="store_true", help="Skip local artifact cleanup before pytest.")
     parser.add_argument("--clean-only", action="store_true", help="Only clean local artifacts, do not run pytest.")
-    parser.add_argument("--dry-run", action="store_true", help="Show what cleanup would remove without deleting.")
-    parser.add_argument("--deep-clean", action="store_true", help="Also remove untracked Rust target/ build cache directories.")
-    parser.add_argument(
-        "pytest_args",
-        nargs=argparse.REMAINDER,
-        help="Optional pytest args after --. Defaults to --import-mode=importlib --tb=short tests",
-    )
+    parser.add_argument("--dry-run", action="store_true", help="Show cleanup plan without deleting local artifacts.")
+    parser.add_argument("--deep-clean", action="store_true", help="Also remove heavyweight untracked build outputs such as Rust target dirs.")
+    parser.add_argument("pytest_args", nargs=argparse.REMAINDER, help="Arguments passed after -- to pytest counter.")
     return parser.parse_args()
-
-
-def normalize_pytest_args(raw: list[str]) -> list[str]:
-    if raw and raw[0] == "--":
-        raw = raw[1:]
-    return raw or ["--import-mode=importlib", "--tb=short", "tests"]
 
 
 def main() -> int:
     args = parse_args()
     root = repo_root()
     report_dir = Path(args.report_dir).expanduser().resolve()
-
-    print("=== BusinessAIOS server maintenance check ===")
-    print(f"repo:       {root}")
-    print(f"branch:     {subprocess.run(['git', 'branch', '--show-current'], cwd=root, text=True, stdout=subprocess.PIPE).stdout.strip()}")
-    print(f"reports:    {report_dir}")
+    pytest_args = list(args.pytest_args)
+    if pytest_args and pytest_args[0] == "--":
+        pytest_args = pytest_args[1:]
+    if not pytest_args:
+        pytest_args = ["--import-mode=importlib", "--tb=short", "tests"]
 
     if not args.no_clean:
-        cleanup = clean_local_artifacts(root, dry_run=args.dry_run, deep_clean=args.deep_clean)
-        print("\n=== CLEANUP ===")
-        print(f"removed:         {cleanup['removed_n']}")
-        print(f"skipped tracked: {cleanup['skipped_tracked_n']}")
-        if cleanup["removed"]:
-            print("first removed:")
-            for item in list(cleanup["removed"])[:30]:
-                print(f"  - {item}")
+        summary = clean_local_artifacts(root, dry_run=bool(args.dry_run), deep_clean=bool(args.deep_clean))
+        print("[maintenance] cleanup=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
 
-    if args.clean_only:
-        print_last_reports(report_dir, limit=max(1, args.last))
+    if args.clean_only or args.dry_run:
+        print_last_reports(report_dir, limit=max(1, int(args.last)))
         return 0
 
-    pytest_args = normalize_pytest_args(args.pytest_args)
     rc, json_path, log_path = run_pytest_count(root, report_dir, pytest_args)
     print_report_summary(json_path)
-    print_last_reports(report_dir, limit=max(1, args.last))
+    print_last_reports(report_dir, limit=max(1, int(args.last)))
     print("\n=== OUTPUT FILES ===")
     print(f"json: {json_path}")
     print(f"log:  {log_path}")
