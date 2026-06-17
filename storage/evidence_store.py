@@ -16,10 +16,7 @@ from storage.tenant_partitioning import build_partition_key, normalize_storage_t
 
 
 CANON_STORAGE_EVIDENCE_STORE = True
-CANON_STORAGE_EVIDENCE_RECORD_LEGACY_ALIAS_CONTRACT = True
-
-
-_MISSING = object()
+CANON_STORAGE_EVIDENCE_RECORD_EXPLICIT_LEGACY_FACTORY = True
 
 
 def utc_now() -> datetime:
@@ -40,7 +37,7 @@ def _first_non_empty(*values: object, default: str) -> str:
     return default
 
 
-@dataclass(frozen=True, init=False)
+@dataclass(frozen=True)
 class EvidenceRecord:
     tenant_id: str
     scope: str
@@ -56,10 +53,13 @@ class EvidenceRecord:
     legal_hold: bool = False
     evidence_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
-    def __init__(
-        self,
+    @classmethod
+    def from_legacy(
+        cls,
         *,
         tenant_id: str,
+        subject: str | None = None,
+        evidence_type: str | None = None,
         scope: str | None = None,
         run_id: str | None = None,
         action_type: str | None = None,
@@ -68,26 +68,26 @@ class EvidenceRecord:
         refs: tuple[str, ...] | list[str] | None = None,
         labels: Mapping[str, str] | None = None,
         action_id: str | None = None,
-        created_at: datetime | object = _MISSING,
+        created_at: datetime | None = None,
         retention_until: datetime | None = None,
         legal_hold: bool = False,
-        evidence_id: str | object = _MISSING,
-        subject: str | None = None,
-        evidence_type: str | None = None,
-    ) -> None:
-        object.__setattr__(self, "tenant_id", tenant_id)
-        object.__setattr__(self, "scope", _first_non_empty(scope, subject, default="general"))
-        object.__setattr__(self, "run_id", _first_non_empty(run_id, default="default"))
-        object.__setattr__(self, "action_type", _first_non_empty(action_type, evidence_type, default="evidence"))
-        object.__setattr__(self, "verification_status", _first_non_empty(verification_status, default="recorded"))
-        object.__setattr__(self, "payload", dict(payload or {}))
-        object.__setattr__(self, "refs", tuple(refs or ()))
-        object.__setattr__(self, "labels", dict(labels or {}))
-        object.__setattr__(self, "action_id", action_id)
-        object.__setattr__(self, "created_at", utc_now() if created_at is _MISSING else created_at)
-        object.__setattr__(self, "retention_until", retention_until)
-        object.__setattr__(self, "legal_hold", bool(legal_hold))
-        object.__setattr__(self, "evidence_id", str(uuid.uuid4()) if evidence_id is _MISSING else str(evidence_id))
+        evidence_id: str | None = None,
+    ) -> "EvidenceRecord":
+        return cls(
+            tenant_id=tenant_id,
+            scope=_first_non_empty(scope, subject, default="general"),
+            run_id=_first_non_empty(run_id, default="default"),
+            action_type=_first_non_empty(action_type, evidence_type, default="evidence"),
+            verification_status=_first_non_empty(verification_status, default="recorded"),
+            payload=dict(payload or {}),
+            refs=tuple(refs or ()),
+            labels=dict(labels or {}),
+            action_id=action_id,
+            created_at=created_at or utc_now(),
+            retention_until=retention_until,
+            legal_hold=legal_hold,
+            evidence_id=evidence_id or str(uuid.uuid4()),
+        )
 
     def validate(self) -> None:
         if not str(self.tenant_id or "").strip():
@@ -341,4 +341,11 @@ class PostgresEvidenceStore:
             return int(cursor.rowcount or 0)
 
 
-__all__ = ["CANON_STORAGE_EVIDENCE_STORE", "EvidenceRecord", "InMemoryEvidenceStore", "SqliteEvidenceStore", "PostgresEvidenceStore"]
+__all__ = [
+    "CANON_STORAGE_EVIDENCE_STORE",
+    "CANON_STORAGE_EVIDENCE_RECORD_EXPLICIT_LEGACY_FACTORY",
+    "EvidenceRecord",
+    "InMemoryEvidenceStore",
+    "SqliteEvidenceStore",
+    "PostgresEvidenceStore",
+]
