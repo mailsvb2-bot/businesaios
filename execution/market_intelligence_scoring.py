@@ -24,6 +24,10 @@ def _safe_datetime(value: str | None) -> datetime | None:
         return None
 
 
+def _clamp01(value: float) -> float:
+    return max(0.0, min(float(value), 1.0))
+
+
 @dataclass(frozen=True)
 class SignalScore:
     entity_id: str
@@ -56,14 +60,17 @@ class EvidenceScoringEngine:
             count = max(1, len(bucket))
             confidence = min(sum(item.confidence for item in bucket) / count, 1.0)
             strength = min(sum(item.strength for item in bucket) / count, 1.0)
-            freshness = min(sum(self._freshness_value(item.observed_at) for item in bucket) / count, 1.0)
+            freshness = min(sum(self._freshness_value(item) for item in bucket) / count, 1.0)
             frequency = min(len({item.provider for item in bucket}) / 5.0 + sum(item.frequency for item in bucket) / count / 2.0, 1.0)
             structured_importance = min((confidence * 0.35) + (strength * 0.30) + (freshness * 0.20) + (frequency * 0.15), 1.0)
             scores.append(SignalScore(entity_id=entity_id, structured_importance=structured_importance, confidence=confidence, strength=strength, freshness=freshness, frequency=frequency, signals_count=count))
         return tuple(sorted(scores, key=lambda item: (-item.structured_importance, item.entity_id)))
 
-    def _freshness_value(self, observed_at: str) -> float:
-        dt = _safe_datetime(observed_at)
+    def _freshness_value(self, signal: UnifiedSignal) -> float:
+        declared = _clamp01(float(getattr(signal, 'freshness', 0.0) or 0.0))
+        if declared > 0.0:
+            return declared
+        dt = _safe_datetime(signal.observed_at)
         if dt is None:
             return 0.25
         delta_hours = max(0.0, (_utc_now() - dt.astimezone(UTC)).total_seconds() / 3600.0)
