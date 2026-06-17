@@ -38,11 +38,14 @@ def required_recovery_action(state: ExecutionCrashWindowState) -> CrashWindowRec
         state.validate()
     except ValueError:
         return CrashWindowRecoveryAction.BLOCK_INVALID_STATE
-    if not state.ledger_marked:
+    ledger_marked = bool(state.ledger_marked)
+    effect_verified = bool(state.effect_verified)
+    handler_dispatched = bool(state.handler_dispatched)
+    if not ledger_marked:
         return CrashWindowRecoveryAction.BLOCK_INVALID_STATE
-    if state.effect_verified:
+    if effect_verified:
         return CrashWindowRecoveryAction.NOOP_ALREADY_VERIFIED
-    if state.handler_dispatched:
+    if handler_dispatched:
         return CrashWindowRecoveryAction.VERIFY_OR_RETRY_DISPATCH
     return CrashWindowRecoveryAction.REPLAY_DISPATCH
 
