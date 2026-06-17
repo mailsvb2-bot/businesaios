@@ -26,6 +26,14 @@ def _safe_list(value: object) -> list[str]:
     return [text] if text else []
 
 
+def _first_text(*values: object) -> str:
+    for value in values:
+        text = _text(value)
+        if text:
+            return text
+    return ""
+
+
 def normalize_router_evidence(payload: Mapping[str, Any] | None) -> dict[str, Any]:
     raw = _safe_dict(payload)
     if not raw:
@@ -40,7 +48,12 @@ def normalize_router_evidence(payload: Mapping[str, Any] | None) -> dict[str, An
         or raw.get("status")
         or raw.get("code")
     )
-    status = normalize_outcome_status(status, verified=raw.get("ok", raw.get("verified", None)), retryable=raw.get("retryable", payload_block.get("retryable", False)), default="unknown")
+    status = normalize_outcome_status(
+        status,
+        verified=raw.get("ok", raw.get("verified", None)),
+        retryable=raw.get("retryable", payload_block.get("retryable", False)),
+        default="unknown",
+    )
 
     confidence = raw.get("verification_confidence")
     if confidence in {None, ""}:
@@ -63,9 +76,13 @@ def normalize_router_evidence(payload: Mapping[str, Any] | None) -> dict[str, An
         or data_block.get("message")
     )
 
-    verified = outcome_is_verified(status, verified=raw.get("verified", raw.get("ok", None)), retryable=raw.get("retryable", payload_block.get("retryable", False)))
+    verified = outcome_is_verified(
+        status,
+        verified=raw.get("verified", raw.get("ok", None)),
+        retryable=raw.get("retryable", payload_block.get("retryable", False)),
+    )
 
-    normalized = {
+    return {
         "verified": verified,
         "status": status,
         "code": _text(raw.get("code") or status) or status,
@@ -76,8 +93,13 @@ def normalize_router_evidence(payload: Mapping[str, Any] | None) -> dict[str, An
         "external_id": _text(raw.get("external_id") or payload_block.get("external_id")),
         "retryable": bool(raw.get("retryable", payload_block.get("retryable", False))),
         "source": _text(evidence_block.get("source") or raw.get("source") or "effect_router"),
+        "observed_at": _first_text(
+            raw.get("observed_at"),
+            evidence_block.get("observed_at"),
+            payload_block.get("observed_at"),
+            data_block.get("observed_at"),
+        ),
     }
-    return normalized
 
 
 def normalize_feedback_contract(feedback: Mapping[str, Any] | None) -> dict[str, Any]:
