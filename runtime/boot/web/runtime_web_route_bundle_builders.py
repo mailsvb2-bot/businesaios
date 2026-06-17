@@ -13,6 +13,7 @@ from interfaces.web.debug.messaging_policy_snapshot.route_bundle import Messagin
 from interfaces.web.debug.messaging_policy_trace_search.route_bundle import MessagingPolicyTraceSearchRouteBundle
 from interfaces.web.settings.alert_subscriptions_integration.route_bundle import AlertSubscriptionsRouteBundle
 from interfaces.web.settings.messaging_preferences_integration.route_bundle import MessagingPreferencesRouteBundle
+from runtime.boot.web.messaging_policy_trace_search_service_builder import build_messaging_policy_trace_search_service
 from runtime.messaging_policy_alerts.service import MessagingPolicyAlertService
 from runtime.messaging_policy_dashboard.service import MessagingPolicyDashboardService
 from runtime.messaging_policy_trace.search_service import MessagingPolicyTraceSearchService
@@ -54,8 +55,13 @@ def build_messaging_policy_snapshot_bundle(*, read_service):
     return MessagingPolicySnapshotRouteBundle(read_service=read_service)
 
 
-def build_messaging_policy_trace_search_bundle(*, trace_search_service: MessagingPolicyTraceSearchService):
-    return _MessagingPolicyTraceSearchRouteBundle(search_service=trace_search_service)
+def build_messaging_policy_trace_search_bundle(*, trace_search_service=None, event_store=None):
+    service = trace_search_service
+    if service is None and event_store is not None:
+        service = build_messaging_policy_trace_search_service(event_store=event_store)
+    if service is None:
+        raise RuntimeError("trace search service is required")
+    return _MessagingPolicyTraceSearchRouteBundle(search_service=service)
 
 
 def build_messaging_policy_dashboard_bundle(*, trace_search_service: MessagingPolicyTraceSearchService):
