@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -89,13 +90,19 @@ def _write_json(path: str, report: PytestErrorCountReport) -> None:
     target.write_text(json.dumps(asdict(report) | {"problem_count": report.problem_count, "success": report.success}, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
 
 
+def _pytest_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env.setdefault("CARGO_TARGET_DIR", str(Path(tempfile.gettempdir()) / "businesaios-cargo-target"))
+    return env
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     pytest_args = _clean_pytest_args(args.pytest_args)
     with tempfile.TemporaryDirectory(prefix="pytest-error-count-") as tmp:
         junit_path = Path(tmp) / "pytest-junit.xml"
         command = [sys.executable, "-m", "pytest", *pytest_args, f"--junitxml={junit_path}"]
-        completed = subprocess.run(command, text=True, capture_output=args.quiet_output, check=False)
+        completed = subprocess.run(command, text=True, capture_output=args.quiet_output, check=False, env=_pytest_env())
         if args.quiet_output:
             if completed.stdout:
                 sys.stdout.write(completed.stdout)
