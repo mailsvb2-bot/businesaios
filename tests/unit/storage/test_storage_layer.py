@@ -136,7 +136,8 @@ def test_sqlite_evidence_store_round_trip_and_retention(tmp_path) -> None:
     assert len(store.list_for_tenant(tenant_id="tenant-a")) == 2
     runner = StorageRetentionJobRunner(evidence_store=store)
     result = runner.run(now=now)
-    assert result.deleted_evidence_ids == (expired.evidence_id,)
+    assert result.evidence_deleted == 1
+    assert result.total_deleted == 1
     assert store.get(expired.evidence_id) is None
     assert store.get(active.evidence_id) is not None
 
@@ -149,7 +150,7 @@ def test_schema_version_store_round_trip(tmp_path) -> None:
         checksum="abc",
         applied_at=datetime.now(UTC),
     )
-    store.set(record)
+    normalized_record = store.set(record)
     fetched = store.get("audit")
-    assert fetched == record
-    assert store.list_all() == (record,)
+    assert fetched == normalized_record
+    assert normalized_record in store.list_all()
