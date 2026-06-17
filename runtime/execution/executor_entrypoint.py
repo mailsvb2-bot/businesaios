@@ -33,6 +33,7 @@ def execute_with_entrypoint_span(
             executor_context_cm=executor_context_cm,
             context_name="RuntimeExecutor.execute",
             execute_callback=run_execute,
+            **{"run": run_execute},
         )
 
 
