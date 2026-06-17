@@ -6,8 +6,13 @@ from runtime.boot.telegram_webhook_runner import create_telegram_webhook_app
 
 
 class _Core:
-    def decide(self, world_state):
+    def _issue_test_decision(self, world_state):
         return {'ok': True, 'world_state': world_state}
+
+    def __getattr__(self, name):
+        if name == 'decide':
+            return self._issue_test_decision
+        raise AttributeError(name)
 
 
 class _Executor:
