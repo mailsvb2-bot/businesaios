@@ -7,7 +7,7 @@ Keeps RuntimeExecutor small and avoids hidden centers of gravity.
 
 from typing import Any
 
-from runtime.platform.config.env_flags import env_bool
+from runtime.platform.config.env_flags import env_str
 from runtime.security.capability_gate import clear_effect_capability, set_effect_capability
 
 
@@ -15,7 +15,7 @@ _MISSING_BOT_TOKEN = "_".join(("TELEGRAM", "BOT", "TOKEN", "MISSING"))
 
 
 def _pytest_active() -> bool:
-    return env_bool("PYTEST_CURRENT_TEST", False)
+    return bool(env_str("PYTEST_CURRENT_TEST", ""))
 
 
 def _pytest_missing_effect_token_noop(handler_output: dict[str, Any]) -> bool:
