@@ -10,7 +10,7 @@ from runtime.integration.runtime_packet_provider import RuntimePacketProvider
 from runtime.decision_input.decision_input_service import DecisionInputService, build_decision_input_service as build_runtime_decision_input_service
 from runtime.decision_gateway import (
     RuntimeDecisionRouteGateway,
-    build_runtime_decision_route_gateway,
+    build_runtime_decision_gateway,
 )
 from runtime.decision_input.runtime_state_enrichment import RuntimeStateEnrichmentService, build_runtime_state_enrichment_service as build_runtime_state_enrichment_service_owner
 from runtime.architecture.architecture_watch_service import ArchitectureWatchService
@@ -60,7 +60,7 @@ def build_decision_gateway(
     enrichment_service: RuntimeStateEnrichmentService,
     observability: RuntimeObservability,
 ) -> RuntimeDecisionRouteGateway:
-    return build_runtime_decision_route_gateway(
+    return build_runtime_decision_gateway(
         decision_input_service=decision_input_service,
         enrichment_service=enrichment_service,
         observability=observability,
