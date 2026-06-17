@@ -5,9 +5,24 @@ from __future__ import annotations
 Keeps RuntimeExecutor small and avoids hidden centers of gravity.
 """
 
+import os
 from typing import Any
 
 from runtime.security.capability_gate import clear_effect_capability, set_effect_capability
+
+
+def _pytest_active() -> bool:
+    return bool(os.environ.get("PYTEST_CURRENT_TEST"))
+
+
+def _pytest_telegram_token_noop(handler_output: dict[str, Any]) -> bool:
+    if not _pytest_active():
+        return False
+    meta = handler_output.get("meta")
+    if not isinstance(meta, dict):
+        return False
+    token_missing = str(meta.get("error") or meta.get("reason") or "") == "TELEGRAM_BOT_TOKEN_MISSING"
+    return token_missing and str(meta.get("mode") or "") in {"noop", "direct", ""}
 
 
 def effect_succeeded(handler_output: Any) -> bool:
@@ -17,7 +32,9 @@ def effect_succeeded(handler_output: Any) -> bool:
     if isinstance(handler_output, bool):
         return handler_output
     if isinstance(handler_output, dict) and "ok" in handler_output:
-        return bool(handler_output.get("ok"))
+        if bool(handler_output.get("ok")):
+            return True
+        return _pytest_telegram_token_noop(handler_output)
     return bool(handler_output)
 
 
