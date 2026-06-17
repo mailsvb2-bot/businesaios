@@ -79,7 +79,7 @@ def test_sqlite_evidence_store_round_trip_and_retention(tmp_path) -> None:
     store = SqliteEvidenceStore(SqliteSessionFactory(tmp_path / "evidence.db"))
     now = datetime.now(UTC)
     expired = store.append(
-        EvidenceRecord(
+        EvidenceRecord.from_legacy(
             tenant_id="tenant-a",
             subject="decision",
             evidence_type="trace",
@@ -89,7 +89,7 @@ def test_sqlite_evidence_store_round_trip_and_retention(tmp_path) -> None:
         )
     )
     active = store.append(
-        EvidenceRecord(
+        EvidenceRecord.from_legacy(
             tenant_id="tenant-a",
             subject="decision",
             evidence_type="trace",
@@ -109,7 +109,7 @@ def test_sqlite_evidence_store_round_trip_and_retention(tmp_path) -> None:
 
 def test_schema_version_store_round_trip(tmp_path) -> None:
     store = SqliteSchemaVersionStore(SqliteSessionFactory(tmp_path / "schema.db"))
-    record = SchemaVersionRecord(
+    record = SchemaVersionRecord.from_legacy(
         component="audit",
         version="v1",
         checksum="abc",
