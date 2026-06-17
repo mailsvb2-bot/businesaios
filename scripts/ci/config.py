@@ -100,6 +100,7 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
         allowed_workflows=(
             ".github/workflows/ci-doctor.yml",
             ".github/workflows/ci-fast.yml",
+            ".github/workflows/ci-full.yml",
             ".github/workflows/ci.yml",
             ".github/workflows/docker-image.yml",
             ".github/workflows/full-ci.yml",
