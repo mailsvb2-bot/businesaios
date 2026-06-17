@@ -14,6 +14,19 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _parse_observed_at(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed.astimezone(UTC) if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
 def _text(value: object) -> str:
     return str(value or "").strip()
 
@@ -132,7 +145,7 @@ class EffectEvidenceBuilder:
         payload: Mapping[str, Any] | None = None,
         external_refs: tuple[str, ...] | list[str] | None = None,
         confidence: float = 0.0,
-        observed_at: datetime | None = None,
+        observed_at: datetime | str | None = None,
     ) -> EffectEvidenceBuilder:
         row_payload = _safe_dict(payload)
         refs = _tuple_refs(external_refs or (), row_payload.get("external_ref"), row_payload.get("external_refs"))
@@ -145,7 +158,7 @@ class EffectEvidenceBuilder:
                 payload=row_payload,
                 external_refs=refs,
                 confidence=max(0.0, min(1.0, _safe_float(confidence))),
-                observed_at=observed_at or _utc_now(),
+                observed_at=_parse_observed_at(observed_at or row_payload.get("observed_at")) or _utc_now(),
             )
         )
         return self
@@ -159,6 +172,7 @@ class EffectEvidenceBuilder:
             summary=_text(row_payload.get("summary") or row_payload.get("message") or row_payload.get("error")),
             payload=row_payload,
             confidence=1.0 if row_payload.get("ok") else 0.25,
+            observed_at=row_payload.get("observed_at"),
         )
 
     def add_feedback_evidence(self, *, feedback: Mapping[str, Any] | None = None) -> EffectEvidenceBuilder:
@@ -174,6 +188,7 @@ class EffectEvidenceBuilder:
                 payload=evidence_result,
                 external_refs=evidence_result.get("external_refs") or payload.get("external_refs"),
                 confidence=_safe_float(payload.get("verification_confidence") or evidence_result.get("confidence"), default=0.0),
+                observed_at=evidence_result.get("observed_at") or payload.get("observed_at"),
             )
         return self
 
@@ -189,6 +204,7 @@ class EffectEvidenceBuilder:
             payload=row_payload,
             external_refs=row_payload.get("external_refs"),
             confidence=_safe_float(row_payload.get("confidence"), default=0.0),
+            observed_at=row_payload.get("observed_at"),
         )
 
     def add_connector_snapshot(self, *, source: str, payload: Mapping[str, Any] | None = None) -> EffectEvidenceBuilder:
@@ -203,6 +219,7 @@ class EffectEvidenceBuilder:
             payload=row_payload,
             external_refs=row_payload.get("external_refs") or row_payload.get("external_ref"),
             confidence=_safe_float(row_payload.get("confidence"), default=0.0),
+            observed_at=row_payload.get("observed_at"),
         )
 
     def build(self) -> EffectEvidenceBundle:
