@@ -145,6 +145,19 @@ RuntimeDecisionGateway = RuntimeDecisionIssueGateway
 COMPAT_DECISION_GATEWAY_FUNCTION = True
 
 
+def build_runtime_decision_gateway(
+    *,
+    decision_input_service: DecisionInputService,
+    enrichment_service: RuntimeStateEnrichmentService,
+    observability: RuntimeObservability,
+) -> RuntimeDecisionRouteGateway:
+    return RuntimeDecisionRouteGateway(
+        decision_input_service=decision_input_service,
+        enrichment_service=enrichment_service,
+        observability=observability,
+    )
+
+
 def issue_runtime_decision(
     *,
     issuer: DecisionIssuer,
