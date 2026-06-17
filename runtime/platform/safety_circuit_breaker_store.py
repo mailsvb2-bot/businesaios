@@ -89,6 +89,7 @@ class PlatformSqliteCircuitBreakerStore:
         breaker_key = str(state.key).strip()
         if not breaker_key:
             raise ValueError('state.key is required')
+        opened_value = 1 if bool(state.opened) else 0
         with self._connect() as conn:
             conn.execute(
                 '''
@@ -96,7 +97,7 @@ class PlatformSqliteCircuitBreakerStore:
                 VALUES (?, ?, ?, datetime('now'))
                 ON CONFLICT(breaker_key) DO UPDATE SET consecutive_failures = excluded.consecutive_failures, opened = excluded.opened, updated_at = excluded.updated_at
                 ''',
-                (breaker_key, int(state.consecutive_failures), 1 if state.opened else 0),
+                (breaker_key, int(state.consecutive_failures), opened_value),
             )
 
     def delete(self, key: str) -> None:
