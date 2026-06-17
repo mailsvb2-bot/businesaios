@@ -7,8 +7,11 @@ from typing import Any
 from core.offers.engine import OfferEngine
 from core.retention.decision_adapter_support import (
     build_initial_plan,
+    build_retention_debug,
+    make_telemetry_step,
     read_entitlements_from_state,
     read_outbound_metrics,
+    render_offer_step,
     try_build_offer_step,
 )
 from core.retention.engine import RetentionDayDecision, RetentionDecision, RetentionEngine
@@ -16,6 +19,7 @@ from core.tenancy.normalization import normalize_tenant_scope
 from kernel.world_state import WorldStateV1 as WorldState
 
 log = logging.getLogger(__name__)
+_RETENTION_SPLIT_HELPERS = (build_retention_debug, make_telemetry_step, render_offer_step)
 
 
 @dataclass(frozen=True)
@@ -63,22 +67,17 @@ class RetentionDecisionAdapter:
 
     def compute_plan(self, state: WorldState) -> ActionPlan:
         user_id = str(state.user_id)
-        outbound = (
-            read_outbound_metrics(reader=self._outbound_metrics_reader, logger=self._log)
-            if self._outbound_metrics_reader
-            else None
-        )
+        outbound = read_outbound_metrics(reader=self._outbound_metrics_reader, logger=self._log) if self._outbound_metrics_reader else None
         entitlements = read_entitlements_from_state(state=state, logger=self._log)
-
+        session = getattr(state, "session", None)
         decision: RetentionDayDecision = self._engine.compute_decision(
             user_id=user_id,
-            day_key=str(getattr(state, "session", {}).get("day_key", "day:today")) if isinstance(getattr(state, "session", None), dict) else "day:today",
-            day_index=int(getattr(state, "session", {}).get("day_index", 0)) if isinstance(getattr(state, "session", None), dict) else 0,
+            day_key=str(session.get("day_key", "day:today")) if isinstance(session, dict) else "day:today",
+            day_index=int(session.get("day_index", 0)) if isinstance(session, dict) else 0,
             outbound_telemetry=outbound,
             prices=self._prices,
             entitlements=entitlements,
         )
-
         steps, debug = build_initial_plan(decision=decision, user_id=user_id)
         offer_step, override_debug = try_build_offer_step(
             decision=decision,
