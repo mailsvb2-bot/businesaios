@@ -22,6 +22,13 @@ os.environ["BUSINESAIOS_TEST_RUN"] = "1"
 os.environ["BUSINESAIOS_TESTS_CONFTEST_LOADED"] = "1"
 os.environ["BUSINESAIOS_ALLOW_TEST_SQLITE_FALLBACK"] = "1"
 
+_RELEASE_INTEGRITY_TESTS = {
+    "tests/test_release_clean.py",
+    "tests/test_release_gate.py",
+    "tests/lock/test_super_locks_no_zip_sqlite.py",
+    "tests/test_canon_package_v21.py",
+}
+
 
 def _safe_path_part(value: str) -> str:
     clean = "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "-" for ch in value.strip())
@@ -115,6 +122,7 @@ def _remove_runtime_artifacts() -> None:
     transient_dirs = (
         ROOT / ".runtime",
         ROOT / ".pytest_cache",
+        ROOT / "tests" / "__pycache__",
         ROOT / "runtime" / "data" / "demo" / ".runtime",
     )
     for transient in transient_dirs:
@@ -122,6 +130,8 @@ def _remove_runtime_artifacts() -> None:
             shutil.rmtree(transient, ignore_errors=True)
 
     _unlink_matching_files(ROOT / "runtime" / "data" / "demo", ("*.db", "*.db-shm", "*.db-wal"))
+    _unlink_matching_files(ROOT / "runtime" / "data" / "security", ("*.jsonl",))
+    _unlink_matching_files(ROOT / "security", ("*.jsonl",))
     _unlink_matching_files(ROOT, ("wave*_*.txt",))
 
     if os.environ.get("BUSINESAIOS_DEEP_TEST_CLEANUP", "").strip() == "1":
@@ -141,6 +151,10 @@ def pytest_sessionstart(session) -> None:  # type: ignore[no-untyped-def]
     _remove_runtime_artifacts()
 
 
+def pytest_collection_finish(session) -> None:  # type: ignore[no-untyped-def]
+    _remove_runtime_artifacts()
+
+
 def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untyped-def]
     if os.environ.get("BUSINESAIOS_SESSION_FINISH_CLEANUP", "").strip() == "1":
         _remove_runtime_artifacts()
@@ -151,7 +165,12 @@ def _item_requests_runtime_artifact_cleanup(item) -> bool:  # type: ignore[no-un
 
     if os.environ.get("BUSINESAIOS_PER_TEST_CLEANUP", "").strip() == "1":
         return True
-    return item.get_closest_marker("runtime_artifacts") is not None
+    path = Path(str(item.fspath)).resolve()
+    try:
+        rel = path.relative_to(ROOT).as_posix()
+    except ValueError:
+        rel = path.as_posix()
+    return rel in _RELEASE_INTEGRITY_TESTS or item.get_closest_marker("runtime_artifacts") is not None
 
 
 def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
