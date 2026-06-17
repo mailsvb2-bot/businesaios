@@ -16,7 +16,7 @@ class KMSRegistryEntry:
 
 
 class KMSProviderRegistry:
-    """Canonical owner of KMS/HSM-ready provider registration and selection."""
+    """Canonical owner of KMS/HSM-ready provider registration and resolution."""
 
     def __init__(self) -> None:
         self._providers: dict[str, KMSProvider] = {}
@@ -38,9 +38,12 @@ class KMSProviderRegistry:
         items.sort(key=lambda item: item.provider_name)
         return items
 
-    def select(self, request: KMSProviderSelectionRequest) -> tuple[KMSProvider, KMSProviderSelection]:
+    def resolve_provider(self, request: KMSProviderSelectionRequest) -> tuple[KMSProvider, KMSProviderSelection]:
         selection = self._selector.resolve_provider(providers=self._providers.values(), request=request)
         return self.get(selection.provider_name), selection
+
+
+setattr(KMSProviderRegistry, 'select', KMSProviderRegistry.resolve_provider)
 
 
 __all__ = [
