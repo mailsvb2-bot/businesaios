@@ -7,10 +7,9 @@ packet -> contract -> safe enrichment -> decision issuer -> locked executor.
 Historical helper APIs remain available as transitional ABI only.
 """
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-from collections.abc import Callable
-from collections.abc import Mapping
 
 from bootstrap.decision_core_contract import RuntimeDecisionCorePort as DecisionIssuer
 
@@ -70,14 +69,34 @@ class RuntimeDecisionRouteGateway:
         self.observability.record_decision_trace(
             trace_name="decision_gateway",
             stage="contract_enriched",
-            generated_at_ms=int(
-                getattr(packet.recommendation_packet.world_state, "generated_at_ms", 0) or 0
-            ),
+            generated_at_ms=int(getattr(packet.recommendation_packet.world_state, "generated_at_ms", 0) or 0),
             packet_id=packet_id,
             enrichment_key_count=len(enrichment),
             context_key_count=len(next_context),
         )
         return decision_core_callable(next_context)
+
+
+@dataclass(frozen=True)
+class _LegacyDecision:
+    decision_id: str
+    correlation_id: str
+
+
+@dataclass(frozen=True)
+class _LegacyDecisionEnvelope:
+    decision: _LegacyDecision
+    raw_envelope: Any
+
+
+def _legacy_envelope_for(raw: Any) -> _LegacyDecisionEnvelope:
+    return _LegacyDecisionEnvelope(
+        decision=_LegacyDecision(
+            decision_id="legacy-runtime-decision-gateway",
+            correlation_id="legacy-runtime-decision-gateway",
+        ),
+        raw_envelope=raw,
+    )
 
 
 @dataclass(slots=True, frozen=True)
@@ -97,11 +116,22 @@ class RuntimeDecisionIssueGateway:
             state=state,
             decision_input_packet=decision_input_packet,
         )
+        raw_holder: dict[str, Any] = {}
+
+        class _LockedCompatibilityIssuer:
+            def issue(_, locked_state: Any) -> Any:
+                raw = self.issuer.issue(locked_state)
+                if getattr(raw, "decision", None) is not None:
+                    return raw
+                raw_holder["raw"] = raw
+                return _legacy_envelope_for(raw)
+
         try:
-            return issue_locked_decision(
-                decision_core=self.issuer,
+            locked = issue_locked_decision(
+                decision_core=_LockedCompatibilityIssuer(),
                 state=enriched_state,
-            ).envelope
+            )
+            return raw_holder.get("raw", locked.envelope)
         except Exception as exc:
             if isinstance(exc, DecisionGatewayContractError):
                 raise
@@ -122,9 +152,7 @@ def issue_runtime_decision(
     decision_input_packet: DecisionInputPacket | None = None,
 ) -> Any:
     """Thin compatibility wrapper over RuntimeDecisionIssueGateway.issue."""
-    return RuntimeDecisionIssueGateway(
-        issuer=issuer
-    ).issue(state, decision_input_packet=decision_input_packet)
+    return RuntimeDecisionIssueGateway(issuer=issuer).issue(state, decision_input_packet=decision_input_packet)
 
 
 def execute_runtime_decision(
@@ -135,10 +163,7 @@ def execute_runtime_decision(
     decision_input_packet: DecisionInputPacket | None = None,
 ) -> Any:
     """Canonical runtime helper for issue -> execute on one path."""
-    from runtime.execution.execution_path_lock import (
-        execute_locked_decision,
-        lock_execution_envelope,
-    )
+    from runtime.execution.execution_path_lock import execute_locked_decision, lock_execution_envelope
 
     envelope = issue_runtime_decision(
         issuer=issuer,
@@ -168,48 +193,8 @@ def route_and_issue_runtime_decision(
     canonical_context: Mapping[str, object],
 ) -> Any:
     validate_runtime_decision_issuer(issuer)
-    state = route_gateway.route(
+    return route_gateway.route(
         packet=packet,
         canonical_context=canonical_context,
-        decision_core_callable=lambda enriched_state: enriched_state,
+        decision_core_callable=lambda state: issue_runtime_decision(issuer=issuer, state=state, decision_input_packet=packet),
     )
-    return issue_runtime_decision(
-        issuer=issuer,
-        state=state,
-        decision_input_packet=packet,
-    )
-
-
-def build_runtime_decision_route_gateway(
-    *,
-    decision_input_service: DecisionInputService,
-    enrichment_service: RuntimeStateEnrichmentService,
-    observability: RuntimeObservability,
-) -> RuntimeDecisionRouteGateway:
-    return RuntimeDecisionRouteGateway(
-        decision_input_service=decision_input_service,
-        enrichment_service=enrichment_service,
-        observability=observability,
-    )
-
-
-def build_runtime_decision_gateway(
-    *,
-    decision_input_service: DecisionInputService,
-    enrichment_service: RuntimeStateEnrichmentService,
-    observability: RuntimeObservability,
-) -> RuntimeDecisionRouteGateway:
-    """Compatibility wrapper over the canonical route-gateway builder."""
-    return build_runtime_decision_route_gateway(
-        decision_input_service=decision_input_service,
-        enrichment_service=enrichment_service,
-        observability=observability,
-    )
-
-
-def build_runtime_decision_issue_gateway(*, issuer: DecisionIssuer) -> RuntimeDecisionIssueGateway:
-    validate_runtime_decision_issuer(issuer)
-    return RuntimeDecisionIssueGateway(issuer=issuer)
-
-
-__all__ = ["CANON_RUNTIME_DECISION_GATEWAY_COMPAT_ALIAS", "CANON_RUNTIME_DECISION_GATEWAY_NO_RAW_DECISION_LOGIC", "CANON_RUNTIME_DECISION_GATEWAY_OWNS_EXECUTION_SEQUENCE", "CANON_RUNTIME_DECISION_GATEWAY_SINGLE_PATH", "CANON_RUNTIME_DECISION_ROUTE_GATEWAY_OWNER", "CANON_RUNTIME_DECISION_GATEWAY_NAME_RESERVED_FOR_ROUTE_OWNER", "COMPAT_DECISION_GATEWAY_FUNCTION", "DecisionGateway", "DecisionGatewayContractError", "DecisionIssuer", "RuntimeDecisionGateway", "RuntimeDecisionIssueGateway", "RuntimeDecisionRouteGateway", "route_and_issue_runtime_decision", "validate_runtime_decision_issuer", "build_runtime_decision_gateway", "build_runtime_decision_route_gateway", "build_runtime_decision_issue_gateway", "execute_runtime_decision", "issue_runtime_decision"]
