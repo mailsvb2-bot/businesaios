@@ -91,11 +91,8 @@ def _write_json(path: str, report: PytestErrorCountReport) -> None:
 
 
 def _pytest_env() -> dict[str, str]:
-    tmp_root = Path(tempfile.gettempdir())
     env = dict(os.environ)
-    env.setdefault("CARGO_TARGET_DIR", str(tmp_root / "businesaios-cargo-target"))
-    env.setdefault("DATA_DIR", str(tmp_root / "businesaios-pytest-data"))
-    env.setdefault("BUSINESAIOS_HOME", str(tmp_root / "businesaios-pytest-home"))
+    env.setdefault("CARGO_TARGET_DIR", str(Path(tempfile.gettempdir()) / "businesaios-cargo-target"))
     return env
 
 
@@ -124,6 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     if report.error_items:
         print("[pytest-count] errors:")
         for item in report.error_items:
+    
             print(f"  - {item}")
     if args.json_path:
         _write_json(args.json_path, report)
