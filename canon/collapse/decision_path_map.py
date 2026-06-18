@@ -5,6 +5,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Final
 
+from core.strategic_horizon.engine import CANONICAL_DECISION_OPTIMIZE_METHOD
+
 
 class FindingSeverity(str, Enum):
     CRITICAL = "critical"
@@ -39,7 +41,7 @@ GOD_MODULE_IMPORTS_MAJOR: Final[int] = 35
 GOD_MODULE_IMPORTS_CRITICAL: Final[int] = 60
 GOD_MODULE_ALLOWLIST_PREFIXES: Final[tuple[str, ...]] = ("contracts/", "tests/")
 HIDDEN_LOGIC_ACTION_KEYS: Final[tuple[str, ...]] = ("selected_action", "final_action", "action_type", "best_action", "issued_action")
-HIDDEN_LOGIC_RETURN_HINTS: Final[tuple[str, ...]] = ("decide", "select", "choose", "rank", "optimize", "issue")
+HIDDEN_LOGIC_RETURN_HINTS: Final[tuple[str, ...]] = ("decide", "select", "choose", "rank", CANONICAL_DECISION_OPTIMIZE_METHOD, "issue")
 
 
 @dataclass(frozen=True)
