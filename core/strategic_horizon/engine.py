@@ -8,6 +8,8 @@ from core.strategic_horizon.cooldown import CooldownState
 from core.strategic_horizon.mode_inference import can_expand, can_optimize, infer_mode, is_defense, is_unstable
 from core.strategic_horizon.vector_math import compute_risk_budget, growth_pressure, learning_regime, select_horizon
 
+CANONICAL_DECISION_OPTIMIZE_METHOD = "optimize"
+
 
 class StrategicMode(str, Enum):
     STABILIZE = "stabilize"
@@ -137,7 +139,7 @@ class StrategicHorizonEngine:
         return learning_regime(s, mode)
 
 
-def veto_if_myopic(self, vector: StrategicVector, decision: object | None = None) -> bool:
+def veto_if_myopic(vector: StrategicVector, decision: object | None = None) -> bool:
     action = getattr(decision, "action", None) if decision is not None else None
     safe_actions = {"noop", "hold", "keep"}
     if vector.mode == StrategicMode.DEFENSE:
