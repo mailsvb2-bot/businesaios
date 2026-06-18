@@ -57,6 +57,10 @@ class RuntimeRegistry:
         ensure_registered(state=self._state, name=name)
         return self._state.get(name)
 
+    def require(self, name: str) -> Any:
+        """Return a required runtime service through the canonical registry owner."""
+        return self.get(name)
+
     def has(self, name: str) -> bool:
         return self._state.has(name)
 
