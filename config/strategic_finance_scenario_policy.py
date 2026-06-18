@@ -5,10 +5,11 @@ CANON_COMPAT_SHIM = True
 from decimal import Decimal
 
 from core.finance.strategic.types import Scenario
+from core.strategic_horizon.engine import StrategicMode
 
 DEFAULT_STRATEGIC_FINANCE_SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
-        name="defense",
+        name=StrategicMode.DEFENSE.value,
         revenue_multiplier=Decimal("0.96"),
         cost_multiplier=Decimal("0.90"),
         probability=Decimal("0.16"),
