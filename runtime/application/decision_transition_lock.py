@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from typing import Any
 from collections.abc import Callable
 
+from core.strategic_horizon.engine import CANONICAL_DECISION_OPTIMIZE_METHOD
+
 CANON_RUNTIME_APPLICATION_DECISION_TRANSITION_SINGLE_OWNER = True
 CANON_RUNTIME_APPLICATION_DECISION_TRANSITION_FAIL_CLOSED = True
 CANON_RUNTIME_APPLICATION_DECISION_TRANSITION_NO_DECISION_LOGIC = True
@@ -30,7 +32,7 @@ class LockedDecisionTransitionCallable:
 FORBIDDEN_DECISION_OWNER_METHODS = (
     'issue',
     'decide',
-    'optimize',
+    CANONICAL_DECISION_OPTIMIZE_METHOD,
 )
 
 
