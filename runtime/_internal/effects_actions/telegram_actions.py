@@ -25,11 +25,15 @@ from runtime._internal.effects_actions.telegram_actions_transport import (
 )
 
 
+def telegram_self_check_effect(effects: Any, *, token: str | None = None) -> dict:
+    from runtime._internal.router_support import execute_effect_action_sync
+
+    return execute_effect_action_sync(effects, EffectActionType.TELEGRAM_SELF_CHECK, {"token": token})
+
+
 class TelegramEffectsMixin:
     def telegram_self_check(self, *, token: str | None = None) -> dict:
-        from runtime._internal.router_support import execute_effect_action_sync
-
-        return execute_effect_action_sync(self, EffectActionType.TELEGRAM_SELF_CHECK, {"token": token})
+        return telegram_self_check_effect(self, token=token)
 
     def send_message(
         self,
@@ -108,6 +112,9 @@ class TelegramEffectsMixin:
 
     def answer_callback(self, *, callback_query_id: str, text: str | None = None, show_alert: bool = False, **kwargs) -> dict:
         return answer_callback_public_effect(self, callback_query_id=callback_query_id, text=text, show_alert=show_alert, **kwargs)
+
+    def answer_callback_query(self, *, callback_query_id: str, text: str | None = None, show_alert: bool = False, **kwargs) -> dict:
+        return self.answer_callback(callback_query_id=callback_query_id, text=text, show_alert=show_alert, **kwargs)
 
     def poll_telegram_updates(self, *, token: str, offset: int | None = None, timeout: int = 30, limit: int = 100) -> dict:
         return poll_telegram_updates_effect(self, token=token, offset=offset, timeout=timeout, limit=limit)
