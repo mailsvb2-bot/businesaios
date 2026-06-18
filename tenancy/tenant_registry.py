@@ -127,16 +127,17 @@ class InMemoryTenantRegistry(TenantRegistryContract):
 
 
 
-def ensure_tenant_record(registry: TenantRegistryContract, tenant_id: str, *, display_name: str | None = None, plan: TenantPlan = TenantPlan.STARTER) -> TenantRecord:
+def ensure_tenant_record(tenant_registry: TenantRegistryContract, tenant_id: str, *, display_name: str | None = None, plan: TenantPlan = TenantPlan.STARTER) -> TenantRecord:
     tid = require_tenant_id(tenant_id)
-    existing = registry.lookup(tid) if hasattr(registry, 'lookup') else registry.get(tid)
+    lookup = getattr(tenant_registry, 'lookup', None)
+    existing = lookup(tid) if callable(lookup) else tenant_registry.get(tid)
     if existing is not None:
         return existing
     record = TenantRecord(tenant_id=tid, display_name=str(display_name or tid), plan=plan)
-    register_many = getattr(registry, 'register_many', None)
+    register_many = getattr(tenant_registry, 'register_many', None)
     if callable(register_many):
         return register_many((record,))[0]
-    register_one = getattr(registry, 'register')
+    register_one = getattr(tenant_registry, 'register')
     return register_one(record)
 
 
@@ -153,66 +154,3 @@ def tenant_registry_path() -> Path:
     if explicit:
         return Path(explicit)
     return tenancy_data_dir() / "tenant_registry.json"
-
-
-class PersistentTenantRegistry(InMemoryTenantRegistry):
-    def __init__(self, path: str | Path | None = None, records: tuple[TenantRecord, ...] = ()) -> None:
-        self._path = Path(path) if path is not None else tenant_registry_path()
-        super().__init__(())
-        self._load()
-        for record in records:
-            self.register(record)
-
-    @property
-    def path(self) -> Path:
-        return self._path
-
-    def register(self, record: TenantRecord) -> TenantRecord:
-        stored = super().register(record)
-        self._flush()
-        return stored
-
-    def set_status(self, *, tenant_id: str, status: TenantStatus) -> TenantRecord:
-        updated = super().set_status(tenant_id=tenant_id, status=status)
-        self._flush()
-        return updated
-
-
-    def register_many(self, records: tuple[TenantRecord, ...] | list[TenantRecord]) -> tuple[TenantRecord, ...]:
-        stored = super().register_many(records)
-        self._flush()
-        return stored
-
-    def _load(self) -> None:
-        raw = read_json_or_default(self._path, default={"records": []})
-        records = raw.get("records", []) if isinstance(raw, dict) else []
-        self._records = {}
-        self._aliases = {}
-        for item in records:
-            if not isinstance(item, dict):
-                continue
-            record = from_dataclass(TenantRecord, dict(item))
-            super().register(record)
-
-    def _flush(self) -> None:
-        with self._lock:
-            records = [to_jsonable(item) for item in sorted(self._records.values(), key=lambda item: item.tenant_id)]
-        atomic_write_json(self._path, {"records": records})
-
-
-def build_default_tenant_registry() -> InMemoryTenantRegistry:
-    mode = os.getenv("BUSINESAIOS_TENANT_REGISTRY_BACKEND", "file").strip().lower()
-    if mode == "memory":
-        return InMemoryTenantRegistry()
-    return PersistentTenantRegistry()
-
-
-__all__ = [
-    "CANON_TENANT_REGISTRY",
-    "InMemoryTenantRegistry",
-    "PersistentTenantRegistry",
-    "build_default_tenant_registry",
-    "ensure_tenant_record",
-    "tenancy_data_dir",
-    "tenant_registry_path",
-]
