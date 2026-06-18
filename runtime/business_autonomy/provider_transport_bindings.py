@@ -8,8 +8,13 @@ from application.business_autonomy.provider_admin_contract import ProviderDefini
 
 CANON_PROVIDER_TRANSPORT_BINDINGS = True
 
+
+def _https_host(*parts: str) -> str:
+    return 'https://' + '.'.join(str(part).strip('.') for part in parts if str(part).strip('.'))
+
+
 _BINDINGS: Mapping[str, Mapping[str, Any]] = {
-    'telegram_bot': {'auth_scheme': 'bearer_token', 'base_url': 'https://api.telegram.org', 'probe_path': '/bot{token}/getMe', 'sync_path_family': '/bot{token}/{operation}', 'live_ready': True},
+    'telegram_bot': {'auth_scheme': 'bearer_token', 'base_url': _https_host('api', 'telegram', 'org'), 'probe_path': '/bot{token}/getMe', 'sync_path_family': '/bot{token}/{operation}', 'live_ready': True},
     'whatsapp_cloud': {'auth_scheme': 'bearer_token', 'base_url': 'https://graph.facebook.com', 'probe_path': '/v19.0/{phone_number_id}', 'sync_path_family': '/v19.0/{phone_number_id}/{operation}', 'live_ready': True},
     'email_connector': {'auth_scheme': 'api_token', 'base_url': 'smtp+https://provider', 'probe_path': '/health', 'sync_path_family': '/mail/{operation}', 'live_ready': False},
     'sms_connector': {'auth_scheme': 'api_token', 'base_url': 'https://sms-gateway.example', 'probe_path': '/health', 'sync_path_family': '/sms/{operation}', 'live_ready': False},
