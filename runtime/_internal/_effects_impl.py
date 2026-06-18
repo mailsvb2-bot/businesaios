@@ -32,7 +32,7 @@ from .effects_domains.evolution import EvolutionEffectsMixin
 from .effects_domains.marketing import MarketingEffectsMixin
 from .effects_domains.tracking import TrackingEffectsMixin
 from .effects_domains.user_state import UserStateEffectsMixin
-from .http_transport import HttpTransport, build_http_transport, form_urlencode, url_with_params as _url_with_params
+from .http_transport import HttpTransport, build_http_transport, form_urlencode as _form_body_encoder, url_with_params as _url_with_params
 
 
 def _telegram_api_base() -> str:
@@ -41,7 +41,7 @@ def _telegram_api_base() -> str:
 
 
 def encode_form_body(data: dict[str, Any]) -> bytes:
-    return form_urlencode(dict(data or {}))
+    return _form_body_encoder(dict(data or {}))
 
 
 def url_with_params(*, url: str, params: dict[str, Any] | None = None) -> str:
