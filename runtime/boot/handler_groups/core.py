@@ -4,6 +4,17 @@ CANON_BOOT_WIRING_ONLY = True
 
 from runtime.handlers import ActionHandlerRegistry
 
+_AI_CEO_HANDLER_REF = "runtime.handlers.ai_ceo_plan:handle_ai_ceo_plan"
+
+
+def _catalog_action_for_handler(handler_ref: str) -> str:
+    from runtime.boot.actions_catalog import SPEC_ROWS
+
+    for name, ref, *_rest in SPEC_ROWS:
+        if str(ref) == str(handler_ref):
+            return str(name)
+    raise KeyError(handler_ref)
+
 
 def _track_marker_event(*, payload, effects, env, event_type: str):
     event_payload = payload.get("payload") if isinstance(payload.get("payload"), dict) else None
@@ -25,7 +36,7 @@ def register_core_handlers(*, handlers: ActionHandlerRegistry, ctx) -> None:
     from runtime.handlers.reward_observe import handle_reward_observe
 
     handlers.register(
-        "ai_ceo_plan@v1",
+        _catalog_action_for_handler(_AI_CEO_HANDLER_REF),
         lambda payload, effects, env: handle_ai_ceo_plan(
             payload,
             effects,
