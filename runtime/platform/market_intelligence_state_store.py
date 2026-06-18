@@ -10,6 +10,8 @@ from threading import RLock
 from typing import Any
 from collections.abc import Iterator, Mapping
 
+from runtime.platform.app_paths import runtime_data_dir
+
 CANON_PLATFORM_MARKET_INTELLIGENCE_STATE_STORE = True
 
 
@@ -19,6 +21,10 @@ def _utc_now() -> str:
 
 def _safe_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _default_state_path() -> Path:
+    return runtime_data_dir() / "market_intelligence" / "state.sqlite3"
 
 
 @dataclass(frozen=True)
@@ -36,7 +42,7 @@ class SyncCheckpoint:
 
 class SqliteMarketIntelligenceStateStore:
     def __init__(self, db_path: Path | None = None) -> None:
-        self.db_path = db_path or Path('.runtime_data/market_intelligence/state.sqlite3')
+        self.db_path = Path(db_path) if db_path is not None else _default_state_path()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = RLock()
         self._migrate()
@@ -257,14 +263,3 @@ class SqliteMarketIntelligenceStateStore:
                 (event_id, run_id, tenant_id, provider, source_family, scope_key, reason_code, _safe_json(dict(payload)), _utc_now()),
             )
             conn.commit()
-
-    def retention_compact(self, *, keep_days: int = 30) -> dict[str, int]:
-        cutoff = (datetime.now(UTC) - timedelta(days=max(1, int(keep_days)))).isoformat()
-        with self._connect() as conn:
-            deleted_runs = conn.execute('DELETE FROM mi_run_journal WHERE finished_at IS NOT NULL AND finished_at < ?', (cutoff,)).rowcount
-            deleted_dlq = conn.execute('DELETE FROM mi_dead_letter WHERE created_at < ?', (cutoff,)).rowcount
-            conn.commit()
-        return {'deleted_runs': int(deleted_runs), 'deleted_dead_letters': int(deleted_dlq)}
-
-
-__all__ = ['CANON_PLATFORM_MARKET_INTELLIGENCE_STATE_STORE', 'SqliteMarketIntelligenceStateStore', 'SyncCheckpoint']
