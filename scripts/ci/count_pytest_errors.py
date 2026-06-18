@@ -121,7 +121,6 @@ def main(argv: list[str] | None = None) -> int:
     if report.error_items:
         print("[pytest-count] errors:")
         for item in report.error_items:
-    
             print(f"  - {item}")
     if args.json_path:
         _write_json(args.json_path, report)
