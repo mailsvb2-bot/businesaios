@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any
 from collections.abc import Mapping
 
+from core.strategic_horizon.engine import StrategicMode
+
 
 CANON_ADAPTIVE_STRATEGY_BRIDGE = True
 
@@ -31,7 +33,7 @@ class AdaptiveStrategyBridge:
         spend_tightness = float(economic.get('spend_tightness') or 0.0)
         min_expected_roi = float(economic.get('min_expected_roi') or 0.0)
 
-        focus_mode = 'stabilize'
+        focus_mode = StrategicMode.STABILIZE.value
         if adaptation_ready and preferred_route and accepted_observations >= 5 and min_expected_roi >= 0.35 and spend_tightness <= 0.65:
             focus_mode = 'scale_verified_route'
         elif preferred_route and verification_threshold >= 0.65:
