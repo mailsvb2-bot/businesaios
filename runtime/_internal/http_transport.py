@@ -5,7 +5,7 @@ import json as _json
 import os
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 
 
 def _socket_module():
@@ -196,10 +196,26 @@ def _normalized_url(url: str) -> str:
         raise ValueError("absolute_http_url_required")
     return _urllib_parse().urlunsplit(parsed)
 
-def url_with_params(*, url: str, params: dict[str, Any] | None = None) -> str:
-    from runtime._internal.effects_clients.http_client import _url_with_params
+def _query_items(params: Mapping[str, Any] | None) -> list[tuple[str, Any]]:
+    items: list[tuple[str, Any]] = []
+    for key, value in dict(params or {}).items():
+        if value is None:
+            continue
+        name = str(key)
+        if isinstance(value, Iterable) and not isinstance(value, (str, bytes, bytearray, Mapping)):
+            for item in value:
+                if item is not None:
+                    items.append((name, item))
+            continue
+        items.append((name, value))
+    return items
 
-    return _url_with_params(_normalized_url(str(url)), params)
+def url_with_params(*, url: str, params: dict[str, Any] | None = None) -> str:
+    normalized = _normalized_url(str(url))
+    items = _query_items(params)
+    if not items:
+        return normalized
+    return normalized + ("&" if "?" in normalized else "?") + _urllib_parse().urlencode(items, doseq=True)
 
 def form_urlencode(data: dict[str, Any]) -> bytes:
     """Encode x-www-form-urlencoded payloads inside the sealed HTTP layer.
@@ -207,8 +223,6 @@ def form_urlencode(data: dict[str, Any]) -> bytes:
     This keeps urllib usage centralized under runtime/_internal/http_transport.py
     instead of leaking URL/form helpers into runtime domain modules.
     """
-
-    from runtime._internal.effects_clients.http_client import _query_items
 
     return _urllib_parse().urlencode(_query_items(data), doseq=True).encode("utf-8")
 
@@ -241,7 +255,10 @@ def sync_post_json(*, url: str, headers: dict[str, str] | None = None, data: dic
     return HTTPResponse(status=int(result.status or 0), json=result.json, text=result.text)
 
 def sync_get(*, url: str, headers: dict[str, str] | None = None, params: dict[str, Any] | None = None, timeout_s: int = 30) -> HTTPResponse:
-    final_url = url_with_params(url=url, params=params)
+    try:
+        final_url = url_with_params(url=url, params=params)
+    except ValueError:
+        return HTTPResponse(status=599, json=None, text="")
     result = sync_request(method="GET", url=final_url, headers=dict(headers or {}), timeout_s=float(timeout_s or 30))
     return HTTPResponse(status=int(result.status or 0), json=result.json, text=result.text)
 
