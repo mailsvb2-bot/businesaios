@@ -24,6 +24,11 @@ def _urllib_request():
     return importlib.import_module("urllib.request")
 
 
+def runtime_network_mode() -> str:
+    enabled = str(os.environ.get("BUSINESAIOS_ALLOW_NETWORK", "0")).strip().lower() in {"1", "true", "yes", "on"}
+    return "enabled" if enabled else "disabled"
+
+
 @dataclass(frozen=True)
 class HTTPResponse:
     status: int
@@ -264,7 +269,7 @@ def sync_get(*, url: str, headers: dict[str, str] | None = None, params: dict[st
 
 def build_http_transport(*, allow_network: bool | None = None) -> HttpTransport:
     if allow_network is None:
-        allow_network = str(os.environ.get("BUSINESAIOS_ALLOW_NETWORK", "0")).strip().lower() in {"1", "true", "yes", "on"}
+        allow_network = runtime_network_mode() == "enabled"
     return UrllibHttpTransport() if allow_network else DisabledNetworkTransport()
 
 __all__ = [
@@ -275,6 +280,7 @@ __all__ = [
     "UrllibHttpTransport",
     "build_http_transport",
     "form_urlencode",
+    "runtime_network_mode",
     "sync_get",
     "sync_post_json",
     "sync_request",
