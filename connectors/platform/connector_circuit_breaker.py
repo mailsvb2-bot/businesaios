@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 CANON_CONNECTOR_CIRCUIT_BREAKER = True
+_OPEN_BLOCK_OBSERVED_KEY = 'open_block_observed'
 
 
 def _connector_control_plane_dir() -> Path:
@@ -216,7 +217,10 @@ class ConnectorCircuitBreaker:
             now = float(self._time())
             if record.state == BreakerState.OPEN.value:
                 blocked_until = float(record.blocked_until or 0.0)
-                if blocked_until > now:
+                open_block_observed = bool(record.metadata.get(_OPEN_BLOCK_OBSERVED_KEY))
+                if blocked_until > now or not open_block_observed:
+                    record.metadata[_OPEN_BLOCK_OBSERVED_KEY] = True
+                    self._flush_state_locked()
                     return BreakerPermit(False, record.state, 'circuit_open', connector_id, provider, version, operation, record.blocked_until)
                 record.state = BreakerState.HALF_OPEN.value
                 record.half_open_in_flight = 0
@@ -349,6 +353,7 @@ class ConnectorCircuitBreaker:
         record.half_open_in_flight = 0
         record.open_count += 1
         record.half_open_first_probe_at = None
+        record.metadata[_OPEN_BLOCK_OBSERVED_KEY] = False
 
     def _close_locked(self, record: _BreakerRecord) -> None:
         record.state = BreakerState.CLOSED.value
@@ -357,6 +362,7 @@ class ConnectorCircuitBreaker:
         record.opened_at = None
         record.blocked_until = None
         record.half_open_in_flight = 0
+        record.metadata.pop(_OPEN_BLOCK_OBSERVED_KEY, None)
 
     def _key(self, *, connector_id: str, provider: str, version: str, operation: str) -> tuple[str, str, str, str]:
         return (str(connector_id).strip(), str(provider).strip(), str(version).strip(), str(operation).strip())
@@ -378,55 +384,3 @@ class ConnectorCircuitBreaker:
                 str(row.get('version') or '').strip(),
                 str(row.get('operation') or '').strip(),
             )
-            if not all(key):
-                continue
-            restored[key] = _BreakerRecord(
-                state=str(row.get('state') or BreakerState.CLOSED.value),
-                failure_count=int(row.get('failure_count') or 0),
-                success_count=int(row.get('success_count') or 0),
-                opened_at=None if row.get('opened_at') is None else float(row.get('opened_at')),
-                blocked_until=None if row.get('blocked_until') is None else float(row.get('blocked_until')),
-                last_failure_reason=None if row.get('last_failure_reason') is None else str(row.get('last_failure_reason')),
-                last_failure_at=None if row.get('last_failure_at') is None else float(row.get('last_failure_at')),
-                last_success_at=None if row.get('last_success_at') is None else float(row.get('last_success_at')),
-                half_open_in_flight=int(row.get('half_open_in_flight') or 0),
-                open_count=int(row.get('open_count') or 0),
-                metadata=dict(row.get('metadata') or {}),
-            )
-        self._state = restored
-
-    def _flush_state_locked(self) -> None:
-        if self._state_path is None:
-            return
-        rows = [
-            {
-                'connector_id': k[0],
-                'provider': k[1],
-                'version': k[2],
-                'operation': k[3],
-                'state': v.state,
-                'failure_count': v.failure_count,
-                'success_count': v.success_count,
-                'opened_at': v.opened_at,
-                'blocked_until': v.blocked_until,
-                'last_failure_reason': v.last_failure_reason,
-                'last_failure_at': v.last_failure_at,
-                'last_success_at': v.last_success_at,
-                'half_open_in_flight': v.half_open_in_flight,
-                'open_count': v.open_count,
-                'metadata': dict(v.metadata),
-            }
-            for k, v in sorted(self._state.items())
-        ]
-        _atomic_write_json(self._state_path, {'state': rows})
-
-
-__all__ = [
-    'BreakerPermit',
-    'BreakerState',
-    'CANON_CONNECTOR_CIRCUIT_BREAKER',
-    'CircuitBreakerRule',
-    'CircuitBreakerSnapshot',
-    'ConnectorCircuitBreaker',
-    'connector_circuit_breaker_path',
-]
