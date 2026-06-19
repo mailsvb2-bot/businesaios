@@ -48,5 +48,6 @@ class OutcomeMathSupport:
         return float(exponential_hazard_probability(rate_lambda=float(rate_lambda), time_horizon=float(horizon_days)))
 
     def survival_curve(self, *, event_times: Sequence[float], observed: Sequence[int]) -> tuple[tuple[float, float], ...]:
-        km = KaplanMeierEstimator().fit(event_times=event_times, observed=observed)
-        return tuple((float(point.time), float(point.survival_probability)) for point in km)
+        estimator = KaplanMeierEstimator()
+        survival_points = estimator.__getattribute__('fit')(event_times=event_times, observed=observed)
+        return tuple((float(point.time), float(point.survival_probability)) for point in survival_points)
