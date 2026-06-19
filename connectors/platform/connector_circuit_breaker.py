@@ -218,7 +218,7 @@ class ConnectorCircuitBreaker:
             if record.state == BreakerState.OPEN.value:
                 blocked_until = float(record.blocked_until or 0.0)
                 open_block_observed = bool(record.metadata.get(_OPEN_BLOCK_OBSERVED_KEY))
-                if blocked_until > now or not open_block_observed:
+                if blocked_until > now or (not open_block_observed and int(record.failure_count) > 1):
                     record.metadata[_OPEN_BLOCK_OBSERVED_KEY] = True
                     self._flush_state_locked()
                     return BreakerPermit(False, record.state, 'circuit_open', connector_id, provider, version, operation, record.blocked_until)
