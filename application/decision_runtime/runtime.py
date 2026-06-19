@@ -16,6 +16,11 @@ from core.observability.perf import Span, emit_sla_violation
 from core.observability.throttled_logger import exception_throttled
 
 
+def gate_action_or_raise(**kwargs: Any) -> None:
+    core_api = __import__("core.ai.decision_core", fromlist=["gate_action_or_raise"])
+    core_api.gate_action_or_raise(**kwargs)
+
+
 def extract_correlation_key(state: Any) -> str | None:
     try:
         meta = dict(getattr(state, "meta", {}) or {})
@@ -132,14 +137,13 @@ def validate_and_gate_action(*, schemas: Any, state: Any, out: Any, user_id: str
         output={"action_schema_version": int(action_schema_version)},
     )
     try:
-        core_api = __import__("core.ai.decision_core", fromlist=["gate_action_or_raise"])
         product_meta = getattr(state, "product_metadata", None)
         if not isinstance(product_meta, dict):
             product_meta = {}
         tid_for_gate = str(product_meta.get("tenant_id") or getattr(state, "tenant_id", "") or "")
         payload = dict(out.payload) if isinstance(out.payload, dict) else {}
         uid_for_gate = str(payload.get("user_id") or user_id)
-        core_api.gate_action_or_raise(
+        gate_action_or_raise(
             action=out.action,
             payload=payload,
             tenant_id=tid_for_gate,
