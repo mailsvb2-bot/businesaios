@@ -16,6 +16,7 @@ def build_messaging_policy_alert_subscription_service(*, alert_service, settings
         dedup_stack = build_tenant_aware_persistent_deduping_alert_notifier(
             settings_gateway=settings_gateway,
             cooldown_s=int(cooldown_s),
+            tenant_id=tenant_id,
         )
     service = MessagingPolicyAlertSubscriptionService(
         alert_service=alert_service,
