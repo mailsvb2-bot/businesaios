@@ -10,6 +10,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 from scripts.ci.paths import repo_root as ci_repo_root
 from scripts.ci.subprocess_io import run_command, stream_command
 
@@ -69,7 +73,7 @@ def relpath(root: Path, path: Path) -> Path:
 
 
 def git_tracked_files(root: Path) -> set[Path]:
-    result = run_command(["git", "ls-files", "-z"], cwd=root)
+    result = run_command(["git", "ls-files", "-z"], cwd=root, echo_output=False)
     if result.returncode != 0:
         raise SystemExit(result.stderr)
     return {Path(item) for item in result.stdout.split("\0") if item}
