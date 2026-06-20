@@ -73,6 +73,7 @@ def run_command(
     cwd: Path | None = None,
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
+    echo_output: bool = True,
 ) -> CommandOutcome:
     printable = " ".join(shlex.quote(part) for part in command)
     effective_timeout = DEFAULT_TIMEOUT_SECONDS if timeout is None else timeout
@@ -97,9 +98,9 @@ def run_command(
         message = f"TIMEOUT after {effective_timeout}s: {printable}\n{stderr}"
         print(message, file=sys.stderr)
         return CommandOutcome(returncode=124, stdout=stdout, stderr=message)
-    if completed.stdout:
+    if echo_output and completed.stdout:
         print(completed.stdout, end="")
-    if completed.stderr:
+    if echo_output and completed.stderr:
         print(completed.stderr, end="", file=sys.stderr)
     return CommandOutcome(
         returncode=completed.returncode,
