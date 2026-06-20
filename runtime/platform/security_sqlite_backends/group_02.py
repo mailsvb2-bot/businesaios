@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import sqlite3
 import time
 from collections.abc import Mapping
 from pathlib import Path
