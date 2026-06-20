@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from collections import Counter
 from collections.abc import Iterable, Sequence
@@ -10,7 +9,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 from scripts.ci.config import project_shape_config
+from scripts.ci.subprocess_io import run_command as ci_run_command
 
 
 @dataclass(frozen=True)
@@ -39,15 +43,8 @@ def quality_targets(root: Path) -> tuple[str, ...]:
 
 
 def run_command(argv: Sequence[str], *, cwd: Path) -> CommandResult:
-    proc = subprocess.run(
-        list(argv),
-        cwd=str(cwd),
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    return CommandResult(tuple(argv), int(proc.returncode), proc.stdout, proc.stderr)
+    result = ci_run_command(list(argv), cwd=cwd, echo_output=False)
+    return CommandResult(tuple(argv), int(result.returncode), result.stdout, result.stderr)
 
 
 def write_text(path: Path, text: str) -> None:
