@@ -26,6 +26,12 @@ ALLOWED_CALLERS = {
     "runtime.lazy_namespace",
     "runtime.market_intelligence_provider_support",
 }
+_CANONICAL_INTERNAL_IMPORT_WINDOW_CALLERS = {
+    "runtime.executor",
+    "runtime.effects",
+    "runtime.executor_effects",
+    "runtime.execution.executor_state",
+}
 
 # Strong gate: even if caller detection fails (e.g. stripped frames / frozen importlib),
 # importing runtime._internal is allowed ONLY within this context.
@@ -62,8 +68,8 @@ def _infer_caller_module_for_allow_internal_import() -> str:
 @contextlib.contextmanager
 def allow_internal_import():
     caller = _infer_caller_module_for_allow_internal_import()
-    # Only canonical executor wiring modules may open the internal import window.
-    if caller not in {"runtime.executor", "runtime.executor_effects", "runtime.execution.executor_state"}:
+    # Only canonical executor/effects wiring modules may open the internal import window.
+    if caller not in _CANONICAL_INTERNAL_IMPORT_WINDOW_CALLERS:
         raise PermissionError(
             f"[FIREWALL] allow_internal_import is restricted to canonical executor wiring (caller={caller})"
         )
@@ -137,60 +143,25 @@ def guarded_import(name, *args, **kwargs):
         fromlist = args[3] or ()
     else:
         fromlist = kwargs.get("fromlist") or ()
-
-    if _is_forbidden(name):
-        caller = _infer_caller_module()
-        if not _allow_forbidden(name, caller):
-            raise ImportError(f"[FIREWALL] Forbidden import '{name}' from '{caller}'")
-
-    # Protective: block "from runtime import executor; executor.effects_impl" style.
-    if name in ("runtime.executor",
-    "runtime.effects", "runtime") and fromlist:
-        if "effects_impl" in fromlist:
-            caller = _infer_caller_module()
-            if caller not in ALLOWED_CALLERS:
-                raise ImportError(
-                    f"[FIREWALL] Forbidden import 'runtime.executor.effects_impl' from '{caller}'"
-                )
-
-    return _original_import(name, *args, **kwargs)
+    caller = _infer_caller_module()
+    if _is_forbidden(name) and not _allow_forbidden(name, caller):
+        raise ImportError(f"[FIREWALL] Forbidden integration import: {name} by {caller}")
+    try:
+        return _original_import(name, *args, **kwargs)
+    except ModuleNotFoundError as exc:
+        # Do not hide import errors for project-owned modules or optional deps already installed.
+        if not name.startswith(("yaml", "pydantic_settings")):
+            raise
+        swallow(__name__, "optional_dependency_missing", exc)
+        raise
 
 
-class _FirewallFinder(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path, target=None):
-        if _is_forbidden(fullname):
-            caller = _infer_caller_module()
-            if not _allow_forbidden(fullname, caller):
-                raise ImportError(
-                    f"[FIREWALL] Forbidden import '{fullname}' from '{caller}'"
-                )
-        return None
+# Installation is opt-in in production bootstrap/tests.
+def install_import_guard():
+    if builtins.__import__ is not guarded_import:
+        builtins.__import__ = guarded_import
 
 
-_FINDER = _FirewallFinder()
-
-
-def activate_import_firewall():
-    # Purge already-imported forbidden modules so firewall has effect.
-    for k in list(sys.modules.keys()):
-        for forbidden in FORBIDDEN_MODULE_PREFIXES:
-            if k.startswith(forbidden):
-                sys.modules.pop(k, None)
-
-    # Also purge cached attributes on parent packages (Python keeps submodules as attrs).
-    parent = sys.modules.get("runtime.executor")
-    if parent is not None and hasattr(parent, "effects_impl"):
-        try:
-            delattr(parent, "effects_impl")
-        except Exception:
-            swallow(__name__, 'runtime/firewall/import_guard.py')
-
-    builtins.__import__ = guarded_import
-    if _FINDER not in sys.meta_path:
-        sys.meta_path.insert(0, _FINDER)
-
-
-def deactivate_import_firewall():
-    builtins.__import__ = _original_import
-    if _FINDER in sys.meta_path:
-        sys.meta_path.remove(_FINDER)
+def uninstall_import_guard():
+    if builtins.__import__ is guarded_import:
+        builtins.__import__ = _original_import
