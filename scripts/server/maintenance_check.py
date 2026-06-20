@@ -162,6 +162,7 @@ def build_isolated_pytest_env(report_dir: Path, stamp: str) -> dict[str, str]:
     for path in (data_dir, tenancy_dir, security_dir):
         path.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
+    env.pop("PYTEST_DISABLE_PLUGIN_AUTOLOAD", None)
     env.update(
         {
             "DATA_DIR": str(data_dir),
@@ -199,6 +200,7 @@ def run_pytest_count(root: Path, report_dir: Path, pytest_args: list[str]) -> tu
         cwd=root,
         env=build_isolated_pytest_env(report_dir, stamp),
         on_stdout_line=tee.write,
+        use_base_env=False,
     )
     tee.write(f"\n[maintenance] pytest-count exit_code={rc}\n")
     tee.close()
