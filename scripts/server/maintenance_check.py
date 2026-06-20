@@ -4,12 +4,14 @@ import argparse
 import json
 import os
 import shutil
-import subprocess
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Iterable
+
+from scripts.ci.paths import repo_root as ci_repo_root
+from scripts.ci.subprocess_io import run_command, stream_command
 
 
 REPORT_DIR_DEFAULT = Path(os.getenv("BUSINESAIOS_TEST_REPORT_DIR", "/tmp/businesaios-pytest-runs"))
@@ -59,16 +61,7 @@ class Tee:
 
 
 def repo_root() -> Path:
-    result = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise SystemExit("Run this script from inside the Git repository.")
-    return Path(result.stdout.strip()).resolve()
+    return ci_repo_root().resolve()
 
 
 def relpath(root: Path, path: Path) -> Path:
@@ -76,16 +69,10 @@ def relpath(root: Path, path: Path) -> Path:
 
 
 def git_tracked_files(root: Path) -> set[Path]:
-    result = subprocess.run(
-        ["git", "ls-files", "-z"],
-        cwd=root,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
+    result = run_command(["git", "ls-files", "-z"], cwd=root)
     if result.returncode != 0:
-        raise SystemExit(result.stderr.decode("utf-8", errors="replace"))
-    return {Path(item.decode("utf-8")) for item in result.stdout.split(b"\0") if item}
+        raise SystemExit(result.stderr)
+    return {Path(item) for item in result.stdout.split("\0") if item}
 
 
 def has_tracked_child(rel_dir: Path, tracked: set[Path]) -> bool:
@@ -203,19 +190,12 @@ def run_pytest_count(root: Path, report_dir: Path, pytest_args: list[str]) -> tu
     cmd = [sys.executable, str(script), "--json", str(json_path), "--", *pytest_args]
     tee = Tee(log_path)
     tee.write("$ " + " ".join(cmd) + "\n")
-    process = subprocess.Popen(
+    rc = stream_command(
         cmd,
         cwd=root,
         env=build_isolated_pytest_env(report_dir, stamp),
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        bufsize=1,
+        on_stdout_line=tee.write,
     )
-    assert process.stdout is not None
-    for line in process.stdout:
-        tee.write(line)
-    rc = process.wait()
     tee.write(f"\n[maintenance] pytest-count exit_code={rc}\n")
     tee.close()
     return rc, json_path, log_path
