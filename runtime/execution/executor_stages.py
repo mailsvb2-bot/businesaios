@@ -6,7 +6,7 @@ from governance.time_scale import TimeScale
 from runtime.execution.dispatcher import effect_succeeded
 from runtime.execution.execution_contract_lock import commit_verified_execution, verify_execution_contract
 from runtime.execution.executor_audit import emit_deployment_proposed, emit_effect_window, emit_reward_observed
-from runtime.execution.executor_commit import _decision_tenant_id, build_delivery_metadata, claim_or_skip, enqueue_once
+from runtime.execution.executor_commit import _decision_tenant_id, build_delivery_metadata, enqueue_once
 from runtime.execution.executor_core import assert_timescale_allowed, enforce_safe_mode, load_world
 from runtime.execution.governance_runtime import review_governance_execution
 from runtime.execution.operational_budget_runtime import review_operational_budget
@@ -136,17 +136,10 @@ def dispatch_effects(*, executor: Any, env: Any, depth: int, enqueue: bool):
         queue_metadata = build_delivery_metadata(decision=env.decision, mode="enqueue", owner_id="runtime-executor")
         _checkpoint(executor=executor, env=env, stage="queue_dispatch", payload={"mode": "outbox", "enqueued": True, **queue_metadata})
         _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_outbox_enqueued", payload={"action": str(env.decision.action), "outbox_mode": "enqueue_once", **queue_metadata})
-    claimed = claim_or_skip(
-        executor._outbox,
-        decision_id=str(env.decision.decision_id),
-        tenant_id=_decision_tenant_id(env.decision),
-        owner_id='runtime-executor',
-    )
-    if not claimed:
+    if not executor._claim_or_skip_outbox(env):
         _checkpoint(executor=executor, env=env, stage="execution", payload={"status": "already_claimed"})
         _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_claim_skipped", payload={"reason": "already_claimed"})
-        from runtime.execution.executor_result import ExecutionResult
-        return ExecutionResult(ok=True, output={"status": "already_claimed"}, decision_id=str(env.decision.decision_id), correlation_id=str(env.decision.correlation_id))
+        return executor._already_claimed_result(env)
     _checkpoint(executor=executor, env=env, stage="execution", payload={"enqueue": bool(enqueue), "claimed": True})
     check_and_emit_world_model_pin(
         event_log=executor._events,
