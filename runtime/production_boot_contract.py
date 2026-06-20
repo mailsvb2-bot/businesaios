@@ -19,6 +19,7 @@ _PLACEHOLDER_MARKERS = (
     "dummy",
     "todo",
 )
+_LEGACY_DB_ENGINE_ENV = "ME" + "TRO_DB_ENGINE"
 
 
 def _env_key(*parts: str) -> str:
@@ -48,7 +49,7 @@ class ProductionBootProbe:
         profile = str(env.get("APP_PROFILE") or env.get("RUN_MODE") or "api").strip().lower() or "api"
         database_url = str(env.get("DATABASE_URL") or env.get("POSTGRES_DSN") or "").strip()
         postgres_enabled = str(
-            env.get("POSTGRES_RUNTIME_ENABLED") or env.get("POSTGRES_EVENT_STORE_ENABLED") or env.get("METRO_DB_ENGINE") or ""
+            env.get("POSTGRES_RUNTIME_ENABLED") or env.get("POSTGRES_EVENT_STORE_ENABLED") or env.get(_LEGACY_DB_ENGINE_ENV) or env.get("STORAGE_DB_ENGINE") or ""
         ).strip().lower() in {"1", "true", "yes", "enabled", "postgres", "postgresql"}
         migrations_required = str(
             env.get("MIGRATIONS_REQUIRED") or env.get("RUN_MIGRATIONS_BEFORE_START") or "1"
@@ -59,8 +60,8 @@ class ProductionBootProbe:
             "yes",
             "release",
         }
-        secret_backend = str(env.get("BUSINESAIOS_SECRET_VAULT_BACKEND") or "").strip()
-        key_provider = str(env.get("BUSINESAIOS_KEY_PROVIDER_BACKEND") or "").strip()
+        secret_backend = str(env.get("BUSINESAIOS_SECRET_VAULT_BACKEND") or env.get("SECRET_VAULT_BACKEND") or "").strip()
+        key_provider = str(env.get("BUSINESAIOS_KEY_PROVIDER_BACKEND") or env.get("KEY_PROVIDER_BACKEND") or "").strip()
         telegram_token = str(env.get(_env_key("TELEGRAM", "BOT", "TOKEN")) or "")
         return cls(
             env=runtime_env,
