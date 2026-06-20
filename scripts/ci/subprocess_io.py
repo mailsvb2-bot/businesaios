@@ -60,8 +60,8 @@ def _base_env() -> dict[str, str]:
     return env
 
 
-def _merged_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
-    merged_env = _base_env()
+def _merged_env(env: Mapping[str, str] | None = None, *, use_base_env: bool = True) -> dict[str, str]:
+    merged_env = _base_env() if use_base_env else dict(os.environ)
     if env:
         merged_env.update({str(k): str(v) for k, v in env.items()})
     return merged_env
@@ -115,11 +115,12 @@ def stream_command(
     cwd: Path | None = None,
     env: Mapping[str, str] | None = None,
     on_stdout_line: Callable[[str], None] | None = None,
+    use_base_env: bool = True,
 ) -> int:
     process = subprocess.Popen(
         list(command),
         cwd=str(cwd or repo_root()),
-        env=_merged_env(env),
+        env=_merged_env(env, use_base_env=use_base_env),
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
