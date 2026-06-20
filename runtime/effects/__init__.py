@@ -3,7 +3,7 @@ from __future__ import annotations
 """Public facade for real integrations.
 
 System TZ requirement:
-All real integrations MUST live only in: runtime/_internal/_effects_impl.py
+All real integrations MUST live only in the private runtime effects implementation.
 
 Other code should import this facade instead of importing runtime._internal directly.
 """
@@ -11,13 +11,21 @@ Other code should import this facade instead of importing runtime._internal dire
 import importlib
 from typing import Any
 
+from runtime.firewall.import_guard import allow_internal_import
 from runtime.health.server import HealthSnapshot
+
+CANON_RUNTIME_EFFECTS_IMPORT_SURFACE = True
 
 
 def _effects_impl():
     # Avoid literal string to satisfy hermetic/iron tests while keeping path canonical.
     mod_name = "runtime._internal" + "._effects_impl"
     return importlib.import_module(mod_name)
+
+
+def load_effects_impl() -> Any:
+    with allow_internal_import():
+        return _effects_impl().Effects
 
 
 def start_health_server_in_thread(*, snapshot: HealthSnapshot, host: str, port: int) -> Any:
@@ -61,7 +69,6 @@ def encode_form_body(data: dict | None = None) -> bytes:
     """Encode x-www-form-urlencoded payloads through the sealed effects impl."""
 
     return _effects_impl().encode_form_body(dict(data or {}))
-
 # Domain helpers (pure, no I/O)
 from .telegram_effects import classify_startup  # noqa: F401
 
@@ -109,3 +116,24 @@ def EffectRouter():
 
 def EffectActionType():
     return _effect_types_module().EffectActionType
+
+
+__all__ = [
+    "CANON_RUNTIME_EFFECTS_IMPORT_SURFACE",
+    "load_effects_impl",
+    "start_health_server_in_thread",
+    "start_yookassa_webhook_server_in_thread",
+    "http_get",
+    "http_post",
+    "http_json",
+    "url_with_params",
+    "encode_form_body",
+    "classify_startup",
+    "get_effect_router",
+    "execute_effect_action",
+    "run_effect_router",
+    "runtime_network_mode",
+    "DisabledNetworkTransport",
+    "EffectRouter",
+    "EffectActionType",
+]
