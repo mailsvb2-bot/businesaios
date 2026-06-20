@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import sqlite3
 import time
 from collections.abc import Mapping
 from pathlib import Path
@@ -119,99 +118,64 @@ class SQLiteSecurityAuditChainBackend:
             if hashlib.sha256(f"{previous_hash}|{event_kind}|{payload_json}|{created_at_epoch_s}".encode()).hexdigest() != event_hash:
                 violations.append(f"hash_mismatch:{event_id}")
             expected_previous = event_hash
-        return {"ok": not violations, "violations": violations, "events_checked": len(rows)}
-
-    def ensure_schema(self) -> None:
-        _ensure_parent(self._db_path)
-        with _connect(self._db_path) as conn:
-            conn.execute("""CREATE TABLE IF NOT EXISTS security_audit_chain (event_id INTEGER PRIMARY KEY AUTOINCREMENT, event_kind TEXT NOT NULL, payload_json TEXT NOT NULL, previous_hash TEXT NOT NULL, event_hash TEXT NOT NULL, created_at_epoch_s INTEGER NOT NULL)""")
-            conn.commit()
+        return {"ok": not violations, "violations": violations}
 
 class SQLiteTokenRevocationStoreBackend:
     def __init__(self, db_path: str) -> None:
         self._db_path = str(db_path)
         self.ensure_schema()
-    def revoke(self, *, token_fingerprint: str, reason: str) -> None:
+    def revoke(self, *, token_hash: str, reason: str = "") -> None:
         with _connect(self._db_path) as conn:
-            conn.execute("INSERT OR REPLACE INTO token_revocations(token_fingerprint, reason, revoked_at_epoch_s) VALUES(?, ?, ?)", (str(token_fingerprint), str(reason), int(time.time())))
+            conn.execute("INSERT OR REPLACE INTO revoked_tokens(token_hash, reason, revoked_at_epoch_s) VALUES(?, ?, ?)", (str(token_hash), str(reason), int(time.time())))
             conn.commit()
-    def is_revoked(self, *, token_fingerprint: str) -> bool:
+    def is_revoked(self, token_hash: str) -> bool:
         with _connect(self._db_path) as conn:
-            return conn.execute("SELECT token_fingerprint FROM token_revocations WHERE token_fingerprint = ?", (str(token_fingerprint),)).fetchone() is not None
+            row = conn.execute("SELECT 1 FROM revoked_tokens WHERE token_hash = ?", (str(token_hash),)).fetchone()
+        return row is not None
     def ensure_schema(self) -> None:
         _ensure_parent(self._db_path)
         with _connect(self._db_path) as conn:
-            conn.execute("""CREATE TABLE IF NOT EXISTS token_revocations (token_fingerprint TEXT PRIMARY KEY, reason TEXT NOT NULL, revoked_at_epoch_s INTEGER NOT NULL)""")
+            conn.execute("CREATE TABLE IF NOT EXISTS revoked_tokens(token_hash TEXT PRIMARY KEY, reason TEXT NOT NULL, revoked_at_epoch_s INTEGER NOT NULL)")
             conn.commit()
 
 class SQLiteSecurityDrillScheduleStoreBackend:
-    def __init__(self, db_path: str, schedule_cls: type) -> None:
-        self._db_path = str(db_path)
-        self._schedule_cls = schedule_cls
-        self.ensure_schema()
-    def put(self, schedule: Any) -> None:
-        with _connect(self._db_path) as conn:
-            conn.execute("""INSERT OR REPLACE INTO security_drill_schedule(drill_id, drill_kind, actor, target_entity_id, interval_seconds, next_run_epoch_s, enabled, failure_escalation_kind, payload_json) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)""", (str(schedule.drill_id), str(schedule.drill_kind), str(schedule.actor), str(schedule.target_entity_id), int(schedule.interval_seconds), int(schedule.next_run_epoch_s), 1 if schedule.enabled else 0, str(schedule.failure_escalation_kind), json.dumps(dict(schedule.payload or {}), ensure_ascii=False, sort_keys=True, separators=(",", ":"))))
-            conn.commit()
-    def _row(self, r: tuple[Any, ...]) -> Any:
-        return self._schedule_cls(drill_id=str(r[0]), drill_kind=str(r[1]), actor=str(r[2]), target_entity_id=str(r[3]), interval_seconds=int(r[4]), next_run_epoch_s=int(r[5]), enabled=bool(int(r[6])), failure_escalation_kind=str(r[7]), payload=json.loads(str(r[8] or "{}")))
-    def due(self, *, now_epoch_s: int | None = None, limit: int = 50) -> list[Any]:
-        now = int(time.time()) if now_epoch_s is None else int(now_epoch_s)
-        with _connect(self._db_path) as conn:
-            rows = conn.execute("SELECT drill_id, drill_kind, actor, target_entity_id, interval_seconds, next_run_epoch_s, enabled, failure_escalation_kind, payload_json FROM security_drill_schedule WHERE enabled = 1 AND next_run_epoch_s <= ? ORDER BY next_run_epoch_s ASC, drill_id ASC LIMIT ?", (now, max(int(limit), 1))).fetchall()
-        return [self._row(tuple(r)) for r in rows]
-    def list_enabled(self) -> list[Any]:
-        with _connect(self._db_path) as conn:
-            rows = conn.execute("SELECT drill_id, drill_kind, actor, target_entity_id, interval_seconds, next_run_epoch_s, enabled, failure_escalation_kind, payload_json FROM security_drill_schedule WHERE enabled = 1 ORDER BY drill_id ASC").fetchall()
-        return [self._row(tuple(r)) for r in rows]
-    def get_by_drill_id(self, *, drill_id: str) -> Any:
-        with _connect(self._db_path) as conn:
-            row = conn.execute("SELECT drill_id, drill_kind, actor, target_entity_id, interval_seconds, next_run_epoch_s, enabled, failure_escalation_kind, payload_json FROM security_drill_schedule WHERE drill_id = ?", (str(drill_id),)).fetchone()
-        if row is None:
-            raise KeyError(f"unknown drill schedule: {drill_id}")
-        return self._row(tuple(row))
-    def mark_run(self, *, drill_id: str, next_run_epoch_s: int) -> None:
-        with _connect(self._db_path) as conn:
-            conn.execute("UPDATE security_drill_schedule SET next_run_epoch_s = ? WHERE drill_id = ?", (int(next_run_epoch_s), str(drill_id)))
-            conn.commit()
-    def ensure_schema(self) -> None:
-        _ensure_parent(self._db_path)
-        with _connect(self._db_path) as conn:
-            conn.execute("""CREATE TABLE IF NOT EXISTS security_drill_schedule (drill_id TEXT PRIMARY KEY, drill_kind TEXT NOT NULL, actor TEXT NOT NULL, target_entity_id TEXT NOT NULL, interval_seconds INTEGER NOT NULL, next_run_epoch_s INTEGER NOT NULL, enabled INTEGER NOT NULL, failure_escalation_kind TEXT NOT NULL, payload_json TEXT NOT NULL)""")
-            conn.commit()
-
-class SQLiteKMSProviderBackend:
     def __init__(self, db_path: str) -> None:
         self._db_path = str(db_path)
         self.ensure_schema()
-    def create_key_row(self, *, key_id: str, algorithm: str, exportable: bool) -> int:
-        version = self.next_version(key_id=key_id)
-        now = int(time.time())
+    def upsert_schedule(self, *, drill_kind: str, cron_expr: str, enabled: bool = True) -> None:
         with _connect(self._db_path) as conn:
-            conn.execute("INSERT INTO kms_provider_keys(key_id, key_version, algorithm, exportable, created_at_epoch_s, active) VALUES(?, ?, ?, ?, ?, 1)", (str(key_id), version, str(algorithm), 1 if exportable else 0, now))
-            conn.execute("UPDATE kms_provider_keys SET active = 0 WHERE key_id = ? AND key_version != ?", (str(key_id), version))
+            conn.execute("INSERT OR REPLACE INTO security_drill_schedule(drill_kind, cron_expr, enabled) VALUES(?, ?, ?)", (str(drill_kind), str(cron_expr), 1 if enabled else 0))
             conn.commit()
-        return version
-    def get_active_key_row(self, *, key_id: str) -> tuple[int, str, bool] | None:
+    def list_schedules(self) -> list[dict[str, Any]]:
         with _connect(self._db_path) as conn:
-            row = conn.execute("SELECT key_version, algorithm, exportable FROM kms_provider_keys WHERE key_id = ? AND active = 1 ORDER BY key_version DESC LIMIT 1", (str(key_id),)).fetchone()
-        return None if row is None else (int(row[0]), str(row[1]), bool(int(row[2])))
-    def next_version(self, *, key_id: str) -> int:
-        with _connect(self._db_path) as conn:
-            row = conn.execute("SELECT MAX(key_version) FROM kms_provider_keys WHERE key_id = ?", (str(key_id),)).fetchone()
-        return (int(row[0]) if row and row[0] is not None else 0) + 1
+            rows = conn.execute("SELECT drill_kind, cron_expr, enabled FROM security_drill_schedule ORDER BY drill_kind").fetchall()
+        return [{"drill_kind": str(r[0]), "cron_expr": str(r[1]), "enabled": bool(int(r[2]))} for r in rows]
     def ensure_schema(self) -> None:
         _ensure_parent(self._db_path)
         with _connect(self._db_path) as conn:
-            conn.execute("""CREATE TABLE IF NOT EXISTS kms_provider_keys (key_id TEXT NOT NULL, key_version INTEGER NOT NULL, algorithm TEXT NOT NULL, exportable INTEGER NOT NULL, created_at_epoch_s INTEGER NOT NULL, active INTEGER NOT NULL, PRIMARY KEY(key_id, key_version))""")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_kms_provider_keys_lookup ON kms_provider_keys(key_id, active, key_version)")
+            conn.execute("CREATE TABLE IF NOT EXISTS security_drill_schedule(drill_kind TEXT PRIMARY KEY, cron_expr TEXT NOT NULL, enabled INTEGER NOT NULL)")
             conn.commit()
 
-__all__ = [
-    "SQLiteGovernanceJournalStore",
-    "SQLiteSimpleAuditEventStoreBackend",
-    "SQLiteSecurityAuditChainBackend",
-    "SQLiteTokenRevocationStoreBackend",
-    "SQLiteSecurityDrillScheduleStoreBackend",
-    "SQLiteKMSProviderBackend",
-]
+class SQLiteKMSProviderBackend:
+    def __init__(self, db_path: str, shared_secret: str) -> None:
+        self._db_path = str(db_path)
+        self._secret = str(shared_secret).encode("utf-8")
+        self.ensure_schema()
+    def _sign(self, payload_json: str, nonce: str) -> str:
+        return hmac.new(self._secret, f"{payload_json}|{nonce}".encode(), hashlib.sha256).hexdigest()
+    def store(self, *, secret_ref: str, payload: Mapping[str, Any], nonce: str) -> str:
+        payload_json = json.dumps(dict(payload), ensure_ascii=False, sort_keys=True)
+        signature = self._sign(payload_json, nonce)
+        with _connect(self._db_path) as conn:
+            conn.execute("INSERT OR REPLACE INTO kms_provider(secret_ref, payload_json, nonce, signature, created_at_epoch_s) VALUES(?, ?, ?, ?, ?)", (str(secret_ref), payload_json, str(nonce), signature, int(time.time())))
+            conn.commit()
+        return signature
+    def load(self, secret_ref: str) -> dict[str, Any] | None:
+        with _connect(self._db_path) as conn:
+            row = conn.execute("SELECT payload_json, nonce, signature FROM kms_provider WHERE secret_ref = ?", (str(secret_ref),)).fetchone()
+        return None if row is None else {"payload": json.loads(str(row[0])), "nonce": str(row[1]), "signature": str(row[2])}
+    def ensure_schema(self) -> None:
+        _ensure_parent(self._db_path)
+        with _connect(self._db_path) as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS kms_provider(secret_ref TEXT PRIMARY KEY, payload_json TEXT NOT NULL, nonce TEXT NOT NULL, signature TEXT NOT NULL, created_at_epoch_s INTEGER NOT NULL)")
+            conn.commit()
