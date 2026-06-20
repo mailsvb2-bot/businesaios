@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Sealed transport helpers extracted from ``runtime._internal._effects_impl``."""
+"""Sealed transport helpers extracted from the private runtime effects implementation."""
 from typing import Any
 
 from runtime._internal.http_transport import HTTPResponse, sync_get, sync_post_json
