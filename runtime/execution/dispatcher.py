@@ -18,6 +18,7 @@ _OFFLINE_EFFECT_MARKERS = {
     "telegram_transport_unbound",
     "transport_unbound",
     "missing_transport",
+    "network_disabled_in_this_runtime",
 }
 
 
