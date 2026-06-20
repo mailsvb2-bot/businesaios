@@ -1,26 +1,19 @@
+from __future__ import annotations
 
 import json
 import sqlite3
-from enum import Enum
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from sqlite3 import Connection
-from collections.abc import Iterator
 
-class _RollbackRecord:
-    def __init__(self, **values):
-        self.__dict__.update(values)
-
-
-class RollbackExecutionState(str, Enum):
-    PLANNED='planned'; CONFIRMED='confirmed'; EXECUTING='executing'; PARTIAL='partial'; EXECUTED='executed'; COMPLETED='completed'; FAILED='failed'
-
-
-class RollbackReconciliationState(str, Enum):
-    PENDING='pending'; VERIFIED='verified'; DRIFTED='drifted'
-
-
-RollbackAction = RollbackReceipt = RollbackPlan = _RollbackRecord
+from core.safety.controls.rollback_engine.models import (
+    RollbackAction,
+    RollbackExecutionState,
+    RollbackPlan,
+    RollbackReceipt,
+    RollbackReconciliationState,
+)
 from runtime.platform.safety_sqlite_migrations import SafetySqliteMigrator, SchemaMigrationPlan
 
 CANON_PLATFORM_SAFETY_ROLLBACK_STORE = True
