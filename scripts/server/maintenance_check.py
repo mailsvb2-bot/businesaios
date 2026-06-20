@@ -163,6 +163,34 @@ def clean_local_artifacts(root: Path, *, dry_run: bool = False, deep_clean: bool
     }
 
 
+def build_isolated_pytest_env(report_dir: Path, stamp: str) -> dict[str, str]:
+    runtime_root = (report_dir / "runtime-data" / stamp).resolve()
+    data_dir = runtime_root / "data"
+    tenancy_dir = runtime_root / "tenancy"
+    security_dir = runtime_root / "security"
+    for path in (data_dir, tenancy_dir, security_dir):
+        path.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ)
+    env.update(
+        {
+            "DATA_DIR": str(data_dir),
+            "BUSINESAIOS_DATA_DIR": str(data_dir),
+            "BAIOS_DATA_DIR": str(data_dir),
+            "BUSINESAIOS_TENANCY_DATA_DIR": str(tenancy_dir),
+            "BUSINESAIOS_TENANT_REGISTRY_PATH": str(tenancy_dir / "tenant_registry.json"),
+            "BUSINESAIOS_TENANT_POLICY_STORE_PATH": str(tenancy_dir / "tenant_policies.json"),
+            "BUSINESAIOS_API_KEY_STORE_PATH": str(security_dir / "api_keys.json"),
+            "BUSINESAIOS_API_IDEMPOTENCY_PATH": str(data_dir / "api" / "api_idempotency.sqlite3"),
+            "API_IDEMPOTENCY_PATH": str(data_dir / "api" / "api_idempotency.sqlite3"),
+            "WORLD_MODEL_DIR": str(data_dir / "world_models"),
+            "SECURITY_AUDIT_PATH": str(security_dir / "security_audit.jsonl"),
+            "WEB_SECURITY_AUDIT_PATH": str(security_dir / "web_security_audit.jsonl"),
+            "CONTROL_PLANE_AUDIT_PATH": str(security_dir / "control_plane_audit.jsonl"),
+        }
+    )
+    return env
+
+
 def run_pytest_count(root: Path, report_dir: Path, pytest_args: list[str]) -> tuple[int, Path, Path]:
     report_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -178,6 +206,7 @@ def run_pytest_count(root: Path, report_dir: Path, pytest_args: list[str]) -> tu
     process = subprocess.Popen(
         cmd,
         cwd=root,
+        env=build_isolated_pytest_env(report_dir, stamp),
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -295,6 +324,9 @@ def main() -> int:
         return 0
 
     rc, json_path, log_path = run_pytest_count(root, report_dir, pytest_args)
+    if not args.no_clean:
+        summary = clean_local_artifacts(root, dry_run=False, deep_clean=bool(args.deep_clean))
+        print("[maintenance] post_cleanup=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
     print_report_summary(json_path)
     print_last_reports(report_dir, limit=max(1, int(args.last)))
     print("\n=== OUTPUT FILES ===")
