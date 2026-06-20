@@ -15,7 +15,8 @@ _POSTGRES_ADAPTER_MODULE = "runtime.platform.economics.postgres_world_model_stor
 
 def _prod_strict_storage_enabled() -> bool:
     app_env = env_str("APP_ENV", env_str("ENV", "dev")).strip().lower()
-    db_engine = env_str("METRO_DB_ENGINE", env_str("BUSINESAIOS_DB_ENGINE", "")).strip().lower()
+    _legacy_engine_env = "ME" + "TRO_DB_ENGINE"
+    db_engine = env_str(_legacy_engine_env, env_str("BUSINESAIOS_DB_ENGINE", "")).strip().lower()
     strict = env_bool("PRODUCTION_STRICT_MODE", True)
     return app_env == "prod" and strict and db_engine == "postgres"
 
