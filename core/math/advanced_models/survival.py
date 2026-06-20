@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -10,8 +10,9 @@ class KaplanMeierPoint:
     time: float
     survival_probability: float
 
+
 class KaplanMeierEstimator:
-    def fit(self, event_times: Sequence[float], observed: Sequence[int]) -> list[KaplanMeierPoint]:
+    def estimate(self, *, event_times: Sequence[float], observed: Sequence[int]) -> list[KaplanMeierPoint]:
         if len(event_times) != len(observed):
             raise ValueError("event_times and observed must have same length")
         rows = sorted((float(t), int(o)) for t, o in zip(event_times, observed, strict=False))
@@ -35,9 +36,13 @@ class KaplanMeierEstimator:
             at_risk -= deaths + censored
         return points
 
+
 def exponential_hazard_probability(*, rate_lambda: float, time_horizon: float) -> float:
     if rate_lambda < 0:
         raise ValueError("rate_lambda must be >= 0")
     if time_horizon < 0:
         raise ValueError("time_horizon must be >= 0")
     return 1.0 - math.exp(-rate_lambda * time_horizon)
+
+
+setattr(KaplanMeierEstimator, "fit", KaplanMeierEstimator.estimate)
