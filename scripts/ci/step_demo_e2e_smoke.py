@@ -84,7 +84,7 @@ def _ci_demo_env() -> dict[str, str]:
         "BUSINESAIOS_TENANT_REGISTRY_PATH": str(_CI_DEMO_TENANCY_DIR / "tenant_registry.json"),
         "BUSINESAIOS_TENANT_POLICY_STORE_PATH": str(_CI_DEMO_TENANCY_DIR / "tenant_policies.json"),
         "STORAGE_BACKEND": "sqlite",
-        "METRO_DB_ENGINE": "sqlite",
+        "STORAGE_DB_ENGINE": "sqlite",
         "POSTGRES_DSN": "",
         "DATABASE_URL": "",
         "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE": "",
