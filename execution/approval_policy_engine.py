@@ -7,9 +7,9 @@ existing governance change-control policy and explicit execution metadata.
 It never chooses actions and never bypasses governance.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Mapping
 
 from contracts.action_impact_contract import ActionCategory, ActionExecutionContext, ActionImpact
 from governance.change_control_policy import ChangeControlDecision, ChangeControlPolicy
@@ -38,6 +38,29 @@ def _safe_bool(value: object) -> bool:
         if normalized in {'0', 'false', 'no', 'off'}:
             return False
     return bool(value)
+
+
+def _coerce_role(value: object) -> RoleId | None:
+    raw = str(getattr(value, 'value', value) or '').strip().lower()
+    if not raw:
+        return None
+    try:
+        return RoleId(raw)
+    except ValueError:
+        return None
+
+
+def _explicit_required_role_groups(value: object) -> tuple[tuple[RoleId, ...], ...]:
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        candidates: list[object] = [item.strip() for item in value.split(',')]
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        candidates = list(value)
+    else:
+        candidates = [value]
+    roles = tuple(dict.fromkeys(role for role in (_coerce_role(item) for item in candidates) if role is not None))
+    return tuple((role,) for role in roles)
 
 
 @dataclass(frozen=True)
@@ -113,9 +136,16 @@ class ApprovalPolicyEngine:
         auto_submit_approval = _safe_bool(approval_policy.get('auto_submit_approval', True))
         required_role_groups = tuple(change_control.required_role_groups)
         min_distinct_approvers = max(1, int(change_control.min_distinct_approvers or 1))
+        explicit_groups = _explicit_required_role_groups(approval_policy.get('required_roles') or meta.get('required_roles'))
         reasons: list[str] = []
         if change_control.approval_required:
             reasons.append(str(change_control.reason or 'change_control_requires_approval'))
+
+        if explicit_groups:
+            approval_required = True
+            operator_required = True
+            required_role_groups = explicit_groups
+            reasons.append('explicit_required_roles')
 
         if _safe_bool(approval_policy.get('force_human_approval') or meta.get('force_human_approval')):
             approval_required = True
@@ -200,6 +230,7 @@ class ApprovalPolicyEngine:
                 'high_risk_change': high_risk_change,
                 'low_confidence_threshold': self._low_confidence_threshold,
                 'requested_manual_override': requested_manual_override,
+                'explicit_required_roles': [[role.value for role in group] for group in explicit_groups],
             },
         )
 
