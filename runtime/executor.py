@@ -19,10 +19,10 @@ Security:
 
 import logging
 import os
+from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 
 from application.autonomy.autonomy_safety_bundle import AutonomySafetyBundle
 from application.evidence.evidence_verifier import EvidenceVerifier
@@ -41,7 +41,7 @@ from runtime.execution import executor_effect_delivery as _executor_effect_deliv
 from runtime.execution.correlation import extract_correlation_key
 from runtime.execution.executor_audit import emit_effect_window as _executor_audit_helper
 from runtime.execution.executor_bindings import apply_executor_state
-from runtime.execution.executor_commit import _decision_tenant_id, get_delivery_info
+from runtime.execution.executor_commit import _decision_tenant_id, claim_or_skip, get_delivery_info
 from runtime.execution.executor_core import enforce_safe_mode as _executor_core_helper
 from runtime.execution.executor_observability import (
     append_decision_trace as append_executor_decision_trace,
@@ -110,13 +110,14 @@ from runtime.executor_api_support import (
 from runtime.executor_api_support import (
     run_queue_tick_as_leader as executor_api_run_queue_tick_as_leader,
 )
-from runtime.executor_recovery_flow import execute_recovery_flow, has_proof_event
+from runtime.executor_recovery_flow import execute_recovery_flow
 from runtime.executor_runtime_support import (
     build_executor_queue_support,
     build_executor_state,
     emit_throttled_executor_warning,
 )
 from runtime.handlers import ActionHandlerRegistry
+from runtime.proofs import ACTION_PROOF_EVENT
 from runtime.world_model import (
     extract_pinned_world_model_meta_from_payload as _executor_world_model_pin_extract_contract,
 )
@@ -376,12 +377,41 @@ class RuntimeExecutor:
     def _extract_ck(self, snapshot_id: str):
         return extract_correlation_key(self._snapshot_store, str(snapshot_id))
 
+    def _claim_or_skip_outbox(self, env: DecisionEnvelope) -> bool:
+        claimed = claim_or_skip(
+            self._outbox,
+            decision_id=str(env.decision.decision_id),
+            tenant_id=_decision_tenant_id(env.decision),
+            owner_id="runtime-executor",
+        )
+        if not claimed:
+            return False
+        return True
+
+    def _already_claimed_result(self, env: DecisionEnvelope) -> ExecutionResult:
+        return ExecutionResult(
+            ok=True,
+            output={"status": "already_claimed"},
+            decision_id=str(env.decision.decision_id),
+            correlation_id=str(env.decision.correlation_id),
+        )
+
     def _has_proof_event(self, *, decision_id: str, action: str) -> bool:
-        return has_proof_event(
+        expected_event = ACTION_PROOF_EVENT.get(str(action))
+        if not expected_event or self._events is None or not hasattr(self._events, "has_event"):
+            return False
+        try:
+            return bool(self._events.has_event(str(decision_id), expected_event))
+        except Exception as exc:
+            _throttled_exec_warn("has_proof_event", exc)
+            return False
+
+    def _mark_delivered_if_already_executed(self, env: DecisionEnvelope) -> ExecutionResult | None:
+        return _executor_recovery_helper(
+            executor=self,
+            outbox=self._outbox,
             event_log=self._events,
-            decision_id=str(decision_id),
-            action=str(action),
-            warn=_throttled_exec_warn,
+            env=env,
         )
 
     def execute_recovery(self, env: DecisionEnvelope) -> ExecutionResult:
