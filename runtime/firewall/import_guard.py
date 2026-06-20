@@ -107,14 +107,14 @@ def _is_forbidden(name: str) -> bool:
 
 
 def _is_test_caller(caller: str) -> bool:
-    if caller == 'conftest':
+    if caller == "conftest":
         return True
-    if caller.startswith(('_pytest.', 'tests.', 'test_')):
+    if caller.startswith(("_pytest.", "tests.", "test_")):
         return True
-    if '.tests.' in caller or caller.endswith('.conftest'):
+    if ".tests." in caller or caller.endswith(".conftest"):
         return True
-    leaf = caller.rsplit('.', 1)[-1]
-    return leaf.startswith('test_')
+    leaf = caller.rsplit(".", 1)[-1]
+    return leaf.startswith("test_")
 
 
 def _allow_forbidden(name: str, caller: str) -> bool:
@@ -162,6 +162,26 @@ def install_import_guard():
         builtins.__import__ = guarded_import
 
 
+def activate_import_firewall():
+    """Backward-compatible public activation surface for bootstrap.
+
+    The owner remains this module; bootstrap must not duplicate firewall install
+    logic or import private internals directly.
+    """
+
+    install_import_guard()
+
+
 def uninstall_import_guard():
     if builtins.__import__ is guarded_import:
         builtins.__import__ = _original_import
+
+
+__all__ = [
+    "ALLOW_INTERNAL_IMPORT",
+    "activate_import_firewall",
+    "allow_internal_import",
+    "guarded_import",
+    "install_import_guard",
+    "uninstall_import_guard",
+]
