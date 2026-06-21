@@ -25,7 +25,7 @@ jobs:
       - name: Run canonical fast CI gate
         env:
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ matrix.python-version }}
-        run: python -m scripts.ci.cli --gate fast
+        run: python scripts/ci/cli.py --gate fast
       - name: Show fast gate diagnostics
         if: failure()
         run: |
