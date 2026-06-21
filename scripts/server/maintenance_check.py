@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import shutil
-import subprocess
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -15,7 +14,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 from scripts.ci.paths import repo_root as ci_repo_root
-from scripts.ci.subprocess_io import run_command
+from scripts.ci.subprocess_io import run_command, subprocess
 
 REPORT_DIR_DEFAULT = Path(os.getenv("BUSINESAIOS_TEST_REPORT_DIR", "/tmp/businesaios-pytest-runs"))
 CACHE_DIR_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".hypothesis"}
