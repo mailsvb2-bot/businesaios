@@ -10,7 +10,6 @@ def _names(gate: str) -> list[str]:
 def test_gate_order_is_canonical() -> None:
     assert _names("doctor") == [
         "assert-project-shape",
-        "dependency-lock",
         "doctor-check",
     ]
     assert _names("fast") == [
