@@ -130,6 +130,8 @@ def build_isolated_pytest_env(report_dir: Path, stamp: str) -> dict[str, str]:
         path.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
     env.pop("PYTEST_DISABLE_PLUGIN_AUTOLOAD", None)
+    env.pop("BUSINESAIOS_API_IDEMPOTENCY_PATH", None)
+    env.pop("API_IDEMPOTENCY_PATH", None)
     env.update(
         {
             "DATA_DIR": str(data_dir),
@@ -139,8 +141,6 @@ def build_isolated_pytest_env(report_dir: Path, stamp: str) -> dict[str, str]:
             "BUSINESAIOS_TENANT_REGISTRY_PATH": str(tenancy_dir / "tenant_registry.json"),
             "BUSINESAIOS_TENANT_POLICY_STORE_PATH": str(tenancy_dir / "tenant_policies.json"),
             "BUSINESAIOS_API_KEY_STORE_PATH": str(security_dir / "api_keys.json"),
-            "BUSINESAIOS_API_IDEMPOTENCY_PATH": str(data_dir / "api" / "api_idempotency.sqlite3"),
-            "API_IDEMPOTENCY_PATH": str(data_dir / "api" / "api_idempotency.sqlite3"),
             "WORLD_MODEL_DIR": str(data_dir / "world_models"),
             "SECURITY_AUDIT_PATH": str(security_dir / "security_audit.jsonl"),
             "WEB_SECURITY_AUDIT_PATH": str(security_dir / "web_security_audit.jsonl"),
