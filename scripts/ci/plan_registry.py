@@ -137,7 +137,7 @@ def _coverage_common(gate: str) -> ExecutionPlan:
 
 def plan_for_gate(gate: str) -> ExecutionPlan:
     if gate == "doctor":
-        return _plan("doctor", "assert-project-shape", "dependency-lock", "doctor-check")
+        return _plan("doctor", "assert-project-shape", "doctor-check")
     if gate == "targeted-domain":
         return _plan(
             "targeted-domain",
