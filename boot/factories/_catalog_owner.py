@@ -71,6 +71,28 @@ def build_decision_input_service(*, observability: RuntimeObservability) -> Deci
     return build_runtime_decision_input_service(observability=observability)
 
 
+def build_runtime_decision_factory_bundle(*, observability: RuntimeObservability) -> dict[str, object]:
+    """Build the canonical decision factory bundle from the private catalog owner.
+
+    Historical package imports may still resolve through a package-owned alias,
+    but the concrete bundle assembly lives here so no public catalog file becomes
+    a second boot/factory owner.
+    """
+
+    decision_input_service = build_decision_input_service(observability=observability)
+    enrichment_service = build_runtime_state_enrichment_service(observability=observability)
+    decision_gateway = build_decision_gateway(
+        decision_input_service=decision_input_service,
+        enrichment_service=enrichment_service,
+        observability=observability,
+    )
+    return {
+        'decision_input_service': decision_input_service,
+        'runtime_state_enrichment_service': enrichment_service,
+        'decision_gateway': decision_gateway,
+    }
+
+
 def build_diffusion_watch_service(*, observability: RuntimeObservability) -> DiffusionWatchService:
     return DiffusionWatchService(observability=observability)
 
@@ -167,6 +189,7 @@ __all__ = [
     'build_creative_intelligence_service',
     'build_decision_gateway',
     'build_runtime_decision_execution_service',
+    'build_runtime_decision_factory_bundle',
     'build_decision_input_service',
     'build_diffusion_watch_service',
     'build_flow_watch_service',
