@@ -14,40 +14,22 @@ from typing import Iterable
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
-
 from scripts.ci.paths import repo_root as ci_repo_root
 from scripts.ci.subprocess_io import run_command
-
 
 REPORT_DIR_DEFAULT = Path(os.getenv("BUSINESAIOS_TEST_REPORT_DIR", "/tmp/businesaios-pytest-runs"))
 CACHE_DIR_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".hypothesis"}
 ARTIFACT_SUFFIXES = (
-    ".pyc",
-    ".pyo",
-    ".lock",
-    ".sqlite",
-    ".sqlite3",
-    ".sqlite-wal",
-    ".sqlite-shm",
-    ".sqlite3-wal",
-    ".sqlite3-shm",
-    ".db",
-    ".db-wal",
-    ".db-shm",
-    ".zip",
+    ".pyc", ".pyo", ".lock", ".sqlite", ".sqlite3", ".sqlite-wal", ".sqlite-shm",
+    ".sqlite3-wal", ".sqlite3-shm", ".db", ".db-wal", ".db-shm", ".zip",
 )
 GENERATED_FILE_SUFFIXES = (".jsonl", ".log", ".tmp", ".bak", ".bak2")
 NEVER_DESCEND = {".git", ".venv", "venv", "node_modules"}
 LOCAL_RUNNER_DIR_NAMES = {"actions-runner-businesaios"}
 GENERATED_DIR_PREFIXES = (
-    Path(".runtime"),
-    Path("runtime/data/reports"),
-    Path("runtime/data/security"),
-    Path("artifacts/ci"),
-    Path("security"),
-    Path("data/config"),
+    Path(".runtime"), Path("runtime/data/reports"), Path("runtime/data/security"),
+    Path("artifacts/ci"), Path("security"), Path("data/config"),
 )
-
 
 class Tee:
     def __init__(self, path: Path) -> None:
@@ -64,14 +46,11 @@ class Tee:
     def close(self) -> None:
         self._file.close()
 
-
 def repo_root() -> Path:
     return ci_repo_root().resolve()
 
-
 def relpath(root: Path, path: Path) -> Path:
     return path.resolve().relative_to(root)
-
 
 def git_tracked_files(root: Path) -> set[Path]:
     result = run_command(["git", "ls-files", "-z"], cwd=root, echo_output=False)
@@ -79,16 +58,13 @@ def git_tracked_files(root: Path) -> set[Path]:
         raise SystemExit(result.stderr)
     return {Path(item) for item in result.stdout.split("\0") if item}
 
-
 def has_tracked_child(rel_dir: Path, tracked: set[Path]) -> bool:
     prefix = str(rel_dir).rstrip("/") + "/"
     return any(str(item).startswith(prefix) for item in tracked)
 
-
 def under_any(path: Path, prefixes: Iterable[Path]) -> bool:
     text = str(path)
     return any(text == str(prefix) or text.startswith(str(prefix).rstrip("/") + "/") for prefix in prefixes)
-
 
 def remove_path(path: Path) -> None:
     if path.is_dir() and not path.is_symlink():
@@ -96,18 +72,14 @@ def remove_path(path: Path) -> None:
     else:
         path.unlink(missing_ok=True)
 
-
 def clean_local_artifacts(root: Path, *, dry_run: bool = False, deep_clean: bool = False) -> dict[str, object]:
     tracked = git_tracked_files(root)
     removed: list[str] = []
     skipped_tracked: list[str] = []
-
     for current, dirnames, filenames in os.walk(root):
         current_path = Path(current)
         rel_current = relpath(root, current_path) if current_path != root else Path(".")
-
         dirnames[:] = [name for name in dirnames if name not in NEVER_DESCEND]
-
         for dirname in list(dirnames):
             path = current_path / dirname
             rel = relpath(root, path)
@@ -127,33 +99,28 @@ def clean_local_artifacts(root: Path, *, dry_run: bool = False, deep_clean: bool
             if not dry_run:
                 remove_path(path)
             dirnames.remove(dirname)
-
         for filename in filenames:
             path = current_path / filename
             rel = relpath(root, path)
             if rel in tracked:
                 continue
-            suffix_match = filename.endswith(ARTIFACT_SUFFIXES)
             generated_dir = under_any(rel, GENERATED_DIR_PREFIXES)
-            generated_file = generated_dir and filename.endswith(GENERATED_FILE_SUFFIXES)
-            empty_generated = path.exists() and path.is_file() and path.stat().st_size == 0 and generated_dir
-            repo_report = under_any(rel, (Path("runtime/data/reports"),))
-            should_remove = suffix_match or generated_file or empty_generated or repo_report
+            should_remove = (
+                filename.endswith(ARTIFACT_SUFFIXES)
+                or (generated_dir and filename.endswith(GENERATED_FILE_SUFFIXES))
+                or (path.exists() and path.is_file() and path.stat().st_size == 0 and generated_dir)
+                or under_any(rel, (Path("runtime/data/reports"),))
+            )
             if not should_remove:
                 continue
             removed.append(str(rel))
             if not dry_run:
                 remove_path(path)
-
     return {
-        "removed_n": len(removed),
-        "removed": removed,
-        "skipped_tracked_n": len(skipped_tracked),
-        "skipped_tracked": skipped_tracked,
-        "dry_run": dry_run,
-        "deep_clean": deep_clean,
+        "removed_n": len(removed), "removed": removed,
+        "skipped_tracked_n": len(skipped_tracked), "skipped_tracked": skipped_tracked,
+        "dry_run": dry_run, "deep_clean": deep_clean,
     }
-
 
 def build_isolated_pytest_env(report_dir: Path, stamp: str) -> dict[str, str]:
     runtime_root = (report_dir / "runtime-data" / stamp).resolve()
@@ -183,7 +150,6 @@ def build_isolated_pytest_env(report_dir: Path, stamp: str) -> dict[str, str]:
     )
     return env
 
-
 def run_pytest_count(root: Path, report_dir: Path, pytest_args: list[str]) -> tuple[int, Path, Path]:
     report_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -192,7 +158,6 @@ def run_pytest_count(root: Path, report_dir: Path, pytest_args: list[str]) -> tu
     script = root / "scripts" / "ci" / "count_pytest_errors.py"
     if not script.exists():
         raise SystemExit(f"Missing pytest counter: {script}")
-
     cmd = [sys.executable, str(script), "--json", str(json_path), "--", *pytest_args]
     tee = Tee(log_path)
     tee.write("$ " + " ".join(cmd) + "\n")
@@ -213,10 +178,8 @@ def run_pytest_count(root: Path, report_dir: Path, pytest_args: list[str]) -> tu
     tee.close()
     return rc, json_path, log_path
 
-
 def load_json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text(encoding="utf-8"))
-
 
 def classify_failed_item(item: str) -> str:
     text = item.lower()
@@ -234,7 +197,6 @@ def classify_failed_item(item: str) -> str:
         return "tenant/governance"
     return "other"
 
-
 def print_report_summary(path: Path, *, max_items: int = 20) -> None:
     data = load_json(path)
     print("\n=== PYTEST SUMMARY ===")
@@ -246,7 +208,6 @@ def print_report_summary(path: Path, *, max_items: int = 20) -> None:
     print(f"skipped:        {data.get('skipped')}")
     print(f"problems:       {data.get('problem_count')}")
     print(f"success:        {data.get('success')}")
-
     failed_items = list(data.get("failed_items") or [])
     error_items = list(data.get("error_items") or [])
     all_items = failed_items + error_items
@@ -255,7 +216,6 @@ def print_report_summary(path: Path, *, max_items: int = 20) -> None:
         print("\n=== PROBLEM GROUPS ===")
         for group, count in groups.most_common():
             print(f"{count:>4}  {group}")
-
     if all_items:
         by_group: dict[str, list[str]] = defaultdict(list)
         for item in all_items:
@@ -269,7 +229,6 @@ def print_report_summary(path: Path, *, max_items: int = 20) -> None:
                 shown += 1
                 if shown >= max_items:
                     return
-
 
 def print_last_reports(report_dir: Path, *, limit: int) -> None:
     files = sorted(report_dir.glob("*.json"), key=lambda p: p.stat().st_mtime)[-limit:]
@@ -285,7 +244,6 @@ def print_last_reports(report_dir: Path, *, limit: int) -> None:
             f"errors={data.get('errors')} problems={data.get('problem_count')}"
         )
 
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Server maintenance wrapper for BusinessAIOS pytest debt checks.")
     parser.add_argument("--report-dir", default=str(REPORT_DIR_DEFAULT), help="Directory outside/inside repo for JSON/log reports.")
@@ -297,7 +255,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("pytest_args", nargs=argparse.REMAINDER, help="Arguments passed after -- to pytest counter.")
     return parser.parse_args()
 
-
 def main() -> int:
     args = parse_args()
     root = repo_root()
@@ -307,15 +264,12 @@ def main() -> int:
         pytest_args = pytest_args[1:]
     if not pytest_args:
         pytest_args = ["--import-mode=importlib", "--tb=short", "tests"]
-
     if not args.no_clean:
         summary = clean_local_artifacts(root, dry_run=bool(args.dry_run), deep_clean=bool(args.deep_clean))
         print("[maintenance] cleanup=" + json.dumps(summary, ensure_ascii=False, sort_keys=True))
-
     if args.clean_only or args.dry_run:
         print_last_reports(report_dir, limit=max(1, int(args.last)))
         return 0
-
     rc, json_path, log_path = run_pytest_count(root, report_dir, pytest_args)
     if not args.no_clean:
         summary = clean_local_artifacts(root, dry_run=False, deep_clean=bool(args.deep_clean))
@@ -326,7 +280,6 @@ def main() -> int:
     print(f"json: {json_path}")
     print(f"log:  {log_path}")
     return rc
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
