@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from canon.public_api_alias import install_public_api_alias
-from typing import Protocol
-
-
 from .budget_optimizer import (
     BudgetOptimizer,
     BudgetOptimizerInputs,
@@ -45,32 +40,14 @@ from .timeline_estimator import (
 CANON_ACQUISITION_PUBLIC_API = True
 
 
-class AcquisitionSolver(Protocol):
-    def solve(self, request: AcquisitionFeasibilityRequest) -> AcquisitionFeasibilityResult:
-        ...
+from .public_api_owner import (
+    AcquisitionPublicAPI,
+    AcquisitionSolver,
+    CANON_ACQUISITION_PUBLIC_API_OWNER,
+    create_acquisition_public_api,
+    evaluate_acquisition_plan,
+)
 
-
-@dataclass(frozen=True, slots=True)
-class AcquisitionPublicAPI:
-    solver: AcquisitionSolver
-
-    def evaluate(self, request: AcquisitionFeasibilityRequest) -> AcquisitionFeasibilityResult:
-        return self.solver.solve(request)
-
-
-def create_acquisition_public_api(
-    *,
-    solver: AcquisitionSolver | None = None,
-) -> AcquisitionPublicAPI:
-    return AcquisitionPublicAPI(solver=solver or FeasibilitySolver())
-
-
-def evaluate_acquisition_plan(
-    request: AcquisitionFeasibilityRequest,
-    *,
-    solver: AcquisitionSolver | None = None,
-) -> AcquisitionFeasibilityResult:
-    return create_acquisition_public_api(solver=solver).evaluate(request)
 
 
 from .headless_entrypoint import (
@@ -98,6 +75,7 @@ __all__ = [
     "CANON_ACQUISITION_FUNNEL_MODEL",
     "CANON_ACQUISITION_HEADLESS_ENTRYPOINT",
     "CANON_ACQUISITION_PUBLIC_API",
+    "CANON_ACQUISITION_PUBLIC_API_OWNER",
     "CANON_ACQUISITION_REQUEST_ADAPTER",
     "CANON_ACQUISITION_TIMELINE_ESTIMATOR",
     "CacInputs",

@@ -21,7 +21,7 @@ from threading import RLock
 
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from runtime.queue.job_contract import normalize_now
-from runtime.queue.queue_slo import QueueSLOReport
+from runtime.queue.queue_operational_contracts import QueueSLOReport
 
 CANON_RUNTIME_QUEUE_METRICS_ROLLUP_SQLITE = True
 
@@ -236,7 +236,7 @@ class SqliteQueueMetricsRollupStore:
         source_samples = 0
         compacted_samples = 0
         removed_samples = 0
-        from runtime.queue.queue_metrics_compactor import QueueMetricsCompactionReport
+        from runtime.queue.queue_metrics_contracts import QueueMetricsCompactionReport
         with self._lock, self._connect() as db:
             db.execute('BEGIN IMMEDIATE;')
             for window in windows:

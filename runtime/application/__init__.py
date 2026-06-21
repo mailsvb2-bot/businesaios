@@ -149,5 +149,5 @@ __all__ = sorted(set(_PUBLIC_ATTRS) | set(_LAZY_CONTRACT_ATTRS) | set(_ALIAS_MAP
 
 
 # Compatibility marker: "public_api": "runtime.application.public_api"
-# Historical owner-builder contract equivalent: install_public_api=False
-install_public_api_alias(__name__, expose_attribute=False)
+# Historical owner-builder contract equivalent: install_public_api=True
+install_public_api_alias(__name__)

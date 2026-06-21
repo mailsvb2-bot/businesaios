@@ -110,7 +110,7 @@ from runtime.executor_api_support import (
 from runtime.executor_api_support import (
     run_queue_tick_as_leader as executor_api_run_queue_tick_as_leader,
 )
-from runtime.executor_recovery_flow import execute_recovery_flow
+from runtime.executor_recovery_flow import execute_recovery_flow, has_proof_event
 from runtime.executor_runtime_support import (
     build_executor_queue_support,
     build_executor_state,

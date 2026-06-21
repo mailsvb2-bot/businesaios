@@ -9,7 +9,7 @@ from config.pricing_retention_policy import DEFAULT_RETENTION_ENGINE_POLICY, Ret
 from core.retention.ports import RetentionStore
 from core.tenancy.normalization import normalize_tenant_scope
 
-from . import feature_extractor as fx_mod
+import core.retention.feature_extractor as fx_mod
 from .arms import base_price_for_arm, build_candidates, choose_arm_event_sourced, filter_candidate_arms
 from .engine_support import (
     build_sandbox_suppressed_decision,

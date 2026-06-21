@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from types import ModuleType
+from canon.owner_module_installer import install_owner_submodules as install_owner_alias_modules
 
 CANON_PUBLIC_API_ALIAS = True
 CANON_NO_ALIAS_EXPANSION = True
@@ -39,8 +40,11 @@ def install_public_api_alias(module_name: str, *, expose_attribute: bool = True)
         setattr(alias_target, 'public_api', alias_target)
 
 
+
+
 __all__ = [
     'CANON_NO_ALIAS_EXPANSION',
     'CANON_PUBLIC_API_ALIAS',
     'install_public_api_alias',
+    'install_owner_alias_modules',
 ]

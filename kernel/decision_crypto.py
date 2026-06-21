@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Mapping
 from core.utils.canonical import canonical_json_bytes, payload_hash
 
 if TYPE_CHECKING:
-    from core.ai.decision import Decision, DecisionEnvelope
+    from core.ai.decision_contracts import Decision, DecisionEnvelope
 
 
 CANON_DECISION_CRYPTO = True
@@ -130,7 +130,7 @@ def assert_envelope_signature_surface(env: "DecisionEnvelope") -> None:
 
 
 def signed_envelope_from_decision(*, decision: "Decision", keyring: Any) -> "DecisionEnvelope":
-    from core.ai.decision import DecisionEnvelope
+    from core.ai.decision_contracts import DecisionEnvelope
 
     kid, secret = keyring.sign_key()
     material = sign_decision(decision=decision, secret=secret, kid=kid)

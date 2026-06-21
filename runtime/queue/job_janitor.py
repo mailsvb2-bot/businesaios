@@ -13,32 +13,17 @@ Non-responsibilities:
 - bypass canonical execution flow
 """
 
-from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import Any
 
 from runtime.queue.job_contract import JobState, normalize_now
 from runtime.queue.job_store import JobStore
-from runtime.queue.queue_leadership import QueueLeadershipCoordinator, QueueLeadershipReport
-
-if TYPE_CHECKING:
-    from runtime.queue.queue_janitor_history_sqlite import SqliteQueueJanitorHistoryStore
-    from runtime.queue.queue_observability import QueueObservabilityRegistry
+from runtime.queue.queue_leadership import QueueLeadershipCoordinator
+from runtime.queue.queue_operational_contracts import QueueJanitorReport, QueueLeadershipReport
 
 CANON_RUNTIME_QUEUE_JANITOR = True
 
 
-@dataclass(frozen=True)
-class QueueJanitorReport:
-    tenant_id: str
-    queue_name: str
-    reclaimed_expired_claims: int = 0
-    pending_jobs: int = 0
-    active_claims: int = 0
-    is_leader: bool = True
-    leadership_fencing_token: int | None = None
-    reason: str = "janitor_tick"
-    ran_at: datetime | None = None
 
 
 class JobQueueJanitor:
@@ -47,8 +32,8 @@ class JobQueueJanitor:
         *,
         store: JobStore,
         leadership: QueueLeadershipCoordinator | None = None,
-        observability: QueueObservabilityRegistry | None = None,
-        history_store: SqliteQueueJanitorHistoryStore | None = None,
+        observability: Any | None = None,
+        history_store: Any | None = None,
     ) -> None:
         self._store = store
         self._leadership = leadership

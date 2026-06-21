@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from reliability.distributed_lock import utc_now
+from reliability.distributed_lock_contracts import utc_now
 from typing import Any
 
-from reliability.distributed_lock import LockLease
+from reliability.distributed_lock_contracts import LockLease
 from reliability.distributed_lock_backend import DistributedLockBackend, LockBackendRecord, build_expires_at, datetime_to_epoch_ms, epoch_ms_to_datetime, normalize_lock_inputs
 
 CANON_DISTRIBUTED_LOCK_REDIS = True

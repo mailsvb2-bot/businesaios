@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 
+from core.strategic_horizon.contracts import LearningRegime, StrategicMode
 from core.strategic_horizon.constants import MAX_RISK_BUDGET, MIN_MARGIN_SAFE, MIN_RISK_BUDGET, MIN_RUNWAY_DEFENSE, MIN_RUNWAY_STABILIZE, MODE_COOLDOWN_SECONDS
 from core.strategic_horizon.cooldown import CooldownState
 from core.strategic_horizon.mode_inference import can_expand, can_optimize, infer_mode, is_defense, is_unstable
@@ -11,18 +11,6 @@ from core.strategic_horizon.vector_math import compute_risk_budget, growth_press
 CANONICAL_DECISION_OPTIMIZE_METHOD = "optimize"
 
 
-class StrategicMode(str, Enum):
-    STABILIZE = "stabilize"
-    OPTIMIZE = "optimize"
-    EXPAND = "expand"
-    RESEARCH = "research"
-    DEFENSE = "defense"
-
-
-class LearningRegime(str, Enum):
-    FROZEN = "frozen"
-    SAFE = "safe"
-    AGGRESSIVE = "aggressive"
 
 
 @dataclass(frozen=True)

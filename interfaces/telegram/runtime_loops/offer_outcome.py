@@ -12,25 +12,22 @@ Invariants:
 - no network imports.
 """
 
-import os
 import time
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Iterable
 
 from core.observability.silent import swallow
+from runtime.platform.config.env_flags import env_bool, env_str
 from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import build_system_world_state
 
 
 def _env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return bool(default)
-    return str(raw).strip().lower() in {"1", "true", "yes", "on", "enabled"}
+    return bool(env_bool(name, default))
 
 
 def _env_str(name: str, default: str) -> str:
-    return str(os.getenv(name, default) or default)
+    return str(env_str(name, default) or default)
 
 
 @dataclass

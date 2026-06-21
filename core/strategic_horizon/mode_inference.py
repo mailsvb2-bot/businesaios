@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from config.final_hidden_logic_policy import DEFAULT_STRATEGIC_HORIZON_DECISION_POLICY
 from core.strategic_horizon.constants import MIN_MARGIN_SAFE, MIN_RUNWAY_DEFENSE, MIN_RUNWAY_STABILIZE
+from core.strategic_horizon.contracts import StrategicMode
 
 
 def infer_mode(s):
-    from core.strategic_horizon.engine import StrategicMode
-
     if is_defense(s):
         return StrategicMode.DEFENSE
     if is_unstable(s):

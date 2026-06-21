@@ -6,24 +6,14 @@ This module only aggregates already-recorded operational facts. It does not
 change queue execution state and must never become a planning layer.
 """
 
-from dataclasses import dataclass
 from datetime import datetime
 
 from runtime.queue.job_contract import normalize_now
+from runtime.queue.queue_metrics_contracts import QueueMetricsCompactionReport
 from runtime.queue.queue_metrics_rollup_sqlite import SqliteQueueMetricsRollupStore
 
 CANON_RUNTIME_QUEUE_METRICS_COMPACTOR = True
 
-
-@dataclass(frozen=True)
-class QueueMetricsCompactionReport:
-    tenant_id: str
-    queue_name: str
-    source_samples: int
-    removed_samples: int
-    compacted_samples: int
-    window_seconds: int
-    compacted_at: datetime
 
 
 class QueueMetricsCompactor:

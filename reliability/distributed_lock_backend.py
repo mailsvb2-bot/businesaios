@@ -6,7 +6,7 @@ from typing import Any, Protocol
 import re
 
 from core.tenancy.normalization import require_tenant_id
-from reliability.distributed_lock import LockLease
+from reliability.distributed_lock_contracts import LockLease
 
 CANON_DISTRIBUTED_LOCK_BACKEND = True
 _SAFE_SQL_IDENTIFIER_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')

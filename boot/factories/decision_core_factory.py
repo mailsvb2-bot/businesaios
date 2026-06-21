@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from boot.registrations.register_decision_core import RuntimeDecisionExecutionService
+from boot.runtime_service_contracts import RuntimeDecisionExecutionService
 from runtime.constructor_tokens import runtime_construction_token
 
 CANON_BUILD_RUNTIME_DECISION_EXECUTION_SERVICE = True

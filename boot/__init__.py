@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+from typing import Any
 
 CANON_BOOT_PACKAGE_API = True
 CANON_LEGACY_BOOTSTRAP_PACKAGE_SHIM = True
@@ -92,7 +93,7 @@ def boot_http_app(*args, **kwargs):
     return _load_attr("bootstrap.http_boot_surface", "build_http_boot_surface")(*args, **kwargs).http_app
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     if name in {
         "CANON_BOOT_PACKAGE_API",
         "CANON_LEGACY_BOOTSTRAP_PACKAGE_SHIM",
@@ -141,7 +142,7 @@ def _install_compat_aliases() -> None:
             object.__setattr__(package, qualified_name.rsplit(".", 1)[-1], target)
             return target
 
-        def __getattr__(name: str):
+        def __getattr__(name: str) -> Any:
             return getattr(_load_target(), name)
 
         def __dir__():

@@ -17,8 +17,7 @@ from threading import RLock
 
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from runtime.queue.job_contract import normalize_now
-from runtime.queue.job_janitor import QueueJanitorReport
-from runtime.queue.queue_leadership import QueueLeadershipReport
+from runtime.queue.queue_operational_contracts import QueueJanitorReport, QueueLeadershipReport
 
 CANON_RUNTIME_QUEUE_JANITOR_HISTORY_SQLITE = True
 

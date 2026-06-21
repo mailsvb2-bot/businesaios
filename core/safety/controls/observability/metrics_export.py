@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 
-if TYPE_CHECKING:
-    from .event_store import SafetyEvent
+from core.safety.controls.observability.contracts import SafetyEvent
 
 CANON_SAFETY_METRICS_EXPORT = True
 

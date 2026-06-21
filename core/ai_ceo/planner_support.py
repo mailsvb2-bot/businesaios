@@ -9,6 +9,7 @@ from core._safe_logging import log_fallback
 from core.ai_ceo.contracts import CEOIntentV1, CEOPlanStepV1, CEOPlanV1
 from core.ai_ceo.intent import build_intent_from_session_args
 from core.ai_ceo.ledger import GrowthSnapshotV1
+from core.ai_ceo.ledger import to_dict as snapshot_to_dict
 from core.ai_ceo.safety import AutonomyPolicyV1, check_step_allowed
 from core.ai_ceo.scoring import rank_steps
 from kernel.world_state import WorldStateV1
@@ -230,14 +231,20 @@ def build_plan(
     intent: CEOIntentV1 | None = None,
     plan_id: str = "ai_ceo_plan",
 ) -> CEOPlanV1:
-    # Canonical planner implementation lives in core.ai_ceo.planner.
-    # Keep this compatibility surface but delegate to avoid a second planning path.
-    from core.ai_ceo.planner import build_ceo_plan
-
-    return build_ceo_plan(
-        state=state,
-        snapshot=snapshot,
+    used_intent = intent or CEOContextReader.default_intent_from_state(state)
+    resolved_plan_id = str(plan_id).strip() or "ai_ceo_plan"
+    builder = CEOPlanBuilder(state=state, autonomy=autonomy, plan_id=resolved_plan_id)
+    raw_steps = builder.build_steps()
+    final_steps = apply_policy_and_rank(
+        steps=raw_steps,
         autonomy=autonomy,
-        intent=intent,
-        plan_id=plan_id,
+        snapshot=snapshot,
+    )
+    return CEOPlanV1(
+        plan_id=resolved_plan_id,
+        intent=used_intent,
+        summary=build_plan_summary(),
+        steps=final_steps,
+        kpi_before=snapshot_to_dict(snapshot),
+        kpi_targets=build_plan_targets(intent=used_intent),
     )

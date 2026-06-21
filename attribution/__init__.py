@@ -9,6 +9,7 @@ logic path.
 """
 
 from importlib import import_module
+from pathlib import Path
 import sys
 import types
 from typing import Any
@@ -47,7 +48,7 @@ def _install_compat_aliases() -> None:
         module.__dict__.update({
             export_name: value,
             '__all__': [export_name],
-            '__file__': f'<compat:attribution.{module_name}>',
+            '__file__': str(Path(__file__).with_name(f"{module_name}.py")),
             '__package__': package_name,
             '__doc__': f'Compat alias for {qualified_name}',
         })

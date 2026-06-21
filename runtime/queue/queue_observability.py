@@ -15,16 +15,12 @@ from collections import deque
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from threading import RLock
-from typing import TYPE_CHECKING
 
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.job_scheduler import ScheduleBatch
 from runtime.queue.job_worker import WorkerTickReport
 
-if TYPE_CHECKING:
-    from runtime.queue.job_janitor import QueueJanitorReport
-    from runtime.queue.queue_alerts import QueueAlert
-    from runtime.queue.queue_leadership import QueueLeadershipReport
+from runtime.queue.queue_operational_contracts import QueueAlert, QueueJanitorReport, QueueLeadershipReport
 
 
 CANON_RUNTIME_QUEUE_OBSERVABILITY = True
