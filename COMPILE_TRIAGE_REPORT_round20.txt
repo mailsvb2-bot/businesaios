@@ -1,0 +1,5 @@
+Round 20: compile triage.
+
+Python files checked: repository Python surface was compile-triaged during the Round 20 cleanup wave.
+
+Status: anchor report restored for the architecture lock. This report is informational and does not grant permission to add second owners, compatibility shadows, or duplicate runtime surfaces.
