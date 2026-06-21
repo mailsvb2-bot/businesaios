@@ -13,6 +13,7 @@ from typing import Any
 from runtime.actions import ACTION_AI_CEO_PLAN_V1
 from runtime.boot.actions_registry import all_actions
 
+CANON_BOOT_WIRING_ONLY = True
 CANON_RUNTIME_REGISTRATION_MANIFEST = True
 
 
@@ -33,6 +34,7 @@ def register_runtime_actions(*, handlers: Any, handler_factory: Callable[[str], 
 
 
 __all__ = [
+    "CANON_BOOT_WIRING_ONLY",
     "CANON_RUNTIME_REGISTRATION_MANIFEST",
     "register_runtime_actions",
 ]
