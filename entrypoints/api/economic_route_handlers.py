@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from runtime.economic_core import EconomicAdminReadService
 from entrypoints.api.economic_routes import service as economic_service
 
-from runtime.executor import build_click_provider_dispatch_execution_contract, build_spend_runtime_execution_contract
-
 CANON_ECONOMIC_ROUTE_HANDLERS = True
 
 
