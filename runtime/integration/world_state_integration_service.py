@@ -20,7 +20,9 @@ from runtime.integration.world_state_packet_support import (
 from runtime.market.market_snapshot import MarketSnapshot
 from runtime.runtime_observability import RuntimeObservability
 from runtime.state import StateSynthesisEngine
-from runtime.world_state import WorldStateHistoryService
+from runtime.world_state import (
+    WorldStateHistoryService,
+)
 
 
 def _record_world_state_trace(*, observability: RuntimeObservability, generated_at_ms: int, synthesized_state) -> None:
