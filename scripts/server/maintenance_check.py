@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -15,7 +16,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from scripts.ci.paths import repo_root as ci_repo_root
-from scripts.ci.subprocess_io import run_command, stream_command
+from scripts.ci.subprocess_io import run_command
 
 
 REPORT_DIR_DEFAULT = Path(os.getenv("BUSINESAIOS_TEST_REPORT_DIR", "/tmp/businesaios-pytest-runs"))
@@ -195,13 +196,19 @@ def run_pytest_count(root: Path, report_dir: Path, pytest_args: list[str]) -> tu
     cmd = [sys.executable, str(script), "--json", str(json_path), "--", *pytest_args]
     tee = Tee(log_path)
     tee.write("$ " + " ".join(cmd) + "\n")
-    rc = stream_command(
+    process = subprocess.Popen(
         cmd,
-        cwd=root,
+        cwd=str(root),
         env=build_isolated_pytest_env(report_dir, stamp),
-        on_stdout_line=tee.write,
-        use_base_env=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
     )
+    assert process.stdout is not None
+    for line in process.stdout:
+        tee.write(line)
+    rc = int(process.wait())
     tee.write(f"\n[maintenance] pytest-count exit_code={rc}\n")
     tee.close()
     return rc, json_path, log_path
