@@ -24,4 +24,4 @@ jobs:
       - run: python scripts/ci/check_requirements_lock.py
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock.txt
-      - run: python scripts/ci/cli.py --gate release
+      - run: python -m scripts.ci.cli --gate release
