@@ -177,10 +177,21 @@ def uninstall_import_guard():
         builtins.__import__ = _original_import
 
 
+def deactivate_import_firewall():
+    """Backward-compatible public deactivation surface for tests and bootstrap cleanup.
+
+    This is intentionally only an alias to the canonical uninstall function. It
+    does not open a second firewall lifecycle path or relax import rules.
+    """
+
+    uninstall_import_guard()
+
+
 __all__ = [
     "ALLOW_INTERNAL_IMPORT",
     "activate_import_firewall",
     "allow_internal_import",
+    "deactivate_import_firewall",
     "guarded_import",
     "install_import_guard",
     "uninstall_import_guard",
