@@ -36,20 +36,31 @@ from scripts.ci.step_verify_release import run as run_verify_release
 StepHandler = Callable[[], tuple[bool, str]]
 
 
+def project_shape(): return _step_ids.project_shape()
+def doctor(): return _step_ids.doctor()
+def quality(): return _step_ids.quality()
+def canon_audit(): return _step_ids.canon_audit()
+def lock_tests(): return _step_ids.lock_tests()
+def unit_tests(): return _step_ids.unit_tests()
+def integration_tests(): return _step_ids.integration_tests()
+def verify_release(): return _step_ids.verify_release()
+def build_artifact(): return _step_ids.build_artifact()
+
+
 _REGISTRY: dict[str, StepHandler] = {
-    _step_ids.project_shape(): run_project_shape,
+    project_shape(): run_project_shape,
     _step_ids.dependency_lock(): run_dependency_lock,
-    _step_ids.doctor(): run_doctor,
+    doctor(): run_doctor,
     _step_ids.import_smoke(): run_import_smoke,
     _step_ids.boot_smoke(): run_boot_smoke,
     _step_ids.demo_e2e_smoke(): run_demo_e2e_smoke,
-    _step_ids.quality(): run_quality,
-    _step_ids.canon_audit(): run_canon_audit,
+    quality(): run_quality,
+    canon_audit(): run_canon_audit,
     _step_ids.architecture_bypass_scan(): run_architecture_bypass_scan,
     _step_ids.async_test_contract(): run_async_test_contract,
-    _step_ids.lock_tests(): run_lock_tests,
-    _step_ids.unit_tests(): run_unit_tests,
-    _step_ids.integration_tests(): run_integration_tests,
+    lock_tests(): run_lock_tests,
+    unit_tests(): run_unit_tests,
+    integration_tests(): run_integration_tests,
     _step_ids.business_critical_tests(): run_business_critical_tests,
     _step_ids.targeted_domain_tests(): run_targeted_domain_tests,
     _step_ids.integrity_auditor(): run_integrity_auditor,
@@ -63,8 +74,8 @@ _REGISTRY: dict[str, StepHandler] = {
     _step_ids.postgres_contract(): run_postgres_contract,
     _step_ids.postgres_live(): run_postgres_live,
     _step_ids.production_boot(): run_production_boot,
-    _step_ids.verify_release(): run_verify_release,
-    _step_ids.build_artifact(): run_build_artifact,
+    verify_release(): run_verify_release,
+    build_artifact(): run_build_artifact,
 }
 
 
