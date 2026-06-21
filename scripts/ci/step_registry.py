@@ -10,7 +10,7 @@ from scripts.ci.step_async_test_contract import run as run_async_test_contract
 from scripts.ci.step_boot_smoke import run as run_boot_smoke
 from scripts.ci.step_build_artifact import run as run_build_artifact
 from scripts.ci.step_business_critical_tests import run as run_business_critical_tests
-from scripts.ci.step_canon_audit import run as run_canon_audit
+from scripts.ci.step_canon_audit import run as _run_canon_audit
 from scripts.ci.step_targeted_domain_tests import run as run_targeted_domain_tests
 from scripts.ci.step_code_coverage import run as run_code_coverage
 from scripts.ci.step_demo_e2e_smoke import run as run_demo_e2e_smoke
@@ -21,16 +21,16 @@ from scripts.ci.step_integrity_cargo_tests import run as run_integrity_cargo_tes
 from scripts.ci.step_test_quality import run as run_test_quality
 from scripts.ci.step_test_collection import run as run_test_collection
 from scripts.ci.step_all_tests import run as run_all_tests
-from scripts.ci.step_integration_tests import run as run_integration_tests
-from scripts.ci.step_lock_tests import run as run_lock_tests
+from scripts.ci.step_integration_tests import run as _run_integration_tests
+from scripts.ci.step_lock_tests import run as _run_lock_tests
 from scripts.ci.step_postgres_contract import run as run_postgres_contract
 from scripts.ci.step_postgres_live import run as run_postgres_live
 from scripts.ci.step_production_boot import run as run_production_boot
-from scripts.ci.step_project_shape import run as run_project_shape
+from scripts.ci.step_project_shape import run as _run_project_shape
 from scripts.ci.step_quality import run as run_quality
 from scripts.ci.step_rust_safety_core import run as run_rust_safety_core
 from scripts.ci.step_rust_supply_chain import run as run_rust_supply_chain
-from scripts.ci.step_unit_tests import run as run_unit_tests
+from scripts.ci.step_unit_tests import run as _run_unit_tests
 from scripts.ci.step_verify_release import run as run_verify_release
 
 StepHandler = Callable[[], tuple[bool, str]]
@@ -45,6 +45,12 @@ def unit_tests(): return _step_ids.unit_tests()
 def integration_tests(): return _step_ids.integration_tests()
 def verify_release(): return _step_ids.verify_release()
 def build_artifact(): return _step_ids.build_artifact()
+
+def run_project_shape(): return _run_project_shape()
+def run_canon_audit(): return _run_canon_audit()
+def run_lock_tests(): return _run_lock_tests()
+def run_unit_tests(): return _run_unit_tests()
+def run_integration_tests(): return _run_integration_tests()
 
 
 _REGISTRY: dict[str, StepHandler] = {
