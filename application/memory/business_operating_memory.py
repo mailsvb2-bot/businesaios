@@ -19,6 +19,10 @@ from application.memory.business_operating_memory_types import (
     PatternEvidence,
     SignalMemoryRecord,
 )
+from application.memory.business_memory_compactor import (
+    BusinessMemoryCompactionReport,
+    BusinessMemoryCompactor,
+)
 from execution.business_memory_store_support import (
     BUSINESS_MEMORY_SCHEMA_VERSION,
 )
@@ -966,6 +970,7 @@ class FileBusinessOperatingMemoryStore:
 
 __all__ = [
     "BUSINESS_MEMORY_SCHEMA_VERSION",
+    "BusinessMemoryCompactionReport",
     "BusinessMemoryCompactor",
     "BusinessMemoryPolicy",
     "BusinessOperatingMemory",

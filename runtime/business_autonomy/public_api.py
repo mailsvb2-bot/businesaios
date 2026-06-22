@@ -62,7 +62,21 @@ def _registry_value(root: object, attrs: tuple[str, ...], key: str):
 
 
 def _business_service(business_id: str, service: object | None):
-    return service or build_business_autonomy_guarded_service(business_id=business_id, seed_admin_read_model=True)
+    requested = str(business_id).strip()
+    if service is not None:
+        if str(getattr(service, "business_id", "") or "").strip() == requested:
+            return service
+        existing = _registry_value(
+            service,
+            ("_autonomy_service", "_autonomy_policy", "_capability_registry"),
+            requested,
+        )
+        if existing is not None and getattr(existing, "capabilities", ()):
+            return service
+    return build_business_autonomy_guarded_service(
+        business_id=requested,
+        seed_admin_read_model=True,
+    )
 
 
 def get_registered_business_capabilities(*, business_id: str, service: object | None = None) -> dict:

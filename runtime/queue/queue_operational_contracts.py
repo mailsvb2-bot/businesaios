@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from reliability.leader_election import LeadershipLease
+
 CANON_RUNTIME_QUEUE_OPERATIONAL_CONTRACTS = True
 
 

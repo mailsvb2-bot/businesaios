@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping as AbcMapping
 from typing import Any
 
+from application.decision_runtime.gate import gate_action_or_raise
 from application.decision_policy.policy_stage import propose_action
 from application.decision_state.state_enrichment import (
     apply_causal_constraints,
@@ -14,11 +15,6 @@ from application.decision_state.world_model_metadata import (
 )
 from core.observability.perf import Span, emit_sla_violation
 from core.observability.throttled_logger import exception_throttled
-
-
-def gate_action_or_raise(**kwargs: Any) -> None:
-    core_api = __import__("core.ai.decision_core", fromlist=["gate_action_or_raise"])
-    core_api.gate_action_or_raise(**kwargs)
 
 
 def extract_correlation_key(state: Any) -> str | None:
