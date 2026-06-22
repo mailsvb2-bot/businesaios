@@ -1,42 +1,42 @@
 {
   "runtime.platform.support.cli.audit": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:audit_main"
   },
   "runtime.platform.support.cli.checkpoints": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:checkpoints_main"
   },
   "runtime.platform.support.cli.datasets": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:datasets_main"
   },
   "runtime.platform.support.cli.evaluate": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:evaluate_main"
   },
   "runtime.platform.support.cli.experiments": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:experiments_main"
   },
   "runtime.platform.support.cli.governance": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:governance_main"
   },
   "runtime.platform.support.cli.inspect": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:inspect_main"
   },
   "runtime.platform.support.cli.lineage": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:lineage_main"
   },
   "runtime.platform.support.cli.main": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:main"
   },
   "runtime.platform.support.cli.promote": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:promote_main"
   },
   "runtime.platform.support.cli.rollback": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:rollback_main"
   },
   "runtime.platform.support.cli.rollout": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:rollout_main"
   },
   "runtime.platform.support.cli.train": {
-    "main": "runtime.platform.support.cli"
+    "main": "runtime.platform.support.cli:train_main"
   },
   "runtime.platform.support.contracts.action": {
     "Action": "runtime.platform.support.contracts"

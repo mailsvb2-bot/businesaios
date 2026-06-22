@@ -12,12 +12,17 @@ def _physical_route_file_exists(route_module: str) -> bool:
     return (ROOT / Path(*route_module.split(".")).with_suffix(".py")).exists()
 
 
+def _resolve_export(export_name: str, target_spec: str) -> object:
+    target_module, separator, target_attr = str(target_spec).partition(":")
+    owner = importlib.import_module(target_module)
+    return getattr(owner, target_attr or export_name)
+
+
 def test_runtime_platform_support_import_doors_preserve_registered_synthetic_routes() -> None:
     """Registered synthetic import doors must preserve old public routes.
 
-    This test intentionally skips routes that still have a physical .py file.
-    A physical legacy file preserves its own semantics. The import-door law is
-    only for routes that were actually collapsed into synthetic modules.
+    Physical legacy .py files keep their own semantics. This law applies to
+    routes that are actually collapsed into synthetic import-door modules.
     """
 
     import runtime.platform.support  # noqa: F401 - installs the import-door finder
@@ -46,23 +51,20 @@ def test_runtime_platform_support_import_doors_preserve_registered_synthetic_rou
         if missing_from_all:
             failures.append(f"{route_module}: missing from __all__: {sorted(missing_from_all)}")
 
-        for export_name, owner_module_name in sorted(exports.items()):
+        for export_name, target_spec in sorted(exports.items()):
             try:
-                owner = importlib.import_module(owner_module_name)
+                expected = _resolve_export(export_name, target_spec)
             except Exception as exc:  # pragma: no cover - failure detail for CI
                 failures.append(
-                    f"{route_module}.{export_name}: owner import failed {owner_module_name}: "
+                    f"{route_module}.{export_name}: owner resolve failed {target_spec}: "
                     f"{type(exc).__name__}: {exc}"
                 )
                 continue
 
-            if not hasattr(owner, export_name):
-                failures.append(f"{route_module}.{export_name}: owner {owner_module_name} lacks export")
-                continue
             if not hasattr(route, export_name):
                 failures.append(f"{route_module}.{export_name}: route lacks export")
                 continue
-            if getattr(route, export_name) is not getattr(owner, export_name):
+            if getattr(route, export_name) is not expected:
                 failures.append(f"{route_module}.{export_name}: route export is not owner export")
 
     assert checked_routes > 0

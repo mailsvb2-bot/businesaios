@@ -38,9 +38,10 @@ class _RuntimePlatformSupportDoorFinder(importlib.abc.MetaPathFinder, importlib.
         module.__all__ = list(exports)
         module.__package__ = module.__name__.rpartition(".")[0]
         module.__file__ = module.__name__.replace(".", "/") + ".py"
-        for name, target_module in exports.items():
+        for name, target_spec in exports.items():
+            target_module, separator, target_attr = str(target_spec).partition(":")
             owner = importlib.import_module(target_module)
-            setattr(module, name, getattr(owner, name))
+            setattr(module, name, getattr(owner, target_attr or name))
 
 
 _FINDER = _RuntimePlatformSupportDoorFinder()
