@@ -16,6 +16,9 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock.txt
       - run: python -m scripts.ci.cli --gate full
+        env:
+          BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.11
+
   full-312:
     runs-on: [self-hosted, linux, x64, businesaios]
     steps:
@@ -29,3 +32,5 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock.txt
       - run: python -m scripts.ci.cli --gate full
+        env:
+          BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.12
