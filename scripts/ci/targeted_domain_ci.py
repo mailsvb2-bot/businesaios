@@ -47,8 +47,19 @@ def touched_domains(changed: list[str]) -> list[str]:
     return domains
 
 
+def _is_runnable_test_file(path: str) -> bool:
+    name = Path(path).name
+    if name == "conftest.py" or name.startswith("_"):
+        return False
+    return name.startswith("test_") or name.endswith("_test.py")
+
+
 def matching_tests(domains: list[str]) -> list[str]:
-    tests = git_lines("ls-files", "tests/**/*.py")
+    tests = [
+        path
+        for path in git_lines("ls-files", "tests/**/*.py")
+        if _is_runnable_test_file(path)
+    ]
     selected: set[str] = set()
     for domain in domains:
         for test in tests:

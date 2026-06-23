@@ -8,7 +8,8 @@ import tempfile
 from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterable, Protocol
+from typing import Iterable
+from security.key_provider_contracts import KeyProvider
 
 from security.key_management_contract import KeyMaterialRecord, KeyPurpose, KeyStatus, utc_now
 
@@ -83,29 +84,6 @@ def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
             os.unlink(temp_name)
 
 
-class KeyProvider(Protocol):
-    def issue_key(
-        self,
-        *,
-        key_id: str,
-        purpose: KeyPurpose,
-        tenant_id: str | None = None,
-        connector_id: str | None = None,
-        expires_in_seconds: int | None = None,
-    ) -> KeyMaterialRecord: ...
-
-    def register(self, record: KeyMaterialRecord) -> None: ...
-
-    def get(self, key_id: str) -> KeyMaterialRecord: ...
-
-    def get_active_for(
-        self,
-        *,
-        purpose: KeyPurpose,
-        tenant_id: str | None = None,
-        connector_id: str | None = None,
-        at: datetime | None = None,
-    ) -> KeyMaterialRecord: ...
 
 
 class InMemoryKeyProvider:

@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-"""Canonical public surface for runtime world-state helpers."""
+"""Compatibility anchor for the canonical runtime.world_state package surface."""
 
-from runtime.world_state._surface import CANON_RUNTIME_WORLD_STATE_SURFACE, runtime_world_state_surface
-from runtime.world_state.contract import RuntimeWorldStateContract
+from runtime.world_state import *  # noqa: F401,F403
 
-__all__ = [
-    'CANON_RUNTIME_WORLD_STATE_SURFACE',
-    'RuntimeWorldStateContract',
-    'runtime_world_state_surface',
-]
+CANON_RUNTIME_WORLD_STATE_PUBLIC_API_ANCHOR = True

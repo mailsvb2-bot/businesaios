@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from boot.registrations.register_governance import GovernanceChain
+from boot.runtime_service_contracts import GovernanceChain
 from runtime.constructor_tokens import runtime_construction_token
 
 

@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from acquisition import AcquisitionFeasibilityRequest, FunnelStage
+from .feasibility_solver import AcquisitionFeasibilityRequest
+from .funnel_model import FunnelStage
 from shared.numbers import coerce_float, coerce_int
 
 CANON_ACQUISITION_REQUEST_ADAPTER = True

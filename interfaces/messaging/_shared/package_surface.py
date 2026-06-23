@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import ModuleType
 from typing import Any
 
-from interfaces.messaging._shared import normalize_provider_inbound
+from interfaces.messaging._shared.inbound_normalizer import normalize_provider_inbound
 from interfaces.messaging._shared.provider_runtime import map_result_for, send_raw_for
 from interfaces.messaging._shared.provider_surface import make_build_config
 from interfaces.messaging._shared.runner_helpers import delivery_preview, sender_identity

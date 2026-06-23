@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from config.final_hidden_logic_policy import DEFAULT_STRATEGIC_HORIZON_DECISION_POLICY
 from core.strategic_horizon.constants import MAX_RISK_BUDGET, MIN_RISK_BUDGET
+from core.strategic_horizon.contracts import LearningRegime, StrategicMode
 
 
 def select_horizon(mode) -> int:
-    from core.strategic_horizon.engine import StrategicMode
 
     return {
         StrategicMode.DEFENSE: DEFAULT_STRATEGIC_HORIZON_DECISION_POLICY.horizon_days_defense,
@@ -17,7 +17,6 @@ def select_horizon(mode) -> int:
 
 
 def compute_risk_budget(s, mode) -> float:
-    from core.strategic_horizon.engine import StrategicMode
 
     base = DEFAULT_STRATEGIC_HORIZON_DECISION_POLICY.budget_baseline - max(s.risk.financial_risk, s.risk.ux_risk, s.risk.regulatory_risk)
     mode_multiplier = {
@@ -32,7 +31,6 @@ def compute_risk_budget(s, mode) -> float:
 
 
 def growth_pressure(s, mode) -> float:
-    from core.strategic_horizon.engine import StrategicMode
 
     if mode in (StrategicMode.DEFENSE, StrategicMode.STABILIZE):
         return DEFAULT_STRATEGIC_HORIZON_DECISION_POLICY.growth_pressure_defense
@@ -47,7 +45,6 @@ def growth_pressure(s, mode) -> float:
 
 
 def learning_regime(s, mode):
-    from core.strategic_horizon.engine import LearningRegime, StrategicMode
 
     if mode == StrategicMode.DEFENSE:
         return LearningRegime.FROZEN

@@ -151,6 +151,42 @@ _ROUTE_SPECS: dict[str, PublicSurfaceRouteSpec] = {
         action=SecurityAction.READ,
         tags=('internal', 'analytics', 'dashboard', 'public_api'),
     ),
+    '/economic/truth/click-billing-sealed-execution/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.economic.truth.click_billing_sealed_execution',
+        resource_type='economic_sealed_execution',
+        action=SecurityAction.READ,
+        tags=('internal', 'economic', 'sealed_execution', 'truth', 'click_billing', 'public_api'),
+    ),
+    '/economic/export/click-billing-sealed-execution/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.economic.export.click_billing_sealed_execution',
+        resource_type='economic_sealed_execution',
+        action=SecurityAction.READ,
+        tags=('internal', 'economic', 'sealed_execution', 'export', 'click_billing', 'public_api'),
+    ),
+    '/economic/audit/click-billing-sealed-execution/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.economic.audit.click_billing_sealed_execution',
+        resource_type='economic_sealed_execution',
+        action=SecurityAction.READ,
+        tags=('internal', 'economic', 'sealed_execution', 'audit', 'click_billing', 'public_api'),
+    ),
+    '/economic/truth/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.economic.truth.spend_external_sealed_execution_client_outcome',
+        resource_type='economic_sealed_execution',
+        action=SecurityAction.READ,
+        tags=('internal', 'economic', 'sealed_execution', 'truth', 'spend_external', 'client_outcome', 'public_api'),
+    ),
+    '/economic/export/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.economic.export.spend_external_sealed_execution_client_outcome',
+        resource_type='economic_sealed_execution',
+        action=SecurityAction.READ,
+        tags=('internal', 'economic', 'sealed_execution', 'export', 'spend_external', 'client_outcome', 'public_api'),
+    ),
+    '/economic/audit/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.economic.audit.spend_external_sealed_execution_client_outcome',
+        resource_type='economic_sealed_execution',
+        action=SecurityAction.READ,
+        tags=('internal', 'economic', 'sealed_execution', 'audit', 'spend_external', 'client_outcome', 'public_api'),
+    ),
     '/public-site/cta/start': PublicSurfaceRouteSpec(
         operation_name='api.public.public_site.cta_start',
         resource_type='public_site_cta_intake',
@@ -337,7 +373,7 @@ class PublicSurfaceSecurityGuard:
             'geo_velocity': bool(metadata.get('geo_velocity') or False),
             'admin_surface': spec.action is SecurityAction.ADMIN,
             'bulk_operation': isinstance(payload.get('run_ids'), list) and len(payload.get('run_ids') or []) > 10,
-            'long_horizon_request': int(payload.get('max_steps') or 1) > 10,
+            'extended_planning_request': int(payload.get('max_steps') or 1) > 10,
         }
 
 

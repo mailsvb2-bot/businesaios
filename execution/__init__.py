@@ -46,13 +46,9 @@ def _load_attr(module_name: str, attr_name: str) -> Any:
     return getattr(import_module(module_name), attr_name)
 
 
-# Eagerly bind names that would otherwise be shadowed by same-named submodules.
-for _name in {
-    'canonical_governance_decision',
-    'canonical_governance_evidence',
-}:
-    _module_name, _attr_name = _OWNER_MAP[_name]
-    globals()[_name] = _load_attr(_module_name, _attr_name)
+# Package-root owner exports are resolved lazily by __getattr__.
+# Do not eager-import governance/evidence here: those routes depend on business
+# memory evidence projection, and eager loading reintroduces a hidden import cycle.
 
 
 def __getattr__(name: str) -> Any:

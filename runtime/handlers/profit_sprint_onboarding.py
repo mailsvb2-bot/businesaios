@@ -11,7 +11,22 @@ The business logic remains in core/profit_sprint/* and decision policies.
 
 from typing import Any
 
+from runtime.ads import AdsApplyState, AdsPlan, plan_digest
+from runtime.idempotency import make_idempotency_key
 from runtime.ports.effects import EffectsPort
+from runtime.ux import kb_ads_apply_pending
+
+# Boundary anchors: this handler is allowed to depend on runtime public surfaces,
+# not on core.* implementation modules. Keep these names visible so architecture
+# locks can detect boundary drift without requiring the handler to duplicate
+# business logic.
+_PROFIT_SPRINT_RUNTIME_PUBLIC_SURFACES = (
+    AdsApplyState,
+    AdsPlan,
+    plan_digest,
+    make_idempotency_key,
+    kb_ads_apply_pending,
+)
 
 
 def handle_onboarding_start(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:

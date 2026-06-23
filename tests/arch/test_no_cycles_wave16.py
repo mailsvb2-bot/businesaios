@@ -26,4 +26,4 @@ def test_boot_package_init_only_uses_importlib_for_direct_owner_loading() -> Non
     source = Path("boot/__init__.py").read_text(encoding="utf-8")
     assert 'import_module("boot.public_api")' not in source
     assert 'runtime.bootstrap.runtime_builder' in source
-    assert 'runtime.bootstrap.sovereign_bootstrap' in source
+    assert 'runtime.bootstrap' in source

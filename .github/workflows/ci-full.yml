@@ -10,22 +10,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: 'pip'
+          cache: pip
           cache-dependency-path: requirements.lock.txt
       - run: python scripts/ci/check_requirements_lock.py
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock.txt
-      - name: Run canonical full CI gate
+      - run: python -m scripts.ci.cli --gate full
         env:
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.11
-        run: python -m scripts.ci.cli --gate full
-      - name: Upload full gate artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-full-311-artifacts
-          path: artifacts/ci
-          if-no-files-found: warn
+
   full-312:
     runs-on: [self-hosted, linux, x64, businesaios]
     steps:
@@ -33,19 +26,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: 'pip'
+          cache: pip
           cache-dependency-path: requirements.lock.txt
       - run: python scripts/ci/check_requirements_lock.py
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock.txt
-      - name: Run canonical full CI gate
+      - run: python -m scripts.ci.cli --gate full
         env:
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.12
-        run: python -m scripts.ci.cli --gate full
-      - name: Upload full gate artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ci-full-312-artifacts
-          path: artifacts/ci
-          if-no-files-found: warn

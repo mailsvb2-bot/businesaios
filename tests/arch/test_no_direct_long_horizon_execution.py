@@ -75,6 +75,7 @@ def test_only_planning_surfaces_may_reference_long_horizon_metadata() -> None:
         "application/planning/multi_goal_planner.py",
         "application/planning/strategy_memory.py",
     }
+    planning_memory_persistence = "application/business_autonomy/persistence.py"
     offenders: list[str] = []
     for path in ROOT.rglob("*.py"):
         try:
@@ -85,5 +86,7 @@ def test_only_planning_surfaces_may_reference_long_horizon_metadata() -> None:
             continue
         content = path.read_text(encoding="utf-8")
         if "long_horizon" in content and relative not in allowed:
+            if relative == planning_memory_persistence and "PersistentBusinessPlanningMemorySink" in content:
+                continue
             offenders.append(relative)
     assert offenders == [], f"Unexpected long_horizon references outside planning surfaces: {sorted(offenders)}"

@@ -6,16 +6,12 @@ This gate binds execution to the existing approval workflow and optional
 one-shot operator override path. It never creates a second decision path.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from collections.abc import Mapping
-from uuid import uuid4
 
 from contracts.action_impact_contract import ActionExecutionContext, ActionImpact
-from execution.approval_policy_engine import ApprovalPolicyDecision, ApprovalPolicyEngine, ApprovalPolicyInput
-from execution.canonical_operator_handoff import canonical_operator_handoff
-from execution.operator_override_contract import OperatorOverrideRecord
 from execution.approval_gate_fingerprint import build_execution_subject_fingerprint
 from execution.approval_gate_support import (
     approval_matches_execution as _approval_matches_execution,
@@ -25,7 +21,9 @@ from execution.approval_gate_support import (
     new_approval_id as _new_approval_id,
     require_execution_id as _require_execution_id,
 )
-from governance.approval_contract import ApprovalRecord, ApprovalRequest, ApprovalStatus
+from execution.approval_policy_engine import ApprovalPolicyDecision, ApprovalPolicyEngine, ApprovalPolicyInput
+from execution.operator_override_contract import OperatorOverrideRecord
+from governance.approval_contract import ApprovalRecord, ApprovalStatus
 from governance.approval_workflow import ApprovalWorkflow
 from governance.control_plane_audit_log import GovernanceAuditEvent, GovernanceAuditLogContract, NullGovernanceAuditLog
 
@@ -167,7 +165,6 @@ class ApprovalExecutionGate:
             )
             self._audit(ctx.tenant_id, 'execution_approval_gate_denied', verdict.to_dict())
             return verdict
-
         requested_by_actor = _text(
             requested_by or meta.get('actor_id') or _safe_dict(ctx.metadata).get('actor_id') or ctx.user_id or 'system'
         )
@@ -310,6 +307,29 @@ class ApprovalExecutionGate:
                 autonomy_tier=autonomy_tier,
                 approval_id=approval_id,
             )
+        current_fingerprint = _build_approval_request_fingerprint(
+            tenant_id=ctx.tenant_id,
+            subject_fingerprint=subject_fingerprint,
+            required_role_groups=policy.required_role_groups,
+            min_distinct_approvers=policy.min_distinct_approvers,
+        )
+        stored_fingerprint = _text(_safe_dict(record.request.metadata).get('approval_request_fingerprint'))
+        if stored_fingerprint and stored_fingerprint != current_fingerprint:
+            return self._deny(
+                ctx=ctx,
+                execution_id=execution_id,
+                decision_id=decision_id,
+                subject_fingerprint=subject_fingerprint,
+                reason='approval_request_fingerprint_mismatch',
+                policy=policy.to_dict(),
+                autonomy_tier=autonomy_tier,
+                approval_id=approval_id,
+                metadata={
+                    'approval_status': record.status.value,
+                    'stored_approval_request_fingerprint': stored_fingerprint,
+                    'current_approval_request_fingerprint': current_fingerprint,
+                },
+            )
         if record.status is ApprovalStatus.APPROVED:
             return ApprovalExecutionGateDecision(
                 allowed=True,
@@ -439,7 +459,6 @@ class ApprovalExecutionGate:
             expires_at=expires_at,
         )
         return self._approval_workflow.submit(request)
-
 
     def _deny(
         self,

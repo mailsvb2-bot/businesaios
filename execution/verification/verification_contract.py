@@ -5,19 +5,29 @@ from typing import Any
 from collections.abc import Mapping
 from execution.verification.evidence_types import EvidenceItem, normalize_evidence_kind, normalize_evidence_status
 CANON_VERIFICATION_CONTRACT = True
+
+_EPOCH_UTC = datetime(1970, 1, 1, tzinfo=UTC)
+
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+def _stable_decided_at() -> datetime:
+    return _EPOCH_UTC
+
 def _text(value: object) -> str:
     return str(value or "").strip()
+
 def _safe_dict(value: object) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
     return {}
+
 def _safe_int(value: object, *, default: int = 0) -> int:
     try:
         return int(value)
     except (TypeError, ValueError):
         return int(default)
+
 def _safe_bool(value: object, *, default: bool = False) -> bool:
     if isinstance(value, bool):
         return value
@@ -27,11 +37,25 @@ def _safe_bool(value: object, *, default: bool = False) -> bool:
     if text in {"0", "false", "no", "n", "off"}:
         return False
     return bool(default)
+
 def _safe_float(value: object, *, default: float = 0.0) -> float:
     try:
         return float(value)
     except (TypeError, ValueError):
         return float(default)
+
+def _parse_datetime(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
+    text = _text(value)
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed.astimezone(UTC) if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
 def _safe_backoff_sequence(value: object) -> tuple[int, ...]:
     if not isinstance(value, (list, tuple)):
         return (30, 120, 300)
@@ -44,6 +68,7 @@ def _safe_backoff_sequence(value: object) -> tuple[int, ...]:
         if number > 0:
             result.append(number)
     return tuple(result) or (30, 120, 300)
+
 @dataclass(frozen=True, slots=True)
 class VerificationRequest:
     action_id: str
@@ -57,6 +82,7 @@ class VerificationRequest:
     requested_at: datetime = field(default_factory=_utc_now)
     verification_deadline: datetime | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
     @classmethod
     def from_payload(
         cls,
@@ -66,16 +92,8 @@ class VerificationRequest:
         metadata: Mapping[str, Any] | None = None,
     ) -> "VerificationRequest":
         payload = _safe_dict(action)
-        deadline_raw = payload.get("verification_deadline")
-        deadline: datetime | None = None
-        if isinstance(deadline_raw, datetime):
-            deadline = deadline_raw.astimezone(UTC) if deadline_raw.tzinfo else deadline_raw.replace(tzinfo=UTC)
-        elif _text(deadline_raw):
-            try:
-                deadline = datetime.fromisoformat(_text(deadline_raw).replace("Z", "+00:00"))
-                deadline = deadline.astimezone(UTC) if deadline.tzinfo else deadline.replace(tzinfo=UTC)
-            except ValueError:
-                deadline = None
+        requested_at = _parse_datetime(payload.get("requested_at") or payload.get("observed_at")) or _utc_now()
+        deadline = _parse_datetime(payload.get("verification_deadline"))
         return cls(
             action_id=_text(payload.get("action_id")),
             action_type=_text(payload.get("action_type")),
@@ -85,9 +103,11 @@ class VerificationRequest:
             step_index=_safe_int(payload.get("step_index"), default=0),
             external_confirmation_mode=_text(payload.get("external_confirmation_mode") or "required"),
             evidence=tuple(evidence or ()),
+            requested_at=requested_at,
             verification_deadline=deadline,
             metadata={**payload, **_safe_dict(metadata)},
         )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "action_id": self.action_id,
@@ -102,6 +122,7 @@ class VerificationRequest:
             "metadata": dict(self.metadata),
             "evidence": [item.to_dict() for item in self.evidence],
         }
+
 @dataclass(frozen=True, slots=True)
 class VerificationPolicy:
     min_evidence_count: int = 1
@@ -137,6 +158,7 @@ class VerificationPolicy:
     def verification_deadline_for(self, requested_at: datetime | None = None) -> datetime:
         base = requested_at or _utc_now()
         return base + timedelta(seconds=max(1, int(self.timeout_seconds)))
+
 @dataclass(frozen=True, slots=True)
 class VerificationDecision:
     action_id: str
@@ -155,7 +177,7 @@ class VerificationDecision:
     delayed: bool = False
     timed_out: bool = False
     decision_fingerprint: str = ""
-    decided_at: datetime = field(default_factory=_utc_now)
+    decided_at: datetime = field(default_factory=_stable_decided_at)
     policy_snapshot: dict[str, Any] = field(default_factory=dict)
     summary: dict[str, Any] = field(default_factory=dict)
     def to_dict(self) -> dict[str, Any]:
@@ -180,6 +202,7 @@ class VerificationDecision:
             "policy_snapshot": dict(self.policy_snapshot),
             "summary": dict(self.summary),
         }
+
 def verification_policy_from_action(action: Mapping[str, Any] | None) -> VerificationPolicy:
     payload = _safe_dict(action)
     mode = _text(payload.get("external_confirmation_mode") or "required").casefold()
@@ -210,6 +233,7 @@ def verification_policy_from_action(action: Mapping[str, Any] | None) -> Verific
         retry_backoff_seconds=_safe_backoff_sequence(payload.get("verification_retry_backoff_seconds")),
         positive_confidence_threshold=max(0.0, min(1.0, _safe_float(payload.get("positive_confidence_threshold"), default=0.0))),
     )
+
 def evidence_item_from_mapping(item: Mapping[str, Any]) -> EvidenceItem:
     payload = _safe_dict(item)
     refs = payload.get("external_refs")

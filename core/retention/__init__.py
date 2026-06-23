@@ -1,15 +1,18 @@
-"""Retention module (thin init).
+"""Retention package lazy public surface.
 
-CRITICAL:
-Do NOT import connector layer / offer catalogs here.
-This package must be safe to import from anywhere, including OfferEngine layer.
+The package root must stay safe to import from anywhere. Heavy engine wiring
+is loaded lazily through __getattr__.
 """
 
-from .engine import RetentionEngine
+from __future__ import annotations
+
+from typing import Any
 
 __all__ = ["RetentionEngine"]
 
-# NOTE:
-# External connectors are intentionally not imported here.
-# Import explicitly where needed:
-#   use core.retention.decision_adapter.RetentionDecisionAdapter
+def __getattr__(name: str) -> Any:
+    if name != "RetentionEngine":
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from core.retention.engine import RetentionEngine
+    globals()[name] = RetentionEngine
+    return RetentionEngine

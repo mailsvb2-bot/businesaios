@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import MutableMapping
+from collections.abc import Iterator, MutableMapping
 from contextlib import contextmanager
 from pathlib import Path
 from sqlite3 import Connection
-from collections.abc import Iterator
 
 from core.safety.controls.multi_step_approval.models import ApprovalTicket, ApprovalWorkflowState
 from runtime.platform.safety_sqlite_migrations import SafetySqliteMigrator, SchemaMigrationPlan
@@ -16,7 +15,7 @@ SCHEMA_VERSION = 6
 
 
 class _ApprovalTicketMap(MutableMapping[str, ApprovalTicket]):
-    def __init__(self, repo: PlatformSqliteApprovalRepository) -> None:
+    def __init__(self, repo: 'PlatformSqliteApprovalRepository') -> None:
         self._repo = repo
 
     def __getitem__(self, key: str) -> ApprovalTicket:
@@ -292,6 +291,3 @@ class PlatformSqliteApprovalRepository:
         with self._connect() as conn:
             rows = conn.execute('SELECT action_id FROM safety_approval_tickets ORDER BY action_id ASC').fetchall()
         return tuple(str(row[0]) for row in rows)
-
-
-__all__ = ['CANON_PLATFORM_SAFETY_APPROVAL_REPOSITORY', 'PlatformSqliteApprovalRepository', 'SCHEMA_VERSION']

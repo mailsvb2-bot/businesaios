@@ -25,6 +25,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run_cmd.add_argument("--region", default="global", type=str)
     run_cmd.add_argument("--max-steps", default=1, type=int)
     run_cmd.add_argument("--ceo", action="store_true")
+    run_cmd.add_argument("--quiet", action="store_true", help="Suppress full JSON report on stdout")
     run_cmd.add_argument("--ceo-horizon", default="30d", type=str)
 
     scenario_cmd = sub.add_parser("scenario", help="Execute a real scenario")
@@ -32,6 +33,7 @@ def _build_parser() -> argparse.ArgumentParser:
     scenario_cmd.add_argument("--business-id", required=True, type=str)
     scenario_cmd.add_argument("--tenant-id", default="default", type=str)
     scenario_cmd.add_argument("--user-id", default=None, type=str)
+    scenario_cmd.add_argument("--quiet", action="store_true", help="Suppress full JSON report on stdout")
 
     capability_cmd = sub.add_parser("capability-matrix", help="Print the operational capability matrix")
     capability_cmd.add_argument("--action", default="", type=str)
@@ -91,7 +93,8 @@ def main(argv: list[str] | None = None) -> int:
             ),
         )
         report = runtime.contract.execute_autopilot(request)
-        print(json.dumps(asdict(report), ensure_ascii=False, indent=2, sort_keys=True))
+        if not getattr(args, "quiet", False):
+            print(json.dumps(asdict(report), ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if report.completed else 1
 
     if args.command == "scenario":
@@ -102,7 +105,8 @@ def main(argv: list[str] | None = None) -> int:
             user_id=args.user_id,
         )
         report = runtime.contract.execute_autopilot(request)
-        print(json.dumps(asdict(report), ensure_ascii=False, indent=2, sort_keys=True))
+        if not getattr(args, "quiet", False):
+            print(json.dumps(asdict(report), ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if report.completed else 1
 
     parser.error("unknown command")

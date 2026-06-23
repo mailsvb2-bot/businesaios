@@ -126,17 +126,17 @@ class InMemoryTenantRegistry(TenantRegistryContract):
 
 
 
-
-def ensure_tenant_record(registry: TenantRegistryContract, tenant_id: str, *, display_name: str | None = None, plan: TenantPlan = TenantPlan.STARTER) -> TenantRecord:
+def ensure_tenant_record(tenant_registry: TenantRegistryContract, tenant_id: str, *, display_name: str | None = None, plan: TenantPlan = TenantPlan.STARTER) -> TenantRecord:
     tid = require_tenant_id(tenant_id)
-    existing = registry.lookup(tid) if hasattr(registry, 'lookup') else registry.get(tid)
+    lookup = getattr(tenant_registry, 'lookup', None)
+    existing = lookup(tid) if callable(lookup) else tenant_registry.get(tid)
     if existing is not None:
         return existing
     record = TenantRecord(tenant_id=tid, display_name=str(display_name or tid), plan=plan)
-    register_many = getattr(registry, 'register_many', None)
+    register_many = getattr(tenant_registry, 'register_many', None)
     if callable(register_many):
         return register_many((record,))[0]
-    register_one = getattr(registry, 'register')
+    register_one = getattr(tenant_registry, 'register')
     return register_one(record)
 
 
@@ -176,7 +176,6 @@ class PersistentTenantRegistry(InMemoryTenantRegistry):
         updated = super().set_status(tenant_id=tenant_id, status=status)
         self._flush()
         return updated
-
 
     def register_many(self, records: tuple[TenantRecord, ...] | list[TenantRecord]) -> tuple[TenantRecord, ...]:
         stored = super().register_many(records)

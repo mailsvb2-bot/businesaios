@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import threading
 
-from reliability.distributed_lock import LockLease
+from reliability.distributed_lock_contracts import LockLease
 from reliability.distributed_lock_backend import DistributedLockBackend, LockBackendRecord, build_expires_at, ensure_aware, normalize_lock_inputs, normalize_resource, safe_sql_identifier
 from storage.postgres_session import PostgresSession, PostgresSessionFactory
 

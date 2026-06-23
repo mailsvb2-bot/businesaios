@@ -6,7 +6,7 @@ from collections.abc import Callable
 from collections.abc import Mapping
 
 if TYPE_CHECKING:
-    from runtime.boot.finance_boot import StrategicFinanceRuntime
+    from runtime.boot.finance_boot_runtime import StrategicFinanceRuntime
 from runtime.finance.event_publisher import FinanceEventPublisher
 from runtime.finance.job_spec import FinanceJobSpec
 from runtime.tenancy import require_tenant_id

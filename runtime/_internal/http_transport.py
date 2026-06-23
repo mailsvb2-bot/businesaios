@@ -5,7 +5,7 @@ import json as _json
 import os
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 
 
 def _socket_module():
@@ -24,9 +24,9 @@ def _urllib_request():
     return importlib.import_module("urllib.request")
 
 
-
-def _socket_module():
-    return importlib.import_module("socket")
+def runtime_network_mode() -> str:
+    enabled = str(os.environ.get("BUSINESAIOS_ALLOW_NETWORK", "0")).strip().lower() in {"1", "true", "yes", "on"}
+    return "enabled" if enabled else "disabled"
 
 
 @dataclass(frozen=True)
@@ -201,12 +201,26 @@ def _normalized_url(url: str) -> str:
         raise ValueError("absolute_http_url_required")
     return _urllib_parse().urlunsplit(parsed)
 
+def _query_items(params: Mapping[str, Any] | None) -> list[tuple[str, Any]]:
+    items: list[tuple[str, Any]] = []
+    for key, value in dict(params or {}).items():
+        if value is None:
+            continue
+        name = str(key)
+        if isinstance(value, Iterable) and not isinstance(value, (str, bytes, bytearray, Mapping)):
+            for item in value:
+                if item is not None:
+                    items.append((name, item))
+            continue
+        items.append((name, value))
+    return items
+
 def url_with_params(*, url: str, params: dict[str, Any] | None = None) -> str:
-    payload = params if isinstance(params, dict) else {}
     normalized = _normalized_url(str(url))
-    if not payload:
+    items = _query_items(params)
+    if not items:
         return normalized
-    return normalized + ("&" if "?" in normalized else "?") + _urllib_parse().urlencode({k: v for k, v in payload.items() if v is not None})
+    return normalized + ("&" if "?" in normalized else "?") + _urllib_parse().urlencode(items, doseq=True)
 
 def form_urlencode(data: dict[str, Any]) -> bytes:
     """Encode x-www-form-urlencoded payloads inside the sealed HTTP layer.
@@ -215,7 +229,7 @@ def form_urlencode(data: dict[str, Any]) -> bytes:
     instead of leaking URL/form helpers into runtime domain modules.
     """
 
-    return _urllib_parse().urlencode({str(k): v for k, v in dict(data or {}).items() if v is not None}).encode("utf-8")
+    return _urllib_parse().urlencode(_query_items(data), doseq=True).encode("utf-8")
 
 def _decode_response(resp) -> HTTPResponse:
     raw = resp.read()
@@ -238,65 +252,37 @@ def _response_from_http_error(exc: Exception) -> HTTPResponse:
         parsed = _json.loads(body) if body else None
     except Exception:
         parsed = None
-    return HTTPResponse(status=int(getattr(exc, "code", 500) or 500), json=parsed, text=body)
+    return HTTPResponse(status=int(getattr(exc, "code", 0) or 0), json=parsed, text=body)
 
-def _response_from_network_error(exc: Exception) -> HTTPResponse:
-    return HTTPResponse(status=599, json=None, text=str(exc))
+def sync_post_json(*, url: str, headers: dict[str, str] | None = None, data: dict[str, Any] | None = None, timeout_s: int = 30) -> HTTPResponse:
+    body = _json.dumps(dict(data or {}), ensure_ascii=False).encode("utf-8")
+    result = sync_request(method="POST", url=url, headers={**dict(headers or {}), "Content-Type": "application/json"}, body=body, timeout_s=float(timeout_s or 30))
+    return HTTPResponse(status=int(result.status or 0), json=result.json, text=result.text)
 
-def sync_get(*, url: str, headers: dict[str, str], params: dict[str, str] | None = None, timeout_s: int = 30) -> HTTPResponse:
+def sync_get(*, url: str, headers: dict[str, str] | None = None, params: dict[str, Any] | None = None, timeout_s: int = 30) -> HTTPResponse:
     try:
-        final = url_with_params(url=str(url), params=(params or {}))
-        req = _urllib_request().Request(url=final, headers=headers or {}, method="GET")
-        with _urllib_request().urlopen(req, timeout=int(timeout_s or 30)) as resp:
-            return _decode_response(resp)
-    except _urllib_error().HTTPError as exc:
-        return _response_from_http_error(exc)
-    except (_urllib_error().URLError, OSError, ValueError) as exc:
-        return _response_from_network_error(exc)
-
-def sync_post_json(*, url: str, headers: dict[str, str], data: dict[str, Any] | None = None, timeout_s: int = 30) -> HTTPResponse:
-    body = _json.dumps(data or {}, ensure_ascii=False).encode("utf-8")
-    hdrs = dict(headers or {})
-    if "Content-Type" not in hdrs:
-        hdrs["Content-Type"] = "application/json"
-    req = _urllib_request().Request(url=_normalized_url(str(url)), data=body, headers=hdrs, method="POST")
-    try:
-        with _urllib_request().urlopen(req, timeout=int(timeout_s or 30)) as resp:
-            return _decode_response(resp)
-    except _urllib_error().HTTPError as exc:
-        return _response_from_http_error(exc)
-    except (_urllib_error().URLError, OSError, ValueError) as exc:
-        return _response_from_network_error(exc)
-
-def runtime_network_mode() -> str:
-    explicit = str(os.getenv("EFFECTS_NETWORK_MODE", "")).strip().lower()
-    if explicit in {"enabled", "on", "allow"}:
-        return "enabled"
-    if explicit in {"disabled", "off", "deny"}:
-        return "disabled"
-    env = str(os.getenv("APP_ENV") or os.getenv("ENV") or "dev").strip().lower()
-    run_mode = str(os.getenv("RUN_MODE") or os.getenv("MODE") or "demo").strip().lower()
-    if os.getenv("PYTEST_CURRENT_TEST"):
-        return "disabled"
-    if env in {"test", "tests"}:
-        return "disabled"
-    if run_mode in {"demo", "test", "tests"}:
-        return "disabled"
-    return "enabled"
-
-def network_enabled_for_runtime() -> bool:
-    return runtime_network_mode() == "enabled"
+        final_url = url_with_params(url=url, params=params)
+    except ValueError:
+        return HTTPResponse(status=599, json=None, text="")
+    result = sync_request(method="GET", url=final_url, headers=dict(headers or {}), timeout_s=float(timeout_s or 30))
+    return HTTPResponse(status=int(result.status or 0), json=result.json, text=result.text)
 
 def build_http_transport(*, allow_network: bool | None = None) -> HttpTransport:
-    enabled = (runtime_network_mode() == "enabled") if allow_network is None else bool(allow_network)
-    if enabled:
-        return UrllibHttpTransport()
-    return DisabledNetworkTransport()
+    if allow_network is None:
+        allow_network = runtime_network_mode() == "enabled"
+    return UrllibHttpTransport() if allow_network else DisabledNetworkTransport()
 
-async def http_get(*, url: str, headers: dict[str, str], params: dict | None = None, timeout_s: int = 30, transport: HttpTransport | None = None) -> HTTPResponse:
-    client = transport or build_http_transport()
-    return await client.get_json(url=str(url), headers=dict(headers or {}), params=params, timeout_s=int(timeout_s or 30))
-
-async def http_post(*, url: str, headers: dict[str, str], data: dict | None = None, timeout_s: int = 30, transport: HttpTransport | None = None) -> HTTPResponse:
-    client = transport or build_http_transport()
-    return await client.post_json(url=str(url), headers=dict(headers or {}), data=data, timeout_s=int(timeout_s or 30))
+__all__ = [
+    "HTTPResponse",
+    "HttpTransport",
+    "SyncHTTPResult",
+    "DisabledNetworkTransport",
+    "UrllibHttpTransport",
+    "build_http_transport",
+    "form_urlencode",
+    "runtime_network_mode",
+    "sync_get",
+    "sync_post_json",
+    "sync_request",
+    "url_with_params",
+]

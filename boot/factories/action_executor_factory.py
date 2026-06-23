@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from boot.registrations.register_action_executor import ActionExecutor
+from boot.runtime_service_contracts import ActionExecutor
 from runtime.constructor_tokens import runtime_construction_token
 
 

@@ -4,7 +4,7 @@ CANON_REVENUE_OS_ACTION_SPECS = True
 
 
 def build_revenue_os_action_specs():
-    from execution.action_catalog import ActionSpec
+    from execution.action_contracts import ActionSpec
 
     return {
         'catalog.revenue.apply_pricing_advisory': ActionSpec(

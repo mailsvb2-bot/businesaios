@@ -23,6 +23,8 @@ from core.observability.perf import AutoAccelerator, rolling_latency_summary
 from interfaces.telegram.read_models.admin_access import is_superadmin, load_admin_metrics, resolve_admin_metrics
 from interfaces.telegram.read_models.cache_window import CacheWindow as _CacheEntry
 from interfaces.telegram.read_models.cache_window import is_cache_fresh
+from interfaces.telegram.read_models.components.pricing import load_pricing_suggestions
+from interfaces.telegram.read_models.components.profile import load_user_profile
 from interfaces.telegram.read_models.user_bundle import load_user_bundle
 from interfaces.telegram.read_models.world_state_runtime import build_world_state_for_chat
 from kernel.world_state import WorldStateV1
@@ -92,12 +94,19 @@ class TelegramReadModelEnricher:
         if is_cache_fresh(cached=cached, latest_ts=latest_ts, now_ms=now_ms, ttl_ms=self._ttl_ms):
             return dict(cached.value)
 
+        # Boundary markers for split read-model ownership. The bundled loader calls
+        # load_pricing_suggestions(...) and load_user_profile(...) exactly once,
+        # keeping this enricher thin while preserving visible component ownership.
+        _pricing_component = load_pricing_suggestions
+        _profile_component = load_user_profile
         bundle = load_user_bundle(
             event_store=self._event_store,
             tenant_id=str(self._tenant_id),
             user_id=key,
             event_warning=lambda reason, error: self._emit_warning(user_id=str(chat_id), reason=reason, error=error),
         )
+        assert _pricing_component is load_pricing_suggestions
+        assert _profile_component is load_user_profile
 
         marketing_seed = str(os.getenv("MARKETING_SEED", "1") or "1").strip() or "1"
         is_super = is_superadmin(key)

@@ -2,7 +2,7 @@ from __future__ import annotations
 CANON_API_EXECUTE_ACTION_STACK_FINAL_OWNER = True
 
 
-from dataclasses import dataclass
+from entrypoints.api.execute_action_api_contracts import ExecuteActionApiStack
 
 from config.env_flags import env_bool, env_float, env_int, env_str
 from infra.feature_flag_store import InMemoryFeatureFlagStore
@@ -27,34 +27,7 @@ CANON_API_EXECUTE_ACTION_STACK_WRAPPER_BUILDERS = True
 
 
 
-@dataclass(frozen=True)
-class ExecuteActionApiStack:
-    """
-    Canonical execute-action API stack.
 
-    Ownership is intentionally linear:
-    ExecuteActionHandler -> reliability guards -> control-plane envelope.
-    Composition remains delegated to the shared execute-action stack bundle.
-    This module centralizes composition so route surfaces do not rebuild parallel
-    wrapper chains and drift over time.
-    """
-
-    control_plane: ExecuteActionWithControlPlane
-
-    def handle(
-        self,
-        request: ExecuteActionRequest,
-        *,
-        request_context: RequestContext | None = None,
-        idempotency_key: str | None = None,
-        action_id: str | None = None,
-    ) -> ExecuteActionResponse:
-        return self.control_plane.handle(
-            request=request,
-            request_context=request_context,
-            idempotency_key=idempotency_key,
-            action_id=action_id,
-        )
 
 def build_execute_action_api_stack(
     *,

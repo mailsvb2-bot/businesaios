@@ -1,13 +1,17 @@
-from __future__ import annotations
-
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 from sqlite3 import Connection
 from collections.abc import Iterator
 
-from core.safety.controls.circuit_breaker.models import CircuitBreakerState
 from runtime.platform.safety_sqlite_migrations import SafetySqliteMigrator, SchemaMigrationPlan
+
+class CircuitBreakerState:
+    def __init__(self, *, key: str, consecutive_failures: int = 0, opened: bool = False) -> None:
+        self.key = str(key)
+        self.consecutive_failures = int(consecutive_failures)
+        self.opened = bool(opened)
+
 
 CANON_PLATFORM_SAFETY_CIRCUIT_BREAKER_STORE = True
 SCHEMA_VERSION = 2
@@ -85,6 +89,7 @@ class PlatformSqliteCircuitBreakerStore:
         breaker_key = str(state.key).strip()
         if not breaker_key:
             raise ValueError('state.key is required')
+        opened_value = 1 if bool(state.opened) else 0
         with self._connect() as conn:
             conn.execute(
                 '''
@@ -92,7 +97,7 @@ class PlatformSqliteCircuitBreakerStore:
                 VALUES (?, ?, ?, datetime('now'))
                 ON CONFLICT(breaker_key) DO UPDATE SET consecutive_failures = excluded.consecutive_failures, opened = excluded.opened, updated_at = excluded.updated_at
                 ''',
-                (breaker_key, int(state.consecutive_failures), 1 if state.opened else 0),
+                (breaker_key, int(state.consecutive_failures), opened_value),
             )
 
     def delete(self, key: str) -> None:

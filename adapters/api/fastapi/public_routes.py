@@ -2,6 +2,18 @@ from __future__ import annotations
 
 """Final owner: adapters.api.fastapi.public_routes."""
 
+
+
+
+SEALED_EXECUTION_PUBLIC_ROUTE_PATHS = (
+    '/economic/truth/click-billing-sealed-execution/{order_id}/{lead_id}',
+    '/economic/export/click-billing-sealed-execution/{order_id}/{lead_id}',
+    '/economic/audit/click-billing-sealed-execution/{order_id}/{lead_id}',
+    '/economic/truth/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}',
+    '/economic/export/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}',
+    '/economic/audit/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}',
+)
+
 CANON_FASTAPI_PUBLIC_ROUTES_FINAL_OWNER = True
 
 

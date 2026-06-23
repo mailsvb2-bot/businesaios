@@ -7,7 +7,7 @@ from core.policies.product_domains.retention_domain import RetentionDomainPolicy
 from core.policies.product_domains.sales_domain import SalesDomainPolicyV1
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction
-from core.policies.telegram.retention_integration import apply_retention_constraints_to_state
+from core.policies.telegram.retention_integration import apply_retention_constraints_to_state, merge_retention_plan
 from core.policies.telegram.router import handle
 from core.policies.telegram.unified_policy_context import extract_session_fields, extract_user_fields
 from core.retention.decision_adapter import RetentionDecisionAdapter
@@ -110,7 +110,7 @@ class UnifiedTelegramPolicyV3:
             perms=[str(p) for p in perms if str(p).strip()],
             is_superadmin=bool(is_superadmin),
             realtime_state=realtime_state,
-            pricing_suggestions={str(k): int(v) for k,v in pricing_suggestions.items() if str(k).strip()},
+            pricing_suggestions={str(k): int(v) for k, v in pricing_suggestions.items() if str(k).strip()},
             full_access=full,
             pay_status=pay_status,
             selected_tariff=selected,
@@ -122,7 +122,7 @@ class UnifiedTelegramPolicyV3:
         # Retention must actually affect UX/offers/prices.
         # Strictly additive + deterministic: compute optional retention plan once.
         plan = None
-        if self._retention is not None and (not is_admin) and getattr(state, 'telegram_update', None) is not None:
+        if self._retention is not None and (not is_admin) and getattr(state, "telegram_update", None) is not None:
             try:
                 plan = self._retention.compute_plan(state)
             except Exception:
@@ -134,26 +134,7 @@ class UnifiedTelegramPolicyV3:
                 state = apply_retention_constraints_to_state(state=state, plan=plan)
                 ctx = replace(ctx, state=state)
             except Exception:
-                swallow(__name__, 'core/policies/telegram/unified_policy.py')
+                swallow(__name__, "core/policies/telegram/unified_policy.py")
 
         base = handle(ctx, default_price_rub=self._default_price_rub)
-
-        # Retention steps were computed above (best-effort).
-        if plan is None:
-            return base
-        if not getattr(plan, 'steps', None):
-            return base
-
-        if isinstance(base, dict) and str(base.get("action")) == "execute_plan@v1":
-            steps = list(base.get("steps") or [])
-            steps.extend(plan.steps)
-            out = dict(base)
-            out["steps"] = steps
-            return out
-
-        # Wrap single action.
-        return {
-            "action": "execute_plan@v1",
-            "user_id": str(state.user_id),
-            "steps": [base, *plan.steps],
-        }
+        return merge_retention_plan(base=base, plan=plan, user_id=str(state.user_id))

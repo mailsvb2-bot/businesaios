@@ -7,6 +7,16 @@ from typing import Any
 CANON_CONFIG_PUBLIC_API = True
 CANON_CONFIG_PACKAGE_OWNER = True
 _DIRECT_EXPORTS = {
+    'BudgetLimits': ('config.catalog', 'BudgetLimits'),
+    'BusinessDefaults': ('config.catalog', 'BusinessDefaults'),
+    'ExperimentLimits': ('config.catalog', 'ExperimentLimits'),
+    'GravityWeights': ('config.catalog', 'GravityWeights'),
+    'RiskThresholds': ('config.catalog', 'RiskThresholds'),
+    'QUALITY_FLOOR': ('config.catalog', 'QUALITY_FLOOR'),
+    'REPUTATION_FLOOR': ('config.catalog', 'REPUTATION_FLOOR'),
+    'MAX_ROUTING_CANDIDATES': ('config.catalog', 'MAX_ROUTING_CANDIDATES'),
+    'MAX_RUNNER_UPS': ('config.catalog', 'MAX_RUNNER_UPS'),
+    'CONFIG_COMPAT_EXPORTS': ('config.catalog', 'CONFIG_COMPAT_EXPORTS'),
     'CANON_CONFIG_AUDIT': ('config.config_audit', 'CANON_CONFIG_AUDIT'), 'ConfigAuditEvent': ('config.config_audit', 'ConfigAuditEvent'), 'PersistentConfigAuditLog': ('config.config_audit', 'PersistentConfigAuditLog'),
     'CANON_CONFIG_VERSIONING': ('config.config_versioning', 'CANON_CONFIG_VERSIONING'), 'ConfigVersion': ('config.config_versioning', 'ConfigVersion'), 'ConfigVersioning': ('config.config_versioning', 'ConfigVersioning'),
     'CANON_ENVIRONMENT_MATRIX': ('config.environment_matrix', 'CANON_ENVIRONMENT_MATRIX'), 'EnvironmentMatrix': ('config.environment_matrix', 'EnvironmentMatrix'), 'EnvironmentMatrixRow': ('config.environment_matrix', 'EnvironmentMatrixRow'), 'normalize_environment_name': ('config.environment_matrix', 'normalize_environment_name'),

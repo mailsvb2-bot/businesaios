@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping as AbcMapping
 from typing import Any
 
-from application.decision_policy.policy_stage import propose_action
 from application.decision_runtime.gate import gate_action_or_raise
+from application.decision_policy.policy_stage import propose_action
 from application.decision_state.state_enrichment import (
     apply_causal_constraints,
     apply_price_constraints,
@@ -13,6 +13,8 @@ from application.decision_state.world_model_metadata import (
     extract_world_model_metadata,
     summarize_pricing_world_state,
 )
+from core.observability.perf import Span, emit_sla_violation
+from core.observability.throttled_logger import exception_throttled
 
 
 def extract_correlation_key(state: Any) -> str | None:
@@ -162,3 +164,24 @@ def validate_and_gate_action(*, schemas: Any, state: Any, out: Any, user_id: str
         )
         raise RuntimeError("DECISION_BLOCKED:action_safety_gate_error") from exc
     return int(action_schema_version)
+
+
+def _emit_router_sla(*, core: Any, user_id: str, correlation_key: Any, span_router: Any, logger: Any) -> None:
+    import time
+
+    try:
+        emit_sla_violation(
+            event_log=core._events,
+            stage="router",
+            duration_ms=int((time.perf_counter_ns() - span_router._t0_ns) / 1_000_000),
+            user_id=user_id,
+            decision_id=None,
+            correlation_id=None,
+            correlation_key=str(correlation_key) if correlation_key else None,
+        )
+    except Exception:
+        exception_throttled(
+            logger,
+            key=f'{user_id}|sla_violation',
+            msg=f'decision_core: emit_sla_violation failed user={user_id}',
+        )

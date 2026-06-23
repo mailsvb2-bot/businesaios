@@ -11,6 +11,7 @@ fails or when callers try to persist outcome/evidence through ad-hoc paths.
 """
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 from collections.abc import Mapping
 
@@ -20,8 +21,10 @@ from runtime.execution.outcome_persistence_lock import persist_verified_outcome
 CANON_RUNTIME_EXECUTION_CONTRACT_LOCK_OWNER = True
 CANON_RUNTIME_EXECUTION_CONTRACT_NO_DECISION_LOGIC = True
 
+
 class ExecutionContractLockError(RuntimeError):
     pass
+
 
 @dataclass(frozen=True, slots=True)
 class VerificationStageResult:
@@ -30,10 +33,12 @@ class VerificationStageResult:
     evidence_bundle: dict[str, Any]
     next_step_context: dict[str, Any]
 
+
 def _safe_dict(value: object) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
     return {}
+
 
 def _checkpoint(*, executor: Any, env: Any, stage: str, payload: Mapping[str, Any] | None = None) -> None:
     reliability = getattr(executor, "_reliability", None)
@@ -49,6 +54,16 @@ def _checkpoint(*, executor: Any, env: Any, stage: str, payload: Mapping[str, An
     except Exception:
         return
 
+
+def _decision_observed_at(env: Any) -> str:
+    decision = getattr(env, "decision", None)
+    raw = getattr(decision, "issued_at_ms", None)
+    try:
+        return datetime.fromtimestamp(int(raw) / 1000, tz=UTC).isoformat()
+    except Exception:
+        return "1970-01-01T00:00:00+00:00"
+
+
 def _extract_feedback_payload(output: Mapping[str, Any]) -> dict[str, Any]:
     for key in ("feedback", "verification_feedback", "effect_feedback"):
         value = output.get(key)
@@ -56,12 +71,14 @@ def _extract_feedback_payload(output: Mapping[str, Any]) -> dict[str, Any]:
             return dict(value)
     return {}
 
+
 def _extract_router_evidence(output: Mapping[str, Any]) -> dict[str, Any]:
     for key in ("router_evidence", "verification", "evidence"):
         value = output.get(key)
         if isinstance(value, Mapping):
             return dict(value)
     return {}
+
 
 def _default_router_evidence(*, env: Any, output: Mapping[str, Any]) -> dict[str, Any]:
     decision = getattr(env, 'decision', None)
@@ -74,7 +91,9 @@ def _default_router_evidence(*, env: Any, output: Mapping[str, Any]) -> dict[str
         'source': 'runtime_execution_contract',
         'external_refs': [decision_id] if decision_id else [],
         'confidence': 1.0,
+        'observed_at': _decision_observed_at(env),
     }
+
 
 def _build_action_payload(*, env: Any) -> dict[str, Any]:
     decision = getattr(env, "decision", None)
@@ -86,8 +105,10 @@ def _build_action_payload(*, env: Any) -> dict[str, Any]:
         "decision_id": decision_id,
         "correlation_id": str(getattr(decision, "correlation_id", "") or ""),
         "external_confirmation_mode": str(payload.get("external_confirmation_mode") or payload.get("confirmation_mode") or "auto"),
+        "requested_at": _decision_observed_at(env),
         **payload,
     }
+
 
 def _build_execution_receipt(*, env: Any, output: Mapping[str, Any]) -> dict[str, Any]:
     decision = getattr(env, "decision", None)
@@ -101,8 +122,10 @@ def _build_execution_receipt(*, env: Any, output: Mapping[str, Any]) -> dict[str
         "correlation_id": str(getattr(decision, "correlation_id", "") or ""),
         "action": str(getattr(decision, "action", "") or ""),
         "action_id": str(output.get("action_id") or payload.get("action_id") or getattr(decision, "decision_id", "") or ""),
+        "observed_at": _decision_observed_at(env),
         "payload": dict(output),
     }
+
 
 def verify_execution_contract(*, executor: Any, env: Any, output: Mapping[str, Any] | None) -> VerificationStageResult:
     normalized_output = _safe_dict(output)
@@ -137,15 +160,14 @@ def verify_execution_contract(*, executor: Any, env: Any, output: Mapping[str, A
         },
     )
     if not verified:
-        raise ExecutionContractLockError(
-            str(verification.get("code") or verification.get("status") or "verification_failed")
-        )
+        raise ExecutionContractLockError(str(verification.get("code") or verification.get("status") or "verification_failed"))
     return VerificationStageResult(
         verified=verified,
         verification=verification,
         evidence_bundle=evidence_bundle,
         next_step_context=next_step_context,
     )
+
 
 def commit_verified_execution(*, executor: Any, env: Any, output: Mapping[str, Any] | None, verification_result: VerificationStageResult) -> dict[str, Any]:
     normalized_output = _safe_dict(output)
@@ -161,6 +183,7 @@ def commit_verified_execution(*, executor: Any, env: Any, output: Mapping[str, A
         "next_step_context": dict(verification_result.next_step_context),
         "persistence": dict(persistence),
     }
+
 
 __all__ = [
     "CANON_RUNTIME_EXECUTION_CONTRACT_LOCK_OWNER",

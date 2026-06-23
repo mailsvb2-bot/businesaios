@@ -15,6 +15,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.strategic_horizon.engine import CANONICAL_DECISION_OPTIMIZE_METHOD
+
 CANON_ARCHITECTURE_BYPASS_SCANNER = True
 
 EXCLUDED_DIRS = {
@@ -119,7 +121,7 @@ RAW_SIDE_EFFECT_CALLS = {
 DECISION_BYPASS_CALLS = {
     "decide",
     "issue",
-    "optimize",
+    CANONICAL_DECISION_OPTIMIZE_METHOD,
 }
 
 APPROVED_DECISION_OWNER_PREFIXES = (

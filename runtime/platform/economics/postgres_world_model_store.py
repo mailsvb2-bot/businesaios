@@ -5,7 +5,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from runtime.platform.economics.world_model_store import WorldModelStorePort
+from runtime.platform.economics.world_model_store_contracts import WorldModelStorePort
 from storage.postgres_session import PostgresSessionFactory
 
 logger = logging.getLogger(__name__)

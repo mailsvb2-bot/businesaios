@@ -6,6 +6,7 @@ from threading import RLock
 from typing import Any, Mapping
 import hashlib
 import json
+import re
 
 from governance.persistence_codec import to_jsonable
 from storage.migration_registry import MigrationRegistry, default_storage_migration_registry
@@ -15,10 +16,26 @@ from storage.tenant_partitioning import normalize_storage_tenant_id
 
 
 CANON_STORAGE_SCHEMA_VERSION_STORE = True
+CANON_STORAGE_SCHEMA_VERSION_EXPLICIT_LEGACY_FACTORY = True
+
+
+_VERSION_NUMBER_RE = re.compile(r"\d+")
 
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def _coerce_version(value: object) -> int:
+    if isinstance(value, int):
+        return value
+    text = str(value or "0").strip()
+    if text.isdigit():
+        return int(text)
+    match = _VERSION_NUMBER_RE.search(text)
+    if match:
+        return int(match.group(0))
+    return 0
 
 
 @dataclass(frozen=True)
@@ -32,6 +49,31 @@ class SchemaVersionRecord:
     applied_by: str = "system"
     details: Mapping[str, Any] = field(default_factory=dict)
 
+    @classmethod
+    def from_legacy(
+        cls,
+        *,
+        component: str,
+        version: int | str,
+        checksum: str | None = None,
+        scope: str = "storage",
+        tenant_id: str = "global",
+        fingerprint: str = "",
+        applied_at: datetime | None = None,
+        applied_by: str = "system",
+        details: Mapping[str, Any] | None = None,
+    ) -> "SchemaVersionRecord":
+        return cls(
+            scope=str(scope or "storage").strip() or "storage",
+            component=str(component).strip(),
+            version=_coerce_version(version),
+            tenant_id=tenant_id,
+            fingerprint=str(fingerprint or checksum or "").strip(),
+            applied_at=applied_at or utc_now(),
+            applied_by=applied_by,
+            details=dict(details or {}),
+        )
+
     def validate(self) -> None:
         if not str(self.scope or "").strip():
             raise ValueError("scope is required")
@@ -41,6 +83,10 @@ class SchemaVersionRecord:
             raise ValueError("version must be >= 0")
         if self.applied_at.tzinfo is None:
             raise ValueError("applied_at must be timezone-aware")
+
+    @property
+    def checksum(self) -> str:
+        return self.fingerprint
 
     def normalized(self) -> "SchemaVersionRecord":
         serialized_details = to_jsonable(dict(self.details))
@@ -99,13 +145,22 @@ class InMemorySchemaVersionStore:
             self._items[(normalized.scope, normalized.tenant_id, normalized.component)] = normalized
         return normalized
 
-    def get(self, *, scope: str, component: str, tenant_id: str = "global") -> SchemaVersionRecord | None:
+    def set(self, record: SchemaVersionRecord) -> SchemaVersionRecord:
+        return self.upsert(record)
+
+    def get(self, component: str | None = None, *, scope: str = "storage", tenant_id: str = "global") -> SchemaVersionRecord | None:
+        if component is None:
+            raise TypeError("component is required")
         key = (str(scope).strip(), normalize_storage_tenant_id(tenant_id), str(component).strip())
         with self._lock:
             return self._items.get(key)
 
+    def list_all(self) -> tuple[SchemaVersionRecord, ...]:
+        with self._lock:
+            return tuple(sorted(self._items.values(), key=lambda item: (item.scope, item.tenant_id, item.component)))
+
     def current_version(self, *, scope: str, component: str, tenant_id: str = "global") -> int:
-        record = self.get(scope=scope, component=component, tenant_id=tenant_id)
+        record = self.get(component=component, scope=scope, tenant_id=tenant_id)
         return 0 if record is None else int(record.version)
 
 
@@ -155,7 +210,12 @@ class SqliteSchemaVersionStore(_PersistentSchemaVersionStore):
             )
         return normalized
 
-    def get(self, *, scope: str, component: str, tenant_id: str = "global") -> SchemaVersionRecord | None:
+    def set(self, record: SchemaVersionRecord) -> SchemaVersionRecord:
+        return self.upsert(record)
+
+    def get(self, component: str | None = None, *, scope: str = "storage", tenant_id: str = "global") -> SchemaVersionRecord | None:
+        if component is None:
+            raise TypeError("component is required")
         with self._session_factory.open() as session:
             row = session.fetchone(
                 "SELECT * FROM storage_schema_versions WHERE scope = ? AND tenant_id = ? AND component = ?",
@@ -163,8 +223,13 @@ class SqliteSchemaVersionStore(_PersistentSchemaVersionStore):
             )
         return None if row is None else SchemaVersionRecord.from_row(dict(row))
 
+    def list_all(self) -> tuple[SchemaVersionRecord, ...]:
+        with self._session_factory.open() as session:
+            rows = session.fetchall("SELECT * FROM storage_schema_versions ORDER BY scope, tenant_id, component", ())
+        return tuple(SchemaVersionRecord.from_row(dict(row)) for row in rows)
+
     def current_version(self, *, scope: str, component: str, tenant_id: str = "global") -> int:
-        record = self.get(scope=scope, component=component, tenant_id=tenant_id)
+        record = self.get(component=component, scope=scope, tenant_id=tenant_id)
         return 0 if record is None else int(record.version)
 
 
@@ -205,7 +270,12 @@ class PostgresSchemaVersionStore(_PersistentSchemaVersionStore):
             )
         return normalized
 
-    def get(self, *, scope: str, component: str, tenant_id: str = "global") -> SchemaVersionRecord | None:
+    def set(self, record: SchemaVersionRecord) -> SchemaVersionRecord:
+        return self.upsert(record)
+
+    def get(self, component: str | None = None, *, scope: str = "storage", tenant_id: str = "global") -> SchemaVersionRecord | None:
+        if component is None:
+            raise TypeError("component is required")
         with self._session_factory.open() as session:
             row = session.fetchone(
                 "SELECT * FROM storage_schema_versions WHERE scope = %s AND tenant_id = %s AND component = %s",
@@ -213,16 +283,21 @@ class PostgresSchemaVersionStore(_PersistentSchemaVersionStore):
             )
         return None if row is None else SchemaVersionRecord.from_row(row)
 
+    def list_all(self) -> tuple[SchemaVersionRecord, ...]:
+        with self._session_factory.open() as session:
+            rows = session.fetchall("SELECT * FROM storage_schema_versions ORDER BY scope, tenant_id, component", ())
+        return tuple(SchemaVersionRecord.from_row(row) for row in rows)
+
     def current_version(self, *, scope: str, component: str, tenant_id: str = "global") -> int:
-        record = self.get(scope=scope, component=component, tenant_id=tenant_id)
+        record = self.get(component=component, scope=scope, tenant_id=tenant_id)
         return 0 if record is None else int(record.version)
 
 
 __all__ = [
     "CANON_STORAGE_SCHEMA_VERSION_STORE",
-    "InMemorySchemaVersionStore",
-    "PostgresSchemaVersionStore",
+    "CANON_STORAGE_SCHEMA_VERSION_EXPLICIT_LEGACY_FACTORY",
     "SchemaVersionRecord",
+    "InMemorySchemaVersionStore",
     "SqliteSchemaVersionStore",
-    "utc_now",
+    "PostgresSchemaVersionStore",
 ]

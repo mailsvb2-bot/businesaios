@@ -8,13 +8,15 @@ Deterministic orchestration layer:
 - retry / dead-letter policy is delegated to reliability.dead_letter_policy
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
-from collections.abc import Iterable
 
 from reliability.dead_letter_policy import DeadLetterPolicy
 from reliability.outbox_store import OutboxMessage
+
+MAX_RETRIES = DeadLetterPolicy().max_delivery_attempts
 
 
 class OutboxLike(Protocol):
@@ -88,7 +90,7 @@ def _policy_message(*, item: dict[str, Any], now_ms: int) -> OutboxMessage:
 def process_outbox(*, now: datetime, outbox: OutboxLike, executor: ExecutorLike, archive, limit: int = 100) -> RetryStats:
     processed = retried = dead = 0
     now_ms = int(now.timestamp() * 1000)
-    dead_letter_policy = DeadLetterPolicy()
+    dead_letter_policy = DeadLetterPolicy(max_delivery_attempts=MAX_RETRIES)
 
     for item in outbox.list_pending(limit=int(limit)):
         item_id = _item_id(item)

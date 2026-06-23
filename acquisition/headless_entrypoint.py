@@ -3,13 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from acquisition import (
-    AcquisitionFeasibilityRequest,
-    AcquisitionFeasibilityResult,
-    AcquisitionPublicAPI,
-    create_acquisition_public_api,
-    request_from_payload,
-)
+from .feasibility_solver import AcquisitionFeasibilityRequest, AcquisitionFeasibilityResult
+from .public_api_owner import AcquisitionPublicAPI, create_acquisition_public_api
+from .request_adapter import request_from_payload
 
 CANON_ACQUISITION_HEADLESS_ENTRYPOINT = True
 

@@ -32,12 +32,12 @@ def test_env_example_covers_server_and_secret_contract() -> None:
     text = (ROOT / '.env.example').read_text(encoding='utf-8')
     for key in (
         'APP_ENV=prod',
-        'METRO_DB_ENGINE=postgres',
+        'STORAGE_DB_ENGINE=postgres',
         'DATABASE_URL=',
         'POSTGRES_DSN=',
         'TELEGRAM_BOT_TOKEN=',
         'CONTROL_PLANE_API_KEY=',
-        'BUSINESAIOS_DATA_DIR=',
+        'BAIOS_DATA_DIR=',
     ):
         assert key in text
 

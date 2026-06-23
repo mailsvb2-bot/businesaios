@@ -9,6 +9,8 @@ surface fragmentation.
 """
 
 from importlib import import_module
+import sys
+from types import ModuleType
 from typing import Any, Final
 
 from boot.factories.action_executor_factory import build_action_executor
@@ -45,9 +47,11 @@ _FACTORY_EXPORT_NAMES = [
     'FACTORY_FUNCTIONS',
     'FACTORY_SERVICE_NAMES',
     'LOCAL_FACTORY_FUNCTION_NAMES',
+    'build_runtime_decision_factory_bundle',
     'get_factory_for_service',
     *FACTORY_COMPAT_EXPORTS.keys(),
 ]
+_PACKAGE_ALIAS_NAMES: Final[tuple[str, ...]] = ('catalog',)
 
 
 def _owner() -> Any:
@@ -66,6 +70,24 @@ def __dir__() -> list[str]:
     return sorted(set(globals()) | set(__all__) | set(dir(_owner())))
 
 
+def _install_package_alias_modules() -> None:
+    owner = sys.modules[__name__]
+    for alias_name in _PACKAGE_ALIAS_NAMES:
+        qualified_name = f'{__name__}.{alias_name}'
+        if qualified_name in sys.modules:
+            continue
+        alias_module = ModuleType(qualified_name)
+
+        def _alias_getattr(name: str, *, _owner=owner) -> Any:
+            return getattr(_owner, name)
+
+        def _alias_dir(*, _owner=owner) -> list[str]:
+            return sorted(set(dir(_owner)))
+
+        alias_module.__getattr__ = _alias_getattr  # type: ignore[attr-defined]
+        alias_module.__dir__ = _alias_dir  # type: ignore[attr-defined]
+        alias_module.__all__ = [name for name in dir(owner) if not name.startswith('_')]
+        sys.modules[qualified_name] = alias_module
 
 
 __all__ = [
@@ -84,6 +106,7 @@ __all__ = [
     'build_decision_core',
     'build_decision_gateway',
     'build_runtime_decision_execution_service',
+    'build_runtime_decision_factory_bundle',
     'build_decision_input_service',
     'build_diffusion_watch_service',
     'build_flow_watch_service',
@@ -98,3 +121,6 @@ __all__ = [
     'build_structure_watch_service',
     'build_world_state_integration_service',
 ]
+
+
+_install_package_alias_modules()

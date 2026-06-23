@@ -5,6 +5,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Final
 
+from core.strategic_horizon.engine import CANONICAL_DECISION_OPTIMIZE_METHOD
+
 
 class FindingSeverity(str, Enum):
     CRITICAL = "critical"
@@ -17,7 +19,7 @@ CANONICAL_DECISION_CORE_MODULE: Final[str] = "core.ai.decision_core"
 CANONICAL_DECISION_CORE_PUBLIC_MODULE: Final[str] = "core.decision_core"
 COMPAT_DECISION_ENGINE_MODULE: Final[str] = "core.application.decision_service.DecisionService"
 CANONICAL_DECISION_PATH_SERVICES: Final[tuple[str, ...]] = ("decision_core", "governance_chain", "action_executor")
-CANONICAL_STATE_FILES: Final[tuple[str, ...]] = ("application/world_state/world_state_assembler.py", "runtime/world_state/public_api.py", "bootstrap/world_model_contract.py")
+CANONICAL_STATE_FILES: Final[tuple[str, ...]] = ("application/world_state/world_state_assembler.py", "runtime/world_state/__init__.py", "bootstrap/world_model_contract.py")
 SCAN_INCLUDE_PREFIXES: Final[tuple[str, ...]] = ("core/", "runtime/", "governance/", "canon/")
 EXCLUDED_PREFIXES: Final[tuple[str, ...]] = (".git/", ".github/", ".venv/", "venv/", "__pycache__/", "artifacts/", ".runtime/", "assets/", "app/web/", "canon/collapse/")
 FORBIDDEN_DECISION_CLASS_NAMES: Final[tuple[str, ...]] = ("StrategyBrain", "GrowthBrain", "AutonomousBrain", "SecondDecisionCore", "DecisionEngineFacade", "PolicyBrain", "ExecutionBrain", "ShadowDecisionCore")
@@ -39,7 +41,7 @@ GOD_MODULE_IMPORTS_MAJOR: Final[int] = 35
 GOD_MODULE_IMPORTS_CRITICAL: Final[int] = 60
 GOD_MODULE_ALLOWLIST_PREFIXES: Final[tuple[str, ...]] = ("contracts/", "tests/")
 HIDDEN_LOGIC_ACTION_KEYS: Final[tuple[str, ...]] = ("selected_action", "final_action", "action_type", "best_action", "issued_action")
-HIDDEN_LOGIC_RETURN_HINTS: Final[tuple[str, ...]] = ("decide", "select", "choose", "rank", "optimize", "issue")
+HIDDEN_LOGIC_RETURN_HINTS: Final[tuple[str, ...]] = ("decide", "select", "choose", "rank", CANONICAL_DECISION_OPTIMIZE_METHOD, "issue")
 
 
 @dataclass(frozen=True)

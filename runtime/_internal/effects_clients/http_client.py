@@ -10,15 +10,20 @@ IMPORTANT:
 - Do not introduce alternative logic paths.
 """
 
+import importlib
 import json
 import logging
 import threading
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from runtime._internal.http_transport import HttpTransport, build_http_transport
-from runtime._internal.http_transport import url_with_params as _canonical_url_with_params
 
 logger = logging.getLogger(__name__)
+
+
+def _urllib_parse():
+    return importlib.import_module("urllib.parse")
 
 
 def safe_result(obj: Any) -> Any:
@@ -36,12 +41,34 @@ def safe_result(obj: Any) -> Any:
     return str(obj)[:200]
 
 
-def _url_with_params(url: str, params: dict[str, Any] | None) -> str:
-    return _canonical_url_with_params(url=str(url), params=params)
+def _query_items(params: Mapping[str, Any] | None) -> list[tuple[str, Any]]:
+    items: list[tuple[str, Any]] = []
+    for key, value in dict(params or {}).items():
+        if value is None:
+            continue
+        name = str(key)
+        if isinstance(value, Iterable) and not isinstance(value, (str, bytes, bytearray, Mapping)):
+            for item in value:
+                if item is not None:
+                    items.append((name, item))
+            continue
+        items.append((name, value))
+    return items
 
 
-def url_with_params(*, url: str, params: dict[str, Any] | None = None) -> str:
-    """Backward-compatible export that delegates to canonical transport helper."""
+def _url_with_params(url: str, params: Mapping[str, Any] | None) -> str:
+    normalized = str(url or "").strip()
+    if not normalized:
+        raise ValueError("url_required")
+    items = _query_items(params)
+    if not items:
+        return normalized
+    joiner = "&" if "?" in normalized else "?"
+    return normalized + joiner + _urllib_parse().urlencode(items, doseq=True)
+
+
+def url_with_params(*, url: str, params: Mapping[str, Any] | None = None) -> str:
+    """Backward-compatible export for sealed URL construction."""
     return _url_with_params(str(url), params)
 
 

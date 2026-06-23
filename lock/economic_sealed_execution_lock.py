@@ -28,6 +28,10 @@ FORBIDDEN_RUNTIME_INTERNAL_IMPORTERS = (
     'entrypoints/api/economic_routes/business.py',
     'entrypoints/api/economic_routes/click.py',
     'entrypoints/api/economic_routes/spend.py',
+    'entrypoints/api/economic_routes/click_ops_billing_post.py',
+    'entrypoints/api/economic_routes/click_ops_core.py',
+    'entrypoints/api/economic_routes/spend_ops_core.py',
+    'entrypoints/api/economic_routes/spend_ops_ingress.py',
     'adapters/api/fastapi/public_routes.py',
     'adapters/api/fastapi/public_route_groups/core_and_economic.py',
     'click_economics/public_api.py',
@@ -72,6 +76,10 @@ ALLOWED_SEALED_EXECUTION_HELPER_OWNERS = (
     'tests/arch/test_economic_sealed_execution_repo_sweep_wave241.py',
     'tests/arch/test_economic_sealed_execution_ultra_repo_sweep_wave242.py',
     'tests/unit/client_outcome/test_click_and_spend_truth_fragments.py',
+    'entrypoints/api/economic_routes/click_ops_billing_post.py',
+    'entrypoints/api/economic_routes/click_ops_core.py',
+    'entrypoints/api/economic_routes/spend_ops_core.py',
+    'entrypoints/api/economic_routes/spend_ops_ingress.py',
 )
 ALLOWED_SEALED_ROUTE_MARKER_OWNERS = (
     'lock/economic_sealed_execution_lock.py',
@@ -81,6 +89,7 @@ ALLOWED_SEALED_ROUTE_MARKER_OWNERS = (
     'tests/arch/test_economic_sealed_execution_owner_lock_wave239.py',
     'tests/arch/test_economic_sealed_execution_hardening_wave240.py',
     'tests/arch/test_economic_sealed_execution_ultra_repo_sweep_wave242.py',
+    'entrypoints/api/public_surface_security_specs.py',
 )
 FORBIDDEN_GATEWAY_IMPORT_PREFIXES = (
     'api/',

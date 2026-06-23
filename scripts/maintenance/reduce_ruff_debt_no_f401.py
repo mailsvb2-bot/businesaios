@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts.ci.subprocess_io import run_command as ci_run_command
+
 ARTIFACTS = ROOT / "artifacts" / "ci" / "ruff_debt_reduction_no_f401"
 
 # This runner intentionally matches the canonical full debt command:
@@ -22,8 +27,16 @@ AUTO_FIX_IGNORE = "F401"
 TARGETS = ["."]
 
 
-def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(argv, cwd=str(ROOT), text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+@dataclass(frozen=True)
+class RunnerResult:
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+def _run(argv: list[str]) -> RunnerResult:
+    result = ci_run_command(argv, cwd=ROOT, echo_output=False)
+    return RunnerResult(returncode=int(result.returncode), stdout=result.stdout, stderr=result.stderr)
 
 
 def _write(path: Path, text: str) -> None:

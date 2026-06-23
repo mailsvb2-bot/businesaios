@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 """Shared runtime-only helpers for sealed effects state.
-This module exists to keep ``runtime._internal._effects_impl`` focused on
-composition instead of accumulating every helper and mutable field concern.
+This module keeps the private effects implementation focused on composition
+instead of accumulating every helper and mutable field concern.
 """
 import threading
 import time

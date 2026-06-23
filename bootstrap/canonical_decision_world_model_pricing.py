@@ -8,7 +8,7 @@ from typing import Any
 
 from runtime.boot import MarketContext, WorldModelInput
 
-from runtime.platform.economics.world_model_store import WorldModelStorePort
+from runtime.platform.economics.world_model_store_contracts import WorldModelStorePort
 from bootstrap.canonical_decision_world_model_resolvers import (
     resolve_float,
     resolve_product_id,
@@ -62,7 +62,7 @@ def enrich_pricing(*, state: Any, product: dict[str, Any], economy: dict[str, An
             out["pricing_world_model_skip_reason"] = "missing_price"
         return dict(economy), out
 
-    from bootstrap.world_model_builder import load_pricing_world_model_with_metadata_for
+    from bootstrap.pricing_world_model_loader import load_pricing_world_model_with_metadata_for
 
     pricing_model, pricing_meta = load_pricing_world_model_with_metadata_for(
         tenant_id=tenant_id,

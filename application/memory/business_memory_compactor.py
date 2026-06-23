@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING
+from typing import Any
 from collections.abc import Iterable
 
 from application.memory.business_memory_policy import BusinessMemoryPolicy
@@ -13,9 +13,6 @@ from application.memory.business_operating_memory_types import (
     PatternEvidence,
     SignalMemoryRecord,
 )
-
-if TYPE_CHECKING:
-    from application.memory.business_operating_memory import BusinessOperatingMemory
 
 
 CANON_BUSINESS_MEMORY_COMPACTOR = True
@@ -63,14 +60,14 @@ class BusinessMemoryCompactor:
 
     policy: BusinessMemoryPolicy = field(default_factory=BusinessMemoryPolicy)
 
-    def compact(self, memory: BusinessOperatingMemory) -> BusinessOperatingMemory:
+    def compact(self, memory: Any) -> Any:
         compacted, _ = self.compact_with_report(memory)
         return compacted
 
     def compact_with_report(
         self,
-        memory: BusinessOperatingMemory,
-    ) -> tuple[BusinessOperatingMemory, BusinessMemoryCompactionReport]:
+        memory: Any,
+    ) -> tuple[Any, BusinessMemoryCompactionReport]:
         recent_runs = self._compact_recent_runs(memory.recent_runs)
         signal_memory = self._compact_signals(memory.signal_memory)
         recurring_failures = self._compact_patterns(
@@ -135,17 +132,15 @@ class BusinessMemoryCompactor:
     def _rebuild_memory(
         self,
         *,
-        memory: BusinessOperatingMemory,
+        memory: Any,
         recent_runs: list[BusinessMemoryRunRecord],
         signal_memory: list[SignalMemoryRecord],
         recurring_failures: list[PatternEvidence],
         recurring_wins: list[PatternEvidence],
         anti_patterns: list[AntiPatternRecord],
         trends: MemoryTrendSnapshot | None,
-    ) -> BusinessOperatingMemory:
-        from application.memory.business_operating_memory import BusinessOperatingMemory
-
-        return BusinessOperatingMemory(
+    ) -> Any:
+        return type(memory)(
             schema_version=int(getattr(memory, "schema_version", 2)),
             tenant_id=self.policy.sanitize_text(memory.tenant_id, max_length=128),
             business_id=self.policy.sanitize_text(memory.business_id, max_length=128),
@@ -405,7 +400,7 @@ class BusinessMemoryCompactor:
             return "up" if delta < 0.0 else "down"
         return "up" if delta > 0.0 else "down"
 
-    def _soft_trim(self, memory: BusinessOperatingMemory) -> BusinessOperatingMemory:
+    def _soft_trim(self, memory: Any) -> Any:
         return self._rebuild_memory(
             memory=memory,
             recent_runs=list(memory.recent_runs[: max(10, int(self.policy.max_recent_runs // 2))]),
@@ -416,10 +411,8 @@ class BusinessMemoryCompactor:
             trends=memory.trends,
         )
 
-    def _hard_trim(self, memory: BusinessOperatingMemory) -> BusinessOperatingMemory:
-        from application.memory.business_operating_memory import BusinessOperatingMemory
-
-        return BusinessOperatingMemory(
+    def _hard_trim(self, memory: Any) -> Any:
+        return type(memory)(
             schema_version=int(getattr(memory, "schema_version", 2)),
             tenant_id=self.policy.sanitize_text(memory.tenant_id, max_length=128),
             business_id=self.policy.sanitize_text(memory.business_id, max_length=128),
@@ -441,7 +434,7 @@ class BusinessMemoryCompactor:
             average_goal_score=self.policy.clamp_goal_score(memory.average_goal_score),
         )
 
-    def _estimate_payload_bytes(self, memory: BusinessOperatingMemory) -> int:
+    def _estimate_payload_bytes(self, memory: Any) -> int:
         return _serialize_size_bytes(asdict(memory))
 
 

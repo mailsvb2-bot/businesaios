@@ -9,6 +9,7 @@ from interfaces.messaging._shared.outbound_sender import send_outbound
 from interfaces.messaging._shared.runner_base import RunnerBase
 from interfaces.messaging._shared.runner_components import build_provider_config
 from interfaces.messaging._shared.send_guard import guarded_send
+from runtime.execution.messaging_execution_path_lock import CANON_MESSAGING_EXECUTION_ENTRYPOINT
 
 
 class ProviderRunner(RunnerBase):
@@ -33,9 +34,17 @@ class ProviderAdapter(AdapterBase):
         super().__init__(runner=runner_factory())
 
 
+def _entrypoint_from_message(msg: Any) -> str:
+    payload = getattr(msg, "payload", {}) if hasattr(msg, "payload") else {}
+    if isinstance(payload, dict):
+        marker = str(payload.get("execution_entrypoint", "") or "").strip()
+        if marker:
+            return marker
+    return CANON_MESSAGING_EXECUTION_ENTRYPOINT
+
+
 def send_raw_for(*, cfg: Any, msg: Any) -> dict:
-    caller = getattr(msg, "payload", {}).get("execution_entrypoint", "") if hasattr(msg, "payload") else ""
-    return guarded_send(caller=caller, send_fn=send_outbound, cfg=cfg, msg=msg)
+    return guarded_send(caller=_entrypoint_from_message(msg), send_fn=send_outbound, cfg=cfg, msg=msg)
 
 
 def map_result_for(*, msg: Any, raw: dict) -> Any:

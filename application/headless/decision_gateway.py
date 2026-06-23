@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 from collections.abc import Callable
 
+from core.strategic_horizon.engine import CANONICAL_DECISION_OPTIMIZE_METHOD
 from runtime.decision_path_lock import (
     DecisionPathLockError,
     LockedDecisionPath,
@@ -40,7 +41,7 @@ class HeadlessDecisionIngress:
             except DecisionPathLockError as exc:
                 raise HeadlessDecisionGatewayContractError(str(exc)) from exc
             return locked.envelope
-        optimize = getattr(self.decision_core, 'optimize', None)
+        optimize = getattr(self.decision_core, CANONICAL_DECISION_OPTIMIZE_METHOD, None)
         if callable(optimize):
             try:
                 locked_state = lock_world_state(state=state)
@@ -68,7 +69,7 @@ HeadlessDecisionGateway = HeadlessDecisionIngress
 
 
 def _resolve_optimize_callable(decision_core: Any) -> Callable[[Any], Any]:
-    optimize = getattr(decision_core, 'optimize', None)
+    optimize = getattr(decision_core, CANONICAL_DECISION_OPTIMIZE_METHOD, None)
     if callable(optimize):
         return optimize
     raise DecisionPathLockError('decision_core_must_provide_callable_issue_or_optimize')

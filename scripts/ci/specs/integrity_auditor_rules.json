@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "name": "BusinessAIOS Integrity Auditor",
+  "goal": "Verify architectural integrity, DecisionCore singularity, canonical flow completeness, no-second-brain discipline, guarded execution, admin visibility, evidence, replay, config, and dead-capability risks.",
+  "thresholds": {
+    "fail_on_severity": ["P0"],
+    "warn_on_severity": ["P1", "P2"],
+    "minimum_architectural_integrity": 70,
+    "minimum_decisioncore_integrity": 70,
+    "minimum_flow_completeness": 60,
+    "minimum_admin_surface_coverage": 50,
+    "minimum_evidence_coverage": 40,
+    "minimum_runtime_side_effect_safety": 60
+  },
+  "canonical_flow": [
+    "signal",
+    "state",
+    "decision",
+    "policy",
+    "guard",
+    "execution",
+    "verification",
+    "evidence",
+    "archive"
+  ],
+  "decision_core_allowed_names": [
+    "DecisionCore",
+    "decision_core",
+    "DecisionCoreEngine"
+  ],
+  "second_brain_suspicious_terms": [
+    "second_brain",
+    "shadow_brain",
+    "alternate_brain",
+    "local_brain",
+    "strategy_engine",
+    "decision_engine",
+    "planner_engine",
+    "private_planner",
+    "self_driving_brain",
+    "autopilot_brain",
+    "world_model_brain"
+  ],
+  "side_effect_calls": [
+    "requests.post",
+    "requests.put",
+    "requests.patch",
+    "requests.delete",
+    "httpx.post",
+    "httpx.put",
+    "httpx.patch",
+    "httpx.delete",
+    "subprocess.run",
+    "subprocess.Popen",
+    "send_email",
+    "capture_payment",
+    "refund_payment",
+    "bot.send_message",
+    "db.commit"
+  ],
+  "approved_side_effect_roots": [
+    "runtime/",
+    "infrastructure/",
+    "integrations/",
+    "connectors/",
+    "scripts/"
+  ],
+  "admin_required_terms": [
+    "admin",
+    "control_plane",
+    "status",
+    "risk",
+    "evidence",
+    "health"
+  ],
+  "registry_required_terms": [
+    "registry",
+    "manifest",
+    "capability",
+    "policy",
+    "guard",
+    "action"
+  ],
+  "canonical_name_groups": [
+    ["tenant", "account", "business", "workspace"],
+    ["user", "client", "customer"],
+    ["decision", "command", "action", "effect"],
+    ["memory", "state", "context", "world_model"],
+    ["payment", "billing", "invoice", "order"]
+  ]
+}

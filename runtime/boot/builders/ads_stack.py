@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from runtime.boot.ads_wiring import build_ads_runtime, build_ads_service
-from runtime.boot.builders import ads_rl as ads_rl_builder
-from runtime.boot.builders import campaign_builder as campaign_builder_builder
+import runtime.boot.builders.ads_rl as ads_rl_builder
+import runtime.boot.builders.campaign_builder as campaign_builder_builder
 from runtime.handlers.route_failure_support import normalized_tenant_id
 from runtime.platform.config.env_flags import env_path
 from runtime.tenancy.paths import TenantPaths

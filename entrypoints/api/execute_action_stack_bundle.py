@@ -66,7 +66,7 @@ def build_execute_action_stack_bundle(
 
 
 def _build_execute_action_api_stack(*, control_plane: ExecuteActionWithControlPlane) -> object:
-    from entrypoints.api.execute_action_api_stack import ExecuteActionApiStack
+    from entrypoints.api.execute_action_api_contracts import ExecuteActionApiStack
     return ExecuteActionApiStack(control_plane=control_plane)
 
 __all__ = [

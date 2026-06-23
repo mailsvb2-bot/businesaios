@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from application.business_autonomy.operationalization import (
     BusinessActiveActiveQuorumService,
     BusinessAutonomyMetrics,
@@ -50,7 +48,48 @@ def build_business_autonomy_operationalization() -> dict:
     return _STACK
 
 
-__all__ = [
-    "build_business_autonomy_guarded_service",
-    "build_business_autonomy_operationalization",
-]
+
+
+def _registry_value(root: object, attrs: tuple[str, ...], key: str):
+    for attr in attrs:
+        root = getattr(root, attr, None)
+        if root is None:
+            return None
+    try:
+        return root.get(key)
+    except Exception:
+        return None
+
+
+def _business_service(business_id: str, service: object | None):
+    requested = str(business_id).strip()
+    if service is not None:
+        if str(getattr(service, "business_id", "") or "").strip() == requested:
+            return service
+        existing = _registry_value(
+            service,
+            ("_autonomy_service", "_autonomy_policy", "_capability_registry"),
+            requested,
+        )
+        if existing is not None and getattr(existing, "capabilities", ()):
+            return service
+    return build_business_autonomy_guarded_service(
+        business_id=requested,
+        seed_admin_read_model=True,
+    )
+
+
+def get_registered_business_capabilities(*, business_id: str, service: object | None = None) -> dict:
+    entry = _registry_value(_business_service(business_id, service), ("_autonomy_service", "_autonomy_policy", "_capability_registry"), business_id)
+    capabilities = [] if entry is None else [{"kind": item.kind.value, "enabled": item.enabled, "confidence": item.confidence, "notes": item.notes} for item in entry.capabilities]
+    return {"business_id": business_id, "capabilities": capabilities}
+
+
+def get_business_trust_profile(*, business_id: str, service: object | None = None) -> dict:
+    snapshot = _registry_value(_business_service(business_id, service), ("_trust_policy", "_trust_registry"), business_id)
+    if snapshot is None or getattr(snapshot, "business_id", None) != business_id:
+        return {"business_id": business_id, "trust_tier": "unknown", "score": 0.0, "reasons": []}
+    return {"business_id": snapshot.business_id, "trust_tier": snapshot.trust_tier.value, "score": snapshot.score, "reasons": list(snapshot.reasons), "metadata": dict(snapshot.metadata or {})}
+
+
+__all__ = ["build_business_autonomy_guarded_service", "build_business_autonomy_operationalization", "get_registered_business_capabilities", "get_business_trust_profile"]

@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
-from typing import Any, Optional
-from collections.abc import Iterable, Mapping
+from typing import Any
+from collections.abc import Iterable, Mapping, Sequence
 
 from .base import AdsConnectorError, AdsPlatform
-from .connector_value_coercion import (
-    as_float,
-    as_int,
-    as_optional_float,
-    as_optional_int,
-    safe_ratio,
-)
+from .connector_value_coercion import as_float, as_int, as_optional_float, as_optional_int, safe_ratio
 
 
 def _normalize_secret_value(value: Any) -> str | None:
@@ -38,6 +33,12 @@ def _stable_jsonable(value: Any) -> Any:
     return value
 
 
+async def _maybe_await(value: Any) -> Any:
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
 def vault_get_secret(vault: Any | None, *, tenant_id: str | None, key: str) -> str | None:
     if vault is None:
         return None
@@ -54,6 +55,114 @@ def vault_get_secret(vault: Any | None, *, tenant_id: str | None, key: str) -> s
     return _normalize_secret_value(getter(key))
 
 
+def _first_present(raw: Mapping[str, Any], keys: Iterable[str]) -> Any:
+    for key in keys:
+        value = raw.get(key)
+        if value not in (None, "", [], ()):  # keep 0 valid
+            return value
+    return None
+
+
+def _first_scalar(value: Any) -> str:
+    if isinstance(value, Mapping):
+        for candidate in ("id", "account_id", "customer_id", "advertiser_id"):
+            found = value.get(candidate)
+            if found not in (None, "", [], ()):  # keep 0 valid
+                return str(found).strip()
+        return ""
+    if isinstance(value, (list, tuple, set)):
+        values = [str(item).strip() for item in value if str(item).strip()]
+        if len(values) == 1:
+            return values[0]
+        return ""
+    return str(value).strip() if value not in (None, "") else ""
+
+
+def pending_account_id_from_raw(
+    *,
+    tenant_id: str,
+    raw: Mapping[str, Any],
+    candidate_keys: Sequence[str],
+    pending_prefix: str,
+) -> str:
+    payload = dict(raw or {})
+    value = _first_present(payload, candidate_keys)
+    if value is None and isinstance(payload.get("data"), Mapping):
+        value = _first_present(payload["data"], candidate_keys)
+    scalar = _first_scalar(value)
+    if scalar:
+        return scalar
+    return f"{str(pending_prefix).strip()}:{str(tenant_id).strip() or 'default'}"
+
+
+async def tokens_put_compat(
+    *,
+    tokens: Any,
+    tenant_id: str,
+    platform: AdsPlatform,
+    account_id: str,
+    access_token: str,
+    scope: str,
+    connector_name: str,
+) -> None:
+    if tokens is None:
+        raise AdsConnectorError(f"{connector_name}: token store is not configured")
+    payload = {
+        "tenant_id": str(tenant_id),
+        "platform": str(platform.value),
+        "account_id": str(account_id),
+        "access_token": str(access_token),
+        "scope": str(scope),
+    }
+    for method_name in ("put_token", "put", "save", "set", "store"):
+        method = getattr(tokens, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            await _maybe_await(method(**payload))
+            return
+        except TypeError:
+            try:
+                await _maybe_await(method(str(tenant_id), str(platform.value), str(account_id), str(access_token), str(scope)))
+                return
+            except TypeError:
+                continue
+    raise AdsConnectorError(f"{connector_name}: token store must expose put_token/put/save/set/store")
+
+
+async def tokens_get_access_token_compat(
+    *,
+    tokens: Any,
+    tenant_id: str,
+    platform: AdsPlatform,
+    account_id: str,
+) -> str:
+    if tokens is None:
+        raise AdsConnectorError("connector token store is not configured")
+    payload = {
+        "tenant_id": str(tenant_id),
+        "platform": str(platform.value),
+        "account_id": str(account_id),
+    }
+    for method_name in ("get_access_token", "access_token", "get_token", "get", "load"):
+        method = getattr(tokens, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            value = await _maybe_await(method(**payload))
+        except TypeError:
+            try:
+                value = await _maybe_await(method(str(tenant_id), str(platform.value), str(account_id)))
+            except TypeError:
+                continue
+        if isinstance(value, Mapping):
+            value = value.get("access_token") or value.get("token")
+        token = _normalize_secret_value(value)
+        if token:
+            return token
+    raise AdsConnectorError("connector token store returned no access_token")
+
+
 async def http_post_compat(
     http: Any,
     *,
@@ -65,10 +174,10 @@ async def http_post_compat(
     post = getattr(http, "post", None)
     if callable(post):
         return _normalized_mapping(await post(url, headers=headers, data=data))
-    request = getattr(http, "request", None)
-    if not callable(request):
+    request_fn = getattr(http, "request", None)
+    if not callable(request_fn):
         raise AdsConnectorError("connector http client must implement post() or request()")
-    return _normalized_mapping(await request(
+    return _normalized_mapping(await request_fn(
         "POST",
         url,
         headers=headers,
@@ -88,10 +197,10 @@ async def http_get_compat(
     get = getattr(http, "get", None)
     if callable(get):
         return _normalized_mapping(await get(url, headers=headers, params=params))
-    request = getattr(http, "request", None)
-    if not callable(request):
+    request_fn = getattr(http, "request", None)
+    if not callable(request_fn):
         raise AdsConnectorError("connector http client must implement get() or request()")
-    return _normalized_mapping(await request(
+    return _normalized_mapping(await request_fn(
         "GET",
         url,
         headers=headers,
@@ -148,110 +257,47 @@ def resolve_secret_required(
     value = vault_get_secret(vault, tenant_id=tenant_id, key=vault_key)
     if value is None:
         raise AdsConnectorError(error_message)
-    return str(value)
+    return value
 
 
-def pending_account_id_from_raw(
-    *,
-    tenant_id: str,
-    raw: Mapping[str, Any],
-    candidate_keys: Iterable[str],
-    pending_prefix: str,
-) -> str:
-    for key in candidate_keys:
-        value = raw.get(key)
-        if isinstance(value, list) and value:
-            value = value[0]
-        if value is not None:
-            account_id = str(value).strip()
-            if account_id:
-                return account_id
-
-        data = raw.get("data")
-        if isinstance(data, Mapping):
-            nested_value = data.get(key)
-            if isinstance(nested_value, list) and nested_value:
-                nested_value = nested_value[0]
-            if nested_value is not None:
-                nested_account_id = str(nested_value).strip()
-                if nested_account_id:
-                    return nested_account_id
-
-    stable_payload = json.dumps(_stable_jsonable(raw), ensure_ascii=False, separators=(",", ":"), sort_keys=True)
-    digest = hashlib.sha256(
-        f"{tenant_id}|{stable_payload}".encode("utf-8", errors="ignore")
-    ).hexdigest()[:12]
-    return f"{pending_prefix}:{digest}"
+def stable_payload_hash(payload: Mapping[str, Any]) -> str:
+    raw = json.dumps(_stable_jsonable(payload), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-async def tokens_put_compat(
-    *,
-    tokens: Any,
-    tenant_id: str,
-    platform: AdsPlatform,
-    account_id: str,
-    access_token: str,
-    scope: str,
-    connector_name: str,
-) -> None:
-    put = getattr(tokens, "put", None)
-    if callable(put):
-        await put(
-            tenant_id=tenant_id,
-            platform=platform,
-            account_id=account_id,
-            token={
-                "access_token": access_token,
-                "scope": scope,
-                "expires_at_iso": None,
-            },
-        )
-        return
-    upsert = getattr(tokens, "upsert", None)
-    if callable(upsert):
-        await upsert(
-            tenant_id=tenant_id,
-            platform=str(platform.value),
-            account_id=account_id,
-            access_token=access_token,
-            refresh_token=None,
-            expires_at_iso=None,
-        )
-        return
-    raise AdsConnectorError(
-        f"{connector_name}: tokens store does not support put/upsert"
-    )
+def normalize_rows(payload: Any, *, key: str) -> list[dict[str, Any]]:
+    if isinstance(payload, Mapping):
+        rows = payload.get(key, [])
+    else:
+        rows = payload
+    if isinstance(rows, Mapping):
+        rows = [rows]
+    if not isinstance(rows, Iterable) or isinstance(rows, (str, bytes)):
+        return []
+    return [dict(row) for row in rows if isinstance(row, Mapping)]
 
 
-async def tokens_get_access_token_compat(
-    *,
-    tokens: Any,
-    tenant_id: str,
-    platform: AdsPlatform,
-    account_id: str,
-) -> str:
-    get = getattr(tokens, "get", None)
-    if callable(get):
-        try:
-            token = await get(
-                tenant_id=tenant_id,
-                platform=platform,
-                account_id=account_id,
-            )
-        except TypeError:
-            token = await get(
-                tenant_id=tenant_id,
-                platform=str(platform.value),
-                account_id=account_id,
-            )
-        if token is None:
-            raise AdsConnectorError(
-                "Not connected: missing OAuth token for this account."
-            )
-        if isinstance(token, Mapping) and token.get("access_token"):
-            return str(token["access_token"])
-        access_token = getattr(token, "access_token", None)
-        normalized = _normalize_secret_value(access_token)
-        if normalized is not None:
-            return normalized
-    raise AdsConnectorError("Not connected: missing OAuth token for this account.")
+def summarize_rows(rows: list[dict[str, Any]]) -> tuple[float, int, float, int]:
+    spend = sum(as_float(row.get("spend"), 0.0) for row in rows)
+    impressions = sum(as_int(row.get("impressions"), 0) for row in rows)
+    clicks = sum(as_int(row.get("clicks"), 0) for row in rows)
+    conversions = sum(as_int(row.get("conversions"), 0) for row in rows)
+    ctr = safe_ratio(clicks, impressions)
+    cpc = safe_ratio(spend, clicks)
+    return spend, impressions, ctr, conversions or int(safe_ratio(clicks, 10))
+
+
+__all__ = [
+    "vault_get_secret",
+    "pending_account_id_from_raw",
+    "tokens_put_compat",
+    "tokens_get_access_token_compat",
+    "http_post_compat",
+    "http_get_compat",
+    "resolve_url_with_default",
+    "resolve_url_required",
+    "resolve_secret_required",
+    "stable_payload_hash",
+    "normalize_rows",
+    "summarize_rows",
+]

@@ -47,7 +47,6 @@ from runtime.application.contracts import (
     RuntimeCapabilityAccess,
     RuntimeDecisionCorePort,
     RuntimeServiceExports,
-    RuntimeTypedAccess,
     build_runtime_application_service,
     build_runtime_application_service_from_exports,
     build_runtime_application_service_from_raw,
@@ -77,6 +76,8 @@ _ALIAS_MAP = {
     "contracts": "runtime.application.contracts",
     "registry_access": "runtime.application.contracts",
 }
+
+_LAZY_CONTRACT_ATTRS = {"RuntimeTypedAccess"}
 
 
 def _install_compat_aliases() -> None:
@@ -120,7 +121,6 @@ _PUBLIC_ATTRS = {
     "RuntimeDecisionCorePort": RuntimeDecisionCorePort,
     "RuntimeDecisionTrace": RuntimeDecisionTrace,
     "RuntimeServiceExports": RuntimeServiceExports,
-    "RuntimeTypedAccess": RuntimeTypedAccess,
     "TraceBuilder": TraceBuilder,
     "TraceStep": TraceStep,
     "build_runtime_application_service": build_runtime_application_service,
@@ -133,6 +133,8 @@ _PUBLIC_ATTRS = {
 
 
 def __getattr__(name: str) -> Any:
+    if name in _LAZY_CONTRACT_ATTRS:
+        return getattr(importlib.import_module("runtime.application.contracts"), name)
     try:
         return _PUBLIC_ATTRS[name]
     except KeyError as exc:
@@ -140,12 +142,12 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(_PUBLIC_ATTRS) | set(_ALIAS_MAP))
+    return sorted(set(globals()) | set(_PUBLIC_ATTRS) | set(_LAZY_CONTRACT_ATTRS) | set(_ALIAS_MAP))
 
 
-__all__ = sorted(set(_PUBLIC_ATTRS) | set(_ALIAS_MAP))
+__all__ = sorted(set(_PUBLIC_ATTRS) | set(_LAZY_CONTRACT_ATTRS) | set(_ALIAS_MAP))
 
 
 # Compatibility marker: "public_api": "runtime.application.public_api"
-# Historical owner-builder contract equivalent: install_public_api=False
-install_public_api_alias(__name__, expose_attribute=False)
+# Historical owner-builder contract equivalent: install_public_api=True
+install_public_api_alias(__name__)

@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import sys
-from importlib import import_module
-from types import ModuleType
+import importlib
 from typing import Any
-
-from canon.public_api_alias import install_public_api_alias
 
 CANON_BOOT_PACKAGE_API = True
 CANON_LEGACY_BOOTSTRAP_PACKAGE_SHIM = True
@@ -19,8 +15,9 @@ CANON_BOOT_PUBLIC_API_DIRECT_OWNER_DELEGATION = True
 CANON_BOOT_PUBLIC_API_DIRECT_RUNTIME_TYPE_EXPORT = True
 CANON_BOOT_PACKAGE_DIRECT_BOOTSTRAP_COMPOSE_RUNTIME = True
 CANONICAL_OWNER_BOOTSTRAP_PUBLIC_API = "bootstrap.compose"
-
 CANON_BOOT_PACKAGE_ALIAS_OWNER = True
+CANON_BOOT_PACKAGE_DIRECT_RUNTIME_BUILDER_OWNER = "runtime.bootstrap.runtime_builder"
+CANON_BOOT_PACKAGE_SOVEREIGN_OWNER_THROUGH_RUNTIME_BOOTSTRAP = "runtime.bootstrap"
 
 _COMPAT_ALIAS_MAP = {
     "app_boot_contracts": "bootstrap.app_boot_contracts",
@@ -45,6 +42,8 @@ _COMPAT_ALIAS_MAP = {
 _EXPORT_MAP = {
     "BuiltRuntime": ("runtime.bootstrap", "BuiltRuntime"),
     "build_runtime": ("bootstrap.compose", "build_runtime"),
+    "bootstrap_runtime": ("runtime.bootstrap", "bootstrap_runtime"),
+    "get_bootstrapped_runtime": ("runtime.bootstrap", "get_bootstrapped_runtime"),
     "BootFacade": ("boot.facade", "BootFacade"),
     "build_app_boot_surface": ("bootstrap.app_boot_surface", "build_app_boot_surface"),
     "build_http_boot_surface": ("bootstrap.http_boot_surface", "build_http_boot_surface"),
@@ -74,12 +73,12 @@ __all__ = [
 ]
 
 
-def _load_attr(module_name: str, attr_name: str) -> Any:
-    return getattr(import_module(module_name), attr_name)
+def _load_attr(module_name: str, attr_name: str):
+    return getattr(importlib.import_module(module_name), attr_name)
 
 
 def bootstrap_runtime(*args, **kwargs):
-    return _load_attr("bootstrap.compose", "bootstrap_runtime")(*args, **kwargs)
+    return _load_attr("runtime.bootstrap", "bootstrap_runtime")(*args, **kwargs)
 
 
 def build_runtime(*args, **kwargs):
@@ -128,20 +127,22 @@ def __dir__() -> list[str]:
 
 
 def _install_compat_aliases() -> None:
-    package = sys.modules[__name__]
+    sys_module = importlib.import_module("sys")
+    module_type = importlib.import_module("types").ModuleType
+    package = sys_module.modules[__name__]
 
-    def _build_alias_module(qualified_name: str, target_module_name: str) -> ModuleType:
-        module = ModuleType(qualified_name)
+    def _build_alias_module(qualified_name: str, target_module_name: str):
+        module = module_type(qualified_name)
         module.__file__ = f"<compat-alias {qualified_name}>"
         module.__package__ = __name__
 
-        def _load_target() -> ModuleType:
-            target = import_module(target_module_name)
-            sys.modules[qualified_name] = target
-            setattr(package, qualified_name.rsplit(".", 1)[-1], target)
+        def _load_target():
+            target = importlib.import_module(target_module_name)
+            sys_module.modules[qualified_name] = target
+            object.__setattr__(package, qualified_name.rsplit(".", 1)[-1], target)
             return target
 
-        def __getattr__(name: str):
+        def __getattr__(name: str) -> Any:
             return getattr(_load_target(), name)
 
         def __dir__():
@@ -153,12 +154,12 @@ def _install_compat_aliases() -> None:
 
     for alias_name, target_module_name in _COMPAT_ALIAS_MAP.items():
         qualified_name = f"{__name__}.{alias_name}"
-        existing = sys.modules.get(qualified_name)
+        existing = sys_module.modules.get(qualified_name)
         if existing is None:
             existing = _build_alias_module(qualified_name, target_module_name)
-            sys.modules[qualified_name] = existing
-        setattr(package, alias_name, existing)
+            sys_module.modules[qualified_name] = existing
+        object.__setattr__(package, alias_name, existing)
 
 
 _install_compat_aliases()
-install_public_api_alias(__name__)
+importlib.import_module("canon.public_api_alias").install_public_api_alias(__name__)

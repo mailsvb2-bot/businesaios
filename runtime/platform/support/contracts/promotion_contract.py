@@ -1,5 +1,7 @@
 from __future__ import annotations
 
-from runtime.platform.support.optimization.promotion_decision import PromotionDecision
+"""Arch-sensitive real route wrapper for runtime.platform.support.contracts.promotion_contract."""
 
-__all__ = ["PromotionDecision"]
+from runtime.platform.support.optimization.promotion_decision import PromotionDecision as PromotionDecision
+
+__all__ = ['PromotionDecision']

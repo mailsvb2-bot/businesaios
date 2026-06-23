@@ -7,33 +7,19 @@ through a single leader election lease. It must not invent business intent or
 compete with DecisionCore.
 """
 
-from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import Any
 
 from reliability.distributed_lock import InMemoryDistributedLock
 from reliability.leader_election import LeaderElection, LeadershipLease
 from runtime.queue.job_contract import normalize_now
+from runtime.queue.queue_operational_contracts import QueueLeadershipReport
 from runtime.queue.job_fencing import build_process_scoped_worker_id
-
-if TYPE_CHECKING:
-    from runtime.queue.queue_janitor_history_sqlite import SqliteQueueJanitorHistoryStore
-    from runtime.queue.queue_observability import QueueObservabilityRegistry
 
 
 CANON_RUNTIME_QUEUE_LEADERSHIP = True
 
 
-@dataclass(frozen=True)
-class QueueLeadershipReport:
-    tenant_id: str
-    queue_name: str
-    role: str
-    owner_id: str
-    is_leader: bool
-    fencing_token: int | None = None
-    expires_at: datetime | None = None
-    leadership: LeadershipLease | None = None
 
 
 class QueueLeadershipCoordinator:
@@ -45,8 +31,8 @@ class QueueLeadershipCoordinator:
         leader_election: LeaderElection | None = None,
         ttl_seconds: int = 30,
         owner_id: str | None = None,
-        history_store: SqliteQueueJanitorHistoryStore | None = None,
-        observability: QueueObservabilityRegistry | None = None,
+        history_store: Any | None = None,
+        observability: Any | None = None,
     ) -> None:
         qn = str(queue_name).strip()
         rl = str(role).strip()

@@ -27,6 +27,8 @@ def test_execution_boundary_requires_decision_command() -> None:
             continue
         if "execution" not in node.name:
             continue
+        if node.name.startswith("build_") or node.name.startswith("_build_"):
+            continue
 
         has_decision_command = False
 

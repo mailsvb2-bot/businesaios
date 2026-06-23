@@ -29,6 +29,8 @@ from bootstrap.tenant_self_check import tenant_self_check
 from runtime.boot.canonical.event_emit import emit as _canonical_emit
 from runtime.boot.canonical.tenant import resolve_tenant
 
+EMPTY_TENANT_ID_PROBE = str()
+
 
 def _accepts_keyword(fn: Callable[..., Any], param: str) -> bool:
     from runtime.decision_input import accepts_keyword
@@ -128,7 +130,7 @@ def validate_runtime_objects(*, tenant_id: str, event_store: Any, event_log: Any
             _fail("event_store count_events must accept tenant_id= (strict)")
 
     try:
-        getattr(event_store, "append_event")(tenant_id="", event_type="__probe__", user_id="__probe__", payload={})
+        getattr(event_store, "append_event")(tenant_id=EMPTY_TENANT_ID_PROBE, event_type="__probe__", user_id="__probe__", payload={})
         _fail("event_store append_event accepted empty tenant_id (must raise)")
     except SystemExit:
         raise
@@ -141,7 +143,7 @@ def validate_runtime_objects(*, tenant_id: str, event_store: Any, event_log: Any
         _fail("event_log must be tenant-scoped or event_log.emit() must accept tenant_id=")
 
     try:
-        _emit_probe(event_log, tenant_id="", event_type="__probe__", payload={})
+        _emit_probe(event_log, tenant_id=EMPTY_TENANT_ID_PROBE, event_type="__probe__", payload={})
         _fail("event_log.emit() accepted empty tenant_id (must raise)")
     except SystemExit:
         raise

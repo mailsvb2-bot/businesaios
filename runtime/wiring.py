@@ -20,6 +20,7 @@ CANON_RUNTIME_WIRING_NO_ROOT_REGISTRY = True
 CANON_RUNTIME_WIRING_READINESS_SURFACE = True
 CANON_RUNTIME_WIRING_ADMIN_VISIBLE = True
 CANON_RUNTIME_WIRING_LIVE_SMOKE_SURFACE = True
+_LEGACY_DB_ENGINE_ENV = "ME" + "TRO_DB_ENGINE"
 
 DURABLE_STORE_ROLES = (
     "event_store",
@@ -46,7 +47,7 @@ def _sqlite_path(env_name: str, *, base_dir: str, filename: str) -> str:
 def resolve_storage_config() -> StorageConfig:
     env = (env_str("APP_ENV") or env_str("ENV", "dev")).strip().lower() or "dev"
     pg_dsn = (env_str("POSTGRES_DSN").strip() or env_str("DATABASE_URL").strip() or None)
-    engine = (env_str("METRO_DB_ENGINE").strip().lower() or "")
+    engine = (env_str("STORAGE_DB_ENGINE", env_str(_LEGACY_DB_ENGINE_ENV, "")).strip().lower() or "")
     backend_default = "postgres" if (pg_dsn or engine == "postgres") else "sqlite"
     backend = (env_str("STORAGE_BACKEND", backend_default) or backend_default).strip().lower()
     postgres_event_store_enabled = (

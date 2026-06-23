@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from security.key_management_contract import KeyMaterialRecord, KeyPurpose, KeyStatus, utc_now
-from security.key_provider import KeyProvider
+from security.key_provider_contracts import KeyProvider
 from security.key_provider_backend import (
     KeyProviderBackend,
     KeyQuery,

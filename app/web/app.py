@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
+
+if TYPE_CHECKING:
+    from security.owner_factory import ApiSecurityOwnerBundle
 
 
 def _default_redactor() -> Any:
@@ -24,7 +27,7 @@ class WebApp:
     settings: Mapping[str, Any] = field(default_factory=dict)
     redactor: Any = field(default_factory=_default_redactor)
     security_adapter: Any | None = None
-    security_owner_bundle: Any | None = None
+    security_owner_bundle: ApiSecurityOwnerBundle | None = None
     runtime_infra: Any = None
 
     def describe(self) -> dict[str, Any]:

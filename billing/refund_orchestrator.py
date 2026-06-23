@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Mapping
-from uuid import uuid4
+from billing.recovery_contracts import RefundResult
 
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
 from billing.ledger_event import LedgerEntry, LedgerPosting, utc_now
@@ -51,34 +51,6 @@ class RefundRequest:
             raise ValueError('requested_at must be timezone-aware')
 
 
-@dataclass(frozen=True)
-class RefundResult:
-    tenant_id: str
-    invoice_id: str
-    refund_id: str
-    amount_minor: int
-    currency: str
-    provider_name: str
-    external_reference: str
-    processed_at: datetime = field(default_factory=utc_now)
-    metadata: Mapping[str, object] = field(default_factory=dict)
-
-    def validate(self) -> None:
-        require_tenant_id(self.tenant_id)
-        if not str(self.invoice_id or '').strip():
-            raise ValueError('invoice_id is required')
-        if not str(self.refund_id or '').strip():
-            raise ValueError('refund_id is required')
-        if int(self.amount_minor) <= 0:
-            raise ValueError('amount_minor must be > 0')
-        if not str(self.currency or '').strip():
-            raise ValueError('currency is required')
-        if not str(self.provider_name or '').strip():
-            raise ValueError('provider_name is required')
-        if not str(self.external_reference or '').strip():
-            raise ValueError('external_reference is required')
-        if self.processed_at.tzinfo is None:
-            raise ValueError('processed_at must be timezone-aware')
 
 
 class InMemoryRefundStore:

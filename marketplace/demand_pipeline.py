@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from core.ai import get_decision_core_singleton
+from core.strategic_horizon.engine import CANONICAL_DECISION_OPTIMIZE_METHOD
 
 
 def process_demand(input: object) -> object:
@@ -12,7 +13,7 @@ def process_demand(input: object) -> object:
     execution contract regresses.
     """
     decision_core = get_decision_core_singleton()
-    optimize = getattr(decision_core, "optimize", None)
+    optimize = getattr(decision_core, CANONICAL_DECISION_OPTIMIZE_METHOD, None)
     if not callable(optimize):
         raise TypeError("canonical_decision_core_optimize_required")
     return optimize(input)

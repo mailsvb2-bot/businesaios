@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+CANON_COMPAT_SHIM = True
 """Canonical optimization contracts re-export surface.
 
 This module exists because historical callers import the public contract symbols

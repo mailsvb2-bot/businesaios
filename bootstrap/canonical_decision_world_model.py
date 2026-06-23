@@ -6,7 +6,8 @@ CANON_BOOT_CLUSTER_FINAL_OWNER = True
 from dataclasses import replace
 from typing import Any, Optional
 
-from runtime.platform.economics.world_model_store import WorldModelStorePort, build_world_model_store
+from runtime.platform.economics.world_model_store_contracts import WorldModelStorePort
+from runtime.platform.economics.world_model_store_factory import build_world_model_store
 from bootstrap.canonical_decision_world_model_ltv import CanonicalLtvEnricher, LtvInput
 from bootstrap.canonical_decision_world_model_pricing import enrich_pricing
 from bootstrap.canonical_decision_world_model_resolvers import safe_dict

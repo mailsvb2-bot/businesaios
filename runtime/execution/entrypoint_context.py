@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-"""Shared execution-entrypoint context binding helpers.
-
-Keeps the runtime/core execution surface on one explicit path for
-observability binding and executor-context activation.
-"""
-
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 CANON_RUNTIME_EXECUTION_ENTRYPOINT_CONTEXT = True
 
@@ -17,9 +11,18 @@ def run_with_bound_execution_context(
     env: Any,
     executor_context_cm: Callable[[str], Any],
     context_name: str,
-    run: Callable[[], Any],
+    execute_callback: Callable[[], Any] | None = None,
+    **legacy_callbacks: Any,
 ) -> Any:
     from runtime.observability import bind, clear
+
+    callback = execute_callback
+    if callback is None:
+        legacy_callback = legacy_callbacks.get("run")
+        if callable(legacy_callback):
+            callback = legacy_callback
+    if callback is None:
+        raise RuntimeError("executor_entrypoint_callback_missing")
 
     bind(
         correlation_id=str(env.decision.correlation_id),
@@ -27,7 +30,7 @@ def run_with_bound_execution_context(
     )
     try:
         with executor_context_cm(context_name):
-            return run()
+            return callback()
     finally:
         clear()
 

@@ -4,7 +4,7 @@ import os
 import shlex
 import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -60,24 +60,29 @@ def _base_env() -> dict[str, str]:
     return env
 
 
+def _merged_env(env: Mapping[str, str] | None = None, *, use_base_env: bool = True) -> dict[str, str]:
+    merged_env = _base_env() if use_base_env else dict(os.environ)
+    if env:
+        merged_env.update({str(k): str(v) for k, v in env.items()})
+    return merged_env
+
+
 def run_command(
     command: Sequence[str],
     *,
     cwd: Path | None = None,
     env: Mapping[str, str] | None = None,
     timeout: float | None = None,
+    echo_output: bool = True,
 ) -> CommandOutcome:
     printable = " ".join(shlex.quote(part) for part in command)
     effective_timeout = DEFAULT_TIMEOUT_SECONDS if timeout is None else timeout
     print(f"[ci] run {printable} (timeout={effective_timeout}s)")
-    merged_env = _base_env()
-    if env:
-        merged_env.update({str(k): str(v) for k, v in env.items()})
     try:
         completed = subprocess.run(
             list(command),
             cwd=str(cwd or repo_root()),
-            env=merged_env,
+            env=_merged_env(env),
             text=True,
             capture_output=True,
             check=False,
@@ -93,15 +98,41 @@ def run_command(
         message = f"TIMEOUT after {effective_timeout}s: {printable}\n{stderr}"
         print(message, file=sys.stderr)
         return CommandOutcome(returncode=124, stdout=stdout, stderr=message)
-    if completed.stdout:
+    if echo_output and completed.stdout:
         print(completed.stdout, end="")
-    if completed.stderr:
+    if echo_output and completed.stderr:
         print(completed.stderr, end="", file=sys.stderr)
     return CommandOutcome(
         returncode=completed.returncode,
         stdout=completed.stdout,
         stderr=completed.stderr,
     )
+
+
+def stream_command(
+    command: Sequence[str],
+    *,
+    cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
+    on_stdout_line: Callable[[str], None] | None = None,
+    use_base_env: bool = True,
+) -> int:
+    process = subprocess.Popen(
+        list(command),
+        cwd=str(cwd or repo_root()),
+        env=_merged_env(env, use_base_env=use_base_env),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1,
+    )
+    assert process.stdout is not None
+    for line in process.stdout:
+        if on_stdout_line is not None:
+            on_stdout_line(line)
+        else:
+            print(line, end="")
+    return int(process.wait())
 
 
 def run_python(args: Sequence[str], *, timeout: float | None = None) -> CommandOutcome:
@@ -145,4 +176,4 @@ def run_pytest(args: Sequence[str], *, timeout: float | None = None) -> CommandO
     return run_command(command, timeout=timeout)
 
 
-__all__ = ["CommandOutcome", "run_command", "run_python", "run_pytest"]
+__all__ = ["CommandOutcome", "run_command", "run_python", "run_pytest", "stream_command"]

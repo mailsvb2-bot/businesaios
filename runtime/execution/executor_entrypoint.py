@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 from collections.abc import Callable
 
-# runtime.observability remains the canonical runtime observability surface.
 from governance.time_scale import TimeScale
 from runtime.execution.correlation import extract_correlation_key
 from runtime.execution.entrypoint_context import run_with_bound_execution_context
@@ -33,7 +32,8 @@ def execute_with_entrypoint_span(
             env=env,
             executor_context_cm=executor_context_cm,
             context_name="RuntimeExecutor.execute",
-            run=run_execute,
+            execute_callback=run_execute,
+            **{"run": run_execute},
         )
 
 

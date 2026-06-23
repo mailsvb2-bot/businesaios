@@ -14,6 +14,7 @@ from typing import Any, Protocol
 
 from governance.constitution import Constitution
 from governance.economic_layer import EconomicAutonomyLayer
+from runtime.effects import load_effects_impl
 from runtime.execution.effects_factory import build_guarded_effects
 from runtime.execution.executor_warnings import throttled_exec_warn
 from runtime.execution.reliability_runtime import build_runtime_reliability
@@ -120,9 +121,7 @@ def build_runtime_executor_effects(
 ) -> RuntimeExecutorEffectsBundle:
     """Build guarded effects exactly once for RuntimeExecutor."""
 
-    with allow_internal_import():
-        effects_cls = import_module("runtime._internal._effects_impl").Effects
-
+    effects_cls = load_effects_impl()
     cap_token, effects = build_guarded_effects(
         effects_cls=effects_cls,
         event_log=event_log,
@@ -199,7 +198,6 @@ def build_runtime_infra(
     )
 
 
-
 def build_executor_runtime_infra_from_runtime_infra(*, runtime_infra, delivery_state, telegram_outbound_queue):
     return build_runtime_infra(
         runtime_infra=RuntimeExecutorInfra(
@@ -235,7 +233,6 @@ def build_executor_effects_bundle(*, event_log, policy_registry, infra: RuntimeE
         http_transport=infra.http_transport,
         effect_router=infra.effect_router,
     )
-
 
 
 def build_executor_state(
@@ -318,21 +315,3 @@ def resolve_executor_economic_layer(
 
 def emit_throttled_executor_warning(*, logger, key: str, error: Exception) -> None:
     throttled_exec_warn(logger=logger, key=key, e=error)
-
-
-__all__ = [
-    "CANON_RUNTIME_EXECUTION_ASSEMBLY",
-    "RuntimeExecutorPort",
-    "RuntimeExecutorInfra",
-    "RuntimeExecutorPorts",
-    "RuntimeExecutorEffectsBundle",
-    "RuntimeExecutorState",
-    "build_runtime_executor_effects",
-    "build_runtime_infra",
-    "build_executor_runtime_infra_from_runtime_infra",
-    "build_executor_effects_bundle",
-    "build_executor_state",
-    "resolve_executor_constitution",
-    "resolve_executor_economic_layer",
-    "emit_throttled_executor_warning",
-]

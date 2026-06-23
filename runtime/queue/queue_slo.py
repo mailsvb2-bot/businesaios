@@ -8,11 +8,12 @@ queue state and must never become planning logic.
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from core.tenancy.normalization import require_tenant_id
 from runtime.queue.job_contract import JobState, normalize_now
 from runtime.queue.job_store_backend import JobStoreBackend
-from runtime.queue.queue_observability import QueueObservabilityRegistry
+from runtime.queue.queue_operational_contracts import QueueSLOReport
 
 CANON_RUNTIME_QUEUE_SLO = True
 
@@ -26,18 +27,6 @@ class QueueSLOThresholds:
     max_stale_leader_age_seconds: int = 120
 
 
-@dataclass(frozen=True)
-class QueueSLOReport:
-    tenant_id: str
-    queue_name: str
-    ok: bool
-    status: str
-    reasons: tuple[str, ...]
-    pending_jobs: int
-    active_claims: int
-    dead_letter_jobs: int
-    janitor_stale_seconds: int | None
-    leader_stale_seconds: int | None
 
 
 class QueueSLOEvaluator:
@@ -45,7 +34,7 @@ class QueueSLOEvaluator:
         self,
         *,
         store: JobStoreBackend,
-        observability: QueueObservabilityRegistry,
+        observability: Any,
         thresholds: QueueSLOThresholds | None = None,
     ) -> None:
         self._store = store

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 CANON_CONNECTOR_CIRCUIT_BREAKER = True
+_OPEN_BLOCK_OBSERVED_KEY = 'open_block_observed'
 
 
 def _connector_control_plane_dir() -> Path:
@@ -216,7 +217,10 @@ class ConnectorCircuitBreaker:
             now = float(self._time())
             if record.state == BreakerState.OPEN.value:
                 blocked_until = float(record.blocked_until or 0.0)
-                if blocked_until > now:
+                open_block_observed = bool(record.metadata.get(_OPEN_BLOCK_OBSERVED_KEY))
+                if blocked_until > now or (not open_block_observed and int(record.failure_count) > 1):
+                    record.metadata[_OPEN_BLOCK_OBSERVED_KEY] = True
+                    self._flush_state_locked()
                     return BreakerPermit(False, record.state, 'circuit_open', connector_id, provider, version, operation, record.blocked_until)
                 record.state = BreakerState.HALF_OPEN.value
                 record.half_open_in_flight = 0
@@ -349,6 +353,7 @@ class ConnectorCircuitBreaker:
         record.half_open_in_flight = 0
         record.open_count += 1
         record.half_open_first_probe_at = None
+        record.metadata[_OPEN_BLOCK_OBSERVED_KEY] = False
 
     def _close_locked(self, record: _BreakerRecord) -> None:
         record.state = BreakerState.CLOSED.value
@@ -357,6 +362,7 @@ class ConnectorCircuitBreaker:
         record.opened_at = None
         record.blocked_until = None
         record.half_open_in_flight = 0
+        record.metadata.pop(_OPEN_BLOCK_OBSERVED_KEY, None)
 
     def _key(self, *, connector_id: str, provider: str, version: str, operation: str) -> tuple[str, str, str, str]:
         return (str(connector_id).strip(), str(provider).strip(), str(version).strip(), str(operation).strip())

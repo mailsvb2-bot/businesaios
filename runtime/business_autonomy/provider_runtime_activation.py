@@ -7,6 +7,7 @@ from application.business_autonomy.provider_admin_contract import ProviderDefini
 from observability.export_pipeline.clickhouse_exporter import ClickHouseExporterConfig
 from reliability.redis_idempotency_backend import RedisIdempotencyBackend, RedisIdempotencyConfig
 from runtime.backends.postgres_backend import ProductionPostgresBackend, ProductionPostgresBackendConfig
+from runtime.effects import encode_form_body
 from runtime.handler_loader import import_internal_attr
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
@@ -18,11 +19,8 @@ def _load_internal_attr(module_name: str, attr_name: str) -> Any:
     return import_internal_attr(module_name, attr_name)
 
 
-def _http_transport_helpers() -> tuple[Any, Any]:
-    return (
-        _load_internal_attr('runtime._internal.http_transport', 'form_urlencode'),
-        _load_internal_attr('runtime._internal.http_transport', 'sync_request'),
-    )
+def _http_transport_helpers() -> Any:
+    return _load_internal_attr('runtime._internal.http_transport', 'sync_request')
 
 
 @dataclass(frozen=True)
@@ -79,8 +77,8 @@ class ProviderRuntimeActivationService:
     def _clickhouse_healthcheck(*, config: ClickHouseExporterConfig, dry_run: bool) -> dict[str, Any]:
         if dry_run:
             return {'status': 'dry_run', 'endpoint': config.endpoint, 'database': config.database}
-        form_urlencode, sync_request = _http_transport_helpers()
-        body = form_urlencode({'query': 'SELECT 1'}).encode('utf-8')
+        sync_request = _http_transport_helpers()
+        body = encode_form_body({'query': 'SELECT 1'})
         response = sync_request(
             url=str(config.endpoint),
             method='POST',

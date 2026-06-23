@@ -1,21 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
-from typing import Mapping, Protocol, TYPE_CHECKING
+from typing import Any, Mapping, Protocol
 
 from core.tenancy.normalization import normalize_tenant_id, require_tenant_id
-
-if TYPE_CHECKING:
-    from tenancy.tenant_policy_store import TenantPolicyBundle
 
 
 CANON_TENANCY_CONTRACT = True
 
 
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+from tenancy.tenant_time import utc_now
 
 
 class TenantStatus(str, Enum):
@@ -82,9 +78,9 @@ class TenantRegistryContract(Protocol):
 
 
 class TenantPolicyStoreContract(Protocol):
-    def get(self, tenant_id: str) -> "TenantPolicyBundle | None": ...
-    def require(self, tenant_id: str) -> "TenantPolicyBundle": ...
-    def save(self, bundle: "TenantPolicyBundle") -> "TenantPolicyBundle": ...
+    def get(self, tenant_id: str) -> Any: ...
+    def require(self, tenant_id: str) -> Any: ...
+    def save(self, bundle: Any) -> Any: ...
 
 
 class TenantQuotaGuardContract(Protocol):

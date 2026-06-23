@@ -1,0 +1,1524 @@
+{
+  "runtime.platform.support.cli.audit": {
+    "main": "runtime.platform.support.cli:audit_main"
+  },
+  "runtime.platform.support.cli.checkpoints": {
+    "main": "runtime.platform.support.cli:checkpoints_main"
+  },
+  "runtime.platform.support.cli.datasets": {
+    "main": "runtime.platform.support.cli:datasets_main"
+  },
+  "runtime.platform.support.cli.evaluate": {
+    "main": "runtime.platform.support.cli:evaluate_main"
+  },
+  "runtime.platform.support.cli.experiments": {
+    "main": "runtime.platform.support.cli:experiments_main"
+  },
+  "runtime.platform.support.cli.governance": {
+    "main": "runtime.platform.support.cli:governance_main"
+  },
+  "runtime.platform.support.cli.inspect": {
+    "main": "runtime.platform.support.cli:inspect_main"
+  },
+  "runtime.platform.support.cli.lineage": {
+    "main": "runtime.platform.support.cli:lineage_main"
+  },
+  "runtime.platform.support.cli.main": {
+    "main": "runtime.platform.support.cli:main"
+  },
+  "runtime.platform.support.cli.promote": {
+    "main": "runtime.platform.support.cli:promote_main"
+  },
+  "runtime.platform.support.cli.rollback": {
+    "main": "runtime.platform.support.cli:rollback_main"
+  },
+  "runtime.platform.support.cli.rollout": {
+    "main": "runtime.platform.support.cli:rollout_main"
+  },
+  "runtime.platform.support.cli.train": {
+    "main": "runtime.platform.support.cli:train_main"
+  },
+  "runtime.platform.support.contracts.action": {
+    "Action": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.candidate": {
+    "Candidate": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.checkpoint": {
+    "CheckpointRef": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.episode": {
+    "Episode": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.evaluation": {
+    "EvaluationResult": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.experiment": {
+    "ExperimentRef": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.governance": {
+    "GovernanceEvent": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.incidents": {
+    "Incident": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.model": {
+    "ModelDescriptor": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.observation": {
+    "Observation": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.policy": {
+    "PolicyDescriptor": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.promotion_contract": {
+    "PromotionDecision": "runtime.platform.support.optimization.promotion_decision"
+  },
+  "runtime.platform.support.contracts.reward": {
+    "Reward": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.rollback": {
+    "RollbackDecision": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.rollout": {
+    "RolloutResult": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.telemetry": {
+    "TelemetryEvent": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.trajectory": {
+    "Trajectory": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.contracts.transition": {
+    "Transition": "runtime.platform.support.contracts"
+  },
+  "runtime.platform.support.data.compression": {
+    "compress": "runtime.platform.support.data",
+    "decompress": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.contracts": {
+    "TrajectoryReader": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.data_catalog": {
+    "DataCatalog": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.dataset_identity": {
+    "DatasetIdentity": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.dataset_lineage": {
+    "DatasetLineage": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.dataset_loader": {
+    "DatasetLoader": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.dataset_registry": {
+    "DatasetRegistry": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.dataset_versioning": {
+    "DatasetVersioning": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.dataset_writer": {
+    "DatasetWriter": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.datasets.benchmark_dataset": {
+    "BenchmarkDataset": "runtime.platform.support.data.datasets"
+  },
+  "runtime.platform.support.data.datasets.episode_dataset": {
+    "EpisodeDataset": "runtime.platform.support.data.datasets"
+  },
+  "runtime.platform.support.data.datasets.evaluation_dataset": {
+    "EvaluationDataset": "runtime.platform.support.data.datasets"
+  },
+  "runtime.platform.support.data.datasets.preference_dataset": {
+    "PreferenceDataset": "runtime.platform.support.data.datasets"
+  },
+  "runtime.platform.support.data.datasets.replay_dataset": {
+    "ReplayDataset": "runtime.platform.support.data.datasets"
+  },
+  "runtime.platform.support.data.datasets.reward_dataset": {
+    "RewardDataset": "runtime.platform.support.data.datasets"
+  },
+  "runtime.platform.support.data.datasets.shadow_traffic_dataset": {
+    "ShadowTrafficDataset": "runtime.platform.support.data.datasets"
+  },
+  "runtime.platform.support.data.datasets.simulation_dataset": {
+    "SimulationDataset": "runtime.platform.support.data.datasets"
+  },
+  "runtime.platform.support.data.datasets.trajectory_dataset": {
+    "TrajectoryDataset": "runtime.platform.support.data.datasets"
+  },
+  "runtime.platform.support.data.datasets.transition_dataset": {
+    "TransitionDataset": "runtime.platform.support.data.datasets"
+  },
+  "runtime.platform.support.data.drift_checks": {
+    "simple_drift": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.integrity_checks": {
+    "not_none": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.packing.balanced_sampler": {
+    "balanced": "runtime.platform.support.data.packing"
+  },
+  "runtime.platform.support.data.packing.batch_builder": {
+    "T": "runtime.platform.support.data.packing",
+    "build_batches": "runtime.platform.support.data.packing"
+  },
+  "runtime.platform.support.data.packing.curriculum_sampler": {
+    "curriculum": "runtime.platform.support.data.packing"
+  },
+  "runtime.platform.support.data.packing.distributed_batch_sampler": {
+    "shard": "runtime.platform.support.data.packing"
+  },
+  "runtime.platform.support.data.packing.hard_example_sampler": {
+    "hard_examples": "runtime.platform.support.data.packing"
+  },
+  "runtime.platform.support.data.packing.minibatch_sampler": {
+    "minibatches": "runtime.platform.support.data.packing"
+  },
+  "runtime.platform.support.data.packing.sequence_padder": {
+    "pad_sequences": "runtime.platform.support.data.packing"
+  },
+  "runtime.platform.support.data.packing.trajectory_packer": {
+    "pack_trajectories": "runtime.platform.support.data.packing"
+  },
+  "runtime.platform.support.data.partitioning": {
+    "partition": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.preprocessing.categorical_encoders": {
+    "encode_categorical": "runtime.platform.support.data.preprocessing"
+  },
+  "runtime.platform.support.data.preprocessing.feature_builder": {
+    "build_features": "runtime.platform.support.data.preprocessing"
+  },
+  "runtime.platform.support.data.preprocessing.feature_store_bridge": {
+    "bridge_to_feature_store": "runtime.platform.support.data.preprocessing"
+  },
+  "runtime.platform.support.data.preprocessing.missing_value_handlers": {
+    "fill_missing": "runtime.platform.support.data.preprocessing"
+  },
+  "runtime.platform.support.data.preprocessing.normalization_stats": {
+    "RunningMeanStd": "runtime.platform.support.data.preprocessing"
+  },
+  "runtime.platform.support.data.preprocessing.observation_transforms": {
+    "normalize_observation": "runtime.platform.support.data.preprocessing"
+  },
+  "runtime.platform.support.data.preprocessing.reward_transforms": {
+    "transform_reward": "runtime.platform.support.data.preprocessing"
+  },
+  "runtime.platform.support.data.preprocessing.sequence_windowing": {
+    "T": "runtime.platform.support.data.preprocessing",
+    "sequence_windows": "runtime.platform.support.data.preprocessing"
+  },
+  "runtime.platform.support.data.quality_checks": {
+    "trajectory_not_empty": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.replay.prioritized_replay_buffer": {
+    "PrioritizedReplayBuffer": "runtime.platform.support.data.replay"
+  },
+  "runtime.platform.support.data.replay.replay_buffer": {
+    "ReplayBuffer": "runtime.platform.support.data.replay"
+  },
+  "runtime.platform.support.data.replay.replay_eviction": {
+    "fifo_eviction": "runtime.platform.support.data.replay"
+  },
+  "runtime.platform.support.data.replay.replay_index": {
+    "ReplayIndex": "runtime.platform.support.data.replay"
+  },
+  "runtime.platform.support.data.replay.replay_integrity": {
+    "validate_replay": "runtime.platform.support.data.replay"
+  },
+  "runtime.platform.support.data.replay.replay_persistence": {
+    "ReplayPersistence": "runtime.platform.support.data.replay"
+  },
+  "runtime.platform.support.data.replay.replay_sampler": {
+    "sample_replay": "runtime.platform.support.data.replay"
+  },
+  "runtime.platform.support.data.replay.reservoir_buffer": {
+    "ReservoirBuffer": "runtime.platform.support.data.replay"
+  },
+  "runtime.platform.support.data.replay.sequence_replay_buffer": {
+    "SequenceReplayBuffer": "runtime.platform.support.data.replay"
+  },
+  "runtime.platform.support.data.retention": {
+    "RetentionPolicy": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.retention_policies": {
+    "DEFAULT_RETENTION_DAYS": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.data.sharding": {
+    "shard_index": "runtime.platform.support.data"
+  },
+  "runtime.platform.support.evaluation.baseline_comparator": {
+    "BaselineComparator": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.benchmark_runner": {
+    "BenchmarkRunner": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.confidence_intervals": {
+    "ConfidenceIntervals": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.contracts": {
+    "Evaluator": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.domain.business_kpi_eval": {
+    "BusinessKPIEval": "runtime.platform.support.evaluation.domain"
+  },
+  "runtime.platform.support.evaluation.domain.calibration_eval": {
+    "CalibrationEval": "runtime.platform.support.evaluation.domain"
+  },
+  "runtime.platform.support.evaluation.domain.cost_eval": {
+    "CostEval": "runtime.platform.support.evaluation.domain"
+  },
+  "runtime.platform.support.evaluation.domain.drift_eval": {
+    "DriftEval": "runtime.platform.support.evaluation.domain"
+  },
+  "runtime.platform.support.evaluation.domain.fairness_eval": {
+    "FairnessEval": "runtime.platform.support.evaluation.domain"
+  },
+  "runtime.platform.support.evaluation.domain.latency_eval": {
+    "LatencyEval": "runtime.platform.support.evaluation.domain"
+  },
+  "runtime.platform.support.evaluation.domain.stability_eval": {
+    "StabilityEval": "runtime.platform.support.evaluation.domain"
+  },
+  "runtime.platform.support.evaluation.evaluation_registry": {
+    "EvaluationRegistry": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.evaluation_request": {
+    "EvaluationRequest": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.evaluation_result": {
+    "StoredEvaluationResult": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.evaluation_suite": {
+    "EvaluationSuite": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.evaluator": {
+    "BasicEvaluator": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.offline.fitted_q_evaluation": {
+    "FittedQEvaluation": "runtime.platform.support.evaluation.offline"
+  },
+  "runtime.platform.support.evaluation.offline.off_policy_evaluation": {
+    "OffPolicyEvaluation": "runtime.platform.support.evaluation.offline"
+  },
+  "runtime.platform.support.evaluation.offline.offline_evaluator": {
+    "OfflineEvaluator": "runtime.platform.support.evaluation.offline"
+  },
+  "runtime.platform.support.evaluation.offline.replay_based_eval": {
+    "ReplayBasedEval": "runtime.platform.support.evaluation.offline"
+  },
+  "runtime.platform.support.evaluation.online.canary_eval": {
+    "CanaryEval": "runtime.platform.support.evaluation.online"
+  },
+  "runtime.platform.support.evaluation.online.holdout_eval": {
+    "HoldoutEval": "runtime.platform.support.evaluation.online"
+  },
+  "runtime.platform.support.evaluation.online.live_reward_tracking": {
+    "LiveRewardTracking": "runtime.platform.support.evaluation.online"
+  },
+  "runtime.platform.support.evaluation.online.live_safety_eval": {
+    "LiveSafetyEval": "runtime.platform.support.evaluation.online"
+  },
+  "runtime.platform.support.evaluation.online.online_evaluator": {
+    "OnlineEvaluator": "runtime.platform.support.evaluation.online"
+  },
+  "runtime.platform.support.evaluation.online.shadow_eval": {
+    "ShadowEval": "runtime.platform.support.evaluation.online"
+  },
+  "runtime.platform.support.evaluation.online.staged_rollout_eval": {
+    "StagedRolloutEval": "runtime.platform.support.evaluation.online"
+  },
+  "runtime.platform.support.evaluation.policy_comparator": {
+    "PolicyComparator": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.regression_runner": {
+    "RegressionRunner": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.safety.abuse_case_eval": {
+    "AbuseCaseEval": "runtime.platform.support.evaluation.safety"
+  },
+  "runtime.platform.support.evaluation.safety.adversarial_eval": {
+    "AdversarialEval": "runtime.platform.support.evaluation.safety"
+  },
+  "runtime.platform.support.evaluation.safety.anomaly_sensitivity_eval": {
+    "AnomalySensitivityEval": "runtime.platform.support.evaluation.safety"
+  },
+  "runtime.platform.support.evaluation.safety.constraint_violation_eval": {
+    "ConstraintViolationEval": "runtime.platform.support.evaluation.safety"
+  },
+  "runtime.platform.support.evaluation.safety.rare_event_eval": {
+    "RareEventEval": "runtime.platform.support.evaluation.safety"
+  },
+  "runtime.platform.support.evaluation.safety.robustness_eval": {
+    "RobustnessEval": "runtime.platform.support.evaluation.safety"
+  },
+  "runtime.platform.support.evaluation.safety.safety_evaluator": {
+    "SafetyEvaluator": "runtime.platform.support.evaluation.safety"
+  },
+  "runtime.platform.support.evaluation.safety.tail_risk_eval": {
+    "TailRiskEval": "runtime.platform.support.evaluation.safety"
+  },
+  "runtime.platform.support.evaluation.score_aggregation": {
+    "ScoreAggregation": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.score_normalization": {
+    "ScoreNormalization": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.evaluation.significance_testing": {
+    "SignificanceTesting": "runtime.platform.support.evaluation"
+  },
+  "runtime.platform.support.events.contracts": {
+    "EventPublisherContract": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.dead_letter_queue": {
+    "DeadLetterQueue": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.delivery_guarantees": {
+    "DeliveryGuarantees": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.event_bus": {
+    "EventBus": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.event_deserializer": {
+    "EventDeserializer": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.event_envelope": {
+    "EventEnvelope": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.event_serializer": {
+    "EventSerializer": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.event_types": {
+    "EVENT_TYPES": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.idempotency": {
+    "Idempotency": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.publisher": {
+    "Publisher": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.retry_policy": {
+    "RetryPolicy": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.subscriber": {
+    "Subscriber": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.events.topic_registry": {
+    "TopicRegistry": "runtime.platform.support.events"
+  },
+  "runtime.platform.support.experiments.ab_testing": {
+    "ABTesting": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.canary_registry": {
+    "CanaryRegistry": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.experiment_identity": {
+    "ExperimentIdentity": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.experiment_lineage": {
+    "ExperimentLineage": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.experiment_metadata": {
+    "ExperimentMetadata": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.experiment_registry": {
+    "ExperimentRegistry": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.experiment_search": {
+    "ExperimentSearch": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.experiment_tags": {
+    "ExperimentTags": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.experiment_tracker": {
+    "ExperimentTracker": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.shadow_registry": {
+    "ShadowRegistry": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.trial_allocator": {
+    "TrialAllocator": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.trial_registry": {
+    "TrialRegistry": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.experiments.trial_scheduler": {
+    "TrialScheduler": "runtime.platform.support.experiments"
+  },
+  "runtime.platform.support.explainability.action_explainer": {
+    "ActionExplainer": "runtime.platform.support.explainability"
+  },
+  "runtime.platform.support.explainability.counterfactual_explainer": {
+    "CounterfactualExplainer": "runtime.platform.support.explainability"
+  },
+  "runtime.platform.support.explainability.evaluation_explainer": {
+    "EvaluationExplainer": "runtime.platform.support.explainability"
+  },
+  "runtime.platform.support.explainability.feature_attribution": {
+    "FeatureAttribution": "runtime.platform.support.explainability"
+  },
+  "runtime.platform.support.explainability.policy_explainer": {
+    "PolicyExplainer": "runtime.platform.support.explainability"
+  },
+  "runtime.platform.support.explainability.promotion_explainer": {
+    "PromotionExplainer": "runtime.platform.support.explainability"
+  },
+  "runtime.platform.support.explainability.reward_explainer": {
+    "RewardExplainer": "runtime.platform.support.explainability"
+  },
+  "runtime.platform.support.explainability.rollback_explainer": {
+    "RollbackExplainer": "runtime.platform.support.explainability"
+  },
+  "runtime.platform.support.governance.approval_workflow": {
+    "ApprovalWorkflow": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.audit_log": {
+    "AuditLog": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.audit_reader": {
+    "AuditReader": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.audit_record": {
+    "AuditRecord": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.audit_writer": {
+    "AuditWriter": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.change_request": {
+    "ChangeRequest": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.change_review": {
+    "ChangeReview": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.compliance_record": {
+    "ComplianceRecord": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.contracts": {
+    "AuditWriterContract": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.evaluation_report": {
+    "EvaluationReport": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.governance_policy": {
+    "GovernancePolicy": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.governance_registry": {
+    "GovernanceRegistry": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.incident_review": {
+    "IncidentReview": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.lineage_manifest": {
+    "LineageManifest": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.model_card": {
+    "ModelCard": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.postmortem": {
+    "Postmortem": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.promotion_report": {
+    "PromotionReport": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.release_policy": {
+    "ReleasePolicy": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.release_readiness": {
+    "ReleaseReadiness": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.reproducibility_manifest": {
+    "ReproducibilityManifest": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.governance.rollback_report": {
+    "RollbackReport": "runtime.platform.support.governance"
+  },
+  "runtime.platform.support.human_review.escalation_policy": {
+    "EscalationPolicy": "runtime.platform.support.human_review"
+  },
+  "runtime.platform.support.human_review.override_audit": {
+    "OverrideAudit": "runtime.platform.support.human_review"
+  },
+  "runtime.platform.support.human_review.override_execution": {
+    "OverrideExecution": "runtime.platform.support.human_review"
+  },
+  "runtime.platform.support.human_review.override_registry": {
+    "OverrideRegistry": "runtime.platform.support.human_review"
+  },
+  "runtime.platform.support.human_review.review_assignment": {
+    "ReviewAssignment": "runtime.platform.support.human_review"
+  },
+  "runtime.platform.support.human_review.review_decision": {
+    "ReviewDecision": "runtime.platform.support.human_review"
+  },
+  "runtime.platform.support.human_review.review_queue": {
+    "ReviewQueue": "runtime.platform.support.human_review"
+  },
+  "runtime.platform.support.human_review.review_request": {
+    "ReviewRequest": "runtime.platform.support.human_review"
+  },
+  "runtime.platform.support.human_review.reviewer_guidelines": {
+    "GUIDELINES": "runtime.platform.support.human_review"
+  },
+  "runtime.platform.support.observability.alerts": {
+    "Alerts": "runtime.platform.support.observability"
+  },
+  "runtime.platform.support.observability.business.cost_metrics": {
+    "CostMetrics": "runtime.platform.support.observability.business"
+  },
+  "runtime.platform.support.observability.business.drift_metrics": {
+    "DriftMetrics": "runtime.platform.support.observability.business"
+  },
+  "runtime.platform.support.observability.business.kpi_metrics": {
+    "KPIMetrics": "runtime.platform.support.observability.business"
+  },
+  "runtime.platform.support.observability.business.promotion_metrics": {
+    "PromotionMetrics": "runtime.platform.support.observability.business"
+  },
+  "runtime.platform.support.observability.business.rollback_metrics": {
+    "RollbackMetrics": "runtime.platform.support.observability.business"
+  },
+  "runtime.platform.support.observability.correlation_ids": {
+    "new_correlation_id": "runtime.platform.support.observability"
+  },
+  "runtime.platform.support.observability.dashboards": {
+    "Dashboards": "runtime.platform.support.observability"
+  },
+  "runtime.platform.support.observability.error_reporting": {
+    "ErrorReporting": "runtime.platform.support.observability"
+  },
+  "runtime.platform.support.observability.health_checks": {
+    "HealthChecks": "runtime.platform.support.observability"
+  },
+  "runtime.platform.support.observability.heartbeat": {
+    "Heartbeat": "runtime.platform.support.observability"
+  },
+  "runtime.platform.support.observability.rate_limited_logging": {
+    "RateLimitedLogging": "runtime.platform.support.observability"
+  },
+  "runtime.platform.support.observability.rollout.actor_metrics": {
+    "ActorMetrics": "runtime.platform.support.observability.rollout"
+  },
+  "runtime.platform.support.observability.rollout.collector_metrics": {
+    "CollectorMetrics": "runtime.platform.support.observability.rollout"
+  },
+  "runtime.platform.support.observability.rollout.episode_metrics": {
+    "EpisodeMetrics": "runtime.platform.support.observability.rollout"
+  },
+  "runtime.platform.support.observability.rollout.reward_metrics": {
+    "RewardMetrics": "runtime.platform.support.observability.rollout"
+  },
+  "runtime.platform.support.observability.rollout.rollout_metrics": {
+    "RolloutMetricsView": "runtime.platform.support.observability.rollout"
+  },
+  "runtime.platform.support.observability.serving.action_distribution_metrics": {
+    "ActionDistributionMetrics": "runtime.platform.support.observability.serving"
+  },
+  "runtime.platform.support.observability.serving.error_metrics": {
+    "ErrorMetrics": "runtime.platform.support.observability.serving"
+  },
+  "runtime.platform.support.observability.serving.fallback_metrics": {
+    "FallbackMetrics": "runtime.platform.support.observability.serving"
+  },
+  "runtime.platform.support.observability.serving.inference_metrics": {
+    "InferenceMetrics": "runtime.platform.support.observability.serving"
+  },
+  "runtime.platform.support.observability.serving.latency_metrics": {
+    "LatencyMetrics": "runtime.platform.support.observability.serving"
+  },
+  "runtime.platform.support.observability.structured_events": {
+    "StructuredEvents": "runtime.platform.support.observability"
+  },
+  "runtime.platform.support.observability.telemetry": {
+    "Telemetry": "runtime.platform.support.observability"
+  },
+  "runtime.platform.support.observability.tracing": {
+    "TraceRecorder": "runtime.platform.support.observability"
+  },
+  "runtime.platform.support.observability.training.checkpoint_metrics": {
+    "CheckpointMetrics": "runtime.platform.support.observability.training"
+  },
+  "runtime.platform.support.observability.training.convergence_metrics": {
+    "ConvergenceMetrics": "runtime.platform.support.observability.training"
+  },
+  "runtime.platform.support.observability.training.gradient_metrics": {
+    "GradientMetrics": "runtime.platform.support.observability.training"
+  },
+  "runtime.platform.support.observability.training.optimizer_metrics": {
+    "OptimizerMetrics": "runtime.platform.support.observability.training"
+  },
+  "runtime.platform.support.observability.training.train_metrics": {
+    "TrainMetricsView": "runtime.platform.support.observability.training"
+  },
+  "runtime.platform.support.optimization.budget_enforcement": {
+    "BudgetEnforcement": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.candidate_generator": {
+    "CandidateGenerator": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.candidate_registry": {
+    "CandidateRegistry": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.candidate_scoring": {
+    "CandidateScoring": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.fallback_policy": {
+    "FallbackPolicy": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.gates.approval_gate": {
+    "ApprovalGate": "runtime.platform.support.optimization.gates"
+  },
+  "runtime.platform.support.optimization.gates.confidence_gate": {
+    "ConfidenceGate": "runtime.platform.support.optimization.gates"
+  },
+  "runtime.platform.support.optimization.gates.cost_gate": {
+    "CostGate": "runtime.platform.support.optimization.gates"
+  },
+  "runtime.platform.support.optimization.gates.promotion_gate": {
+    "PromotionGate": "runtime.platform.support.optimization.gates"
+  },
+  "runtime.platform.support.optimization.gates.release_readiness_gate": {
+    "ReleaseReadinessGate": "runtime.platform.support.optimization.gates"
+  },
+  "runtime.platform.support.optimization.gates.reproducibility_gate": {
+    "ReproducibilityGate": "runtime.platform.support.optimization.gates"
+  },
+  "runtime.platform.support.optimization.gates.rollback_gate": {
+    "RollbackGate": "runtime.platform.support.optimization.gates"
+  },
+  "runtime.platform.support.optimization.gates.safety_gate": {
+    "SafetyGate": "runtime.platform.support.optimization.gates"
+  },
+  "runtime.platform.support.optimization.incumbent_registry": {
+    "IncumbentRegistry": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.iteration_planner": {
+    "IterationPlanner": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.next_iteration_decision": {
+    "NextIterationDecision": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.optimization_request": {
+    "OptimizationRequest": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.optimization_result": {
+    "OptimizationResult": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.optimizer_identity": {
+    "OptimizerIdentity": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.rollback_decision": {
+    "RollbackDecision": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.search.architecture_search": {
+    "ArchitectureSearch": "runtime.platform.support.optimization.search"
+  },
+  "runtime.platform.support.optimization.search.bayesian_optimization": {
+    "BayesianOptimization": "runtime.platform.support.optimization.search"
+  },
+  "runtime.platform.support.optimization.search.early_termination": {
+    "EarlyTermination": "runtime.platform.support.optimization.search"
+  },
+  "runtime.platform.support.optimization.search.evolutionary_search": {
+    "EvolutionarySearch": "runtime.platform.support.optimization.search"
+  },
+  "runtime.platform.support.optimization.search.pruning_policy": {
+    "PruningPolicy": "runtime.platform.support.optimization.search"
+  },
+  "runtime.platform.support.optimization.search.random_search": {
+    "RandomSearch": "runtime.platform.support.optimization.search"
+  },
+  "runtime.platform.support.optimization.search.resource_allocator": {
+    "ResourceAllocator": "runtime.platform.support.optimization.search"
+  },
+  "runtime.platform.support.optimization.search.scheduler_search": {
+    "SchedulerSearch": "runtime.platform.support.optimization.search"
+  },
+  "runtime.platform.support.optimization.search_space": {
+    "SearchSpace": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.optimization.service": {
+    "OptimizationDecisionService": "runtime.platform.support.optimization"
+  },
+  "runtime.platform.support.orchestration.cluster.autoscaling": {
+    "Autoscaling": "runtime.platform.support.orchestration.cluster"
+  },
+  "runtime.platform.support.orchestration.cluster.capacity_planner": {
+    "CapacityPlanner": "runtime.platform.support.orchestration.cluster"
+  },
+  "runtime.platform.support.orchestration.cluster.cluster_runtime": {
+    "ClusterRuntime": "runtime.platform.support.orchestration.cluster"
+  },
+  "runtime.platform.support.orchestration.cluster.cost_scheduler": {
+    "CostScheduler": "runtime.platform.support.orchestration.cluster"
+  },
+  "runtime.platform.support.orchestration.cluster.gpu_allocator": {
+    "GPUAllocator": "runtime.platform.support.orchestration.cluster"
+  },
+  "runtime.platform.support.orchestration.cluster.memory_guard": {
+    "MemoryGuard": "runtime.platform.support.orchestration.cluster"
+  },
+  "runtime.platform.support.orchestration.cluster.node_registry": {
+    "NodeRegistry": "runtime.platform.support.orchestration.cluster"
+  },
+  "runtime.platform.support.orchestration.cluster.placement_policy": {
+    "PlacementPolicy": "runtime.platform.support.orchestration.cluster"
+  },
+  "runtime.platform.support.orchestration.cluster.spot_recovery": {
+    "SpotRecovery": "runtime.platform.support.orchestration.cluster"
+  },
+  "runtime.platform.support.orchestration.cluster.worker_registry": {
+    "WorkerRegistry": "runtime.platform.support.orchestration.cluster"
+  },
+  "runtime.platform.support.orchestration.concurrency_limits": {
+    "ConcurrencyLimits": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.dag_builder": {
+    "DAGBuilder": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.job_dispatcher": {
+    "JobDispatcher": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.job_recovery": {
+    "JobRecovery": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.job_runner": {
+    "JobRunner": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.job_spec": {
+    "JobSpec": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.leases": {
+    "Leases": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.priority_classes": {
+    "PriorityClass": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.quotas": {
+    "Quotas": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.task_graph": {
+    "TaskGraph": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.workflow_events": {
+    "WorkflowEvents": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.workflow_gc": {
+    "WorkflowGC": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.workflow_recovery": {
+    "WorkflowRecovery": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.workflow_registry": {
+    "WorkflowRegistry": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.workflow_retry": {
+    "WorkflowRetry": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.workflow_runner": {
+    "WorkflowRunner": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.orchestration.workflow_state": {
+    "WorkflowState": "runtime.platform.support.orchestration"
+  },
+  "runtime.platform.support.policy.heads.constraint_head": {
+    "ConstraintHead": "runtime.platform.support.policy.heads"
+  },
+  "runtime.platform.support.policy.heads.continuous_action_head": {
+    "ContinuousActionHead": "runtime.platform.support.policy.heads"
+  },
+  "runtime.platform.support.policy.heads.discrete_action_head": {
+    "DiscreteActionHead": "runtime.platform.support.policy.heads"
+  },
+  "runtime.platform.support.policy.heads.distribution_head": {
+    "DistributionHead": "runtime.platform.support.policy.heads"
+  },
+  "runtime.platform.support.policy.heads.hybrid_action_head": {
+    "HybridActionHead": "runtime.platform.support.policy.heads"
+  },
+  "runtime.platform.support.policy.heads.q_value_head": {
+    "QValueHead": "runtime.platform.support.policy.heads"
+  },
+  "runtime.platform.support.policy.heads.temperature_head": {
+    "TemperatureHead": "runtime.platform.support.policy.heads"
+  },
+  "runtime.platform.support.policy.heads.uncertainty_head": {
+    "UncertaintyHead": "runtime.platform.support.policy.heads"
+  },
+  "runtime.platform.support.policy.heads.value_head": {
+    "ValueHead": "runtime.platform.support.policy.heads"
+  },
+  "runtime.platform.support.policy.inference.action_postprocessing": {
+    "ActionPostprocessing": "runtime.platform.support.policy.inference"
+  },
+  "runtime.platform.support.policy.inference.action_sampler": {
+    "ActionSampler": "runtime.platform.support.policy.inference"
+  },
+  "runtime.platform.support.policy.inference.batch_inference": {
+    "BatchInference": "runtime.platform.support.policy.inference"
+  },
+  "runtime.platform.support.policy.inference.deterministic_inference": {
+    "DeterministicInference": "runtime.platform.support.policy.inference"
+  },
+  "runtime.platform.support.policy.inference.inference_caching": {
+    "InferenceCaching": "runtime.platform.support.policy.inference"
+  },
+  "runtime.platform.support.policy.inference.inference_engine": {
+    "InferenceEngine": "runtime.platform.support.policy.inference"
+  },
+  "runtime.platform.support.policy.inference.latency_budgeting": {
+    "LatencyBudget": "runtime.platform.support.policy.inference"
+  },
+  "runtime.platform.support.policy.inference.stochastic_inference": {
+    "StochasticInference": "runtime.platform.support.policy.inference"
+  },
+  "runtime.platform.support.policy.inference.streaming_inference": {
+    "StreamingInference": "runtime.platform.support.policy.inference"
+  },
+  "runtime.platform.support.policy.models.backbone_factory": {
+    "BackboneFactory": "runtime.platform.support.policy.models"
+  },
+  "runtime.platform.support.policy.models.decoder_factory": {
+    "DecoderFactory": "runtime.platform.support.policy.models"
+  },
+  "runtime.platform.support.policy.models.embedding_factory": {
+    "EmbeddingFactory": "runtime.platform.support.policy.models"
+  },
+  "runtime.platform.support.policy.models.encoder_factory": {
+    "EncoderFactory": "runtime.platform.support.policy.models"
+  },
+  "runtime.platform.support.policy.models.head_factory": {
+    "HeadFactory": "runtime.platform.support.policy.models"
+  },
+  "runtime.platform.support.policy.models.initialization": {
+    "initialize_parameters": "runtime.platform.support.policy.models"
+  },
+  "runtime.platform.support.policy.models.model_factory": {
+    "ModelFactory": "runtime.platform.support.policy.models"
+  },
+  "runtime.platform.support.policy.models.normalization_factory": {
+    "NormalizationFactory": "runtime.platform.support.policy.models"
+  },
+  "runtime.platform.support.policy.models.parameter_groups": {
+    "parameter_groups": "runtime.platform.support.policy.models"
+  },
+  "runtime.platform.support.policy.policy_registry": {
+    "PolicyRegistry": "core.ai.policy_registry"
+  },
+  "runtime.platform.support.representation.auxiliary_tasks": {
+    "AuxiliaryTask": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.representation.contrastive_objectives": {
+    "ContrastiveObjective": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.representation.imagination_rollouts": {
+    "ImaginationRollouts": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.representation.latent_dynamics": {
+    "LatentDynamics": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.representation.latent_state": {
+    "LatentState": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.representation.observation_encoder": {
+    "ObservationEncoder": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.representation.predictive_representation": {
+    "PredictiveRepresentation": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.representation.sequence_encoder": {
+    "SequenceEncoder": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.representation.state_abstraction": {
+    "StateAbstraction": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.representation.state_encoder": {
+    "StateEncoder": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.representation.temporal_encoder": {
+    "TemporalEncoder": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.representation.world_model": {
+    "WorldModel": "runtime.platform.support.representation"
+  },
+  "runtime.platform.support.reward.credit_assignment.delayed_credit_propagation": {
+    "propagate": "runtime.platform.support.reward.credit_assignment"
+  },
+  "runtime.platform.support.reward.credit_assignment.eligibility_traces": {
+    "EligibilityTraces": "runtime.platform.support.reward.credit_assignment"
+  },
+  "runtime.platform.support.reward.credit_assignment.generalized_advantage_estimation": {
+    "gae": "runtime.platform.support.reward.credit_assignment"
+  },
+  "runtime.platform.support.reward.credit_assignment.monte_carlo_returns": {
+    "returns": "runtime.platform.support.reward.credit_assignment"
+  },
+  "runtime.platform.support.reward.credit_assignment.sequence_credit_assignment": {
+    "assign_sequence_credit": "runtime.platform.support.reward.credit_assignment"
+  },
+  "runtime.platform.support.reward.credit_assignment.td_returns": {
+    "td_target": "runtime.platform.support.reward.credit_assignment"
+  },
+  "runtime.platform.support.reward.preference.evaluator_bridge": {
+    "EvaluatorBridge": "runtime.platform.support.reward.preference"
+  },
+  "runtime.platform.support.reward.preference.preference_dataset_builder": {
+    "PreferenceDatasetBuilder": "runtime.platform.support.reward.preference"
+  },
+  "runtime.platform.support.reward.preference.preference_model": {
+    "PreferenceModel": "runtime.platform.support.reward.preference"
+  },
+  "runtime.platform.support.reward.preference.preference_pair_sampler": {
+    "PreferencePairSampler": "runtime.platform.support.reward.preference"
+  },
+  "runtime.platform.support.reward.preference.preference_trainer": {
+    "PreferenceTrainer": "runtime.platform.support.reward.preference"
+  },
+  "runtime.platform.support.reward.preference.ranking_loss": {
+    "logistic_ranking_loss": "runtime.platform.support.reward.preference"
+  },
+  "runtime.platform.support.reward.preference.reward_from_preferences": {
+    "reward_from_preference": "runtime.platform.support.reward.preference"
+  },
+  "runtime.platform.support.rollout.contracts": {
+    "RolloutCollector": "runtime.platform.support.rollout"
+  },
+  "runtime.platform.support.rollout.control.rollout_admission": {
+    "RolloutAdmission": "runtime.platform.support.rollout.control"
+  },
+  "runtime.platform.support.rollout.control.rollout_cancellation": {
+    "RolloutCancellation": "runtime.platform.support.rollout.control"
+  },
+  "runtime.platform.support.rollout.control.rollout_priority": {
+    "RolloutPriority": "runtime.platform.support.rollout.control"
+  },
+  "runtime.platform.support.rollout.control.rollout_recovery": {
+    "RolloutRecovery": "runtime.platform.support.rollout.control"
+  },
+  "runtime.platform.support.rollout.control.rollout_retry_policy": {
+    "RolloutRetryPolicy": "runtime.platform.support.rollout.control"
+  },
+  "runtime.platform.support.rollout.control.rollout_router": {
+    "RolloutRouter": "runtime.platform.support.rollout.control"
+  },
+  "runtime.platform.support.rollout.control.rollout_scheduler": {
+    "RolloutScheduler": "runtime.platform.support.rollout.control"
+  },
+  "runtime.platform.support.rollout.control.rollout_throttling": {
+    "RolloutThrottling": "runtime.platform.support.rollout.control"
+  },
+  "runtime.platform.support.rollout.monitoring.rollout_anomaly_detection": {
+    "RolloutAnomalyDetection": "runtime.platform.support.rollout.monitoring"
+  },
+  "runtime.platform.support.rollout.monitoring.rollout_cost": {
+    "RolloutCost": "runtime.platform.support.rollout.monitoring"
+  },
+  "runtime.platform.support.rollout.monitoring.rollout_drift": {
+    "RolloutDrift": "runtime.platform.support.rollout.monitoring"
+  },
+  "runtime.platform.support.rollout.monitoring.rollout_health": {
+    "RolloutHealth": "runtime.platform.support.rollout.monitoring"
+  },
+  "runtime.platform.support.rollout.monitoring.rollout_quality": {
+    "RolloutQuality": "runtime.platform.support.rollout.monitoring"
+  },
+  "runtime.platform.support.rollout.monitoring.rollout_safety": {
+    "RolloutSafety": "runtime.platform.support.rollout.monitoring"
+  },
+  "runtime.platform.support.rollout.rollout_budget": {
+    "RolloutBudget": "runtime.platform.support.rollout"
+  },
+  "runtime.platform.support.rollout.rollout_identity": {
+    "RolloutIdentity": "runtime.platform.support.rollout"
+  },
+  "runtime.platform.support.rollout.rollout_limits": {
+    "RolloutLimits": "runtime.platform.support.rollout"
+  },
+  "runtime.platform.support.rollout.rollout_lineage": {
+    "RolloutLineage": "runtime.platform.support.rollout"
+  },
+  "runtime.platform.support.rollout.rollout_metrics": {
+    "RolloutMetrics": "runtime.platform.support.rollout"
+  },
+  "runtime.platform.support.rollout.rollout_registry": {
+    "RolloutRegistry": "runtime.platform.support.rollout"
+  },
+  "runtime.platform.support.rollout.rollout_request": {
+    "RolloutRequest": "runtime.platform.support.rollout"
+  },
+  "runtime.platform.support.rollout.rollout_result": {
+    "StoredRolloutResult": "runtime.platform.support.rollout"
+  },
+  "runtime.platform.support.rollout.rollout_spec": {
+    "RolloutSpec": "runtime.platform.support.rollout"
+  },
+  "runtime.platform.support.safety.constraints": {
+    "Constraints": "runtime.platform.support.safety"
+  },
+  "runtime.platform.support.safety.contracts": {
+    "Guard": "runtime.platform.support.safety"
+  },
+  "runtime.platform.support.safety.guards.action_guard": {
+    "ActionGuard": "runtime.platform.support.safety.guards"
+  },
+  "runtime.platform.support.safety.guards.checkpoint_guard": {
+    "CheckpointGuard": "runtime.platform.support.safety.guards"
+  },
+  "runtime.platform.support.safety.guards.dataset_guard": {
+    "DatasetGuard": "runtime.platform.support.safety.guards"
+  },
+  "runtime.platform.support.safety.guards.policy_guard": {
+    "PolicyGuard": "runtime.platform.support.safety.guards"
+  },
+  "runtime.platform.support.safety.guards.promotion_guard": {
+    "PromotionGuard": "runtime.platform.support.safety.guards"
+  },
+  "runtime.platform.support.safety.guards.reward": {
+    "RewardGuard": "runtime.platform.support.safety.guards"
+  },
+  "runtime.platform.support.safety.guards.reward_guard": {
+    "RewardGuard": "runtime.platform.support.safety.guards"
+  },
+  "runtime.platform.support.safety.guards.rollout_guard": {
+    "RolloutGuard": "runtime.platform.support.safety.guards"
+  },
+  "runtime.platform.support.safety.guards.serving_guard": {
+    "ServingGuard": "runtime.platform.support.safety.guards"
+  },
+  "runtime.platform.support.safety.guards.training_guard": {
+    "TrainingGuard": "runtime.platform.support.safety.guards"
+  },
+  "runtime.platform.support.safety.incident_types": {
+    "INCIDENT_TYPES": "runtime.platform.support.safety"
+  },
+  "runtime.platform.support.safety.limit_registry": {
+    "LimitRegistry": "runtime.platform.support.safety"
+  },
+  "runtime.platform.support.safety.risk_levels": {
+    "RiskLevel": "runtime.platform.support.safety"
+  },
+  "runtime.platform.support.safety.rule_registry": {
+    "RuleRegistry": "runtime.platform.support.safety"
+  },
+  "runtime.platform.support.safety.runtime.anomaly_detection": {
+    "detect_numeric_anomaly": "runtime.platform.support.safety.runtime"
+  },
+  "runtime.platform.support.safety.runtime.collapse_detector": {
+    "CollapseDetector": "runtime.platform.support.safety.runtime"
+  },
+  "runtime.platform.support.safety.runtime.degraded_mode_entry": {
+    "DegradedModeEntry": "runtime.platform.support.safety.runtime"
+  },
+  "runtime.platform.support.safety.runtime.drift_detection": {
+    "detect_drift": "runtime.platform.support.safety.runtime"
+  },
+  "runtime.platform.support.safety.runtime.emergency_stop": {
+    "EmergencyStop": "runtime.platform.support.safety.runtime"
+  },
+  "runtime.platform.support.safety.runtime.human_override": {
+    "HumanOverride": "runtime.platform.support.safety.runtime"
+  },
+  "runtime.platform.support.safety.runtime.reward_hacking_detector": {
+    "RewardHackingDetector": "runtime.platform.support.safety.runtime"
+  },
+  "runtime.platform.support.safety.runtime.runaway_feedback_firewall": {
+    "RunawayFeedbackFirewall": "runtime.platform.support.safety.runtime"
+  },
+  "runtime.platform.support.safety.runtime.safe_shutdown": {
+    "SafeShutdown": "runtime.platform.support.safety.runtime"
+  },
+  "runtime.platform.support.safety.runtime.self_reinforcement_firewall": {
+    "SelfReinforcementFirewall": "runtime.platform.support.safety.runtime"
+  },
+  "runtime.platform.support.safety.safe_defaults": {
+    "SAFE_DEFAULTS": "runtime.platform.support.safety"
+  },
+  "runtime.platform.support.safety.safety_policy": {
+    "SafetyPolicy": "runtime.platform.support.safety"
+  },
+  "runtime.platform.support.safety.violation_types": {
+    "VIOLATION_TYPES": "runtime.platform.support.safety"
+  },
+  "runtime.platform.support.schemas.python.checkpoint_schema": {
+    "checkpoint_schema": "runtime.platform.support.schemas.python"
+  },
+  "runtime.platform.support.schemas.python.episode_schema": {
+    "episode_schema": "runtime.platform.support.schemas.python"
+  },
+  "runtime.platform.support.schemas.python.evaluation_schema": {
+    "evaluation_schema": "runtime.platform.support.schemas.python"
+  },
+  "runtime.platform.support.schemas.python.experiment_schema": {
+    "experiment_schema": "runtime.platform.support.schemas.python"
+  },
+  "runtime.platform.support.schemas.python.incident_schema": {
+    "incident_schema": "runtime.platform.support.schemas.python"
+  },
+  "runtime.platform.support.schemas.python.policy_schema": {
+    "policy_schema": "runtime.platform.support.schemas.python"
+  },
+  "runtime.platform.support.schemas.python.reward_schema": {
+    "reward_schema": "runtime.platform.support.schemas.python"
+  },
+  "runtime.platform.support.schemas.python.rollout_schema": {
+    "rollout_schema": "runtime.platform.support.schemas.python"
+  },
+  "runtime.platform.support.schemas.python.trajectory_schema": {
+    "trajectory_schema": "runtime.platform.support.schemas.python"
+  },
+  "runtime.platform.support.schemas.python.transition_schema": {
+    "transition_schema": "runtime.platform.support.schemas.python"
+  },
+  "runtime.platform.support.schemas.validators.checkpoint_validator": {
+    "valid_checkpoint": "runtime.platform.support.schemas.validators"
+  },
+  "runtime.platform.support.schemas.validators.episode_validator": {
+    "valid_episode": "runtime.platform.support.schemas.validators"
+  },
+  "runtime.platform.support.schemas.validators.evaluation_validator": {
+    "valid_evaluation": "runtime.platform.support.schemas.validators"
+  },
+  "runtime.platform.support.schemas.validators.experiment_validator": {
+    "valid_experiment": "runtime.platform.support.schemas.validators"
+  },
+  "runtime.platform.support.schemas.validators.reward_validator": {
+    "valid_reward": "runtime.platform.support.schemas.validators"
+  },
+  "runtime.platform.support.schemas.validators.rollout_validator": {
+    "valid_rollout": "runtime.platform.support.schemas.validators"
+  },
+  "runtime.platform.support.schemas.validators.trajectory_validator": {
+    "valid_trajectory": "runtime.platform.support.schemas.validators"
+  },
+  "runtime.platform.support.scripts.registry": {
+    "SCRIPT_COMMANDS": "runtime.platform.support.scripts",
+    "is_known_script_command": "runtime.platform.support.scripts"
+  },
+  "runtime.platform.support.sdk.action_client": {
+    "ActionClient": "runtime.platform.support.sdk"
+  },
+  "runtime.platform.support.sdk.evaluation_client": {
+    "EvaluationClient": "runtime.platform.support.sdk"
+  },
+  "runtime.platform.support.sdk.experiment_client": {
+    "ExperimentClient": "runtime.platform.support.sdk"
+  },
+  "runtime.platform.support.sdk.governance_client": {
+    "GovernanceClient": "runtime.platform.support.sdk"
+  },
+  "runtime.platform.support.sdk.rollout_client": {
+    "RolloutClient": "runtime.platform.support.sdk"
+  },
+  "runtime.platform.support.security.artifact_signing": {
+    "ArtifactSigning": "runtime.platform.support.security"
+  },
+  "runtime.platform.support.security.auth": {
+    "Auth": "runtime.platform.support.security"
+  },
+  "runtime.platform.support.security.authz": {
+    "Authz": "runtime.platform.support.security"
+  },
+  "runtime.platform.support.security.key_rotation": {
+    "KeyRotation": "runtime.platform.support.security"
+  },
+  "runtime.platform.support.security.permissions": {
+    "PERMISSIONS": "runtime.platform.support.security"
+  },
+  "runtime.platform.support.security.service_identities": {
+    "ServiceIdentity": "runtime.platform.support.security"
+  },
+  "runtime.platform.support.security.signature_verification": {
+    "SignatureVerification": "runtime.platform.support.security"
+  },
+  "runtime.platform.support.security.transport_security": {
+    "TransportSecurity": "runtime.platform.support.security"
+  },
+  "runtime.platform.support.serving.api.action_handler": {
+    "ActionHandler": "runtime.platform.support.serving.api"
+  },
+  "runtime.platform.support.serving.api.batch_action_handler": {
+    "BatchActionHandler": "runtime.platform.support.serving.api"
+  },
+  "runtime.platform.support.serving.api.dto": {
+    "ActionRequestDTO": "runtime.platform.support.serving.api"
+  },
+  "runtime.platform.support.serving.api.handlers": {
+    "ActionHandlerBundle": "runtime.platform.support.serving.api"
+  },
+  "runtime.platform.support.serving.api.health_handler": {
+    "HealthHandler": "runtime.platform.support.serving.api"
+  },
+  "runtime.platform.support.serving.api.metrics_handler": {
+    "MetricsHandler": "runtime.platform.support.serving.api"
+  },
+  "runtime.platform.support.serving.api.parsers": {
+    "Parser": "runtime.platform.support.serving.api"
+  },
+  "runtime.platform.support.serving.api.readiness_handler": {
+    "ReadinessHandler": "runtime.platform.support.serving.api"
+  },
+  "runtime.platform.support.serving.api.request_validation": {
+    "RequestValidation": "runtime.platform.support.serving.api"
+  },
+  "runtime.platform.support.serving.api.response_validation": {
+    "ResponseValidation": "runtime.platform.support.serving.api"
+  },
+  "runtime.platform.support.serving.api.serializers": {
+    "Serializer": "runtime.platform.support.serving.api"
+  },
+  "runtime.platform.support.serving.batch.batch_scoring_job": {
+    "BatchScoringJob": "runtime.platform.support.serving.batch"
+  },
+  "runtime.platform.support.serving.batch.bulk_action_job": {
+    "run_bulk_action": "runtime.platform.support.serving.batch"
+  },
+  "runtime.platform.support.serving.batch.evaluation_job": {
+    "EvaluationJob": "runtime.platform.support.serving.batch"
+  },
+  "runtime.platform.support.serving.batch.offline_inference_job": {
+    "OfflineInferenceJob": "runtime.platform.support.serving.batch"
+  },
+  "runtime.platform.support.serving.batch.replay_scoring_job": {
+    "ReplayScoringJob": "runtime.platform.support.serving.batch"
+  },
+  "runtime.platform.support.serving.contracts": {
+    "ServingRuntime": "runtime.platform.support.serving"
+  },
+  "runtime.platform.support.serving.serving_budget": {
+    "ServingBudget": "runtime.platform.support.serving"
+  },
+  "runtime.platform.support.serving.serving_config": {
+    "ServingConfig": "runtime.platform.support.serving"
+  },
+  "runtime.platform.support.serving.serving_limits": {
+    "ServingLimits": "runtime.platform.support.serving"
+  },
+  "runtime.platform.support.serving.serving_metadata": {
+    "ServingMetadata": "runtime.platform.support.serving"
+  },
+  "runtime.platform.support.serving.serving_policy": {
+    "ServingPolicy": "runtime.platform.support.serving"
+  },
+  "runtime.platform.support.serving.serving_registry": {
+    "ServingRegistry": "runtime.platform.support.serving"
+  },
+  "runtime.platform.support.serving.serving_router": {
+    "ServingRouter": "runtime.platform.support.serving"
+  },
+  "runtime.platform.support.serving.serving_selector": {
+    "ServingSelector": "runtime.platform.support.serving"
+  },
+  "runtime.platform.support.storage.artifacts.artifact_store": {
+    "ArtifactStore": "runtime.platform.support.storage.generated_stores"
+  },
+  "runtime.platform.support.storage.artifacts.checkpoint_store": {
+    "CheckpointStore": "runtime.platform.support.storage.generated_stores"
+  },
+  "runtime.platform.support.storage.artifacts.evaluation_store": {
+    "EvaluationStore": "runtime.platform.support.storage.artifacts"
+  },
+  "runtime.platform.support.storage.artifacts.model_artifact_store": {
+    "ModelArtifactStore": "runtime.platform.support.storage.artifacts"
+  },
+  "runtime.platform.support.storage.artifacts.packaging_store": {
+    "PackagingStore": "runtime.platform.support.storage.artifacts"
+  },
+  "runtime.platform.support.storage.artifacts.report_store": {
+    "ReportStore": "runtime.platform.support.storage.artifacts"
+  },
+  "runtime.platform.support.storage.artifacts.signature_store": {
+    "SignatureStore": "runtime.platform.support.storage.artifacts"
+  },
+  "runtime.platform.support.storage.contracts": {
+    "Store": "runtime.platform.support.storage"
+  },
+  "runtime.platform.support.storage.datasets.benchmark_store": {
+    "BenchmarkStore": "runtime.platform.support.storage.datasets"
+  },
+  "runtime.platform.support.storage.datasets.dataset_store": {
+    "DatasetStore": "runtime.platform.support.storage.datasets"
+  },
+  "runtime.platform.support.storage.datasets.preference_store": {
+    "PreferenceStore": "runtime.platform.support.storage.datasets"
+  },
+  "runtime.platform.support.storage.datasets.replay_store": {
+    "ReplayStore": "runtime.platform.support.storage.datasets"
+  },
+  "runtime.platform.support.storage.datasets.rollout_store": {
+    "RolloutStore": "runtime.platform.support.storage.datasets"
+  },
+  "runtime.platform.support.storage.datasets.simulation_store": {
+    "SimulationStore": "runtime.platform.support.storage.datasets"
+  },
+  "runtime.platform.support.storage.naming": {
+    "artifact_name": "runtime.platform.support.storage"
+  },
+  "runtime.platform.support.storage.paths": {
+    "ensure_directory": "runtime.platform.support.storage"
+  },
+  "runtime.platform.support.storage.registry.audit_store": {
+    "AuditStore": "runtime.platform.support.storage.registry"
+  },
+  "runtime.platform.support.storage.registry.candidate_registry_store": {
+    "CandidateRegistryStore": "runtime.platform.support.storage.registry"
+  },
+  "runtime.platform.support.storage.registry.evaluation_registry_store": {
+    "EvaluationRegistryStore": "runtime.platform.support.storage.registry"
+  },
+  "runtime.platform.support.storage.registry.experiment_registry_store": {
+    "ExperimentRegistryStore": "runtime.platform.support.storage.registry"
+  },
+  "runtime.platform.support.storage.registry.lineage_store": {
+    "LineageStore": "runtime.platform.support.storage.registry"
+  },
+  "runtime.platform.support.storage.registry.policy_registry_store": {
+    "PolicyRegistryStore": "runtime.platform.support.storage.registry"
+  },
+  "runtime.platform.support.storage.registry.rollout_registry_store": {
+    "RolloutRegistryStore": "runtime.platform.support.storage.registry"
+  },
+  "runtime.platform.support.storage.retention": {
+    "StorageRetention": "runtime.platform.support.storage"
+  },
+  "runtime.platform.support.storage.storage_policy": {
+    "StoragePolicy": "runtime.platform.support.storage"
+  },
+  "runtime.platform.support.storage.uri": {
+    "join_uri": "runtime.platform.support.storage"
+  },
+  "runtime.platform.support.training.checkpointing_step": {
+    "CheckpointingStep": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.checkpoints.checkpoint_gc": {
+    "CheckpointGC": "runtime.platform.support.training.checkpoints"
+  },
+  "runtime.platform.support.training.checkpoints.checkpoint_integrity": {
+    "valid_checkpoint_payload": "runtime.platform.support.training.checkpoints"
+  },
+  "runtime.platform.support.training.checkpoints.checkpoint_loading": {
+    "CheckpointLoading": "runtime.platform.support.training.checkpoints"
+  },
+  "runtime.platform.support.training.checkpoints.checkpoint_manager": {
+    "CheckpointManager": "runtime.platform.support.training.checkpoints"
+  },
+  "runtime.platform.support.training.checkpoints.checkpoint_metadata": {
+    "CheckpointMetadata": "runtime.platform.support.training.checkpoints"
+  },
+  "runtime.platform.support.training.checkpoints.checkpoint_naming": {
+    "checkpoint_name": "runtime.platform.support.training.checkpoints"
+  },
+  "runtime.platform.support.training.checkpoints.checkpoint_policy": {
+    "CheckpointPolicy": "runtime.platform.support.training.checkpoints"
+  },
+  "runtime.platform.support.training.checkpoints.checkpoint_promotion": {
+    "CheckpointPromotion": "runtime.platform.support.training.checkpoints"
+  },
+  "runtime.platform.support.training.checkpoints.checkpoint_saving": {
+    "CheckpointSaving": "runtime.platform.support.training.checkpoints"
+  },
+  "runtime.platform.support.training.checkpoints.warmstart": {
+    "Warmstart": "runtime.platform.support.training.checkpoints"
+  },
+  "runtime.platform.support.training.contracts": {
+    "Trainable": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.convergence_detection": {
+    "ConvergenceDetection": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.distributed.ddp_runtime": {
+    "DDPRuntime": "runtime.platform.support.training.distributed"
+  },
+  "runtime.platform.support.training.distributed.deepspeed_runtime": {
+    "DeepSpeedRuntime": "runtime.platform.support.training.distributed"
+  },
+  "runtime.platform.support.training.distributed.distributed_state": {
+    "DistributedState": "runtime.platform.support.training.distributed"
+  },
+  "runtime.platform.support.training.distributed.elastic_recovery": {
+    "ElasticRecovery": "runtime.platform.support.training.distributed"
+  },
+  "runtime.platform.support.training.distributed.fsdp_runtime": {
+    "FSDPRuntime": "runtime.platform.support.training.distributed"
+  },
+  "runtime.platform.support.training.distributed.gradient_sync": {
+    "GradientSync": "runtime.platform.support.training.distributed"
+  },
+  "runtime.platform.support.training.distributed.node_failure_recovery": {
+    "NodeFailureRecovery": "runtime.platform.support.training.distributed"
+  },
+  "runtime.platform.support.training.distributed.parameter_sync": {
+    "ParameterSync": "runtime.platform.support.training.distributed"
+  },
+  "runtime.platform.support.training.distributed.rank_topology": {
+    "RankTopology": "runtime.platform.support.training.distributed"
+  },
+  "runtime.platform.support.training.distributed.sharded_optimizer": {
+    "ShardedOptimizer": "runtime.platform.support.training.distributed"
+  },
+  "runtime.platform.support.training.distributed.train_barrier": {
+    "TrainBarrier": "runtime.platform.support.training.distributed"
+  },
+  "runtime.platform.support.training.early_stopping": {
+    "EarlyStopping": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.fit_loop": {
+    "FitLoop": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.gradient_accumulation": {
+    "GradientAccumulation": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.gradient_clipping": {
+    "clip_gradient_norm": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.gradient_pipeline": {
+    "GradientPipeline": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.learner_loop": {
+    "LearnerLoop": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.learning_rate_control": {
+    "LearningRateControl": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.mixed_precision": {
+    "MixedPrecision": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.optimizer_factory": {
+    "OptimizerFactory": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.scheduler_factory": {
+    "SchedulerFactory": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.strategies.curriculum_manager": {
+    "CurriculumManager": "runtime.platform.support.training.strategies"
+  },
+  "runtime.platform.support.training.strategies.curriculum_policy": {
+    "CurriculumPolicy": "runtime.platform.support.training.strategies"
+  },
+  "runtime.platform.support.training.strategies.opponent_sampler": {
+    "OpponentSampler": "runtime.platform.support.training.strategies"
+  },
+  "runtime.platform.support.training.strategies.self_play_manager": {
+    "SelfPlayManager": "runtime.platform.support.training.strategies"
+  },
+  "runtime.platform.support.training.strategies.teacher_forcing": {
+    "TeacherForcing": "runtime.platform.support.training.strategies"
+  },
+  "runtime.platform.support.training.train_epoch": {
+    "TrainEpoch": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.train_metrics": {
+    "TrainMetrics": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.train_state": {
+    "TrainState": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.train_step": {
+    "TrainStep": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.trainer": {
+    "Trainer": "runtime.platform.support.training"
+  },
+  "runtime.platform.support.training.trainer_factory": {
+    "TrainerFactory": "runtime.platform.support.training"
+  }
+}

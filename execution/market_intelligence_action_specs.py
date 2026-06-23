@@ -4,7 +4,7 @@ CANON_MARKET_INTELLIGENCE_ACTION_SPECS = True
 
 
 def build_market_intelligence_action_specs():
-    from execution.action_catalog import ActionSpec
+    from execution.action_contracts import ActionSpec
     return {
         'sync_marketplace_catalog': ActionSpec(
             action_type='sync_marketplace_catalog',

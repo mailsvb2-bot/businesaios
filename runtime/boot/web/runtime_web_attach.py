@@ -56,8 +56,6 @@ def build_runtime_web_attach_bundle_attrs(*, routed) -> dict[str, object]:
     }
 
 
-
-
 def _resolve_runtime_web_security_owner_bundle(*, runtime_obj, explicit_bundle=None):
     if explicit_bundle is not None:
         return explicit_bundle
@@ -68,6 +66,7 @@ def _resolve_runtime_web_security_owner_bundle(*, runtime_obj, explicit_bundle=N
     if runtime_infra is None:
         return None
     return getattr(runtime_infra, "api_security_owner_bundle", None)
+
 
 def build_runtime_web_attachment_attrs(*, state: RuntimeWebAttachmentState) -> dict[str, object]:
     attrs = {}
@@ -85,8 +84,11 @@ def iter_runtime_web_targets(*, runtime_obj):
 
 
 def apply_runtime_web_attachment(*, target, attrs: dict[str, object]) -> None:
-    for key, value in attrs.items():
-        setattr(target, key, value)
+    try:
+        vars(target).update(attrs)
+    except TypeError:
+        for key, value in attrs.items():
+            object.__setattr__(target, key, value)
 
 
 def attach_runtime_web_bundle(*, runtime_obj, project_root, settings_gateway, messaging_policy_read_service=None, messaging_policy_event_store=None, api_security_owner_bundle=None):

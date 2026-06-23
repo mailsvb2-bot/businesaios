@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
-from typing import Any
-from collections.abc import Mapping
+
+from core.safety.controls.observability.contracts import SafetyEvent
 
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 
@@ -16,16 +15,6 @@ from .metrics_export import SafetyMetricsExporter
 CANON_SAFETY_EVENT_STORE = True
 
 
-@dataclass(frozen=True)
-class SafetyEvent:
-    tenant_id: str
-    action: str
-    stage: str
-    status: str
-    control: str = ''
-    reason: str = ''
-    details: Mapping[str, Any] = field(default_factory=dict)
-    observed_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class JsonlSafetyEventStore:

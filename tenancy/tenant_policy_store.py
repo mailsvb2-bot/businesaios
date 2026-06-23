@@ -12,7 +12,7 @@ from governance.persistence_codec import atomic_write_json, from_dataclass, read
 from tenancy.tenant_audit_scope import TenantAuditScope
 from tenancy.tenant_billing_scope import TenantBillingScope
 from tenancy.tenant_connector_scope import TenantConnectorScope
-from tenancy.tenant_contract import utc_now
+from tenancy.tenant_time import utc_now
 from tenancy.tenant_feature_flags import TenantFeatureFlags
 from tenancy.tenant_memory_scope import TenantMemoryScope
 from tenancy.tenant_runtime_limits import TenantRuntimeLimits

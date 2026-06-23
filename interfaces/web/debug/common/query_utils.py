@@ -14,3 +14,6 @@ def clamp_int(value: object | None, *, default: int, lower: int, upper: int) -> 
     except Exception:
         out = int(default)
     return max(int(lower), min(out, int(upper)))
+
+
+__all__ = ["clean_text", "clamp_int"]

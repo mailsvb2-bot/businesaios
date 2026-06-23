@@ -4,3 +4,4 @@ from application.planning.long_horizon_planner import *
 
 CANON_LONG_HORIZON_PLANNER_COMPAT_SHIM = True
 CANON_LONG_HORIZON_PLANNER_FINAL_OWNER = "application.planning.long_horizon_planner"
+CANON_LONG_HORIZON_PLANNER_SURFACE = "LongHorizonPlanner"

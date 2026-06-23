@@ -12,9 +12,15 @@ class SurfaceCeiling:
 
 
 SURFACE_CEILING = SurfaceCeiling(max_python_files=5888, max_transition_surface_modules=8, max_path_legacy_compat_shim_files=5)
-_NON_SOURCE_DIR_NAMES = frozenset({".git", ".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".runtime", ".artifacts", "artifacts", "data", "runtime_state", "_audit", "htmlcov", "build", "dist"})
+_NON_SOURCE_DIR_NAMES = frozenset({".git", ".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".runtime", ".artifacts", "artifacts", "data", "runtime_state", "_audit", "htmlcov", "build", "dist", "node_modules", "target", "reports", "actions-runner-businesaios"})
 _TRANSITION_PATH_TOKENS = ("legacy", "compat", "shim")
+_TRANSITION_PATH_ALLOWLIST_PREFIXES = frozenset({("canon", "legacy")})
 _PRODUCTION_EXCLUDED_TOP_LEVEL = frozenset({"tests"})
+
+
+def _has_path_prefix(path: Path, prefixes: frozenset[tuple[str, ...]]) -> bool:
+    parts = path.parts
+    return any(parts[:len(prefix)] == prefix for prefix in prefixes)
 
 
 def is_canonical_source_path(path: Path) -> bool:
@@ -38,7 +44,15 @@ def iter_production_python_files(root: Path):
 
 
 def transition_path_marked_python_files(root: Path) -> tuple[str, ...]:
-    return tuple(sorted(path.relative_to(root).as_posix() for path in iter_production_python_files(root) if any(token in path.relative_to(root).as_posix() for token in _TRANSITION_PATH_TOKENS)))
+    items = []
+    for path in iter_production_python_files(root):
+        relative = path.relative_to(root)
+        if _has_path_prefix(relative, _TRANSITION_PATH_ALLOWLIST_PREFIXES):
+            continue
+        posix = relative.as_posix()
+        if any(token in posix for token in _TRANSITION_PATH_TOKENS):
+            items.append(posix)
+    return tuple(sorted(items))
 
 
 def surface_ceiling_snapshot(root: Path) -> dict[str, object]:

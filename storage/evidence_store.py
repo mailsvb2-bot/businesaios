@@ -16,6 +16,7 @@ from storage.tenant_partitioning import build_partition_key, normalize_storage_t
 
 
 CANON_STORAGE_EVIDENCE_STORE = True
+CANON_STORAGE_EVIDENCE_RECORD_EXPLICIT_LEGACY_FACTORY = True
 
 
 def utc_now() -> datetime:
@@ -24,6 +25,16 @@ def utc_now() -> datetime:
 
 def _json_dumps(payload: object) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _first_non_empty(*values: object, default: str) -> str:
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return default
 
 
 @dataclass(frozen=True)
@@ -41,6 +52,42 @@ class EvidenceRecord:
     retention_until: datetime | None = None
     legal_hold: bool = False
     evidence_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+
+    @classmethod
+    def from_legacy(
+        cls,
+        *,
+        tenant_id: str,
+        subject: str | None = None,
+        evidence_type: str | None = None,
+        scope: str | None = None,
+        run_id: str | None = None,
+        action_type: str | None = None,
+        verification_status: str | None = None,
+        payload: Mapping[str, Any] | None = None,
+        refs: tuple[str, ...] | list[str] | None = None,
+        labels: Mapping[str, str] | None = None,
+        action_id: str | None = None,
+        created_at: datetime | None = None,
+        retention_until: datetime | None = None,
+        legal_hold: bool = False,
+        evidence_id: str | None = None,
+    ) -> "EvidenceRecord":
+        return cls(
+            tenant_id=tenant_id,
+            scope=_first_non_empty(scope, subject, default="general"),
+            run_id=_first_non_empty(run_id, default="default"),
+            action_type=_first_non_empty(action_type, evidence_type, default="evidence"),
+            verification_status=_first_non_empty(verification_status, default="recorded"),
+            payload=dict(payload or {}),
+            refs=tuple(refs or ()),
+            labels=dict(labels or {}),
+            action_id=action_id,
+            created_at=created_at or utc_now(),
+            retention_until=retention_until,
+            legal_hold=legal_hold,
+            evidence_id=evidence_id or str(uuid.uuid4()),
+        )
 
     def validate(self) -> None:
         if not str(self.tenant_id or "").strip():
@@ -285,25 +332,20 @@ class PostgresEvidenceStore:
         return tuple(EvidenceRecord.from_row(row) for row in rows)
 
     def delete_expired(self, *, now: datetime | None = None) -> int:
-        moment = (now or utc_now()).isoformat()
+        moment = now or utc_now()
         with self._session_factory.open() as session:
-            row = session.fetchone(
-                "SELECT COUNT(*) AS deleted_count FROM storage_evidence_log WHERE legal_hold = 0 AND retention_until IS NOT NULL AND retention_until <= %s",
+            cursor = session.execute(
+                "DELETE FROM storage_evidence_log WHERE legal_hold = false AND retention_until IS NOT NULL AND retention_until <= %s",
                 (moment,),
             )
-            deleted_count = int((row or {}).get("deleted_count") or 0)
-            session.execute(
-                "DELETE FROM storage_evidence_log WHERE legal_hold = 0 AND retention_until IS NOT NULL AND retention_until <= %s",
-                (moment,),
-            )
-        return deleted_count
+            return int(cursor.rowcount or 0)
 
 
 __all__ = [
     "CANON_STORAGE_EVIDENCE_STORE",
+    "CANON_STORAGE_EVIDENCE_RECORD_EXPLICIT_LEGACY_FACTORY",
     "EvidenceRecord",
     "InMemoryEvidenceStore",
-    "PostgresEvidenceStore",
     "SqliteEvidenceStore",
-    "utc_now",
+    "PostgresEvidenceStore",
 ]

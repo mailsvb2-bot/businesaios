@@ -13,6 +13,8 @@ PAYMENTS NOTE:
 """
 from dataclasses import dataclass
 from typing import Any
+from runtime.observability.telemetry import CANON_RUNTIME_TELEMETRY_OWNER as _CANON_RUNTIME_TELEMETRY_OWNER
+CANON_RUNTIME_OBSERVABILITY_OWNER = _CANON_RUNTIME_TELEMETRY_OWNER
 
 from runtime.platform.delivery_state import DeliveryState
 from runtime.ports.effects import EffectsPort
@@ -30,12 +32,97 @@ from .effects_domains.evolution import EvolutionEffectsMixin
 from .effects_domains.marketing import MarketingEffectsMixin
 from .effects_domains.tracking import TrackingEffectsMixin
 from .effects_domains.user_state import UserStateEffectsMixin
-from .http_transport import HttpTransport, build_http_transport
+from .http_transport import HttpTransport, build_http_transport, form_urlencode as _form_body_encoder, url_with_params as _url_with_params
 
 
 def _telegram_api_base() -> str:
     from runtime.platform.config.env_flags import env_str
     return env_str("TELEGRAM_API_BASE", "https://api.telegram.org").strip().rstrip("/")
+
+
+def encode_form_body(data: dict[str, Any]) -> bytes:
+    return _form_body_encoder(dict(data or {}))
+
+
+def url_with_params(*, url: str, params: dict[str, Any] | None = None) -> str:
+    return _url_with_params(url=url, params=params)
+
+
+def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, event_store: Any, payment_outbox: Any) -> Any:
+    import json
+    import os
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    normalized_path = str(path or "/").strip() or "/"
+    auth_mode = str(os.environ.get("YOOKASSA_WEBHOOK_AUTH_MODE", "")).strip().casefold()
+    expected_token = str(os.environ.get("YOOKASSA_WEBHOOK_TOKEN", "")).strip()
+
+    def _emit_event(payload: dict[str, Any]) -> None:
+        if event_store is None:
+            return
+        append = getattr(event_store, "append", None) or getattr(event_store, "record", None)
+        if callable(append):
+            append(payload)
+
+    def _enqueue(raw: dict[str, Any]) -> None:
+        obj = raw.get("object") if isinstance(raw.get("object"), dict) else {}
+        event_name = str(raw.get("event") or "yookassa.webhook")
+        object_id = str(obj.get("id") or raw.get("id") or "unknown")
+        payload = {"type": "yookassa_webhook", "payload": raw}
+        enqueue_once = getattr(payment_outbox, "enqueue_once", None)
+        if callable(enqueue_once):
+            enqueue_once(dedupe_key=f"{event_name}:{object_id}", payload=payload)
+            return
+        enqueue = getattr(payment_outbox, "enqueue", None)
+        if callable(enqueue):
+            enqueue(payload)
+            return
+        items = getattr(payment_outbox, "items", None)
+        if isinstance(items, list):
+            items.append({"dedupe_key": f"{event_name}:{object_id}", "payload": payload})
+
+    class _Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args: Any) -> None:  # pragma: no cover - quiet smoke server
+            return
+
+        def _send_json(self, status_code: int, body: dict[str, Any]) -> None:
+            raw = json.dumps(body).encode("utf-8")
+            self.send_response(status_code)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            if self.path != normalized_path:
+                self._send_json(404, {"ok": False, "code": "not_found"})
+                return
+            if auth_mode == "token" and expected_token:
+                observed_token = str(self.headers.get("X-Webhook-Token", "")).strip()
+                if observed_token != expected_token:
+                    self._send_json(401, {"ok": False, "code": "unauthorized"})
+                    return
+            size = int(self.headers.get("content-length") or 0)
+            body = self.rfile.read(size) if size > 0 else b"{}"
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except Exception:
+                self._send_json(400, {"ok": False, "code": "invalid_json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(400, {"ok": False, "code": "invalid_payload"})
+                return
+            _enqueue(payload)
+            _emit_event({"type": "yookassa_webhook_received", "payload": payload})
+            self._send_json(200, {"ok": True})
+
+    server = ThreadingHTTPServer((str(host), int(port)), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
 @dataclass
 class Effects(UserStateEffectsMixin, TrackingEffectsMixin, AdminStateEffectsMixin, MarketingEffectsMixin, EvolutionEffectsMixin, TelegramEffectsMixin, WeatherEffectsMixin, PaymentsEffectsMixin, LLMEffectsMixin, OfferPatchEffectsMixin, PolicyEffectsMixin, EffectsPort):
     event_log: Any

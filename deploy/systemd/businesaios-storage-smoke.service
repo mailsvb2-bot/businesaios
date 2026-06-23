@@ -1,5 +1,5 @@
 [Unit]
-Description=BusinesAIOS storage live smoke gate
+Description=businessaios storage live smoke gate
 Documentation=https://github.com/mailsvb2-bot/businesaios
 After=network-online.target
 Wants=network-online.target

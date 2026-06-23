@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -26,6 +25,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts.ci.subprocess_io import run_command as ci_run_command
+
 ARTIFACT_DIR = REPO_ROOT / "artifacts" / "ci" / "server_ruff_debt_factory"
 RUNTIME_ARTIFACT_PATHS = (
     "data/business_autonomy",
@@ -67,15 +71,8 @@ def emit(message: str) -> None:
 
 
 def run(argv: Sequence[str], *, check: bool = False) -> CommandResult:
-    proc = subprocess.run(
-        list(argv),
-        cwd=str(REPO_ROOT),
-        check=False,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    result = CommandResult(tuple(str(item) for item in argv), int(proc.returncode), proc.stdout, proc.stderr)
+    outcome = ci_run_command(list(argv), cwd=REPO_ROOT, echo_output=False)
+    result = CommandResult(tuple(str(item) for item in argv), int(outcome.returncode), outcome.stdout, outcome.stderr)
     if check and result.returncode != 0:
         raise SystemExit(
             "command failed\n"

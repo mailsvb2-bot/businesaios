@@ -120,8 +120,6 @@ def resolve_world_state_inputs(
     }
 
 
-
-
 def empty_creative_snapshot() -> CreativeIntelligenceSnapshot:
     return CreativeIntelligenceSnapshot(
         creative_id="none",
@@ -151,6 +149,17 @@ def empty_creative_snapshot() -> CreativeIntelligenceSnapshot:
         downside_envelope=1.0,
         portfolio_rank_score=0.0,
         explanations=(),
+    )
+
+
+def build_world_state_reward_signal(*, creative_snapshots: tuple[CreativeIntelligenceSnapshot, ...], resolved: Mapping[str, object]) -> float:
+    return build_reward_signal_from_world_view(
+        creative_snapshots=creative_snapshots,
+        architecture_state=resolved["architecture_state"],
+        structure_state=resolved["structure_state"],
+        flow_state=resolved["flow_state"],
+        market_snapshot=resolved["market_snapshot"],
+        fallback_snapshot=empty_creative_snapshot(),
     )
 
 
@@ -249,6 +258,7 @@ def materialize_world_state_packet(
 __all__ = [
     "build_advisory_notes",
     "build_reward_signal_from_world_view",
+    "build_world_state_reward_signal",
     "materialize_world_state_packet",
     "empty_creative_snapshot",
     "emit_world_state_materialized_trace",

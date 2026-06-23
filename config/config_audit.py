@@ -54,8 +54,6 @@ class PersistentConfigAuditLog:
     def __init__(self, path: str | Path) -> None:
         self._path = ensure_parent_dir(Path(path))
         self._lock = RLock()
-        if not self._path.exists():
-            self._path.touch()
 
     @property
     def path(self) -> Path:

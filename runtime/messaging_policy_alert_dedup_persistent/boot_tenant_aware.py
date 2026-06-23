@@ -13,11 +13,12 @@ from runtime.messaging_policy_alert_dedup_persistent.tenant_suppression_service 
 from runtime.messaging_policy_alert_subscriptions.notifier import MessagingPolicyAlertNotifier
 
 
-def build_tenant_aware_persistent_deduping_alert_notifier(*, settings_gateway, cooldown_s: int = 3600):
+def build_tenant_aware_persistent_deduping_alert_notifier(*, settings_gateway, cooldown_s: int = 3600, tenant_id: str = ''):
     store_factory = TenantScopedDedupStoreFactory(settings_gateway=settings_gateway)
     suppression_service = TenantAwareAlertNotificationSuppressionService(
         store_factory=store_factory,
         cooldown_s=int(cooldown_s),
+        tenant_id=tenant_id,
     )
     mark_sent_service = TenantAwareAlertNotificationMarkSentService(store_factory=store_factory)
     base_notifier = MessagingPolicyAlertNotifier()

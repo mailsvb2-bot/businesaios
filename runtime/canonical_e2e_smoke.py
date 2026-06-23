@@ -83,6 +83,7 @@ def run_canonical_e2e_smoke(storage: StorageConfig, *, base_dir: str = "data/run
 
     now_ms = int(time.time() * 1000)
     smoke_id = uuid.uuid4().hex
+    tenant_id = "ops-smoke"
     decision = _build_smoke_decision(now_ms=now_ms, smoke_id=smoke_id)
     envelope = signed_envelope_from_decision(decision=decision, keyring=_SmokeKeyring())
     snapshot_bytes = ("snapshot:" + smoke_id).encode("utf-8")
@@ -98,7 +99,7 @@ def run_canonical_e2e_smoke(storage: StorageConfig, *, base_dir: str = "data/run
             event_store.append_event(
                 {
                     "event_id": f"evt-{smoke_id}",
-                    "tenant_id": "ops-smoke",
+                    "tenant_id": tenant_id,
                     "user_id": "ops-smoke-user",
                     "source": "ops.e2e_smoke",
                     "event_type": "ops.e2e_smoke.started",
@@ -106,7 +107,8 @@ def run_canonical_e2e_smoke(storage: StorageConfig, *, base_dir: str = "data/run
                     "decision_id": decision.decision_id,
                     "correlation_id": decision.correlation_id,
                     "payload": {"smoke_id": smoke_id},
-                }
+                },
+                tenant_id=tenant_id,
             )
             result["steps"]["event_store_append"] = True
 

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from contextlib import nullcontext
 from dataclasses import replace
-from collections.abc import Callable
-from collections.abc import Mapping
 
 from observability.distributed_trace_context import trace_context_from_envelope, trace_context_scope
 from observability.execution_span import execution_span
@@ -223,7 +222,7 @@ def execute_core_flow(*, executor, env: DecisionEnvelope, depth: int, timescale,
                 reliability.append_checkpoint(
                     env,
                     stage='failed',
-                    checkpoint_id=f"failed:{getattr(env.decision, 'decision_id', 'unknown')}",
+                    checkpoint_id=f"failed:runtime_execute:{getattr(env.decision, 'decision_id', 'unknown')}",
                     payload={'reason': f'runtime_execute:{type(exc).__name__}'},
                 )
             except Exception as checkpoint_exc:

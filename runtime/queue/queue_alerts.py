@@ -12,20 +12,12 @@ from threading import RLock
 from typing import Protocol, runtime_checkable
 
 from runtime.queue.job_contract import normalize_now
-from runtime.queue.queue_observability import QueueObservabilityRegistry
-from runtime.queue.queue_slo import QueueSLOEvaluator, QueueSLOReport
+from runtime.queue.queue_operational_contracts import QueueAlert, QueueSLOReport
+from runtime.queue.queue_slo import QueueSLOEvaluator
 
 CANON_RUNTIME_QUEUE_ALERTS = True
 
 
-@dataclass(frozen=True)
-class QueueAlert:
-    tenant_id: str
-    queue_name: str
-    code: str
-    severity: str
-    message: str
-    created_at: datetime
 
 
 @dataclass(frozen=True)
@@ -149,7 +141,7 @@ class QueueAlertRouter:
         self,
         *,
         evaluator: QueueSLOEvaluator,
-        observability: QueueObservabilityRegistry | None = None,
+        observability: object | None = None,
         sink: QueueAlertSink | None = None,
     ) -> None:
         self._evaluator = evaluator

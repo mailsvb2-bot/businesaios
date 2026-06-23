@@ -4,7 +4,6 @@ import logging
 
 from runtime.execution.entrypoint_context import run_with_bound_execution_context
 from runtime.execution.executor_commit import _decision_tenant_id, has_pending
-from runtime.execution.executor_recovery import finalize_if_already_executed
 from runtime.execution.executor_result import ExecutionResult
 from runtime.execution.outcome_persistence_lock import finalize_recovered_outcome
 from runtime.observability.perf import watchdog_tick
@@ -75,7 +74,7 @@ def execute_recovery_flow(*, executor, env, outbox, guard, event_log, executor_c
 
     guard.verify_recovery(env)
 
-    recovered = finalize_if_already_executed(executor=executor, outbox=outbox, event_log=event_log, env=env)
+    recovered = executor._mark_delivered_if_already_executed(env)
     if recovered is not None:
         _reliability_call(
             reliability,
@@ -90,11 +89,9 @@ def execute_recovery_flow(*, executor, env, outbox, guard, event_log, executor_c
         _reliability_call(reliability, "mark_completed", lambda: reliability.mark_completed(env))
         _record_recovery_trace(executor=executor, env=env, stage="already_executed")
         return recovered
-    if has_proof_event(
-        event_log=event_log,
+    if executor._has_proof_event(
         decision_id=str(env.decision.decision_id),
         action=str(env.decision.action),
-        warn=warn,
     ):
         persistence = finalize_recovered_outcome(
             executor=executor,

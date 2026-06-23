@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from importlib import import_module
+from canon.public_api_alias import install_owner_alias_modules
 from typing import Any
 
 CANON_ROUTING_POLICY_OWNER_SURFACE = True
@@ -33,6 +34,13 @@ def __getattr__(name: str) -> Any:
     if name in _OWNER_EXPORTS:
         return getattr(_owner(), name)
     raise AttributeError(name)
+
+
+def _install_compat_aliases() -> None:
+    install_owner_alias_modules(__name__, _ALIAS_EXPORTS, owner_getter=_owner)
+
+
+_install_compat_aliases()
 
 def __dir__() -> list[str]:
     return sorted(set(globals()) | set(__all__) | set(_OWNER_EXPORTS))

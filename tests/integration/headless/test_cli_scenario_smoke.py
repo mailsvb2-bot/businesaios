@@ -13,6 +13,7 @@ def test_cli_scenario_smoke_uses_single_canonical_bootstrap_path(tmp_path, monke
         "biz-scenario",
         "--tenant-id",
         "tenant-scenario",
+        "--quiet",
     ])
     assert code in {0, 1}
     runtime = headless_product.build_headless_runtime(entrypoint="headless_cli")
