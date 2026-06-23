@@ -15,6 +15,7 @@ def test_cli_run_smoke_creates_report_and_runtime_state(tmp_path, monkeypatch) -
         "tenant-cli",
         "--max-steps",
         "1",
+        "--quiet",
     ])
     assert code in {0, 1}
     assert any((tmp_path / ".runtime" / "headless_ledger").rglob("*.json"))

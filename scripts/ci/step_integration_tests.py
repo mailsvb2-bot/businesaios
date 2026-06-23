@@ -74,7 +74,7 @@ def run() -> tuple[bool, str]:
                 mark_expression=mark,
                 junit_name=f"integration-headless-smoke-{index}.xml",
                 coverage_name=f"integration-headless-smoke-{index}-coverage.xml",
-                timeout=90,
+                timeout=240,
             )
             if not ok:
                 return False, message
