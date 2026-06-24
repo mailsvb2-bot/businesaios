@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from billing.recovery_contracts import ChargebackCase
 
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope

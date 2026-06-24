@@ -128,7 +128,7 @@ class ConnectorFailoverRouter:
             for attempt_no in range(1, int(rule.max_attempts) + 1):
                 started = monotonic()
                 try:
-                    result = self._timeout_policy.run(lambda: call(entry), operation=operation, verify=bool(retry_context.verify), dry_run=bool(dry_run), requested_timeout=timeout_seconds)
+                    result = self._timeout_policy.run(lambda entry=entry: call(entry), operation=operation, verify=bool(retry_context.verify), dry_run=bool(dry_run), requested_timeout=timeout_seconds)
                     duration_ms = (monotonic() - started) * 1000.0
                     classification = self._retry_policy.classify_result(context=retry_context, result=result, attempt=attempt_no)
                     attempts.append(self._attempt_row(entry=entry, operation=operation, route_index=route_index, attempt=attempt_no, phase=phase, outcome='success' if result.ok else 'result_error', reason=classification.reason, duration_ms=duration_ms, breaker_state=permit_state, metadata={'result_code': result.code}))

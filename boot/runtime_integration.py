@@ -2,8 +2,6 @@ from __future__ import annotations
 
 """Compatibility shim. Final owner: bootstrap.runtime_integration."""
 
-from typing import Protocol, runtime_checkable
-
 from core.application.decision_service import DecisionApplicationService
 from runtime.application import (  # compatibility audit marker: package-root owner
     ReadOnlyRuntimeRegistry,
@@ -16,7 +14,6 @@ from bootstrap.runtime_integration import (  # noqa: F401
     CANON_RUNTIME_INTEGRATION_EXPORTS_DIRECT_COMPAT,
     CANON_RUNTIME_INTEGRATION_FINAL_OWNER,
     CANON_RUNTIME_INTEGRATION_NO_RUNTIME_ASSEMBLY,
-    CANON_RUNTIME_INTEGRATION_PROTOCOL_TYPED,
     RuntimeIntegration as OwnerRuntimeIntegration,
 )
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Mapping

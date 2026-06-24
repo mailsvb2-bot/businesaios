@@ -141,32 +141,32 @@ class GoalDecompositionEngine:
         policy = DEFAULT_GOAL_DECOMPOSITION_POLICY
         if goal_family == "revenue_growth":
             return (
-                {"phase": "diagnose", "title": "Assess demand, offer friction, and conversion bottlenecks", "success_metric": "baseline_captured", "evidence_hint": "baseline_state", "recommended_action_types": ("assess_state",), "estimated_steps": 1, "priority_weight": policy.default_priority_weight, "checkpoint_required": True},
+                {"phase": "diagnose", "title": "Assess demand, offer friction, and conversion bottlenecks", "success_metric": "baseline_captured", "evidence_hint": "baseline_state", "recommended_action_types": ("assess_state",), "estimated_steps": 1, "priority_weight": DEFAULT_GOAL_DECOMPOSITION_POLICY.default_priority_weight, "checkpoint_required": True},
                 {"phase": "activate", "title": "Launch or adjust the highest-confidence demand action", "success_metric": "qualified_pipeline_created", "evidence_hint": "execution_receipt", "recommended_action_types": ("launch_campaign", "publish_offer"), "estimated_steps": 2, "priority_weight": policy.activation_priority_weight, "checkpoint_required": True},
                 {"phase": "verify", "title": "Verify conversion and revenue movement", "success_metric": "verified_revenue_delta", "evidence_hint": "revenue_verification", "recommended_action_types": ("verify_conversion",), "estimated_steps": 1, "priority_weight": policy.verification_priority_weight, "checkpoint_required": True},
                 {"phase": "scale", "title": "Scale only if verified economics stay healthy", "success_metric": "efficient_scale_candidate", "evidence_hint": "economic_signal", "recommended_action_types": ("tune_budget", "expand_channel"), "estimated_steps": 2, "priority_weight": policy.scale_priority_weight, "checkpoint_required": True},
             )
         if goal_family == "retention":
             return (
-                {"phase": "segment", "title": "Identify churn-risk or dormant cohorts", "success_metric": "target_cohort_selected", "evidence_hint": "cohort_snapshot", "recommended_action_types": ("segment_customers",), "estimated_steps": 1, "priority_weight": policy.default_priority_weight, "checkpoint_required": True},
-                {"phase": "engage", "title": "Run retention touchpoint for the selected cohort", "success_metric": "outreach_delivered", "evidence_hint": "delivery_receipt", "recommended_action_types": ("send_followup", "send_offer"), "estimated_steps": 2, "priority_weight": policy.default_priority_weight, "checkpoint_required": True},
+                {"phase": "segment", "title": "Identify churn-risk or dormant cohorts", "success_metric": "target_cohort_selected", "evidence_hint": "cohort_snapshot", "recommended_action_types": ("segment_customers",), "estimated_steps": 1, "priority_weight": DEFAULT_GOAL_DECOMPOSITION_POLICY.default_priority_weight, "checkpoint_required": True},
+                {"phase": "engage", "title": "Run retention touchpoint for the selected cohort", "success_metric": "outreach_delivered", "evidence_hint": "delivery_receipt", "recommended_action_types": ("send_followup", "send_offer"), "estimated_steps": 2, "priority_weight": DEFAULT_GOAL_DECOMPOSITION_POLICY.default_priority_weight, "checkpoint_required": True},
                 {"phase": "verify", "title": "Verify repeat behavior or reactivation", "success_metric": "repeat_rate_verified", "evidence_hint": "retention_measurement", "recommended_action_types": ("measure_repeat_rate",), "estimated_steps": 1, "priority_weight": policy.verification_priority_weight, "checkpoint_required": True},
             )
         if goal_family == "reputation":
             return (
-                {"phase": "target", "title": "Select the best review request audience", "success_metric": "review_candidates_prepared", "evidence_hint": "audience_snapshot", "recommended_action_types": ("select_audience",), "estimated_steps": 1, "priority_weight": policy.default_priority_weight, "checkpoint_required": True},
-                {"phase": "request", "title": "Send review or reputation request", "success_metric": "request_delivered", "evidence_hint": "delivery_receipt", "recommended_action_types": ("request_review",), "estimated_steps": 1, "priority_weight": policy.default_priority_weight, "checkpoint_required": True},
+                {"phase": "target", "title": "Select the best review request audience", "success_metric": "review_candidates_prepared", "evidence_hint": "audience_snapshot", "recommended_action_types": ("select_audience",), "estimated_steps": 1, "priority_weight": DEFAULT_GOAL_DECOMPOSITION_POLICY.default_priority_weight, "checkpoint_required": True},
+                {"phase": "request", "title": "Send review or reputation request", "success_metric": "request_delivered", "evidence_hint": "delivery_receipt", "recommended_action_types": ("request_review",), "estimated_steps": 1, "priority_weight": DEFAULT_GOAL_DECOMPOSITION_POLICY.default_priority_weight, "checkpoint_required": True},
                 {"phase": "verify", "title": "Verify public review outcome", "success_metric": "review_publication_verified", "evidence_hint": "review_publication", "recommended_action_types": ("verify_publication",), "estimated_steps": 1, "priority_weight": policy.verification_priority_weight, "checkpoint_required": True},
             )
         if goal_family == "demand_generation":
             return (
-                {"phase": "position", "title": "Prepare or improve the offer surface", "success_metric": "offer_surface_live", "evidence_hint": "page_publication", "recommended_action_types": ("publish_service_page",), "estimated_steps": 1, "priority_weight": policy.default_priority_weight, "checkpoint_required": True},
-                {"phase": "activate", "title": "Activate a demand channel", "success_metric": "traffic_or_inquiry_signal", "evidence_hint": "channel_signal", "recommended_action_types": ("launch_campaign", "route_listing"), "estimated_steps": 2, "priority_weight": policy.default_priority_weight, "checkpoint_required": True},
+                {"phase": "position", "title": "Prepare or improve the offer surface", "success_metric": "offer_surface_live", "evidence_hint": "page_publication", "recommended_action_types": ("publish_service_page",), "estimated_steps": 1, "priority_weight": DEFAULT_GOAL_DECOMPOSITION_POLICY.default_priority_weight, "checkpoint_required": True},
+                {"phase": "activate", "title": "Activate a demand channel", "success_metric": "traffic_or_inquiry_signal", "evidence_hint": "channel_signal", "recommended_action_types": ("launch_campaign", "route_listing"), "estimated_steps": 2, "priority_weight": DEFAULT_GOAL_DECOMPOSITION_POLICY.default_priority_weight, "checkpoint_required": True},
                 {"phase": "capture", "title": "Capture and verify inbound demand", "success_metric": "qualified_lead_verified", "evidence_hint": "lead_capture", "recommended_action_types": ("capture_leads", "verify_lead"), "estimated_steps": 1, "priority_weight": policy.activation_priority_weight, "checkpoint_required": True},
             )
         return (
-            {"phase": "assess", "title": "Assess the current state", "success_metric": "state_assessed", "evidence_hint": "baseline_state", "recommended_action_types": ("assess_state",), "estimated_steps": 1, "priority_weight": policy.default_priority_weight, "checkpoint_required": True},
-            {"phase": "act", "title": "Run the next best verified action path", "success_metric": "action_executed", "evidence_hint": "execution_receipt", "recommended_action_types": ("select_next_action",), "estimated_steps": 1, "priority_weight": policy.default_priority_weight, "checkpoint_required": True},
+            {"phase": "assess", "title": "Assess the current state", "success_metric": "state_assessed", "evidence_hint": "baseline_state", "recommended_action_types": ("assess_state",), "estimated_steps": 1, "priority_weight": DEFAULT_GOAL_DECOMPOSITION_POLICY.default_priority_weight, "checkpoint_required": True},
+            {"phase": "act", "title": "Run the next best verified action path", "success_metric": "action_executed", "evidence_hint": "execution_receipt", "recommended_action_types": ("select_next_action",), "estimated_steps": 1, "priority_weight": DEFAULT_GOAL_DECOMPOSITION_POLICY.default_priority_weight, "checkpoint_required": True},
             {"phase": "verify", "title": "Verify the business outcome", "success_metric": "outcome_verified", "evidence_hint": "verification_receipt", "recommended_action_types": ("verify_outcome",), "estimated_steps": 1, "priority_weight": policy.verification_priority_weight, "checkpoint_required": True},
         )
 
@@ -207,7 +207,7 @@ class GoalDecompositionEngine:
                         "evidence_hint": "execution_receipt",
                         "recommended_action_types": (_slug(title, fallback=f"step_{index}"),),
                         "estimated_steps": 1,
-                        "priority_weight": policy.default_priority_weight,
+                        "priority_weight": DEFAULT_GOAL_DECOMPOSITION_POLICY.default_priority_weight,
                         "checkpoint_required": True,
                     })
         return tuple(rows) if rows else fallback

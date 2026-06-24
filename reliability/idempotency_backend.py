@@ -279,14 +279,18 @@ class BaseBackendIdempotencyStore(IdempotencyStore):
         moment = now or utc_now()
         changed = 0
         for record in list(self._backend.scan_non_terminal()):
+            record_idempotency_key = record.idempotency_key
             if record.state in {IdempotencyState.COMPLETED, IdempotencyState.FAILED, IdempotencyState.EXPIRED}:
                 continue
             if record.has_live_lease(now=moment):
                 continue
 
-            def _mutate(existing: IdempotencyRecord | None) -> IdempotencyRecord:
+            def _mutate(
+                existing: IdempotencyRecord | None,
+                record_idempotency_key: IdempotencyKey = record_idempotency_key,
+            ) -> IdempotencyRecord:
                 if existing is None:
-                    raise KeyError(f'idempotency key not found: {record.idempotency_key.as_tuple()}')
+                    raise KeyError(f'idempotency key not found: {record_idempotency_key.as_tuple()}')
                 if existing.state in {IdempotencyState.COMPLETED, IdempotencyState.FAILED, IdempotencyState.EXPIRED}:
                     return existing
                 if existing.has_live_lease(now=moment):
@@ -295,7 +299,7 @@ class BaseBackendIdempotencyStore(IdempotencyStore):
                 expired.validate()
                 return expired
 
-            mutated = self._backend.mutate(key=record.idempotency_key, mutator=_mutate).stored_record
+            mutated = self._backend.mutate(key=record_idempotency_key, mutator=_mutate).stored_record
             if mutated.state is IdempotencyState.EXPIRED:
                 changed += 1
         return changed

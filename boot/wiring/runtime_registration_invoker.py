@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from runtime.manifest_entry import RuntimeManifestEntry
 from runtime.registration_result import RegistrationResult
 from runtime.registry import RuntimeRegistry
+
+if TYPE_CHECKING:
+    from boot.wiring.runtime_dependency_resolver import RuntimeDependencyResolver
 
 
 class RuntimeRegistrationInvoker:

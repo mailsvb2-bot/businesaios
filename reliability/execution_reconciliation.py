@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from reliability.execution_checkpoint_store import ExecutionCheckpointStore
+from reliability.execution_checkpoint_store import ExecutionCheckpoint, ExecutionCheckpointStore
 from reliability.idempotency_contract import IdempotencyKey, IdempotencyState, IdempotencyStore
 from reliability.outbox_store import OutboxState, OutboxStore
 

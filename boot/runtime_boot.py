@@ -8,7 +8,10 @@ owner stays in ``bootstrap.runtime_boot``. No assembly ownership lives here.
 """
 
 from importlib import import_module
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from bootstrap.runtime_boot import RuntimeBootSurface
 
 CANON_LEGACY_BOOTSTRAP_SHIM = True
 CANON_BOOT_HELPER_SURFACE = True

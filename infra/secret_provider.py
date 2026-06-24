@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.config import env_str
+
 
 @dataclass(frozen=True)
 class EnvSecretProvider:

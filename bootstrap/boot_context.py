@@ -103,10 +103,6 @@ class BootContext:
             )
 
 
-from dataclasses import dataclass
-from typing import Protocol
-
-
 @dataclass(frozen=True)
 class BootRequest:
     """External request that enters the product-contract boot pipeline."""
