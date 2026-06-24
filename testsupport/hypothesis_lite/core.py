@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import functools
 import inspect
-import itertools
 import os
 from dataclasses import dataclass
 from typing import Any, Callable
