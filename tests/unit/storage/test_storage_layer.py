@@ -9,7 +9,6 @@ import pytest
 from storage import (
     AuditRecord,
     EvidenceRecord,
-    RetentionPolicy,
     SqliteAuditStore,
     SqliteEvidenceStore,
     SqliteSchemaVersionStore,

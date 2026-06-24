@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import itertools
 import math
-from dataclasses import is_dataclass
 from typing import Any, Callable
 
 
