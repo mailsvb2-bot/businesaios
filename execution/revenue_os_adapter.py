@@ -5,7 +5,7 @@ from typing import Any
 from collections.abc import Sequence
 
 from runtime.monetization import RevenueAdvisoryService
-from runtime.monetization import RevenueDecisionEnvelope
+from runtime.monetization import RevenueDecisionEnvelope as RuntimeRevenueDecisionEnvelope
 from runtime.monetization import RevenuePaywallVariantInput
 from runtime.monetization import RevenuePlanInput
 from runtime.monetization import RevenueSnapshotInput
@@ -53,7 +53,7 @@ class RevenueOSAdapter:
         )
         return self._to_execution_envelope(envelope)
 
-    def _to_execution_envelope(self, envelope: RevenueDecisionEnvelope) -> ExecutionRevenueDecisionEnvelope:
+    def _to_execution_envelope(self, envelope: RuntimeRevenueDecisionEnvelope) -> ExecutionRevenueDecisionEnvelope:
         candidate_actions = tuple(
             {
                 'action_type': item.action_type,

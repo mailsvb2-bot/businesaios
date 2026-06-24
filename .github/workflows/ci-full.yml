@@ -10,8 +10,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-          cache-dependency-path: requirements.lock.txt
       - run: python scripts/ci/check_requirements_lock.py
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock.txt
@@ -26,8 +24,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements.lock.txt
       - run: python scripts/ci/check_requirements_lock.py
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock.txt

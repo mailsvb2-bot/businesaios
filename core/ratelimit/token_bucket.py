@@ -96,6 +96,9 @@ class TokenBucketLimiter:
 # ---------------------------------------------------------------------------
 
 
+_DEFAULT_TRANSPORT_TENANT_ID = TenantId(DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.transport_tenant_id)
+
+
 class SyncTokenBucket:
     """Tiny token bucket with a stable single key.
 
@@ -108,7 +111,7 @@ class SyncTokenBucket:
         *,
         capacity: int,
         refill_per_s: float,
-        tenant_id: TenantId | str = TenantId(DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.transport_tenant_id),
+        tenant_id: TenantId | str = _DEFAULT_TRANSPORT_TENANT_ID,
         subject: str = DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.transport_subject,
         bucket: str = DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.default_bucket,
         store: RateLimitStore | None = None,
@@ -137,7 +140,7 @@ class AsyncTokenBucket:
         *,
         rps: float,
         burst: int,
-        tenant_id: TenantId | str = TenantId(DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.transport_tenant_id),
+        tenant_id: TenantId | str = _DEFAULT_TRANSPORT_TENANT_ID,
         subject: str = DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.transport_subject,
         bucket: str = DEFAULT_TOKEN_BUCKET_POLICY_DEFAULTS.default_bucket,
         store: RateLimitStore | None = None,

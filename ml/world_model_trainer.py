@@ -30,8 +30,9 @@ def train_pricing_world_model(
     *,
     demand_obs: Sequence[DemandObservation],
     conv_obs: Sequence[ConversionObservation],
-    config: WorldModelTrainConfig = WorldModelTrainConfig(),
+    config: WorldModelTrainConfig | None = None,
 ) -> PricingWorldModel:
+    config = config or WorldModelTrainConfig()
     dk = str(config.demand_kind).strip().lower()
     if dk == "piecewise_linear":
         demand = PiecewiseLinearDemandCurve.calibrate(demand_obs, k=int(config.piecewise_k))
@@ -53,7 +54,7 @@ def train_and_export_payload(
     *,
     demand_obs: Sequence[DemandObservation],
     conv_obs: Sequence[ConversionObservation],
-    config: WorldModelTrainConfig = WorldModelTrainConfig(),
+    config: WorldModelTrainConfig | None = None,
 ) -> Dict[str, Any]:
     model = train_pricing_world_model(demand_obs=demand_obs, conv_obs=conv_obs, config=config)
     return export_pricing_world_model_payload(model)

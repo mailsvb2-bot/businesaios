@@ -7,8 +7,6 @@ pure-domain semantics on the historical path during the transition.
 """
 
 from application.world_state.packet_enrichment import (
-    CANON_WORLD_STATE_PACKET_ENRICHMENT,
-    CANON_WORLD_STATE_PACKET_ENRICHMENT_PURE_DOMAIN,
     build_advisory_notes,
     build_reward_signal_from_world_view,
 )

@@ -7,7 +7,10 @@ Runtime assembly delegates to the canonical package-level bootstrap owner in
 """
 
 from importlib import import_module
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from runtime.bootstrap import BuiltRuntime
 
 CANON_RUNTIME_BOOT_PUBLIC_API = True
 CANON_LEGACY_BOOTSTRAP_SHIM = True

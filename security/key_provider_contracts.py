@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from typing import Iterable, Protocol
 
 from security.key_management_contract import KeyMaterialRecord, KeyPurpose

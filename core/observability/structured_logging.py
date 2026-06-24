@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 # Contextvars: safe across async and threads.
 # For observability: bind(correlation_id=..., decision_id=...) in executor context (see runtime/execution/telemetry).
-_ctx: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar("log_ctx", default={})
+_ctx: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar("log_ctx", default=None)
 
 
 def bind(**fields: Any):

@@ -16,8 +16,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: requirements.lock.txt
       - name: Verify dependency lock
         run: python scripts/ci/check_requirements_lock.py
       - name: Install locked dependencies
@@ -30,6 +28,7 @@ jobs:
         run: python -m scripts.ci.cli --gate business-critical
       - name: Upload business-critical gate artifacts
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: ci-${{ matrix.python-version }}-artifacts
