@@ -6,7 +6,7 @@ from execution.business_operating_memory import (
     project_business_memory_meta_payloads,
     project_business_memory_state_context,
 )
-from application.memory.business_memory_state_adapter import *
+from application.memory.business_memory_state_adapter import BusinessMemoryStateAdapter, CANON_BUSINESS_MEMORY_STATE_ADAPTER
 
 # legacy audit markers retained for transitional lock-tests:
 # meta.update(meta_payloads)

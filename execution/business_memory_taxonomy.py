@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from application.memory.business_memory_taxonomy import *
+from application.memory.business_memory_taxonomy import BusinessMemoryTaxonomy, CANON_BUSINESS_MEMORY_TAXONOMY, NormalizedFeedback
 
 CANON_BUSINESS_MEMORY_TAXONOMY_COMPAT_SHIM = True
 CANON_BUSINESS_MEMORY_TAXONOMY_FINAL_OWNER = "application.memory.business_memory_taxonomy"

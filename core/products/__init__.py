@@ -14,7 +14,19 @@ import sys
 from importlib import import_module
 from typing import Any
 
-from contracts.product_contract import *  # noqa: F401,F403
+from contracts.product_contract import (
+    EntitlementsSpec,
+    EntryPolicy,
+    ModuleSpec,
+    ModulesSpec,
+    Offer,
+    OfferCatalog,
+    PricingModel,
+    ProductContract,
+    TelemetryEventSpec,
+    TelemetryField,
+    TelemetrySchema,
+)
 from contracts.product_contract import ProductContract
 from core.offers.offer_catalog_resolver import OfferCatalogKey, OfferCatalogResolver
 from core.offers.offer_types import OfferCatalog
