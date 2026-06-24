@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from execution.business_operating_memory import project_business_memory_contract_bundle
-from application.memory.business_memory_query import *
+from application.memory.business_memory_query import BusinessMemoryQueryService, CANON_BUSINESS_MEMORY_QUERY
 
 CANON_BUSINESS_MEMORY_QUERY_COMPAT_SHIM = True
 CANON_BUSINESS_MEMORY_QUERY_FINAL_OWNER = "application.memory.business_memory_query"

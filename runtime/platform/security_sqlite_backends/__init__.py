@@ -1,8 +1,19 @@
 """SQLite-backed security runtime stores split from the legacy facade."""
 
 from runtime.platform.security_sqlite_backends.group_01 import *
-from runtime.platform.security_sqlite_backends.group_02 import *
-from runtime.platform.security_sqlite_backends.group_03 import *
+from runtime.platform.security_sqlite_backends.group_02 import (
+    SQLiteApprovalReplayGuardBackend,
+    SQLiteKeyRotationJournalBackend,
+    SQLiteReencryptionJobStoreBackend,
+    SQLiteReencryptionProgressLedgerBackend,
+    SQLiteSecurityIncidentRegistryBackend,
+    SQLiteSecurityQuarantineRegistryBackend,
+)
+from runtime.platform.security_sqlite_backends.group_03 import (
+    SQLiteSecurityIncidentDrillHistoryBackend,
+    SQLiteSecurityOperatorWorkflowStoreBackend,
+    SignedOperatorApprovalStoreBackend,
+)
 
 __all__ = [
     "SQLiteGovernanceJournalStore",
