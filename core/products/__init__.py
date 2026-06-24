@@ -27,15 +27,14 @@ from contracts.product_contract import (
     TelemetryField,
     TelemetrySchema,
 )
-from contracts.product_contract import ProductContract
 from core.offers.offer_catalog_resolver import OfferCatalogKey, OfferCatalogResolver
-from core.offers.offer_types import OfferCatalog
+from core.offers.offer_types import OfferCatalog as RuntimeOfferCatalog
 from core.tenancy.normalization import require_tenant_id
 
 CANON_COMPAT_SHIM = True
 
 
-def resolve_offer_catalog_for_product(*, product: ProductContract, tenant_id: str) -> OfferCatalog:
+def resolve_offer_catalog_for_product(*, product: ProductContract, tenant_id: str) -> RuntimeOfferCatalog:
     """Backward-compat helper for call-sites that still resolve catalogs by product."""
 
     resolver = OfferCatalogResolver()

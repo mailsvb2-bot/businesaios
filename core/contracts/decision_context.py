@@ -5,6 +5,6 @@ from __future__ import annotations
 CANON_KERNEL_DECISION_CONTRACT_COMPAT = True
 # canonical owner: kernel.decision_context
 
-from kernel.decision_context import *  # noqa: F401,F403
+from kernel.decision_context import DecisionContext
 
 __all__ = ['DecisionContext']

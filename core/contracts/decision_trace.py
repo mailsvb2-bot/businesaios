@@ -5,6 +5,6 @@ from __future__ import annotations
 CANON_KERNEL_DECISION_CONTRACT_COMPAT = True
 # canonical owner: kernel.decision_trace
 
-from kernel.decision_trace import *  # noqa: F401,F403
+from kernel.decision_trace import DecisionTrace
 
 __all__ = ['DecisionTrace']
