@@ -5,6 +5,6 @@ from __future__ import annotations
 CANON_KERNEL_DECISION_CONTRACT_COMPAT = True
 # canonical owner: kernel.decision_rejection
 
-from kernel.decision_rejection import *  # noqa: F401,F403
+from kernel.decision_rejection import DecisionRejection
 
 __all__ = ['DecisionRejection']
