@@ -30,6 +30,7 @@ jobs:
         run: python -m scripts.ci.cli --gate business-critical
       - name: Upload business-critical gate artifacts
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: ci-${{ matrix.python-version }}-artifacts
