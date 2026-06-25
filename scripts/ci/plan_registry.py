@@ -29,6 +29,8 @@ def _production_boot_step() -> str:
 
 def _release_proof_steps() -> tuple[str, ...]:
     return (
+        "postgres-contract",
+        _pg_migrations_step(),
         _pg_live_step(),
         _container_runtime_step(),
         _staging_runtime_step(),
@@ -38,6 +40,9 @@ def _release_proof_steps() -> tuple[str, ...]:
 
 def requires_release_proof_environment(*, gate: str, step_name: str) -> bool:
     return gate in {"release", "pre-release"} and step_name in _release_proof_steps()
+
+def requires_release_dependency_lock_environment(*, gate: str, step_name: str) -> bool:
+    return gate in {"release", "pre-release"} and step_name == "dependency-lock"
 
 
 def allowed_gates() -> tuple[str, ...]:
