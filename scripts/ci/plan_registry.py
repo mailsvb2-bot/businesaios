@@ -41,6 +41,7 @@ def _release_proof_steps() -> tuple[str, ...]:
 def requires_release_proof_environment(*, gate: str, step_name: str) -> bool:
     return gate in {"release", "pre-release"} and step_name in _release_proof_steps()
 
+
 def requires_release_dependency_lock_environment(*, gate: str, step_name: str) -> bool:
     return gate in {"release", "pre-release"} and step_name == "dependency-lock"
 
@@ -78,6 +79,7 @@ def _business_critical_common(gate: str) -> ExecutionPlan:
         "assert-project-shape",
         "dependency-lock",
         "doctor-check",
+        "regression-impact",
         "import-smoke",
         "boot-smoke",
         "quality-check",
@@ -220,6 +222,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "assert-project-shape",
             "dependency-lock",
             "doctor-check",
+            "regression-impact",
             "import-smoke",
             "boot-smoke",
             "quality-check",
@@ -233,6 +236,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "assert-project-shape",
             "dependency-lock",
             "doctor-check",
+            "regression-impact",
             "import-smoke",
             "boot-smoke",
             "demo-e2e-smoke",
@@ -252,6 +256,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "assert-project-shape",
             "dependency-lock",
             "doctor-check",
+            "regression-impact",
             "import-smoke",
             "boot-smoke",
             "demo-e2e-smoke",
@@ -281,6 +286,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "assert-project-shape",
             "dependency-lock",
             "doctor-check",
+            "regression-impact",
             "import-smoke",
             "boot-smoke",
             "quality-check",
@@ -294,6 +300,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "assert-project-shape",
             "dependency-lock",
             "doctor-check",
+            "regression-impact",
             "import-smoke",
             "boot-smoke",
             "demo-e2e-smoke",
