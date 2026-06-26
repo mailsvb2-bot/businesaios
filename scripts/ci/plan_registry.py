@@ -80,6 +80,7 @@ def _business_critical_common(gate: str) -> ExecutionPlan:
         "dependency-lock",
         "doctor-check",
         "regression-impact",
+        "baseline-contract",
         "import-smoke",
         "boot-smoke",
         "quality-check",
@@ -139,6 +140,27 @@ def _coverage_common(gate: str) -> ExecutionPlan:
         "dependency-lock",
         "doctor-check",
         "code-coverage",
+    )
+
+
+def _core_ci_prefix() -> tuple[str, ...]:
+    return (
+        "assert-project-shape",
+        "dependency-lock",
+        "doctor-check",
+        "regression-impact",
+        "baseline-contract",
+    )
+
+
+def _core_runtime_locks() -> tuple[str, ...]:
+    return (
+        "import-smoke",
+        "boot-smoke",
+        "quality-check",
+        "architecture-bypass-scan",
+        "async-test-contract",
+        "lock-tests",
     )
 
 
@@ -217,26 +239,11 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
     if gate == _production_boot_step():
         return _production_boot_common(gate)
     if gate == "fast":
-        return _plan(
-            "fast",
-            "assert-project-shape",
-            "dependency-lock",
-            "doctor-check",
-            "regression-impact",
-            "import-smoke",
-            "boot-smoke",
-            "quality-check",
-            "architecture-bypass-scan",
-            "async-test-contract",
-            "lock-tests",
-        )
+        return _plan("fast", *_core_ci_prefix(), *_core_runtime_locks())
     if gate == "full":
         return _plan(
             "full",
-            "assert-project-shape",
-            "dependency-lock",
-            "doctor-check",
-            "regression-impact",
+            *_core_ci_prefix(),
             "import-smoke",
             "boot-smoke",
             "demo-e2e-smoke",
@@ -253,10 +260,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
     if gate == "release":
         return _plan(
             "release",
-            "assert-project-shape",
-            "dependency-lock",
-            "doctor-check",
-            "regression-impact",
+            *_core_ci_prefix(),
             "import-smoke",
             "boot-smoke",
             "demo-e2e-smoke",
@@ -281,26 +285,11 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "build-artifact",
         )
     if gate == "pre-push":
-        return _plan(
-            "pre-push",
-            "assert-project-shape",
-            "dependency-lock",
-            "doctor-check",
-            "regression-impact",
-            "import-smoke",
-            "boot-smoke",
-            "quality-check",
-            "architecture-bypass-scan",
-            "async-test-contract",
-            "lock-tests",
-        )
+        return _plan("pre-push", *_core_ci_prefix(), *_core_runtime_locks())
     if gate == "pre-release":
         return _plan(
             "pre-release",
-            "assert-project-shape",
-            "dependency-lock",
-            "doctor-check",
-            "regression-impact",
+            *_core_ci_prefix(),
             "import-smoke",
             "boot-smoke",
             "demo-e2e-smoke",
