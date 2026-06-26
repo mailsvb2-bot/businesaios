@@ -11,6 +11,7 @@ StepHandler = Callable[[], tuple[bool, str]]
 def project_shape(): return _step_ids.project_shape()
 def doctor(): return _step_ids.doctor()
 def regression_impact(): return _step_ids.regression_impact()
+def baseline_contract(): return _step_ids.baseline_contract()
 def quality(): return _step_ids.quality()
 def canon_audit(): return _step_ids.canon_audit()
 def lock_tests(): return _step_ids.lock_tests()
@@ -45,6 +46,7 @@ _REGISTRY: dict[str, StepHandler] = {
     _step_ids.dependency_lock(): _lazy_handler("scripts.ci.step_dependency_lock"),
     doctor(): run_doctor,
     regression_impact(): _lazy_handler("scripts.ci.step_regression_impact"),
+    baseline_contract(): _lazy_handler("scripts.ci.step_baseline_contract"),
     _step_ids.import_smoke(): _lazy_handler("scripts.ci.step_import_smoke"),
     _step_ids.boot_smoke(): _lazy_handler("scripts.ci.step_boot_smoke"),
     _step_ids.demo_e2e_smoke(): _lazy_handler("scripts.ci.step_demo_e2e_smoke"),
