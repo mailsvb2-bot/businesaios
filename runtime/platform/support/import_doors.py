@@ -20,7 +20,7 @@ def _load_runtime_platform_support_import_doors() -> dict[str, dict[str, str]]:
     with registry_path.open("r", encoding="utf-8") as fh:
         raw = json.load(fh)
     return {
-        str(module_name): {str(export_name): str(target_module) for export_name, exports in raw.items() for export_name, target_module in exports.items()}
+        str(module_name): {str(export_name): str(target_module) for export_name, target_module in exports.items()}
         for module_name, exports in raw.items()
     }
 
