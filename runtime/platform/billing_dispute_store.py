@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import sqlite3
 from contextlib import contextmanager
@@ -7,13 +9,7 @@ from typing import Any
 from collections.abc import Iterator
 
 from billing.dispute_policy import DisputeClassification
-
-def require_tenant_id(value: object) -> str:
-    tenant_id = str(value or "").strip()
-    if not tenant_id:
-        raise ValueError("tenant_id is required")
-    return tenant_id
-
+from core.tenancy.normalization import require_tenant_id
 
 CANON_PLATFORM_BILLING_DISPUTE_STORE = True
 DISPUTE_SCHEMA_VERSION = 1

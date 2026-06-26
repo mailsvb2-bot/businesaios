@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from datetime import datetime
 from collections.abc import Mapping
-
-from billing.recovery_contracts import ChargebackCase
+from uuid import uuid4
 
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope
 from billing.ledger_event import LedgerEntry, LedgerPosting, utc_now
@@ -17,6 +18,35 @@ from runtime.monetization import ChargebackRecord, MonetizationService
 CANON_BILLING_CHARGEBACK_ORCHESTRATOR = True
 
 
+@dataclass(frozen=True)
+class ChargebackCase:
+    tenant_id: str
+    invoice_id: str
+    user_id: str
+    amount_minor: int
+    currency: str
+    reason: str
+    opened_at: datetime = field(default_factory=utc_now)
+    case_id: str = field(default_factory=lambda: str(uuid4()))
+    idempotency_key: str | None = None
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+    def validate(self) -> None:
+        require_tenant_id(self.tenant_id)
+        if not str(self.invoice_id or '').strip():
+            raise ValueError('invoice_id is required')
+        if not str(self.user_id or '').strip():
+            raise ValueError('user_id is required')
+        if int(self.amount_minor) <= 0:
+            raise ValueError('amount_minor must be > 0')
+        if not str(self.currency or '').strip():
+            raise ValueError('currency is required')
+        if not str(self.reason or '').strip():
+            raise ValueError('reason is required')
+        if self.opened_at.tzinfo is None:
+            raise ValueError('opened_at must be timezone-aware')
+        if self.idempotency_key is not None and not str(self.idempotency_key).strip():
+            raise ValueError('idempotency_key cannot be blank')
 
 
 class InMemoryChargebackStore:

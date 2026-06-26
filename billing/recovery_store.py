@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from runtime.platform.billing_recovery_store import SCHEMA_VERSION, PlatformSqliteChargebackStore, PlatformSqliteRefundStore
 
-from billing.recovery_contracts import ChargebackCase, RefundResult
+if TYPE_CHECKING:
+    from billing.chargeback_orchestrator import ChargebackCase
+    from billing.refund_orchestrator import RefundResult
 
 
 CANON_BILLING_RECOVERY_STORE = True
@@ -33,6 +35,8 @@ class SqliteRefundStore(PlatformSqliteRefundStore):
     """
 
     def __init__(self, *, sqlite_path: str) -> None:
+        from billing.refund_orchestrator import RefundResult
+
         super().__init__(sqlite_path=sqlite_path, result_cls=RefundResult)
 
 
@@ -43,6 +47,8 @@ class SqliteChargebackStore(PlatformSqliteChargebackStore):
     """
 
     def __init__(self, *, sqlite_path: str) -> None:
+        from billing.chargeback_orchestrator import ChargebackCase
+
         super().__init__(sqlite_path=sqlite_path, case_cls=ChargebackCase)
 
 
