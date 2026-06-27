@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from boot.app_boot import boot_application
+from interfaces.api.runtime_api_adapter import RuntimeApiAdapter
+from interfaces.telegram.runtime_telegram_adapter import RuntimeTelegramAdapter
+
 
 def test_interfaces_do_not_access_runtime_registry() -> None:
     violations: list[str] = []
@@ -28,11 +32,6 @@ def test_interfaces_do_not_access_runtime_registry() -> None:
                     )
 
     assert not violations, "\n".join(violations)
-
-
-from boot.app_boot import boot_application
-from interfaces.api.runtime_api_adapter import RuntimeApiAdapter
-from interfaces.telegram.runtime_telegram_adapter import RuntimeTelegramAdapter
 
 
 class SomeAction:
