@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-CANON_RUNTIME_SCHEDULER_MONITORING_GATEWAY_ONLY = True
-CANON_RUNTIME_SCHEDULER_MONITORING_NO_RAW_DECISION_ISSUE = True
-
-
 from runtime.observability.error_handling import swallow
 from runtime.scheduler_helpers import build_system_world_state, cleanup_rollout
 from runtime.scheduler_parts.decision_request import request_scheduler_decision_execution
 from runtime.scheduler_parts.result import LearningJobResult
+
+CANON_RUNTIME_SCHEDULER_MONITORING_GATEWAY_ONLY = True
+CANON_RUNTIME_SCHEDULER_MONITORING_NO_RAW_DECISION_ISSUE = True
 
 
 def load_candidate_metrics(*, event_store, candidate_policy_id: str, window_ms: int, now_ms: int):
