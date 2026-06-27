@@ -13,9 +13,6 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from scripts.ci.config import project_shape_config
-from scripts.ci.subprocess_io import run_command as ci_run_command
-
 
 @dataclass(frozen=True)
 class CommandResult:
@@ -36,6 +33,8 @@ def artifact_dir(root: Path) -> Path:
 
 
 def quality_targets(root: Path) -> tuple[str, ...]:
+    from scripts.ci.config import project_shape_config
+
     targets = project_shape_config(root).quality_targets
     if not targets:
         raise RuntimeError("quality_targets_missing")
@@ -43,6 +42,8 @@ def quality_targets(root: Path) -> tuple[str, ...]:
 
 
 def run_command(argv: Sequence[str], *, cwd: Path) -> CommandResult:
+    from scripts.ci.subprocess_io import run_command as ci_run_command
+
     result = ci_run_command(list(argv), cwd=cwd, echo_output=False)
     return CommandResult(tuple(argv), int(result.returncode), result.stdout, result.stderr)
 
