@@ -19,8 +19,6 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.ci.subprocess_io import run_command as ci_run_command
-
 ARTIFACTS = ROOT / "artifacts" / "ci" / "ruff_typing_factory"
 SCOPES = ("tools", "scripts", "tests")
 RULES = ("UP006", "UP007", "UP035", "UP037")
@@ -34,6 +32,8 @@ class RunnerResult:
 
 
 def run(argv: list[str]) -> RunnerResult:
+    from scripts.ci.subprocess_io import run_command as ci_run_command
+
     result = ci_run_command(argv, cwd=ROOT, echo_output=False)
     return RunnerResult(returncode=int(result.returncode), stdout=result.stdout, stderr=result.stderr)
 
