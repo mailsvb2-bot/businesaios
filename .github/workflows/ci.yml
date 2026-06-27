@@ -13,6 +13,8 @@ jobs:
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -23,8 +25,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.lock.txt
       - name: Run canonical business-critical CI gate
-        env:
-          BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ matrix.python-version }}
         run: python -m scripts.ci.cli --gate business-critical
       - name: Upload business-critical gate artifacts
         if: always()
