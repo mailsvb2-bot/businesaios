@@ -6,15 +6,13 @@ import os
 import shutil
 import sys
 from collections import Counter, defaultdict
+from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
-from scripts.ci.paths import repo_root as ci_repo_root
-from scripts.ci.subprocess_io import run_command, subprocess
 
 REPORT_DIR_DEFAULT = Path(os.getenv("BUSINESAIOS_TEST_REPORT_DIR", "/tmp/businesaios-pytest-runs"))
 CACHE_DIR_NAMES = {"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".hypothesis"}
@@ -46,12 +44,16 @@ class Tee:
         self._file.close()
 
 def repo_root() -> Path:
+    from scripts.ci.paths import repo_root as ci_repo_root
+
     return ci_repo_root().resolve()
 
 def relpath(root: Path, path: Path) -> Path:
     return path.resolve().relative_to(root)
 
 def git_tracked_files(root: Path) -> set[Path]:
+    from scripts.ci.subprocess_io import run_command
+
     result = run_command(["git", "ls-files", "-z"], cwd=root, echo_output=False)
     if result.returncode != 0:
         raise SystemExit(result.stderr)
@@ -150,6 +152,8 @@ def build_isolated_pytest_env(report_dir: Path, stamp: str) -> dict[str, str]:
     return env
 
 def run_pytest_count(root: Path, report_dir: Path, pytest_args: list[str]) -> tuple[int, Path, Path]:
+    from scripts.ci.subprocess_io import subprocess
+
     report_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     json_path = report_dir / f"{stamp}.json"
