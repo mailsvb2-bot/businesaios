@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-CANON_RUNTIME_SCHEDULER_DEPLOY_FLOW_GATEWAY_ONLY = True
-CANON_RUNTIME_SCHEDULER_DEPLOY_FLOW_NO_RAW_DECISION_ISSUE = True
-
-
 from runtime.observability.error_handling import swallow
 from runtime.scheduler_helpers import build_system_world_state, cleanup_rollout
 from runtime.scheduler_parts.decision_request import request_scheduler_decision_execution
 from runtime.scheduler_parts.result import LearningJobResult
+
+CANON_RUNTIME_SCHEDULER_DEPLOY_FLOW_GATEWAY_ONLY = True
+CANON_RUNTIME_SCHEDULER_DEPLOY_FLOW_NO_RAW_DECISION_ISSUE = True
 
 
 def apply_auto_deploy_guard(*, auto_deploy_guard, best_policy_id: str, rollout_pct: int, skip_result) -> int | LearningJobResult:

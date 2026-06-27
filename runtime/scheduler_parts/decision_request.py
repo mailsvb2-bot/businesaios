@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical scheduler decision-request helper.
 
 This module keeps scheduler-side decision execution on one path:
@@ -7,8 +5,10 @@ proposal/world-state -> decision input packet -> runtime decision gateway -> exe
 It contains no raw decision logic and does not construct alternate decision owners.
 """
 
-from typing import Any
+from __future__ import annotations
+
 from collections.abc import Mapping
+from typing import Any
 
 from runtime.decision_gateway import execute_runtime_decision
 from runtime.decision_input.runtime_packet_provider import maybe_build_decision_input_packet
