@@ -9,6 +9,10 @@ from pathlib import Path
 from types import ModuleType
 
 CANON_RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS = True
+CANON_RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS_PREFER_PHYSICAL_MODULES = True
+
+_SUPPORT_PACKAGE = "runtime.platform.support"
+_SUPPORT_PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
 def _load_runtime_platform_support_import_doors() -> dict[str, dict[str, str]]:
@@ -21,12 +25,28 @@ def _load_runtime_platform_support_import_doors() -> dict[str, dict[str, str]]:
     }
 
 
+def _physical_module_path(fullname: str) -> Path | None:
+    prefix = f"{_SUPPORT_PACKAGE}."
+    if not fullname.startswith(prefix):
+        return None
+    relative = fullname.removeprefix(prefix).replace(".", "/")
+    module_path = _SUPPORT_PACKAGE_ROOT / f"{relative}.py"
+    if module_path.is_file():
+        return module_path
+    package_path = _SUPPORT_PACKAGE_ROOT / relative / "__init__.py"
+    if package_path.is_file():
+        return package_path
+    return None
+
+
 RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS = _load_runtime_platform_support_import_doors()
 
 
 class _RuntimePlatformSupportDoorFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
     def find_spec(self, fullname: str, path=None, target=None):
         if fullname not in RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS:
+            return None
+        if _physical_module_path(fullname) is not None:
             return None
         return importlib.machinery.ModuleSpec(fullname, self)
 
@@ -54,6 +74,7 @@ def install_runtime_platform_support_import_doors() -> None:
 
 __all__ = [
     "CANON_RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS",
+    "CANON_RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS_PREFER_PHYSICAL_MODULES",
     "RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS",
     "install_runtime_platform_support_import_doors",
 ]
