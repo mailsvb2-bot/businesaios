@@ -4,6 +4,7 @@ from scripts.ci import regression_impact_hardened
 from scripts.ci import step_ids
 from scripts.ci import step_doctor
 from scripts.ci import step_registry
+from scripts.ci import step_regression_impact
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.regression_impact import (
     IMPACT_RULES,
@@ -77,3 +78,14 @@ def test_hardened_changed_files_uses_first_parent_when_clean_main_diff_is_empty(
 
     assert regression_impact_hardened.changed_files() == ("runtime/world_state/public_api.py",)
     assert ("git", "diff", "--name-only", "HEAD^1..HEAD") in commands
+
+
+def test_regression_impact_allows_removing_generated_artifacts(monkeypatch) -> None:
+    monkeypatch.setattr(step_regression_impact, "changed_files", lambda: ("runtime/data/security/events.jsonl", ".gitignore"))
+    monkeypatch.setattr(step_regression_impact, "deleted_changed_files", lambda: ("runtime/data/security/events.jsonl",))
+    monkeypatch.setattr(step_regression_impact, "run_baseline_contract", lambda: (True, "baseline contract matrix passed"))
+
+    ok, message = step_regression_impact.run()
+
+    assert ok is True
+    assert "changed_paths=2" in message
