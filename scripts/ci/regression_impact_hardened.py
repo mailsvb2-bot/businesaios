@@ -50,7 +50,9 @@ def _changed_files_from_git() -> tuple[str, ...]:
     for command in (
         [vcs, "diff", "--name-only", f"{diff_base}...HEAD"],
         [vcs, "diff", "--name-only", f"{diff_base}..HEAD"],
-        [vcs, "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "HEAD"],
+        [vcs, "diff", "--name-only", "HEAD^1..HEAD"],
+        [vcs, "diff", "--name-only", "HEAD~1..HEAD"],
+        [vcs, "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "-m", "HEAD"],
     ):
         outcome = run_command(command, cwd=root, timeout=20, echo_output=False)
         if outcome.returncode == 0:
