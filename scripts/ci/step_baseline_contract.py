@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import sys
-
 from scripts.ci.baseline_contract import BASELINE_REQUIREMENTS, baseline_scenario_refs, missing_scenario_paths
-from scripts.ci.paths import repo_root
-from scripts.ci.subprocess_io import run_command
+from scripts.ci.subprocess_io import run_pytest
 
 
 def run() -> tuple[bool, str]:
@@ -21,7 +18,7 @@ def run() -> tuple[bool, str]:
         return False, "baseline scenario path(s) missing: " + ", ".join(missing_paths[:20])
 
     scenario_refs = baseline_scenario_refs()
-    outcome = run_command([sys.executable, "-m", "pytest", *scenario_refs, "-q"], cwd=repo_root(), timeout=120, echo_output=False)
+    outcome = run_pytest(["-m", "pytest", *scenario_refs, "-q"], timeout=120)
     if outcome.returncode != 0:
         output = "\n".join(line for line in (outcome.stdout + "\n" + outcome.stderr).splitlines() if line.strip())
         return False, "baseline scenario failure: " + output[:1000]
