@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.regression_impact_dotfix import blocked_artifact_paths, changed_files, impacted_rules, missing_fast_steps_for_paths
+from scripts.ci.step_baseline_contract import run as run_baseline_contract
 
 
 def run() -> tuple[bool, str]:
@@ -19,10 +20,14 @@ def run() -> tuple[bool, str]:
         impacted = ", ".join(rule.name for rule in impacted_rules(paths)) or "none"
         return False, f"regression impact missing fast step(s): {missing}; impacted={impacted}"
 
+    baseline_ok, baseline_message = run_baseline_contract()
+    if not baseline_ok:
+        return False, baseline_message
+
     impacted = tuple(rule.name for rule in impacted_rules(paths))
     if not impacted:
-        return True, f"regression impact passed: {len(paths)} changed path(s), no critical domain impact"
-    return True, f"regression impact passed: impacted={impacted}; changed_paths={len(paths)}"
+        return True, f"regression impact passed: {len(paths)} changed path(s), no critical domain impact; {baseline_message}"
+    return True, f"regression impact passed: impacted={impacted}; changed_paths={len(paths)}; {baseline_message}"
 
 
 __all__ = ["run"]
