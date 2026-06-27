@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from scripts.ci.plan_registry import plan_for_gate
-from scripts.ci.regression_impact import blocked_artifact_paths, changed_files, impacted_rules, missing_fast_steps_for_paths
+from scripts.ci.regression_impact_dotfix import blocked_artifact_paths, changed_files, impacted_rules, missing_fast_steps_for_paths
 
 
 def run() -> tuple[bool, str]:
     paths = changed_files()
     if not paths:
-        return True, "regression impact gate skipped by contract: no changed files discovered"
+        return False, "regression impact could not determine changed files"
 
     artifacts = blocked_artifact_paths(paths)
     if artifacts:
