@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.regression_impact_dotfix import blocked_artifact_paths, impacted_rules, missing_fast_steps_for_paths
-from scripts.ci.regression_impact_hardened import changed_files, removed_changed_files
+from scripts.ci.regression_impact_hardened import changed_files, deleted_changed_files
 from scripts.ci.step_baseline_contract import run as run_baseline_contract
 
 
@@ -10,8 +10,8 @@ def run() -> tuple[bool, str]:
     paths = changed_files()
     if not paths:
         return False, "regression impact has no changed files"
-    removed_paths = set(removed_changed_files())
-    active_paths = tuple(path for path in paths if path not in removed_paths)
+    deleted_paths = set(deleted_changed_files())
+    active_paths = tuple(path for path in paths if path not in deleted_paths)
     artifacts = blocked_artifact_paths(active_paths)
     if artifacts:
         return False, "generated/runtime artifacts in change set: " + ", ".join(artifacts[:20])
