@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 
 from scripts.ci import step_ids as _step_ids
 from scripts.ci.paths import repo_root
