@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.ci import step_ids as _step_ids
 from scripts.ci.paths import repo_root
 from scripts.ci.subprocess_io import run_command
 
@@ -15,36 +17,48 @@ class ImpactRule:
     required_fast_steps: tuple[str, ...]
 
 
+StepNameFactory = Callable[[], str]
+
+
+def _steps(*factories: StepNameFactory) -> tuple[str, ...]:
+    return tuple(factory() for factory in factories)
+
+
 IMPACT_RULES: tuple[ImpactRule, ...] = (
     ImpactRule(
         name="ci",
         prefixes=("scripts/ci/", ".github/workflows/", ".githooks/"),
-        required_fast_steps=("import-smoke", "quality-check", "lock-tests"),
+        required_fast_steps=_steps(_step_ids.import_smoke, _step_ids.quality, _step_ids.lock_tests),
     ),
     ImpactRule(
         name="runtime",
         prefixes=("runtime/",),
-        required_fast_steps=("import-smoke", "boot-smoke", "architecture-bypass-scan", "lock-tests"),
+        required_fast_steps=_steps(
+            _step_ids.import_smoke,
+            _step_ids.boot_smoke,
+            _step_ids.architecture_bypass_scan,
+            _step_ids.lock_tests,
+        ),
     ),
     ImpactRule(
         name="storage",
         prefixes=("storage/",),
-        required_fast_steps=("import-smoke", "lock-tests"),
+        required_fast_steps=_steps(_step_ids.import_smoke, _step_ids.lock_tests),
     ),
     ImpactRule(
         name="billing",
         prefixes=("billing/", "runtime/platform/billing"),
-        required_fast_steps=("import-smoke", "lock-tests"),
+        required_fast_steps=_steps(_step_ids.import_smoke, _step_ids.lock_tests),
     ),
     ImpactRule(
         name="tenant-security",
         prefixes=("tenancy/", "security/", "runtime/tenancy/", "runtime/security/"),
-        required_fast_steps=("import-smoke", "architecture-bypass-scan", "lock-tests"),
+        required_fast_steps=_steps(_step_ids.import_smoke, _step_ids.architecture_bypass_scan, _step_ids.lock_tests),
     ),
     ImpactRule(
         name="interfaces",
         prefixes=("interfaces/", "api/", "tests/interfaces/", "tests/api/"),
-        required_fast_steps=("import-smoke", "boot-smoke", "lock-tests"),
+        required_fast_steps=_steps(_step_ids.import_smoke, _step_ids.boot_smoke, _step_ids.lock_tests),
     ),
 )
 
