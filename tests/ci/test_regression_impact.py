@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from scripts.ci import regression_impact_hardened
 from scripts.ci import step_ids
 from scripts.ci import step_doctor
 from scripts.ci import step_registry
@@ -11,6 +12,7 @@ from scripts.ci.regression_impact import (
     missing_fast_steps_for_paths,
     required_fast_steps_for_paths,
 )
+from scripts.ci.subprocess_io import CommandOutcome
 
 
 def _fast_steps() -> tuple[str, ...]:
@@ -56,3 +58,22 @@ def test_doctor_legacy_wrapper_stays_importable_after_lazy_registry() -> None:
 def test_impacted_rules_classify_multiple_domains() -> None:
     names = {rule.name for rule in impacted_rules(("billing/recovery_store.py", "security/key_provider.py"))}
     assert names == {"billing", "tenant-security"}
+
+
+def test_hardened_changed_files_uses_first_parent_when_clean_main_diff_is_empty(monkeypatch) -> None:
+    monkeypatch.delenv("BAIOS_CHANGED_FILES", raising=False)
+    monkeypatch.delenv("GITHUB_BASE_REF", raising=False)
+    monkeypatch.delenv("BAIOS_BASE_REF", raising=False)
+    commands: list[tuple[str, ...]] = []
+
+    def fake_run_command(command, **_kwargs) -> CommandOutcome:
+        normalized = tuple(command)
+        commands.append(normalized)
+        if normalized == ("git", "diff", "--name-only", "HEAD^1..HEAD"):
+            return CommandOutcome(returncode=0, stdout="runtime/world_state/public_api.py\n", stderr="")
+        return CommandOutcome(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(regression_impact_hardened, "run_command", fake_run_command)
+
+    assert regression_impact_hardened.changed_files() == ("runtime/world_state/public_api.py",)
+    assert ("git", "diff", "--name-only", "HEAD^1..HEAD") in commands
