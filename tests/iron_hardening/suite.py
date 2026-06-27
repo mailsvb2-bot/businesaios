@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """IRON hardening suite (50 tests).
 
 These tests are designed to be:
@@ -7,6 +5,8 @@ These tests are designed to be:
   - hermetic (no network / no subprocess)
   - focused on Ring invariants and regression prevention
 """
+
+from __future__ import annotations
 
 import ast
 import pathlib
