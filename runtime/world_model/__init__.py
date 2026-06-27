@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Canonical runtime public surface for world-model contracts and helpers.
 
 Runtime boot, handlers and integration code should import world-model types and
 services from here instead of reaching into core.world_model internals directly.
 """
+
+from __future__ import annotations
 
 from application.decision_state.world_model_metadata import (
     extract_pinned_world_model_meta_from_payload,
@@ -20,10 +20,10 @@ from runtime.public_api_alias import install_public_api_alias
 from runtime.world_model.contract import RUNTIME_WORLD_MODEL_PUBLIC_API, WORLD_MODEL_CANON
 
 CANON_RUNTIME_WORLD_MODEL_PUBLIC_API = True
+CANON_RUNTIME_WORLD_MODEL_NAMESPACE = True
 
 __all__ = [
-    'CANON_RUNTIME_WORLD_MODEL_NAMESPACE',
-    "replay_state_against_world_model",
+    "CANON_RUNTIME_WORLD_MODEL_NAMESPACE",
     "CANON_RUNTIME_WORLD_MODEL_PUBLIC_API",
     "InMemorySnapshotRepository",
     "RUNTIME_WORLD_MODEL_PUBLIC_API",
@@ -38,10 +38,7 @@ __all__ = [
     "extract_pinned_world_model_meta_from_payload",
     "extract_world_model_metadata",
     "explain_world_snapshot",
+    "replay_state_against_world_model",
 ]
-
-CANON_RUNTIME_WORLD_MODEL_NAMESPACE = True
-
-
 
 install_public_api_alias(__name__)
