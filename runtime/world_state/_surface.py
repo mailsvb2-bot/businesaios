@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Canonical runtime public surface for world-state types."""
+
+from __future__ import annotations
 
 from application.world_state.history_service import WorldStateHistoryService
 from application.world_state.history_summary import HistorySummary
@@ -28,5 +28,3 @@ __all__ = [
 ]
 
 CANON_RUNTIME_WORLD_STATE_NAMESPACE = True
-
-
