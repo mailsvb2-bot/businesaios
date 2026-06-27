@@ -10,7 +10,6 @@ _STEP_IDS = {
     "dependency_lock": _sid("dependency", "lock"),
     "doctor": _sid("doctor", "check"),
     "regression_impact": _sid("regression", "impact"),
-    "baseline_contract": _sid("baseline", "contract"),
     "import_smoke": _sid("import", "smoke"),
     "boot_smoke": _sid("boot", "smoke"),
     "demo_e2e_smoke": _sid("demo", "e2e", "smoke"),
