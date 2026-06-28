@@ -1,8 +1,9 @@
+"""Thin external shim for typed runtime access."""
+
 from __future__ import annotations
 
 from runtime.application.contracts import RuntimeTypedAccess
 
-"""Thin external shim for typed runtime access."""
 
 CANON_COMPAT_SHIM = True
 
