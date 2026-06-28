@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """Thin external shim for canonical service registry types.
 
 No wildcard exports and no root-level registry ownership are allowed here.
 """
+
+from __future__ import annotations
 
 from shared.registry import Registry, ServiceRegistry
 
