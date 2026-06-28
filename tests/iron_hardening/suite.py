@@ -28,13 +28,36 @@ def _parse(path: pathlib.Path) -> ast.AST:
 
 
 def _iter_prod_py() -> list[pathlib.Path]:
-    excluded = {"tests", "experimental", "docs", "ci", ".github", "data", "scripts", "canon"}
+    excluded = {
+        ".git",
+        ".mypy_cache",
+        ".nox",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".tox",
+        ".venv",
+        "__pycache__",
+        "build",
+        "canon",
+        "ci",
+        "data",
+        "dist",
+        "docs",
+        "env",
+        "experimental",
+        "node_modules",
+        "scripts",
+        "site-packages",
+        "tests",
+        "venv",
+    }
     files: list[pathlib.Path] = []
     for p in ROOT.rglob("*.py"):
         rel = p.relative_to(ROOT).as_posix()
+        rel_parts = rel.split("/")
         if rel.startswith("runtime/platform/support/"):
             continue
-        if any(part in excluded for part in p.parts):
+        if any(part in excluded for part in rel_parts):
             continue
         files.append(p)
     return files
