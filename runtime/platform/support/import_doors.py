@@ -26,16 +26,25 @@ def _load_runtime_platform_support_import_doors() -> dict[str, dict[str, str]]:
 
 
 def _physical_module_path(fullname: str) -> Path | None:
+    """Return a concrete module path when this support module now exists physically.
+
+    Import doors are a compatibility fallback for old public module paths. They must
+    not shadow real modules because that would hide ownership from static analysis
+    and block bounded extraction from replacing dynamic meta-path behavior.
+    """
     prefix = f"{_SUPPORT_PACKAGE}."
     if not fullname.startswith(prefix):
         return None
+
     relative = fullname.removeprefix(prefix).replace(".", "/")
     module_path = _SUPPORT_PACKAGE_ROOT / f"{relative}.py"
     if module_path.is_file():
         return module_path
+
     package_path = _SUPPORT_PACKAGE_ROOT / relative / "__init__.py"
     if package_path.is_file():
         return package_path
+
     return None
 
 
