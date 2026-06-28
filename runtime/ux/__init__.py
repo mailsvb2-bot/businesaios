@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-"""Canonical runtime package alias namespace for runtime.ux public API."""
-
 from runtime.package_alias_namespace import build_package_alias_namespace
+
+"""Canonical runtime package alias namespace for runtime.ux public API."""
 
 CANON_RUNTIME_PACKAGE_ALIAS_NAMESPACE = True
 
@@ -15,4 +15,3 @@ __getattr__, __dir__, __all__ = build_package_alias_namespace(
     _PUBLIC_ATTRS,
     extra_exports=['CANON_RUNTIME_PACKAGE_ALIAS_NAMESPACE'],
     )
-
