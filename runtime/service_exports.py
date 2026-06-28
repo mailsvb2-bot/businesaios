@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Thin external shim for runtime application service exports.
 
 This module intentionally re-exports the canonical owner surface from
@@ -7,7 +5,10 @@ This module intentionally re-exports the canonical owner surface from
 here.
 """
 
+from __future__ import annotations
+
 from runtime.application.contracts import RuntimeServiceExports
+
 
 CANON_COMPAT_SHIM = True
 

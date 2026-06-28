@@ -1,8 +1,9 @@
-from __future__ import annotations
-
 """Canonical runtime package alias namespace for runtime.simulation public API."""
 
+from __future__ import annotations
+
 from runtime.package_alias_namespace import build_package_alias_namespace
+
 
 CANON_RUNTIME_PACKAGE_ALIAS_NAMESPACE = True
 

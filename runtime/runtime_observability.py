@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical runtime observability owner.
 
 This module is allowed to append audit-style runtime observability events only.
@@ -7,9 +5,11 @@ It must not become a decision surface, runtime assembler, or hidden side-effect
 router.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 from runtime.audit_log import RuntimeAuditLog
+
 
 CANON_RUNTIME_OBSERVABILITY_OWNER = True
 CANON_RUNTIME_OBSERVABILITY_AUDIT_ONLY = True

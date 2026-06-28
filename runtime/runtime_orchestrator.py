@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Runtime readiness orchestrator.
 
 This root-level surface is intentionally narrow: it validates the already-built
@@ -7,10 +5,13 @@ runtime registry state and marks lifecycle readiness. It must not become an
 alternative runtime assembly path or absorb decision logic.
 """
 
+from __future__ import annotations
+
 from runtime.lifecycle import Lifecycle
 from runtime.readiness import Readiness
 from runtime.runtime_state import RuntimeState
 from shared.registry import ComponentRegistry, ServiceRegistry
+
 
 CANON_RUNTIME_ROOT_READINESS_OWNER = True
 CANON_RUNTIME_ROOT_NO_ASSEMBLY = True
