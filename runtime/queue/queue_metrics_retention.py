@@ -1,20 +1,18 @@
-from __future__ import annotations
-
 """Retention and rotation for queue health rollups.
 
 This module manages operational evidence only. It must not mutate queue
 execution state or introduce any alternate planning/decision path.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
-
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_metrics_compactor import QueueMetricsCompactionReport, QueueMetricsCompactor
 from runtime.queue.queue_metrics_rollup_sqlite import SqliteQueueMetricsRollupStore
 
 CANON_RUNTIME_QUEUE_METRICS_RETENTION = True
-
 
 @dataclass(frozen=True)
 class QueueMetricsRetentionPolicy:

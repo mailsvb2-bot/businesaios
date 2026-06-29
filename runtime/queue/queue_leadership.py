@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Leadership binding for queue operational roles.
 
 This layer gates *operational* roles such as janitor or scheduler coordination
@@ -7,20 +5,17 @@ through a single leader election lease. It must not invent business intent or
 compete with DecisionCore.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any
-
 from reliability.distributed_lock import InMemoryDistributedLock
 from reliability.leader_election import LeaderElection, LeadershipLease
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_operational_contracts import QueueLeadershipReport
 from runtime.queue.job_fencing import build_process_scoped_worker_id
 
-
 CANON_RUNTIME_QUEUE_LEADERSHIP = True
-
-
-
 
 class QueueLeadershipCoordinator:
     def __init__(
