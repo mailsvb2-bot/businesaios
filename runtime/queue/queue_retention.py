@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Retention cleanup for runtime queue terminal jobs.
 
 This layer is operational hygiene only:
@@ -7,6 +5,8 @@ This layer is operational hygiene only:
 - keep queue persistence bounded
 - never invent business logic or decisions
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta

@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Postgres-backed route history for queue remediation surfaces."""
+
+from __future__ import annotations
 
 import json
 from dataclasses import dataclass

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Durable route history for queue remediation surfaces.
 
 This module records access to queue remediation control-plane surfaces:
@@ -10,6 +8,8 @@ This module records access to queue remediation control-plane surfaces:
 It is evidence only and must never mutate queue execution state.
 """
 
+from __future__ import annotations
+
 import importlib
 import json
 import os
@@ -17,12 +17,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-sqlite3 = importlib.import_module("sqlite3")
 from threading import RLock
 
 from core.tenancy.normalization import require_tenant_id
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from runtime.queue.job_contract import normalize_now
+
+sqlite3 = importlib.import_module("sqlite3")
 
 CANON_RUNTIME_QUEUE_REMEDIATION_ROUTE_HISTORY_SQLITE = True
 

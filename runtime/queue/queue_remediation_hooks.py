@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Operator-facing remediation hooks for queue health.
 
 This module stays strictly operational:
@@ -9,6 +7,8 @@ This module stays strictly operational:
 
 No business planning or autonomous intent is introduced here.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
