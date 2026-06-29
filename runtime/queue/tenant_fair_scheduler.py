@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Tenant-fair claim planning for shared runtime queues.
 
 Operational only:
@@ -8,6 +6,8 @@ Operational only:
 - does not change business semantics or DecisionCore outputs;
 - prevents queue monopolization by one noisy tenant.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import RLock

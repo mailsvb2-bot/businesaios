@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Read-model cache window controller.
 
 Avoids "God code" where arbitrary modules mutate os.environ directly.
@@ -8,6 +6,8 @@ This module is the single point that adjusts READ_MODEL_CACHE_WINDOW_S.
 The runtime uses environment variables as configuration source, so we keep the
 implementation minimal and reversible.
 """
+
+from __future__ import annotations
 
 import os
 

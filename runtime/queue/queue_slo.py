@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Operational SLO evaluation for runtime queue health.
 
 This module reads queue facts and emits health verdicts. It does not change
 queue state and must never become planning logic.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime

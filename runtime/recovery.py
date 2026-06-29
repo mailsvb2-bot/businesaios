@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Crash-recovery worker.
 
 RuntimeExecutor enqueues an outbox item before effect dispatch and records
@@ -7,6 +5,8 @@ terminal delivery state only through the canonical outcome-persistence owner.
 This module recovers unfinished deliveries without introducing any new decision
 logic or alternate execution workflow.
 """
+
+from __future__ import annotations
 
 import logging
 from types import SimpleNamespace
