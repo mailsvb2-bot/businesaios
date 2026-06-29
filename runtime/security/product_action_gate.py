@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Product capability gate (Engine-level).
 
 This is NOT a second brain.
@@ -14,10 +12,11 @@ We gate at RuntimeExecutor time (after Decision issuance) because:
 The gate is intentionally small and explicit.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Mapping
-
 
 @dataclass(frozen=True)
 class ProductGateVerdict:

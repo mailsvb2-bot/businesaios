@@ -1,19 +1,17 @@
-from __future__ import annotations
-
 """Supervisor for queue janitor loops.
 
 Operational only. This owns janitor thread lifecycle, not job decisions.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from threading import Lock, Thread
-
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.job_janitor_loop import JanitorLoopReport, JobJanitorLoop
 from runtime.queue.job_stop_token import JobStopToken
 
 CANON_RUNTIME_QUEUE_JANITOR_SUPERVISOR = True
-
 
 @dataclass(frozen=True)
 class JanitorHandle:

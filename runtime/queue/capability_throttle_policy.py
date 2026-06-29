@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Capability-aware throttle policy for queue claims.
 
 Operational only:
@@ -8,16 +6,16 @@ Operational only:
 - separates preview from commit to keep telemetry truthful.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from threading import RLock
 from collections.abc import Iterable, Mapping
-
 from core.tenancy.normalization import require_tenant_id
 from runtime.queue.job_contract import normalize_now, utc_now
 
 CANON_RUNTIME_QUEUE_CAPABILITY_THROTTLE_POLICY = True
-
 
 def normalize_capability_key(value: str) -> str:
     text = str(value or "").strip().lower()

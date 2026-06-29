@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Lease lifecycle manager for runtime queue jobs.
 
 Responsibilities:
@@ -11,15 +9,15 @@ Responsibilities:
 This module is operational-only and must not become a second brain.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
-
 from runtime.queue.job_contract import JobLease, JobRecord, normalize_now, utc_now
 from runtime.queue.job_store_backend import JobStoreBackend
 from runtime.queue.job_visibility_timeout import JobVisibilityTimeout, JobVisibilityWindow
 
 CANON_RUNTIME_QUEUE_JOB_LEASE_MANAGER = True
-
 
 @dataclass(frozen=True)
 class LeaseHeartbeatReport:

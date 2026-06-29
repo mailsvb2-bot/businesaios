@@ -1,14 +1,13 @@
-from __future__ import annotations
-
 """Scheduler for due queue jobs.
 
 This scheduler never invents work.
 It only selects already-persisted due jobs for workers.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
-
 from core.tenancy.normalization import require_tenant_id
 from runtime.queue.capability_throttle_policy import (
     CapabilityThrottlePolicy,
@@ -26,7 +25,6 @@ from runtime.queue.tenant_fair_scheduler import (
 from runtime.queue.throttle_policy import ThrottlePolicy
 
 CANON_RUNTIME_QUEUE_SCHEDULER = True
-
 
 @dataclass(frozen=True)
 class ScheduleBatch:

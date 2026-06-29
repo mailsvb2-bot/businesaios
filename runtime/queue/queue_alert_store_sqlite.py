@@ -1,25 +1,22 @@
-from __future__ import annotations
-
 """Durable SQLite queue alert sink.
 
 This persists operational alerts only. It must not mutate queue execution state
 or become an alternate decision surface.
 """
 
+from __future__ import annotations
+
 import importlib
 import os
 from datetime import datetime
 from pathlib import Path
-
-sqlite3 = importlib.import_module("sqlite3")
 from threading import RLock
-
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_alerts import QueueAlert, QueueAlertSink
 
+sqlite3 = importlib.import_module("sqlite3")
 CANON_RUNTIME_QUEUE_ALERT_STORE_SQLITE = True
-
 
 def runtime_queue_alert_store_path() -> Path:
     explicit = os.getenv('BUSINESAIOS_QUEUE_ALERT_SQLITE_PATH', '').strip()

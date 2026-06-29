@@ -1,24 +1,20 @@
-from __future__ import annotations
-
 """Queue alert derivation and routing for operational health.
 
 This module derives alerts from queue health signals only.
 It must not mutate queue state or become policy/planning logic.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from threading import RLock
 from typing import Protocol, runtime_checkable
-
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_operational_contracts import QueueAlert, QueueSLOReport
 from runtime.queue.queue_slo import QueueSLOEvaluator
 
 CANON_RUNTIME_QUEUE_ALERTS = True
-
-
-
 
 @dataclass(frozen=True)
 class QueueAlertCooldownPolicy:

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Cooperative stop token for runtime queue worker loops.
 
 Operational only:
@@ -8,14 +6,14 @@ Operational only:
 - does not change canonical execution semantics
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from threading import Event
-
 from runtime.queue.job_contract import normalize_now
 
 CANON_RUNTIME_QUEUE_STOP_TOKEN = True
-
 
 @dataclass(frozen=True)
 class StopRequest:

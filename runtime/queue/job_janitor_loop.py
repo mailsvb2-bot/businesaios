@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Polling loop for queue janitor maintenance.
 
 Operational only:
@@ -8,16 +6,16 @@ Operational only:
 - optionally gated by operational leadership
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
-
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.job_janitor import JobQueueJanitor, QueueJanitorReport
 from runtime.queue.job_stop_token import JobStopToken
 from runtime.queue.queue_retention import QueueRetentionManager, QueueRetentionReport
 
 CANON_RUNTIME_QUEUE_JANITOR_LOOP = True
-
 
 @dataclass(frozen=True)
 class JanitorLoopTick:

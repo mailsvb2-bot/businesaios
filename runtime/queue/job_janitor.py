@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Queue janitor for recovery-safe operational maintenance.
 
 Responsibilities:
@@ -13,18 +11,16 @@ Non-responsibilities:
 - bypass canonical execution flow
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any
-
 from runtime.queue.job_contract import JobState, normalize_now
 from runtime.queue.job_store import JobStore
 from runtime.queue.queue_leadership import QueueLeadershipCoordinator
 from runtime.queue.queue_operational_contracts import QueueJanitorReport, QueueLeadershipReport
 
 CANON_RUNTIME_QUEUE_JANITOR = True
-
-
-
 
 class JobQueueJanitor:
     def __init__(

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Runtime scheduler jobs.
 
 This file hosts the offline ML job that closes the learning ring:
@@ -12,8 +10,9 @@ IMPORTANT:
 - Feedback-loop guards must run at canonical train/evaluate/rollout boundaries.
 """
 
-import time
+from __future__ import annotations
 
+import time
 from learning.replay import FeedbackLoopFirewall
 from ml.policy_promotion_guard import PolicyPromotionGuard
 from ml.policy_rollout_manager import PolicyRolloutManager
@@ -28,8 +27,6 @@ from runtime.scheduler_run_cycle import run_learning_cycle
 
 CANON_RUNTIME_SCHEDULER_SINGLE_DECISION_PATH = True
 CANON_RUNTIME_SCHEDULER_ORCHESTRATOR_ONLY = True
-
-
 
 class LearningJob:
     def __init__(

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Supervisor for runtime queue worker loops.
 
 This supervisor owns lifecycle only:
@@ -11,10 +9,11 @@ This supervisor owns lifecycle only:
 It must not introduce queue policy or a second decision center.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from threading import Lock, Thread
 from collections.abc import Iterable
-
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.job_stop_token import JobStopToken
 from runtime.queue.job_worker import JobWorker
@@ -22,7 +21,6 @@ from runtime.queue.job_worker_loop import JobWorkerLoop, WorkerLoopReport
 from runtime.queue.queue_observability import QueueObservabilityRegistry, QueueObservabilitySnapshot
 
 CANON_RUNTIME_QUEUE_WORKER_SUPERVISOR = True
-
 
 @dataclass(frozen=True)
 class WorkerHandle:

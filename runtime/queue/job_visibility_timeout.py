@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Visibility timeout policy for runtime queue jobs.
 
 Operational contract only:
@@ -8,12 +6,12 @@ Operational contract only:
 - no scheduling or business decisions here
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 from runtime.queue.job_contract import JobPriority, JobRecord
 
 CANON_RUNTIME_QUEUE_JOB_VISIBILITY_TIMEOUT = True
-
 
 @dataclass(frozen=True)
 class JobVisibilityWindow:

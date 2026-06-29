@@ -1,19 +1,17 @@
-from __future__ import annotations
-
 """Retry policy for runtime queue workers.
 
 The policy is deliberately operational, not strategic.
 It classifies errors only to decide retry delay / dead-letter outcome.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from random import randint
 from collections.abc import Iterable
-
 from runtime.queue.job_contract import JobRecord
 
 CANON_RUNTIME_QUEUE_RETRY_POLICY = True
-
 
 @dataclass(frozen=True)
 class JobRetryDecision:

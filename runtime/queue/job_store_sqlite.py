@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SQLite-backed durable job store for runtime queue.
 
 Infrastructure only:
@@ -10,10 +8,11 @@ Infrastructure only:
 - never a second brain
 """
 
+from __future__ import annotations
+
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
-
 from core.tenancy.normalization import require_tenant_id
 from runtime.queue import _sqlite_job_store_terminal_methods as _sqlite_job_store_terminal_methods
 from runtime.queue._sqlite_job_store_claims import (
@@ -58,8 +57,6 @@ from runtime.queue.job_fencing import validate_fencing_token
 from runtime.queue.queue_store_policy import DEFAULT_QUEUE_STORE_POLICY
 
 CANON_RUNTIME_QUEUE_JOB_STORE_SQLITE = True
-
-
 
 class SqliteJobStore:
     def __init__(self, path: str | Path | None = None, *, busy_timeout_ms: int = DEFAULT_QUEUE_STORE_POLICY.default_sqlite_busy_timeout_ms, wal_checkpoint_on_close: bool = DEFAULT_QUEUE_STORE_POLICY.wal_checkpoint_on_close) -> None:

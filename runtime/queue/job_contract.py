@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical runtime queue contracts.
 
 Operational only:
@@ -8,17 +6,17 @@ Operational only:
 - workers must execute an injected canonical runner.
 """
 
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 from collections.abc import Mapping
-
 from core.tenancy.normalization import require_tenant_id
 
 CANON_RUNTIME_QUEUE_CONTRACT = True
-
 MAX_JOB_ATTEMPTS = 100
 MAX_JOB_PAYLOAD_BYTES = 256_000
 MAX_JOB_TAGS = 32
@@ -26,7 +24,6 @@ MAX_ID_LENGTH = 200
 MAX_QUEUE_NAME_LENGTH = 120
 MAX_JOB_TYPE_LENGTH = 160
 MAX_ERROR_LENGTH = 2_000
-
 
 def utc_now() -> datetime:
     return datetime.now(UTC)

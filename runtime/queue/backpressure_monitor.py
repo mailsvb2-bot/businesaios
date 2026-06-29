@@ -1,12 +1,11 @@
-from __future__ import annotations
-
 """Read-only queue pressure/fairness monitor."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 from collections.abc import Iterable
-
 from runtime.queue.backpressure_policy import BackpressurePolicy, BackpressureVerdict
 from runtime.queue.job_contract import JobState, normalize_now
 from runtime.queue.job_store_backend import JobStoreBackend
@@ -20,7 +19,6 @@ from runtime.queue.tenant_fair_scheduler import (
 )
 
 CANON_RUNTIME_QUEUE_BACKPRESSURE_MONITOR = True
-
 
 @dataclass(frozen=True)
 class TenantBackpressureStatus:
