@@ -1,6 +1,7 @@
+"""Import-stable facade for local stateful platform-support adapters."""
+
 from __future__ import annotations
 
-"""Import-stable facade for local stateful platform-support adapters."""
 
 from runtime.platform.support.integrations._local_adapters_memory import (
     ExperimentTrackerAdapter,

@@ -1,6 +1,7 @@
+"""Canonical owner for tiny platform-support schemas and validators."""
+
 from __future__ import annotations
 
-"""Canonical owner for tiny platform-support schemas and validators."""
 
 from collections.abc import Mapping
 from typing import Any

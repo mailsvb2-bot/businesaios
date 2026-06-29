@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """DEPRECATED Postgres backend (disabled by System TZ).
 
 System TZ requires: all real integrations only through runtime/_internal/_effects_impl.py.
@@ -7,6 +5,9 @@ System TZ requires: all real integrations only through runtime/_internal/_effect
 This repository's canonical production build uses SQLite backends. This module remains
 only to keep import paths stable; it contains NO DB driver imports and NO integration code.
 """
+
+from __future__ import annotations
+
 
 from typing import Any
 

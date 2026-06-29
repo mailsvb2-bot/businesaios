@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical Postgres event-store adapter.
 
 The driver remains sealed behind runtime.platform.postgres_port.PostgresPort.
@@ -9,6 +7,9 @@ events, count events, and provide a health probe. It intentionally keeps
 explicit production enablement so capability surfaces cannot be mistaken for
 live adapters.
 """
+
+from __future__ import annotations
+
 
 import importlib.util
 import json

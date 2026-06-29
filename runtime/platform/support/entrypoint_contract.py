@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Shared contract for platform-support CLI and script entrypoints.
 
 Keeps command normalization and dispatch in one place so CLI and script surfaces do not
 carry subtly different validation or execution paths.
 """
+
+from __future__ import annotations
+
 
 from dataclasses import dataclass
 from collections.abc import Callable

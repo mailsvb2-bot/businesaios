@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Runtime application paths.
 
 Provides a BusinesAIOS-first home directory while preserving a narrow legacy
 fallback for older single-product installs.
 """
+
+from __future__ import annotations
+
 
 from pathlib import Path
 

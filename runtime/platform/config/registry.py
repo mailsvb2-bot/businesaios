@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Canonical config registry.
 
 Unifies settings + feature flags + YAML loading + tenant env access behind one
 access point so boot/runtime code avoids parallel config paths.
 """
+
+from __future__ import annotations
+
 
 from dataclasses import dataclass
 from pathlib import Path

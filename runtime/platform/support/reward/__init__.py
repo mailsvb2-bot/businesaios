@@ -1,9 +1,10 @@
-from __future__ import annotations
-
 """Physical compatibility package surface.
 
 This package uses real files instead of import-time synthetic module generation.
 """
+
+from __future__ import annotations
+
 
 from importlib import import_module
 

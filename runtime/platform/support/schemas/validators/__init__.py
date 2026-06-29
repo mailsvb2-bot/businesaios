@@ -1,6 +1,7 @@
+"""Canonical validator surface backed by schema_catalog with compat alias submodules."""
+
 from __future__ import annotations
 
-"""Canonical validator surface backed by schema_catalog with compat alias submodules."""
 
 from typing import Any
 

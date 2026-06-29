@@ -1,6 +1,7 @@
+"""Helpers for explicit import-stable modules that are intentionally not bundled."""
+
 from __future__ import annotations
 
-"""Helpers for explicit import-stable modules that are intentionally not bundled."""
 
 from typing import Any
 

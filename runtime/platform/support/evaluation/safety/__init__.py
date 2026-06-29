@@ -1,6 +1,7 @@
+"""Canonical safety evaluation surface with compat alias submodules."""
+
 from __future__ import annotations
 
-"""Canonical safety evaluation surface with compat alias submodules."""
 
 from runtime.platform.support.contracts.evaluation import EvaluationResult
 

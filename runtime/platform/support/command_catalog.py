@@ -1,6 +1,7 @@
+"""Canonical command catalog for platform-support entrypoints."""
+
 from __future__ import annotations
 
-"""Canonical command catalog for platform-support entrypoints."""
 
 from runtime.platform.support.command_registry import is_known_command, known_command_set
 

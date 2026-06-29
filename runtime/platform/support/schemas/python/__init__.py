@@ -1,6 +1,7 @@
+"""Canonical physical schema entrypoints backed by schema_catalog."""
+
 from __future__ import annotations
 
-"""Canonical physical schema entrypoints backed by schema_catalog."""
 
 from typing import Any
 

@@ -1,6 +1,7 @@
+"""Shared local workspace helpers for platform-support CLI commands."""
+
 from __future__ import annotations
 
-"""Shared local workspace helpers for platform-support CLI commands."""
 
 import os
 from pathlib import Path

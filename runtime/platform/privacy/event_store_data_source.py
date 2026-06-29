@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Platform-layer adapter: event store as a user-data source.
 
 IMPORTANT:
@@ -12,6 +10,9 @@ Required event_store methods:
 
 This adapter is used by core/privacy services via dependency injection.
 """
+
+from __future__ import annotations
+
 
 from dataclasses import dataclass
 from typing import Any

@@ -1,6 +1,7 @@
+"""Canonical policy exploration surface with compat alias submodules."""
+
 from __future__ import annotations
 
-"""Canonical policy exploration surface with compat alias submodules."""
 
 import math
 import random

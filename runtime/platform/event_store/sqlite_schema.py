@@ -1,9 +1,10 @@
-from __future__ import annotations
-
 """SQLite DDL and migration helpers for SqliteEventStore.
 
 Extracted from sqlite_event_store.py to eliminate god-module.
 """
+
+from __future__ import annotations
+
 
 import sqlite3
 

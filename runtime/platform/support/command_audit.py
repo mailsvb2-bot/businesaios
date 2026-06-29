@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Structured observability for platform-support command entrypoints.
 
 The platform-support surface still carries honest no-op shims for packaging stability.
 This module makes those invocations inspectable instead of only printing to stderr.
 """
+
+from __future__ import annotations
+
 
 import json
 import os

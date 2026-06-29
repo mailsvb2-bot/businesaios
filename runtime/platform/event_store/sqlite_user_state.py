@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """User state projection helpers for SqliteEventStore.
 
 Incrementally maintains a realtime per-user state snapshot
 on every append. Read via get_user_state().
 Extracted from sqlite_event_store.py.
 """
+
+from __future__ import annotations
+
 
 import json
 import sqlite3

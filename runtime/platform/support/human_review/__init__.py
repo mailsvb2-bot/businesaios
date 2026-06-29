@@ -1,6 +1,7 @@
+"""Canonical human review surface with compat alias submodules."""
+
 from __future__ import annotations
 
-"""Canonical human review surface with compat alias submodules."""
 
 from dataclasses import dataclass
 from typing import Any

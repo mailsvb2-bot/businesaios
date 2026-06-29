@@ -1,6 +1,7 @@
+"""Canonical orchestration surface with compat alias submodules."""
+
 from __future__ import annotations
 
-"""Canonical orchestration surface with compat alias submodules."""
 
 from dataclasses import dataclass
 

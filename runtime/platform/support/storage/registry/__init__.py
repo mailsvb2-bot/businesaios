@@ -1,6 +1,7 @@
+"""Canonical owner for generated registry store compatibility surfaces."""
+
 from __future__ import annotations
 
-"""Canonical owner for generated registry store compatibility surfaces."""
 
 from runtime.platform.support.storage.generated_stores import (
     AuditStore,

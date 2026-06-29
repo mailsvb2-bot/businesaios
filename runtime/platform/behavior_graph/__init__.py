@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """Behavior-graph storage package.
 
 The canonical SQLite owner is ``sqlite_behavior_graph_store``. Historical split
 modules are served via compat aliases so old imports stay stable without
 keeping a second implementation tree.
 """
+
+from __future__ import annotations
+
 
 import importlib
 from typing import Any

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical entrypoints for platform_support surfaces.
 
 These modules intentionally stay thin, but no longer pretend to be full-featured
@@ -10,6 +8,9 @@ Default behavior preserves historical packaging semantics by returning success
 for known-but-unimplemented commands. Operators may opt into fail-closed entry
 surfaces by setting ``BUSINESAIOS_PLATFORM_SUPPORT_STRICT_ENTRYPOINTS=1``.
 """
+
+from __future__ import annotations
+
 
 import os
 import sys

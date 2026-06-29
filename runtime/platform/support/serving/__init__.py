@@ -1,6 +1,7 @@
+"""Canonical serving support surface with compat alias submodules."""
+
 from __future__ import annotations
 
-"""Canonical serving support surface with compat alias submodules."""
 
 from dataclasses import dataclass
 from typing import Protocol

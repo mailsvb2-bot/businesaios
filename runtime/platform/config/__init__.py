@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Runtime platform config package surface.
 
 Keep root import light. Heavy settings/YAML helpers are loaded only when the
 caller asks for them, while the historical yaml_loader alias remains available.
 """
+
+from __future__ import annotations
+
 
 import sys
 from importlib import import_module

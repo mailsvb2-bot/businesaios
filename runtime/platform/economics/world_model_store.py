@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """Backward-compatible public facade for governed world-model stores.
 
 Contracts live in world_model_store_contracts.
 Construction lives in world_model_store_factory.
 This facade intentionally owns no implementation logic.
 """
+
+from __future__ import annotations
+
 
 from runtime.platform.economics.world_model_store_contracts import (
     FileWorldModelStore,

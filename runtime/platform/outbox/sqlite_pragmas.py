@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SQLite connection pragmas (canonical).
 
 Goal:
@@ -9,6 +7,9 @@ Goal:
 
 This module is safe to import from platform_layer/* (allowed by architecture tests).
 """
+
+from __future__ import annotations
+
 
 import sqlite3
 

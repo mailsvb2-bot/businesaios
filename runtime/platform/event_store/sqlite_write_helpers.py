@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """Write-path helpers for SqliteEventStore append_event.
 
 Responsibility:
   - _append_counters()           — update event_counters incremental table
   - _append_user_state()         — trigger sqlite_user_state projection
 """
+
+from __future__ import annotations
+
 
 import logging
 import sqlite3

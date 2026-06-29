@@ -1,6 +1,7 @@
+"""Canonical checkpoint support surface with compat alias submodules."""
+
 from __future__ import annotations
 
-"""Canonical checkpoint support surface with compat alias submodules."""
 
 import pickle
 from dataclasses import dataclass

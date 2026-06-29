@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """PostgresPort — the only place where the real DB driver is imported.
 
 We treat database drivers as external integrations and keep their imports sealed
@@ -8,6 +6,9 @@ psycopg (or any other driver) directly.
 
 This keeps the dependency surface narrow and auditable.
 """
+
+from __future__ import annotations
+
 
 from dataclasses import dataclass
 from typing import Any

@@ -1,6 +1,7 @@
+"""Canonical platform-support CLI surface with synthetic compatibility submodules."""
+
 from __future__ import annotations
 
-"""Canonical platform-support CLI surface with synthetic compatibility submodules."""
 
 from runtime.platform.support.cli._main_stub import cli_main
 from runtime.platform.support.cli.commands import build_cli_implementations

@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """Canonical sqlite read-query surface for ``SqliteEventStore``.
 
 This module is used by the canonical ``sqlite_event_store.py`` implementation
 and keeps all read-only query helpers in one place. The implementation is
 intentionally small and deterministic.
 """
+
+from __future__ import annotations
+
 
 import sqlite3
 from typing import Any

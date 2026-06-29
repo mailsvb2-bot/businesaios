@@ -1,6 +1,7 @@
+"""Tiny shared helpers for sqlite event store modules."""
+
 from __future__ import annotations
 
-"""Tiny shared helpers for sqlite event store modules."""
 
 import json
 import time

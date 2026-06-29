@@ -1,6 +1,7 @@
+"""Canonical offline evaluation surface with compat alias submodules."""
+
 from __future__ import annotations
 
-"""Canonical offline evaluation surface with compat alias submodules."""
 
 from runtime.platform.support.contracts.evaluation import EvaluationResult
 

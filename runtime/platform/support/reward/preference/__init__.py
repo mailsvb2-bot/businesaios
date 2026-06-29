@@ -1,6 +1,7 @@
+"""Canonical preference-reward surface with compat alias submodules."""
+
 from __future__ import annotations
 
-"""Canonical preference-reward surface with compat alias submodules."""
 
 import math
 

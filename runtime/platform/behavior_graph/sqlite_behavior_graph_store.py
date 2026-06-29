@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical sqlite behavior graph store.
 
 This module owns the SQLite implementation directly. Historical split modules
@@ -8,6 +6,9 @@ the package installs compat
 aliases for those imports. Keeping the full implementation here removes a real
 risk where the canonical surface pointed at a truncated part file.
 """
+
+from __future__ import annotations
+
 
 import json
 import sqlite3

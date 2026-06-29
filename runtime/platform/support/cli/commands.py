@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Small concrete implementations for platform-support CLI commands.
 
 These commands intentionally stay local and explicit. They provide a usable
 operator surface for offline tooling instead of decorative no-op entrypoints.
 """
+
+from __future__ import annotations
+
 
 import json
 import os

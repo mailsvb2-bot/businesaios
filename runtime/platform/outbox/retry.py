@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Outbox retry + dead-letter processing.
 
 Deterministic orchestration layer:
@@ -7,6 +5,9 @@ Deterministic orchestration layer:
 - outbox is only state storage
 - retry / dead-letter policy is delegated to reliability.dead_letter_policy
 """
+
+from __future__ import annotations
+
 
 from collections.abc import Iterable
 from dataclasses import dataclass

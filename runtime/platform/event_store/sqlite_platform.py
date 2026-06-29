@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """Canonical sqlite platform shim.
 
 This module centralizes stdlib sqlite imports inside the approved runtime.platform
 storage zone so domain packages can depend on a typed storage adapter instead of
 opening direct sqlite side channels.
 """
+
+from __future__ import annotations
+
 
 import sqlite3
 from pathlib import Path

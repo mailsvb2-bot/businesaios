@@ -1,6 +1,7 @@
+"""Canonical environment access helpers for platform/runtime/core code."""
+
 from __future__ import annotations
 
-"""Canonical environment access helpers for platform/runtime/core code."""
 
 from pathlib import Path
 

@@ -1,6 +1,7 @@
+"""Canonical batch serving surface with compat alias submodules."""
+
 from __future__ import annotations
 
-"""Canonical batch serving surface with compat alias submodules."""
 
 from typing import Any
 

@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Canonical sqlite event store implementation.
 
 Public API is unchanged; callers must keep importing
 ``runtime.platform.event_store.sqlite_event_store``.
 """
+
+from __future__ import annotations
+
 
 import logging
 import sqlite3
