@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Canonical in-memory state for the runtime service registry.
 
 Keeps mutable storage in one explicit place so ``runtime.registry`` can stay a
 small owner surface for lifecycle + validation flow rather than an ad-hoc bag of
 parallel dictionaries.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any

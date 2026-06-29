@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Canonical runtime infrastructure contract.
 
 This root-level module defines the immutable data contract passed into runtime
 execution. It must stay a passive structure only: no boot logic, no decision
 logic, and no alternate wiring path.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any

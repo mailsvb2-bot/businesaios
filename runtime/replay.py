@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Canonical replay surface.
 
 Replay is intentionally thin: it only loads an already-issued canonical
 DecisionEnvelope by decision_id. It must not re-route, re-plan, or mutate
 execution state.
 """
+
+from __future__ import annotations
 
 from runtime.decision import DecisionEnvelope
 

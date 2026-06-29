@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Thin external shim for the canonical read-only runtime registry surface."""
+
+from __future__ import annotations
 
 from runtime.application.contracts import ReadOnlyRuntimeRegistry
 

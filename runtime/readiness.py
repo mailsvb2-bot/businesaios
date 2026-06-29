@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Canonical runtime readiness contract.
 
 This root-level module must remain a tiny state validator only. It must not
 become a second boot path, registry owner, or decision surface.
 """
+
+from __future__ import annotations
 
 from runtime.runtime_state import RuntimeState
 
