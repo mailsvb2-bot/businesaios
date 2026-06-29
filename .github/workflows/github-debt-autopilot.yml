@@ -1,0 +1,70 @@
+name: github-debt-autopilot
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/github-debt-autopilot.yml
+      - tools/github_debt_autofix.py
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: github-debt-autopilot-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  autofix:
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, 'github debt autopilot result') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.lock.txt ]; then
+            python -m pip install -r requirements.lock.txt
+          else
+            python -m pip install -r requirements.txt
+          fi
+      - name: Run safe debt autopilot
+        run: python tools/github_debt_autofix.py --apply
+      - name: Compile changed Python files
+        run: python -m compileall -q runtime scripts tests billing core execution interfaces
+      - name: Targeted safety tests
+        run: |
+          python -m pytest -q \
+            tests/ci/test_regression_impact.py \
+            tests/lock/test_runtime_data_artifacts_not_tracked.py \
+            tests/arch/test_support_import_doors_prefer_physical_modules.py
+      - name: Canonical fast gate
+        env:
+          BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}
+        run: python -m scripts.ci.cli --gate fast
+      - name: Upload autopilot artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-debt-autopilot-${{ github.run_id }}
+          path: artifacts/github-debt-autopilot
+          if-no-files-found: warn
+      - name: Commit safe fixes to main
+        run: |
+          if git diff --quiet; then
+            echo "No safe debt fixes produced."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "style: github debt autopilot result"
+          git push origin HEAD:main
