@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Runtime queue worker.
 
 The worker executes already-decided jobs with an injected runner.
 It must not decide business intent on its own.
 """
+
+from __future__ import annotations
+
 
 from contextlib import contextmanager
 from dataclasses import dataclass

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Self-driving scheduler.
 
 This module closes the canonical loop:
@@ -12,6 +10,9 @@ IMPORTANT:
   then executes the resulting DecisionEnvelope via RuntimeExecutor.
 - Feedback-loop guards are enforced before deploy proposals enter the DecisionCore.
 """
+
+from __future__ import annotations
+
 
 import logging
 from dataclasses import dataclass

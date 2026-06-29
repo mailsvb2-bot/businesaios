@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """Operational monitor for queue health sampling.
 
 This monitor reads queue health, routes derived alerts, persists rollups, and
 can optionally attach a read-only backpressure/fairness sample. It does not
 mutate queue execution state and must never become a second brain.
 """
+
+from __future__ import annotations
+
 
 from dataclasses import dataclass
 from datetime import datetime

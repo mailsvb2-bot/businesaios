@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Process-level fencing helpers for runtime queue workers.
 
 Operational only:
@@ -9,6 +7,9 @@ Operational only:
 
 This module must never introduce business decisions or a second execution path.
 """
+
+from __future__ import annotations
+
 
 import os
 import platform

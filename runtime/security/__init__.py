@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Security primitives for sandboxed execution.
 
 The historical ``runtime.security.public_api`` import path is preserved as a
 package alias to avoid a second one-symbol shim file.
 """
+
+from __future__ import annotations
+
 
 from runtime.package_alias_namespace import build_package_alias_namespace
 

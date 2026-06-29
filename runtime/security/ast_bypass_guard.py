@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Static bypass detector (AST).
 
 CI-level architectural stop.
@@ -12,6 +10,9 @@ Notes:
   - Conservative by design.
   - Complements (does not replace) runtime firewalls.
 """
+
+from __future__ import annotations
+
 
 import ast
 from pathlib import Path

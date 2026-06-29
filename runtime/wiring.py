@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Canonical storage-wiring owner for runtime boot.
 
 This root surface is allowed to build storage adapters, but it must not become
 an alternative runtime assembly path, registry surface, or decision owner.
 """
+
+from __future__ import annotations
+
 
 from contextlib import ExitStack
 from dataclasses import dataclass
