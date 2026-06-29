@@ -13,18 +13,17 @@ permissions:
   actions: read
 
 concurrency:
-  group: github-debt-autopilot-${{ github.ref }}
+  group: github-debt-autopilot-main
   cancel-in-progress: false
 
 jobs:
   autofix:
-    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, 'github debt autopilot result') }}
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, 'github debt autopilot result')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -48,23 +47,23 @@ jobs:
             tests/arch/test_support_import_doors_prefer_physical_modules.py
       - name: Canonical fast gate
         env:
-          BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}
+          BAIOS_BOOT_SMOKE_ROOT: /tmp/businesaios-boot-smoke
         run: python -m scripts.ci.cli --gate fast
       - name: Upload autopilot artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: github-debt-autopilot-${{ github.run_id }}
+          name: github-debt-autopilot
           path: artifacts/github-debt-autopilot
           if-no-files-found: warn
       - name: Commit safe fixes to main
         run: |
-          if git diff --quiet; then
+          if git diff --quiet -- runtime scripts tests billing core execution interfaces; then
             echo "No safe debt fixes produced."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add runtime scripts tests billing core execution interfaces
           git commit -m "style: github debt autopilot result"
           git push origin HEAD:main
