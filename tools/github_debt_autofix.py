@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""GitHub-side safe debt autopilot for BusinessAIOS.
+"""Safe debt fixer for BusinessAIOS.
 
-This tool intentionally fixes only conservative import-order debt:
-module docstrings that were placed after imports/future imports. It never
-removes imports, never edits workflow safety locks, and never changes runtime
-logic. It is designed to run in GitHub Actions before committing changes.
+This helper intentionally fixes only conservative import-order debt: a module
+docstring placed after imports/future imports. It never removes imports, never
+edits workflow safety locks, and never changes runtime logic.
+
+The default mode is deliberately small and bounded. Wider runs must pass
+explicit paths and a larger max-change budget.
 """
 
 from __future__ import annotations
@@ -33,7 +35,14 @@ EXCLUDED_DIRS = {
     "dist",
     "artifacts",
 }
-TARGET_ROOTS = ("runtime", "scripts", "tests", "billing", "core", "execution", "interfaces")
+DEFAULT_PATHS = (
+    "runtime/queue",
+    "runtime/security",
+    "runtime/scheduler.py",
+    "runtime/self_driving_scheduler.py",
+    "runtime/wiring.py",
+    "runtime/tenancy/__init__.py",
+)
 
 
 @dataclass(frozen=True)
@@ -43,15 +52,33 @@ class FixResult:
     reason: str
 
 
-def iter_python_files() -> Iterable[Path]:
-    for root_name in TARGET_ROOTS:
-        root = ROOT / root_name
-        if not root.exists():
+def normalize_target(raw: str) -> Path:
+    path = (ROOT / raw).resolve()
+    if ROOT not in path.parents and path != ROOT:
+        raise ValueError(f"target escapes repo root: {raw}")
+    return path
+
+
+def iter_python_files(targets: Iterable[str]) -> Iterable[Path]:
+    seen: set[Path] = set()
+    for raw in targets:
+        target = normalize_target(raw)
+        candidates: Iterable[Path]
+        if target.is_file():
+            candidates = (target,)
+        elif target.is_dir():
+            candidates = target.rglob("*.py")
+        else:
             continue
-        for path in root.rglob("*.py"):
+        for path in candidates:
+            if path.suffix != ".py":
+                continue
             rel_parts = path.relative_to(ROOT).parts
             if any(part in EXCLUDED_DIRS for part in rel_parts):
                 continue
+            if path in seen:
+                continue
+            seen.add(path)
             yield path
 
 
@@ -68,8 +95,6 @@ def has_real_module_docstring(tree: ast.Module) -> bool:
 
 
 def choose_docstring_candidate(tree: ast.Module) -> ast.stmt | None:
-    # Conservative: only consider a bare string expression among the first few
-    # module-level statements. Do not search the whole file.
     for stmt in tree.body[:10]:
         if is_string_expr(stmt):
             return stmt
@@ -138,9 +163,9 @@ def move_docstring_to_top(path: Path, *, apply: bool) -> FixResult:
     return FixResult(rel, True, "moved-module-docstring-before-imports")
 
 
-def run(cmd: list[str], *, check: bool = False) -> subprocess.CompletedProcess[str]:
+def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     print("$", " ".join(cmd), flush=True)
-    return subprocess.run(cmd, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=check)
+    return subprocess.run(cmd, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 
 def write_json(path: Path, payload: object) -> None:
@@ -152,14 +177,31 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--report-dir", default="artifacts/github-debt-autopilot")
+    parser.add_argument("--path", action="append", dest="paths", help="Path or directory to scan. Can be repeated.")
+    parser.add_argument("--max-changes", type=int, default=30)
     args = parser.parse_args(argv)
 
+    targets = tuple(args.paths or DEFAULT_PATHS)
     report_dir = ROOT / args.report_dir
     report_dir.mkdir(parents=True, exist_ok=True)
 
-    py_files = list(iter_python_files())
-    before = run([sys.executable, "-m", "ruff", "check", *[p.relative_to(ROOT).as_posix() for p in py_files], "--select", "E402,F401", "--output-format", "json"])
+    py_files = list(iter_python_files(targets))
+    if not py_files:
+        print("python_files=0")
+        return 0
+
+    rel_files = [p.relative_to(ROOT).as_posix() for p in py_files]
+    before = run([sys.executable, "-m", "ruff", "check", *rel_files, "--select", "E402,F401", "--output-format", "json"])
     (report_dir / "ruff-before.json").write_text(before.stdout, encoding="utf-8")
+
+    planned_results = [move_docstring_to_top(path, apply=False) for path in py_files]
+    planned_changed = [result for result in planned_results if result.changed]
+    if len(planned_changed) > args.max_changes:
+        write_json(report_dir / "docstring-fixes.json", [result.__dict__ for result in planned_results])
+        print(f"python_files={len(py_files)}")
+        print(f"planned_docstring_fixes={len(planned_changed)}")
+        print(f"ERROR: planned changes exceed max_changes={args.max_changes}")
+        return 2
 
     results = [move_docstring_to_top(path, apply=args.apply) for path in py_files]
     changed = [result for result in results if result.changed]
@@ -171,18 +213,16 @@ def main(argv: list[str]) -> int:
         print(f"fixed {result.path}: {result.reason}")
 
     if changed:
-        compile_cmd = [sys.executable, "-m", "compileall", "-q", *[result.path for result in changed]]
-        compile_result = run(compile_cmd)
+        compile_result = run([sys.executable, "-m", "compileall", "-q", *[result.path for result in changed]])
         (report_dir / "compileall-changed.log").write_text(compile_result.stdout, encoding="utf-8")
         if compile_result.returncode != 0:
             return compile_result.returncode
 
-    after = run([sys.executable, "-m", "ruff", "check", *[p.relative_to(ROOT).as_posix() for p in py_files], "--select", "E402,F401", "--output-format", "json"])
+    after = run([sys.executable, "-m", "ruff", "check", *rel_files, "--select", "E402,F401", "--output-format", "json"])
     (report_dir / "ruff-after.json").write_text(after.stdout, encoding="utf-8")
 
     status = run(["git", "status", "--short"])
     (report_dir / "git-status.txt").write_text(status.stdout, encoding="utf-8")
-
     return 0
 
 
