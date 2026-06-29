@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Operational observability for runtime queue loops.
 
 This registry records queue runtime facts only:
@@ -11,20 +9,18 @@ This registry records queue runtime facts only:
 It must not become policy or planning logic.
 """
 
+from __future__ import annotations
+
 from collections import deque
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from threading import RLock
-
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.job_scheduler import ScheduleBatch
 from runtime.queue.job_worker import WorkerTickReport
-
 from runtime.queue.queue_operational_contracts import QueueAlert, QueueJanitorReport, QueueLeadershipReport
 
-
 CANON_RUNTIME_QUEUE_OBSERVABILITY = True
-
 
 def _require_queue_tenant_id(tenant_id: str | None, *, fallback_job_tenant_id: str | None = None) -> str:
     candidate = str(tenant_id or fallback_job_tenant_id or '').strip()
