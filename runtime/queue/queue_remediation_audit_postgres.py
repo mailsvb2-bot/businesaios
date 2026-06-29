@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Postgres-backed queue remediation audit store.
 
 This module persists remediation audit evidence only:
@@ -10,10 +8,11 @@ It must remain strictly operational and must never mutate queue execution state
 or introduce a second decision path.
 """
 
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass
 from datetime import datetime
-
 from runtime.platform.postgres_port import PostgresPort
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_remediation_audit_sqlite import (

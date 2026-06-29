@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Durable remediation audit trail for queue operations.
 
 This module records operator-facing queue remediation planning and execution.
@@ -11,22 +9,21 @@ It is evidence only:
 It must never mutate queue execution state or become a second decision path.
 """
 
+from __future__ import annotations
+
 import importlib
 import json
 import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-
-sqlite3 = importlib.import_module("sqlite3")
 from threading import RLock
-
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_remediation_hooks import QueueRemediationExecutionReport, QueueRemediationPlan
 
+sqlite3 = importlib.import_module("sqlite3")
 CANON_RUNTIME_QUEUE_REMEDIATION_AUDIT_SQLITE = True
-
 
 def runtime_queue_remediation_audit_store_path() -> Path:
     explicit = os.getenv('BUSINESAIOS_QUEUE_REMEDIATION_AUDIT_SQLITE_PATH', '').strip()
