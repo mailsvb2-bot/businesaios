@@ -1,9 +1,3 @@
-from __future__ import annotations
-
-# Historical entrypoint bundle markers retained for arch-locks:
-# build_executor_entrypoint_bundle(
-# entrypoint_bundle.run(executor=self, env=env)
-
 """RuntimeExecutor — единственный шлюз к необратимым эффектам.
 
 Law (Decision Sovereignty):
@@ -16,6 +10,13 @@ Security:
   - The private Effects implementation lives in runtime/_internal and MUST NOT be
     imported anywhere else (enforced by tests/test_architecture.py).
 """
+
+from __future__ import annotations
+
+# Historical entrypoint bundle markers retained for arch-locks:
+# build_executor_entrypoint_bundle(
+# entrypoint_bundle.run(executor=self, env=env)
+
 
 import logging
 import os
@@ -122,6 +123,13 @@ from runtime.world_model import (
     extract_pinned_world_model_meta_from_payload as _executor_world_model_pin_extract_contract,
 )
 from tenancy.tenant_runtime_isolation import TenantRuntimeIsolation
+
+
+from runtime._internal.economic_execution_contract import (
+    SealedEconomicExecutionContract,
+    build_click_provider_dispatch_execution_contract,
+    build_spend_runtime_execution_contract,
+)
 
 CANON_RUNTIME_EXECUTION_GATEWAY = True
 _EXECUTOR_SPLIT_HELPERS = (
@@ -454,8 +462,3 @@ __all__ = ['CANON_RUNTIME_EXECUTION_GATEWAY', 'RuntimeExecutor', 'assert_called_
 # The implementation stays runtime-internal; entrypoints import only from this
 # executor surface to preserve one guarded execution contract and prevent
 # route-level provider dispatch logic from becoming a second execution brain.
-from runtime._internal.economic_execution_contract import (
-    SealedEconomicExecutionContract,
-    build_click_provider_dispatch_execution_contract,
-    build_spend_runtime_execution_contract,
-)
