@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
 from reliability.distributed_lock import DistributedLock, LockLease, build_distributed_lock
 from reliability.lease_manager import LeaseManager
 from reliability.leader_election import LeaderElection, LeadershipLease

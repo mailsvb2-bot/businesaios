@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 
 from core.human_governance.contracts import ReviewCase
 from core.human_governance.explainers.review_case_explainer import explain_review_case

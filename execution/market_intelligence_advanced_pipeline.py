@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Iterable, Mapping
 
-from contracts.platforms.market_intelligence_advanced_contract import OpportunityEvidence, UnifiedSignal
+from contracts.platforms.market_intelligence_advanced_contract import UnifiedSignal
 from execution.market_intelligence_advanced_memory_bridge import AdvancedBusinessMemoryBridge
 from execution.market_intelligence_advanced_models import TrendPoint
 from execution.market_intelligence_advanced_world_state_bridge import AdvancedWorldStateBridge

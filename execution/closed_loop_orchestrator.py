@@ -15,8 +15,6 @@ from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Mapping
 from pathlib import Path
-import hashlib
-import json
 
 from execution.action_verification_policy import ActionVerificationPolicy, build_action_verification_policy
 from execution.autonomy_policy import AutonomyPolicy, autonomy_input_from_world_state
@@ -38,7 +36,6 @@ from execution.economic_memory_store import EconomicMemoryStore, NoOpEconomicMem
 from execution.economic_scope_profile import EconomicScopeProfileResolver
 from execution.replay_safe_roi_history import ROIHistoryStore, NoOpROIHistoryStore, ReplaySafeROIHistoryBuilder
 from execution.capital_rebalancer import CapitalRebalancer
-from reliability.idempotency_scope import IdempotencyScope
 from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetGuard
 from tenancy.tenant_queue_scope import TenantQueueScope
 from observability.action_audit_log import ActionAuditLog

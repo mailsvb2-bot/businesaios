@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Mapping
 
-from execution.action_budget_engine import ActionBudgetDecision, ActionBudgetEngine
+from execution.action_budget_engine import ActionBudgetEngine
 from execution.action_cost_model import ActionCostModel
 from execution.economic_signal_context import EconomicSignalContextBuilder
 from execution.economic_risk_envelope import EconomicRiskEnvelopeBuilder

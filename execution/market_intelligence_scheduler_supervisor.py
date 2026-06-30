@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import Event, Lock, Thread
-from time import sleep, time
+from time import time
 from typing import Any
 from execution.market_intelligence_scheduler_service import MarketIntelligenceSchedulerService
 from runtime.runtime_observability import RuntimeObservability

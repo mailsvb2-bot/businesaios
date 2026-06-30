@@ -1,7 +1,6 @@
 import builtins
 import contextlib
 import contextvars
-import importlib.abc
 import inspect
 import sys
 from types import FrameType
