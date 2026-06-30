@@ -34,6 +34,11 @@ from governance.constitution import Constitution
 from governance.economic_layer import EconomicAutonomyLayer
 from governance.time_scale import TimeScale
 from observability.decision_trace_store import NullDecisionTraceStore
+from runtime._internal.economic_execution_contract import (
+    SealedEconomicExecutionContract as SealedEconomicExecutionContract,
+    build_click_provider_dispatch_execution_contract as build_click_provider_dispatch_execution_contract,
+    build_spend_runtime_execution_contract as build_spend_runtime_execution_contract,
+)
 from runtime.decision import DecisionEnvelope
 from runtime.enforcement.world_model_pin_guard import (
     enforce_world_model_pin_or_raise as _executor_world_model_pin_guard_contract,
@@ -448,7 +453,17 @@ RuntimeExecutor.campaign_recovery_leader = executor_api_campaign_recovery_leader
 RuntimeExecutor.campaign_or_heartbeat_recovery_leader = executor_api_campaign_or_heartbeat_recovery_leader
 RuntimeExecutor.run_queue_tick_as_leader = executor_api_run_queue_tick_as_leader
 
-__all__ = ['CANON_RUNTIME_EXECUTION_GATEWAY', 'RuntimeExecutor', 'assert_called_from_executor', 'executor_context', 'preflight_and_verify', 'execute_core_flow']
+__all__ = [
+    'CANON_RUNTIME_EXECUTION_GATEWAY',
+    'RuntimeExecutor',
+    'SealedEconomicExecutionContract',
+    'assert_called_from_executor',
+    'build_click_provider_dispatch_execution_contract',
+    'build_spend_runtime_execution_contract',
+    'executor_context',
+    'preflight_and_verify',
+    'execute_core_flow',
+]
 
 # Canonical public gateway for economic sealed execution contracts.
 # The implementation stays runtime-internal; entrypoints import only from this
