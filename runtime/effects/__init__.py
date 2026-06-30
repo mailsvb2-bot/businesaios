@@ -18,10 +18,10 @@ from runtime.health.server import HealthSnapshot
 
 # -------- LLM (network facade) --------
 from .llm_effects import (
-    llm_generate_anthropic,
-    llm_generate_gigachat,
-    llm_generate_openai_compat,
-    llm_generate_yandexgpt,
+    llm_generate_anthropic as llm_generate_anthropic,
+    llm_generate_gigachat as llm_generate_gigachat,
+    llm_generate_openai_compat as llm_generate_openai_compat,
+    llm_generate_yandexgpt as llm_generate_yandexgpt,
 )  # noqa: F401
 # Domain helpers (pure, no I/O)
 from .telegram_effects import classify_startup  # noqa: F401
