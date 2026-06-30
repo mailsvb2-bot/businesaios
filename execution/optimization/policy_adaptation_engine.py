@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from collections.abc import Iterable
 
@@ -94,5 +94,4 @@ class PolicyAdaptationEngine:
             'must_not_issue_decision': True,
         }
 
-from dataclasses import asdict
 __all__ = ['PolicyAdaptationEngine']

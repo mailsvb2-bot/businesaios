@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Any
 from collections.abc import Mapping
 
+
+from economics.contracts import TruthFragment
+
 CANON_CLIENT_OUTCOME_ECONOMIC_CORE_BRIDGE = True
 
 
@@ -87,7 +90,6 @@ def build_client_outcome_truth_snapshot(
     }
 
 
-from economics.contracts import TruthFragment
 
 
 def build_client_outcome_truth_fragment(*, truth_snapshot: Mapping[str, Any]) -> TruthFragment:

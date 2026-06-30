@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import AdsConnectorError
+
+from datetime import UTC, datetime
+
+from .base import AdsConnectorError, ConnectedAccount
 from .connector_shared import resolve_secret_required
 from .oauth_helper import OAuthAppConfig
 from .ports import SecretVault
@@ -82,9 +85,7 @@ async def disconnect_tokens_compat(
     )
 
 
-from datetime import UTC, datetime
 
-from .base import ConnectedAccount
 
 
 def build_connected_account(*, platform, account_id: str, display_name: str, scope: str) -> ConnectedAccount:
