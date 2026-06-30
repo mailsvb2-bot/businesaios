@@ -12,7 +12,6 @@ IMPORTANT:
 
 from __future__ import annotations
 
-from typing import Optional
 from core.ai._policy_registry_store import PolicyRegistryStore
 from core.policies.registry import PolicyRegistry as _MetaPolicyRegistry
 from core.policies.types import PolicyRef
