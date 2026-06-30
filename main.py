@@ -44,6 +44,10 @@ def _tenant_self_check() -> Any:
     return import_module("runtime.boot.tenant_self_check")
 
 
+def _sovereign_bootstrap() -> Any:
+    return import_module("runtime.bootstrap")
+
+
 def _observability() -> tuple[Any, Any]:
     structured_logging = import_module("core.observability.structured_logging")
     throttled_logger = import_module("core.observability.throttled_logger")
@@ -98,21 +102,28 @@ def _run_demo(core: Any, executor: Any, event_log: Any) -> None:
 
 
 def _run_demo_e2e_smoke() -> None:
-    """Run the bounded local decision -> execution smoke path.
+    """Run the bounded local sovereign runtime smoke path.
 
     The default demo path intentionally stays lightweight. Operators can set
-    DEMO_E2E_SMOKE=1 to prove the canonical DecisionCore/RuntimeExecutor path
-    without starting Telegram polling/webhook transport.
+    DEMO_E2E_SMOKE=1 to prove the canonical sovereign bootstrap and exported
+    decision-execution surface without starting Telegram polling/webhook transport.
     """
     _bootstrap_runtime_process()
-    core, executor, event_log, _event_store, _payment_outbox, stack, _learning_job = _telegram_ep().build_system()
-    try:
-        _run_demo(core=core, executor=executor, event_log=event_log)
-    finally:
-        try:
-            stack.close()
-        except Exception:
-            log.exception("Demo e2e smoke stack close failed")
+    runtime = _sovereign_bootstrap().bootstrap_runtime()
+    artifacts = getattr(runtime, "artifacts", None)
+    exports = getattr(artifacts, "exports", None)
+    decision_execution = getattr(exports, "decision_execution", None)
+    if decision_execution is None:
+        raise RuntimeError("demo e2e smoke failed: decision_execution export missing")
+    observability = getattr(exports, "observability", None)
+    audit_events = getattr(observability, "audit_events", None)
+    if callable(audit_events):
+        audit_events()
+    log.info(
+        "Demo e2e smoke bootstrapped=%s services=%s",
+        bool(getattr(getattr(runtime, "state", None), "ready", False)),
+        len(tuple(getattr(runtime, "services", ()) or ())),
+    )
 
 
 def main() -> None:
