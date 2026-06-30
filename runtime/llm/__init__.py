@@ -5,7 +5,6 @@ from __future__ import annotations
 from runtime.public_api_alias import install_public_api_alias
 
 
-from typing import Optional
 from collections.abc import Callable
 
 from core.llm import (

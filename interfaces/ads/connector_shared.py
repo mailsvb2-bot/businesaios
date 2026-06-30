@@ -7,7 +7,7 @@ from typing import Any
 from collections.abc import Iterable, Mapping, Sequence
 
 from .base import AdsConnectorError, AdsPlatform
-from .connector_value_coercion import as_float, as_int, as_optional_float, as_optional_int, safe_ratio
+from .connector_value_coercion import as_float, as_int, as_optional_float as as_optional_float, as_optional_int as as_optional_int, safe_ratio
 
 
 def _normalize_secret_value(value: Any) -> str | None:
