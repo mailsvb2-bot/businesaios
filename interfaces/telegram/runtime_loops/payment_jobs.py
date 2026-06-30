@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Durable payment webhook jobs processing.
 
 This is runner orchestration only:
@@ -10,12 +8,20 @@ This is runner orchestration only:
 - mark delivered / retry / dead-letter
 """
 
+from __future__ import annotations
+
+
 import logging
 import time
 from dataclasses import dataclass
 from typing import Any
 
 from core.tenancy.tenant import current_tenant_id
+
+
+from core.observability.silent import swallow
+from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import build_system_world_state
+from runtime.platform.config.env_flags import env_str
 
 logger = logging.getLogger(__name__)
 
@@ -68,9 +74,6 @@ def _normalize_webhook_job(raw: dict) -> dict:
         raise ValueError('MISSING_EVENT')
     return out
 
-from core.observability.silent import swallow
-from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import build_system_world_state
-from runtime.platform.config.env_flags import env_str
 
 
 @dataclass

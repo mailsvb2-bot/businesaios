@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Public facade for real integrations.
 
 System TZ requirement:
@@ -8,11 +6,25 @@ All real integrations MUST live only in the private runtime effects implementati
 Other code should import this facade instead of importing runtime._internal directly.
 """
 
+from __future__ import annotations
+
+
 import importlib
 from typing import Any
 
 from runtime.firewall.import_guard import allow_internal_import
 from runtime.health.server import HealthSnapshot
+
+
+# -------- LLM (network facade) --------
+from .llm_effects import (
+    llm_generate_anthropic,
+    llm_generate_gigachat,
+    llm_generate_openai_compat,
+    llm_generate_yandexgpt,
+)  # noqa: F401
+# Domain helpers (pure, no I/O)
+from .telegram_effects import classify_startup  # noqa: F401
 
 CANON_RUNTIME_EFFECTS_IMPORT_SURFACE = True
 
@@ -35,13 +47,6 @@ def start_health_server_in_thread(*, snapshot: HealthSnapshot, host: str, port: 
 def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, event_store: Any, payment_outbox: Any) -> Any:
     return _effects_impl().start_yookassa_webhook_server_in_thread(host=host, port=port, path=path, event_store=event_store, payment_outbox=payment_outbox)
 
-# -------- LLM (network facade) --------
-from .llm_effects import (
-    llm_generate_anthropic,
-    llm_generate_gigachat,
-    llm_generate_openai_compat,
-    llm_generate_yandexgpt,
-)  # noqa: F401
 
 # -------- HTTP (network facade) --------
 
@@ -69,8 +74,6 @@ def encode_form_body(data: dict | None = None) -> bytes:
     """Encode x-www-form-urlencoded payloads through the sealed effects impl."""
 
     return _effects_impl().encode_form_body(dict(data or {}))
-# Domain helpers (pure, no I/O)
-from .telegram_effects import classify_startup  # noqa: F401
 
 # -------- Effect router / transport public facade --------
 
