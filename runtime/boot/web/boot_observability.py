@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from runtime.boot.web.fastapi_components import boot_alert_subscriptions as boot_alert_subscriptions_fastapi
 from runtime.boot.web.fastapi_components import boot_alerts as boot_alerts_fastapi
 from runtime.boot.web.fastapi_components import boot_dashboard as boot_dashboard_fastapi
@@ -23,6 +21,7 @@ from runtime.boot.web.observability_boot_plan import (
     execute_observability_boot_plan,
 )
 
+CANON_BOOT_WIRING_ONLY = True
 
 def boot_messaging_policy_observability_fastapi(
     *,

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical runtime-owned telemetry helpers.
 
 This module is the single owner for runtime telemetry spans and correlation-key
@@ -7,14 +5,14 @@ propagation helpers. Runtime execution surfaces may depend on it, but should
 not re-implement span wiring locally.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Mapping
-
 from runtime.observability.tracing import correlation_key_scope, span_with_sla
 
 CANON_RUNTIME_TELEMETRY_OWNER = True
-
 
 @dataclass(frozen=True)
 class TelemetryEvent:

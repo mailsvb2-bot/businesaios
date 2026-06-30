@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Pricing versioning gate for production strict.
 
 Goal:
@@ -15,15 +13,15 @@ How it works:
 No side-effects on import.
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
-
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_path, env_str
-
 
 def _stable_json(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))

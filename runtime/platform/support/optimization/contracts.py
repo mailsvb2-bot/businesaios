@@ -1,12 +1,11 @@
-from __future__ import annotations
-
-CANON_COMPAT_SHIM = True
 """Canonical optimization contracts re-export surface.
 
 This module exists because historical callers import the public contract symbols
 from ``runtime.platform.support.optimization.contracts`` while the canonical
 owner is the package root. Keep this file as a thin, explicit re-export layer.
 """
+
+from __future__ import annotations
 
 from . import (
     CANON_PLATFORM_OPTIMIZATION_PUBLIC_API,
@@ -16,6 +15,7 @@ from . import (
     OptimizationGate,
 )
 
+CANON_COMPAT_SHIM = True
 __all__ = [
     'CANONICAL_OPTIMIZATION_PUBLIC_MODULE',
     'CANON_PLATFORM_OPTIMIZATION_PUBLIC_API',
@@ -23,3 +23,4 @@ __all__ = [
     'OptimizationGate',
     'SOVEREIGN_DECISION_CORE',
 ]
+

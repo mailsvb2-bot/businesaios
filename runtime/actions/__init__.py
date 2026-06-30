@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Canonical runtime action-name package surface."""
+
+from __future__ import annotations
 
 from core.actions import build_schema_registry
 from core.actions.names import (
@@ -18,7 +18,6 @@ from core.actions.names import (
 )
 
 CANON_RUNTIME_ACTION_NAMES_PUBLIC_API = True
-
 __all__ = [
     'CANON_RUNTIME_ACTIONS_NAMESPACE',
     'CANON_RUNTIME_ACTION_NAMES_PUBLIC_API',
@@ -35,8 +34,5 @@ __all__ = [
     'ACTION_SUGGEST_OFFER_PATCH_V1',
     'build_schema_registry',
 ]
-
 CANON_RUNTIME_ACTIONS_NAMESPACE = True
-
-
 

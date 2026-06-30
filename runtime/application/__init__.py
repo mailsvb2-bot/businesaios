@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical runtime.application package root.
 
 The package root is now the primary owner for runtime application exports.
@@ -8,6 +6,9 @@ for older imports, but project-internal code should treat this package root as
 the canonical surface. Historical submodule aliases are still installed to
 preserve ABI without creating a second owner.
 """
+
+from __future__ import annotations
+
 
 import importlib
 import sys

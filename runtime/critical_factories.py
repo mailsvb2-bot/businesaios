@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Lazy external shim for critical runtime factory builders.
 
 This root module must not become a factory owner or force eager import of
 boot-time construction graph during runtime namespace import. The canonical
 construction logic lives under the ``boot.factories`` package owner surface and is loaded on demand.
 """
+
+from __future__ import annotations
 
 from importlib import import_module
 from typing import Any
@@ -14,14 +14,12 @@ CANON_COMPAT_SHIM = True
 CANON_NO_ROOT_FACTORY_OWNERSHIP = True
 CANON_LAZY_IMPORT_SHIM = True
 CANON_CRITICAL_FACTORIES_PACKAGE_OWNER = "boot.factories"
-
 _EXPORT_SPECS = {
     "build_action_executor": ("boot.factories", "build_action_executor"),
     "build_decision_core": ("boot.factories", "build_decision_core"),
     "build_runtime_decision_execution_service": ("boot.factories", "build_runtime_decision_execution_service"),
     "build_governance_chain": ("boot.factories", "build_governance_chain"),
 }
-
 
 def __getattr__(name: str) -> Any:
     spec = _EXPORT_SPECS.get(name)

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical provider-call discipline for runtime decision input.
 
 This module prevents false fallback behavior where an internal ``TypeError``
@@ -9,19 +7,19 @@ and only degrade when the signature truly does not accept the richer runtime
 packet inputs.
 """
 
+from __future__ import annotations
+
 import importlib
 from typing import Any
 from collections.abc import Callable
 
 CANON_RUNTIME_DECISION_INPUT_PROVIDER_CALL = True
-
 _FULL_KWARGS = (
     "world_state",
     "proposal",
     "generated_at_ms",
     "safe_mode",
 )
-
 
 def call_decision_input_provider(
     *,

@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Thin compatibility shim for the canonical runtime observability owner."""
+
+from __future__ import annotations
 
 from runtime.runtime_observability import (
     CANON_RUNTIME_OBSERVABILITY_AUDIT_ONLY,
@@ -13,7 +13,6 @@ from runtime.runtime_observability import (
 CANON_RUNTIME_OBSERVABILITY_THIN_SHIM = True
 CANON_RUNTIME_OBSERVABILITY_EXPLICIT_EXPORTS_ONLY = True
 CANON_RUNTIME_OBSERVABILITY_SHIM_OWNER = "runtime.runtime_observability"
-
 __all__ = [
     "CANON_RUNTIME_OBSERVABILITY_AUDIT_ONLY",
     "CANON_RUNTIME_OBSERVABILITY_EXPLICIT_EXPORTS_ONLY",
@@ -24,3 +23,4 @@ __all__ = [
     "CANON_RUNTIME_OBSERVABILITY_THIN_SHIM",
     "RuntimeObservability",
 ]
+

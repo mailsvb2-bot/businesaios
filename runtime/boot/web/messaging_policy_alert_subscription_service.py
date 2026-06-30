@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from runtime.messaging_policy_alert_dedup.boot import build_deduping_alert_notifier
 from runtime.messaging_policy_alert_dedup_persistent.boot_tenant_aware import (
     build_tenant_aware_persistent_deduping_alert_notifier,
 )
 from runtime.messaging_policy_alert_subscriptions.service import MessagingPolicyAlertSubscriptionService
 
+CANON_BOOT_WIRING_ONLY = True
 
 def build_messaging_policy_alert_subscription_service(*, alert_service, settings_gateway=None, tenant_id: str = '', cooldown_s: int = 3600):
     if settings_gateway is None:

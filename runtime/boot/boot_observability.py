@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 """Runtime boot observability wiring through runtime.observability."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-
 from runtime.observability import (
     bind,
     clear,
@@ -14,7 +13,6 @@ from runtime.observability import (
 
 CANON_BOOT_WIRING_ONLY = True
 CANON_RUNTIME_BOOT_OBSERVABILITY = True
-
 
 @dataclass(frozen=True)
 class BootObservabilityBundle:

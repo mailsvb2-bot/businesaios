@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Support helpers for the canonical world-state packet path.
 
 These helpers keep the runtime integration service thin while preserving the
@@ -7,8 +5,9 @@ existing single canonical packet-building route. They do not issue decisions
 and do not contain alternate runtime wiring.
 """
 
-from collections.abc import Mapping
+from __future__ import annotations
 
+from collections.abc import Mapping
 from core.world_state.packet_enrichment import (
     build_advisory_notes,
     build_reward_signal_from_world_view,
@@ -46,7 +45,6 @@ from runtime.world_state import (
     assemble_world_state,
     build_recommendation_packet,
 )
-
 
 def resolve_world_state_inputs(
     *,

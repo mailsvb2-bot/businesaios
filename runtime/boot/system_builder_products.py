@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
 from dataclasses import dataclass
 from collections.abc import Mapping
-
 from bootstrap.product_boot import BootProductContext, ProductBoot
 from products import load_all_product_contracts
 from runtime.platform.products.registry import ProductRegistry
 
+CANON_BOOT_WIRING_ONLY = True
 
 @dataclass(frozen=True)
 class RuntimeRequest:

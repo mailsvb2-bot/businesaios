@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Canonical runtime governance public surface."""
+
+from __future__ import annotations
 
 from core.governance.builders.audit_record_builder import build_audit_record
 from core.governance.contracts import AuditRecord, RestrictionProposal
@@ -14,7 +14,6 @@ from core.governance.service import build_restriction_proposal
 from core.governance.types import PolicyState
 
 CANON_RUNTIME_GOVERNANCE_PUBLIC_API = True
-
 __all__ = [
     'CANON_RUNTIME_GOVERNANCE_NAMESPACE',
     "ActuationRegistry",
@@ -31,9 +30,7 @@ __all__ = [
     "build_restriction_proposal",
     "explain_decision_audit",
 ]
-
 CANON_RUNTIME_GOVERNANCE_NAMESPACE = True
-
 
 def assert_governance_event_store_contract(event_store) -> None:
     return _event_sourced_path.assert_governance_event_store_contract(event_store)

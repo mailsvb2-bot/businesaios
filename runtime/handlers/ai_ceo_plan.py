@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-CANON_THIN_HANDLER = True
-
 from typing import Any
-
 from runtime.actions import ACTION_AI_CEO_PLAN_V1
 from runtime.ai_ceo import render_plan_text
 from runtime.decisioning import DecisionRouteViolation
@@ -18,8 +15,8 @@ from runtime.handlers.route_failure_support import (
 )
 from runtime.ports.effects import EffectsPort
 
+CANON_THIN_HANDLER = True
 ACTION_NAME = ACTION_AI_CEO_PLAN_V1
-
 
 def handle_ai_ceo_plan(payload: dict[str, Any], effects: EffectsPort, env: Any, *, planner: Any) -> Any:
     p = payload or {}

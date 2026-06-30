@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from pathlib import Path
-
 from interfaces.web.debug.messaging_policy_alerts.route_bundle import MessagingPolicyAlertsRouteBundle
 from interfaces.web.debug.messaging_policy_dashboard.route_bundle import MessagingPolicyDashboardRouteBundle
 from interfaces.web.debug.messaging_policy_observability_nav.route_bundle import (
@@ -18,6 +15,7 @@ from runtime.messaging_policy_alerts.service import MessagingPolicyAlertService
 from runtime.messaging_policy_dashboard.service import MessagingPolicyDashboardService
 from runtime.messaging_policy_trace.search_service import MessagingPolicyTraceSearchService
 
+CANON_BOOT_WIRING_ONLY = True
 
 class _MessagingPolicyAlertsRouteBundle(MessagingPolicyAlertsRouteBundle):
     def __init__(self, *, alert_service):

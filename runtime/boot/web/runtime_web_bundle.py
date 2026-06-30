@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
 from runtime.boot.web.runtime_web_observability_boot import (
     boot_runtime_web_bundle_fastapi,
     boot_runtime_web_bundle_flask,
 )
 from runtime.boot.web.runtime_web_services import RuntimeWebServices
 
+CANON_BOOT_WIRING_ONLY = True
 
 class RuntimeWebBundle:
     def __init__(self, *, services: RuntimeWebServices):

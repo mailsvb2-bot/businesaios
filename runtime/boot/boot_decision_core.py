@@ -1,14 +1,12 @@
-from __future__ import annotations
-
-CANON_BOOT_WIRING_ONLY = True
-
 """Decision-core support helpers extracted from boot_core_assembly."""
 
-from typing import Any
+from __future__ import annotations
 
+from typing import Any
 from bootstrap.world_model_boot_check import build_and_verify_default_world_model
 from core.ai.decision_core import DecisionCore
 
+CANON_BOOT_WIRING_ONLY = True
 
 def build_world_model(*, event_log: Any) -> object:
     return build_and_verify_default_world_model(event_log=event_log)

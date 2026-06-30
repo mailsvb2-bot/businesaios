@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from pathlib import Path
-
 from bootstrap.assembly_runtime import (
     build_event_log_and_bindings,
     resolve_tenant_and_pricing,
@@ -27,6 +24,7 @@ from runtime.boot.system_builder_steps import build_marketing_llm_components, wi
 from runtime.messaging_policy_events.event_store_adapter import EventLogMessagingPolicyEventStore
 from runtime.messaging_policy_readmodel.boot_runtime import boot_messaging_policy_readmodel
 
+CANON_BOOT_WIRING_ONLY = True
 
 def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_registry_ctx):
     ctx.enter(BootPhase.P30_STORES)

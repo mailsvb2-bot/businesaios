@@ -1,15 +1,13 @@
-from __future__ import annotations
-
 """Runtime blast-radius enforcement.
 
 Keeps runtime-level action throttling aligned with the canonical core safety
 policy instead of leaving a no-op placeholder that invites inline forks.
 """
 
+from __future__ import annotations
+
 from typing import Any
-
 from runtime.enforcement import BlastRadiusPolicy, allow_action
-
 
 class BlastRadiusViolation(RuntimeError):
     """Raised when a high-impact action exceeds the configured hourly budget."""

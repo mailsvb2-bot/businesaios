@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """Inference providers live under the runtime execution boundary only.
 
 The package root is the owner surface for runtime inference provider exports.
 """
+
+from __future__ import annotations
 
 from runtime.inference.providers.cpu_fallback_provider import CPUFallbackProvider
 from runtime.inference.providers.dedicated_gpu_provider import DedicatedGPUProvider
@@ -26,7 +26,6 @@ from runtime.inference.providers.provider_retry_adapter import ProviderRetryAdap
 
 CANON_RUNTIME_INFERENCE_PROVIDER_NAMESPACE = True
 CANON_RUNTIME_INFERENCE_PROVIDER_PACKAGE_OWNER = True
-
 __all__ = [
     'CANON_RUNTIME_INFERENCE_PROVIDER_NAMESPACE',
     'CANON_RUNTIME_INFERENCE_PROVIDER_PACKAGE_OWNER',
@@ -48,3 +47,4 @@ __all__ = [
     'ProviderRetryAdapter',
     'RetryPolicy',
 ]
+

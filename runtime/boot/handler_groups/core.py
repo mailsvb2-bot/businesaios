@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from runtime.handlers import ActionHandlerRegistry
 
+CANON_BOOT_WIRING_ONLY = True
 _AI_CEO_HANDLER_REF = "runtime.handlers.ai_ceo_plan:handle_ai_ceo_plan"
-
 
 def _catalog_action_for_handler(handler_ref: str) -> str:
     from runtime.boot.actions_catalog import SPEC_ROWS

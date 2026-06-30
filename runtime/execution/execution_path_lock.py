@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Single-owner execution path contract.
 
 This module contains *only* structural validation for the canonical execution path:
@@ -7,6 +5,8 @@ This module contains *only* structural validation for the canonical execution pa
 
 It must not become a second execution engine.
 """
+
+from __future__ import annotations
 
 import importlib
 from dataclasses import dataclass
@@ -22,7 +22,6 @@ CANON_EXECUTION_PATH_ORDER = (
     'executor_entrypoint',
     'execution_gateway',
 )
-
 _DECISION_COMMAND_MODULE = 'application.decisioning.decision_command'
 
 class ExecutionPathLockError(RuntimeError):

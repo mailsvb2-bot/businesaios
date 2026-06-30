@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical runtime tracing helpers.
 
 Goals:
@@ -7,6 +5,9 @@ Goals:
 - No ad-hoc contextvars scattered across modules.
 - Minimal API used by executor, effects and transports.
 """
+
+from __future__ import annotations
+
 
 import contextvars
 from contextlib import contextmanager

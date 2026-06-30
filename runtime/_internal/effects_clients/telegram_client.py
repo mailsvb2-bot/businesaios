@@ -1,18 +1,16 @@
-from __future__ import annotations
-
 """Sealed transport: Telegram Bot API client."""
+
+from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Callable
 from collections.abc import Mapping
-
 from runtime._internal.http_transport import HttpTransport, build_http_transport
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_bool, env_str
 from runtime.platform.delivery_state import ACCEPTED_PHASE, FINALIZED_PHASE, RECOVERY_PHASE
-
 from ._telegram_delivery_state import (
     accepted_receipt_stale,
     delivery_metadata,
@@ -29,7 +27,6 @@ from ._telegram_delivery_support import delivery_key as build_delivery_key
 from ._telegram_delivery_support import payload_digest as build_payload_digest
 from ._telegram_delivery_support import stable_json
 from .http_client import http_json
-
 
 def telegram_api_base() -> str:
     return env_str("TELEGRAM_API_BASE", "https://api.telegram.org").strip().rstrip("/")

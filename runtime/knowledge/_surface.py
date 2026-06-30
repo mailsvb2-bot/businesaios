@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Canonical runtime knowledge public surface."""
+
+from __future__ import annotations
 
 from core.knowledge.builders.business_case_builder import BusinessCaseBuilder
 from core.knowledge.builders.lesson_builder import LessonBuilder
@@ -39,7 +39,6 @@ from core.knowledge.writers.memory_link_writer import MemoryLinkWriter
 from core.knowledge.writers.pattern_writer import PatternWriter
 
 CANON_RUNTIME_KNOWLEDGE_PUBLIC_API = True
-
 __all__ = [
     'CANON_RUNTIME_KNOWLEDGE_NAMESPACE',
     'BusinessCaseBuilder', 'CampaignOutcomeLessonDraftMapper', 'CANON_RUNTIME_KNOWLEDGE_PUBLIC_API',
@@ -53,8 +52,5 @@ __all__ = [
     'RetrievalQualityEvaluator', 'StaleMemoryGuard', 'StrategyMemoryReader', 'UnsafeReuseGuard',
     'WeakPatternGuard',
 ]
-
 CANON_RUNTIME_KNOWLEDGE_NAMESPACE = True
-
-
 

@@ -1,14 +1,13 @@
-from __future__ import annotations
-
 """Telegram effect helpers.
 
 NOTE: External I/O MUST remain sealed inside runtime/_internal/_effects_impl.py.
 This module contains only pure helpers and thin orchestration.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
-
 
 @dataclass
 class TelegramStartupReport:

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from collections.abc import Callable
 from typing import Any
 
+CANON_BOOT_WIRING_ONLY = True
 
 def boot_with_bundle(*, app: Any, bundle_builder: Callable[..., Any], route_registrar: Callable[..., None], **bundle_kwargs: Any) -> None:
     """Canonical framework-agnostic boot helper.

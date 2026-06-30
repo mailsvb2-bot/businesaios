@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Canonical runtime decisioning surface.
 
 Runtime handlers may validate canonical decision routes and share tiny transport
 shapes, but must not fork selection logic.
 """
+
+from __future__ import annotations
 
 from runtime.decisioning.contract import (
     CANON_RUNTIME_DECISIONING_CONTRACT,
@@ -25,7 +25,6 @@ from runtime.decisioning.contract import (
 )
 
 CANON_RUNTIME_DECISIONING_PUBLIC_API = True
-
 __all__ = [
     'CANONICAL_ROUTE',
     'CANON_RUNTIME_DECISIONING_CONTRACT',
@@ -44,6 +43,4 @@ __all__ = [
     'extract_route_from_envelope',
     'extract_strict_route_from_envelope',
 ]
-
-
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """SLA auto-accelerator.
 
 If latency increases, we temporarily extend the read-model cache window.
@@ -9,13 +7,13 @@ Important: this module must not mutate os.environ directly except through
 runtime.read_models.cache_window, to avoid "God code" leaks.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from typing import Any
-
 from runtime.platform.config.env_flags import env_int
 from runtime.read_models.cache_window import set_cache_window_seconds
-
 
 @dataclass(frozen=True)
 class SlaAcceleratorConfig:

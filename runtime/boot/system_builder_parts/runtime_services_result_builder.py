@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from runtime.boot.system_builder_parts.runtime_services_result import RuntimeServicesResult
 
+CANON_BOOT_WIRING_ONLY = True
 
 def build_runtime_services_result(*, tenant_runtime_services: dict[str, object], finance_bundle: dict[str, object], model_registry_ctx, durable_services: dict[str, object], messaging_services: dict[str, object], settings_services: dict[str, object], outbound_services: dict[str, object], policy_services: dict[str, object], security_services: dict[str, object] | None = None):
     finance_host_binding = finance_bundle['finance_host_binding']

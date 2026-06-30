@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Commit/outbox helpers for RuntimeExecutor.
 
 These helpers provide one canonical adapter layer between the executor and
@@ -9,12 +7,12 @@ implementations.
 No business logic lives here.
 """
 
+from __future__ import annotations
+
 import importlib
 from typing import Any
 from collections.abc import Mapping
-
 from reliability.outbox_store import OutboxMessage, OutboxState, canonical_payload_digest
-
 
 def _safe_dict(value: object) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}

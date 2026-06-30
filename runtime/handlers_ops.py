@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Canonical runtime handlers facade.
 
 The public module path stays stable for action-registry contracts, while the
 actual implementations are split into small domain modules.
 """
+
+from __future__ import annotations
 
 from runtime.handler_impl.domains.admin_ops import (
     handle_admin_set_perm,
@@ -57,3 +57,4 @@ __all__ = [
     "handle_set_marketing_copy",
     "handle_set_user_setting",
 ]
+

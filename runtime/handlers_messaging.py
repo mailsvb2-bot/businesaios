@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical messaging handlers.
 
 Handlers are execution-only.
@@ -7,6 +5,9 @@ No channel choice policy.
 No fallback ranking.
 No hidden second brain.
 """
+
+from __future__ import annotations
+
 
 import logging
 

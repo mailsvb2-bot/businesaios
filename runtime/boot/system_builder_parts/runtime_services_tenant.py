@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from tenancy.tenant_admission_coordinator import LeaseStoreAdmissionBackend, TenantAdmissionCoordinator
 from tenancy.tenant_contract import TenantPlan, TenantRecord
 from tenancy.tenant_execution_budget_guard import TenantExecutionBudgetGuard
@@ -18,6 +16,7 @@ from tenancy.tenant_runtime_reconciliation import TenantRuntimeReconciler
 from tenancy.tenant_schema_version_guard import TenantSchemaVersionExpectation
 from tenancy.tenant_startup_selfcheck import TenantStartupSelfcheck
 
+CANON_BOOT_WIRING_ONLY = True
 
 def build_tenant_runtime_services(*, tenant_id: str):
     tenant_registry = build_default_tenant_registry()

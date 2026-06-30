@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Canonical runtime Ads boundary surface.
 
 Runtime wiring, handlers, and jobs should depend on this module instead of
 reaching into scattered core.ads/core.growth internals directly.
 """
+
+from __future__ import annotations
 
 from core.ads.ads_service import AdsCommand, AdsGuardrails, AdsPlan, AdsPort, AdsService
 from core.ads.apply.contract import AdsApplyRequest
@@ -78,8 +78,5 @@ __all__ = [
     "plan_digest",
     "policy_store",
 ]
-
 CANON_RUNTIME_ADS_NAMESPACE = True
-
-
 

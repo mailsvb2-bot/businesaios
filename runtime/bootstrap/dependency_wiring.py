@@ -1,15 +1,15 @@
-from __future__ import annotations
-
 """Canonical dependency wiring for sovereign runtime bootstrap."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol
-
 from runtime.bootstrap.bootstrap_contract import BootstrapEnvironment
 from runtime.bootstrap.bootstrap_lock import BootstrapLock
 from runtime.bootstrap.runtime_builder import build_runtime
 
 CANON_RUNTIME_BOOTSTRAP_DEPENDENCY_WIRING_EXPLICIT_EXPORTS_ONLY = True
+
 class RuntimeBuilder(Protocol):
     def __call__(self) -> Any: ...
 class ProcessBootstrap(Protocol):

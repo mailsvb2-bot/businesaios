@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Worker job: Ads RL automatic observe/tick.
 
 Usage example (pseudo):
@@ -12,11 +10,11 @@ Usage example (pseudo):
 This job is intentionally NOT started automatically.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
-
 from runtime.ads import ObserveTickResult, observe_tick_once
-
 
 @dataclass(frozen=True)
 class JobDeps:

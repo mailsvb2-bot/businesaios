@@ -1,6 +1,7 @@
+"""Canonical runtime package alias namespace for runtime.ledger public API."""
+
 from __future__ import annotations
 
-"""Canonical runtime package alias namespace for runtime.ledger public API."""
 
 from runtime.package_alias_namespace import build_package_alias_namespace
 

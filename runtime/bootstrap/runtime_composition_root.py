@@ -1,9 +1,8 @@
-from __future__ import annotations
-
 """Canonical runtime composition root for sovereign bootstrap."""
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 from runtime.bootstrap.bootstrap_contract import (
     BootstrapArtifacts,
     BootstrapAttestationPolicy,
@@ -13,6 +12,7 @@ from runtime.bootstrap.bootstrap_failfast import BootstrapCompositionError
 from runtime.bootstrap.startup_validator import validate_composition_artifacts
 
 CANON_RUNTIME_BOOTSTRAP_COMPOSITION_ROOT_EXPLICIT_EXPORTS_ONLY = True
+
 @dataclass(frozen=True)
 class RuntimeCompositionResult:
     environment: BootstrapEnvironment

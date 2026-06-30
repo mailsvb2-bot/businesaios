@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
 from runtime.handlers import ActionHandlerRegistry
 from runtime.handlers_ops import (
     handle_admin_set_perm,
@@ -27,6 +24,7 @@ from runtime.handlers_ops import (
     handle_set_user_setting,
 )
 
+CANON_BOOT_WIRING_ONLY = True
 
 def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> None:
     handlers.register("answer_callback@v1", handle_answer_callback)

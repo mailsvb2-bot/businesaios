@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Canonical runtime namespace for inference capacity execution.
 
 This namespace does not introduce a second brain.
 It contains only execution/runtime support for deterministic inference routing.
 """
+
+from __future__ import annotations
 
 from runtime.inference.distributed import (
     DistributedInferenceNetworkResponseVerifier,
@@ -44,7 +44,6 @@ from runtime.inference.provisioning import (
 
 CANON_RUNTIME_INFERENCE_NAMESPACE = True
 CANON_RUNTIME_INFERENCE_PACKAGE_OWNER = True
-
 __all__ = [
     'CANON_RUNTIME_INFERENCE_NAMESPACE',
     'CANON_RUNTIME_INFERENCE_PACKAGE_OWNER',
@@ -78,3 +77,4 @@ __all__ = [
     'ProviderRetryAdapter',
     'RetryPolicy',
 ]
+

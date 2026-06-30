@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
-
 from bootstrap.finalize_runtime_args import FinalizeRuntimeArgs
 from runtime.platform.app_paths import runtime_data_dir
 from runtime.platform.config.env_flags import env_path
 
+CANON_BOOT_WIRING_ONLY = True
 
 def finalize_runtime_system(*, args: FinalizeRuntimeArgs):
     from bootstrap.world_model_self_check import run_world_model_self_check

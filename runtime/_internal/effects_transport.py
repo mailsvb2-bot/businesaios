@@ -1,11 +1,10 @@
+"""Sealed transport helpers extracted from the private runtime effects implementation."""
+
 from __future__ import annotations
 
-"""Sealed transport helpers extracted from the private runtime effects implementation."""
 from typing import Any
-
 from runtime._internal.http_transport import HTTPResponse, sync_get, sync_post_json
 from runtime._internal.http_transport import url_with_params as _url_with_params
-
 
 def url_with_params(*, url: str, params: dict[str, Any] | None = None) -> str:
     return _url_with_params(url=str(url), params=(params if isinstance(params, dict) else None))

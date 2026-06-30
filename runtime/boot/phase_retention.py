@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
 import os
 from contextlib import ExitStack
 from typing import Any
-
 from bootstrap.failure_policy import resolve_optional_boot_component
 
+CANON_BOOT_WIRING_ONLY = True
 
 def build_retention_adapter(
     *,

@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """Runtime health snapshot (NO network bindings).
 
 Per System TZ:
 - All real integrations (network servers, SDKs, DB drivers) live only in: runtime/_internal/_effects_impl.py
 - This module is pure data aggregation from EventLog.
 """
+
+from __future__ import annotations
+
 
 import logging
 import time

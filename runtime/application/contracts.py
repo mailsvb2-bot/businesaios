@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical runtime application contract surface.
 
 This module is the single owner for lightweight runtime-owned application
@@ -9,9 +7,10 @@ access helpers remain transition ABI only. This file is the single owner for
 runtime application access/contracts surface and must not absorb business logic.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any, Protocol
-
 from application.decision.decision_service import DecisionApplicationService
 from runtime.access_policies import validate_capability_access
 from runtime.application._ports_impl import (
@@ -25,7 +24,6 @@ from runtime.service_names import RuntimeServiceName
 
 CANON_RUNTIME_APPLICATION_CONTRACTS = True
 CANON_SINGLE_OWNER = True
-
 
 class RuntimeDecisionCorePort(Protocol):
     decide: Any

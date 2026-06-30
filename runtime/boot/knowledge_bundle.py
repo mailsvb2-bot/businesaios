@@ -1,9 +1,8 @@
-from __future__ import annotations
-
 """Runtime boot knowledge bundle delegated through runtime.knowledge public API."""
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 from runtime.knowledge import (
     KnowledgeCommandService,
     KnowledgeExplainService,
@@ -16,7 +15,6 @@ from runtime.knowledge import (
 
 CANON_RUNTIME_BOOT_KNOWLEDGE_BUNDLE = True
 CANON_BOOT_WIRING_ONLY = True
-
 
 @dataclass(frozen=True)
 class RuntimeKnowledgeBundle:

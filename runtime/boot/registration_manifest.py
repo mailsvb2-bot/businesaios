@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Runtime registration manifest.
 
 The manifest is intentionally thin: action ownership remains in
@@ -7,15 +5,15 @@ The manifest is intentionally thin: action ownership remains in
 This module wires handler registration without owning catalog rows.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from typing import Any
-
 from runtime.actions import ACTION_AI_CEO_PLAN_V1
 from runtime.boot.actions_registry import all_actions
 
 CANON_BOOT_WIRING_ONLY = True
 CANON_RUNTIME_REGISTRATION_MANIFEST = True
-
 
 def register_runtime_actions(*, handlers: Any, handler_factory: Callable[[str], Any] | None = None) -> tuple[str, ...]:
     """Register known runtime actions through the canonical action registry.

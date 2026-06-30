@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
 from typing import Any
-
 from learning.registry import ArtifactRegistry
 from runtime.boot import (
     EconomicBrain,
@@ -16,6 +12,7 @@ from runtime.boot import (
     RewardEngine,
 )
 
+CANON_BOOT_WIRING_ONLY = True
 
 def build_economic_brain() -> EconomicBrain:
     return EconomicBrain(

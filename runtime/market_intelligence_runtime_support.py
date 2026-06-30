@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical runtime wiring for market-intelligence operational support.
 
 This module deliberately reuses the shared runtime reliability contour rather
@@ -7,15 +5,15 @@ than inventing a separate coordination stack. It must not introduce any
 planning or decision logic.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
-
 from reliability.distributed_lock import DistributedLock
 from reliability.leader_election import LeaderElection
 from runtime.executor_runtime_support import RuntimeExecutorRecoverySupport, build_executor_recovery_support
 
 CANON_MARKET_INTELLIGENCE_RUNTIME_SUPPORT = True
-
 
 @dataclass(frozen=True)
 class MarketIntelligenceRuntimeSupport:

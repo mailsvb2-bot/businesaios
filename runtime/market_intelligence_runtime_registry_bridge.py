@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Registry bridge for market-intelligence managed runtime.
 
 This module is lifecycle/attachment only. It must not introduce planning,
@@ -8,15 +6,15 @@ owns service registration; this bridge only binds the managed market-
 intelligence runtime to the canonical market-watch service when available.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
-
 from runtime.runtime_observability import RuntimeObservability
 from runtime.service_names import RuntimeServiceName
 
 CANON_MARKET_INTELLIGENCE_RUNTIME_REGISTRY_BRIDGE = True
 CANON_MARKET_INTELLIGENCE_RUNTIME_REGISTRY_BRIDGE_NO_DECISION_LOGIC = True
-
 
 @dataclass(frozen=True)
 class MarketIntelligenceRuntimeAttachmentReport:

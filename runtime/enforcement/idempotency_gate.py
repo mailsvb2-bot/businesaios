@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 """Idempotency/ledger proof helpers for RuntimeGuard."""
+
+from __future__ import annotations
 
 import hashlib
 from typing import Any
-
 
 def mark_execution_once(*, ledger: Any, env: Any) -> None:
     try_mark = getattr(ledger, "try_mark_executed")

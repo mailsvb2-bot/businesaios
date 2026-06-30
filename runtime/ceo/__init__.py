@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical CEO runtime facade.
 
 The package is itself the stable public surface. Historical imports through
@@ -7,10 +5,11 @@ The package is itself the stable public surface. Historical imports through
 an extra re-export file around.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Iterable, Mapping
-
 from core.actions import build_schema_registry
 from runtime.actions import ACTION_EXECUTE_PLAN_V1
 from runtime.application.contracts import build_runtime_application_service_from_raw
@@ -18,7 +17,6 @@ from runtime.boot.actions_registry import get_spec
 from runtime.boot.builders.ai_ceo_planner import build_runtime_ai_ceo_planner
 
 CANON_RUNTIME_CEO_PUBLIC_API = True
-
 
 @dataclass(frozen=True)
 class CEOExecutionEnvelope:

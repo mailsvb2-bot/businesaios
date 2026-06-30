@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-CANON_THIN_HANDLER = True
-
-
 from typing import Any
 
+CANON_THIN_HANDLER = True
 
 class DeployPolicyHandler:
     """Apply a decided deployment.

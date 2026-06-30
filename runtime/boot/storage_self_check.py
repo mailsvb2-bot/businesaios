@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
 from runtime.platform.config.env_flags import env_str
 
+CANON_BOOT_WIRING_ONLY = True
 
 def storage_self_check() -> None:
     """Production constitution: strict storage must use Postgres.

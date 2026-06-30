@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical execution assembly surface.
 
 This module owns the assembled executor state plus the execution-specific
@@ -7,11 +5,12 @@ infra/ports/effects construction helpers. Older top-level ``runtime.executor_*``
 modules remain as compatibility shims only.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, fields
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Protocol
-
 from governance.constitution import Constitution
 from governance.economic_layer import EconomicAutonomyLayer
 from runtime.effects import load_effects_impl
@@ -22,7 +21,6 @@ from runtime.firewall.import_guard import allow_internal_import
 from runtime.runtime_infra import RuntimeInfra
 
 CANON_RUNTIME_EXECUTION_ASSEMBLY = True
-
 
 def _copy_runtime_infra_fields(*, source: RuntimeInfra | None, overrides: dict[str, Any] | None = None, exclude: tuple[str, ...] = ()) -> dict[str, Any]:
     payload: dict[str, Any] = {}

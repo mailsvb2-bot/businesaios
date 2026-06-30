@@ -1,12 +1,11 @@
-from __future__ import annotations
-
 """Sealed payment effect actions mixin.
 
 Thin orchestration only; business details live in focused helper modules.
 """
 
-from typing import Any
+from __future__ import annotations
 
+from typing import Any
 from runtime._internal.effects_actions.payments.access import grant_access_effect
 from runtime._internal.effects_actions.payments.reconciliation import (
     reconcile_payment_effect,
@@ -21,7 +20,6 @@ from runtime._internal.effects_actions.payments.yookassa import (
     yookassa_create_payment,
     yookassa_get_payment_status,
 )
-
 
 class PaymentsEffectsMixin:
     def select_tariff(

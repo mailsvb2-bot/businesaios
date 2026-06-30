@@ -1,11 +1,8 @@
-from __future__ import annotations
-
-CANON_BOOT_WIRING_ONLY = True
-
 """Executor assembly helpers extracted from boot_core_assembly."""
 
-from typing import Any
+from __future__ import annotations
 
+from typing import Any
 from bootstrap.decision_core_contract import RuntimeDecisionCorePort
 from bootstrap.governance_execution_boot import build_default_governance_execution_guard
 from governance.economic_layer import EconomicAutonomyLayer
@@ -15,6 +12,7 @@ from runtime.guard import RuntimeGuard
 from runtime.recovery import recover_pending
 from runtime.safety import resolve_operational_safety_runtime
 
+CANON_BOOT_WIRING_ONLY = True
 
 def build_runtime_infra(*, runtime_infra, delivery_state, telegram_outbound_queue, **_unused):
     return build_executor_runtime_infra_from_runtime_infra(

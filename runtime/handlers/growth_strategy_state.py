@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-CANON_THIN_HANDLER = True
-
-
 from typing import Any
-
 from runtime.growth import GrowthStrategyService
 from runtime.ports.effects import EffectsPort
 
+CANON_THIN_HANDLER = True
 ACTION_NAME_ACCEPT = "growth_strategy_accept@v1"
 ACTION_NAME_REJECT = "growth_strategy_reject@v1"
-
 
 def handle_growth_strategy_accept(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
     return _handle(payload, effects, env, event_store=event_store, state="accept")

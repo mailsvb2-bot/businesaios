@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Legacy package-form runtime bootstrap surface.
 
 This package path is preserved for compatibility and to host thin re-export
@@ -14,6 +12,9 @@ package keeps a very small process-only wrapper that mirrors the original
 public surface while delegating full runtime assembly to
 ``runtime.bootstrap.sovereign_bootstrap``.
 """
+
+from __future__ import annotations
+
 
 import atexit
 from importlib import import_module

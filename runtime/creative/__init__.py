@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Canonical runtime creative-intelligence public surface."""
+
+from __future__ import annotations
 
 from core.creative_intelligence.input_replacement import replace_market_fit_score
 from core.creative_intelligence.models import (
@@ -17,7 +17,6 @@ from core.scorers.portfolio import rank_portfolio
 from core.traffic.creative_generator import LLMCreativeGenerator
 
 CANON_RUNTIME_CREATIVE_PUBLIC_API = True
-
 __all__ = [
     'CANON_RUNTIME_CREATIVE_NAMESPACE',
     'CANON_RUNTIME_CREATIVE_PUBLIC_API',
@@ -33,8 +32,5 @@ __all__ = [
     'rank_portfolio',
     'replace_market_fit_score',
 ]
-
 CANON_RUNTIME_CREATIVE_NAMESPACE = True
-
-
 

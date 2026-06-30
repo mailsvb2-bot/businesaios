@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from dataclasses import dataclass
-
 from runtime.boot.web.observability_boot_plan import MessagingPolicyObservabilityBootFlags
 
+CANON_BOOT_WIRING_ONLY = True
 
 @dataclass(frozen=True)
 class RuntimeWebFlagState:

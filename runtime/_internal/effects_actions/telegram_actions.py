@@ -1,15 +1,13 @@
-from __future__ import annotations
-
 """Sealed effect actions mixin.
 
 This module is INTERNAL to runtime/_internal.
 No API changes to EffectsPort.
 """
 
+from __future__ import annotations
+
 from typing import Any
 from runtime.observability.telemetry import CANON_RUNTIME_TELEMETRY_OWNER as _CANON_RUNTIME_TELEMETRY_OWNER
-CANON_RUNTIME_OBSERVABILITY_OWNER = _CANON_RUNTIME_TELEMETRY_OWNER
-
 from runtime._internal.effect_types import EffectActionType
 from runtime._internal.effects_actions.telegram.media import send_audio_effect
 from runtime._internal.effects_actions.telegram.messaging import send_message_effect
@@ -24,6 +22,7 @@ from runtime._internal.effects_actions.telegram_actions_transport import (
     send_message_transport_effect,
 )
 
+CANON_RUNTIME_OBSERVABILITY_OWNER = _CANON_RUNTIME_TELEMETRY_OWNER
 
 def telegram_self_check_effect(effects: Any, *, token: str | None = None) -> dict:
     from runtime._internal.router_support import execute_effect_action_sync

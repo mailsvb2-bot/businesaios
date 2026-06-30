@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Evolution worker: poll durable outbox and execute jobs.
 
 Hard invariants:
@@ -7,6 +5,9 @@ Hard invariants:
 - Writes only to durable stores (event_store / outbox state).
 - Never crashes the process on a single bad job.
 """
+
+from __future__ import annotations
+
 
 import logging
 import time

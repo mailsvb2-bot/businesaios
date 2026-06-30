@@ -1,9 +1,10 @@
-from __future__ import annotations
-
 """Action handler registry.
 
 This file groups effect handlers by domain modules.
 """
+
+from __future__ import annotations
+
 
 from types import MappingProxyType
 from collections.abc import Callable

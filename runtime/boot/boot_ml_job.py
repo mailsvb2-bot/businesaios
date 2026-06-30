@@ -1,7 +1,3 @@
-from __future__ import annotations
-
-CANON_BOOT_WIRING_ONLY = True
-
 """Offline ML job assembly for the boot pipeline.
 
 Responsibility: construct the LearningJob (OfflineTrainer + RolloutManager +
@@ -10,9 +6,10 @@ AutoDeployGuard + …) from env config and already-wired objects.
 Single public function: build_ml_job()
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
-
 from learning.registry import ArtifactRegistry
 from learning.replay import FeedbackLoopFirewall
 from learning.trainer import OfflineTrainer as MLOfflineTrainer
@@ -38,6 +35,7 @@ from runtime.platform.app_paths import runtime_data_dir
 from runtime.platform.config.env_flags import env_path
 from runtime.scheduler import LearningJob
 
+CANON_BOOT_WIRING_ONLY = True
 
 def build_ml_job(
     *,

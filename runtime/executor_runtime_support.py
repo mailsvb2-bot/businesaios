@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Compatibility shim. Canonical owner: runtime.execution.executor_state.
 
 This shim stays executable rather than acting as a passive re-export so that
@@ -11,9 +9,10 @@ Queue support added here is strictly operational: it can persist and execute
 already-authorized work, but it never decides what should be done.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
-
 from runtime.execution.executor_state import (
     RuntimeExecutorPorts,
     RuntimeExecutorState,
@@ -41,7 +40,6 @@ from runtime.queue.rate_limit_guard import RateLimitGuard
 from runtime.queue.throttle_policy import ThrottlePolicy
 
 CANON_RUNTIME_EXECUTOR_QUEUE_SUPPORT = True
-
 
 @dataclass(frozen=True)
 class RuntimeExecutorQueueSupport:

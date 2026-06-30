@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical runtime action catalog data.
 
 Single source of truth for runtime action rows and registry grouping metadata.
@@ -7,10 +5,11 @@ This module intentionally stores only declarative action metadata so boot wiring
 and the public actions registry do not each grow their own competing tables.
 """
 
-CANON_BOOT_WIRING_ONLY = True
+from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
+CANON_BOOT_WIRING_ONLY = True
 SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("admin_set_perm@v1", "runtime.handlers_ops:handle_admin_set_perm", True, "admin", 60, 60),
     ("admin_set_role@v1", "runtime.handlers_ops:handle_admin_set_role", True, "admin", 60, 60),
@@ -69,7 +68,6 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("apply_offer_patch@v1", "runtime.effects.registry:build_effects_registry", True, "general", 60, 30),
     ("suggest_offer_patch@v1", "runtime.effects.registry:build_effects_registry", True, "general", 60, 30),
 )
-
 INLINE_ALLOWLIST_NAMES: tuple[str, ...] = (
     "emit_event@v1",
     "track_event@v1",

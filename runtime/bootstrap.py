@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Explicit process-hygiene bootstrap for runtime execution.
 
 This module owns only process guards and singleton/runtime firewalls. It must
@@ -11,6 +9,9 @@ Compatibility note:
   sovereign bootstrap implementation can live in dedicated submodules without
   breaking legacy imports.
 """
+
+from __future__ import annotations
+
 
 from pathlib import Path
 from typing import Any

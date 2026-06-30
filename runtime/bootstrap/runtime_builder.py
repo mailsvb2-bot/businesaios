@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 """Canonical internal runtime builder.
 
 This module owns runtime assembly for the sovereign bootstrap path. It is an
 internal support surface, not a public entrypoint.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 from boot.runtime_boot_guard import validate_runtime_boot
 from boot.runtime_boot_report import RuntimeBootReport
 from boot.wiring.runtime_dependency_resolver import RuntimeDependencyResolver
@@ -27,7 +26,6 @@ CANON_RUNTIME_BUILDER_OWNER = True
 CANON_RUNTIME_BUILDER_INTERNAL_ONLY = True
 CANON_RUNTIME_BUILDER_NO_PUBLIC_ENTRYPOINT = True
 CANON_RUNTIME_BOOTSTRAP_RUNTIME_BUILDER_EXPLICIT_EXPORTS_ONLY = True
-
 
 @dataclass(frozen=True)
 class BuiltRuntime:

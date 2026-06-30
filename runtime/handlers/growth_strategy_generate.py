@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-CANON_THIN_HANDLER = True
-
-
 from typing import Any
-
 from runtime.growth import GrowthGoalV1, GrowthStrategyService
 from runtime.ports.effects import EffectsPort
 
+CANON_THIN_HANDLER = True
 ACTION_NAME = "growth_strategy_generate@v1"
-
 
 def handle_growth_strategy_generate(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any, llm: Any = None) -> Any:
     p = payload or {}

@@ -1,9 +1,10 @@
-from __future__ import annotations
-
 """Execution dispatcher.
 
 Keeps RuntimeExecutor small and avoids hidden centers of gravity.
 """
+
+from __future__ import annotations
+
 
 from typing import Any
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Crash-recovery helpers for RuntimeExecutor.
 
 If action is not in ACTION_PROOF_EVENT, ``finalize_if_already_executed`` returns
@@ -7,13 +5,13 @@ If action is not in ACTION_PROOF_EVENT, ``finalize_if_already_executed`` returns
 for such actions.
 """
 
-from typing import Any
+from __future__ import annotations
 
+from typing import Any
 from runtime.execution.executor_commit import _decision_tenant_id, status
 from runtime.execution.executor_result import ExecutionResult
 from runtime.execution.outcome_persistence_lock import finalize_recovered_outcome
 from runtime.proofs import ACTION_PROOF_EVENT
-
 
 def finalize_if_already_executed(*, executor: Any, outbox: Any, event_log: Any, env: Any) -> ExecutionResult | None:
     decision_id = str(env.decision.decision_id)

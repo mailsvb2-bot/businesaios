@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Auto-deploy guardrails.
 
 This module is an *operator safety layer*.
@@ -9,11 +7,11 @@ automatic deployment/rollback proposals.
 No side-effects.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
-
 from runtime.platform.config.env_flags import env_bool, env_int, env_str
-
 
 @dataclass(frozen=True)
 class AutoDeployVerdict:

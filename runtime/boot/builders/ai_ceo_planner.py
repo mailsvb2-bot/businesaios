@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from dataclasses import dataclass
 from typing import Any
-
 from runtime.ai_ceo import (
     AutonomyPolicyV1,
     GrowthSnapshotV1,
@@ -20,6 +17,7 @@ from runtime.ai_ceo import (
 from runtime.tenancy import normalize_tenant_id_or_unknown
 from runtime.world_state import WorldStateV1
 
+CANON_BOOT_WIRING_ONLY = True
 
 @dataclass(frozen=True)
 class RuntimeAICeoPlanner:

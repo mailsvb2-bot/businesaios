@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from dataclasses import dataclass
-
 from runtime.boot.web.messaging_policy_trace_search_service_builder import build_messaging_policy_trace_search_service
 from runtime.messaging_policy_alerts.service import MessagingPolicyAlertService
 from runtime.messaging_policy_dashboard.service import MessagingPolicyDashboardService
 from runtime.messaging_policy_trace.search_service import MessagingPolicyTraceSearchService
 
+CANON_BOOT_WIRING_ONLY = True
 
 @dataclass(frozen=True)
 class MessagingPolicyServiceGraph:

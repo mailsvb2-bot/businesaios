@@ -1,9 +1,3 @@
-from __future__ import annotations
-
-import sys
-from importlib import import_module
-from types import ModuleType
-
 """Package marker for BUSINESAIOS canonical runtime namespace.
 
 This root must stay import-light. It intentionally avoids eager compat-target imports
@@ -11,16 +5,17 @@ so foundational modules such as runtime.service_names can be imported without pu
 in runtime.application and triggering circular initialization.
 """
 
-CANON_RUNTIME_NAMESPACE = True
-CANON_COMPAT_SHIM = True
+from __future__ import annotations
 
+import sys
+from importlib import import_module
+from types import ModuleType
 from shared.registry import ComponentRegistry, ServiceRegistry
 
+CANON_RUNTIME_NAMESPACE = True
+CANON_COMPAT_SHIM = True
 __all__ = ["CANON_RUNTIME_NAMESPACE", "CANON_COMPAT_SHIM", "CANON_RUNTIME_PACKAGE_ALIAS_OWNER", "ServiceRegistry", "ComponentRegistry"]
-
-
 CANON_RUNTIME_PACKAGE_ALIAS_OWNER = True
-
 _COMPAT_ALIAS_MAP = {
     "bootstrap_process": "bootstrap.process_hygiene",
     "bootstrap_prod_guards": "bootstrap.prod_guards",
@@ -29,7 +24,6 @@ _COMPAT_ALIAS_MAP = {
     "executor_ports": "runtime.execution.executor_state",
     "llm_provider_factory": "runtime.llm",
 }
-
 
 def _install_runtime_compat_aliases() -> None:
     package = sys.modules[__name__]

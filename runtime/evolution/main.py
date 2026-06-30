@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """Evolution entrypoint.
 
 Runs EVOLUTION-timescale worker + optional health server.
 
 This module MUST NOT start Telegram runtime.
 """
+
+from __future__ import annotations
+
 
 import logging
 from typing import Any

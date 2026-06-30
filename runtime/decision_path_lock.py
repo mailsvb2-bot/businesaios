@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Single-owner decision path contract.
 
 This module contains *only* structural validation for the canonical decision path:
@@ -7,6 +5,8 @@ This module contains *only* structural validation for the canonical decision pat
 
 It must not become a second decision engine and must not add pre-decision business logic.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
@@ -20,7 +20,6 @@ CANON_DECISION_PATH_ORDER = (
     'decision_core',
     'executor',
 )
-
 
 class DecisionPathLockError(RuntimeError):
     pass

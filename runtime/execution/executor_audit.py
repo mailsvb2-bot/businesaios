@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 """Audit/proof helpers for RuntimeExecutor.
 
 These helpers keep runtime.executor focused on sovereign orchestration while
 centralizing proof-event emission in one place.
 """
 
-from typing import Any
+from __future__ import annotations
 
+from typing import Any
 
 def _user_id(payload: Any) -> str:
     if isinstance(payload, dict):

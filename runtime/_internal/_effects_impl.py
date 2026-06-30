@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 PRIVATE IMPLEMENTATION of EffectsPort.
 SECURITY / ARCHITECTURE:
@@ -11,14 +9,14 @@ PAYMENTS NOTE:
 - Provider create calls must use a stable *idempotence* key derived from a
   business order id (see core.payments.provider.idempotence_key_for_order).
 """
+
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
 from runtime.observability.telemetry import CANON_RUNTIME_TELEMETRY_OWNER as _CANON_RUNTIME_TELEMETRY_OWNER
-CANON_RUNTIME_OBSERVABILITY_OWNER = _CANON_RUNTIME_TELEMETRY_OWNER
-
 from runtime.platform.delivery_state import DeliveryState
 from runtime.ports.effects import EffectsPort
-
 from .effect_router import EffectRouter
 from .effects_actions.llm_actions import LLMEffectsMixin
 from .effects_actions.offer_patch_actions import OfferPatchEffectsMixin
@@ -34,6 +32,7 @@ from .effects_domains.tracking import TrackingEffectsMixin
 from .effects_domains.user_state import UserStateEffectsMixin
 from .http_transport import HttpTransport, build_http_transport, form_urlencode as _form_body_encoder, url_with_params as _url_with_params
 
+CANON_RUNTIME_OBSERVABILITY_OWNER = _CANON_RUNTIME_TELEMETRY_OWNER
 
 def _telegram_api_base() -> str:
     from runtime.platform.config.env_flags import env_str

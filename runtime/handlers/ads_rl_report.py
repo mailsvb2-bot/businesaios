@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-CANON_THIN_HANDLER = True
-
-
 from typing import Any
-
 from runtime.ads import bind_runtime_state, policy_store
 from runtime.ports.effects import EffectsPort
 from runtime.tenancy import as_tenant_id
 
+CANON_THIN_HANDLER = True
 ACTION_NAME = "ads_rl_report@v1"
-
 
 def handle_ads_rl_report(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any) -> Any:
     p = payload or {}

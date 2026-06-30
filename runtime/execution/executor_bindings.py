@@ -1,15 +1,14 @@
-from __future__ import annotations
-
 """Executor instance binding helpers.
 
 Keeps ``runtime.executor`` focused on sovereign execution entrypoints while the
 mechanical state-to-attribute wiring lives on a single canonical path.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 CANON_RUNTIME_EXECUTOR_BINDINGS = True
-
 
 def apply_executor_state(*, executor: Any, state: Any) -> None:
     """Bind canonical assembled state to a RuntimeExecutor instance."""

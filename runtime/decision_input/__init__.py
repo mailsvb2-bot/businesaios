@@ -1,6 +1,7 @@
+"""Decision-input runtime package alias namespace."""
+
 from __future__ import annotations
 
-"""Decision-input runtime package alias namespace."""
 
 from runtime.package_alias_namespace import build_package_alias_namespace
 

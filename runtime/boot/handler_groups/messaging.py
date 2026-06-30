@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
 from runtime.handlers import ActionHandlerRegistry
 from runtime.handlers_messaging import (
     handle_noop,
@@ -13,6 +10,7 @@ from runtime.handlers_messaging import (
     handle_telegram_self_check,
 )
 
+CANON_BOOT_WIRING_ONLY = True
 
 def _marketing_offer_handler(*, composer):
     def _handler(payload, effects, env):

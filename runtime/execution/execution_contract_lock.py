@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical post-decision execution contract owner.
 
 This module centralizes the only allowed post-decision path:
@@ -10,17 +8,17 @@ cements the canonical post-dispatch contract and fail-closes when verification
 fails or when callers try to persist outcome/evidence through ad-hoc paths.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 from collections.abc import Mapping
-
 from application.evidence.evidence_verifier import EvidenceVerifier
 from runtime.execution.outcome_persistence_lock import persist_verified_outcome
 
 CANON_RUNTIME_EXECUTION_CONTRACT_LOCK_OWNER = True
 CANON_RUNTIME_EXECUTION_CONTRACT_NO_DECISION_LOGIC = True
-
 
 class ExecutionContractLockError(RuntimeError):
     pass

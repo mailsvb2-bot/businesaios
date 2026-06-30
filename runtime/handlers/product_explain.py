@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-CANON_THIN_HANDLER = True
-
 from runtime.product import RoadmapPriorityExplainer, RoadmapProposal
 
+CANON_THIN_HANDLER = True
 
 def handle_product_explain(proposal: RoadmapProposal) -> str:
     lines = RoadmapPriorityExplainer().explain(proposal, scores=[])

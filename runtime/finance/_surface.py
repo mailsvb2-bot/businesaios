@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Canonical runtime finance boundary surface."""
+
+from __future__ import annotations
 
 from core.finance.builders.cashflow_builder import build_cashflow_snapshot
 from core.finance.contracts import FinanceSnapshot
@@ -35,7 +35,6 @@ from runtime.finance.job_orchestrator import FinanceJobOrchestrator, FinanceJobR
 from runtime.finance.job_spec import FinanceJobSpec
 
 CANON_RUNTIME_FINANCE_PUBLIC_API = True
-
 __all__ = [
     'CANON_RUNTIME_FINANCE_NAMESPACE',
     "AllocationRecommended",
@@ -69,7 +68,5 @@ __all__ = [
     "StrategicFinanceDecision",
     "StrategicFinanceService",
 ]
-
 CANON_RUNTIME_FINANCE_NAMESPACE = True
-
 

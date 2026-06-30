@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Global managed-runtime plane.
 
 Operational only. This module owns lifecycle registration/start/stop/join ordering
@@ -7,14 +5,14 @@ for already-built managed runtimes. It must not introduce business policy,
 planning, provider ranking, or any alternate decision path.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any
-
 from runtime.runtime_observability import RuntimeObservability
 
 CANON_MANAGED_RUNTIME_PLANE = True
 CANON_MANAGED_RUNTIME_PLANE_NO_DECISION_LOGIC = True
-
 
 @dataclass(frozen=True)
 class ManagedRuntimeRecord:

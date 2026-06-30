@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """Canonical runtime decision gateways.
 
 This module keeps runtime orchestration code on a single canonical path:
 packet -> contract -> safe enrichment -> decision issuer -> locked executor.
 Historical helper APIs remain available as transitional ABI only.
 """
+
+from __future__ import annotations
+
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass

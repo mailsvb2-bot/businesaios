@@ -1,8 +1,3 @@
-from __future__ import annotations
-
-CANON_THIN_HANDLER = True
-
-
 """Ads apply execution handler (runtime).
 
 This is an effect handler: it executes an already-decided AdsPlan via the
@@ -11,8 +6,9 @@ production-hard core.ads.apply_engine.AdsApplyEngine.
 No business decisions here.
 """
 
-from typing import Any
+from __future__ import annotations
 
+from typing import Any
 from runtime.ads import AdsApplyEngine, bind_runtime_state, maturity_gate
 from runtime.governance import ActuationRegistry
 from runtime.handlers.ads_apply_helpers import (
@@ -31,9 +27,8 @@ from runtime.handlers.route_failure_support import (
 )
 from runtime.ports.effects import EffectsPort
 
+CANON_THIN_HANDLER = True
 ACTION_NAME = "ads_apply_execute@v1"
-
-
 
 def handle_ads_apply_execute(payload: dict[str, Any], effects: EffectsPort, env: Any, *, engine: AdsApplyEngine | None, event_store: Any | None = None) -> Any:
     ActuationRegistry.register(domain="ads.apply", controller_id=ACTION_NAME, source=__file__)

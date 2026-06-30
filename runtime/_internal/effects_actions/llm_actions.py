@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Sealed effect actions mixin.
 
 This module is INTERNAL to runtime/_internal.
 No API changes to EffectsPort.
 """
+
+from __future__ import annotations
 
 from runtime._internal.effect_types import EffectActionType
 from runtime._internal.effects_actions.llm_completion_support import (
@@ -14,7 +14,6 @@ from runtime._internal.effects_actions.llm_completion_support import (
 )
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
-
 
 class LLMEffectsMixin:
     def compose_marketing_message(

@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-_PUBLIC_API_MODULE = False
-CANON_FASTAPI_COMPONENTS_COLLAPSED_OWNER = True
-CANON_BOOT_WIRING_ONLY = True
-
 from interfaces.web.debug.messaging_policy_alerts.fastapi_adapter import (
     register_fastapi_routes as _register_alert_routes,
 )
@@ -37,6 +33,9 @@ from runtime.boot.web.runtime_web_service_builders import (
     build_messaging_preferences_bundle,
 )
 
+_PUBLIC_API_MODULE = False
+CANON_FASTAPI_COMPONENTS_COLLAPSED_OWNER = True
+CANON_BOOT_WIRING_ONLY = True
 
 def boot_alert_subscriptions(*, app, project_root, settings_gateway) -> None:
     boot_with_bundle(

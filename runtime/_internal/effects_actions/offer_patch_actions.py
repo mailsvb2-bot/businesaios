@@ -1,15 +1,13 @@
-from __future__ import annotations
-
 """Sealed effect actions mixin.
 
 This module is INTERNAL to runtime/_internal.
 No API changes to EffectsPort.
 """
 
+from __future__ import annotations
+
 from typing import Any
-
 import yaml
-
 from runtime._internal.effects_actions.offer_patch_apply_support import (
     load_offer_catalog,
     locate_offer,
@@ -19,7 +17,6 @@ from runtime._internal.effects_actions.offer_patch_apply_support import (
 )
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
-
 
 class OfferPatchEffectsMixin:
     def suggest_offer_patch(

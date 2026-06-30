@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from dataclasses import dataclass
 from pathlib import Path
-
 from runtime.boot.web.messaging_policy_alert_subscription_service import (
     build_messaging_policy_alert_subscription_service,
 )
@@ -21,6 +18,7 @@ from runtime.boot.web.runtime_web_route_bundle_builders import (
 )
 from runtime.boot.web.runtime_web_routed_services import RuntimeWebRoutedServices
 
+CANON_BOOT_WIRING_ONLY = True
 
 @dataclass(frozen=True)
 class RuntimeWebNavigationParts:

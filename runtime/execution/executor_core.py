@@ -1,11 +1,9 @@
-from __future__ import annotations
-
 """Core execution helpers for RuntimeExecutor."""
 
+from __future__ import annotations
+
 from typing import Any
-
 from governance.time_scale import TIME_SCALE_RULES, TimeScale, assert_action_allowed
-
 
 def enforce_safe_mode(*, action: str) -> None:
     try:

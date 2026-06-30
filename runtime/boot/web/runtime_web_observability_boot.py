@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
 from runtime.boot.web.boot_observability import (
     boot_messaging_policy_observability_fastapi,
     boot_messaging_policy_observability_flask,
 )
 from runtime.boot.web.runtime_web_default_flags import build_runtime_web_default_flags
 
+CANON_BOOT_WIRING_ONLY = True
 
 def boot_runtime_web_bundle_fastapi(*, app, services) -> None:
     boot_messaging_policy_observability_fastapi(

@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """Evolution runtime package.
 
 Runs EVOLUTION-timescale background jobs (no Telegram side-effects).
 The historical ``runtime.evolution.public_api`` module is served as a package
 alias so imports stay stable without keeping a second physical surface.
 """
+
+from __future__ import annotations
+
 
 from runtime.package_alias_namespace import build_package_alias_namespace
 

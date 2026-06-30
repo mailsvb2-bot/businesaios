@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
 from runtime.actions import ACTION_ADS_APPLY_EXECUTE_V1
 from runtime.handlers import ActionHandlerRegistry
 
+CANON_BOOT_WIRING_ONLY = True
 
 def register_ads_handlers(*, handlers: ActionHandlerRegistry, event_store, ads_runtime, ads_autopilot_engine, ads_apply_engine) -> None:
     from runtime.handlers.ads_apply_execute import handle_ads_apply_execute as _ads_apply_execute

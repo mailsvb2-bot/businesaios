@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
 from runtime.handlers import ActionHandlerRegistry
 
+CANON_BOOT_WIRING_ONLY = True
 
 def register_growth_handlers(*, handlers: ActionHandlerRegistry, event_store, behavior_graph_store, marketing_llm) -> None:
     from runtime.handlers.behavior_graph import (

@@ -1,9 +1,8 @@
-from __future__ import annotations
-
 """Runtime knowledge boot wiring through runtime.knowledge public API."""
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 from runtime.knowledge import (
     KnowledgeCommandService,
     KnowledgeExplainService,
@@ -13,7 +12,6 @@ from runtime.knowledge import (
 
 CANON_BOOT_WIRING_ONLY = True
 CANON_RUNTIME_KNOWLEDGE_WIRING = True
-
 
 @dataclass(frozen=True)
 class RuntimeKnowledgeWiring:

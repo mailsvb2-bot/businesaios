@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Sealed transport: minimal HTTP/URL helpers.
 
 This module is *internal* to runtime/_internal. It centralizes urllib usage so that
@@ -9,6 +7,9 @@ IMPORTANT:
 - Keep behavior identical to prior runtime/_internal/_effects_impl.py helpers.
 - Do not introduce alternative logic paths.
 """
+
+from __future__ import annotations
+
 
 import importlib
 import json

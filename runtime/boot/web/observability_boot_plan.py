@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+CANON_BOOT_WIRING_ONLY = True
 
 @dataclass(frozen=True)
 class MessagingPolicyObservabilityBootFlags:

@@ -1,20 +1,18 @@
-from __future__ import annotations
-
 """Sealed transport: YooKassa webhook server.
 
 Extracted from runtime/_internal/_effects_impl.py without changing behavior.
 """
+
+from __future__ import annotations
 
 import base64
 import hmac
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
-
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_str
 from runtime.tenancy import normalize_tenant_id
-
 
 def _extract_webhook_tenant_id(raw: dict[str, Any]) -> str:
     obj = raw.get("object") if isinstance(raw.get("object"), dict) else {}

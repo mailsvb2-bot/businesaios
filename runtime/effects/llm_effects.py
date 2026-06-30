@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 """LLM network facade.
 
 Real HTTP is implemented in runtime/_internal/_effects_impl.py.
 This module remains import-safe for the repository bypass guard.
 """
 
-import importlib
+from __future__ import annotations
 
+import importlib
 
 def _effects_impl():
     return importlib.import_module("runtime._internal" + "._effects_impl")

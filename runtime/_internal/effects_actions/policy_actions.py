@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 """Sealed effect actions mixin.
 
 This module is INTERNAL to runtime/_internal.
 No API changes to EffectsPort.
 """
 
-from runtime.security.runtime_asserts import assert_called_from_executor
+from __future__ import annotations
 
+from runtime.security.runtime_asserts import assert_called_from_executor
 
 class PolicyEffectsMixin:
     def deploy_policy(

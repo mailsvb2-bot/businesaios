@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-CANON_THIN_HANDLER = True
-
-
 from typing import Any
-
 from runtime.governance import PolicyUpdateGateError
 from runtime.handlers.ads_autopilot_flow import (
     AutopilotRouteViolation,
@@ -25,8 +21,8 @@ from runtime.handlers.route_failure_support import (
 )
 from runtime.ports.effects import EffectsPort
 
+CANON_THIN_HANDLER = True
 ACTION_NAME = 'ads_autopilot_tick@v1'
-
 
 def handle_ads_autopilot_tick(
     payload: dict[str, Any],

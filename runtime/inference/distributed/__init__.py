@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Deterministic distributed inference runtime helpers.
 
 This package is an owner surface for distributed-node runtime helpers only.
 It owns no business decision logic and introduces no alternate planning path.
 """
+
+from __future__ import annotations
 
 from runtime.inference.distributed.network_response_verifier import DistributedInferenceNetworkResponseVerifier
 from runtime.inference.distributed.network_transport import DistributedInferenceNetworkTransport
@@ -26,7 +26,6 @@ from runtime.inference.distributed.node_selection_policy import DistributedInfer
 
 CANON_RUNTIME_DISTRIBUTED_INFERENCE_NAMESPACE = True
 CANON_RUNTIME_DISTRIBUTED_INFERENCE_PACKAGE_OWNER = True
-
 __all__ = [
     'CANON_RUNTIME_DISTRIBUTED_INFERENCE_NAMESPACE',
     'CANON_RUNTIME_DISTRIBUTED_INFERENCE_PACKAGE_OWNER',
@@ -42,3 +41,4 @@ __all__ = [
     'DistributedInferenceNodeSelectionPolicy',
     'DistributedNetworkUsage',
 ]
+

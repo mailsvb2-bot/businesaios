@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical E2E smoke for decision -> execution -> verification -> evidence -> archive.
 
 This module is intentionally an explicit ops/test surface, not a DecisionCore
@@ -7,12 +5,13 @@ and not an alternative business brain. It builds a synthetic no-op decision and
 runs it through the existing canonical durable-store contracts.
 """
 
+from __future__ import annotations
+
 import time
 import uuid
 from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import Any
-
 from core.ai.decision import Decision
 from kernel.decision_crypto import signed_envelope_from_decision
 from runtime.wiring import StorageConfig, build_durable_stores, describe_storage_readiness
@@ -20,7 +19,6 @@ from runtime.wiring import StorageConfig, build_durable_stores, describe_storage
 CANON_E2E_SMOKE_SURFACE = True
 CANON_E2E_SMOKE_NO_EXTERNAL_EFFECTS = True
 CANON_E2E_SMOKE_NO_DECISION_CORE = True
-
 
 @dataclass(frozen=True)
 class _SmokeKeyring:

@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
 from dataclasses import dataclass
-
 from bootstrap.decision_core_contract import RuntimeDecisionCorePort
 from governance.economic_layer import EconomicAutonomyLayer
 from runtime.boot import CapitalAllocationEngine, EconomicBrain, LearningSystem, RewardEngine, StrategicHorizonEngine
@@ -15,6 +12,7 @@ from runtime.boot.core_assembly_args import CoreAssemblyArgs
 from survival.controller import SurvivalController
 from survival.metrics import StaticSurvivalMetricsProvider
 
+CANON_BOOT_WIRING_ONLY = True
 
 @dataclass
 class CoreAssembly:

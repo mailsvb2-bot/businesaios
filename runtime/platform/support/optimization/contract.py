@@ -1,12 +1,9 @@
-from __future__ import annotations
-
 """External-only compatibility shim for the canonical optimization contracts owner.
 
 Canonical owner: ``runtime.platform.support.optimization.contracts``.
 """
 
-CANON_COMPAT_SHIM = True
-CANON_EXTERNAL_ABI_ONLY = True
+from __future__ import annotations
 
 from runtime.platform.support.optimization.contracts import (
     CANON_PLATFORM_OPTIMIZATION_PUBLIC_API,
@@ -16,6 +13,8 @@ from runtime.platform.support.optimization.contracts import (
     OptimizationGate,
 )
 
+CANON_COMPAT_SHIM = True
+CANON_EXTERNAL_ABI_ONLY = True
 __all__ = [
     "CANON_COMPAT_SHIM",
     "CANON_EXTERNAL_ABI_ONLY",
@@ -25,3 +24,4 @@ __all__ = [
     "OptimizationGate",
     "SOVEREIGN_DECISION_CORE",
 ]
+

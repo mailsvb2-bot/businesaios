@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-
 from typing import Any
-
 from bootstrap.failure_policy import raise_or_log_boot_failure
 from runtime.platform.config.env_flags import env_csv, env_int, env_str
 
+CANON_BOOT_WIRING_ONLY = True
 
 def build_policy_registry(*, settings: Any, pricing: Any, retention: Any, logging_mod: Any):
     from core.ai.policy_registry import PolicyRegistry

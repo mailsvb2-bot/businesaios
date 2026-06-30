@@ -1,11 +1,12 @@
-from __future__ import annotations
-
 """RollbackGuard (canonical term).
 
 Project documents may refer to RollbackGuard.
 In code we historically used AutoDeployGuard.
 This module provides a stable name + contract to prevent concept drift.
 """
+
+from __future__ import annotations
+
 
 from runtime.governance.auto_deploy_guard import AutoDeployGuard, build_auto_deploy_guard_from_env
 

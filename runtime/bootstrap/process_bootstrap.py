@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical internal process-bootstrap owner.
 
 This module owns only runtime process hygiene, singleton lock discipline, and
@@ -8,9 +6,10 @@ assembly so internal bootstrap code does not need to route back through the
 public ``runtime.bootstrap`` compat surface.
 """
 
+from __future__ import annotations
+
 import atexit
 from dataclasses import dataclass
-
 from bootstrap.logging_setup import setup_logging
 from runtime.bootstrap_process import apply_process_hygiene, maybe_disable_singleton_lock_in_dev_test
 from runtime.bootstrap_prod_guards import (
@@ -24,7 +23,6 @@ from runtime.firewall.singleton_lock import SingletonLock
 CANON_RUNTIME_PROCESS_BOOTSTRAP_OWNER = True
 CANON_RUNTIME_PROCESS_BOOTSTRAP_INTERNAL_ONLY = True
 CANON_RUNTIME_PROCESS_BOOTSTRAP_NO_RUNTIME_ASSEMBLY = True
-
 
 @dataclass
 class _ProcessBootstrapState:
