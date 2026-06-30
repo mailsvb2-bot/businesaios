@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import hashlib
 import json
 from pathlib import Path
-sqlite3 = __import__("sqlite3")
+import sqlite3
 from typing import Iterable, Iterator, Mapping, Protocol
 
 from billing.commercial_cycle_contract import utc_now

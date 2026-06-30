@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical runtime messaging registry.
 
 The channel catalog now lives directly in the package namespace instead of a
@@ -7,9 +5,15 @@ standalone ``catalog.py`` module. This keeps ownership local to the package
 without changing the exposed runtime behavior.
 """
 
+from __future__ import annotations
+
+
 from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.messaging.channel_spec import ChannelSpec
 
+
+
+from runtime.messaging.inbound_to_world_state import map_inbound_to_world_state
 
 def _spec(key: str, family: str, env_prefix: str, default_mode: str, delivery_backend: str) -> ChannelSpec:
     return ChannelSpec(key, family, env_prefix, default_mode, delivery_backend)
@@ -41,6 +45,5 @@ def get_channel_spec(channel: str) -> ChannelSpec:
     return spec
 
 
-__all__ = ["CHANNEL_SPECS", "ChannelSpec", "get_channel_spec", "normalize_channel"]
+__all__ = ["CHANNEL_SPECS", "ChannelSpec", "get_channel_spec", "map_inbound_to_world_state", "normalize_channel"]
 
-from runtime.messaging.inbound_to_world_state import map_inbound_to_world_state

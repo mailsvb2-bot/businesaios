@@ -3,6 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+
+from collections.abc import Mapping
+from runtime.market.market_snapshot import MarketSnapshot
+from runtime.state import apply_synthesized_world_view
+
 @dataclass(frozen=True)
 class FallbackPolicy:
     allow_missing_user_observables: bool = False
@@ -27,10 +32,7 @@ TEST_FALLBACK_POLICY = FallbackPolicy(
 )
 
 
-from collections.abc import Mapping
 
-from runtime.market.market_snapshot import MarketSnapshot
-from runtime.state import apply_synthesized_world_view
 
 
 def apply_world_view_with_policy(

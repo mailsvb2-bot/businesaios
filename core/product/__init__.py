@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical product domain namespace.
 
 Use ``core.product`` for live product-planning logic. Historical
@@ -7,7 +5,9 @@ Use ``core.product`` for live product-planning logic. Historical
 active domain surface.
 """
 
-CANON_PRODUCT_DOMAIN = True
+from __future__ import annotations
+
+
 
 from core.product.contracts import *  # noqa: F401,F403
 from core.product.enums import *  # noqa: F401,F403
@@ -15,5 +15,8 @@ from core.product.errors import *  # noqa: F401,F403
 from core.product.guard import *  # noqa: F401,F403
 from core.product.policy import *  # noqa: F401,F403
 from core.product.service import *  # noqa: F401,F403
+
+CANON_PRODUCT_DOMAIN = True
+
 
 __all__ = [name for name in globals() if not name.startswith("_")]

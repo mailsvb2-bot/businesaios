@@ -1,9 +1,10 @@
-from __future__ import annotations
-
 """Budget guardrails.
 
 Even when Ads Connector is enabled, budget is enforced here.
 """
+
+from __future__ import annotations
+
 
 from dataclasses import dataclass
 from typing import Any
@@ -14,6 +15,11 @@ from config.growth_budget_guardrails_policy import (
     GrowthBudgetGuardrailsPolicy,
 )
 
+
+
+from dataclasses import dataclass as _dc
+from datetime import UTC, datetime
+from typing import Protocol
 
 @dataclass(frozen=True)
 class BudgetPolicy:
@@ -51,9 +57,6 @@ def enforce_daily_budget(*, policy: BudgetPolicy, spend_minor_today: int) -> Bud
 
 # ---- Ads write guardrails (Stage 2/3) ----
 
-from dataclasses import dataclass as _dc
-from datetime import UTC, datetime
-from typing import Protocol
 
 
 class EventSink(Protocol):

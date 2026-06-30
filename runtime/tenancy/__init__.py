@@ -1,12 +1,13 @@
-from __future__ import annotations
-
-from runtime.public_api_alias import install_public_api_alias
-
 """Canonical runtime tenancy normalization surface.
 
 Runtime code may normalize and validate tenant identifiers through this module
 without binding itself to core tenancy internals.
 """
+
+from __future__ import annotations
+
+from runtime.public_api_alias import install_public_api_alias
+
 
 from core.tenancy.normalization import (
     UNKNOWN_TENANT_ID,

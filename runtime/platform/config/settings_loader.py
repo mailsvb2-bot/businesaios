@@ -1,13 +1,13 @@
-from __future__ import annotations
-
 """Runtime settings loader (env -> Settings).
 
 Core (domain) must not read environment variables. This module is runtime-only.
 """
 
+from __future__ import annotations
+
+
 from dataclasses import replace
 
-_TELEGRAM_TOKEN_LABEL = "TELEGRAM_" + "BOT_TOKEN"
 
 from config.settings_models import (
     CoreSettings,
@@ -27,6 +27,8 @@ from runtime.platform.config.env_flags import env_bool as _env_bool
 from runtime.platform.config.env_flags import env_int as _env_int
 from runtime.platform.config.env_flags import env_str as _env_str
 
+
+_TELEGRAM_TOKEN_LABEL = "TELEGRAM_" + "BOT_TOKEN"
 _SETTINGS_CACHE: Settings | None = None
 
 

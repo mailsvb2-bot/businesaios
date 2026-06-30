@@ -1,10 +1,13 @@
+"""Compat shim: core.contracts.* forwards to kernel.*."""
+
 from __future__ import annotations
 
-"""Compat shim: core.contracts.* forwards to kernel.*."""
+
+
+from kernel.decision_result import DecisionResult
 
 CANON_KERNEL_DECISION_CONTRACT_COMPAT = True
 # canonical owner: kernel.decision_result
 
-from kernel.decision_result import DecisionResult
 
 __all__ = ['DecisionResult']
