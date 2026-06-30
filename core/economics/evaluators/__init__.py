@@ -1,4 +1,4 @@
-from .budget_pressure_evaluator import BudgetPressureEvaluator
-from .ltv_cac_evaluator import LTVCACEvaluator
-from .margin_health_evaluator import MarginHealthEvaluator
-from .payback_risk_evaluator import PaybackRiskEvaluator
+from .budget_pressure_evaluator import BudgetPressureEvaluator as BudgetPressureEvaluator
+from .ltv_cac_evaluator import LTVCACEvaluator as LTVCACEvaluator
+from .margin_health_evaluator import MarginHealthEvaluator as MarginHealthEvaluator
+from .payback_risk_evaluator import PaybackRiskEvaluator as PaybackRiskEvaluator

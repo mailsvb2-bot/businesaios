@@ -11,4 +11,7 @@ __all__ = [
     'PerformanceProfile',
 ]
 
-from execution.optimization.adaptive_strategy_bridge import AdaptiveStrategyBridge, CANON_ADAPTIVE_STRATEGY_BRIDGE
+from execution.optimization.adaptive_strategy_bridge import (
+    AdaptiveStrategyBridge as AdaptiveStrategyBridge,
+    CANON_ADAPTIVE_STRATEGY_BRIDGE as CANON_ADAPTIVE_STRATEGY_BRIDGE,
+)

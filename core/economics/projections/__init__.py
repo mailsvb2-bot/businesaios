@@ -1,3 +1,3 @@
-from .advisory_projection import AdvisoryProjection
-from .budget_health_projection import BudgetHealthProjection
-from .unit_economics_projection import UnitEconomicsProjection
+from .advisory_projection import AdvisoryProjection as AdvisoryProjection
+from .budget_health_projection import BudgetHealthProjection as BudgetHealthProjection
+from .unit_economics_projection import UnitEconomicsProjection as UnitEconomicsProjection

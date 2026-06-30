@@ -1,1 +1,3 @@
-from .economics_snapshot_adapter import EconomicsSnapshotToFinancialInputAdapter
+from .economics_snapshot_adapter import (
+    EconomicsSnapshotToFinancialInputAdapter as EconomicsSnapshotToFinancialInputAdapter,
+)

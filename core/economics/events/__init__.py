@@ -1,3 +1,3 @@
-from .budget_guard_triggered import BudgetGuardTriggered
-from .economics_snapshot_built import EconomicsSnapshotBuilt
-from .factories import EconomicsEventFactory
+from .budget_guard_triggered import BudgetGuardTriggered as BudgetGuardTriggered
+from .economics_snapshot_built import EconomicsSnapshotBuilt as EconomicsSnapshotBuilt
+from .factories import EconomicsEventFactory as EconomicsEventFactory

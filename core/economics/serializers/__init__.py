@@ -1,1 +1,1 @@
-from .economics_snapshot_serializer import EconomicsSnapshotSerializer
+from .economics_snapshot_serializer import EconomicsSnapshotSerializer as EconomicsSnapshotSerializer

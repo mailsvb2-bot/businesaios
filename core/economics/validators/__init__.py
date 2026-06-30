@@ -1,1 +1,1 @@
-from .signal_validator import EconomicsSignalValidator
+from .signal_validator import EconomicsSignalValidator as EconomicsSignalValidator
