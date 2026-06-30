@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from billing.client_outcome_reversal_contract import ClientOutcomeReversalRecord
 from lead_outcomes.client_outcome_contract import BillableClientRecord

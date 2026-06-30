@@ -6,7 +6,7 @@ from governance.time_scale import TimeScale
 from runtime.execution.dispatcher import effect_succeeded
 from runtime.execution.execution_contract_lock import commit_verified_execution, verify_execution_contract
 from runtime.execution.executor_audit import emit_deployment_proposed, emit_effect_window, emit_reward_observed
-from runtime.execution.executor_commit import _decision_tenant_id, build_delivery_metadata, enqueue_once
+from runtime.execution.executor_commit import build_delivery_metadata, enqueue_once
 from runtime.execution.executor_core import assert_timescale_allowed, enforce_safe_mode, load_world
 from runtime.execution.governance_runtime import review_governance_execution
 from runtime.execution.operational_budget_runtime import review_operational_budget

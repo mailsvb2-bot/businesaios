@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from core.observability.silent import swallow
 from core.policies.telegram.helpers import ProposedAction, choose_marketing_variant, propose, propose_message
-from core.policies.telegram.tariffs_text import build_plan_confirmation_text, scope_hint
+from core.policies.telegram.tariffs_text import build_plan_confirmation_text
 from core.ux.telegram_keyboards import kb_back_main, kb_pay_selected, kb_sub, kb_tariffs
 
 

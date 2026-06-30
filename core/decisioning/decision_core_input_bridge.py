@@ -1,5 +1,4 @@
 from __future__ import annotations
 
-from application.decisioning.decision_core_input_bridge import build_decision_core_enrichment
 
 CANON_DECISION_CORE_INPUT_BRIDGE_FINAL_OWNER = "application.decisioning.decision_core_input_bridge"

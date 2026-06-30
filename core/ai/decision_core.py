@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 
 from application.decision_policy.pricing import allowed_price_band, band_rank, merge_price_constraints
-from application.decision_runtime.gate import gate_action_or_raise
 from application.decision_runtime.run import run_decision
 from core.decision_core_contract import CANONICAL_DECISION_CORE_IMPORT_PATH
 from kernel.decision_signer import DecisionSigner
