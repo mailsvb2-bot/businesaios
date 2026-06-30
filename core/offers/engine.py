@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Offer Engine (shared service).
 
 Contract:
@@ -10,6 +8,24 @@ Contract:
 This module is intentionally conservative: it can run in "best-effort" mode and
 fallback to legacy offer catalog if needed.
 """
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+from collections.abc import Mapping
+from core.marketing.variants import choose_variant as choose_marketing_variant
+from core.offers.catalog_registry import OfferCatalogRegistry, default_offer_catalog_registry
+from core.offers.catalog_resolution import resolve_catalog
+from core.offers.cooldown_policy import allow_offer_by_cooldown
+from core.offers.eligibility import check_offer_eligibility
+from core.offers.models import OfferSpec
+from core.offers.offer_catalog_resolver import OfferCatalogResolver
+from core.offers.offer_keyboards import offer_outcome_kb
+from core.offers.offer_types import OfferRender
+from core.offers.selection_policy import choose_band as _choose_band
+from core.offers.selection_policy import choose_offer_variant
+from core.offers.selection_policy import clamp_band as _clamp_band
 
 """Canonical Offers Engine.
 
@@ -27,24 +43,6 @@ It contains:
 
 legacy import path ``core.offers.offer_engine`` is now served from ``core.offers`` package aliases.
 """
-
-from dataclasses import dataclass
-from typing import Any
-from collections.abc import Mapping
-
-from core.marketing.variants import choose_variant as choose_marketing_variant
-from core.offers.catalog_registry import OfferCatalogRegistry, default_offer_catalog_registry
-from core.offers.catalog_resolution import resolve_catalog
-from core.offers.cooldown_policy import allow_offer_by_cooldown
-from core.offers.eligibility import check_offer_eligibility
-from core.offers.models import OfferSpec
-from core.offers.offer_catalog_resolver import OfferCatalogResolver
-from core.offers.offer_keyboards import offer_outcome_kb
-from core.offers.offer_types import OfferRender
-from core.offers.selection_policy import choose_band as _choose_band
-from core.offers.selection_policy import choose_offer_variant
-from core.offers.selection_policy import clamp_band as _clamp_band
-
 
 def decide_offer(
     *,

@@ -1,20 +1,18 @@
-from __future__ import annotations
-
 """Auto stop-loss orchestration for Business Autopilot.
 
 This module is deterministic: it only builds *plans* (actions) based on inputs.
 It does NOT execute side-effects.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Mapping
-
 from core.autopilot.guardrails import GuardrailVerdict
 
 STOP_LOSS_SETTING_KEY = "autopilot:stop_loss"
-
 
 @dataclass(frozen=True)
 class StopLossState:

@@ -1,14 +1,13 @@
-from __future__ import annotations
-
 """Canonical execution package root.
 
 The package root is the single execution owner surface. ``execution.public_api``
 remains available only as a compatibility shell for historical imports.
 """
 
+from __future__ import annotations
+
 from importlib import import_module
 from typing import Any
-
 from canon.public_api_alias import install_public_api_alias
 
 CANON_EXECUTION_PACKAGE_OWNER = True
@@ -17,7 +16,6 @@ CANON_EXECUTION_PUBLIC_API_COMPAT_SHELL = True
 CANON_EXECUTION_COMPAT_SHIM = True
 CANON_EXECUTION_ROOT_DIRECT_OWNER_EXPORTS = True
 CANONICAL_OWNER_EXECUTION_SURFACE = "execution"
-
 _OWNER_MAP = {
     'GoalExecutionRequest': ('execution.headless_contract', 'GoalExecutionRequest'),
     'GoalExecutionReport': ('execution.headless_contract', 'GoalExecutionReport'),
@@ -40,7 +38,6 @@ _OWNER_MAP = {
     'RevenueDecisionEnvelope': ('execution.revenue_os_adapter', 'RevenueDecisionEnvelope'),
     'RevenueOSAdapter': ('execution.revenue_os_adapter', 'RevenueOSAdapter'),
 }
-
 
 def _load_attr(module_name: str, attr_name: str) -> Any:
     return getattr(import_module(module_name), attr_name)

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Request-scoped tenant context (SaaS-first).
 
 Goal:
@@ -13,6 +11,9 @@ Fallback behavior:
   process tenant (TENANT_ID env) via core.tenancy.tenant.current_tenant_id().
   This keeps legacy flows working while enabling SaaS-first flows.
 """
+
+from __future__ import annotations
+
 
 from contextlib import contextmanager
 from contextvars import ContextVar, Token

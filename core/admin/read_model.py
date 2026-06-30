@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Admin read-model facade.
 
 The implementation lives in small focused modules to keep admin analytics
 auditable and to avoid a single read-model god module.
 """
+
+from __future__ import annotations
 
 from core.admin.read_models import (
     ab_offers_summary,
@@ -37,3 +37,4 @@ __all__ = [
     "latency_breakdown",
     "sla_breaches_brief",
 ]
+

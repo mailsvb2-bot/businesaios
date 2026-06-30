@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Unified Growth Ledger v2 (range-capable read-model).
 
 This does NOT replace existing read-models; it's an additive primitive.
@@ -14,15 +12,15 @@ Event contracts (default names):
 This module is intentionally tolerant: missing events => zeros.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Iterable
-
 from core.events.read_call import call_iter_events, call_latest_events
 from core.growth.spend_ledger_event_store import EventStoreSpendLedger
 from core.observability.structured_logging import log_exception_throttled
-
 
 def _day_start_ms(ts_ms: int) -> int:
     return ts_ms - (ts_ms % 86_400_000)

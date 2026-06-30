@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Call-origin assertions.
 
 Used to enforce architectural sovereignty at runtime without creating layer violations.
@@ -7,9 +5,10 @@ Used to enforce architectural sovereignty at runtime without creating layer viol
 This module lives in *core* so that both core and runtime can depend on it.
 """
 
+from __future__ import annotations
+
 import inspect
 from importlib import import_module
-
 
 def _is_bootstrap_context_active() -> bool:
     try:

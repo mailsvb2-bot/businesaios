@@ -1,12 +1,10 @@
-from __future__ import annotations
-
 """Compatibility wrapper to the canonical ledger_v2 read-model."""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-
 from core.growth.ledger_v2 import snapshot_today
-
 
 @dataclass(frozen=True)
 class TodayGrowthKPI:

@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Experiment result evaluation and rollout policy."""
+
+from __future__ import annotations
 
 from config.experiments_policy import (
     DEFAULT_EXPERIMENT_RESULT_EVALUATION_POLICY,
@@ -11,7 +11,6 @@ from core.experiments.evaluators.significance_evaluator import SignificanceEvalu
 from core.experiments.evaluators.uplift_evaluator import UpliftEvaluator
 from core.experiments.policies.rollout_policy import ConservativeRolloutPolicy
 from core.experiments.types import EvaluationSummary
-
 
 class ExperimentResultEvaluator:
     def __init__(

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical OAuth state helpers for Ads connectors.
 
 We keep this small and stable:
@@ -10,9 +8,10 @@ Here we only provide a consistent generator/parser to avoid "second lines"
 and copy/paste drift across connectors.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import UTC, datetime
-
 
 @dataclass(frozen=True)
 class OAuthState:

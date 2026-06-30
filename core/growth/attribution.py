@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Attribution: link lead → purchase.
 
 This is deliberately minimal:
@@ -9,9 +7,10 @@ This is deliberately minimal:
 No network IO.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
-
 
 @dataclass(frozen=True)
 class Attribution:

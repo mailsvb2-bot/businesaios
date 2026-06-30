@@ -1,12 +1,11 @@
-from __future__ import annotations
-
 """Canonical advisory scoring surface for bandit-style candidate ranking."""
+
+from __future__ import annotations
 
 import hashlib
 import random
 from dataclasses import dataclass
 from collections.abc import Mapping, Sequence
-
 
 @dataclass(frozen=True)
 class ArmScore:

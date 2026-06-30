@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """YooKassa webhook parsing + verification (PURE).
 
 IMPORTANT:
@@ -20,13 +18,14 @@ If auth_mode is 'none', we still enforce best-effort safety by requiring
 that the payload contains a recognizable payment id.
 """
 
+from __future__ import annotations
+
 import base64
 import hashlib
 import hmac
 import json
 from dataclasses import dataclass
 from typing import Any
-
 
 class WebhookAuthError(RuntimeError):
     pass

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Ads read-only service surface.
 
 Design goal:
@@ -11,9 +9,10 @@ write methods (even if currently proxied). The only write surface must be the
 dedicated gateway with guardrails + audit.
 """
 
+from __future__ import annotations
+
 from datetime import date
 from collections.abc import Iterable, Sequence
-
 from interfaces.ads.base import (
     AdsPlatform,
     AdsReadConnector,
@@ -23,7 +22,6 @@ from interfaces.ads.base import (
     OAuthAuthorizeURL,
 )
 from interfaces.ads.registry import AdsConnectorRegistry
-
 
 class AdsReadService:
     """Read-only facade over registered ads connectors."""

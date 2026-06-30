@@ -1,16 +1,13 @@
-from __future__ import annotations
-
 """Deterministic scoring for growth hypotheses (ICE-ish + risk penalty)."""
 
-from collections.abc import Iterable
+from __future__ import annotations
 
+from collections.abc import Iterable
 from config.scoring_behavior_policy import (
     DEFAULT_GROWTH_STRATEGY_SCORING_POLICY,
     GrowthStrategyScoringPolicy,
 )
-
 from .contracts import GrowthHypothesisV1, OpportunityScoreV1
-
 
 def score_hypothesis(
     h: GrowthHypothesisV1,

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """User read-models (event-sourced).
 
 These helpers are PURE and deterministic. They do not perform IO themselves;
@@ -10,15 +8,15 @@ Why:
 - TelegramRunner can enrich WorldState.user from these read models.
 """
 
-from typing import Any
+from __future__ import annotations
 
+from typing import Any
 from core.events.read_model_support import (
     best_effort_iter_events,
     best_effort_latest_event,
     best_effort_latest_events,
 )
 from core.read_model.cache import global_cache, watermark_for
-
 
 def _iter_user_events(event_store: Any, *, tenant_id: str = "default", user_id: str, types: set[str] | None = None):
     if event_store is None:

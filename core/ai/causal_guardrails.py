@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Causal guardrails (evidence -> deterministic constraints).
 
 This module is intentionally conservative.
@@ -14,6 +12,9 @@ Outputs:
 
 No side effects.
 """
+
+from __future__ import annotations
+
 
 from dataclasses import dataclass
 from typing import Any

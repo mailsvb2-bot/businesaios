@@ -1,17 +1,16 @@
-from __future__ import annotations
-
 """Admin slash-commands.
 
 This module intentionally contains *only* command parsing and formatting.
 All irreversible actions must still go through propose(...) and Runtime.
 """
 
+from __future__ import annotations
+
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction
 from core.ux.telegram_keyboards import kb_back_main, kb_staff_menu
 
 ADMIN_COMMANDS = {"/admin", "/demo_stats", "/funnel", "/retention", "/latency", "/causal"}
-
 
 def handle_admin_commands(ctx: TelegramCtx, *, pm) -> ProposedAction | None:
     """Handle admin informational commands.

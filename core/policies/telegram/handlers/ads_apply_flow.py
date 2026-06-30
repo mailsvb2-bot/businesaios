@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Thin routing shim for ads apply flow callbacks.
 
 Previously this module duplicated preview/confirm/cancel logic that also
@@ -9,11 +7,12 @@ Now: single canon is ads_apply.handle_ads_apply().
 This module is a thin wrapper so router.py's import/call stays unchanged.
 """
 
+from __future__ import annotations
+
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.handlers.ads_apply import handle_ads_apply
 from core.policies.telegram.helpers import ProposedAction
 from core.ux.callbacks import CB_ADS_APPLY_CANCEL, CB_ADS_APPLY_CONFIRM, CB_ADS_APPLY_PREVIEW
-
 
 def handle_ads_apply_flow(ctx: TelegramCtx, *, user_id: str) -> ProposedAction | None:
     """Route ads-apply callbacks to the canonical handler.

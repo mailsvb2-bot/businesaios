@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Campaign builder (canonical, deterministic).
 
 Goal: produce a *plan* for AdsWriteGateway without side-effects.
@@ -12,10 +10,11 @@ Rules:
   - executed only via runtime sealed handler.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Mapping
-
 
 @dataclass(frozen=True)
 class CampaignSpec:

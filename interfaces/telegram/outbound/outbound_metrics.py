@@ -1,14 +1,13 @@
-from __future__ import annotations
-
 """Outbound queue metrics collector.
 
 Tracks latency per priority bucket (wait_ms, exec_ms) in a bounded ring.
 Extracted from outbound_queue.py.
 """
 
+from __future__ import annotations
+
 import threading
 from collections import deque
-
 
 class OutboundMetricsCollector:
     """Thread-safe collector of (priority, wait_ms, exec_ms) samples."""

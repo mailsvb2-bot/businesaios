@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Telegram tenant session store (in-memory, small TTL).
 
 Purpose:
@@ -13,11 +11,11 @@ Safety stance:
   - No persistence: production can swap this via a port.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
-
 from core.tenancy.scope import TenantId, as_tenant_id
-
 
 @dataclass
 class _Entry:

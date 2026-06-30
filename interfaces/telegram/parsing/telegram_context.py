@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Telegram update parsing (PURE).
 
 This module is intentionally side-effect free.
@@ -8,10 +6,11 @@ It extracts a normalized TelegramContext from a raw update dict.
 WorldState building is handled elsewhere (runtime reducers).
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from typing import Any
-
 
 def extract_telegram_user_id(update: dict) -> int | None:
     """Extract Telegram sender user id from update (best-effort).

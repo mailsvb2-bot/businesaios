@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Marketing uplift (bandit) read-model.
 
 READ-ONLY, event-sourced:
@@ -34,12 +32,12 @@ Output:
   {step_key: {'a': {'alpha': .., 'beta': ..}, 'b': {...}}}
 """
 
-from typing import Any
+from __future__ import annotations
 
+from typing import Any
 from config.marketing_bandit_policy import DEFAULT_MARKETING_BANDIT_POLICY, MarketingBanditPolicy
 from core.admin.marketing_bandit_read_model_support import resolve_window_bounds
 from core.read_model.cache import global_cache, watermark_for
-
 
 def marketing_bandit_stats(
     event_store: Any,

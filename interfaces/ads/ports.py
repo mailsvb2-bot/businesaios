@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Shared ports for Ads connectors.
 
 Why:
@@ -7,10 +5,10 @@ Why:
   - Keep connector modules small and focused on normalization logic.
 """
 
+from __future__ import annotations
+
 from typing import Any, Optional, Protocol
-
 from .base import AdsPlatform
-
 
 class SecretVault(Protocol):
     def get_secret(self, key: str) -> str: ...

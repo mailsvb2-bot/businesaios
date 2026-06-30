@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Generic kill switch (feature-flag driven).
 
 Why this exists:
@@ -13,10 +11,10 @@ Convention (env-based default provider):
     FLAG_KILL_<KIND>_TENANTS=tenantA,tenantB
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-
 from core.flags.provider import FeatureFlagProvider, FlagContext
-
 
 @dataclass(frozen=True)
 class KillSwitchState:

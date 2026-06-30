@@ -1,15 +1,14 @@
-from __future__ import annotations
-
 """Canonical decision selection surface.
 
 Candidate scoring is canonicalized under :mod:`core.scorers.decision` and this
 module provides the thin winner-selection shell.
 """
 
+from __future__ import annotations
+
 from config.system_config import OptimizationObjective
 from core.scorers.decision import DecisionCandidateScorer
 from kernel.decision_candidate import DecisionCandidate
-
 
 class DecisionSelector:
     def __init__(self, objective: OptimizationObjective | None = None) -> None:

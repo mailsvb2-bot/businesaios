@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Canonical callable-signature helpers.
 
 Used by boot/runtime/core adapter layers that need compatibility without
 masking internal provider errors as signature mismatches.
 """
+
+from __future__ import annotations
 
 from inspect import Parameter, signature
 from typing import Any
@@ -12,7 +12,6 @@ from collections.abc import Callable
 from collections.abc import Iterable
 
 CANON_CALL_SIGNATURE_HELPERS = True
-
 
 def parameters(fn: Callable[..., Any]) -> tuple[Parameter, ...]:
     try:

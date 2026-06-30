@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Telegram polling via DecisionCore + RuntimeExecutor.
 
 Contract: _decide MUST be DecisionCore.decide (single decision source).
 No SDK or network imports live here.
 """
+
+from __future__ import annotations
+
 
 import logging
 import time

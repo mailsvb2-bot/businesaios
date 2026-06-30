@@ -10,6 +10,7 @@ Split into submodules by role:
   guards        — KnowledgeGuard
   publishers    — EventPublisher
 """
+
 from __future__ import annotations
 
 from .builders import (
@@ -46,9 +47,21 @@ from .writers import (
     MemoryLinkWriter,
     PatternWriter,
 )
+from typing import Protocol
+from collections.abc import Sequence
+from ..types import (
+    Lesson,
+    LessonDraft,
+    LessonQuery,
+    MemoryLink,
+    MemoryRetrieval,
+    OutcomeFact,
+    Pattern,
+    PatternDraft,
+    StrategyMemoryEntry,
+)
 
 CANON_COMPAT_SHIM = True
-
 __all__ = [
     "BusinessCaseBuilder",
     "CANON_COMPAT_SHIM",
@@ -74,23 +87,6 @@ __all__ = [
     "RetrievalQualityEvaluator",
     "StrategyMemoryReader",
 ]
-
-
-from typing import Protocol
-from collections.abc import Sequence
-
-from ..types import (
-    Lesson,
-    LessonDraft,
-    LessonQuery,
-    MemoryLink,
-    MemoryRetrieval,
-    OutcomeFact,
-    Pattern,
-    PatternDraft,
-    StrategyMemoryEntry,
-)
-
 
 class KnowledgeReadPort(Protocol):
     def get(self, lesson_id: str) -> Lesson | None: ...

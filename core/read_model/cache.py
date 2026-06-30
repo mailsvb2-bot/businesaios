@@ -1,6 +1,7 @@
+"""Read-model accelerator: TTL cache + event watermark invalidation."""
+
 from __future__ import annotations
 
-"""Read-model accelerator: TTL cache + event watermark invalidation."""
 
 import threading
 import time

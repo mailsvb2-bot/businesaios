@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Off-policy evaluation (OPE) primitives for pricing.
 
 We assume logged events include:
@@ -16,15 +14,15 @@ This module is pure and supports simple IPS estimate for a target policy that
 replays a deterministic action (price point).
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Iterable
-
 from config.pricing_retention_policy import (
     DEFAULT_PRICING_OFF_POLICY_DEFAULTS,
     PricingOffPolicyDefaults,
 )
-
 
 @dataclass(frozen=True)
 class IPSEstimate:

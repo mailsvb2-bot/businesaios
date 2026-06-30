@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Priority constants and mapping helpers for TelegramOutboundQueue.
 
 Responsibility: single source of truth for priority ladder.
@@ -8,8 +6,9 @@ Responsibility: single source of truth for priority ladder.
   - _normalize_priority(priority) — PriorityArg → int
 """
 
-from interfaces.telegram.outbound.outbound_types import PriorityArg
+from __future__ import annotations
 
+from interfaces.telegram.outbound.outbound_types import PriorityArg
 
 class OutboundPriorityMixin:
     """Priority ladder + string→int resolution.

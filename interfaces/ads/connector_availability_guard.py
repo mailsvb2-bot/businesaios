@@ -1,12 +1,11 @@
-from __future__ import annotations
-
 """Helpers for read-only demo connectors that are intentionally not live integrations."""
+
+from __future__ import annotations
 
 from typing import Any
 from collections.abc import Mapping
 
 DEMO_CONNECTOR_REASON = 'connector_not_bundled'
-
 
 def build_demo_connector_metadata(*, platform: str) -> dict[str, Any]:
     return {

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """LLM provider rate limiting.
 
 Why this file exists:
@@ -10,8 +8,9 @@ Canonical infra lives in `core.ratelimit.token_bucket`.
 This module is just a small adapter around that implementation.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 from config.llm_ratelimit_policy import DEFAULT_LLM_RATELIMIT_POLICY, LLMRateLimitPolicy
 from core.ratelimit.token_bucket import (
     MemoryRateLimitStore,
@@ -22,7 +21,6 @@ from core.ratelimit.token_bucket import (
     TokenBucketLimiter as _TokenBucketLimiter,
 )
 from core.tenancy.scope import TenantId
-
 
 @dataclass(frozen=True)
 class _Cfg:

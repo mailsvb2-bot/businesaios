@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 """Shared factories for provider-specific adapter/runner surfaces.
 
 The per-provider modules remain import-stable, but the implementation shape now
 lives in one place instead of being duplicated across each provider namespace.
 """
 
-from interfaces.messaging._shared.provider_runtime import ProviderAdapter, ProviderRunner, build_config_for
+from __future__ import annotations
 
+from interfaces.messaging._shared.provider_runtime import ProviderAdapter, ProviderRunner, build_config_for
 
 def make_adapter_type(*, runner_factory):
     class Adapter(ProviderAdapter):

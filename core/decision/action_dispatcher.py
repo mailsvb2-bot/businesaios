@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Compatibility dispatcher surface for historical ``core.decision`` imports.
 
 Canonical owner stays in ``application.decision.action_dispatcher``.
@@ -7,14 +5,14 @@ This shim preserves the visible path without introducing a second dispatcher
 brain or bypassing the single decision-execution contract.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 from application.decision.ports import DecisionExecutionPortProtocol
 
 CANON_COMPAT_SHIM = True
 CANON_CORE_DECISION_ACTION_DISPATCHER_COMPAT = True
 CANONICAL_OWNER_MODULE = "application.decision.action_dispatcher"
-
 
 @dataclass(frozen=True)
 class ActionDispatcher:

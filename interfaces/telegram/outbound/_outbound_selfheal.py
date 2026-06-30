@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Compatibility re-export for canonical Telegram outbound self-heal primitives."""
+
+from __future__ import annotations
 
 from interfaces.telegram.outbound.outbound_self_heal import (
     SelfHealConfig,
@@ -15,3 +15,4 @@ __all__ = [
     "maybe_self_heal",
     "purge_backlog",
 ]
+

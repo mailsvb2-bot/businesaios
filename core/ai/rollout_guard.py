@@ -1,14 +1,12 @@
-from __future__ import annotations
-
 """Staged rollout guard.
 
 Pure function mapping metrics to rollout percentage.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-
 from config.rollout_guard_policy import RolloutGuardPolicy
-
 
 @dataclass(frozen=True)
 class RolloutMetrics:

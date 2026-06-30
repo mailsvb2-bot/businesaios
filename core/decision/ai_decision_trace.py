@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical core-owned AI decision trace surface.
 
 This module owns the mutable trace-building mechanics used by the sovereign
@@ -7,11 +5,12 @@ AI DecisionCore path. Historical imports from ``core.ai.decision_trace`` are
 kept as compatibility shims only.
 """
 
+from __future__ import annotations
+
 import time
 import uuid
 from dataclasses import asdict, dataclass
 from typing import Any
-
 
 @dataclass(frozen=True)
 class TraceStep:

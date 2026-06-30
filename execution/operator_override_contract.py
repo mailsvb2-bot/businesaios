@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Canonical operator override contract.
 
 Override remains subordinate to DecisionCore and the existing governance
 approval flow. It models a one-shot human intervention bound to a single
 execution subject fingerprint.
 """
+
+from __future__ import annotations
 
 import hashlib
 import json
@@ -14,14 +14,11 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol
 from collections.abc import Mapping
-
 from core.tenancy.normalization import require_tenant_id
 from governance.rbac_contract import RoleId
 from governance.role_catalog import RoleCatalog
 
-
 CANON_OPERATOR_OVERRIDE_CONTRACT = True
-
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)

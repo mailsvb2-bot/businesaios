@@ -1,16 +1,15 @@
-from __future__ import annotations
-
 """Canonical execution approval gate.
 
 This gate binds execution to the existing approval workflow and optional
 one-shot operator override path. It never creates a second decision path.
 """
 
+from __future__ import annotations
+
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
-
 from contracts.action_impact_contract import ActionExecutionContext, ActionImpact
 from execution.approval_gate_fingerprint import build_execution_subject_fingerprint
 from execution.approval_gate_support import (
@@ -27,9 +26,7 @@ from governance.approval_contract import ApprovalRecord, ApprovalStatus
 from governance.approval_workflow import ApprovalWorkflow
 from governance.control_plane_audit_log import GovernanceAuditEvent, GovernanceAuditLogContract, NullGovernanceAuditLog
 
-
 CANON_EXECUTION_APPROVAL_GATE = True
-
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)

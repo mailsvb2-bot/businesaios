@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """AI CEO contracts (pure).
 
 AI CEO = executive loop that plans and coordinates profit-driving actions.
@@ -10,10 +8,11 @@ Design goals:
 - no side-effects
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any
 from collections.abc import Sequence
-
 
 @dataclass(frozen=True)
 class CEOIntentV1:

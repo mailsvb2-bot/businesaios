@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """Outbound queue data types.
 
 Extracted from outbound_queue.py to eliminate god-module.
 """
+
+from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
@@ -11,7 +11,6 @@ from typing import Any
 from collections.abc import Callable
 
 PriorityArg = int | str
-
 
 @dataclass
 class OutboundTask:

@@ -1,14 +1,12 @@
-from __future__ import annotations
-
 """Safe autonomy primitives for AI CEO (pure decisions).
 
 This module contains *policy* checks only. No side effects.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-
 from config.env_flags import env_bool, env_int
-
 
 @dataclass(frozen=True)
 class AutonomyPolicyV1:

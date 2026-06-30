@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Helpers for thin decision transition surfaces.
 
 These helpers keep historical ``core.decision.*`` imports alive without
@@ -7,12 +5,13 @@ recreating owner logic in this namespace. Every transition module should bind to
 single canonical owner module and expose only lazy attribute delegation.
 """
 
+from __future__ import annotations
+
 import importlib
 from collections.abc import Iterable
 from types import ModuleType
 
 CANON_CORE_DECISION_TRANSITION_HELPER = True
-
 
 def install_transition_module(
     *,

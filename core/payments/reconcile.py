@@ -1,17 +1,16 @@
-from __future__ import annotations
-
 """Payment reconciliation (core orchestration).
 
 This module is PURE and contains only orchestration logic.
 Provider I/O MUST be passed as an injected port (implemented in runtime effects).
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta
 from typing import Any, Protocol
 from collections.abc import Iterable
 
 RECONCILE_WINDOW_MIN = 30
-
 
 class EventStoreLike(Protocol):
     def iter_events(

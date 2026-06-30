@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Retention math: hazard (churn risk) and readiness.
 
 This is deliberately **minimal, deterministic, and production-safe**:
@@ -12,8 +10,9 @@ It is a computable translation of the chat spec:
 - offers are triggered by *state*, not by clock time
 """
 
-import math
+from __future__ import annotations
 
+import math
 
 def sigmoid(x: float) -> float:
     # stable-ish sigmoid for moderate x

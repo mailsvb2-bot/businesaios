@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Shared helpers for OAuth code exchange in ads connectors.
 
 These helpers keep connectors thin and avoid each connector re-implementing the
@@ -7,12 +5,12 @@ same token persistence + ConnectedAccount assembly flow. They do not contain
 business decisions; they only normalize connector I/O.
 """
 
+from __future__ import annotations
+
 from typing import Any
 from collections.abc import Iterable, Mapping, Sequence
-
 from .base import AdsConnectorError, AdsPlatform, ConnectedAccount
 from .connector_oauth_helpers import build_connected_account
-
 
 def _first_present(raw: Mapping[str, Any], keys: Iterable[str]) -> Any:
     for key in keys:

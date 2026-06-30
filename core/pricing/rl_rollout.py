@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Safe rollout helper for RL pricing.
 
 Principle:
@@ -10,11 +8,11 @@ Principle:
 This module is pure.
 """
 
+from __future__ import annotations
+
 import hashlib
 from dataclasses import dataclass
-
 from core.flags.provider import FeatureFlagProvider, FlagContext
-
 
 @dataclass(frozen=True)
 class RolloutDecision:

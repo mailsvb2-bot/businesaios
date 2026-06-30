@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Evolution outbox (core facade).
 
 Architecture rule: sqlite3 is only allowed inside platform_layer/*.
@@ -11,9 +9,10 @@ This module provides:
 Core must not import sqlite implementations at module import time.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
-
 
 @dataclass(frozen=True)
 class EvolutionJob:

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Payments hardening: reconcile state machine (idempotent).
 
 This is an Engine-level pure layer:
@@ -10,8 +8,9 @@ This is an Engine-level pure layer:
 Keep it minimal: the actual IO happens in effects_impl.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class PaymentReconcileInput:

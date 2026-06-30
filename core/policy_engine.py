@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Compatibility facade for policy registry mutation.
 
 This module is intentionally *not* a second decision engine.
@@ -13,12 +11,12 @@ Irreversible rollout still must go through the sovereign path:
 DecisionCore -> DecisionEnvelope -> RuntimeExecutor.
 """
 
-from typing import Any
+from __future__ import annotations
 
+from typing import Any
 from core.ai.policy_registry import PolicyRegistry
 
 CANON_COMPAT_SHIM = True
-
 
 class PolicyEngine:
     """Minimal policy management facade."""

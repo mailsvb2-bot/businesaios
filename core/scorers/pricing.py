@@ -1,9 +1,8 @@
-from __future__ import annotations
-
 """Canonical pricing RL scoring helpers."""
 
-import math
+from __future__ import annotations
 
+import math
 
 def softmax_probs(values: list[float], *, temperature: float) -> list[float]:
     if not values:

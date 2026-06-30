@@ -1,6 +1,7 @@
+"""Read-only demo ads connector. Production must use a real provider (Meta/Yandex/VK/Telegram Ads)."""
+
 from __future__ import annotations
 
-"""Read-only demo ads connector. Production must use a real provider (Meta/Yandex/VK/Telegram Ads)."""
 
 from datetime import date
 from collections.abc import AsyncIterator, Sequence

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """AI CEO orchestration helpers.
 
 AI CEO is a *planning assistant*, not an executor.
@@ -8,11 +6,11 @@ All irreversible actions must still go through DecisionCore -> Runtime.
 This module provides tiny helper(s) that can be used by UI flows.
 """
 
+from __future__ import annotations
 
 from core.ai_ceo.contracts import CEOIntentV1, CEOPlanStepV1
 from core.ai_ceo.ledger import GrowthSnapshotV1
 from core.ai_ceo.planner_support import build_default_plan_steps
-
 
 def build_minimal_plan_steps(
     *, tenant_id: str, user_id: str, snapshot: GrowthSnapshotV1, intent: CEOIntentV1 | None

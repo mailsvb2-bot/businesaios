@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical error logging helpers.
 
 This module exists to avoid "second lines" of observability.
@@ -12,10 +10,10 @@ This file provides a stable import path (`core.observability.errors`) that
 other modules can depend on without re-implementing throttling.
 """
 
+from __future__ import annotations
+
 from typing import Any
-
 from core.observability.throttled_logger import exception_throttled
-
 
 def log_exception_throttled(
     logger: Any,

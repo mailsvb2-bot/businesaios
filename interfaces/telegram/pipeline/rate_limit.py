@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Small in-memory safety guards for Telegram ingress.
 
 Goals (pragmatic, not "distributed"):
@@ -11,10 +9,11 @@ If you ever run multiple replicas, keep the logic (it still helps locally),
 and optionally back it by Redis.
 """
 
+from __future__ import annotations
+
 import time
 from collections import deque
 from dataclasses import dataclass
-
 
 @dataclass
 class RateLimitVerdict:

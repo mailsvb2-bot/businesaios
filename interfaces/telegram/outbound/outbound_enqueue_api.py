@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Typed enqueue helpers and legacy compatibility wrappers.
 
 Responsibility:
@@ -9,15 +7,15 @@ Responsibility:
 Depends on the core `enqueue()` method supplied by TelegramOutboundQueue.
 """
 
+from __future__ import annotations
+
 import warnings
 from typing import Any
 from collections.abc import Callable
-
 from interfaces.telegram.outbound.outbound_enqueue_helpers import (
     enqueue_best_effort_with_suppression,
     parse_legacy_task,
 )
-
 
 class OutboundEnqueueApiMixin:
     """Typed per-kind enqueue helpers.

@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-CANON_NON_DECISION_MODULE = True
-
 from dataclasses import dataclass
 from typing import Any
-
 from application.decisioning.decision_output_guard import assert_non_decision_payload
 from core.growth.autopilot_contracts import (
     GrowthAutopilotContext,
@@ -13,6 +10,7 @@ from core.growth.autopilot_contracts import (
 from core.growth.autopilot_engine_run import run_autopilot_engine
 from kernel.decisioning.decision_types import RecommendationSet
 
+CANON_NON_DECISION_MODULE = True
 
 class GrowthAutopilotEngine:
     """Legacy filename retained intentionally.

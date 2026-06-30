@@ -1,21 +1,19 @@
-from __future__ import annotations
-
 """Canonical read-call discipline for event stores.
 
 Prevents false fallback behavior where an internal ``TypeError`` from the
 store implementation could be mistaken for a signature mismatch.
 """
 
+from __future__ import annotations
+
 from typing import Any
 from collections.abc import Callable
 from collections.abc import Iterable
-
 from core.utils.call_signature import accepted_kwargs as _accepted_kwargs
 from core.utils.call_signature import accepts_keyword as _accepts_keyword
 from core.utils.call_signature import supports_zero_arg_call as _supports_zero_arg_call
 
 CANON_EVENT_READ_CALL_DISCIPLINE = True
-
 
 def call_latest_events(
     *,

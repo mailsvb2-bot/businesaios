@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Admin roles & permissions (event-sourced read models).
 
 This module is READ-ONLY.
@@ -9,12 +7,13 @@ Strict tenant contract:
 - no silent defaults inside iter_events
 """
 
+from __future__ import annotations
+
 from typing import Any
 from collections.abc import Iterable
 
 ROLE_ADMIN = "admin"
 ROLE_MARKETING = "marketing"
-
 
 def _iter(event_store: Any, *, tenant_id: str, event_type: str) -> Iterable[dict[str, Any]]:
     if event_store is None or not hasattr(event_store, "iter_events"):

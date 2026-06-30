@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Ad creative generator — deterministic fallback + LLM-powered upgrade.
 
 Architecture:
@@ -9,6 +7,9 @@ Architecture:
 TrafficStrategyService uses CreativeGenerator by default.
 Boot builder upgrades to LLMCreativeGenerator when LLM_ENABLED=1.
 """
+
+from __future__ import annotations
+
 
 import asyncio
 import json

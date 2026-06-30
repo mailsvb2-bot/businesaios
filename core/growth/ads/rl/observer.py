@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Automatic observe/tick for Ads RL.
 
 Goal:
@@ -12,18 +10,17 @@ Design:
 - Idempotency via checkpoint event (tenant-aware).
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from typing import Any, Protocol
 from collections.abc import Iterable
-
 from core.events.log import EventLog
 from core.events.read_call import call_latest_event, call_latest_events
 from core.observability.structured_logging import log_exception_throttled
 from core.tenancy.scope import TenantId
-
 from .contracts import AdsRLOptSpec, action_from_json
-
 
 class _EventStore(Protocol):
     def iter_events(

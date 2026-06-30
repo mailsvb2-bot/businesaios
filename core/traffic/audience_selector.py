@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Audience interest selector.
 
 AudienceSelector — pure, sync, keyword-heuristic (domain default, no I/O).
@@ -10,9 +8,9 @@ The LLM interests are injected via TrafficStrategyService.plan_7d() when
 the creative generator returns them alongside the creative.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-
-
 
 @dataclass(frozen=True)
 class AudienceSelector:

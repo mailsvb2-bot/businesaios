@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Offer outcome callback handler.
 
 Why separate module:
@@ -8,13 +6,13 @@ Why separate module:
 - Prevents accidental divergence ("two lines" for offer callbacks)
 """
 
+from __future__ import annotations
 
 from core.offers.offer_callbacks import outcome_event_type, parse_offer_callback
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction
 from core.tenancy.normalization import normalize_tenant_id_or_unknown
 from core.ux.telegram_keyboards import kb_main
-
 
 def handle_offer_outcome(
     ctx: TelegramCtx,

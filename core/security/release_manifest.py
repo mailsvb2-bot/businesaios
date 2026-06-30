@@ -1,9 +1,3 @@
-from __future__ import annotations
-
-import sys
-
-sys.dont_write_bytecode = True
-
 """Release freeze + attestation.
 
 Goal:
@@ -17,12 +11,15 @@ Design constraints:
 - No "second brain": this module does not decide anything, only verifies.
 """
 
+from __future__ import annotations
+
+import sys
 import json
 from dataclasses import dataclass
 from pathlib import Path
-
 from core.security.release_manifest_io import iter_release_files, sha256_file
 
+sys.dont_write_bytecode = True
 
 @dataclass(frozen=True)
 class ReleaseManifest:

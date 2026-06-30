@@ -1,16 +1,14 @@
-from __future__ import annotations
-
 """Canonical policy rollout resolver.
 
 This is routing-only policy selection logic. It may resolve rollout and canary
 state, but must never compute executable actions.
 """
 
-import hashlib
+from __future__ import annotations
 
+import hashlib
 from core.policies.domain import PolicyRef, RolloutConfig
 from core.policies.registry import PolicyRegistry
-
 
 class CanaryPolicyResolver:
     def __init__(self, registry: PolicyRegistry, cfg: RolloutConfig):

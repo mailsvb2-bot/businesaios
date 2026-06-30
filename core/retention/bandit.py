@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Thompson-sampling bandit for offer/price selection.
 
 We store per-arm Beta(alpha,beta) in SQLite (via RetentionStore helpers).
@@ -10,11 +8,11 @@ This is the minimal production form of "expected profit" while keeping
 A/B exploration stable.
 """
 
+from __future__ import annotations
+
 import random
 import time
-
 from core.retention.ports import RetentionStore
-
 
 def choose_arm(
     store: RetentionStore,

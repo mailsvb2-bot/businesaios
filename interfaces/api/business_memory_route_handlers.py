@@ -1,9 +1,8 @@
-from __future__ import annotations
-
 """Compatibility wrapper preserving monkeypatchable runtime path."""
 
-from dataclasses import dataclass, field
+from __future__ import annotations
 
+from dataclasses import dataclass, field
 from entrypoints.api.business_memory_models import (
     BusinessMemoryGetRequest,
     BusinessMemoryPatternsResponse,
@@ -18,7 +17,6 @@ from execution.headless_boot import build_headless_runtime
 
 CANON_API_BUSINESS_MEMORY_ROUTE_HANDLERS_COMPAT = True
 CANON_API_BUSINESS_MEMORY_ROUTE_HANDLERS_FINAL_OWNER = "entrypoints.api.business_memory_route_handlers"
-
 
 def _bootstrap_headless_runtime() -> object:
     return globals()["build_headless_runtime"]()

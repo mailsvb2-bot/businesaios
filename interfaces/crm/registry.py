@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Honest CRM connector registry.
 
 The legacy interfaces registry remains intentionally conservative. It exposes
@@ -7,6 +5,9 @@ HubSpot as the only implemented named CRM surface while keeping all other CRM
 names as explicit not-implemented declarations. That avoids a shadow catalog
 and keeps the public matrix honest.
 """
+
+from __future__ import annotations
+
 
 from interfaces.common.registry_capability_contract import build_registry_entry
 

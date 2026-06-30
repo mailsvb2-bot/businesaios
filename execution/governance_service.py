@@ -1,6 +1,7 @@
+"""Compat shim for application.governance.governance_service."""
+
 from __future__ import annotations
 
-"""Compat shim for application.governance.governance_service."""
 
 # project_business_memory_governance_summary
 from application.governance.governance_service import GovernanceService as _OwnerGovernanceService

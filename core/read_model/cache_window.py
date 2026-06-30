@@ -1,18 +1,16 @@
-from __future__ import annotations
-
 """Short cache window for heavy read-model computations.
 
 This is intentionally tiny and dependency-free.
 It is safe to use in read-only layers.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Callable
-
 from config.cache_window_policy import DEFAULT_CACHE_WINDOW_POLICY, CacheWindowPolicy
-
 
 @dataclass
 class CacheWindow:

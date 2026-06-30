@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Minimal RL policy interface (compat).
 
 The production-safe RL pricing picker in this repo is implemented in
@@ -10,10 +8,11 @@ This module provides a tiny, dependency-free policy object for callers/tests
 that expect a 'choose_action' shape.
 """
 
+from __future__ import annotations
+
 import random
 from typing import Any
 from collections.abc import Sequence
-
 
 class RLPricePolicy:
     def __init__(self, actions: Sequence[Any]):

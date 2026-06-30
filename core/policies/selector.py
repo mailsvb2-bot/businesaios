@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Canonical policy selection surface.
 
 Routing-only selection of which policy reference should be used for a given
 state. This module must not compute actions or execute effects.
 """
+
+from __future__ import annotations
+
 
 import logging
 

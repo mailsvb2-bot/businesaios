@@ -1,6 +1,7 @@
+"""Ads bid adjustment heuristic. NOT the platform DecisionCore. optimize() here is bid-delta only; platform: core.ai.decision_core."""
+
 from __future__ import annotations
 
-"""Ads bid adjustment heuristic. NOT the platform DecisionCore. optimize() here is bid-delta only; platform: core.ai.decision_core."""
 
 from dataclasses import dataclass
 from typing import Any

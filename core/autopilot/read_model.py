@@ -1,14 +1,13 @@
-from __future__ import annotations
-
 """Business observability read-models.
 
 These are intentionally simple and derived from event log.
 They power the Telegram "dashboards".
 """
 
+from __future__ import annotations
+
 from typing import Any
 from collections.abc import Mapping
-
 from core.autopilot.read_model_support import (
     collect_ads_metrics,
     collect_recent_autopilot_action_rows,
@@ -18,7 +17,6 @@ from core.autopilot.read_model_support import (
     today_start_ms,
     utc_now_ms,
 )
-
 
 def business_metrics_window(
     event_store: Any,

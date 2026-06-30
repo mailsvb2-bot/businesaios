@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Policy registry.
 
 Single source of truth for policy objects selected by DecisionCore.
@@ -12,15 +10,15 @@ IMPORTANT:
   generic registry mechanics do not fork into another local engine.
 """
 
-from typing import Optional
+from __future__ import annotations
 
+from typing import Optional
 from core.ai._policy_registry_store import PolicyRegistryStore
 from core.policies.registry import PolicyRegistry as _MetaPolicyRegistry
 from core.policies.types import PolicyRef
 from core.security.call_origin import assert_called_from_bootstrap, assert_called_from_runtime_executor
 
 CANON_CORE_AI_POLICY_REGISTRY_LOCAL_STORE = True
-
 
 class PolicyRegistry:
     def __init__(self):

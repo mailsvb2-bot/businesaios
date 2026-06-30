@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Event-sourced RL-based pricing (production-hard).
 
 This module provides a *deterministic*, event-sourced pricing policy suitable for
@@ -29,15 +27,15 @@ For production OPE and safe rollout, we prefer Softmax/epsilon-greedy variants
 with explicit probabilities.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from typing import Any
-
 from config.pricing_retention_policy import DEFAULT_RL_PRICING_DEFAULTS
 from core.pricing.rl.candidates import build_candidates, clamp_int
 from core.pricing.rl.evidence import collect_pricing_evidence
 from core.pricing.rl.scoring import choose_candidate
-
 
 @dataclass(frozen=True)
 class RLPricingConfig:

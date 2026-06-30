@@ -1,22 +1,19 @@
-from __future__ import annotations
-
 """Operational scheduler coordination only.
 
 This module coordinates *when* a market-intelligence scheduler instance may run.
 It must not add any planning, ranking, or alternative decision logic.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-
 from reliability.distributed_lock import DistributedLock, LockLease, build_distributed_lock
 from reliability.lease_manager import LeaseManager
 from reliability.leader_election import LeaderElection, LeadershipLease
 
-
 CANON_MARKET_INTELLIGENCE_SCHEDULER_COORDINATION = True
-
 
 @dataclass(frozen=True)
 class SchedulerLeadershipReport:

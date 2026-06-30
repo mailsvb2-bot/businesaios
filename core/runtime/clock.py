@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 """Clock abstraction.
 
 Ring invariants depend on determinism. Any use of wall-clock time in the
 decision/verification pipeline must be routed through a clock object.
 """
 
-import time
+from __future__ import annotations
 
+import time
 
 class Clock:
     def now_ms(self) -> int:

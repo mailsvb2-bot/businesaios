@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Pure Telegram keyboard facade.
 
 This module preserves the historic import surface while delegating to focused
 keyboard modules. It remains the single canonical import point for callers.
 """
+
+from __future__ import annotations
 
 from core.ux.keyboards.admin import kb_staff_menu
 from core.ux.keyboards.autopilot import (
@@ -22,7 +22,6 @@ from core.ux.keyboards.settings import (
     kb_state_menu,
     kb_weather,
 )
-
 
 def kb_ai_ceo_menu() -> dict:
     from core.ux.telegram_keyboards_ai_ceo import kb_ai_ceo_menu as _kb_ai_ceo_menu

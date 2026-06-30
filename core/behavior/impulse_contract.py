@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical impulse contract for BusinesAIOS Behavioral OS.
 
 This module defines a *portable* mapping from canonical event types
@@ -17,16 +15,16 @@ domain-agnostic *baseline physics* for Ring/DecisionCore.
 Products may override via configuration, but must keep bounds.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Mapping
-
 from config.behavior_impulse_policy import (
     DEFAULT_IMPULSE_BOUNDS_POLICY,
     BehaviorImpulsePolicy,
 )
 from core.retention.event_types import normalize_event_type
-
 
 @dataclass(frozen=True)
 class Impulse:

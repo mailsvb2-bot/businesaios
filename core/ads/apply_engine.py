@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Production-hard Ads Apply Engine.
 
 Responsibilities:
@@ -14,8 +12,9 @@ This module is orchestration but stays small by delegating primitives to
 core.ads.apply.* modules.
 """
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 from core.ads.apply.contract import AdsApplyRequest, AdsApplyResult
 from core.ads.apply.limits import AdsApplyLimits
 from core.ads.apply_engine_execution import build_dry_run_result, perform_apply_flow
@@ -33,7 +32,6 @@ from core.api.idempotency import IdempotencyStore
 from core.governance.guards.feedback_loop_guard import FeedbackLoopGuard
 
 __all__ = ["AdsApplyEngine", "AdsApplyEnv", "AdsApplyPort"]
-
 
 @dataclass(frozen=True)
 class AdsApplyEnv:

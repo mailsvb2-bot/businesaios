@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """TelegramOutboundQueue — priority-based async outbound with self-heal.
 
 Architecture (each file = single responsibility):
@@ -13,12 +11,13 @@ Architecture (each file = single responsibility):
   outbound_queue.py       — THIS FILE: lifecycle + enqueue core + metrics ~130 lines
 """
 
+from __future__ import annotations
+
 import itertools
 import queue
 import threading
 from typing import Any
 from collections.abc import Callable
-
 from interfaces.telegram.outbound.outbound_alerter import OutboundAlerterMixin
 from interfaces.telegram.outbound.outbound_backpressure import put_task
 from interfaces.telegram.outbound.outbound_enqueue_api import OutboundEnqueueApiMixin
@@ -38,7 +37,6 @@ from interfaces.telegram.outbound.outbound_worker import OutboundWorkerMixin
 from interfaces.telegram.outbound.rate_limit import TokenBucket
 
 __all__ = ["TelegramOutboundQueue", "OutboundTask", "PriorityArg"]
-
 
 class TelegramOutboundQueue(
     OutboundPriorityMixin,

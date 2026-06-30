@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Autopilot onboarding (canonical).
 
 This package defines the UX-safe onboarding schema and a deterministic state machine.
 It contains **no side effects** and can be used from Telegram, Web, or API entrypoints.
 """
+
+from __future__ import annotations
 
 from .schema import BudgetChoice, Diagnostics, HasClientsChoice, RegionChoice
 from .state_machine import (
@@ -16,3 +16,4 @@ from .state_machine import (
     session_from_settings,
     session_to_settings,
 )
+

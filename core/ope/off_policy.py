@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Off-policy evaluation (OPE) primitives.
 
 Implements standard estimators for logged bandit data:
@@ -9,9 +7,10 @@ Implements standard estimators for logged bandit data:
 Inputs are simple dict-like mappings to avoid tight coupling.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from collections.abc import Iterable, Mapping
-
 
 @dataclass(frozen=True)
 class OPEStats:

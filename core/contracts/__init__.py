@@ -1,14 +1,13 @@
-from __future__ import annotations
-
 """Compatibility package for decision contracts.
 
 Canonical owners now live in ``kernel.*``. This package remains as a stable
 transition surface for legacy imports.
 """
 
+from __future__ import annotations
+
 import sys
 from importlib import import_module
-
 from kernel.decision_candidate import DecisionCandidate
 from kernel.decision_context import DecisionContext
 from kernel.decision_reason import DecisionReason
@@ -22,12 +21,9 @@ __all__ = [
     'DecisionCandidate', 'DecisionContext', 'DecisionRequest', 'DecisionResult',
     'DecisionReason', 'DecisionRejection', 'DecisionTrace', 'DecisionSpace',
 ]
-
-
 _COMPAT_ALIAS_MAP = {
     "product_contract": "contracts.product_contract",
 }
-
 
 def _install_contract_aliases() -> None:
     package = sys.modules[__name__]

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Ads circuit breaker.
 
 Goal: protect against runaway automation and external platform instability.
@@ -12,9 +10,10 @@ State is in-memory (per process). In multi-node deployments, this should be
 backed by event_store aggregation or a shared store.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
-
 
 @dataclass
 class BreakerConfig:

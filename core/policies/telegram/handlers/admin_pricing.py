@@ -1,17 +1,15 @@
-from __future__ import annotations
-
 """Admin pricing session handler.
 
 Extracted from telegram router to prevent router from becoming a god-module
 and to make the pricing governance flow testable and auditable.
 """
 
-from collections.abc import Callable
+from __future__ import annotations
 
+from collections.abc import Callable
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose
 from core.ux.telegram_keyboards import kb_staff_menu
-
 
 def handle_admin_pricing_session(
     ctx: TelegramCtx,

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Async outbound queue adapter.
 
 P0 goal: the runtime should not be bottlenecked by Telegram API latency.
@@ -11,15 +9,15 @@ This adapter lets the runtime keep the same sync interface while executing
 tasks on an asyncio loop backed by :class:`AsyncTelegramOutboundQueue`.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import threading
 import time
 from typing import Any
 from collections.abc import Callable
-
 from interfaces.telegram.outbound.async_outbound_queue import AsyncTelegramOutboundQueue
-
 
 class AsyncTelegramOutboundQueueAdapter:
     """Sync-compatible facade over AsyncTelegramOutboundQueue."""

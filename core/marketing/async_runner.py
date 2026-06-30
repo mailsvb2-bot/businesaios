@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 """Small sync/async bridge for canonical sync entrypoints.
 
 Delegates to the shared canonical bridge so marketing code does not drift from
 other sync entrypoints such as runtime boot/apply surfaces.
 """
+
+from __future__ import annotations
+
 
 from typing import TypeVar
 from collections.abc import Awaitable

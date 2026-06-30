@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Causal evidence builders from an in-memory event window.
 
 Design goals:
@@ -10,6 +8,9 @@ Design goals:
 We build simple panel datasets by day and run tiny estimators from core.causal.
 This is intentionally conservative: it is evidence, not a 'second brain'.
 """
+
+from __future__ import annotations
+
 
 from dataclasses import dataclass
 from typing import Any

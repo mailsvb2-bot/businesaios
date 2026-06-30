@@ -1,6 +1,7 @@
+"""Canonical provider service layer for public LLM builders."""
+
 from __future__ import annotations
 
-"""Canonical provider service layer for public LLM builders."""
 
 from typing import Any
 from collections.abc import Callable

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """V13 staged rollout pipeline (OFFLINE -> SHADOW -> PROD).
 
 This module is intentionally minimal and deterministic.
@@ -9,13 +7,13 @@ Deployment remains a DecisionCore decision (deploy_policy/rollback_policy)
 and must pass RuntimeGuard + DecisionLedger + RuntimeExecutor.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol
 from collections.abc import Iterable
-
 from config.staged_rollout_policy import DEFAULT_STAGED_ROLLOUT_POLICY, StagedRolloutPolicy
-
 
 class RolloutStage(str, Enum):
     OFFLINE = "offline"

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """User role segmentation (product UX).
 
 Roles:
@@ -10,6 +8,9 @@ Roles:
 Role is derived from user settings (transport-agnostic).
 This is intentionally dumb and explicit.
 """
+
+from __future__ import annotations
+
 
 from dataclasses import dataclass
 from typing import Any, Literal

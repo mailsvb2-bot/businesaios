@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Pricing decision logging helpers.
 
 We keep logging as a tiny primitive to avoid pulling event-store wiring into
@@ -24,12 +22,12 @@ IMPORTANT:
 - Keep payload compact (no PII beyond user_id).
 """
 
+from __future__ import annotations
+
 import time
 from typing import Any
-
 from core.events.log import EventLog
 from core.tenancy.scope import TenantScope
-
 
 def _now_ms() -> int:
     return int(time.time() * 1000)

@@ -1,7 +1,3 @@
-from __future__ import annotations
-
-from core.tenancy.tenant import current_tenant_id
-
 """Learning system (online + offline scaffolding).
 
 This module MUST NOT perform side-effects (no policy activation/rollback directly).
@@ -14,13 +10,14 @@ Actual deployment/rollback is executed ONLY via RuntimeExecutor after a Decision
 (action deploy_policy / rollback_policy) passes Guard + Ledger.
 """
 
+from __future__ import annotations
+
+from core.tenancy.tenant import current_tenant_id
 import time
 from dataclasses import dataclass
 from collections.abc import Iterable
-
 from config.final_hidden_logic_policy import DEFAULT_LEARNING_SYSTEM_POLICY
 from kernel.world_state import WorldStateV1
-
 
 @dataclass
 class BanditStats:

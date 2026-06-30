@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Dirac-inspired behavioral dynamics (BusinesAIOS core).
 
 Deterministic, bounded, product-agnostic.
@@ -16,14 +14,14 @@ P: payment readiness
 Complex numbers are stored as (re, im) for speed and determinism.
 """
 
+from __future__ import annotations
+
 import math
 from typing import Any
 from collections.abc import Iterable, Mapping
-
 from core.behavior.complex4 import EPS, Complex4
 from core.behavior.dirac_operators import apply_event_operator
 from core.observability.silent import swallow
-
 
 def _clamp01(x: float) -> float:
     if x <= 0.0:

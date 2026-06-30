@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Canonical offers package root with legacy alias support."""
+
+from __future__ import annotations
 
 import sys
 from importlib import import_module
@@ -8,11 +8,9 @@ from importlib import import_module
 CANON_TRANSITION_SURFACE = True
 CANON_COMPAT_SHIM = True
 CANON_OFFERS_PACKAGE_ALIAS_OWNER = True
-
 _COMPAT_ALIAS_MAP = {
     "offer_engine": "core.offers.engine",
 }
-
 
 def _install_offer_aliases() -> None:
     package = sys.modules[__name__]

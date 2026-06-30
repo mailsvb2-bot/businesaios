@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-CANON_NON_DECISION_MODULE = True
-
 from dataclasses import dataclass
-
 from config.economics_domain_policy import (
     DEFAULT_ECONOMIC_BRAIN_POLICY,
     DEFAULT_ECONOMICS_SIGNAL_DEFAULTS,
@@ -17,6 +14,7 @@ from core.economics.types import EconomicAction, EconomicState
 from core.strategic_horizon.engine import StrategicMode
 from kernel.decisioning.decision_types import RecommendationSet
 
+CANON_NON_DECISION_MODULE = True
 
 @dataclass(frozen=True)
 class EconomicSignals:

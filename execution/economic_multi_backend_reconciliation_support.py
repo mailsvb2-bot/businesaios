@@ -1,14 +1,12 @@
-from __future__ import annotations
-
 """Support owner for execution.economic_multi_backend_reconciliation."""
+
+from __future__ import annotations
 
 from typing import Any
 from collections.abc import Mapping
-
 from execution.economic_backend_authority import EconomicBackendAuthorityResolver
 from execution.economic_split_brain_guard import EconomicSplitBrainGuard
 from execution.economic_lineage_lock import EconomicLineageLockBuilder
-
 
 def _safe_dict(value: object) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}

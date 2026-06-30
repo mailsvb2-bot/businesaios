@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Compatibility namespace for historical ``core.products.*`` imports.
 
 Canonical planning logic lives under ``core.product``.
@@ -7,13 +5,11 @@ Canonical DTO contract lives under ``contracts.product_contract``.
 This package intentionally exposes only compatibility helpers and aliases.
 """
 
-NON_CANON_COMPAT_NAMESPACE = True
-CANON_TRANSITION_SURFACE = True
+from __future__ import annotations
 
 import sys
 from importlib import import_module
 from typing import Any
-
 from contracts.product_contract import (
     EntitlementsSpec,
     EntryPolicy,
@@ -31,8 +27,9 @@ from core.offers.offer_catalog_resolver import OfferCatalogKey, OfferCatalogReso
 from core.offers.offer_types import OfferCatalog as RuntimeOfferCatalog
 from core.tenancy.normalization import require_tenant_id
 
+NON_CANON_COMPAT_NAMESPACE = True
+CANON_TRANSITION_SURFACE = True
 CANON_COMPAT_SHIM = True
-
 
 def resolve_offer_catalog_for_product(*, product: ProductContract, tenant_id: str) -> RuntimeOfferCatalog:
     """Backward-compat helper for call-sites that still resolve catalogs by product."""

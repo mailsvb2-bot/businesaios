@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Marketing read-models (event-sourced).
 
 Purpose:
@@ -10,8 +8,9 @@ Selection itself happens in policy (deterministic hash).
 The chosen variant is logged via send_message@v1 track_event_type.
 """
 
-from typing import Any
+from __future__ import annotations
 
+from typing import Any
 from core.read_model.cache import global_cache, watermark_for
 
 DEFAULTS: dict[str, dict[str, str]] = {
@@ -24,7 +23,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "b": "💳 Доступ\n\nВыбери вариант, который подходит по ритму:",
     },
 }
-
 
 def marketing_variants(event_store: Any, *, tenant_id: str = "default") -> dict[str, dict[str, str]]:
     """Return latest configured variants per step_key."""

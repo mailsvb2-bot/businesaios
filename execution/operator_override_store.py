@@ -1,16 +1,15 @@
-from __future__ import annotations
-
 """Canonical persistence surface for operator overrides.
 
 This module stores operator-override state snapshots only.
 It must not contain approval or decision logic.
 """
 
+from __future__ import annotations
+
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 import os
-
 from core.tenancy.normalization import require_tenant_id
 from execution.operator_override_contract import (
     OperatorOverrideDecision,
@@ -22,9 +21,7 @@ from execution.operator_override_contract import (
 from governance.persistence_codec import atomic_write_json, from_dataclass, read_json_or_default, to_jsonable
 from governance.persistence_paths import operator_override_store_path
 
-
 CANON_OPERATOR_OVERRIDE_STORE = True
-
 
 def _expire_record_if_needed(record: OperatorOverrideRecord | None) -> tuple[OperatorOverrideRecord | None, bool]:
     if record is None:

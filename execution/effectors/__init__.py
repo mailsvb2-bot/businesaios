@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Canonical effector owner surface."""
+
+from __future__ import annotations
 
 from importlib import import_module
 from typing import Any
@@ -17,7 +17,6 @@ _OWNER_MAP = {
     'CANON_EFFECTOR_CATALOG': ('execution.effectors.catalog', 'CANON_EFFECTOR_CATALOG'),
     'build_effector': ('execution.effectors.catalog', 'build_effector'),
 }
-
 
 def __getattr__(name: str) -> Any:
     if name == 'CANON_EFFECTOR_PACKAGE_OWNER':

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical execution approval policy engine.
 
 This module derives execution-time human-in-the-loop requirements from the
@@ -7,17 +5,16 @@ existing governance change-control policy and explicit execution metadata.
 It never chooses actions and never bypasses governance.
 """
 
+from __future__ import annotations
+
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
-
 from contracts.action_impact_contract import ActionCategory, ActionExecutionContext, ActionImpact
 from governance.change_control_policy import ChangeControlDecision, ChangeControlPolicy
 from governance.rbac_contract import RoleId
 
-
 CANON_EXECUTION_APPROVAL_POLICY_ENGINE = True
-
 
 def _safe_dict(value: object) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}

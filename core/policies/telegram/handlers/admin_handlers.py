@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Admin + operator handlers.
 
 Thin orchestrator only. Large UI/admin flows live in small modules under
 core/policies/telegram/handlers/admin/ to avoid god-modules and hidden logic.
 """
+
+from __future__ import annotations
 
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.handlers.admin.analytics import handle_analytics
@@ -15,7 +15,6 @@ from core.policies.telegram.handlers.admin.menu import handle_admin_menu
 from core.policies.telegram.handlers.admin.pricing import handle_pricing
 from core.policies.telegram.handlers.admin.roles_perms import handle_roles_perms
 from core.policies.telegram.helpers import ProposedAction
-
 
 def _has_perm(ctx: TelegramCtx, perm: str) -> bool:
     if bool(getattr(ctx, "is_superadmin", False)):

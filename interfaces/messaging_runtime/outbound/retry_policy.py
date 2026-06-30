@@ -1,9 +1,8 @@
-from __future__ import annotations
-
 """Delivery retry policy (retry/defer/dead_letter). Not a platform policy layer."""
 
-from dataclasses import dataclass
+from __future__ import annotations
 
+from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class RetryDecision:

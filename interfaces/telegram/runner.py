@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Telegram runner (orchestration only).
 
 Hard invariants:
@@ -9,6 +7,9 @@ Hard invariants:
 
 This runner is intentionally thin.
 """
+
+from __future__ import annotations
+
 
 import logging
 from dataclasses import dataclass

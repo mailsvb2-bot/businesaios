@@ -1,17 +1,16 @@
-from __future__ import annotations
-
 """Deterministic price recommendation (rule + bandit).
 
 This module does NOT set prices; it only produces recommendations + reasons.
 DecisionCore/policy decides whether to apply, and guardrails may block.
 """
 
+from __future__ import annotations
+
 import hashlib
 import random
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Mapping
-
 
 @dataclass(frozen=True)
 class PriceRecommendation:

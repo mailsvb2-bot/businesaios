@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Worker loop internals for TelegramOutboundQueue.
 
 Responsibility:
@@ -8,9 +6,10 @@ Responsibility:
   - _bucket_for_chat()— per-chat TokenBucket lazy factory
 """
 
+from __future__ import annotations
+
 import queue
 import time
-
 from core.observability.silent import swallow
 from interfaces.telegram.outbound.outbound_types import OutboundTask
 from interfaces.telegram.outbound.outbound_worker_helpers import (
@@ -18,7 +17,6 @@ from interfaces.telegram.outbound.outbound_worker_helpers import (
     record_task_metrics,
 )
 from interfaces.telegram.outbound.rate_limit import TokenBucket
-
 
 class OutboundWorkerMixin:
     """Background worker loop.

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical retention pricing ladder contract.
 
 This module is the single source of truth for retention pricing primitives:
@@ -11,9 +9,10 @@ This module is the single source of truth for retention pricing primitives:
 Compat modules may re-export these values, but must not redefine them.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Final
-
 
 @dataclass(frozen=True)
 class OfferWindow:

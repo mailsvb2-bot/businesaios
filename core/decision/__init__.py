@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical core decision namespace.
 
 The package root is a thin compatibility facade. The canonical owner surface is
@@ -7,6 +5,9 @@ The package root is a thin compatibility facade. The canonical owner surface is
 submodules such as ``core.decision.ai_decision_trace`` does not create a package
 initialization cycle.
 """
+
+from __future__ import annotations
+
 
 import sys
 from importlib import import_module

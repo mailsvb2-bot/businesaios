@@ -1,13 +1,12 @@
-from __future__ import annotations
-
 """Backward-compatible shim for canonical action names."""
+
+from __future__ import annotations
 
 from .names import ACTION_ADS_APPLY_EXECUTE_V1, ACTION_AI_CEO_PLAN_V1, ACTION_EXECUTE_PLAN_V1
 
 ADS_APPLY_EXECUTE_V1 = ACTION_ADS_APPLY_EXECUTE_V1
 EXECUTE_PLAN_V1 = ACTION_EXECUTE_PLAN_V1
 AI_CEO_PLAN_V1 = ACTION_AI_CEO_PLAN_V1
-
 __all__ = [
     "ACTION_ADS_APPLY_EXECUTE_V1",
     "ACTION_EXECUTE_PLAN_V1",
@@ -16,3 +15,4 @@ __all__ = [
     "EXECUTE_PLAN_V1",
     "AI_CEO_PLAN_V1",
 ]
+

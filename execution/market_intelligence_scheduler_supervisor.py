@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Lifecycle-only supervisor for managed market-intelligence scheduling.
 
 This module owns thread lifecycle only:
@@ -11,18 +9,17 @@ This module owns thread lifecycle only:
 It must not introduce provider ranking, planning, or an alternate decision path.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from threading import Event, Lock, Thread
 from time import sleep, time
 from typing import Any
-
 from execution.market_intelligence_scheduler_service import MarketIntelligenceSchedulerService
 from runtime.runtime_observability import RuntimeObservability
 
-
 CANON_MARKET_INTELLIGENCE_SCHEDULER_SUPERVISOR = True
 CANON_MARKET_INTELLIGENCE_SCHEDULER_SUPERVISOR_NO_DECISION_LOGIC = True
-
 
 @dataclass(frozen=True)
 class MarketIntelligenceSupervisorReport:

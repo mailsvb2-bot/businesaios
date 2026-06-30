@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical self-heal primitives for the Telegram outbound queue.
 
 This module is the single ownership point for:
@@ -10,16 +8,16 @@ This module is the single ownership point for:
 Legacy imports from ``_outbound_selfheal`` are preserved as thin re-exports.
 """
 
+from __future__ import annotations
+
 import threading
 import time
 from dataclasses import dataclass
 from collections.abc import Callable
-
 from interfaces.telegram.outbound.outbound_self_heal_ops import (
     maybe_self_heal,
     purge_backlog,
 )
-
 
 @dataclass
 class SelfHealConfig:

@@ -1,14 +1,13 @@
-from __future__ import annotations
-
 """Self-driving ML loop scheduling.
 
 Runner only triggers LearningJob methods; it never deploys directly.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from typing import Any
-
 
 @dataclass
 class MLLooopConfig:

@@ -1,9 +1,8 @@
-from __future__ import annotations
-
 """Main and navigation keyboards."""
 
-from typing import Any
+from __future__ import annotations
 
+from typing import Any
 from core.users.roles import UserRoleInfo
 from core.ux.callbacks import (
     CB_ADMIN_MENU,
@@ -20,9 +19,7 @@ from core.ux.callbacks import (
     CB_SUB_MENU,
     CB_WEATHER_SHOW,
 )
-
 from .common import mk
-
 
 def kb_main(*, is_admin: bool = False, role: UserRoleInfo | None = None) -> dict[str, Any]:
     r = (role or UserRoleInfo("owner")).role

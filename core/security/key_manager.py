@@ -1,16 +1,14 @@
-from __future__ import annotations
-
 """Key management helpers.
 
 This module provides entropy-safe rotation utilities. It does not perform IO by itself;
 callers inject persistence via a `store` callable.
 """
 
+from __future__ import annotations
+
 import secrets
 from collections.abc import Callable
-
 from core.security.keyring import Keyring
-
 
 def rotate_key(*, store: Callable[[str], None]) -> str:
     """Generate a new random signing key (hex) and persist it via `store`."""

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Tariff/plan catalog (PURE).
 
 Etalon-5 uses a DB-driven plans table. In the canonical kernel we keep
@@ -10,12 +8,12 @@ this data source (out of scope here).
 The policy layer reads the catalog; prices are re-checked at pay time.
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any
-
 from core.observability.silent import swallow
-
 
 def _repo_root() -> Path:
     # this file: core/plans/catalog.py -> core -> repo root

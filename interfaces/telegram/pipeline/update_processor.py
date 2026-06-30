@@ -1,14 +1,13 @@
-from __future__ import annotations
-
 """Telegram ingress pipeline.
 
 Single canonical ingress path for Telegram updates:
 parse -> dedupe -> rate limit -> enrich -> worldstate -> decide -> execute
 """
 
+from __future__ import annotations
+
 import time
 from typing import Any
-
 from core.behavior.behavioral_state_builder import BehavioralStateBuilder
 from core.observability.perf import Span
 from interfaces.telegram.parsing.telegram_context import build_context
@@ -27,7 +26,6 @@ from products.product_resolver import new_resolver_from_env
 from runtime.platform.config.env_flags import env_float
 
 INGRESS_WARNING_EVENT = "telegram_ingress_warning"
-
 
 class TelegramUpdateProcessor:
     def __init__(

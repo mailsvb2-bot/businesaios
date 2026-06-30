@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Payment provider ports.
 
 SECURITY:
@@ -7,9 +5,10 @@ SECURITY:
 - Runtime implements the actual provider I/O inside runtime/_internal/_effects_impl.py.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any, Protocol
-
 
 class PaymentProviderPort(Protocol):
     def create_payment(

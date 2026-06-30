@@ -1,10 +1,9 @@
-from __future__ import annotations
-
 """Deterministic constraints derived from behavioral observables."""
+
+from __future__ import annotations
 
 from typing import Any
 from collections.abc import Mapping
-
 
 def price_constraints_from_behavior(
     *,
