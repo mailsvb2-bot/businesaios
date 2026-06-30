@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
 
 import logging
-
 from learning.rollout import RolloutGuard
 from runtime.ads import AdsRLOptimizerDeps, AdsRLOptimizerService
 from runtime.boot.failure_policy import raise_or_log_boot_failure
 from runtime.platform.config.env_flags import env_bool
+
+CANON_BOOT_WIRING_ONLY = True
+
+
 
 LOGGER = logging.getLogger(__name__)
 

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+
+from typing import Any
+from runtime.ads import AdsApplyState, AdsPlan, plan_digest
+from runtime.idempotency import make_idempotency_key
+from runtime.ports.effects import EffectsPort
+from runtime.ux import kb_ads_apply_pending
+
 CANON_THIN_HANDLER = True
 
 
@@ -9,12 +16,7 @@ These are intentionally dumb. They only execute decided steps via EffectsPort.
 The business logic remains in core/profit_sprint/* and decision policies.
 """
 
-from typing import Any
 
-from runtime.ads import AdsApplyState, AdsPlan, plan_digest
-from runtime.idempotency import make_idempotency_key
-from runtime.ports.effects import EffectsPort
-from runtime.ux import kb_ads_apply_pending
 
 # Boundary anchors: this handler is allowed to depend on runtime public surfaces,
 # not on core.* implementation modules. Keep these names visible so architecture

@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-CANON_THIN_HANDLER = True
-CANON_ADS_AUTOPILOT_EXECUTION_THIN_BOUNDARY = True
-CANON_ADS_AUTOPILOT_EXECUTION_SHARED_OWNER = True
-# build_decision_execution_service(
 
 from runtime.decisioning import DecisionCommand, RecommendationSet
 from runtime.execution.decision_execution_service import (
@@ -19,6 +15,12 @@ from runtime.handlers.ads_autopilot import (
     format_autopilot_result,
     gate_error_text,
 )
+
+CANON_THIN_HANDLER = True
+CANON_ADS_AUTOPILOT_EXECUTION_THIN_BOUNDARY = True
+CANON_ADS_AUTOPILOT_EXECUTION_SHARED_OWNER = True
+# build_decision_execution_service(
+
 
 
 def handle_ads_autopilot_proposal(

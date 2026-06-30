@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+
+import logging
+import time
+from runtime.boot.env import env_bool, env_int, resolve_telegram_bot_token
+from runtime.boot.health_server import start_health_server
+from runtime.platform.config.env_flags import env_str
+
 CANON_BOOT_WIRING_ONLY = True
 
 
@@ -12,12 +19,7 @@ Single responsibility:
 This module must not call core.decide itself.
 """
 
-import logging
-import time
 
-from runtime.boot.env import env_bool, env_int, resolve_telegram_bot_token
-from runtime.boot.health_server import start_health_server
-from runtime.platform.config.env_flags import env_str
 
 log = logging.getLogger("runtime.telegram")
 

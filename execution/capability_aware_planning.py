@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Compatibility shim for the canonical capability router/planner surface.
 
 Canonical owner logic lives in the application capability modules, but the
@@ -9,8 +7,9 @@ arch-lock tests can verify that planner callers stay routed through the
 canonical execution-facing owner path.
 """
 
-CANON_CAPABILITY_COMPAT_SURFACE = True
-# Compatibility shim: canonical public owner path remains execution.capability_router.
+from __future__ import annotations
+
+
 
 from execution.capability_router import ExecutionCapabilityRouter
 from application.capability.capability_aware_planning import (
@@ -18,6 +17,10 @@ from application.capability.capability_aware_planning import (
     CapabilityAwarePlanner,
     CapabilityPlanDecision,
 )
+
+CANON_CAPABILITY_COMPAT_SURFACE = True
+# Compatibility shim: canonical public owner path remains execution.capability_router.
+
 
 __all__ = [
     'CANON_CAPABILITY_COMPAT_SURFACE',

@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+
+import logging
+from typing import Any
+from runtime.platform.config.env_flags import env_bool, env_float, env_int
+
 CANON_BOOT_WIRING_ONLY = True
 
 """AdsApplyEngine constructor for the boot pipeline.
@@ -10,10 +15,7 @@ AdsRuntime. Returns None (gracefully degraded) if anything is unavailable.
 Single public function: build_ads_apply_engine()
 """
 
-import logging
-from typing import Any
 
-from runtime.platform.config.env_flags import env_bool, env_float, env_int
 
 logger = logging.getLogger(__name__)
 

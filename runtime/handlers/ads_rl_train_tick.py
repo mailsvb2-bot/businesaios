@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-CANON_THIN_HANDLER = True
-
 
 import logging
 from typing import Any
-
 from runtime.ads import (
     DatasetBuilder,
     OPEGate,
@@ -19,6 +16,11 @@ from runtime.ads import (
 from runtime.governance import ProfitMetricsService
 from runtime.ports.effects import EffectsPort
 from runtime.tenancy import as_tenant_id
+
+CANON_THIN_HANDLER = True
+
+
+
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical runtime action registry (single source of truth).
 
 Purpose:
@@ -12,12 +10,13 @@ Purpose:
 This file is intentionally boring and explicit.
 """
 
-CANON_BOOT_WIRING_ONLY = True
+from __future__ import annotations
+
+
 
 from dataclasses import dataclass
 from typing import Literal
 from collections.abc import Iterator
-
 from runtime.boot.actions_catalog import (
     BUILTIN_HANDLER_ACTIONS,
     EFFECT_ONLY_ACTIONS,
@@ -27,6 +26,10 @@ from runtime.boot.actions_catalog import (
     build_specs_registry,
     handler_actions_from,
 )
+
+CANON_BOOT_WIRING_ONLY = True
+
+
 
 LimitKind = Literal["none", "general", "llm", "ads", "payments", "admin"]
 

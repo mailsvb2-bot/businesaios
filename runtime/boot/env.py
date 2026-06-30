@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+
+import os
+from runtime.boot.canonical.env import normalize_env
+from runtime.platform.config.env_access import env_bool, env_float, env_int, env_str
+
 CANON_BOOT_WIRING_ONLY = True
 
 """Canonical environment parsing utilities.
@@ -12,7 +17,6 @@ No network/SDK usage. python-dotenv is optional at import time; when missing,
 .env loading becomes a no-op until dependencies are installed.
 """
 
-import os
 
 try:
     from dotenv import load_dotenv as _load_dotenv
@@ -20,8 +24,6 @@ except ModuleNotFoundError:  # dependency may be absent during import-smoke
     def _load_dotenv(*_args: object, **_kwargs: object) -> bool:
         return False
 
-from runtime.boot.canonical.env import normalize_env
-from runtime.platform.config.env_access import env_bool, env_float, env_int, env_str
 
 # Compatibility note for canon audit locks:
 # from runtime.platform.config.env_flags import env_bool as _env_bool

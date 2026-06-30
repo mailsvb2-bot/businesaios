@@ -1,17 +1,8 @@
 from __future__ import annotations
 
-CANON_BOOT_WIRING_ONLY = True
-
-"""Boot builder: AutopilotCampaignBuilder wiring.
-
-When LLM_ENABLED=1 and the LLM composer is available, the CreativeGenerator
-is upgraded to LLMCreativeGenerator — AI generates headline, copy, and
-targeting interests instead of a hardcoded template.
-"""
 
 import logging
 from typing import Any
-
 from runtime.boot import (
     AdsSpecBuilder,
     AudienceSelector,
@@ -26,6 +17,17 @@ from runtime.boot import (
 )
 from runtime.llm import resolve_runtime_llm_settings
 from runtime.platform.config.env_flags import env_bool, env_float, env_str
+
+CANON_BOOT_WIRING_ONLY = True
+
+"""Boot builder: AutopilotCampaignBuilder wiring.
+
+When LLM_ENABLED=1 and the LLM composer is available, the CreativeGenerator
+is upgraded to LLMCreativeGenerator — AI generates headline, copy, and
+targeting interests instead of a hardcoded template.
+"""
+
+
 
 logger = logging.getLogger(__name__)
 
