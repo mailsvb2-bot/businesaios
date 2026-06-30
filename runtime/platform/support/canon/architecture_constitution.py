@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-ARCHITECTURE_NAME = "BUSINESAIOS RL Support Constitution"
+
 from runtime.canon import CANONICAL_DECISION_CORE_MODULE
+
+ARCHITECTURE_NAME = "BUSINESAIOS RL Support Constitution"
 
 DECISION_SOVEREIGN = CANONICAL_DECISION_CORE_MODULE
 ALLOWED_AUTHORITY_ROLES = frozenset({"measure", "evaluate", "recommend", "block"})

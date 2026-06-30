@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
+
+
+from application.decisioning.candidate_space import build_candidate_space
 
 from .experience_store import RLStep
 
@@ -84,9 +87,6 @@ def _propensity(step: RLStep) -> float:
         return 0.0
 
 
-from dataclasses import dataclass
-from collections.abc import Sequence
-
 
 @dataclass(frozen=True)
 class OffPolicyActionScore:
@@ -121,8 +121,6 @@ def score_target_actions(
         )
     return tuple(out)
 
-
-from application.decisioning.candidate_space import build_candidate_space
 
 
 def advisory_candidate_scores(*, steps, target_action_keys):

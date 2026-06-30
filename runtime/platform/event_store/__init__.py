@@ -19,6 +19,15 @@ from typing import TYPE_CHECKING, Any
 
 from runtime.lazy_namespace import install_module_aliases
 
+
+from contracts.event_store import (
+    EventStore,
+    EventStoreReader,
+    EventStoreWriter,
+    iter_events_strict,
+    supports_event_store,
+)
+
 CANON_EVENT_STORE_NAMESPACE = True
 
 __all__ = [
@@ -61,10 +70,3 @@ def __getattr__(name: str) -> Any:  # pragma: no cover
         return PostgresEventStore
     raise AttributeError(name)
 
-from contracts.event_store import (
-    EventStore,
-    EventStoreReader,
-    EventStoreWriter,
-    iter_events_strict,
-    supports_event_store,
-)

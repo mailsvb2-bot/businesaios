@@ -4,6 +4,9 @@ import importlib
 import sys
 from types import ModuleType
 
+
+from .model_cache import ModelCache
+
 CANON_COMPAT_SHIM = True
 CANON_RUNTIME_SERVING_RUNTIME_PACKAGE_OWNER = True
 
@@ -58,7 +61,6 @@ class TimeoutManager:
         return elapsed_ms > max_ms
 
 
-from .model_cache import ModelCache
 
 _COMPAT_ALIAS_MAP = {
     "action_validator": "application.decision.action_validator",

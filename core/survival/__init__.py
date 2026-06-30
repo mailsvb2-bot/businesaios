@@ -1,13 +1,18 @@
-from __future__ import annotations
-
 """Compatibility package surface: ``core.survival`` -> ``survival``.
 
 The package root keeps the historical imports alive while the canonical owners
 live in the top-level ``survival`` package.
 """
 
+from __future__ import annotations
+
+
 import sys
 from importlib import import_module
+
+
+from survival.controller import SurvivalController, SurvivalMode, SurvivalVerdict
+from survival.metrics import SurvivalMetrics
 
 CANON_TRANSITION_SURFACE = True
 CANON_COMPAT_SHIM = True
@@ -23,8 +28,6 @@ for _alias_name, _target_module_name in _COMPAT_ALIAS_MAP.items():
     sys.modules[f"{__name__}.{_alias_name}"] = _target
     globals()[_alias_name] = _target
 
-from survival.controller import SurvivalController, SurvivalMode, SurvivalVerdict
-from survival.metrics import SurvivalMetrics
 
 __all__ = [
     "CANON_TRANSITION_SURFACE",
