@@ -33,6 +33,7 @@ CANON_RUNTIME_ENTRYPOINT_THIN_SHIM = True
 CANON_RUNTIME_ENTRYPOINT_BOOTSTRAP_DELEGATES_TO_SOVEREIGN_BOOTSTRAP = True
 CANON_TELEGRAM_ENTRYPOINT_MAIN_CONTRACT = True
 CANON_TELEGRAM_ENTRYPOINT_NO_SDK_IMPORTS = True
+CANON_TELEGRAM_WEBHOOK_AND_LONGPOLL_SHARED_DECISION_PATH = True
 
 _LOG = logging.getLogger("businesaios.telegram.entrypoint")
 
@@ -203,52 +204,34 @@ def _start_health_if_enabled(event_log: Any) -> Any:
     return start_health_server_in_thread(snapshot=snapshot, host=host, port=port)
 
 
-def runtime_bootstrap() -> None:
-    """Explicit process bootstrap.
+def _execute_update(*, core: Any, executor: Any, event_log: Any, update: dict[str, Any], transport: str) -> None:
+    raw_update_id = update.get("update_id")
+    state = _world_state_from_update(update)
+    if transport:
+        try:
+            state = state.__class__(
+                **{
+                    **state.__dict__,
+                    "meta": {**dict(state.meta or {}), "transport": transport},
+                }
+            )
+        except Exception:
+            pass
+    envelope = core.optimize(state)
+    result = executor.execute(envelope)
+    _append_event(
+        event_log,
+        event_type="telegram_update_executed",
+        payload={
+            "transport": transport,
+            "update_id": raw_update_id,
+            "decision_id": str(getattr(result, "decision_id", "")),
+            "ok": bool(getattr(result, "ok", False)),
+        },
+    )
 
-    Hard invariant: no side-effects on import. We load dotenv/token aliases only
-    when the sovereign entrypoint explicitly boots the process.
-    """
 
-    mark_telegram_token_source()
-    _bootstrap()
-
-
-def build_system() -> Any:
-    """Build the canonical runtime tuple expected by ``main.py``.
-
-    The real wiring owner remains ``bootstrap.system_builder``; this entrypoint
-    only preserves the public Telegram runtime contract.
-    """
-
-    from bootstrap.system_builder import build_system as _build_system
-
-    return _build_system()
-
-
-def run_telegram(
-    *,
-    core: Any,
-    executor: Any,
-    event_log: Any,
-    event_store: Any = None,
-    payment_outbox: Any = None,
-    stack: Any = None,
-    learning_job: Any = None,
-) -> None:
-    """Run Telegram long polling through the canonical decision/execution path.
-
-    External I/O is sealed behind ``runtime.effects``. Each Telegram update is
-    converted into the single canonical ``WorldStateV1`` and then routed through
-    ``DecisionCore.optimize`` followed by ``RuntimeExecutor.execute``.
-    """
-
-    del event_store, payment_outbox, stack, learning_job
-
-    token = resolve_telegram_bot_token()
-    if not token:
-        raise RuntimeError("TELEGRAM_BOT_TOKEN is required for RUN_MODE=telegram")
-
+def _run_longpoll(*, token: str, core: Any, executor: Any, event_log: Any) -> None:
     _validate_startup(token)
     _start_health_if_enabled(event_log)
 
@@ -283,18 +266,7 @@ def run_telegram(
                 raw_update_id = update.get("update_id")
                 if raw_update_id is not None:
                     offset = int(raw_update_id) + 1
-                state = _world_state_from_update(update)
-                envelope = core.optimize(state)
-                result = executor.execute(envelope)
-                _append_event(
-                    event_log,
-                    event_type="telegram_update_executed",
-                    payload={
-                        "update_id": raw_update_id,
-                        "decision_id": str(getattr(result, "decision_id", "")),
-                        "ok": bool(getattr(result, "ok", False)),
-                    },
-                )
+                _execute_update(core=core, executor=executor, event_log=event_log, update=update, transport="longpoll")
             if not updates and idle_sleep_s > 0:
                 time.sleep(idle_sleep_s)
         except KeyboardInterrupt:
@@ -310,11 +282,120 @@ def run_telegram(
             time.sleep(max(1, env_int("TELEGRAM_ERROR_SLEEP_S", 3)))
 
 
+def _webhook_public_url(path: str) -> str:
+    explicit = env_str("TELEGRAM_WEBHOOK_URL", "").strip()
+    if explicit:
+        return explicit
+    base = env_str("TELEGRAM_WEBHOOK_PUBLIC_BASE_URL", "").strip().rstrip("/")
+    if not base:
+        return ""
+    normalized_path = "/" + str(path or "").strip().lstrip("/")
+    return f"{base}{normalized_path}"
+
+
+def _set_webhook_if_configured(*, token: str, path: str, secret_token: str) -> None:
+    webhook_url = _webhook_public_url(path)
+    if not webhook_url:
+        return
+    payload: dict[str, Any] = {
+        "url": webhook_url,
+        "drop_pending_updates": env_bool("TELEGRAM_DROP_PENDING_UPDATES_ON_START", False),
+    }
+    if secret_token:
+        payload["secret_token"] = secret_token
+    timeout_s = max(1, env_int("TELEGRAM_STARTUP_TIMEOUT_S", 10))
+    response = _response_payload(_http_json("POST", _telegram_api_url(token, "setWebhook"), payload, timeout_s=timeout_s))
+    if not response.get("ok"):
+        raise RuntimeError(str(response.get("description") or response))
+
+
+def _run_webhook(*, token: str, core: Any, executor: Any, event_log: Any) -> None:
+    from runtime.effects import start_telegram_webhook_server_in_thread
+    from runtime.health.server import HealthSnapshot
+
+    host = env_str("TELEGRAM_WEBHOOK_HOST", env_str("HEALTH_HOST", "0.0.0.0"))
+    port = env_int("TELEGRAM_WEBHOOK_PORT", env_int("TELEGRAM_HEALTH_PORT", 8088))
+    path = env_str("TELEGRAM_WEBHOOK_PATH", "/telegram-webhook/")
+    secret_token = env_str("TELEGRAM_WEBHOOK_SECRET_TOKEN", env_str("TELEGRAM_WEBHOOK_SECRET", ""))
+
+    def _on_update(update: dict[str, Any]) -> None:
+        _append_event(event_log, event_type="telegram_webhook_received", payload={"update_id": update.get("update_id")})
+        _execute_update(core=core, executor=executor, event_log=event_log, update=update, transport="webhook")
+
+    snapshot = HealthSnapshot(event_log=event_log, name="telegram-webhook")
+    start_telegram_webhook_server_in_thread(
+        host=host,
+        port=port,
+        path=path,
+        on_update=_on_update,
+        secret_token=secret_token,
+        snapshot=snapshot,
+    )
+    _set_webhook_if_configured(token=token, path=path, secret_token=secret_token)
+    _append_event(event_log, event_type="telegram_started", payload={"mode": "webhook", "port": port, "path": path})
+    _LOG.info("telegram webhook receiver started")
+    while True:
+        time.sleep(max(1, env_int("TELEGRAM_WEBHOOK_IDLE_SLEEP_S", 3600)))
+
+
+def runtime_bootstrap() -> None:
+    """Explicit process bootstrap.
+
+    Hard invariant: no side-effects on import. We load dotenv/token aliases only
+    when the sovereign entrypoint explicitly boots the process.
+    """
+
+    mark_telegram_token_source()
+    _bootstrap()
+
+
+def build_system() -> Any:
+    """Build the canonical runtime tuple expected by ``main.py``.
+
+    The real wiring owner remains ``bootstrap.system_builder``; this entrypoint
+    only preserves the public Telegram runtime contract.
+    """
+
+    from bootstrap.system_builder import build_system as _build_system
+
+    return _build_system()
+
+
+def run_telegram(
+    *,
+    core: Any,
+    executor: Any,
+    event_log: Any,
+    event_store: Any = None,
+    payment_outbox: Any = None,
+    stack: Any = None,
+    learning_job: Any = None,
+) -> None:
+    """Run Telegram transport through the canonical decision/execution path.
+
+    External I/O is sealed behind ``runtime.effects``. Each Telegram update is
+    converted into the single canonical ``WorldStateV1`` and then routed through
+    ``DecisionCore.optimize`` followed by ``RuntimeExecutor.execute``.
+    """
+
+    del event_store, payment_outbox, stack, learning_job
+
+    token = resolve_telegram_bot_token()
+    if not token:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN is required for RUN_MODE=telegram")
+
+    if env_bool("TELEGRAM_USE_WEBHOOK", False) or env_bool("TELEGRAM_WEBHOOK_ENABLED", False):
+        _run_webhook(token=token, core=core, executor=executor, event_log=event_log)
+        return
+    _run_longpoll(token=token, core=core, executor=executor, event_log=event_log)
+
+
 __all__ = [
     "CANON_RUNTIME_ENTRYPOINT_BOOTSTRAP_DELEGATES_TO_SOVEREIGN_BOOTSTRAP",
     "CANON_RUNTIME_ENTRYPOINT_THIN_SHIM",
     "CANON_TELEGRAM_ENTRYPOINT_MAIN_CONTRACT",
     "CANON_TELEGRAM_ENTRYPOINT_NO_SDK_IMPORTS",
+    "CANON_TELEGRAM_WEBHOOK_AND_LONGPOLL_SHARED_DECISION_PATH",
     "WorldStateV1",
     "build_system",
     "run_telegram",
