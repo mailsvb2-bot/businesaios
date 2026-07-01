@@ -4,7 +4,7 @@ from typing import Any
 
 from core.observability.silent import swallow
 from core.policies.telegram.helpers import ProposedAction, choose_marketing_variant, propose, propose_message
-from core.policies.telegram.tariffs_text import build_plan_confirmation_text
+from core.policies.telegram.tariffs_text import build_plan_confirmation_text, scope_hint
 from core.ux.telegram_keyboards import kb_back_main, kb_pay_selected, kb_sub, kb_tariffs
 
 
@@ -189,3 +189,13 @@ def propose_pay_selected(*, user_id: str, full_access: bool, selected: dict[str,
             "metadata": meta_note,
         },
     )
+
+
+__all__ = [
+    "build_plan_confirmation_text",
+    "parse_sub_buy",
+    "propose_pay_selected",
+    "propose_select_tariff",
+    "propose_show_tariffs",
+    "scope_hint",
+]
