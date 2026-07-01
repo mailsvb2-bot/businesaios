@@ -162,3 +162,110 @@ def perform_admin_toggle(
         channel=channel,
         event_log=event_log,
     )
+
+
+def apply_pricing_change_effect(
+    owner: Any,
+    *,
+    decision_id: str,
+    correlation_id: str,
+    admin_id: str,
+    plan_id: int,
+    new_price: int,
+    pricing_version: str,
+    request_id: str | None = None,
+    requested_by: str | None = None,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    from runtime._internal.effects_domains.admin_pricing import (
+        execute_plan_price_update,
+        validate_pricing_change,
+    )
+
+    validate_pricing_change(
+        admin_id=str(admin_id),
+        requested_by=requested_by,
+        pricing_version=str(pricing_version),
+    )
+    result = execute_plan_price_update(
+        plan_id=int(plan_id),
+        new_price=int(new_price),
+        pricing_version=str(pricing_version),
+    )
+    event_log = getattr(owner, "event_log", None)
+    if event_log is not None:
+        event_log.emit(
+            event_type="admin_pricing_change_applied",
+            source="admin_state",
+            user_id=str(admin_id),
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+            payload={
+                "plan_id": int(plan_id),
+                "new_price": int(new_price),
+                "pricing_version": str(pricing_version),
+                "request_id": str(request_id or ""),
+                "requested_by": str(requested_by or ""),
+                "reason": str(reason or ""),
+                "result": dict(result),
+            },
+        )
+    return {"ok": True, "result": dict(result)}
+
+
+def request_pricing_change_effect(
+    owner: Any,
+    *,
+    decision_id: str,
+    correlation_id: str,
+    admin_id: str,
+    plan_id: int,
+    new_price: int,
+    request_id: str,
+    suggested_pricing_version: str | None = None,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    event_log = getattr(owner, "event_log", None)
+    payload = {
+        "plan_id": int(plan_id),
+        "new_price": int(new_price),
+        "request_id": str(request_id),
+        "suggested_pricing_version": str(suggested_pricing_version or ""),
+        "reason": str(reason or ""),
+    }
+    if event_log is not None:
+        event_log.emit(
+            event_type="admin_pricing_change_requested",
+            source="admin_state",
+            user_id=str(admin_id),
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+            payload=payload,
+        )
+    return {"ok": True, "request": payload}
+
+
+def reject_pricing_change_effect(
+    owner: Any,
+    *,
+    decision_id: str,
+    correlation_id: str,
+    admin_id: str,
+    request_id: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    event_log = getattr(owner, "event_log", None)
+    payload = {
+        "request_id": str(request_id),
+        "reason": str(reason or ""),
+    }
+    if event_log is not None:
+        event_log.emit(
+            event_type="admin_pricing_change_rejected",
+            source="admin_state",
+            user_id=str(admin_id),
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+            payload=payload,
+        )
+    return {"ok": True, "rejection": payload}
