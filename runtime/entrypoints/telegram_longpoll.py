@@ -1,9 +1,10 @@
 """BusinesAIOS Telegram transport entrypoint.
 
 Telegram is only one transport. Incoming updates are normalized through the
-canonical messaging ingress adapter before they reach DecisionCore. This keeps
-Telegram, WhatsApp, VK, Max, Slack, Discord, Viber, SMS, email, and webchat on
-one WorldState contract instead of creating channel-specific decision paths.
+canonical messaging ingress adapter before they reach the runtime decision
+gateway. This keeps Telegram, WhatsApp, VK, Max, Slack, Discord, Viber, SMS,
+email, and webchat on one WorldState contract instead of creating
+channel-specific decision paths.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from runtime.boot.env import (
     resolve_telegram_bot_token,
 )
 from runtime.bootstrap import bootstrap as _bootstrap
+from runtime.decision_gateway import execute_runtime_decision
 from runtime.messaging_ingress import messaging_event_to_world_state, telegram_update_to_messaging_event
 
 CANON_RUNTIME_ENTRYPOINT_THIN_SHIM = True
@@ -29,6 +31,7 @@ CANON_TELEGRAM_ENTRYPOINT_MAIN_CONTRACT = True
 CANON_TELEGRAM_ENTRYPOINT_NO_SDK_IMPORTS = True
 CANON_TELEGRAM_WEBHOOK_AND_LONGPOLL_SHARED_DECISION_PATH = True
 CANON_TELEGRAM_USES_CANONICAL_MESSAGING_INGRESS = True
+CANON_TELEGRAM_EXECUTES_ONLY_THROUGH_DECISION_GATEWAY = True
 
 _LOG = logging.getLogger("businesaios.telegram.entrypoint")
 
@@ -161,8 +164,7 @@ def _start_health_if_enabled(event_log: Any) -> Any:
 def _execute_update(*, core: Any, executor: Any, event_log: Any, update: dict[str, Any], transport: str) -> None:
     raw_update_id = update.get("update_id")
     state = _world_state_from_update(update, transport=transport)
-    envelope = core.optimize(state)
-    result = executor.execute(envelope)
+    result = execute_runtime_decision(issuer=core, executor=executor, state=state)
     _append_event(
         event_log,
         event_type="telegram_update_executed",
@@ -322,6 +324,7 @@ __all__ = [
     "CANON_TELEGRAM_ENTRYPOINT_NO_SDK_IMPORTS",
     "CANON_TELEGRAM_WEBHOOK_AND_LONGPOLL_SHARED_DECISION_PATH",
     "CANON_TELEGRAM_USES_CANONICAL_MESSAGING_INGRESS",
+    "CANON_TELEGRAM_EXECUTES_ONLY_THROUGH_DECISION_GATEWAY",
     "WorldStateV1",
     "build_system",
     "run_telegram",
