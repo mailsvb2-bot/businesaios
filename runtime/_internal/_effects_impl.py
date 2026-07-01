@@ -159,6 +159,90 @@ def start_health_server_in_thread(*, snapshot: Any, host: str, port: int) -> Any
     return server
 
 
+def start_telegram_webhook_server_in_thread(
+    *,
+    host: str,
+    port: int,
+    path: str,
+    on_update: Any,
+    secret_token: str = "",
+    snapshot: Any | None = None,
+) -> Any:
+    """Start the sealed Telegram webhook receiver.
+
+    The callback receives a parsed Telegram update dict and remains responsible
+    for converting it into WorldState -> DecisionCore -> RuntimeExecutor.
+    """
+
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    normalized_path = str(path or "/telegram-webhook/").strip() or "/telegram-webhook/"
+    expected_secret = str(secret_token or "").strip()
+
+    class _Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args: Any) -> None:  # pragma: no cover - quiet webhook server
+            return
+
+        def _send_json(self, status_code: int, body: dict[str, Any]) -> None:
+            raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+            self.send_response(status_code)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            if self.path.split("?", 1)[0] not in {"/health", "/healthz", "/readyz"}:
+                self._send_json(404, {"ok": False, "code": "not_found"})
+                return
+            collect = getattr(snapshot, "collect", None)
+            if not callable(collect):
+                self._send_json(200, {"ok": True, "name": "telegram-webhook"})
+                return
+            try:
+                payload = collect()
+            except Exception as exc:
+                self._send_json(500, {"ok": False, "code": "health_snapshot_failed", "error": type(exc).__name__})
+                return
+            if not isinstance(payload, dict):
+                payload = {"payload": payload}
+            payload.setdefault("ok", True)
+            self._send_json(200, payload)
+
+        def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            if self.path.split("?", 1)[0] != normalized_path:
+                self._send_json(404, {"ok": False, "code": "not_found"})
+                return
+            if expected_secret:
+                observed = str(self.headers.get("X-Telegram-Bot-Api-Secret-Token", "")).strip()
+                if observed != expected_secret:
+                    self._send_json(401, {"ok": False, "code": "unauthorized"})
+                    return
+            size = int(self.headers.get("content-length") or 0)
+            body = self.rfile.read(size) if size > 0 else b"{}"
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except Exception:
+                self._send_json(400, {"ok": False, "code": "invalid_json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(400, {"ok": False, "code": "invalid_update"})
+                return
+            try:
+                on_update(payload)
+            except Exception as exc:
+                self._send_json(500, {"ok": False, "code": "update_processing_failed", "error": type(exc).__name__})
+                return
+            self._send_json(200, {"ok": True})
+
+    server = ThreadingHTTPServer((str(host), int(port)), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
 def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, event_store: Any, payment_outbox: Any) -> Any:
     import json
     import os
@@ -287,6 +371,7 @@ __all__ = [
     "http_json",
     "http_post",
     "start_health_server_in_thread",
+    "start_telegram_webhook_server_in_thread",
     "start_yookassa_webhook_server_in_thread",
     "url_with_params",
 ]
