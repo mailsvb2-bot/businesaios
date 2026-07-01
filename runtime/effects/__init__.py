@@ -44,6 +44,25 @@ def start_health_server_in_thread(*, snapshot: HealthSnapshot, host: str, port: 
     return _effects_impl().start_health_server_in_thread(snapshot=snapshot, host=host, port=port)
 
 
+def start_telegram_webhook_server_in_thread(
+    *,
+    host: str,
+    port: int,
+    path: str,
+    on_update: Any,
+    secret_token: str = "",
+    snapshot: HealthSnapshot | None = None,
+) -> Any:
+    return _effects_impl().start_telegram_webhook_server_in_thread(
+        host=host,
+        port=port,
+        path=path,
+        on_update=on_update,
+        secret_token=secret_token,
+        snapshot=snapshot,
+    )
+
+
 def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, event_store: Any, payment_outbox: Any) -> Any:
     return _effects_impl().start_yookassa_webhook_server_in_thread(host=host, port=port, path=path, event_store=event_store, payment_outbox=payment_outbox)
 
@@ -125,6 +144,7 @@ __all__ = [
     "CANON_RUNTIME_EFFECTS_IMPORT_SURFACE",
     "load_effects_impl",
     "start_health_server_in_thread",
+    "start_telegram_webhook_server_in_thread",
     "start_yookassa_webhook_server_in_thread",
     "http_get",
     "http_post",
