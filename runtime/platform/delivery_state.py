@@ -12,18 +12,18 @@ from __future__ import annotations
 
 import sqlite3
 import time
+from collections.abc import Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 
 from runtime.platform._delivery_state_codec import merge_metadata as _merge_metadata
 from runtime.platform._delivery_state_codec import metadata_json as _metadata_json
 from runtime.platform._delivery_state_codec import normalize_receipt_row as _normalize_receipt_row
 from runtime.platform.app_paths import runtime_data_dir
 from runtime.platform.config.env_flags import env_path
-from runtime.platform.delivery_state_policy import DEFAULT_DELIVERY_STATE_POLICY
+from runtime.platform.delivery_state_policy import DEFAULT_DELIVERY_STATE_POLICY, DeliveryStatePolicy
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 
 FINALIZED_PHASE = DEFAULT_DELIVERY_STATE_POLICY.finalized_phase
@@ -258,8 +258,7 @@ def mark_recovery_queued(
             SET payload_digest = COALESCE(payload_digest, ?),
                 metadata_json = ?,
                 delivery_phase = ?,
-                accepted_at_ms = COALESCE(accepted_at_ms, ?),
-                finalized_at_ms = finalized_at_ms
+                accepted_at_ms = COALESCE(accepted_at_ms, ?)
             WHERE message_id = ?
             """,
             (
