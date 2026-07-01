@@ -30,13 +30,37 @@ from .effects_domains.evolution import EvolutionEffectsMixin
 from .effects_domains.marketing import MarketingEffectsMixin
 from .effects_domains.tracking import TrackingEffectsMixin
 from .effects_domains.user_state import UserStateEffectsMixin
-from .http_transport import HttpTransport, build_http_transport, form_urlencode as _form_body_encoder, url_with_params as _url_with_params
+from .http_transport import (
+    HTTPResponse,
+    HttpTransport,
+    build_http_transport,
+    form_urlencode as _form_body_encoder,
+    runtime_network_mode as _runtime_network_mode,
+    sync_get as _sync_get,
+    sync_post_json as _sync_post_json,
+    url_with_params as _url_with_params,
+)
 
 CANON_RUNTIME_OBSERVABILITY_OWNER = _CANON_RUNTIME_TELEMETRY_OWNER
+CANON_EFFECTS_PUBLIC_FACADE_BACKED_BY_INTERNAL_IMPL = True
+
 
 def _telegram_api_base() -> str:
     from runtime.platform.config.env_flags import env_str
+
     return env_str("TELEGRAM_API_BASE", "https://api.telegram.org").strip().rstrip("/")
+
+
+def _require_network_enabled() -> None:
+    """Fail closed before any sealed outbound network call.
+
+    The public ``runtime.effects`` facade is allowed to expose HTTP helpers, but
+    actual network usage must stay here and must respect the same runtime network
+    switch used by the effect router transport.
+    """
+
+    if _runtime_network_mode() != "enabled":
+        raise RuntimeError("network_disabled_in_this_runtime")
 
 
 def encode_form_body(data: dict[str, Any]) -> bytes:
@@ -45,6 +69,178 @@ def encode_form_body(data: dict[str, Any]) -> bytes:
 
 def url_with_params(*, url: str, params: dict[str, Any] | None = None) -> str:
     return _url_with_params(url=url, params=params)
+
+
+def http_get(*, url: str, headers: dict[str, str] | None = None, params: dict[str, Any] | None = None, timeout_s: int = 30) -> HTTPResponse:
+    """Sealed synchronous HTTP GET used by public runtime.effects facade."""
+
+    _require_network_enabled()
+    return _sync_get(url=str(url), headers=dict(headers or {}), params=dict(params or {}), timeout_s=int(timeout_s or 30))
+
+
+def http_post(*, url: str, headers: dict[str, str] | None = None, data: dict[str, Any] | None = None, timeout_s: int = 30) -> HTTPResponse:
+    """Sealed synchronous JSON POST used by public runtime.effects facade."""
+
+    _require_network_enabled()
+    return _sync_post_json(url=str(url), headers=dict(headers or {}), data=dict(data or {}), timeout_s=int(timeout_s or 30))
+
+
+def http_json(
+    method: str,
+    url: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    headers: dict[str, str] | None = None,
+    params: dict[str, Any] | None = None,
+    timeout_s: int = 30,
+) -> HTTPResponse:
+    """Sealed JSON HTTP helper.
+
+    ``GET`` routes payload through query parameters by convention; mutating verbs
+    send JSON body. This keeps callers SDK-free without leaking urllib/http
+    details outside ``runtime/_internal``.
+    """
+
+    normalized_method = str(method or "GET").strip().upper()
+    if normalized_method == "GET":
+        query = dict(params or {})
+        query.update(dict(payload or {}))
+        return http_get(url=url, headers=headers, params=query, timeout_s=timeout_s)
+    if normalized_method == "POST":
+        body = dict(payload or {})
+        return http_post(url=url, headers=headers, data=body, timeout_s=timeout_s)
+    raise ValueError(f"unsupported_json_http_method:{normalized_method}")
+
+
+def start_health_server_in_thread(*, snapshot: Any, host: str, port: int) -> Any:
+    """Start a tiny sealed HTTP health endpoint.
+
+    The health snapshot itself is pure/read-only. Binding an HTTP server is a
+    real integration and therefore belongs in this private effects implementation.
+    """
+
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    class _Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args: Any) -> None:  # pragma: no cover - quiet health server
+            return
+
+        def _send_json(self, status_code: int, body: dict[str, Any]) -> None:
+            raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+            self.send_response(status_code)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            if self.path.split("?", 1)[0] not in {"/health", "/healthz", "/readyz"}:
+                self._send_json(404, {"ok": False, "code": "not_found"})
+                return
+            collect = getattr(snapshot, "collect", None)
+            if not callable(collect):
+                self._send_json(500, {"ok": False, "code": "invalid_health_snapshot"})
+                return
+            try:
+                payload = collect()
+            except Exception as exc:
+                self._send_json(500, {"ok": False, "code": "health_snapshot_failed", "error": type(exc).__name__})
+                return
+            if not isinstance(payload, dict):
+                payload = {"payload": payload}
+            payload.setdefault("ok", True)
+            self._send_json(200, payload)
+
+    server = ThreadingHTTPServer((str(host), int(port)), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
+
+
+def start_telegram_webhook_server_in_thread(
+    *,
+    host: str,
+    port: int,
+    path: str,
+    on_update: Any,
+    secret_token: str = "",
+    snapshot: Any | None = None,
+) -> Any:
+    """Start the sealed Telegram webhook receiver.
+
+    The callback receives a parsed Telegram update dict and remains responsible
+    for converting it into WorldState -> DecisionCore -> RuntimeExecutor.
+    """
+
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    normalized_path = str(path or "/telegram-webhook/").strip() or "/telegram-webhook/"
+    expected_secret = str(secret_token or "").strip()
+
+    class _Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args: Any) -> None:  # pragma: no cover - quiet webhook server
+            return
+
+        def _send_json(self, status_code: int, body: dict[str, Any]) -> None:
+            raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+            self.send_response(status_code)
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
+
+        def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            if self.path.split("?", 1)[0] not in {"/health", "/healthz", "/readyz"}:
+                self._send_json(404, {"ok": False, "code": "not_found"})
+                return
+            collect = getattr(snapshot, "collect", None)
+            if not callable(collect):
+                self._send_json(200, {"ok": True, "name": "telegram-webhook"})
+                return
+            try:
+                payload = collect()
+            except Exception as exc:
+                self._send_json(500, {"ok": False, "code": "health_snapshot_failed", "error": type(exc).__name__})
+                return
+            if not isinstance(payload, dict):
+                payload = {"payload": payload}
+            payload.setdefault("ok", True)
+            self._send_json(200, payload)
+
+        def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+            if self.path.split("?", 1)[0] != normalized_path:
+                self._send_json(404, {"ok": False, "code": "not_found"})
+                return
+            if expected_secret:
+                observed = str(self.headers.get("X-Telegram-Bot-Api-Secret-Token", "")).strip()
+                if observed != expected_secret:
+                    self._send_json(401, {"ok": False, "code": "unauthorized"})
+                    return
+            size = int(self.headers.get("content-length") or 0)
+            body = self.rfile.read(size) if size > 0 else b"{}"
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except Exception:
+                self._send_json(400, {"ok": False, "code": "invalid_json"})
+                return
+            if not isinstance(payload, dict):
+                self._send_json(400, {"ok": False, "code": "invalid_update"})
+                return
+            try:
+                on_update(payload)
+            except Exception as exc:
+                self._send_json(500, {"ok": False, "code": "update_processing_failed", "error": type(exc).__name__})
+                return
+            self._send_json(200, {"ok": True})
+
+    server = ThreadingHTTPServer((str(host), int(port)), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server
 
 
 def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, event_store: Any, payment_outbox: Any) -> Any:
@@ -164,3 +360,18 @@ class Effects(UserStateEffectsMixin, TrackingEffectsMixin, AdminStateEffectsMixi
             event_type=str(event_type),
             payload=dict(payload),
         )
+
+
+__all__ = [
+    "CANON_RUNTIME_OBSERVABILITY_OWNER",
+    "CANON_EFFECTS_PUBLIC_FACADE_BACKED_BY_INTERNAL_IMPL",
+    "Effects",
+    "encode_form_body",
+    "http_get",
+    "http_json",
+    "http_post",
+    "start_health_server_in_thread",
+    "start_telegram_webhook_server_in_thread",
+    "start_yookassa_webhook_server_in_thread",
+    "url_with_params",
+]
