@@ -1,16 +1,9 @@
-"""BusinesAIOS Telegram entrypoint.
+"""BusinesAIOS Telegram transport entrypoint.
 
-This module is intentionally thin, but it must expose the runtime surface used by
-``main.py``:
-
-- ``runtime_bootstrap()``
-- ``build_system()``
-- ``run_telegram()``
-- ``WorldStateV1``
-
-No Telegram SDK, socket, subprocess, urllib, httpx, requests, or direct private
-``runtime._internal`` imports are allowed here. Real network I/O is routed through
-``runtime.effects`` which delegates into the sealed private effects implementation.
+Telegram is only one transport. Incoming updates are normalized through the
+canonical messaging ingress adapter before they reach DecisionCore. This keeps
+Telegram, WhatsApp, VK, Max, Slack, Discord, Viber, SMS, email, and webchat on
+one WorldState contract instead of creating channel-specific decision paths.
 """
 
 from __future__ import annotations
@@ -28,14 +21,20 @@ from runtime.boot.env import (
     resolve_telegram_bot_token,
 )
 from runtime.bootstrap import bootstrap as _bootstrap
+from runtime.messaging_ingress import messaging_event_to_world_state, telegram_update_to_messaging_event
 
 CANON_RUNTIME_ENTRYPOINT_THIN_SHIM = True
 CANON_RUNTIME_ENTRYPOINT_BOOTSTRAP_DELEGATES_TO_SOVEREIGN_BOOTSTRAP = True
 CANON_TELEGRAM_ENTRYPOINT_MAIN_CONTRACT = True
 CANON_TELEGRAM_ENTRYPOINT_NO_SDK_IMPORTS = True
 CANON_TELEGRAM_WEBHOOK_AND_LONGPOLL_SHARED_DECISION_PATH = True
+CANON_TELEGRAM_USES_CANONICAL_MESSAGING_INGRESS = True
 
 _LOG = logging.getLogger("businesaios.telegram.entrypoint")
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
 
 
 def _telegram_api_base() -> str:
@@ -64,7 +63,7 @@ def _append_event(event_log: Any, *, event_type: str, payload: dict[str, Any] | 
         return
     event = {
         "event_type": str(event_type),
-        "timestamp_ms": int(time.time() * 1000),
+        "timestamp_ms": _now_ms(),
         "payload": dict(payload or {}),
     }
     for name in ("append", "record", "emit"):
@@ -77,97 +76,52 @@ def _append_event(event_log: Any, *, event_type: str, payload: dict[str, Any] | 
                 continue
 
 
-def _message_from_update(update: dict[str, Any]) -> dict[str, Any]:
-    for key in ("message", "edited_message", "channel_post", "edited_channel_post"):
-        value = update.get(key)
-        if isinstance(value, dict):
-            return value
-    callback = update.get("callback_query")
-    if isinstance(callback, dict):
-        value = callback.get("message")
-        if isinstance(value, dict):
-            return value
-    return {}
-
-
-def _text_from_update(update: dict[str, Any], message: dict[str, Any]) -> str:
-    callback = update.get("callback_query")
-    if isinstance(callback, dict):
-        data = str(callback.get("data") or "").strip()
-        if data:
-            return data
-    return str(message.get("text") or message.get("caption") or "").strip()
-
-
-def _chat_id(message: dict[str, Any]) -> str:
-    chat = message.get("chat")
-    if isinstance(chat, dict):
-        value = chat.get("id")
-        if value is not None:
-            return str(value)
-    return ""
-
-
-def _sender_id(update: dict[str, Any], message: dict[str, Any]) -> str:
-    callback = update.get("callback_query")
-    if isinstance(callback, dict):
-        sender = callback.get("from")
-        if isinstance(sender, dict) and sender.get("id") is not None:
-            return str(sender.get("id"))
-    sender = message.get("from")
-    if isinstance(sender, dict) and sender.get("id") is not None:
-        return str(sender.get("id"))
-    chat_id = _chat_id(message)
-    return chat_id or env_str("DEMO_USER_ID", "telegram_user")
-
-
-def _command_and_args(text: str) -> tuple[str, str]:
-    stripped = str(text or "").strip()
-    if not stripped.startswith("/"):
-        return "", stripped
-    head, _, tail = stripped.partition(" ")
-    return head, tail.strip()
-
-
-def _world_state_from_update(update: dict[str, Any]) -> WorldStateV1:
-    message = _message_from_update(update)
-    text = _text_from_update(update, message)
-    command, args = _command_and_args(text)
-    chat_id = _chat_id(message)
-    user_id = _sender_id(update, message)
-    message_date = int(message.get("date") or 0)
-    timestamp_ms = message_date * 1000 if message_date > 0 else int(time.time() * 1000)
-    tenant_id = env_str("TENANT_ID", "default").strip() or "default"
-
+def _copy_world_state(state: WorldStateV1, *, user: dict[str, Any], session: dict[str, Any], meta: dict[str, Any], timestamp_ms: int) -> WorldStateV1:
     return WorldStateV1(
-        schema_version=1,
-        user={
-            "id": user_id,
-            "telegram_user_id": user_id,
-            "telegram_chat_id": chat_id,
-            "timezone": env_str("SYSTEM_TZ", "Europe/Amsterdam"),
-        },
-        session={
-            "source": "telegram",
-            "text": text,
-            "command": command,
-            "args": args,
-            "telegram_update_id": update.get("update_id"),
-            "telegram_chat_id": chat_id,
-        },
-        product={
-            "name": env_str("PRODUCT_NAME", "BusinesAIOS"),
-            "channel": "telegram",
-        },
-        economy={},
-        timestamp_ms=timestamp_ms,
-        tenant_id=tenant_id,
-        user_id=user_id,
-        meta={
-            "source": "telegram",
-            "transport": "longpoll",
-        },
+        schema_version=state.schema_version,
+        user=user,
+        session=session,
+        product=dict(state.product or {}),
+        economy=dict(state.economy or {}),
+        timestamp_ms=int(timestamp_ms or state.timestamp_ms or _now_ms()),
+        tenant_id=state.tenant_id,
+        meta=meta,
+        user_id=state.user_id,
+        safe_mode=state.safe_mode,
+        capital=state.capital,
+        horizon_state=state.horizon_state,
+        behavior=state.behavior,
+        price_constraints=state.price_constraints,
+        deployment_proposal=state.deployment_proposal,
+        manual_override=state.manual_override,
     )
+
+
+def _world_state_from_update(update: dict[str, Any], *, transport: str = "longpoll") -> WorldStateV1:
+    event = telegram_update_to_messaging_event(
+        update,
+        tenant_id=env_str("TENANT_ID", "default").strip() or "default",
+        product_name=env_str("PRODUCT_NAME", "BusinesAIOS"),
+        timezone=env_str("SYSTEM_TZ", "Europe/Amsterdam"),
+    )
+    timestamp_ms = int(event.timestamp_ms or 0) or _now_ms()
+    state = messaging_event_to_world_state(event)
+
+    user = {
+        **dict(state.user or {}),
+        "telegram_user_id": event.user_id,
+        "telegram_chat_id": event.chat_id,
+    }
+    session = {
+        **dict(state.session or {}),
+        "telegram_update_id": event.update_id,
+        "telegram_chat_id": event.chat_id,
+    }
+    meta = {
+        **dict(state.meta or {}),
+        "transport": str(transport or "telegram"),
+    }
+    return _copy_world_state(state, user=user, session=session, meta=meta, timestamp_ms=timestamp_ms)
 
 
 def _validate_startup(token: str) -> None:
@@ -206,17 +160,7 @@ def _start_health_if_enabled(event_log: Any) -> Any:
 
 def _execute_update(*, core: Any, executor: Any, event_log: Any, update: dict[str, Any], transport: str) -> None:
     raw_update_id = update.get("update_id")
-    state = _world_state_from_update(update)
-    if transport:
-        try:
-            state = state.__class__(
-                **{
-                    **state.__dict__,
-                    "meta": {**dict(state.meta or {}), "transport": transport},
-                }
-            )
-        except Exception:
-            pass
+    state = _world_state_from_update(update, transport=transport)
     envelope = core.optimize(state)
     result = executor.execute(envelope)
     _append_event(
@@ -339,23 +283,11 @@ def _run_webhook(*, token: str, core: Any, executor: Any, event_log: Any) -> Non
 
 
 def runtime_bootstrap() -> None:
-    """Explicit process bootstrap.
-
-    Hard invariant: no side-effects on import. We load dotenv/token aliases only
-    when the sovereign entrypoint explicitly boots the process.
-    """
-
     mark_telegram_token_source()
     _bootstrap()
 
 
 def build_system() -> Any:
-    """Build the canonical runtime tuple expected by ``main.py``.
-
-    The real wiring owner remains ``bootstrap.system_builder``; this entrypoint
-    only preserves the public Telegram runtime contract.
-    """
-
     from bootstrap.system_builder import build_system as _build_system
 
     return _build_system()
@@ -371,13 +303,6 @@ def run_telegram(
     stack: Any = None,
     learning_job: Any = None,
 ) -> None:
-    """Run Telegram transport through the canonical decision/execution path.
-
-    External I/O is sealed behind ``runtime.effects``. Each Telegram update is
-    converted into the single canonical ``WorldStateV1`` and then routed through
-    ``DecisionCore.optimize`` followed by ``RuntimeExecutor.execute``.
-    """
-
     del event_store, payment_outbox, stack, learning_job
 
     token = resolve_telegram_bot_token()
@@ -396,6 +321,7 @@ __all__ = [
     "CANON_TELEGRAM_ENTRYPOINT_MAIN_CONTRACT",
     "CANON_TELEGRAM_ENTRYPOINT_NO_SDK_IMPORTS",
     "CANON_TELEGRAM_WEBHOOK_AND_LONGPOLL_SHARED_DECISION_PATH",
+    "CANON_TELEGRAM_USES_CANONICAL_MESSAGING_INGRESS",
     "WorldStateV1",
     "build_system",
     "run_telegram",
