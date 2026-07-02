@@ -24,6 +24,14 @@ def _artifact_path(name: str) -> Path:
     return repo_root() / "artifacts" / "ci" / name
 
 
+def _invalid_artifact(name: str, reason: str) -> dict[str, object]:
+    return {
+        "artifact": name.removesuffix(".json"),
+        "status": "invalid",
+        "violations": [name.removesuffix(".json") + reason],
+    }
+
+
 def _read_artifact(name: str) -> dict[str, object]:
     path = _artifact_path(name)
     if not path.exists():
@@ -35,35 +43,31 @@ def _read_artifact(name: str) -> dict[str, object]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        return {
-            "artifact": name.removesuffix(".json"),
-            "status": "invalid",
-            "violations": [name.removesuffix(".json") + "_artifact_invalid"],
-        }
-    return dict(payload) if isinstance(payload, Mapping) else {
-        "artifact": name.removesuffix(".json"),
-        "status": "invalid",
-        "violations": [name.removesuffix(".json") + "_artifact_not_object"],
-    }
+        return _invalid_artifact(name, "_artifact_invalid")
+    if not isinstance(payload, Mapping):
+        return _invalid_artifact(name, "_artifact_not_object")
+    return dict(payload)
 
 
 def _write_verify_artifact(payload: dict[str, object]) -> None:
     path = _artifact_path("verify_release.json")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    text = json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    path.write_text(text, encoding="utf-8")
 
 
 def _aggregate_required_proof_artifacts() -> tuple[bool, str]:
     artifacts: dict[str, dict[str, object]] = {}
     violations: list[str] = []
     for filename, accepted_statuses in _REQUIRED_PROOF_ARTIFACTS:
+        artifact_name = filename.removesuffix(".json")
         payload = _read_artifact(filename)
-        artifacts[filename.removesuffix(".json")] = payload
+        artifacts[artifact_name] = payload
         status = str(payload.get("status") or "")
         if status not in accepted_statuses:
-            violations.append(filename.removesuffix(".json") + "_not_ready")
+            violations.append(artifact_name + "_not_ready")
         if payload.get("claims_production_ready") is True:
-            violations.append(filename.removesuffix(".json") + "_must_not_claim_production_ready")
+            violations.append(artifact_name + "_must_not_claim_production_ready")
 
     payload = {
         "artifact": "verify_release",
