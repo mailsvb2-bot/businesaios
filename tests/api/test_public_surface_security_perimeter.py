@@ -60,11 +60,30 @@ def test_internal_write_requires_replay_marker() -> None:
         )
 
 
+def test_internal_write_does_not_accept_request_id_as_replay_proof() -> None:
+    with pytest.raises(PermissionError, match="api_replay_protection_required"):
+        _guard().enforce(
+            route_path="/actions/execute",
+            request_context=_context(jwt_verified=True),
+            body={"tenant_id": "tenant-a", "request_id": "req-only", "action_type": "noop@v1"},
+        )
+
+
 def test_internal_write_passes_with_perimeter_tenant_and_replay_marker() -> None:
     verdict = _guard().enforce(
         route_path="/actions/execute",
         request_context=_context(jwt_verified=True),
         body={"tenant_id": "tenant-a", "idempotency_key": "idem-1", "action_type": "noop@v1"},
+    )
+
+    assert verdict["allowed"] is True
+
+
+def test_internal_write_accepts_metadata_replay_nonce() -> None:
+    verdict = _guard().enforce(
+        route_path="/goals/execute",
+        request_context=_context(jwt_verified=True, replay_nonce="nonce-1"),
+        body={"tenant_id": "tenant-a", "goal": "smoke"},
     )
 
     assert verdict["allowed"] is True
