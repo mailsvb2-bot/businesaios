@@ -27,4 +27,26 @@ class RuntimeServiceName:
     ACTION_BUDGET: str = "action_budget"
     GOVERNANCE_CHAIN: str = "governance_chain"
     ACTION_EXECUTOR: str = "action_executor"
+    RUNTIME_DECISION_EXECUTION_SERVICE: str = "runtime_decision_execution_service"
     DECISION_CORE: str = "decision_core"
+
+
+CANON_RUNTIME_DECISION_EXECUTION_SERVICE_NAME = True
+CANON_RUNTIME_DECISION_CORE_SERVICE_NAME_COMPAT_ALIAS = True
+
+_RUNTIME_SERVICE_NAME_ALIASES = {
+    RuntimeServiceName.DECISION_CORE: RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE,
+}
+
+
+def canonical_runtime_service_name(name: str) -> str:
+    normalized = str(name).strip()
+    return _RUNTIME_SERVICE_NAME_ALIASES.get(normalized, normalized)
+
+
+__all__ = [
+    "CANON_RUNTIME_DECISION_CORE_SERVICE_NAME_COMPAT_ALIAS",
+    "CANON_RUNTIME_DECISION_EXECUTION_SERVICE_NAME",
+    "RuntimeServiceName",
+    "canonical_runtime_service_name",
+]
