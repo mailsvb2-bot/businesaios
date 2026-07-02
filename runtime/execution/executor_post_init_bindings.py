@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from application.autonomy.autonomy_safety_bundle import AutonomySafetyBundle
@@ -11,6 +12,7 @@ from observability.decision_trace_store import NullDecisionTraceStore
 from runtime.executor_runtime_support import build_executor_queue_support
 
 CANON_RUNTIME_EXECUTOR_POST_INIT_BINDINGS = True
+_LOGGER = logging.getLogger("runtime.executor")
 
 
 def bind_executor_post_init_surfaces(
@@ -60,6 +62,7 @@ def bind_executor_post_init_surfaces(
     executor._connector_health_monitor = getattr(runtime_infra, "connector_health_monitor", None)
     executor._connector_failover_router = getattr(runtime_infra, "connector_failover_router", None)
     executor._evidence_verifier = getattr(runtime_infra, "evidence_verifier", None) or EvidenceVerifier()
+    executor._logger = _LOGGER
     executor._queue_support = build_executor_queue_support(
         runtime_infra=runtime_infra,
         queue_store=queue_store,
