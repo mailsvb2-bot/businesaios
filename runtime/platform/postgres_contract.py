@@ -53,6 +53,7 @@ class PostgresRuntimeProof:
     rollback_roundtrip_ok: bool = False
     backup_evidence_ok: bool = False
     ledger_chain_verification_ok: bool = False
+    deep_live_proof_required: bool = True
 
     @classmethod
     def advisory(cls) -> PostgresRuntimeProof:
@@ -69,6 +70,7 @@ class PostgresRuntimeProof:
             rollback_roundtrip_ok=False,
             backup_evidence_ok=False,
             ledger_chain_verification_ok=False,
+            deep_live_proof_required=True,
         )
 
 
@@ -123,12 +125,13 @@ def evaluate_postgres_contract(proof: PostgresRuntimeProof) -> dict[str, object]
             violations.append("postgres_outbox_roundtrip_required")
         if not proof.recovery_contract_ok:
             violations.append("postgres_recovery_contract_required")
-        if not proof.rollback_roundtrip_ok:
-            violations.append("postgres_rollback_roundtrip_required")
-        if not proof.ledger_chain_verification_ok:
-            violations.append("postgres_ledger_chain_verification_required")
-        if not proof.backup_evidence_ok:
-            violations.append("postgres_backup_evidence_required")
+        if proof.deep_live_proof_required:
+            if not proof.rollback_roundtrip_ok:
+                violations.append("postgres_rollback_roundtrip_required")
+            if not proof.ledger_chain_verification_ok:
+                violations.append("postgres_ledger_chain_verification_required")
+            if not proof.backup_evidence_ok:
+                violations.append("postgres_backup_evidence_required")
     status = (
         PostgresContractStatus.ADVISORY_ONLY.value
         if warnings and not violations
@@ -155,6 +158,7 @@ def evaluate_postgres_contract(proof: PostgresRuntimeProof) -> dict[str, object]
         "rollback_roundtrip_ok": proof.rollback_roundtrip_ok,
         "backup_evidence_ok": proof.backup_evidence_ok,
         "ledger_chain_verification_ok": proof.ledger_chain_verification_ok,
+        "deep_live_proof_required": proof.deep_live_proof_required,
         "required_recovery_action": CrashWindowRecoveryAction.REPLAY_DISPATCH.value,
         "violations": violations,
         "warnings": warnings,
