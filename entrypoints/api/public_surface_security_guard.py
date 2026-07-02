@@ -1,27 +1,21 @@
 from __future__ import annotations
 
-"""Canonical owner for non-control-plane public API security surfaces.
-
-This guard does not introduce a second business brain. It translates public API
-operations into the single security contour so execute/headless/governance and
-memory surfaces are audited and fail-closed on security policy violations.
-"""
-
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
-from governance.rbac_contract import ActorContext, RoleId
-from entrypoints.api.request_context import RequestContext
 from security.access_policy import SecurityAction
-from security.owner_factory import build_default_security_adapter
-from security.security_integration_adapter import SecurityIntegrationAdapter
+from security.actor_context import ActorContext
+from security.roles import RoleId
+from security.security_integration import SecurityIntegrationAdapter, build_default_security_adapter
 
+from entrypoints.api.request_context import RequestContext
 
 CANON_API_PUBLIC_SURFACE_SECURITY_GUARD = True
 CANON_API_FINAL_OWNER = True
 CANON_API_INTERNAL_WRITE_ADMIN_PERIMETER_FAIL_CLOSED = True
 CANON_API_INTERNAL_WRITE_ADMIN_REPLAY_REQUIRED = True
+CANON_API_INTERNAL_WRITE_ADMIN_EXPLICIT_REPLAY_MARKER = True
 CANON_API_INTERNAL_WRITE_ADMIN_TENANT_ISOLATION = True
 
 
@@ -333,8 +327,7 @@ class PublicSurfaceSecurityGuard:
             value = payload.get(key) or metadata.get(key)
             if value is not None and str(value).strip():
                 return True
-        request_id = request_context.request_id or payload.get('request_id') or metadata.get('request_id')
-        return bool(str(request_id or '').strip())
+        return False
 
     @staticmethod
     def _tenant_isolation_ok(*, payload: Mapping[str, Any], request_context: RequestContext, tenant_id: str) -> bool:
@@ -445,6 +438,7 @@ class PublicSurfaceSecurityGuard:
 
 __all__ = [
     'CANON_API_FINAL_OWNER',
+    'CANON_API_INTERNAL_WRITE_ADMIN_EXPLICIT_REPLAY_MARKER',
     'CANON_API_INTERNAL_WRITE_ADMIN_PERIMETER_FAIL_CLOSED',
     'CANON_API_INTERNAL_WRITE_ADMIN_REPLAY_REQUIRED',
     'CANON_API_INTERNAL_WRITE_ADMIN_TENANT_ISOLATION',
