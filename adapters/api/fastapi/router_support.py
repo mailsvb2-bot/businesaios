@@ -67,12 +67,28 @@ def normalized_env_name() -> str:
     return (env_str('APP_ENV', env_str('ENV', 'dev')) or 'dev').strip().lower()
 
 
+def is_production_env_name(env_name: str) -> bool:
+    return str(env_name or '').strip().lower() in {'prod', 'production'}
+
+
+def enforce_control_plane_auth_prod_contract(*, env_name: str, pepper: str) -> None:
+    if not is_production_env_name(env_name):
+        return
+    if not str(pepper or '').strip():
+        raise RuntimeError('PRODUCTION_CONTROL_PLANE_API_KEY_PEPPER_REQUIRED')
+    backend = env_str('BUSINESAIOS_API_KEY_STORE_BACKEND', 'file').strip().lower()
+    if backend == 'memory':
+        raise RuntimeError('PRODUCTION_CONTROL_PLANE_API_KEY_STORE_MUST_BE_PERSISTENT')
+    if not env_str('BUSINESAIOS_API_KEY_STORE_PATH', '').strip():
+        raise RuntimeError('PRODUCTION_CONTROL_PLANE_API_KEY_STORE_PATH_REQUIRED')
+
+
 def build_auth_bundle(*, security_bundle: ApiSecurityOwnerBundle) -> AuthDependencyBundle:
     env_name = normalized_env_name()
     jwt_secret = env_str('API_CONTROL_PLANE_JWT_SECRET', '').strip()
     jwt_audience = env_str('API_CONTROL_PLANE_JWT_AUDIENCE', 'control-plane').strip() or 'control-plane'
     jwt_issuer = env_str('API_CONTROL_PLANE_JWT_ISSUER', 'businesaios-api').strip() or 'businesaios-api'
-    allow_dev_fallbacks = env_bool('API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS', env_name != 'prod')
+    allow_dev_fallbacks = env_bool('API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS', not is_production_env_name(env_name))
     dev_jwt_secret = env_str('API_CONTROL_PLANE_DEV_JWT_SECRET', '').strip()
     jwt_policy = None
     if jwt_secret:
@@ -83,6 +99,7 @@ def build_auth_bundle(*, security_bundle: ApiSecurityOwnerBundle) -> AuthDepende
     pepper = env_str('API_CONTROL_PLANE_API_KEY_PEPPER', '').strip()
     if not pepper and allow_dev_fallbacks:
         pepper = env_str('API_CONTROL_PLANE_DEV_API_KEY_PEPPER', '').strip()
+    enforce_control_plane_auth_prod_contract(env_name=env_name, pepper=pepper)
     api_key_policy = ApiKeyPolicy(store=build_default_api_key_store(pepper=pepper))
     return AuthDependencyBundle(
         auth_policy=CompositeAuthPolicy(
