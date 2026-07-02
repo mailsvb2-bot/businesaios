@@ -171,6 +171,36 @@ print("runtime decision execution service naming lock passed")
     return True, "runtime decision execution service naming lock passed"
 
 
+def _direct_container_release_lock_install_path() -> tuple[bool, str]:
+    root = repo_root()
+    dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+    release_lock_path = root / "requirements.release.lock.txt"
+    if not release_lock_path.exists():
+        return False, "requirements.release.lock.txt is required for container production install"
+    release_lock = release_lock_path.read_text(encoding="utf-8")
+    required = (
+        "COPY requirements.release.lock.txt",
+        "pip install --require-hashes -r requirements.release.lock.txt",
+        "BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK=1",
+    )
+    missing = [snippet for snippet in required if snippet not in dockerfile]
+    if missing:
+        return False, "container release dependency install path missing: " + ", ".join(missing)
+    forbidden = (
+        "COPY requirements.lock.txt",
+        "pip install -r requirements.lock.txt",
+        "pip install -r requirements.txt",
+    )
+    hits = [snippet for snippet in forbidden if snippet in dockerfile]
+    if hits:
+        return False, "container production install uses non-release lock path: " + ", ".join(hits)
+    if "BAIOS_TRANSITIVE_LOCK: true" not in release_lock or "--hash=sha256:" not in release_lock:
+        return False, "requirements.release.lock.txt does not prove transitive hash locking"
+    if "Transitive dependency locking can be added later" in release_lock:
+        return False, "requirements.release.lock.txt is marked as top-level-only"
+    return True, "container release dependency install path lock passed"
+
+
 def _direct_ai_ceo_lock() -> tuple[bool, str]:
     root = repo_root()
     needle = "ai" + "_ceo" + "_plan" + "@v1"
@@ -276,6 +306,7 @@ def run() -> tuple[bool, str]:
         _direct_cicd_contract_lock,
         _direct_second_brain_surface_lock,
         _direct_runtime_decision_execution_service_name_lock,
+        _direct_container_release_lock_install_path,
         _direct_ai_ceo_lock,
         _direct_runtime_actions_registry_lock,
     )
