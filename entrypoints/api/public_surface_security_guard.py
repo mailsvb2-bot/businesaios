@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
+from governance.rbac_contract import ActorContext, RoleId
 from security.access_policy import SecurityAction
-from security.actor_context import ActorContext
-from security.roles import RoleId
 from security.security_integration import SecurityIntegrationAdapter, build_default_security_adapter
 
 from entrypoints.api.request_context import RequestContext
