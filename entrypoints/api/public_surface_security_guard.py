@@ -20,6 +20,9 @@ from security.security_integration_adapter import SecurityIntegrationAdapter
 
 CANON_API_PUBLIC_SURFACE_SECURITY_GUARD = True
 CANON_API_FINAL_OWNER = True
+CANON_API_INTERNAL_WRITE_ADMIN_PERIMETER_FAIL_CLOSED = True
+CANON_API_INTERNAL_WRITE_ADMIN_REPLAY_REQUIRED = True
+CANON_API_INTERNAL_WRITE_ADMIN_TENANT_ISOLATION = True
 
 
 @dataclass(frozen=True)
@@ -224,6 +227,12 @@ class PublicSurfaceSecurityGuard:
         payload = dict(body or {})
         tenant_id = self._tenant_id(payload=payload, request_context=request_context)
         actor_id = self._actor_id(payload=payload, request_context=request_context)
+        self._enforce_internal_write_admin_perimeter(
+            spec=spec,
+            payload=payload,
+            request_context=request_context,
+            tenant_id=tenant_id,
+        )
         now = datetime.now(timezone.utc)
         actor = ActorContext(
             actor_id=actor_id,
@@ -300,6 +309,64 @@ class PublicSurfaceSecurityGuard:
         return verdict
 
     @staticmethod
+    def _requires_internal_write_admin_perimeter(*, spec: PublicSurfaceRouteSpec) -> bool:
+        return spec.action in {SecurityAction.WRITE, SecurityAction.ADMIN} and 'public' not in spec.tags
+
+    @staticmethod
+    def _external_perimeter_verified(*, request_context: RequestContext) -> bool:
+        metadata = dict(request_context.metadata)
+        proof_keys = (
+            'mtls_verified',
+            'api_key_verified',
+            'jwt_verified',
+            'control_plane_verified',
+        )
+        if any(bool(metadata.get(key)) for key in proof_keys):
+            return True
+        auth_level = str(metadata.get('auth_level') or '').strip().lower()
+        return auth_level in {'mtls', 'api_key', 'jwt', 'control_plane'}
+
+    @staticmethod
+    def _replay_marker_present(*, payload: Mapping[str, Any], request_context: RequestContext) -> bool:
+        metadata = dict(request_context.metadata)
+        for key in ('idempotency_key', 'idempotencyKey', 'replay_nonce', 'request_nonce'):
+            value = payload.get(key) or metadata.get(key)
+            if value is not None and str(value).strip():
+                return True
+        request_id = request_context.request_id or payload.get('request_id') or metadata.get('request_id')
+        return bool(str(request_id or '').strip())
+
+    @staticmethod
+    def _tenant_isolation_ok(*, payload: Mapping[str, Any], request_context: RequestContext, tenant_id: str) -> bool:
+        context_tenant = request_context.validated_tenant_id(required=False)
+        nested_payload = payload.get('payload')
+        nested_tenant = nested_payload.get('tenant_id') if isinstance(nested_payload, Mapping) else None
+        candidates = [context_tenant, payload.get('tenant_id'), nested_tenant]
+        normalized = {str(item).strip() for item in candidates if item is not None and str(item).strip()}
+        if not normalized:
+            return False
+        return normalized == {str(tenant_id).strip()}
+
+    def _enforce_internal_write_admin_perimeter(
+        self,
+        *,
+        spec: PublicSurfaceRouteSpec,
+        payload: Mapping[str, Any],
+        request_context: RequestContext,
+        tenant_id: str,
+    ) -> None:
+        if not self._requires_internal_write_admin_perimeter(spec=spec):
+            return
+        if not self._effective_transport_security(request_context=request_context):
+            raise PermissionError('api_transport_security_required')
+        if not self._external_perimeter_verified(request_context=request_context):
+            raise PermissionError('api_perimeter_auth_required')
+        if not self._tenant_isolation_ok(payload=payload, request_context=request_context, tenant_id=tenant_id):
+            raise PermissionError('api_tenant_isolation_violation')
+        if not self._replay_marker_present(payload=payload, request_context=request_context):
+            raise PermissionError('api_replay_protection_required')
+
+    @staticmethod
     def _transport_encrypted(*, request_context: RequestContext) -> bool:
         value = request_context.metadata.get('transport_encrypted')
         if isinstance(value, bool):
@@ -336,7 +403,6 @@ class PublicSurfaceSecurityGuard:
             if action_type is not None and str(action_type).strip():
                 parts.append(str(action_type).strip())
         return ':'.join(parts)
-
 
     @staticmethod
     def _effective_transport_security(*, request_context: RequestContext) -> bool:
@@ -378,6 +444,10 @@ class PublicSurfaceSecurityGuard:
 
 
 __all__ = [
+    'CANON_API_FINAL_OWNER',
+    'CANON_API_INTERNAL_WRITE_ADMIN_PERIMETER_FAIL_CLOSED',
+    'CANON_API_INTERNAL_WRITE_ADMIN_REPLAY_REQUIRED',
+    'CANON_API_INTERNAL_WRITE_ADMIN_TENANT_ISOLATION',
     'CANON_API_PUBLIC_SURFACE_SECURITY_GUARD',
     'PublicSurfaceRouteSpec',
     'PublicSurfaceSecurityGuard',
