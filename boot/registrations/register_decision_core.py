@@ -13,6 +13,7 @@ CANON_RUNTIME_DECISION_CORE_NAME_RESERVED_FOR_SOVEREIGN_ISSUER = True
 CANON_REGISTER_RUNTIME_DECISION_EXECUTION_SERVICE = True
 CANON_REGISTER_DECISION_CORE_COMPAT_WRAPPER = True
 CANON_REGISTER_DECISION_CORE_NO_EXECUTABLE_ALIAS_EXPORT = True
+CANON_REGISTER_DECISION_CORE_SERVICE_NAME_COMPAT_ALIAS_ONLY = True
 
 
 def register_runtime_decision_execution_service(registry: RuntimeRegistry):
@@ -24,9 +25,9 @@ def register_runtime_decision_execution_service(registry: RuntimeRegistry):
     )
     return register_runtime_service(
         registry,
-        name=RuntimeServiceName.DECISION_CORE,
+        name=RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE,
         service=service,
-        service_type=RuntimeServiceType.CORE,
+        service_type=RuntimeServiceType.EXECUTOR,
         dependencies=DECISION_CORE_DEPS,
     )
 
@@ -38,6 +39,7 @@ def register_decision_core(registry: RuntimeRegistry):
 __all__ = [
     "CANON_REGISTER_DECISION_CORE_COMPAT_WRAPPER",
     "CANON_REGISTER_DECISION_CORE_NO_EXECUTABLE_ALIAS_EXPORT",
+    "CANON_REGISTER_DECISION_CORE_SERVICE_NAME_COMPAT_ALIAS_ONLY",
     "CANON_REGISTER_RUNTIME_DECISION_EXECUTION_SERVICE",
     "CANON_RUNTIME_DECISION_CORE_NAME_RESERVED_FOR_SOVEREIGN_ISSUER",
     "CANON_RUNTIME_DECISION_EXECUTION_SERVICE",
