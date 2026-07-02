@@ -10,13 +10,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     API_PORT=8000 \
     HEALTH_HOST=0.0.0.0 \
     TELEGRAM_HEALTH_PORT=8088 \
-    EVOLUTION_HEALTH_PORT=8087
+    EVOLUTION_HEALTH_PORT=8087 \
+    BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK=1
 
 WORKDIR /app
 
-COPY requirements.lock.txt ./
+COPY requirements.release.lock.txt ./
 RUN python -m pip install --upgrade pip \
-    && pip install -r requirements.lock.txt
+    && pip install --require-hashes -r requirements.release.lock.txt
 
 COPY . .
 
