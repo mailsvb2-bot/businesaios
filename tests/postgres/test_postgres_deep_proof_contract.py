@@ -43,6 +43,7 @@ def test_postgres_contract_requires_rollback_backup_and_ledger_chain() -> None:
 
     assert payload["status"] == "blocked"
     assert "postgres_backup_evidence_required" in payload["violations"]
+    assert payload["deep_live_proof_required"] is True
     assert payload["rollback_roundtrip_ok"] is True
     assert payload["ledger_chain_verification_ok"] is True
     assert payload["claims_production_ready"] is False
@@ -56,6 +57,29 @@ def test_postgres_contract_ready_requires_all_deep_proofs() -> None:
     assert payload["backup_evidence_ok"] is True
     assert payload["rollback_roundtrip_ok"] is True
     assert payload["ledger_chain_verification_ok"] is True
+    assert payload["deep_live_proof_required"] is True
+    assert payload["claims_production_ready"] is False
+
+
+def test_structural_contract_scope_does_not_fake_deep_live_proofs() -> None:
+    payload = evaluate_postgres_contract(
+        PostgresRuntimeProof(
+            **{
+                **_READY_PROOF,
+                "rollback_roundtrip_ok": False,
+                "backup_evidence_ok": False,
+                "ledger_chain_verification_ok": False,
+                "deep_live_proof_required": False,
+            }
+        )
+    )
+
+    assert payload["status"] == "ready"
+    assert payload["deep_live_proof_required"] is False
+    assert payload["rollback_roundtrip_ok"] is False
+    assert payload["backup_evidence_ok"] is False
+    assert payload["ledger_chain_verification_ok"] is False
+    assert "postgres_backup_evidence_required" not in payload["violations"]
     assert payload["claims_production_ready"] is False
 
 
