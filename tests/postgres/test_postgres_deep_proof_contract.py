@@ -62,17 +62,14 @@ def test_postgres_contract_ready_requires_all_deep_proofs() -> None:
 
 
 def test_structural_contract_scope_does_not_fake_deep_live_proofs() -> None:
-    payload = evaluate_postgres_contract(
-        PostgresRuntimeProof(
-            **{
-                **_READY_PROOF,
-                "rollback_roundtrip_ok": False,
-                "backup_evidence_ok": False,
-                "ledger_chain_verification_ok": False,
-                "deep_live_proof_required": False,
-            }
-        )
+    structural = dict(_READY_PROOF)
+    structural.update(
+        rollback_roundtrip_ok=False,
+        backup_evidence_ok=False,
+        ledger_chain_verification_ok=False,
+        deep_live_proof_required=False,
     )
+    payload = evaluate_postgres_contract(PostgresRuntimeProof(**structural))
 
     assert payload["status"] == "ready"
     assert payload["deep_live_proof_required"] is False
