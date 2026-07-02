@@ -1,8 +1,82 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
+from pathlib import Path
+
 from scripts.ci.makefile_tools import has_make_target
 from scripts.ci.paths import repo_root
 from scripts.ci.subprocess_io import run_command, run_python
+
+CANON_VERIFY_RELEASE_ARTIFACT_AGGREGATION = True
+
+_REQUIRED_PROOF_ARTIFACTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("postgres_contract.json", ("ready",)),
+    ("postgres_migrations.json", ("ready",)),
+    ("postgres_live.json", ("ready",)),
+    ("container_runtime.json", ("ready",)),
+    ("staging_runtime_proof.json", ("ready",)),
+    ("production_boot.json", ("contract_satisfied",)),
+)
+
+
+def _artifact_path(name: str) -> Path:
+    return repo_root() / "artifacts" / "ci" / name
+
+
+def _read_artifact(name: str) -> dict[str, object]:
+    path = _artifact_path(name)
+    if not path.exists():
+        return {
+            "artifact": name.removesuffix(".json"),
+            "status": "missing",
+            "violations": [name.removesuffix(".json") + "_artifact_missing"],
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "artifact": name.removesuffix(".json"),
+            "status": "invalid",
+            "violations": [name.removesuffix(".json") + "_artifact_invalid"],
+        }
+    return dict(payload) if isinstance(payload, Mapping) else {
+        "artifact": name.removesuffix(".json"),
+        "status": "invalid",
+        "violations": [name.removesuffix(".json") + "_artifact_not_object"],
+    }
+
+
+def _write_verify_artifact(payload: dict[str, object]) -> None:
+    path = _artifact_path("verify_release.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+def _aggregate_required_proof_artifacts() -> tuple[bool, str]:
+    artifacts: dict[str, dict[str, object]] = {}
+    violations: list[str] = []
+    for filename, accepted_statuses in _REQUIRED_PROOF_ARTIFACTS:
+        payload = _read_artifact(filename)
+        artifacts[filename.removesuffix(".json")] = payload
+        status = str(payload.get("status") or "")
+        if status not in accepted_statuses:
+            violations.append(filename.removesuffix(".json") + "_not_ready")
+        if payload.get("claims_production_ready") is True:
+            violations.append(filename.removesuffix(".json") + "_must_not_claim_production_ready")
+
+    payload = {
+        "artifact": "verify_release",
+        "status": "blocked" if violations else "ready",
+        "required_artifacts": [name for name, _ in _REQUIRED_PROOF_ARTIFACTS],
+        "artifacts": artifacts,
+        "violations": violations,
+        "claims_production_ready": False,
+    }
+    _write_verify_artifact(payload)
+    if violations:
+        return False, "verify release blocked: " + ",".join(violations)
+    return True, "verify release proof artifacts ready: artifacts/ci/verify_release.json"
 
 
 def _run_optional_make_target(name: str) -> tuple[bool, str]:
@@ -59,4 +133,12 @@ def run() -> tuple[bool, str]:
     if not ok_project:
         return False, "; ".join(parts)
 
+    ok_proof, msg_proof = _aggregate_required_proof_artifacts()
+    parts.append(msg_proof)
+    if not ok_proof:
+        return False, "; ".join(parts)
+
     return True, "; ".join(parts)
+
+
+__all__ = ["CANON_VERIFY_RELEASE_ARTIFACT_AGGREGATION", "run"]
