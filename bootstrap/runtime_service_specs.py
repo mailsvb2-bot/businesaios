@@ -3,31 +3,24 @@ from __future__ import annotations
 """Final owner for runtime service specs.
 
 Physical ownership moved from `boot/*` to `bootstrap/*`.
-Legacy boot surfaces remain thin compatibility shells."""
-
-CANON_RUNTIME_SERVICE_SPECS_FINAL_OWNER = True
-CANON_RUNTIME_SERVICE_SPECS_SINGLE_SOURCE = True
-
-
-"""Canonical runtime service specifications for boot wiring.
+Legacy boot surfaces remain thin compatibility shells.
 
 This module is the single source of truth for runtime boot ordering,
-dependency declarations, and catalog-backed dependency maps. It exists to
-shrink duplication across:
-- boot.runtime_dependency_sets
-- boot.runtime_boot_manifest
-- boot.registrations
-
-It does not create a second execution path: the runtime boot manifest still
-remains the only boot contract consumed by the orchestrator.
+dependency declarations, and catalog-backed dependency maps. It does not create
+a second execution path: the runtime boot manifest remains the only boot
+contract consumed by the orchestrator.
 """
 
 from dataclasses import dataclass, field
 from typing import Final
 
 from runtime.manifest_entry import RuntimeManifestEntry
-from runtime.service_names import RuntimeServiceName
+from runtime.service_names import RuntimeServiceName, canonical_runtime_service_name
 from runtime.service_types import RuntimeServiceType
+
+CANON_RUNTIME_SERVICE_SPECS_FINAL_OWNER = True
+CANON_RUNTIME_SERVICE_SPECS_SINGLE_SOURCE = True
+CANON_RUNTIME_DECISION_EXECUTION_SERVICE_MANIFEST_NAME = True
 
 
 @dataclass(frozen=True)
@@ -84,70 +77,26 @@ _DEFAULT_BUILDER_NAMES_BY_SERVICE: Final[dict[str, str]] = {
     RuntimeServiceName.WORLD_STATE_INTEGRATION: "build_world_state_integration_service",
 }
 
-
 _RUNTIME_SPECS: Final[tuple[RuntimeServiceSpec, ...]] = (
+    RuntimeServiceSpec("register_observability", "register_observability", RuntimeServiceName.OBSERVABILITY, RuntimeServiceType.GUARD),
+    RuntimeServiceSpec("register_architecture_watch", "register_architecture_watch", RuntimeServiceName.ARCHITECTURE_WATCH, RuntimeServiceType.GUARD, dependencies=(RuntimeServiceName.OBSERVABILITY,), dependency_map={"observability": RuntimeServiceName.OBSERVABILITY}),
+    RuntimeServiceSpec("register_structure_watch", "register_structure_watch", RuntimeServiceName.STRUCTURE_WATCH, RuntimeServiceType.GUARD, dependencies=(RuntimeServiceName.OBSERVABILITY,), dependency_map={"observability": RuntimeServiceName.OBSERVABILITY}),
+    RuntimeServiceSpec("register_flow_watch", "register_flow_watch", RuntimeServiceName.FLOW_WATCH, RuntimeServiceType.GUARD, dependencies=(RuntimeServiceName.OBSERVABILITY,), dependency_map={"observability": RuntimeServiceName.OBSERVABILITY}),
+    RuntimeServiceSpec("register_diffusion_watch", "register_diffusion_watch", RuntimeServiceName.DIFFUSION_WATCH, RuntimeServiceType.GUARD, dependencies=(RuntimeServiceName.OBSERVABILITY,), dependency_map={"observability": RuntimeServiceName.OBSERVABILITY}),
+    RuntimeServiceSpec("register_market_watch", "register_market_watch", RuntimeServiceName.MARKET_WATCH, RuntimeServiceType.GUARD, dependencies=(RuntimeServiceName.OBSERVABILITY,), dependency_map={"observability": RuntimeServiceName.OBSERVABILITY}),
     RuntimeServiceSpec(
-        step_name="register_observability",
-        callable_name="register_observability",
-        service_name=RuntimeServiceName.OBSERVABILITY,
-        service_type=RuntimeServiceType.GUARD,
-    ),
-    RuntimeServiceSpec(
-        step_name="register_architecture_watch",
-        callable_name="register_architecture_watch",
-        service_name=RuntimeServiceName.ARCHITECTURE_WATCH,
-        service_type=RuntimeServiceType.GUARD,
-        dependencies=(RuntimeServiceName.OBSERVABILITY,),
+        "register_creative_intelligence",
+        "register_creative_intelligence",
+        RuntimeServiceName.CREATIVE_INTELLIGENCE,
+        RuntimeServiceType.GUARD,
+        dependencies=(RuntimeServiceName.OBSERVABILITY, RuntimeServiceName.MARKET_WATCH),
         dependency_map={"observability": RuntimeServiceName.OBSERVABILITY},
     ),
     RuntimeServiceSpec(
-        step_name="register_structure_watch",
-        callable_name="register_structure_watch",
-        service_name=RuntimeServiceName.STRUCTURE_WATCH,
-        service_type=RuntimeServiceType.GUARD,
-        dependencies=(RuntimeServiceName.OBSERVABILITY,),
-        dependency_map={"observability": RuntimeServiceName.OBSERVABILITY},
-    ),
-    RuntimeServiceSpec(
-        step_name="register_flow_watch",
-        callable_name="register_flow_watch",
-        service_name=RuntimeServiceName.FLOW_WATCH,
-        service_type=RuntimeServiceType.GUARD,
-        dependencies=(RuntimeServiceName.OBSERVABILITY,),
-        dependency_map={"observability": RuntimeServiceName.OBSERVABILITY},
-    ),
-    RuntimeServiceSpec(
-        step_name="register_diffusion_watch",
-        callable_name="register_diffusion_watch",
-        service_name=RuntimeServiceName.DIFFUSION_WATCH,
-        service_type=RuntimeServiceType.GUARD,
-        dependencies=(RuntimeServiceName.OBSERVABILITY,),
-        dependency_map={"observability": RuntimeServiceName.OBSERVABILITY},
-    ),
-    RuntimeServiceSpec(
-        step_name="register_market_watch",
-        callable_name="register_market_watch",
-        service_name=RuntimeServiceName.MARKET_WATCH,
-        service_type=RuntimeServiceType.GUARD,
-        dependencies=(RuntimeServiceName.OBSERVABILITY,),
-        dependency_map={"observability": RuntimeServiceName.OBSERVABILITY},
-    ),
-    RuntimeServiceSpec(
-        step_name="register_creative_intelligence",
-        callable_name="register_creative_intelligence",
-        service_name=RuntimeServiceName.CREATIVE_INTELLIGENCE,
-        service_type=RuntimeServiceType.GUARD,
-        dependencies=(
-            RuntimeServiceName.OBSERVABILITY,
-            RuntimeServiceName.MARKET_WATCH,
-        ),
-        dependency_map={"observability": RuntimeServiceName.OBSERVABILITY},
-    ),
-    RuntimeServiceSpec(
-        step_name="register_autonomy_advisor",
-        callable_name="register_autonomy_advisor",
-        service_name=RuntimeServiceName.AUTONOMY_ADVISOR,
-        service_type=RuntimeServiceType.GOVERNANCE,
+        "register_autonomy_advisor",
+        "register_autonomy_advisor",
+        RuntimeServiceName.AUTONOMY_ADVISOR,
+        RuntimeServiceType.GOVERNANCE,
         dependencies=(
             RuntimeServiceName.OBSERVABILITY,
             RuntimeServiceName.CREATIVE_INTELLIGENCE,
@@ -160,10 +109,10 @@ _RUNTIME_SPECS: Final[tuple[RuntimeServiceSpec, ...]] = (
         dependency_map={"observability": RuntimeServiceName.OBSERVABILITY},
     ),
     RuntimeServiceSpec(
-        step_name="register_world_state_integration",
-        callable_name="register_world_state_integration",
-        service_name=RuntimeServiceName.WORLD_STATE_INTEGRATION,
-        service_type=RuntimeServiceType.GOVERNANCE,
+        "register_world_state_integration",
+        "register_world_state_integration",
+        RuntimeServiceName.WORLD_STATE_INTEGRATION,
+        RuntimeServiceType.GOVERNANCE,
         dependencies=(
             RuntimeServiceName.OBSERVABILITY,
             RuntimeServiceName.AUTONOMY_ADVISOR,
@@ -177,89 +126,40 @@ _RUNTIME_SPECS: Final[tuple[RuntimeServiceSpec, ...]] = (
         dependency_map={"observability": RuntimeServiceName.OBSERVABILITY},
     ),
     RuntimeServiceSpec(
-        step_name="register_decision_input_service",
-        callable_name="register_decision_input_service",
-        service_name=RuntimeServiceName.DECISION_INPUT_SERVICE,
-        service_type=RuntimeServiceType.GOVERNANCE,
-        dependencies=(
-            RuntimeServiceName.OBSERVABILITY,
-            RuntimeServiceName.WORLD_STATE_INTEGRATION,
-        ),
+        "register_decision_input_service",
+        "register_decision_input_service",
+        RuntimeServiceName.DECISION_INPUT_SERVICE,
+        RuntimeServiceType.GOVERNANCE,
+        dependencies=(RuntimeServiceName.OBSERVABILITY, RuntimeServiceName.WORLD_STATE_INTEGRATION),
         dependency_map={"observability": RuntimeServiceName.OBSERVABILITY},
     ),
     RuntimeServiceSpec(
-        step_name="register_runtime_packet_provider",
-        callable_name="register_runtime_packet_provider",
-        service_name=RuntimeServiceName.RUNTIME_PACKET_PROVIDER,
-        service_type=RuntimeServiceType.GOVERNANCE,
-        dependencies=(
-            RuntimeServiceName.WORLD_STATE_INTEGRATION,
-            RuntimeServiceName.OBSERVABILITY,
-        ),
-        dependency_map={
-            "integration_service": RuntimeServiceName.WORLD_STATE_INTEGRATION,
-            "observability": RuntimeServiceName.OBSERVABILITY,
-        },
+        "register_runtime_packet_provider",
+        "register_runtime_packet_provider",
+        RuntimeServiceName.RUNTIME_PACKET_PROVIDER,
+        RuntimeServiceType.GOVERNANCE,
+        dependencies=(RuntimeServiceName.WORLD_STATE_INTEGRATION, RuntimeServiceName.OBSERVABILITY),
+        dependency_map={"integration_service": RuntimeServiceName.WORLD_STATE_INTEGRATION, "observability": RuntimeServiceName.OBSERVABILITY},
     ),
+    RuntimeServiceSpec("register_runtime_state_enrichment", "register_runtime_state_enrichment", RuntimeServiceName.RUNTIME_STATE_ENRICHMENT, RuntimeServiceType.GOVERNANCE, dependencies=(RuntimeServiceName.OBSERVABILITY,), dependency_map={"observability": RuntimeServiceName.OBSERVABILITY}),
     RuntimeServiceSpec(
-        step_name="register_runtime_state_enrichment",
-        callable_name="register_runtime_state_enrichment",
-        service_name=RuntimeServiceName.RUNTIME_STATE_ENRICHMENT,
-        service_type=RuntimeServiceType.GOVERNANCE,
-        dependencies=(RuntimeServiceName.OBSERVABILITY,),
-        dependency_map={"observability": RuntimeServiceName.OBSERVABILITY},
+        "register_decision_gateway",
+        "register_decision_gateway",
+        RuntimeServiceName.DECISION_GATEWAY,
+        RuntimeServiceType.GOVERNANCE,
+        dependencies=(RuntimeServiceName.DECISION_INPUT_SERVICE, RuntimeServiceName.RUNTIME_STATE_ENRICHMENT, RuntimeServiceName.OBSERVABILITY),
+        dependency_map={"decision_input_service": RuntimeServiceName.DECISION_INPUT_SERVICE, "enrichment_service": RuntimeServiceName.RUNTIME_STATE_ENRICHMENT, "observability": RuntimeServiceName.OBSERVABILITY},
     ),
+    RuntimeServiceSpec("register_risk", "register_risk", RuntimeServiceName.RISK_ENGINE, RuntimeServiceType.GUARD),
+    RuntimeServiceSpec("register_reward", "register_reward", RuntimeServiceName.REWARD_GUARD, RuntimeServiceType.GUARD),
+    RuntimeServiceSpec("register_simulation", "register_simulation", RuntimeServiceName.SIMULATION_GATE, RuntimeServiceType.GUARD),
+    RuntimeServiceSpec("register_kill_switch", "register_kill_switch", RuntimeServiceName.KILL_SWITCH, RuntimeServiceType.GUARD),
+    RuntimeServiceSpec("register_action_budget", "register_action_budget", RuntimeServiceName.ACTION_BUDGET, RuntimeServiceType.GUARD),
     RuntimeServiceSpec(
-        step_name="register_decision_gateway",
-        callable_name="register_decision_gateway",
-        service_name=RuntimeServiceName.DECISION_GATEWAY,
-        service_type=RuntimeServiceType.GOVERNANCE,
-        dependencies=(
-            RuntimeServiceName.DECISION_INPUT_SERVICE,
-            RuntimeServiceName.RUNTIME_STATE_ENRICHMENT,
-            RuntimeServiceName.OBSERVABILITY,
-        ),
-        dependency_map={
-            "decision_input_service": RuntimeServiceName.DECISION_INPUT_SERVICE,
-            "enrichment_service": RuntimeServiceName.RUNTIME_STATE_ENRICHMENT,
-            "observability": RuntimeServiceName.OBSERVABILITY,
-        },
-    ),
-    RuntimeServiceSpec(
-        step_name="register_risk",
-        callable_name="register_risk",
-        service_name=RuntimeServiceName.RISK_ENGINE,
-        service_type=RuntimeServiceType.GUARD,
-    ),
-    RuntimeServiceSpec(
-        step_name="register_reward",
-        callable_name="register_reward",
-        service_name=RuntimeServiceName.REWARD_GUARD,
-        service_type=RuntimeServiceType.GUARD,
-    ),
-    RuntimeServiceSpec(
-        step_name="register_simulation",
-        callable_name="register_simulation",
-        service_name=RuntimeServiceName.SIMULATION_GATE,
-        service_type=RuntimeServiceType.GUARD,
-    ),
-    RuntimeServiceSpec(
-        step_name="register_kill_switch",
-        callable_name="register_kill_switch",
-        service_name=RuntimeServiceName.KILL_SWITCH,
-        service_type=RuntimeServiceType.GUARD,
-    ),
-    RuntimeServiceSpec(
-        step_name="register_action_budget",
-        callable_name="register_action_budget",
-        service_name=RuntimeServiceName.ACTION_BUDGET,
-        service_type=RuntimeServiceType.GUARD,
-    ),
-    RuntimeServiceSpec(
-        step_name="register_governance",
-        callable_name="register_governance",
-        service_name=RuntimeServiceName.GOVERNANCE_CHAIN,
-        service_type=RuntimeServiceType.GOVERNANCE,
+        "register_governance",
+        "register_governance",
+        RuntimeServiceName.GOVERNANCE_CHAIN,
+        RuntimeServiceType.GOVERNANCE,
         dependencies=(
             RuntimeServiceName.RISK_ENGINE,
             RuntimeServiceName.REWARD_GUARD,
@@ -268,21 +168,13 @@ _RUNTIME_SPECS: Final[tuple[RuntimeServiceSpec, ...]] = (
             RuntimeServiceName.ACTION_BUDGET,
         ),
     ),
+    RuntimeServiceSpec("register_action_executor", "register_action_executor", RuntimeServiceName.ACTION_EXECUTOR, RuntimeServiceType.EXECUTOR),
     RuntimeServiceSpec(
-        step_name="register_action_executor",
-        callable_name="register_action_executor",
-        service_name=RuntimeServiceName.ACTION_EXECUTOR,
-        service_type=RuntimeServiceType.EXECUTOR,
-    ),
-    RuntimeServiceSpec(
-        step_name="register_decision_core",
-        callable_name="register_decision_core",
-        service_name=RuntimeServiceName.DECISION_CORE,
-        service_type=RuntimeServiceType.CORE,
-        dependencies=(
-            RuntimeServiceName.GOVERNANCE_CHAIN,
-            RuntimeServiceName.ACTION_EXECUTOR,
-        ),
+        "register_decision_core",
+        "register_decision_core",
+        RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE,
+        RuntimeServiceType.EXECUTOR,
+        dependencies=(RuntimeServiceName.GOVERNANCE_CHAIN, RuntimeServiceName.ACTION_EXECUTOR),
     ),
 )
 
@@ -297,19 +189,13 @@ RUNTIME_SERVICE_SPECS: Final[tuple[RuntimeServiceSpec, ...]] = RUNTIME_BOOT_SERV
 RUNTIME_SERVICE_SPEC_BY_NAME: Final[dict[str, RuntimeServiceSpec]] = RUNTIME_BOOT_SERVICE_SPEC_BY_NAME
 RUNTIME_SERVICE_SPEC_BY_CALLABLE: Final[dict[str, RuntimeServiceSpec]] = RUNTIME_BOOT_SERVICE_SPEC_BY_CALLABLE
 CATALOG_BACKED_RUNTIME_SERVICES: Final[tuple[str, ...]] = tuple(
-    spec.service_name
-    for spec in RUNTIME_BOOT_SERVICE_SPECS
-    if spec.builder_name is not None
+    spec.service_name for spec in RUNTIME_BOOT_SERVICE_SPECS if spec.builder_name is not None
 )
 CATALOG_BACKED_RUNTIME_CALLABLES: Final[tuple[str, ...]] = tuple(
-    spec.callable_name
-    for spec in RUNTIME_BOOT_SERVICE_SPECS
-    if spec.builder_name is not None
+    spec.callable_name for spec in RUNTIME_BOOT_SERVICE_SPECS if spec.builder_name is not None
 )
 CATALOG_BACKED_FACTORY_NAMES: Final[dict[str, str]] = {
-    spec.service_name: spec.builder_name
-    for spec in RUNTIME_BOOT_SERVICE_SPECS
-    if spec.builder_name is not None
+    spec.service_name: spec.builder_name for spec in RUNTIME_BOOT_SERVICE_SPECS if spec.builder_name is not None
 }
 SINGLETON_RUNTIME_CALLABLES: Final[tuple[str, ...]] = tuple(
     spec.callable_name
@@ -320,8 +206,9 @@ SINGLETON_RUNTIME_CALLABLES: Final[tuple[str, ...]] = tuple(
 
 
 def get_runtime_service_spec(service_name: str) -> RuntimeServiceSpec:
+    canonical_name = canonical_runtime_service_name(service_name)
     try:
-        return RUNTIME_BOOT_SERVICE_SPEC_BY_NAME[service_name]
+        return RUNTIME_BOOT_SERVICE_SPEC_BY_NAME[canonical_name]
     except KeyError as exc:
         raise KeyError(f"Unknown runtime service spec: {service_name!r}") from exc
 
@@ -351,6 +238,7 @@ def build_registration_compat_exports(*, callable_names: tuple[str, ...]) -> dic
 
 
 __all__ = [
+    "CANON_RUNTIME_DECISION_EXECUTION_SERVICE_MANIFEST_NAME",
     "CATALOG_BACKED_FACTORY_NAMES",
     "CATALOG_BACKED_RUNTIME_CALLABLES",
     "CATALOG_BACKED_RUNTIME_SERVICES",
