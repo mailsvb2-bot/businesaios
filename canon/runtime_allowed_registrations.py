@@ -3,6 +3,10 @@ from __future__ import annotations
 from runtime.service_names import RuntimeServiceName
 from runtime.service_types import RuntimeServiceType
 
+CANON_RUNTIME_ALLOWED_REGISTRATIONS = True
+CANON_RUNTIME_DECISION_CORE_NOT_A_BOOT_SERVICE = True
+CANON_RUNTIME_DECISION_EXECUTION_SERVICE_ALLOWED = True
+
 ALLOWED_RUNTIME_REGISTRATIONS: dict[str, str] = {
     RuntimeServiceName.OBSERVABILITY: RuntimeServiceType.GUARD,
     RuntimeServiceName.ARCHITECTURE_WATCH: RuntimeServiceType.GUARD,
@@ -24,5 +28,13 @@ ALLOWED_RUNTIME_REGISTRATIONS: dict[str, str] = {
     RuntimeServiceName.ACTION_BUDGET: RuntimeServiceType.GUARD,
     RuntimeServiceName.GOVERNANCE_CHAIN: RuntimeServiceType.GOVERNANCE,
     RuntimeServiceName.ACTION_EXECUTOR: RuntimeServiceType.EXECUTOR,
-    RuntimeServiceName.DECISION_CORE: RuntimeServiceType.CORE,
+    RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE: RuntimeServiceType.EXECUTOR,
 }
+
+
+__all__ = [
+    "ALLOWED_RUNTIME_REGISTRATIONS",
+    "CANON_RUNTIME_ALLOWED_REGISTRATIONS",
+    "CANON_RUNTIME_DECISION_CORE_NOT_A_BOOT_SERVICE",
+    "CANON_RUNTIME_DECISION_EXECUTION_SERVICE_ALLOWED",
+]
