@@ -6,7 +6,8 @@ from typing import Any, Mapping
 
 from governance.rbac_contract import ActorContext, RoleId
 from security.access_policy import SecurityAction
-from security.security_integration import SecurityIntegrationAdapter, build_default_security_adapter
+from security.owner_factory import build_default_security_adapter
+from security.security_integration_adapter import SecurityIntegrationAdapter
 
 from entrypoints.api.request_context import RequestContext
 
