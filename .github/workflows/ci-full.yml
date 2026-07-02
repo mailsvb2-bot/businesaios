@@ -4,7 +4,7 @@ on:
   pull_request:
 jobs:
   full-311:
-    runs-on: [self-hosted, linux, x64, businesaios]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,7 +18,7 @@ jobs:
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.11
 
   full-312:
-    runs-on: [self-hosted, linux, x64, businesaios]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
