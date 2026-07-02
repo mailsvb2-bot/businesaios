@@ -11,6 +11,7 @@ from runtime.platform.postgres_contract import (
 )
 from scripts.ci.cli import build_parser
 from scripts.ci.plan_registry import plan_for_gate
+from scripts.ci.step_postgres_contract import run as run_postgres_contract
 from scripts.ci.step_registry import handler_for_step
 
 
