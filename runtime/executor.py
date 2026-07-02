@@ -25,15 +25,9 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from application.autonomy.autonomy_safety_bundle import AutonomySafetyBundle
-from application.evidence.evidence_verifier import EvidenceVerifier
-from execution.action_budget_engine import ActionBudgetEngine
-from execution.blast_radius_guard import BlastRadiusGuard
-from execution.bounded_autonomy import BoundedAutonomyGuard
 from governance.constitution import Constitution
 from governance.economic_layer import EconomicAutonomyLayer
 from governance.time_scale import TimeScale
-from observability.decision_trace_store import NullDecisionTraceStore
 from runtime._internal.economic_execution_contract import (
     SealedEconomicExecutionContract as SealedEconomicExecutionContract,
     build_click_provider_dispatch_execution_contract as build_click_provider_dispatch_execution_contract,
@@ -61,6 +55,7 @@ from runtime.execution.executor_observability import (
 from runtime.execution.executor_observability import (
     record_inference_runtime_event as record_executor_inference_runtime_event,
 )
+from runtime.execution.executor_post_init_bindings import bind_executor_post_init_surfaces
 from runtime.execution.executor_recovery import finalize_if_already_executed as _executor_recovery_helper
 from runtime.execution.executor_reliability import apply_reliability_gate as executor_apply_reliability_gate
 from runtime.execution.executor_result import ExecutionResult
@@ -115,7 +110,6 @@ from runtime.executor_api_support import (
 )
 from runtime.executor_recovery_flow import execute_recovery_flow
 from runtime.executor_runtime_support import (
-    build_executor_queue_support,
     build_executor_state,
     emit_throttled_executor_warning,
 )
@@ -126,8 +120,6 @@ from runtime.world_model import (
 )
 from tenancy.tenant_runtime_isolation import TenantRuntimeIsolation
 
-
-
 CANON_RUNTIME_EXECUTION_GATEWAY = True
 _EXECUTOR_SPLIT_HELPERS = (
     _executor_audit_helper,
@@ -137,6 +129,7 @@ _EXECUTOR_SPLIT_HELPERS = (
     executor_api_run_queue_tick,
     _executor_world_model_pin_extract_contract,
     _executor_world_model_pin_guard_contract,
+    bind_executor_post_init_surfaces,
 )
 logger = logging.getLogger(__name__)
 _throttled_exec_warn = emit_throttled_executor_warning
@@ -211,29 +204,10 @@ class RuntimeExecutor:
         )
         apply_executor_state(executor=self, state=state)
         self._rebind_reliability_to_guard_ledger_if_needed()
-        self._operational_budget_service = operational_budget_service
-        self._governance_execution_guard = None
-        self._action_budget_engine = ActionBudgetEngine()
-        self._blast_radius_guard = BlastRadiusGuard(action_budget_engine=self._action_budget_engine)
-        self._bounded_autonomy_guard = BoundedAutonomyGuard(action_budget_engine=self._action_budget_engine)
-        self._autonomy_safety_bundle = AutonomySafetyBundle(action_budget_engine=self._action_budget_engine, blast_radius_guard=self._blast_radius_guard, bounded_autonomy_guard=self._bounded_autonomy_guard)
-        self._tenant_runtime_isolation = tenant_runtime_isolation or getattr(runtime_infra, "tenant_runtime_isolation", None)
-        self._tenant_execution_budget_guard = tenant_execution_budget_guard or getattr(runtime_infra, "tenant_execution_budget_guard", None)
-        self._tenant_registry = getattr(runtime_infra, 'tenant_registry', None)
-        self._runtime_observability = getattr(runtime_infra, 'runtime_observability', None)
-        self._inference_budget_burn_log = getattr(runtime_infra, 'inference_budget_burn_log', None)
-        self._runtime_owner_id = str(queue_worker_id or getattr(runtime_infra, 'runtime_owner_id', None) or 'runtime-executor').strip() or 'runtime-executor'
-        self._action_audit_log = action_audit_log or getattr(runtime_infra, 'action_audit_log', None)
-        self._execution_trace_store = execution_trace_store or getattr(runtime_infra, 'execution_trace_store', None)
-        self._decision_trace_store = getattr(runtime_infra, 'decision_trace_store', None) or decision_trace_store or NullDecisionTraceStore()
-        self._runtime_effect_trace_store = runtime_effect_trace_store or getattr(runtime_infra, 'runtime_effect_trace_store', None)
-        self._connector_observability = getattr(runtime_infra, 'connector_observability', None)
-        self._connector_health_monitor = getattr(runtime_infra, 'connector_health_monitor', None)
-        self._connector_failover_router = getattr(runtime_infra, 'connector_failover_router', None)
-        self._evidence_verifier = getattr(runtime_infra, 'evidence_verifier', None) or EvidenceVerifier()
-        self._logger = logger
-        self._queue_support = build_executor_queue_support(
+        bind_executor_post_init_surfaces(
+            executor=self,
             runtime_infra=runtime_infra,
+            operational_budget_service=operational_budget_service,
             queue_store=queue_store,
             queue_dead_letter_store=queue_dead_letter_store,
             queue_dispatcher=queue_dispatcher,
@@ -244,7 +218,13 @@ class RuntimeExecutor:
             queue_backpressure_policy=queue_backpressure_policy,
             queue_throttle_policy=queue_throttle_policy,
             queue_retry_policy=queue_retry_policy,
-            worker_id=str(queue_worker_id or "runtime-executor"),
+            queue_worker_id=queue_worker_id,
+            tenant_runtime_isolation=tenant_runtime_isolation,
+            tenant_execution_budget_guard=tenant_execution_budget_guard,
+            action_audit_log=action_audit_log,
+            execution_trace_store=execution_trace_store,
+            decision_trace_store=decision_trace_store,
+            runtime_effect_trace_store=runtime_effect_trace_store,
         )
 
     def _rebind_reliability_to_guard_ledger_if_needed(self) -> None:
