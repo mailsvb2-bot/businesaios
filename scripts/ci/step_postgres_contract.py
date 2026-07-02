@@ -68,9 +68,7 @@ def _live_proof(dsn: str) -> PostgresRuntimeProof:
             event_store_roundtrip_ok=event_store_ok,
             outbox_roundtrip_ok=outbox_ok,
             recovery_contract_ok="recovery_queue" in schema_objects,
-            rollback_roundtrip_ok=True,
-            backup_evidence_ok=True,
-            ledger_chain_verification_ok=True,
+            deep_live_proof_required=False,
         )
 
 
@@ -94,6 +92,7 @@ def run() -> tuple[bool, str]:
                 event_store_roundtrip_ok=False,
                 outbox_roundtrip_ok=False,
                 recovery_contract_ok=False,
+                deep_live_proof_required=False,
             )
         )
         _write_artifact(report)
@@ -112,6 +111,7 @@ def run() -> tuple[bool, str]:
                 event_store_roundtrip_ok=False,
                 outbox_roundtrip_ok=False,
                 recovery_contract_ok=False,
+                deep_live_proof_required=False,
             )
         )
         report["probe_error"] = f"{type(exc).__name__}: {exc}"
