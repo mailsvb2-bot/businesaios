@@ -10,6 +10,9 @@ from runtime.manifest_entry import RuntimeManifestEntry
 from runtime.service_names import RuntimeServiceName
 
 
+CANON_RUNTIME_MANIFEST_VALIDATOR = True
+CANON_RUNTIME_DECISION_EXECUTION_SERVICE_MANIFEST_VALIDATOR = True
+
 _ALLOWED_MODULE_PREFIX = "boot.registrations."
 
 
@@ -58,12 +61,15 @@ def validate_runtime_manifest(entries: tuple[RuntimeManifestEntry, ...]) -> None
             "Governance chain dependencies do not match canonical runtime rules."
         )
 
-    decision_entry = _find(entries, RuntimeServiceName.DECISION_CORE)
-    forbidden = FORBIDDEN_DIRECT_DECISION_DEPENDENCIES[RuntimeServiceName.DECISION_CORE]
-    illegal = [dep for dep in decision_entry.dependencies if dep in forbidden]
+    execution_entry = _find(entries, RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE)
+    forbidden = FORBIDDEN_DIRECT_DECISION_DEPENDENCIES[
+        RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE
+    ]
+    illegal = [dep for dep in execution_entry.dependencies if dep in forbidden]
     if illegal:
         raise RuntimeConfigurationError(
-            "Decision core has illegal direct dependencies: " + ", ".join(illegal)
+            "Runtime decision execution service has illegal direct dependencies: "
+            + ", ".join(illegal)
         )
 
 
@@ -77,3 +83,10 @@ def _find(
     raise RuntimeConfigurationError(
         f"Required runtime manifest entry '{service_name}' is missing."
     )
+
+
+__all__ = [
+    "CANON_RUNTIME_DECISION_EXECUTION_SERVICE_MANIFEST_VALIDATOR",
+    "CANON_RUNTIME_MANIFEST_VALIDATOR",
+    "validate_runtime_manifest",
+]
