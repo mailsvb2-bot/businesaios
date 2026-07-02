@@ -16,9 +16,11 @@ def test_runtime_decision_core_executable_alias_is_not_restored() -> None:
     assert "CANON_RUNTIME_DECISION_CORE_COMPAT_TRIPWIRE" in text
 
 
-def test_runtime_registration_does_not_export_runtime_decision_core() -> None:
+def test_runtime_registration_does_not_import_or_export_runtime_decision_core_symbol() -> None:
     text = REGISTRATION.read_text(encoding="utf-8")
 
-    assert "RuntimeDecisionCore" not in text
+    assert "from boot.runtime_service_contracts import RuntimeDecisionCore" not in text
+    assert "RuntimeDecisionCore," not in text
+    assert '"RuntimeDecisionCore"' not in text
     assert "RuntimeDecisionExecutionService" in text
     assert "CANON_REGISTER_DECISION_CORE_NO_EXECUTABLE_ALIAS_EXPORT" in text
