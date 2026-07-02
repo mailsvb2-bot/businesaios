@@ -7,6 +7,8 @@ from runtime.constructor_tokens import is_valid_runtime_construction_token
 from runtime.sealed_types import SealedType
 
 CANON_BOOT_RUNTIME_SERVICE_CONTRACTS = True
+CANON_RUNTIME_DECISION_CORE_ALIAS_REMOVED = True
+CANON_RUNTIME_DECISION_CORE_COMPAT_TRIPWIRE = True
 
 
 def _payload(action: object) -> dict[str, Any]:
@@ -46,7 +48,9 @@ class ActionExecutor(SealedType):
 class RuntimeDecisionExecutionService(SealedType):
     """Runtime-owned governed action execution service.
 
-    This is not the sovereign core.ai.decision_core.DecisionCore.
+    This is not the sovereign core.ai.decision_core.DecisionCore. It may only
+    execute an already selected runtime action through governance and executor
+    contours. It must never issue, optimize, price, or select a business decision.
     """
 
     governance_chain: object
@@ -68,7 +72,22 @@ class RuntimeDecisionExecutionService(SealedType):
         return self.action_executor.execute(action)
 
 
-RuntimeDecisionCore = RuntimeDecisionExecutionService
+class RuntimeDecisionCore(SealedType):
+    """Compatibility tripwire, not an alias and not an executable service.
+
+    Historical imports of ``RuntimeDecisionCore`` must fail closed instead of
+    silently resolving to ``RuntimeDecisionExecutionService``. The only sovereign
+    decision issuer remains ``core.ai.decision_core.DecisionCore``.
+    """
+
+    CANON_RUNTIME_DECISION_CORE_COMPAT_TRIPWIRE = True
+
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
+        raise RuntimeError(
+            "RuntimeDecisionCore compatibility alias is removed. "
+            "Use core.ai.decision_core.DecisionCore for sovereign issuance or "
+            "RuntimeDecisionExecutionService for governed runtime execution."
+        )
 
 
 @dataclass
@@ -101,6 +120,8 @@ class GovernanceChain(SealedType):
 __all__ = [
     "ActionExecutor",
     "CANON_BOOT_RUNTIME_SERVICE_CONTRACTS",
+    "CANON_RUNTIME_DECISION_CORE_ALIAS_REMOVED",
+    "CANON_RUNTIME_DECISION_CORE_COMPAT_TRIPWIRE",
     "GovernanceChain",
     "RuntimeDecisionCore",
     "RuntimeDecisionExecutionService",
