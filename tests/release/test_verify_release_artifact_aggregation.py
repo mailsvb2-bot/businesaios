@@ -7,12 +7,36 @@ from scripts.ci import step_verify_release
 
 
 _REQUIRED_READY_PAYLOADS = {
-    "postgres_contract.json": {"artifact": "postgres_contract", "status": "ready", "claims_production_ready": False},
-    "postgres_migrations.json": {"artifact": "postgres_migrations", "status": "ready", "claims_production_ready": False},
-    "postgres_live.json": {"artifact": "postgres_live", "status": "ready", "claims_production_ready": False},
-    "container_runtime.json": {"artifact": "container_runtime", "status": "ready", "claims_production_ready": False},
-    "staging_runtime_proof.json": {"artifact": "staging_runtime_proof", "status": "ready", "claims_production_ready": False},
-    "production_boot.json": {"artifact": "production_boot_contract", "status": "contract_satisfied", "claims_production_ready": False},
+    "postgres_contract.json": {
+        "artifact": "postgres_contract",
+        "status": "ready",
+        "claims_production_ready": False,
+    },
+    "postgres_migrations.json": {
+        "artifact": "postgres_migrations",
+        "status": "ready",
+        "claims_production_ready": False,
+    },
+    "postgres_live.json": {
+        "artifact": "postgres_live",
+        "status": "ready",
+        "claims_production_ready": False,
+    },
+    "container_runtime.json": {
+        "artifact": "container_runtime",
+        "status": "ready",
+        "claims_production_ready": False,
+    },
+    "staging_runtime_proof.json": {
+        "artifact": "staging_runtime_proof",
+        "status": "ready",
+        "claims_production_ready": False,
+    },
+    "production_boot.json": {
+        "artifact": "production_boot_contract",
+        "status": "contract_satisfied",
+        "claims_production_ready": False,
+    },
 }
 
 
@@ -30,17 +54,27 @@ def _clear_verify_release_test_artifacts() -> None:
             path.unlink()
 
 
+def _write_json(path: Path, payload: dict[str, object]) -> None:
+    path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _read_json(path: Path) -> dict[str, object]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert isinstance(payload, dict)
+    return payload
+
+
 def _write_required_ready_artifacts() -> None:
     directory = _artifact_dir()
     for name, payload in _REQUIRED_READY_PAYLOADS.items():
-        (directory / name).write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+        _write_json(directory / name, payload)
 
 
 def test_verify_release_blocks_when_required_proof_artifact_is_missing() -> None:
     _clear_verify_release_test_artifacts()
 
     ok, message = step_verify_release._aggregate_required_proof_artifacts()
-    payload = json.loads((_artifact_dir() / "verify_release.json").read_text(encoding="utf-8"))
+    payload = _read_json(_artifact_dir() / "verify_release.json")
 
     assert ok is False
     assert "postgres_contract_not_ready" in message
@@ -54,7 +88,7 @@ def test_verify_release_accepts_complete_ready_proof_artifact_set() -> None:
     _write_required_ready_artifacts()
 
     ok, message = step_verify_release._aggregate_required_proof_artifacts()
-    payload = json.loads((_artifact_dir() / "verify_release.json").read_text(encoding="utf-8"))
+    payload = _read_json(_artifact_dir() / "verify_release.json")
 
     assert ok is True, message
     assert payload["status"] == "ready"
@@ -66,12 +100,12 @@ def test_verify_release_rejects_premature_production_ready_claims() -> None:
     _clear_verify_release_test_artifacts()
     _write_required_ready_artifacts()
     path = _artifact_dir() / "postgres_live.json"
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload = _read_json(path)
     payload["claims_production_ready"] = True
-    path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+    _write_json(path, payload)
 
     ok, message = step_verify_release._aggregate_required_proof_artifacts()
-    report = json.loads((_artifact_dir() / "verify_release.json").read_text(encoding="utf-8"))
+    report = _read_json(_artifact_dir() / "verify_release.json")
 
     assert ok is False
     assert "postgres_live_must_not_claim_production_ready" in message
