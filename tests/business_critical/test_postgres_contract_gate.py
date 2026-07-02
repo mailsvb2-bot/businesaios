@@ -11,7 +11,6 @@ from runtime.platform.postgres_contract import (
 )
 from scripts.ci.cli import build_parser
 from scripts.ci.plan_registry import plan_for_gate
-from scripts.ci.step_postgres_contract import run as run_postgres_contract
 from scripts.ci.step_registry import handler_for_step
 
 
@@ -57,7 +56,29 @@ def test_postgres_contract_blocks_declared_runtime_without_live_proof() -> None:
     assert report["claims_production_ready"] is False
 
 
-def test_postgres_contract_ready_requires_schema_migrations_event_outbox_and_recovery() -> None:
+def test_postgres_structural_contract_ready_does_not_claim_production_ready() -> None:
+    report = evaluate_postgres_contract(
+        PostgresRuntimeProof(
+            database_url_present=True,
+            postgres_enabled=True,
+            psycopg_available=True,
+            live_probe_ok=True,
+            schema_objects_present=REQUIRED_SCHEMA_OBJECTS,
+            migrations_applied=REQUIRED_MIGRATIONS,
+            event_store_roundtrip_ok=True,
+            outbox_roundtrip_ok=True,
+            recovery_contract_ok=True,
+            deep_live_proof_required=False,
+        )
+    )
+
+    assert report["status"] == "ready"
+    assert report["violations"] == []
+    assert report["deep_live_proof_required"] is False
+    assert report["claims_production_ready"] is False
+
+
+def test_postgres_deep_live_contract_requires_rollback_ledger_and_backup_evidence() -> None:
     report = evaluate_postgres_contract(
         PostgresRuntimeProof(
             database_url_present=True,
@@ -72,8 +93,10 @@ def test_postgres_contract_ready_requires_schema_migrations_event_outbox_and_rec
         )
     )
 
-    assert report["status"] == "ready"
-    assert report["violations"] == []
+    assert report["status"] == "blocked"
+    assert "postgres_rollback_roundtrip_required" in report["violations"]
+    assert "postgres_ledger_chain_verification_required" in report["violations"]
+    assert "postgres_backup_evidence_required" in report["violations"]
     assert report["claims_production_ready"] is False
 
 
