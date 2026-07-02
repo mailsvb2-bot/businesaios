@@ -4,7 +4,7 @@ on:
   pull_request:
 jobs:
   health:
-    runs-on: [self-hosted, linux, x64, businesaios]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:

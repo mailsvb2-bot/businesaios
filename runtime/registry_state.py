@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from runtime.registry_snapshot import RuntimeRegistrySnapshot
+from runtime.service_names import canonical_runtime_service_name
 
 
 @dataclass
@@ -20,21 +21,22 @@ class RuntimeRegistryState:
     dependencies: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     def has(self, name: str) -> bool:
-        return name in self.services
+        return canonical_runtime_service_name(name) in self.services
 
     def get(self, name: str) -> Any:
-        return self.services[name]
+        return self.services[canonical_runtime_service_name(name)]
 
     def remember(self, *, name: str, service: Any, service_type: str, dependencies: tuple[str, ...]) -> None:
-        self.services[name] = service
-        self.service_types[name] = service_type
-        self.dependencies[name] = dependencies
+        canonical_name = canonical_runtime_service_name(name)
+        self.services[canonical_name] = service
+        self.service_types[canonical_name] = service_type
+        self.dependencies[canonical_name] = dependencies
 
     def service_type_of(self, name: str) -> str:
-        return self.service_types[name]
+        return self.service_types[canonical_runtime_service_name(name)]
 
     def dependencies_of(self, name: str) -> tuple[str, ...]:
-        return self.dependencies[name]
+        return self.dependencies[canonical_runtime_service_name(name)]
 
     def list_service_names(self) -> tuple[str, ...]:
         return tuple(self.services.keys())

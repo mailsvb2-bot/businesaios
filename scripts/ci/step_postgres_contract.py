@@ -68,6 +68,7 @@ def _live_proof(dsn: str) -> PostgresRuntimeProof:
             event_store_roundtrip_ok=event_store_ok,
             outbox_roundtrip_ok=outbox_ok,
             recovery_contract_ok="recovery_queue" in schema_objects,
+            deep_live_proof_required=False,
         )
 
 
@@ -91,6 +92,7 @@ def run() -> tuple[bool, str]:
                 event_store_roundtrip_ok=False,
                 outbox_roundtrip_ok=False,
                 recovery_contract_ok=False,
+                deep_live_proof_required=False,
             )
         )
         _write_artifact(report)
@@ -109,12 +111,14 @@ def run() -> tuple[bool, str]:
                 event_store_roundtrip_ok=False,
                 outbox_roundtrip_ok=False,
                 recovery_contract_ok=False,
+                deep_live_proof_required=False,
             )
         )
         report["probe_error"] = f"{type(exc).__name__}: {exc}"
         _write_artifact(report)
         return False, "postgres live probe failed: " + str(exc)
     report = evaluate_postgres_contract(proof)
+    report["deep_live_proof_owner"] = "postgres-live"
     _write_artifact(report)
     if report["status"] != "ready":
         return False, "postgres contract blocked: " + ",".join(report["violations"])

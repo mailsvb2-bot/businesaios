@@ -8,14 +8,13 @@ Legacy boot surfaces remain thin compatibility shells.
 
 CANON_RUNTIME_DEPENDENCY_SETS_FINAL_OWNER = True
 CANON_RUNTIME_DEPENDENCY_SETS_DATA_ONLY = True
-
+CANON_RUNTIME_DECISION_EXECUTION_SERVICE_DEPS = True
 
 from collections.abc import Mapping
 from typing import Final
 
 from bootstrap.runtime_service_specs import get_runtime_service_spec
 from runtime.service_names import RuntimeServiceName
-
 
 OBSERVABILITY_ONLY: Final[tuple[str, ...]] = get_runtime_service_spec(
     RuntimeServiceName.ARCHITECTURE_WATCH,
@@ -44,9 +43,10 @@ GOVERNANCE_CHAIN_DEPS: Final[tuple[str, ...]] = get_runtime_service_spec(
 ACTION_BUDGET_DEPS: Final[tuple[str, ...]] = get_runtime_service_spec(
     RuntimeServiceName.ACTION_BUDGET,
 ).dependencies
-DECISION_CORE_DEPS: Final[tuple[str, ...]] = get_runtime_service_spec(
-    RuntimeServiceName.DECISION_CORE,
+RUNTIME_DECISION_EXECUTION_SERVICE_DEPS: Final[tuple[str, ...]] = get_runtime_service_spec(
+    RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE,
 ).dependencies
+DECISION_CORE_DEPS: Final[tuple[str, ...]] = RUNTIME_DECISION_EXECUTION_SERVICE_DEPS
 
 RUNTIME_DEPENDENCY_SETS: Final[Mapping[str, tuple[str, ...]]] = {
     "action_budget": ACTION_BUDGET_DEPS,
@@ -57,20 +57,23 @@ RUNTIME_DEPENDENCY_SETS: Final[Mapping[str, tuple[str, ...]]] = {
     "decision_input_service": DECISION_INPUT_SERVICE_DEPS,
     "governance_chain": GOVERNANCE_CHAIN_DEPS,
     "observability_only": OBSERVABILITY_ONLY,
+    "runtime_decision_execution_service": RUNTIME_DECISION_EXECUTION_SERVICE_DEPS,
     "runtime_packet_provider": RUNTIME_PACKET_PROVIDER_DEPS,
     "world_state_integration": WORLD_STATE_INTEGRATION_DEPS,
 }
 
 __all__ = [
-    'ACTION_BUDGET_DEPS',
-    'AUTONOMY_ADVISOR_DEPS',
-    'CREATIVE_INTELLIGENCE_DEPS',
-    'DECISION_CORE_DEPS',
-    'DECISION_GATEWAY_DEPS',
-    'DECISION_INPUT_SERVICE_DEPS',
-    'GOVERNANCE_CHAIN_DEPS',
-    'OBSERVABILITY_ONLY',
-    'RUNTIME_DEPENDENCY_SETS',
-    'RUNTIME_PACKET_PROVIDER_DEPS',
-    'WORLD_STATE_INTEGRATION_DEPS',
+    "ACTION_BUDGET_DEPS",
+    "AUTONOMY_ADVISOR_DEPS",
+    "CANON_RUNTIME_DECISION_EXECUTION_SERVICE_DEPS",
+    "CREATIVE_INTELLIGENCE_DEPS",
+    "DECISION_CORE_DEPS",
+    "DECISION_GATEWAY_DEPS",
+    "DECISION_INPUT_SERVICE_DEPS",
+    "GOVERNANCE_CHAIN_DEPS",
+    "OBSERVABILITY_ONLY",
+    "RUNTIME_DECISION_EXECUTION_SERVICE_DEPS",
+    "RUNTIME_DEPENDENCY_SETS",
+    "RUNTIME_PACKET_PROVIDER_DEPS",
+    "WORLD_STATE_INTEGRATION_DEPS",
 ]

@@ -1,7 +1,8 @@
 """Thin compatibility shim for delivery state.
 
-The canonical owner lives in :mod:`runtime.platform.delivery_state`.
-Keeping only explicit exports here prevents semantic drift and avoids a duplicate
+The delivery-state implementation lives in :mod:`runtime.platform.delivery_state`.
+The policy contract lives in :mod:`runtime.platform.delivery_state_policy`.
+Keeping only explicit imports here prevents semantic drift and avoids a duplicate
 infrastructure owner for accepted/finalized receipt behavior.
 """
 
@@ -11,7 +12,6 @@ from runtime.platform.delivery_state import (
     ACCEPTED_PHASE,
     DEFAULT_DELIVERY_STATE_POLICY,
     FINALIZED_PHASE,
-    DeliveryStatePolicy,
     get_receipt,
     is_accepted,
     is_delivered,
@@ -21,6 +21,7 @@ from runtime.platform.delivery_state import (
     mark_delivered,
     open_delivery_state,
 )
+from runtime.platform.delivery_state_policy import DeliveryStatePolicy
 
 __all__ = [
     "ACCEPTED_PHASE",

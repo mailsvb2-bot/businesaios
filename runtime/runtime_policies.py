@@ -33,5 +33,5 @@ class RuntimePolicies:
         RuntimeServiceName.ACTION_BUDGET,
         RuntimeServiceName.GOVERNANCE_CHAIN,
         RuntimeServiceName.ACTION_EXECUTOR,
-        RuntimeServiceName.DECISION_CORE,
+        RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE,
     )

@@ -87,6 +87,120 @@ def _direct_second_brain_surface_lock() -> tuple[bool, str]:
     return True, "second-brain surface lock passed"
 
 
+def _direct_runtime_decision_execution_service_name_lock() -> tuple[bool, str]:
+    root = repo_root()
+    service_names = (root / "runtime" / "service_names.py").read_text(encoding="utf-8")
+    registry_state = (root / "runtime" / "registry_state.py").read_text(encoding="utf-8")
+    registration = (root / "boot" / "registrations" / "register_decision_core.py").read_text(encoding="utf-8")
+    service_specs = (root / "bootstrap" / "runtime_service_specs.py").read_text(encoding="utf-8")
+    runtime_policies = (root / "runtime" / "runtime_policies.py").read_text(encoding="utf-8")
+
+    required_snippets = {
+        "runtime/service_names.py": (
+            "RUNTIME_DECISION_EXECUTION_SERVICE",
+            "canonical_runtime_service_name",
+            "CANON_RUNTIME_DECISION_CORE_SERVICE_NAME_COMPAT_ALIAS",
+        ),
+        "runtime/registry_state.py": ("canonical_runtime_service_name(name)",),
+        "boot/registrations/register_decision_core.py": (
+            "name=RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE",
+            "service_type=RuntimeServiceType.EXECUTOR",
+            "CANON_REGISTER_DECISION_CORE_SERVICE_NAME_COMPAT_ALIAS_ONLY",
+        ),
+        "bootstrap/runtime_service_specs.py": (
+            "RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE",
+            "CANON_RUNTIME_DECISION_EXECUTION_SERVICE_MANIFEST_NAME",
+        ),
+        "runtime/runtime_policies.py": ("RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE",),
+    }
+    text_by_file = {
+        "runtime/service_names.py": service_names,
+        "runtime/registry_state.py": registry_state,
+        "boot/registrations/register_decision_core.py": registration,
+        "bootstrap/runtime_service_specs.py": service_specs,
+        "runtime/runtime_policies.py": runtime_policies,
+    }
+    missing: list[str] = []
+    for rel, snippets in required_snippets.items():
+        for snippet in snippets:
+            if snippet not in text_by_file[rel]:
+                missing.append(f"{rel}:{snippet}")
+    if missing:
+        return False, "runtime decision execution service naming lock missing snippets: " + ", ".join(missing)
+
+    forbidden_registration = "name=RuntimeServiceName." + "DECISION_CORE"
+    forbidden_spec = "service_name=RuntimeServiceName." + "DECISION_CORE"
+    forbidden_policy = "RuntimeServiceName." + "DECISION_CORE"
+    offenders: list[str] = []
+    if forbidden_registration in registration:
+        offenders.append("boot/registrations/register_decision_core.py registers execution under decision core name")
+    if forbidden_spec in service_specs:
+        offenders.append("bootstrap/runtime_service_specs.py manifests execution under decision core name")
+    if forbidden_policy in runtime_policies:
+        offenders.append("runtime/runtime_policies.py requires decision core alias")
+    if offenders:
+        return False, "runtime decision execution service naming lock failed: " + "; ".join(offenders)
+
+    code = r'''
+from runtime.registry import RuntimeRegistry
+from runtime.service_names import RuntimeServiceName, canonical_runtime_service_name
+from runtime.service_types import RuntimeServiceType
+
+service = object()
+registry = RuntimeRegistry()
+registry.begin_registration()
+registry.register(
+    name=RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE,
+    service=service,
+    service_type=RuntimeServiceType.EXECUTOR,
+)
+if canonical_runtime_service_name(RuntimeServiceName.DECISION_CORE) != RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE:
+    print("decision_core alias does not resolve to execution service")
+    raise SystemExit(1)
+if registry.get(RuntimeServiceName.DECISION_CORE) is not service:
+    print("legacy decision_core lookup no longer resolves to execution service")
+    raise SystemExit(1)
+if RuntimeServiceName.DECISION_CORE in registry.list_service_names():
+    print("registry stores legacy decision_core alias as canonical service name")
+    raise SystemExit(1)
+print("runtime decision execution service naming lock passed")
+'''
+    outcome = run_python(["-c", code], timeout=30)
+    if outcome.returncode != 0:
+        return False, outcome.stdout.strip() or outcome.stderr.strip() or "runtime decision execution service naming lock failed"
+    return True, "runtime decision execution service naming lock passed"
+
+
+def _direct_container_release_lock_install_path() -> tuple[bool, str]:
+    root = repo_root()
+    dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+    release_lock_path = root / "requirements.release.lock.txt"
+    if not release_lock_path.exists():
+        return False, "requirements.release.lock.txt is required for container production install"
+    release_lock = release_lock_path.read_text(encoding="utf-8")
+    required = (
+        "COPY requirements.release.lock.txt",
+        "pip install --require-hashes -r requirements.release.lock.txt",
+        "BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK=1",
+    )
+    missing = [snippet for snippet in required if snippet not in dockerfile]
+    if missing:
+        return False, "container release dependency install path missing: " + ", ".join(missing)
+    forbidden = (
+        "COPY requirements.lock.txt",
+        "pip install -r requirements.lock.txt",
+        "pip install -r requirements.txt",
+    )
+    hits = [snippet for snippet in forbidden if snippet in dockerfile]
+    if hits:
+        return False, "container production install uses non-release lock path: " + ", ".join(hits)
+    if "BAIOS_TRANSITIVE_LOCK: true" not in release_lock or "--hash=sha256:" not in release_lock:
+        return False, "requirements.release.lock.txt does not prove transitive hash locking"
+    if "Transitive dependency locking can be added later" in release_lock:
+        return False, "requirements.release.lock.txt is marked as top-level-only"
+    return True, "container release dependency install path lock passed"
+
+
 def _direct_ai_ceo_lock() -> tuple[bool, str]:
     root = repo_root()
     needle = "ai" + "_ceo" + "_plan" + "@v1"
@@ -191,6 +305,8 @@ def run() -> tuple[bool, str]:
         _direct_repo_hygiene_lock,
         _direct_cicd_contract_lock,
         _direct_second_brain_surface_lock,
+        _direct_runtime_decision_execution_service_name_lock,
+        _direct_container_release_lock_install_path,
         _direct_ai_ceo_lock,
         _direct_runtime_actions_registry_lock,
     )

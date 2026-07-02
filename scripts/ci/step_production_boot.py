@@ -8,6 +8,13 @@ from runtime.production_boot_contract import ProductionBootProbe, evaluate_produ
 from scripts.ci.paths import repo_root
 
 REAL_BOOT_EVIDENCE_NAME = "real_runtime_boot_evidence.json"
+CANON_PRODUCTION_BOOT_ENV_DRIFT_GUARD = True
+LEGACY_ENV_KEYS = (
+    "METRO_DB_ENGINE",
+    "STORAGE_DB_ENGINE",
+    "METRO_DATABASE_URL",
+    "METRO_POSTGRES_DSN",
+)
 
 
 def _write_artifact(payload: dict[str, object]) -> None:
@@ -38,6 +45,10 @@ def _evidence_required() -> bool:
 
 def _production_profile_required() -> bool:
     return _truthy_env("PRODUCTION_BOOT_PROOF_REQUIRED")
+
+
+def _legacy_env_keys_present(env: dict[str, str]) -> list[str]:
+    return [name for name in LEGACY_ENV_KEYS if str(env.get(name) or "").strip()]
 
 
 def _append_violation(report: dict[str, object], *items: str) -> None:
@@ -71,6 +82,8 @@ def run() -> tuple[bool, str]:
     report["proof_kind"] = "contract_aggregation_not_process_boot"
     report["claims_real_runtime_boot"] = False
     report["proof_required"] = _evidence_required()
+    legacy_env_keys = _legacy_env_keys_present(proof_env)
+    report["legacy_env_keys_present"] = legacy_env_keys
     postgres_report = _read_artifact(root, "postgres_contract.json")
     postgres_migrations = _read_artifact(root, "postgres_migrations.json")
     postgres_live = _read_artifact(root, "postgres_live.json")
@@ -81,6 +94,9 @@ def run() -> tuple[bool, str]:
     report["postgres_live"] = postgres_live
     report["container_runtime"] = container_runtime
     report["real_runtime_boot_evidence"] = real_boot_evidence
+
+    if legacy_env_keys:
+        _append_violation(report, "legacy_production_env_drift:" + ",".join(legacy_env_keys))
 
     if _production_profile_required() and report.get("production_profile") is not True:
         _append_violation(report, "production_profile_required")
@@ -117,4 +133,4 @@ def run() -> tuple[bool, str]:
     )
 
 
-__all__ = ["run"]
+__all__ = ["CANON_PRODUCTION_BOOT_ENV_DRIFT_GUARD", "LEGACY_ENV_KEYS", "_legacy_env_keys_present", "run"]

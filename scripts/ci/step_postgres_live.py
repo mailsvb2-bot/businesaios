@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+from pathlib import Path
 
 from runtime.platform.postgres_contract import PostgresRuntimeProof, evaluate_postgres_contract
 from runtime.platform.postgres_live_probe import PostgresLiveProbeConfig, run_postgres_live_probe
@@ -33,6 +34,18 @@ def _proof_required() -> bool:
 
 def _apply_migrations() -> bool:
     return str(os.getenv("POSTGRES_APPLY_MIGRATIONS") or os.getenv("RUN_MIGRATIONS_BEFORE_START") or "").strip().lower() in {"1", "true", "yes", "enabled"}
+
+
+def _backup_evidence_ok() -> bool:
+    if _truthy_env("POSTGRES_BACKUP_EVIDENCE_OK"):
+        return True
+    raw_path = str(os.getenv("POSTGRES_BACKUP_EVIDENCE_PATH") or "").strip()
+    if not raw_path:
+        return False
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        candidate = repo_root() / candidate
+    return candidate.exists() and candidate.is_file()
 
 
 def _block_required_postgres_live(*, dsn: str, enabled: bool, psycopg_available: bool) -> tuple[bool, str]:
@@ -108,6 +121,7 @@ def run() -> tuple[bool, str]:
                 dsn=dsn,
                 apply_migrations=_apply_migrations(),
                 proof_id=os.getenv("POSTGRES_LIVE_PROOF_ID", "ci-postgres-live-proof"),
+                backup_evidence_ok=_backup_evidence_ok(),
             )
         )
     except Exception as exc:
