@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import importlib
+
 import pytest
 
-from boot.registrations import register_decision_core as registration
 from boot.runtime_service_contracts import RuntimeDecisionCore, RuntimeDecisionExecutionService
+
+registration = importlib.import_module("boot.registrations.register_decision_core")
 
 
 def test_runtime_decision_core_is_not_alias_to_execution_service() -> None:
