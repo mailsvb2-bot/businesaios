@@ -25,3 +25,11 @@ jobs:
         env:
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.12
         run: python -m scripts.ci.cli --gate full
+      - name: Upload full gate artifacts
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-ci-artifacts
+          path: artifacts/ci
+          if-no-files-found: warn
