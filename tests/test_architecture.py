@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -76,6 +77,17 @@ def _parse(py: pathlib.Path):
     return ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
 
 
+def _imported_modules(py: pathlib.Path) -> set[str]:
+    tree = _parse(py)
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(item.name for item in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+    return modules
+
+
 def test_no_private_internal_imports_outside_executor():
     for py, rel in _iter_py_files():
         # runtime/_internal is the sealed implementation zone; it is allowed to
@@ -147,6 +159,41 @@ def test_runtime_modules_not_imported_in_core_layers():
                     mod = n.name
                     if any(mod == f or mod.startswith(f + ".") for f in forbidden):
                         raise AssertionError(f"Forbidden import of runtime layer in {rel}: {mod}")
+
+
+def test_audit_tools_are_read_only_scanners_not_decision_callers():
+    audit_files = (
+        "tools/canon_audit.py",
+        "scripts/ci/integrity/auditor.py",
+    )
+    forbidden = {
+        "core.ai.decision_core",
+        "core.decision_core",
+        "runtime.executor",
+        "runtime.guard",
+    }
+    for rel in audit_files:
+        modules = _imported_modules(ROOT / rel)
+        for item in forbidden:
+            assert item not in modules
+            assert not any(module.startswith(item + ".") for module in modules)
+
+
+def test_integrity_auditor_is_in_long_gates_but_not_fast():
+    from scripts.ci.plan_registry import plan_for_gate
+
+    for gate in ("full", "release", "pre-release"):
+        steps = [step.name for step in plan_for_gate(gate).steps]
+        assert "integrity-auditor" in steps
+
+    fast_steps = [step.name for step in plan_for_gate("fast").steps]
+    assert "integrity-auditor" not in fast_steps
+
+
+def test_decision_core_engine_not_allowed_as_canonical_authority():
+    spec = json.loads((ROOT / "scripts/ci/specs/integrity_auditor_rules.json").read_text(encoding="utf-8"))
+    assert "DecisionCoreEngine" not in spec["decision_core_allowed_names"]
+    assert "DecisionCoreEngine" in spec["executable_decision_authority_names"]
 
 
 def test_runtime_handlers_registry_no_business_logic_markers():
