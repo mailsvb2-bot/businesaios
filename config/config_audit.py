@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
-
 import hashlib
 import json
 import uuid
@@ -12,6 +10,8 @@ from pathlib import Path
 from threading import RLock
 
 from governance.persistence_codec import ensure_parent_dir, to_jsonable
+
+CANON_COMPAT_SHIM = True
 
 CANON_CONFIG_AUDIT = True
 

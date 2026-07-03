@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
-
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -15,6 +13,8 @@ from config.config_versioning import ConfigVersion, ConfigVersioning, utc_now
 from config.environment_matrix import normalize_environment_name
 from core.tenancy.normalization import normalize_tenant_id
 from governance.persistence_codec import atomic_write_json, read_json_or_default, to_jsonable
+
+CANON_COMPAT_SHIM = True
 
 CANON_RUNTIME_CONFIG_STORE = True
 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
-
 import hashlib
 import json
 from collections.abc import Mapping
@@ -10,6 +8,8 @@ from datetime import UTC, datetime
 from typing import Any
 
 from governance.persistence_codec import to_jsonable
+
+CANON_COMPAT_SHIM = True
 
 CANON_CONFIG_VERSIONING = True
 

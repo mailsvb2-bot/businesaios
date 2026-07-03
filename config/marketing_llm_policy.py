@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
-
 from dataclasses import dataclass, field
 
 from core.llm.circuit import CircuitConfig
 from core.llm.sampling import DebugSampling
 
+CANON_COMPAT_SHIM = True
 
 @dataclass(frozen=True)
 class MarketingLLMPolicy:
