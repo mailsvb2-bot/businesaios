@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "name": "BusinessAIOS Integrity Auditor",
   "goal": "Verify architectural integrity, DecisionCore singularity, canonical flow completeness, no-second-brain discipline, guarded execution, admin visibility, evidence, replay, config, and dead-capability risks.",
   "thresholds": {
@@ -25,8 +25,13 @@
   ],
   "decision_core_allowed_names": [
     "DecisionCore",
-    "decision_core",
-    "DecisionCoreEngine"
+    "decision_core"
+  ],
+  "executable_decision_authority_names": [
+    "DecisionCore",
+    "DecisionCoreEngine",
+    "DecisionEngine",
+    "PlannerEngine"
   ],
   "second_brain_suspicious_terms": [
     "second_brain",
