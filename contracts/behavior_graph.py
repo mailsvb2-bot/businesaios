@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Behavior Graph contract types.
 
 This module intentionally lives in `contracts/` to avoid cross-layer coupling.
 Runtime/UI can depend on this module without importing `core.*`.
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
