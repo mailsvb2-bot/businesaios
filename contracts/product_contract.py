@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Product Contract — Single Source of Truth.
 
 Canonical definition of ProductContract for BusinesAIOS.
@@ -13,6 +11,8 @@ Compatibility shims:
 - `core.contracts.product_contract` and `core.products.product_contract` re-export this module.
   Lock-tests ensure this module remains the only definition site.
 """
+
+from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
