@@ -26,6 +26,7 @@ TOP_LEVEL_LOCK = ROOT / "requirements.lock.txt"
 RELEASE_REQUIREMENTS_LOCK = ROOT / "requirements.release.lock.txt"
 UV_LOCK = ROOT / "uv.lock"
 POETRY_LOCK = ROOT / "poetry.lock"
+DOCKERFILE = ROOT / "Dockerfile"
 
 _RELEASE_LOCK_MARKERS = (
     "BAIOS_TRANSITIVE_LOCK: true",
@@ -80,6 +81,20 @@ def _release_lock_required() -> bool:
         "release",
         "required",
     }
+
+
+def _container_install_requires_release_lock() -> bool:
+    """Require release-lock validation whenever the container install path uses it.
+
+    This keeps the Docker workflow fail-closed even if the workflow invokes the
+    generic lock checker without an explicit release env flag. The dependency
+    contract follows the production install path, not a duplicated workflow brain.
+    """
+
+    if not DOCKERFILE.exists():
+        return False
+    text = DOCKERFILE.read_text(encoding="utf-8")
+    return "requirements.release.lock.txt" in text or "pip install --require-hashes" in text
 
 
 def _path_has_any_marker(path: Path, markers: tuple[str, ...]) -> bool:
@@ -158,7 +173,7 @@ def main() -> int:
     if not ok:
         print(message)
         return 1
-    if _release_lock_required():
+    if _release_lock_required() or _container_install_requires_release_lock():
         release_ok, release_message = _check_release_lock()
         if not release_ok:
             print(message)

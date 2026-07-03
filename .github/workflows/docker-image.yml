@@ -5,7 +5,10 @@ on:
     paths:
       - Dockerfile
       - docker/**
+      - requirements.txt
       - requirements.lock.txt
+      - requirements.release.lock.txt
+      - scripts/ci/check_requirements_lock.py
       - .github/workflows/docker-image.yml
   push:
     branches:
@@ -13,7 +16,10 @@ on:
     paths:
       - Dockerfile
       - docker/**
+      - requirements.txt
       - requirements.lock.txt
+      - requirements.release.lock.txt
+      - scripts/ci/check_requirements_lock.py
       - .github/workflows/docker-image.yml
 jobs:
   build:

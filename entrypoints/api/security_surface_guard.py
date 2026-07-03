@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
@@ -145,7 +145,7 @@ class ApiSecuritySurfaceGuard:
         scheme = str(request_context.metadata.get('scheme') or '').strip().lower()
         if scheme:
             return scheme == 'https'
-        return True
+        return False
 
     @staticmethod
     def _default_compliance_evidence(*, request_context: RequestContext) -> dict[str, object]:
@@ -219,5 +219,6 @@ def _coerce_dt(value: object) -> datetime | None:
 
 __all__ = [
     'ApiSecuritySurfaceGuard',
+    'CANON_API_FINAL_OWNER',
     'CANON_API_SECURITY_SURFACE_GUARD',
 ]

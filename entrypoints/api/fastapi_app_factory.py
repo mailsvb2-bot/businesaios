@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-from config.env_flags import env_bool
+from config.env_flags import env_bool, env_str
 from entrypoints.api.openapi_tags import OPENAPI_TAGS
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -30,6 +30,16 @@ def _read_version(default: str = API_VERSION) -> str:
     except OSError:
         return default
     return text or default
+
+
+def _is_production_env() -> bool:
+    app_env = env_str('APP_ENV', '').strip().lower()
+    env = env_str('ENV', '').strip().lower()
+    return app_env in {'prod', 'production'} or env in {'prod', 'production'}
+
+
+def _api_docs_enabled() -> bool:
+    return env_bool('API_DOCS_ENABLED', default=not _is_production_env())
 
 
 def _validate_inputs(*, application_service: object, dependency_container: object | None) -> None:
@@ -160,7 +170,7 @@ def create_fastapi_app(*, application_service: object, dependency_container: obj
     from adapters.api.fastapi.openapi_security import attach_security_schema
 
     _validate_inputs(application_service=application_service, dependency_container=dependency_container)
-    docs_enabled = env_bool('API_DOCS_ENABLED', default=True)
+    docs_enabled = _api_docs_enabled()
 
     @asynccontextmanager
     async def _lifespan(_: object):
