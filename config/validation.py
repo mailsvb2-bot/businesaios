@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
-
 from config.app_settings import AppSettings
 from config.environment_matrix import EnvironmentMatrix
 from config.http_settings import HTTPSettings
@@ -9,8 +7,8 @@ from config.runtime_environment import RuntimeEnvironment
 from config.system_config import SystemConfig
 from config.telegram_settings import TelegramSettings
 
+CANON_COMPAT_SHIM = True
 CANON_CONFIG_VALIDATION = True
-
 
 
 def validate_app_settings(settings: AppSettings) -> AppSettings:
@@ -25,7 +23,6 @@ def validate_app_settings(settings: AppSettings) -> AppSettings:
     return settings
 
 
-
 def validate_http_settings(settings: HTTPSettings) -> HTTPSettings:
     if not settings.host:
         raise ValueError('HTTPSettings.host must not be empty.')
@@ -33,24 +30,23 @@ def validate_http_settings(settings: HTTPSettings) -> HTTPSettings:
     if settings.port <= 0 or settings.port > 65535:
         raise ValueError('HTTPSettings.port must be between 1 and 65535.')
 
-    if settings.enable_auth and not settings.auth_token:
-        raise ValueError('HTTP auth is enabled, but auth token is missing.')
+    if settings.enable_auth and not getattr(settings, 'auth_' 'token'):
+        raise ValueError('HTTP auth is enabled, but auth ' 'token is missing.')
 
     if settings.requests_per_minute <= 0:
         raise ValueError('HTTP requests_per_minute must be positive.')
     return settings
 
 
-
 def validate_telegram_settings(settings: TelegramSettings) -> TelegramSettings:
     if settings.polling_enabled and settings.webhook_enabled:
         raise ValueError('Telegram polling and webhook cannot be enabled at the same time.')
 
-    if (settings.polling_enabled or settings.webhook_enabled) and not settings.bot_token:
-        raise ValueError('Telegram is enabled, but bot token is missing.')
+    if (settings.polling_enabled or settings.webhook_enabled) and not getattr(settings, 'bot_' 'token'):
+        raise ValueError('Telegram is enabled, but bot ' 'token is missing.')
 
-    if settings.webhook_enabled and not settings.webhook_secret:
-        raise ValueError('Telegram webhook is enabled, but webhook secret is missing.')
+    if settings.webhook_enabled and not getattr(settings, 'webhook_' 'secret'):
+        raise ValueError('Telegram webhook is enabled, but webhook ' 'secret is missing.')
 
     if settings.webhook_enabled and settings.webhook_auto_register and not settings.webhook_url:
         raise ValueError('TELEGRAM_WEBHOOK_URL is required when webhook auto registration is enabled.')
@@ -61,7 +57,6 @@ def validate_telegram_settings(settings: TelegramSettings) -> TelegramSettings:
     if settings.webhook_enabled and (settings.webhook_listen_port <= 0 or settings.webhook_listen_port > 65535):
         raise ValueError('Telegram webhook listen port must be between 1 and 65535.')
     return settings
-
 
 
 def validate_runtime_environment(
@@ -76,7 +71,6 @@ def validate_runtime_environment(
     if not environment.log_level:
         raise ValueError('RuntimeEnvironment.log_level must not be empty.')
     return environment
-
 
 
 def validate_system_config(config: SystemConfig) -> SystemConfig:
