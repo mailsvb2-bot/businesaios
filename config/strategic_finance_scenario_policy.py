@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
-
 from decimal import Decimal
 
 from core.finance.strategic.types import Scenario
 from core.strategic_horizon.engine import StrategicMode
+
+CANON_COMPAT_SHIM = True
 
 DEFAULT_STRATEGIC_FINANCE_SCENARIOS: tuple[Scenario, ...] = (
     Scenario(
