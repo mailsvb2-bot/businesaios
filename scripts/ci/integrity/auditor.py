@@ -206,8 +206,8 @@ def check_canonical_flow(files: list[Path], spec: dict[str, Any]) -> list[Findin
     if not missing:
         return []
     return [finding(
-        "P0_CANONICAL_FLOW",
-        "P0",
+        "P1_CANONICAL_FLOW",
+        "P1",
         "Canonical flow terms missing",
         "repo",
         1,
@@ -233,8 +233,8 @@ def check_runtime_side_effects(files: list[Path], spec: dict[str, Any]) -> list[
                 name = dotted_name(node.func)
                 if name in calls:
                     out.append(finding(
-                        "P0_RUNTIME_SIDE_EFFECTS",
-                        "P0",
+                        "P1_RUNTIME_SIDE_EFFECTS",
+                        "P1",
                         "Side effect outside approved execution roots",
                         path,
                         getattr(node, "lineno", 1),
@@ -252,8 +252,8 @@ def check_admin_surface(files: list[Path], spec: dict[str, Any]) -> list[Finding
     if not missing:
         return []
     return [finding(
-        "P0_ADMIN_SURFACE",
-        "P0",
+        "P1_ADMIN_SURFACE",
+        "P1",
         "Admin/control-plane visibility incomplete",
         "repo",
         1,
