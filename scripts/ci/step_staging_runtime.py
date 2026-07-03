@@ -5,9 +5,32 @@ import os
 from pathlib import Path
 
 from scripts.ci.paths import repo_root
+from scripts.ci.proof_artifacts import proof_artifact_violations
 
 RUNNER = Path("scripts/staging/run_staging_runtime_proof.sh")
 EVIDENCE_NAME = "staging_runtime_proof.json"
+CANON_STAGING_RUNTIME_PROOF_AGGREGATION_GUARD = True
+STAGING_PROOF_REQUIRED_TEXT_FIELDS = (
+    "evidence_kind",
+    "created_at",
+    "proof_id",
+    "commit_sha",
+)
+STAGING_PROOF_KINDS = ("real_staging_runtime_proof",)
+CONTAINER_EVIDENCE_REQUIRED_TEXT_FIELDS = (
+    "evidence_kind",
+    "created_at",
+    "proof_id",
+    "commit_sha",
+    "image",
+    "container_name",
+)
+REAL_BOOT_EVIDENCE_REQUIRED_TEXT_FIELDS = (
+    "evidence_kind",
+    "created_at",
+    "proof_id",
+    "commit_sha",
+)
 
 
 def _project_root() -> Path:
@@ -57,9 +80,73 @@ def _validate_runner() -> list[str]:
             violations.append("docker_build_run_required")
         if "probe_url /readyz" not in text or "probe_url /storagez" not in text or "probe_url /executionz" not in text:
             violations.append("readiness_probe_surfaces_required")
+        if "GIT_COMMIT_SHA" not in text or "BAIOS_STAGING_PROOF_ID" not in text:
+            violations.append("staging_runtime_provenance_required")
         if EVIDENCE_NAME not in text:
             violations.append("staging_runtime_artifact_required")
     return violations
+
+
+def _nested_ready_artifact_violations(
+    *,
+    evidence: dict[str, object],
+    key: str,
+    artifact_name: str,
+    required_fields: tuple[str, ...],
+    allowed_kinds: tuple[str, ...],
+) -> list[str]:
+    nested = evidence.get(key)
+    if not isinstance(nested, dict):
+        return [f"{key}_not_ready"]
+    return proof_artifact_violations(
+        payload=nested,
+        artifact_name=artifact_name,
+        required_text_fields=required_fields,
+        allowed_evidence_kinds=allowed_kinds,
+    )
+
+
+def _ready_staging_evidence_violations(evidence: dict[str, object]) -> list[str]:
+    violations = proof_artifact_violations(
+        payload=evidence,
+        artifact_name="staging_runtime_proof",
+        required_text_fields=STAGING_PROOF_REQUIRED_TEXT_FIELDS,
+        allowed_evidence_kinds=STAGING_PROOF_KINDS,
+    )
+    required_ready = (
+        "postgres_contract",
+        "postgres_migrations",
+        "postgres_live",
+        "container_runtime",
+        "container_runtime_evidence",
+        "real_runtime_boot_evidence",
+    )
+    for name in required_ready:
+        nested = evidence.get(name)
+        if not isinstance(nested, dict) or nested.get("status") != "ready":
+            violations.append(f"{name}_not_ready")
+    violations.extend(
+        _nested_ready_artifact_violations(
+            evidence=evidence,
+            key="container_runtime_evidence",
+            artifact_name="container_runtime_evidence",
+            required_fields=CONTAINER_EVIDENCE_REQUIRED_TEXT_FIELDS,
+            allowed_kinds=("real_container_runtime_probe",),
+        )
+    )
+    violations.extend(
+        _nested_ready_artifact_violations(
+            evidence=evidence,
+            key="real_runtime_boot_evidence",
+            artifact_name="real_runtime_boot_evidence",
+            required_fields=REAL_BOOT_EVIDENCE_REQUIRED_TEXT_FIELDS,
+            allowed_kinds=("real_staging_runtime_boot_probe", "real_production_runtime_boot_probe"),
+        )
+    )
+    production_boot = evidence.get("production_boot")
+    if not isinstance(production_boot, dict) or production_boot.get("status") != "contract_satisfied":
+        violations.append("production_boot_contract_not_satisfied")
+    return sorted(set(violations))
 
 
 def run() -> tuple[bool, str]:
@@ -77,22 +164,14 @@ def run() -> tuple[bool, str]:
     evidence = _read_existing_evidence()
     if evidence is not None:
         if evidence.get("status") == "ready":
-            required_ready = (
-                "postgres_contract",
-                "postgres_migrations",
-                "postgres_live",
-                "container_runtime",
-                "container_runtime_evidence",
-                "real_runtime_boot_evidence",
-            )
-            blocked = [name for name in required_ready if not isinstance(evidence.get(name), dict) or evidence[name].get("status") != "ready"]
-            if blocked:
+            violations = _ready_staging_evidence_violations(evidence)
+            if violations:
                 payload = dict(evidence)
                 payload["status"] = "blocked"
-                payload["violations"] = [f"{name}_not_ready" for name in blocked]
+                payload["violations"] = violations
                 payload["claims_production_ready"] = False
                 _write_artifact(payload)
-                return False, "staging runtime proof blocked: " + ",".join(payload["violations"])
+                return False, "staging runtime proof blocked: " + ",".join(violations)
             evidence["claims_production_ready"] = False
             _write_artifact(evidence)
             return True, "staging runtime proof ready from artifacts/ci/staging_runtime_proof.json"
@@ -146,4 +225,4 @@ def run() -> tuple[bool, str]:
     )
 
 
-__all__ = ["run"]
+__all__ = ["CANON_STAGING_RUNTIME_PROOF_AGGREGATION_GUARD", "run"]
