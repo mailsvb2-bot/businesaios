@@ -43,6 +43,13 @@ HOST_PORT="${BAIOS_STAGING_PORT:-18000}"
 CONTAINER_PORT="${BAIOS_CONTAINER_PORT:-8000}"
 TIMEOUT_SECONDS="${BAIOS_STAGING_TIMEOUT_SECONDS:-120}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts/ci}"
+GIT_COMMIT_SHA="${GIT_COMMIT_SHA:-$(git rev-parse --verify HEAD 2>/dev/null || true)}"
+if [[ -z "$GIT_COMMIT_SHA" ]]; then
+  echo "GIT_COMMIT_SHA could not be resolved; staging proof must be tied to an exact commit." >&2
+  exit 2
+fi
+BAIOS_STAGING_PROOF_ID="${BAIOS_STAGING_PROOF_ID:-staging-${GIT_COMMIT_SHA}-$(date -u +%Y%m%dT%H%M%SZ)}"
+export GIT_COMMIT_SHA BAIOS_STAGING_PROOF_ID
 
 mkdir -p "$ARTIFACT_DIR"
 
@@ -139,6 +146,8 @@ payload = {
     "status": "ready",
     "evidence_kind": "real_container_runtime_probe",
     "created_at": datetime.now(timezone.utc).isoformat(),
+    "proof_id": os.environ["BAIOS_STAGING_PROOF_ID"],
+    "commit_sha": os.environ["GIT_COMMIT_SHA"],
     "image": os.environ.get("BAIOS_STAGING_IMAGE", "businesaios:staging-proof"),
     "base_image": base_image,
     "base_image_pull_policy": "never_during_staging_proof",
@@ -165,6 +174,7 @@ run_gate container-runtime
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -178,6 +188,8 @@ payload = {
     "status": "ready",
     "evidence_kind": "real_staging_runtime_boot_probe",
     "created_at": datetime.now(timezone.utc).isoformat(),
+    "proof_id": os.environ["BAIOS_STAGING_PROOF_ID"],
+    "commit_sha": os.environ["GIT_COMMIT_SHA"],
     "postgres_contract_ready": postgres_contract.get("status") == "ready",
     "postgres_migrations_ready": postgres_migrations.get("status") == "ready",
     "postgres_live_ready": postgres_live.get("status") == "ready",
@@ -211,12 +223,17 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 artifact_dir = Path("artifacts/ci")
 summary = {
     "artifact": "staging_runtime_proof",
     "status": "ready",
+    "evidence_kind": "real_staging_runtime_proof",
+    "created_at": datetime.now(timezone.utc).isoformat(),
+    "proof_id": os.environ["BAIOS_STAGING_PROOF_ID"],
+    "commit_sha": os.environ["GIT_COMMIT_SHA"],
     "base_image": os.environ.get("BAIOS_PYTHON_BASE_IMAGE", "businesaios/python-runtime-base:3.12-slim"),
     "base_image_pull_policy": "never_during_staging_proof",
     "release_manifest": json.loads(Path("release/manifest.json").read_text(encoding="utf-8")),
@@ -238,6 +255,8 @@ required_ready = (
     "real_runtime_boot_evidence",
 )
 blocked = [name for name in required_ready if summary[name].get("status") != "ready"]
+if summary["production_boot"].get("status") != "contract_satisfied":
+    blocked.append("production_boot")
 if blocked:
     summary["status"] = "blocked"
     summary["violations"] = [f"{name}_not_ready" for name in blocked]

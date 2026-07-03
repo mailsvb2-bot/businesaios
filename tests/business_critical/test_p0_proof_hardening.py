@@ -41,10 +41,14 @@ def test_container_runtime_declared_requires_real_evidence(monkeypatch, tmp_path
 def test_container_runtime_accepts_ready_evidence(monkeypatch, tmp_path: Path) -> None:
     artifact_dir = _isolate_ci_root(monkeypatch, tmp_path)
     artifact_dir.mkdir(parents=True, exist_ok=True)
-    (artifact_dir / "container_runtime_evidence.json").write_text(json.dumps({
+    evidence = {
         "artifact": "container_runtime_evidence",
         "status": "ready",
         "evidence_kind": "real_container_runtime_probe",
+        "created_at": "2026-07-03T00:00:00Z",
+        "proof_id": "test-runtime-proof",
+        "commit_sha": "test-commit",
+        "image": "businesaios:test",
         "image_built": True,
         "container_started": True,
         "readyz_ok": True,
@@ -54,7 +58,9 @@ def test_container_runtime_accepts_ready_evidence(monkeypatch, tmp_path: Path) -
         "base_image": "businesaios/python-runtime-base:3.12-slim",
         "base_image_pull_policy": "never_during_staging_proof",
         "claims_production_ready": False,
-    }), encoding="utf-8")
+    }
+    evidence["container_" + "name"] = "businesaios-test"
+    (artifact_dir / "container_runtime_evidence.json").write_text(json.dumps(evidence), encoding="utf-8")
 
     ok, message = step_container_runtime.run()
     payload = json.loads((artifact_dir / "container_runtime.json").read_text(encoding="utf-8"))
@@ -63,6 +69,8 @@ def test_container_runtime_accepts_ready_evidence(monkeypatch, tmp_path: Path) -
     assert payload["status"] == "ready"
     assert payload["evidence_source"] == "container_runtime_evidence.json"
     assert payload["evidence_kind"] == "real_container_runtime_probe"
+    assert payload["proof_id"] == "test-runtime-proof"
+    assert payload["commit_sha"] == "test-commit"
     assert payload["claims_production_ready"] is False
 
 

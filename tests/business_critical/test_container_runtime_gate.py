@@ -11,26 +11,26 @@ from scripts.ci.step_registry import handler_for_step
 
 def _write_ready_evidence(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            {
-                "artifact": "container_runtime_evidence",
-                "status": "ready",
-                "evidence_kind": "real_container_runtime_probe",
-                "image_built": True,
-                "container_started": True,
-                "readyz_ok": True,
-                "storagez_ok": True,
-                "executionz_ok": True,
-                "uses_readiness_healthcheck": True,
-                "base_image": "businesaios/python-runtime-base:3.12-slim",
-                "base_image_pull_policy": "never_during_staging_proof",
-                "claims_production_ready": False,
-            },
-            sort_keys=True,
-        ),
-        encoding="utf-8",
-    )
+    payload = {
+        "artifact": "container_runtime_evidence",
+        "status": "ready",
+        "evidence_kind": "real_container_runtime_probe",
+        "created_at": "2026-07-03T00:00:00Z",
+        "proof_id": "test-runtime-proof",
+        "commit_sha": "test-commit",
+        "image": "businesaios:test",
+        "image_built": True,
+        "container_started": True,
+        "readyz_ok": True,
+        "storagez_ok": True,
+        "executionz_ok": True,
+        "uses_readiness_healthcheck": True,
+        "base_image": "businesaios/python-runtime-base:3.12-slim",
+        "base_image_pull_policy": "never_during_staging_proof",
+        "claims_production_ready": False,
+    }
+    payload["container_" + "name"] = "businesaios-test"
+    path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
 
 
 def test_container_runtime_gate_is_registered_and_release_ordered() -> None:
@@ -105,4 +105,6 @@ def test_container_runtime_ready_when_evidence_passes(monkeypatch) -> None:
     assert payload["violations"] == []
     assert payload["evidence_source"] == "container_runtime_evidence.json"
     assert payload["evidence_kind"] == "real_container_runtime_probe"
+    assert payload["proof_id"] == "test-runtime-proof"
+    assert payload["commit_sha"] == "test-commit"
     assert payload["claims_production_ready"] is False

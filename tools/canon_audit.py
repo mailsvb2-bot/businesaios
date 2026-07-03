@@ -20,8 +20,17 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-CANON_AUDIT_TOOL_VERSION = "2026-05-11.p2"
+CANON_AUDIT_TOOL_VERSION = "2026-07-03.p3"
 MAX_REPORTED_ITEMS = 25
+CANONICAL_DECISION_CORE_PATH = "core/ai/decision_core.py"
+EXECUTABLE_DECISION_AUTHORITY_NAMES = frozenset(
+    {
+        "DecisionCore",
+        "DecisionCoreEngine",
+        "DecisionEngine",
+        "PlannerEngine",
+    }
+)
 
 PY_SKIP_DIRS = {
     ".git",
@@ -37,7 +46,7 @@ PY_SKIP_DIRS = {
 
 MANDATORY_FILES = (
     "docs/SYSTEM_TZ_CANONICAL.md",
-    "core/ai/decision_core.py",
+    CANONICAL_DECISION_CORE_PATH,
     "core/decision_core.py",
     "runtime/executor.py",
     "runtime/guard.py",
@@ -187,14 +196,8 @@ def _check_mandatory_files(root: Path, violations: list[CanonViolation]) -> int:
     return total
 
 
-def _check_decision_core_presence(root: Path, violations: list[CanonViolation], warnings: list[CanonViolation]) -> tuple[int, int]:
-    canonical = "core/ai/decision_core.py"
-    canonical_path = root / canonical
-    if not canonical_path.exists():
-        _append_bounded(violations, CanonViolation("CANON_DECISION_CORE_MISSING", canonical, "canonical DecisionCore file is missing"))
-        return 1, 0
-
-    classes: list[str] = []
+def _executable_authority_defs(root: Path) -> list[tuple[str, int, str]]:
+    found: list[tuple[str, int, str]] = []
     for path in _iter_py_files(root):
         rel = _rel(root, path)
         if rel.startswith("tests/"):
@@ -203,25 +206,48 @@ def _check_decision_core_presence(root: Path, violations: list[CanonViolation], 
         if tree is None:
             continue
         for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef) and node.name == "DecisionCore":
-                classes.append(rel)
+            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in EXECUTABLE_DECISION_AUTHORITY_NAMES:
+                found.append((rel, getattr(node, "lineno", 1), node.name))
+    return found
 
-    if canonical not in classes:
-        _append_bounded(violations, CanonViolation("CANON_DECISION_CORE_CLASS_MISSING", canonical, "canonical file must define class DecisionCore"))
+
+def _check_decision_core_presence(root: Path, violations: list[CanonViolation], warnings: list[CanonViolation]) -> tuple[int, int]:
+    del warnings
+    canonical_path = root / CANONICAL_DECISION_CORE_PATH
+    if not canonical_path.exists():
+        _append_bounded(
+            violations,
+            CanonViolation("CANON_DECISION_CORE_MISSING", CANONICAL_DECISION_CORE_PATH, "canonical DecisionCore file is missing"),
+        )
         return 1, 0
 
-    extras = sorted(rel for rel in classes if rel != canonical)
-    if extras:
+    definitions = _executable_authority_defs(root)
+    canonical_defs = [item for item in definitions if item[0] == CANONICAL_DECISION_CORE_PATH and item[2] == "DecisionCore"]
+    if not canonical_defs:
         _append_bounded(
-            warnings,
+            violations,
             CanonViolation(
-                "CANON_DECISION_CORE_EXTRA_MATCHES",
-                ",".join(extras[:8]),
-                "extra DecisionCore class name matches found; keep them non-runtime or collapse in a negative-mass wave",
+                "CANON_DECISION_CORE_CLASS_MISSING",
+                CANONICAL_DECISION_CORE_PATH,
+                "canonical file must define class DecisionCore",
             ),
         )
-        return 0, len(extras)
-    return 0, 0
+        return 1, 0
+
+    total = 0
+    for rel, line, name in definitions:
+        if rel == CANONICAL_DECISION_CORE_PATH and name == "DecisionCore":
+            continue
+        total += 1
+        _append_bounded(
+            violations,
+            CanonViolation(
+                "CANON_SECOND_EXECUTABLE_DECISION_AUTHORITY",
+                f"{rel}:{line}",
+                f"executable decision authority `{name}` must not exist outside the canonical DecisionCore",
+            ),
+        )
+    return total, 0
 
 
 def _check_private_internal_imports(root: Path, warnings: list[CanonViolation]) -> int:
@@ -349,6 +375,8 @@ def run_operational_canon_checks(root: Path | str) -> CanonAuditReport:
 
 __all__ = [
     "CANON_AUDIT_TOOL_VERSION",
+    "CANONICAL_DECISION_CORE_PATH",
+    "EXECUTABLE_DECISION_AUTHORITY_NAMES",
     "CanonAuditReport",
     "CanonViolation",
     "run_operational_canon_checks",

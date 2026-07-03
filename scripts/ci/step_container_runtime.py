@@ -6,6 +6,7 @@ from pathlib import Path
 
 from runtime.platform.container_runtime_contract import ContainerRuntimeProbe, evaluate_container_runtime
 from scripts.ci.paths import repo_root
+from scripts.ci.proof_artifacts import proof_artifact_violations
 
 EVIDENCE_NAME = "container_runtime_evidence.json"
 ENV_FLAG_NAMES = [
@@ -16,6 +17,16 @@ ENV_FLAG_NAMES = [
     "CONTAINER_EXECUTIONZ_OK",
     "CONTAINER_READINESS_HEALTHCHECK_OK",
 ]
+CONTAINER_EVIDENCE_REQUIRED_TEXT_FIELDS = (
+    "evidence_kind",
+    "created_at",
+    "proof_id",
+    "commit_sha",
+    "image",
+    "container_name",
+)
+CONTAINER_EVIDENCE_KINDS = ("real_container_runtime_probe",)
+CANON_CONTAINER_RUNTIME_PROOF_EVIDENCE_GUARD = True
 
 
 def _artifact_path(name: str) -> Path:
@@ -62,11 +73,23 @@ def _probe_from_evidence(payload: dict[str, object]) -> ContainerRuntimeProbe:
     )
 
 
+def _ready_evidence_violations(payload: dict[str, object]) -> list[str]:
+    violations = proof_artifact_violations(
+        payload=payload,
+        artifact_name="container_runtime_evidence",
+        required_text_fields=CONTAINER_EVIDENCE_REQUIRED_TEXT_FIELDS,
+        allowed_evidence_kinds=CONTAINER_EVIDENCE_KINDS,
+    )
+    if payload.get("status") == "ready" and payload.get("base_image_pull_policy") != "never_during_staging_proof":
+        violations.append("container_runtime_evidence_vetted_base_image_policy_required")
+    return violations
+
+
 def _blocked_payload(*, violations: list[str], evidence: dict[str, object] | None = None) -> dict[str, object]:
     payload: dict[str, object] = {
         "artifact": "container_runtime",
         "status": "blocked",
-        "violations": violations,
+        "violations": sorted(set(violations)),
         "evidence_source": EVIDENCE_NAME,
         "claims_production_ready": False,
     }
@@ -95,16 +118,21 @@ def _advisory_payload() -> dict[str, object]:
 def run() -> tuple[bool, str]:
     evidence = _read_evidence()
     if evidence is not None:
-        if evidence.get("status") != "ready":
+        evidence_violations = _ready_evidence_violations(evidence)
+        if evidence.get("status") != "ready" or evidence_violations:
+            violations = list(evidence.get("violations") or ["container_runtime_evidence_not_ready"])
+            violations.extend(evidence_violations)
             payload = _blocked_payload(
-                violations=list(evidence.get("violations") or ["container_runtime_evidence_not_ready"]),
+                violations=violations,
                 evidence=evidence,
             )
             _write_artifact(payload)
-            return False, "container runtime blocked: container_runtime_evidence_not_ready"
+            return False, "container runtime blocked: " + ",".join(payload["violations"])
         payload = evaluate_container_runtime(_probe_from_evidence(evidence))
         payload["evidence_source"] = EVIDENCE_NAME
         payload["evidence_kind"] = evidence.get("evidence_kind")
+        payload["proof_id"] = evidence.get("proof_id")
+        payload["commit_sha"] = evidence.get("commit_sha")
         payload["base_image"] = evidence.get("base_image")
         payload["base_image_pull_policy"] = evidence.get("base_image_pull_policy")
         payload["claims_production_ready"] = False
@@ -128,4 +156,7 @@ def run() -> tuple[bool, str]:
     return True, "container runtime artifact written: artifacts/ci/container_runtime.json status=advisory_only"
 
 
-__all__ = ["run"]
+__all__ = [
+    "CANON_CONTAINER_RUNTIME_PROOF_EVIDENCE_GUARD",
+    "run",
+]
