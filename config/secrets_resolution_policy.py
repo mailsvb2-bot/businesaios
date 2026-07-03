@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
 from security.secret_contract import SecretRef
+
+CANON_COMPAT_SHIM = True
 
 CANON_SECRETS_RESOLUTION_POLICY = True
 

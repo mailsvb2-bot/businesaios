@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
 
 import os
 from collections.abc import Mapping
@@ -14,6 +13,8 @@ from config.config_audit import ConfigAuditEvent, PersistentConfigAuditLog
 from config.config_versioning import ConfigVersion, ConfigVersioning, utc_now
 from core.tenancy.normalization import require_tenant_id
 from governance.persistence_codec import atomic_write_json, read_json_or_default, to_jsonable
+
+CANON_COMPAT_SHIM = True
 
 CANON_TENANT_CONFIG_STORE = True
 
