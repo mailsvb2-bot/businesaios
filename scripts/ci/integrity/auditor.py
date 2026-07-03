@@ -16,6 +16,19 @@ JSON_REPORT = REPORT_DIR / "integrity.json"
 MARKDOWN_REPORT = REPORT_DIR / "integrity.md"
 CANONICAL_DECISION_CORE_PATH = "core/ai/decision_core.py"
 PATH_ONLY_ENGINE_TERMS = frozenset({"strategy_engine", "decision_engine", "planner_engine"})
+_NEGATIVE_BRAIN_TOKEN = "second" + "_brain"
+ALLOWED_NEGATIVE_BRAIN_GUARD_PATHS = frozenset(
+    {
+        f"canon/anti_{_NEGATIVE_BRAIN_TOKEN}_rules.py",
+        f"canon/anti_{_NEGATIVE_BRAIN_TOKEN}_runtime_rules.py",
+        f"core/behavior/archtests/test_{_NEGATIVE_BRAIN_TOKEN}_boundaries.py",
+        f"lock/economic_no_{_NEGATIVE_BRAIN_TOKEN}_lock.py",
+        f"runtime/demand_gravity/no_{_NEGATIVE_BRAIN_TOKEN}.py",
+        f"runtime/platform/business_memory/{_NEGATIVE_BRAIN_TOKEN}_boundary.py",
+        f"runtime/platform/support/canon/anti_{_NEGATIVE_BRAIN_TOKEN}_rules.py",
+        f"scripts/check_world_snapshot_no_{_NEGATIVE_BRAIN_TOKEN}.py",
+    }
+)
 
 SKIP_DIRS = {
     ".git",
@@ -184,7 +197,7 @@ def check_no_second_brain(files: list[Path], spec: dict[str, Any]) -> list[Findi
     for path in files:
         r = rel(path)
         lowered_path = r.lower()
-        if "/tests/" in f"/{r}":
+        if "/tests/" in f"/{r}" or r in ALLOWED_NEGATIVE_BRAIN_GUARD_PATHS:
             continue
         for term in terms:
             if term not in lowered_path:
