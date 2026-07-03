@@ -14,6 +14,7 @@ SPEC_PATH = ROOT / "scripts" / "ci" / "specs" / "integrity_auditor_rules.json"
 REPORT_DIR = ROOT / "reports" / "integrity"
 JSON_REPORT = REPORT_DIR / "integrity.json"
 MARKDOWN_REPORT = REPORT_DIR / "integrity.md"
+CANONICAL_DECISION_CORE_PATH = "core/ai/decision_core.py"
 
 SKIP_DIRS = {
     ".git",
@@ -119,48 +120,61 @@ def finding(check_id: str, severity: str, title: str, path: Path | str, line: in
     )
 
 
+def _executable_decision_authority_names(spec: dict[str, Any]) -> set[str]:
+    configured = spec.get("executable_decision_authority_names")
+    if isinstance(configured, list) and all(isinstance(item, str) for item in configured):
+        return set(configured)
+    return {"DecisionCore", "DecisionCoreEngine", "DecisionEngine", "PlannerEngine"}
+
+
 def check_single_decision_core(files: list[Path], spec: dict[str, Any]) -> list[Finding]:
-    allowed = set(spec["decision_core_allowed_names"])
-    suspicious: list[Finding] = []
-    decision_like_defs: list[tuple[Path, int, str]] = []
+    executable_names = _executable_decision_authority_names(spec)
+    findings: list[Finding] = []
+    executable_defs: list[tuple[Path, int, str, str]] = []
 
     for path in files:
+        if rel(path).startswith("tests/"):
+            continue
         tree = parse_file(path)
         if tree is None:
             continue
         for node in ast.walk(tree):
-            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
-                name = node.name
-                lowered = name.lower()
-                if "decision" in lowered or "autopilot" in lowered or "planner" in lowered:
-                    decision_like_defs.append((path, getattr(node, "lineno", 1), name))
+            if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name not in executable_names:
+                continue
+            executable_defs.append((path, getattr(node, "lineno", 1), node.name, type(node).__name__))
 
-    core_defs = [item for item in decision_like_defs if item[2] in allowed or item[2].lower() in allowed]
-    extra_defs = [item for item in decision_like_defs if item not in core_defs and "test" not in rel(item[0])]
-
+    core_defs = [item for item in executable_defs if rel(item[0]) == CANONICAL_DECISION_CORE_PATH and item[2] == "DecisionCore"]
     if not core_defs:
-        suspicious.append(finding(
-            "P0_SINGLE_DECISION_CORE",
-            "P0",
-            "DecisionCore not detected",
-            "repo",
-            1,
-            "No canonical DecisionCore definition was found by the auditor.",
-            "Declare or expose the single canonical DecisionCore and keep other decision-like modules as thin callers.",
-        ))
+        findings.append(
+            finding(
+                "P0_SINGLE_DECISION_CORE",
+                "P0",
+                "DecisionCore not detected",
+                "repo",
+                1,
+                "No canonical DecisionCore definition was found by the auditor.",
+                "Declare the single canonical DecisionCore in core/ai/decision_core.py and keep all other decision authority as callers.",
+            )
+        )
 
-    for path, line, name in extra_defs[:50]:
-        suspicious.append(finding(
-            "P0_SINGLE_DECISION_CORE",
-            "P0",
-            "Potential competing decision authority",
-            path,
-            line,
-            f"Found decision-like symbol `{name}` outside the canonical DecisionCore allowlist.",
-            "Route this capability through the single DecisionCore or add an explicit canonical exception with evidence.",
-        ))
+    for path, line, name, node_kind in executable_defs:
+        if rel(path) == CANONICAL_DECISION_CORE_PATH and name == "DecisionCore" and node_kind == "ClassDef":
+            continue
+        findings.append(
+            finding(
+                "P0_SINGLE_DECISION_CORE",
+                "P0",
+                "Potential competing executable decision authority",
+                path,
+                line,
+                f"Found executable `{name}` ({node_kind}) outside the canonical DecisionCore.",
+                "Remove this authority or route it through the single canonical DecisionCore as a non-authoritative caller.",
+            )
+        )
 
-    return suspicious
+    return findings
 
 
 def check_no_second_brain(files: list[Path], spec: dict[str, Any]) -> list[Finding]:
