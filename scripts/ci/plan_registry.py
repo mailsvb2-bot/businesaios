@@ -27,6 +27,10 @@ def _production_boot_step() -> str:
     return "".join(("production", "-", "boot"))
 
 
+def _integrity_auditor_step() -> str:
+    return "".join(("integrity", "-", "auditor"))
+
+
 def _release_proof_steps() -> tuple[str, ...]:
     return (
         "postgres-contract",
@@ -159,7 +163,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "assert-project-shape",
             "dependency-lock",
             "doctor-check",
-            "integrity-auditor",
+            _integrity_auditor_step(),
         )
     if gate == "test-quality":
         return _plan(
@@ -242,6 +246,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "demo-e2e-smoke",
             "quality-check",
             "canon-audit",
+            _integrity_auditor_step(),
             "architecture-bypass-scan",
             "async-test-contract",
             "lock-tests",
@@ -262,6 +267,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "demo-e2e-smoke",
             "quality-check",
             "canon-audit",
+            _integrity_auditor_step(),
             "architecture-bypass-scan",
             "async-test-contract",
             "lock-tests",
@@ -306,6 +312,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "demo-e2e-smoke",
             "quality-check",
             "canon-audit",
+            _integrity_auditor_step(),
             "architecture-bypass-scan",
             "async-test-contract",
             "lock-tests",
