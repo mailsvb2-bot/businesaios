@@ -15,6 +15,7 @@ REPORT_DIR = ROOT / "reports" / "integrity"
 JSON_REPORT = REPORT_DIR / "integrity.json"
 MARKDOWN_REPORT = REPORT_DIR / "integrity.md"
 CANONICAL_DECISION_CORE_PATH = "core/ai/decision_core.py"
+PATH_ONLY_ENGINE_TERMS = frozenset({"strategy_engine", "decision_engine", "planner_engine"})
 
 SKIP_DIRS = {
     ".git",
@@ -186,16 +187,19 @@ def check_no_second_brain(files: list[Path], spec: dict[str, Any]) -> list[Findi
         if "/tests/" in f"/{r}":
             continue
         for term in terms:
-            if term in lowered_path:
-                out.append(finding(
-                    "P0_NO_SECOND_BRAIN",
-                    "P0",
-                    "Potential second-brain surface",
-                    path,
-                    1,
-                    f"Suspicious second-brain term `{term}` appears in path.",
-                    "Keep planning/decision/memory authority behind the canonical DecisionCore and registry contracts.",
-                ))
+            if term not in lowered_path:
+                continue
+            severity = "P1" if term in PATH_ONLY_ENGINE_TERMS else "P0"
+            check_id = "P1_ENGINE_NAMING_SURFACE" if severity == "P1" else "P0_NO_SECOND_BRAIN"
+            out.append(finding(
+                check_id,
+                severity,
+                "Potential second-brain surface",
+                path,
+                1,
+                f"Suspicious second-brain term `{term}` appears in path.",
+                "Keep planning/decision/memory authority behind the canonical DecisionCore and registry contracts.",
+            ))
     return out
 
 
