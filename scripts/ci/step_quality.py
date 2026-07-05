@@ -183,9 +183,18 @@ def _ruff_check() -> tuple[bool, str, dict[str, object]]:
         payload["status"] = "ready"
         return True, "ruff critical baseline and strict full check passed", payload
 
+    targeted_measured = bool(payload.get("targeted_strict_debt_measured"))
+    targeted_total = int(payload.get("targeted_strict_debt_total") or 0)
+    if targeted_measured and targeted_total == 0:
+        payload["status"] = "ready_with_unenforced_full_ruff"
+        payload["targeted_strict_debt_clean"] = True
+        payload["warnings"] = ["full_ruff_strict_not_enforced"]
+        return True, "ruff critical baseline passed; targeted strict debt clean; full ruff strict check is not enforced", payload
+
     payload["status"] = "ready_with_debt"
+    payload["targeted_strict_debt_clean"] = False
     payload["warnings"] = ["full_ruff_strict_not_enforced", "legacy_ruff_debt_present_or_unmeasured"]
-    return True, "ruff critical baseline passed; full ruff strict debt is not claimed clean", payload
+    return True, "ruff critical baseline passed; targeted strict debt remains or was not measured", payload
 
 
 def run() -> tuple[bool, str]:
