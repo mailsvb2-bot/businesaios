@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Business Autopilot Contract (canonical).
 
 This contract is *above* Product Contract.
@@ -12,6 +10,8 @@ Design rules:
 - No implicit behavior. Runtime + DecisionCore consume it.
 - No side effects here.
 """
+
+from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field

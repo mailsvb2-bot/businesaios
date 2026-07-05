@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
-
 from dataclasses import dataclass
 from typing import Any
 
@@ -11,6 +9,8 @@ from config.environment_matrix import EnvironmentMatrix, normalize_environment_n
 from config.http_settings import HTTPSettings
 from config.telegram_settings import TelegramSettings
 from core.tenancy.normalization import normalize_tenant_id
+
+CANON_COMPAT_SHIM = True
 
 _TELEGRAM_TOKEN_ENV = 'TELEGRAM_' + 'BOT_TOKEN'
 

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-CANON_COMPAT_SHIM = True
-
 import os
 import sys
 import warnings
 
 from deployment.startup_barrier_policy import StartupBarrierPolicy
+
+CANON_COMPAT_SHIM = True
 
 
 def build_default_startup_barrier_policy(*, repo_root: str = ".") -> StartupBarrierPolicy:
