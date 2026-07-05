@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Canonical world-state packet enrichment helpers.
 
 These helpers preserve domain semantics while keeping runtime integration
 surfaces thin. They are pure domain transforms only: no runtime wiring,
 no side effects, and no decision issuance.
 """
+
+from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 
