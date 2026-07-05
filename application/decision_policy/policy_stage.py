@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Pure helpers for proposal generation and candidate ranking."""
+
+from __future__ import annotations
 
 from typing import Any
 
