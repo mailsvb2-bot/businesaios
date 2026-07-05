@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Canonical presenter for raw action execution payloads.
 
 Historical runtime imports are preserved via ``runtime.application.action_result_presenter``.
 The canonical owner lives in ``core.application`` so result-shaping semantics stay
 with the neutral application layer rather than a shadow decision namespace.
 """
+
+from __future__ import annotations
 
 from application.decision.action_result import ActionExecutionResult
 
