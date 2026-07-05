@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Neutral helper contract for the non-sovereign decision application service.
 
 This module owns deterministic request normalization, trace construction, and
 executable-action payload shaping for the recommendation-only application layer.
 It is intentionally not a sovereign decision issuer.
 """
+
+from __future__ import annotations
 
 import shared.types as _shared_types
 from core.constraints.decision import DecisionConstraints
@@ -37,7 +37,6 @@ def canonical_request(
     return resolved
 
 
-
 def start_trace(*, request: DecisionRequest, candidate_count: int) -> DecisionTrace:
     return DecisionTrace(
         request_id=request.request_id,
@@ -51,7 +50,6 @@ def start_trace(*, request: DecisionRequest, candidate_count: int) -> DecisionTr
             "decision_surface": NON_SOVEREIGN_ENGINE_SURFACE,
         },
     )
-
 
 
 def build_executable_action_payload(
