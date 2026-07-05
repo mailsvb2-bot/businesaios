@@ -13,7 +13,7 @@ from application.decision_state.world_model_metadata import (
     extract_world_model_metadata,
     summarize_pricing_world_state,
 )
-from core.observability.perf import Span, emit_sla_violation
+from core.observability.perf import emit_sla_violation
 from core.observability.throttled_logger import exception_throttled
 
 
