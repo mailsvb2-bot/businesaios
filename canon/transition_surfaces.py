@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical registry for transition-only import surfaces.
 
 These modules exist only to preserve stable imports during controlled
@@ -9,6 +7,8 @@ physical surface. Package-owned ``*/public_api.py`` modules remain the only
 retained public-api compatibility surface; repo-root dotted pseudo-files are
 retired.
 """
+
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Final
