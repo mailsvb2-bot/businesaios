@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Canonical core-owned protocol names for the decision application surface.
 
 The runtime package keeps a physical compatibility file for regression gates,
 while the actual import identity stays anchored here to avoid split-brain API
 ownership between core and runtime.
 """
+
+from __future__ import annotations
 
 from typing import Protocol
 
