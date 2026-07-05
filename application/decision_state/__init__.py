@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Lightweight decision-state package surface."""
+
+from __future__ import annotations
 
 from importlib import import_module
 from typing import Any
