@@ -90,5 +90,5 @@ class FunnelEvent:
             "currency": self.currency,
         }
         if isinstance(self.meta, dict) and self.meta:
-            d["meta"] = {k: v for k, v in self.meta.items() if isinstance(v, (str, int, float, bool))}
+            d["meta"] = {k: v for k, v in self.meta.items() if isinstance(v, str | int | float | bool)}
         return d
