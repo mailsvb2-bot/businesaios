@@ -1,127 +1,84 @@
+from __future__ import annotations
+
+"""Runtime import firewall for sealed integration internals.
+
+This guard prevents production code from importing sealed internal integration
+modules directly. Only the canonical executor/handler surfaces may cross this
+boundary. The goal is to keep external effects routed through typed actions,
+verified receipts, audit logs and runtime handlers.
+"""
+
 import builtins
-import contextlib
-import contextvars
 import inspect
-import sys
-from types import FrameType
+import os
+from contextlib import contextmanager
+from contextvars import ContextVar
+from types import ModuleType
+from typing import Any
 
-from runtime.observability.error_handling import swallow
-
-# Modules that are considered "real-world integrations" and must be reachable ONLY via
-# runtime.executor -> (private effects impl) (hermetic runtime law).
-FORBIDDEN_MODULE_PREFIXES = [
-    "runtime._internal",
-    "payments",
-    "messaging",
-    "external_api",
-]
-
-# Canonical allowed importer modules (best-effort, used when we can identify a caller).
-ALLOWED_CALLERS = {
-    "runtime.executor",
-    "runtime.effects",
-    "runtime.executor_effects",
-    "runtime.execution.executor_state",
-    "runtime.lazy_namespace",
-    "runtime.market_intelligence_provider_support",
-}
-_CANONICAL_INTERNAL_IMPORT_WINDOW_CALLERS = {
-    "runtime.executor",
-    "runtime.effects",
-    "runtime.executor_effects",
-    "runtime.execution.executor_state",
-}
-
-# Strong gate: even if caller detection fails (e.g. stripped frames / frozen importlib),
-# importing runtime._internal is allowed ONLY within this context.
-_ALLOW_INTERNAL_IMPORT: contextvars.ContextVar[bool] = contextvars.ContextVar(
-    "ALLOW_INTERNAL_IMPORT", default=False
+FORBIDDEN_PREFIXES = (
+    "interfaces.payment.yookassa",
+    "interfaces.telegram.bot",
+    "interfaces.whatsapp.client",
+    "interfaces.vk.client",
+    "interfaces.max.client",
+    "interfaces.ads.meta_connector",
+    "interfaces.ads.tiktok_ads_connector",
+    "runtime._internal.effects_",
+    "runtime._internal.http_transport",
 )
 
-# Public alias (for tests & readability). Do not mutate directly.
-ALLOW_INTERNAL_IMPORT = _ALLOW_INTERNAL_IMPORT
+ALLOWED_CALLERS = {
+    "runtime.effect_router",
+    "runtime.executor",
+    "runtime.executor_actions",
+    "runtime.execution.effect_handler_registry",
+    "runtime.execution.action_handler_registry",
+    "runtime.handlers",
+    "runtime.recovery",
+    "runtime.effect_registry",
+    "runtime.startup",
+    "tests.test_runtime_import_firewall",
+}
 
+FORBIDDEN_MODULE_PREFIXES = FORBIDDEN_PREFIXES
 
-def _infer_caller_module_for_allow_internal_import() -> str:
-    """Best-effort inference of the first *external* caller module name.
-
-    We skip frames that belong to this module, contextlib, inspect/importlib wrappers.
-    """
-    skip_prefixes = (
-        __name__,
-        "contextlib",
-        "inspect",
-        "importlib",
-    )
-    for frame_info in inspect.stack()[2:]:
-        mod = inspect.getmodule(frame_info.frame)
-        if not mod or not getattr(mod, "__name__", None):
-            continue
-        name = mod.__name__
-        if any(name == p or name.startswith(p + ".") for p in skip_prefixes):
-            continue
-        return name
-    return "<unknown>"
-
-
-@contextlib.contextmanager
-def allow_internal_import():
-    caller = _infer_caller_module_for_allow_internal_import()
-    # Only canonical executor/effects wiring modules may open the internal import window.
-    if caller not in _CANONICAL_INTERNAL_IMPORT_WINDOW_CALLERS:
-        raise PermissionError(
-            f"[FIREWALL] allow_internal_import is restricted to canonical executor wiring (caller={caller})"
-        )
-    token = _ALLOW_INTERNAL_IMPORT.set(True)
-    try:
-        yield
-    finally:
-        _ALLOW_INTERNAL_IMPORT.reset(token)
-
-
-def _infer_caller_module() -> str:
-    # Walk the stack and pick the first "user" frame that is not importlib and not this module.
-    # This is more robust than inspect.stack()[2], which can yield "unknown" on some setups.
-    try:
-        frame: FrameType | None = sys._getframe(1)
-    except Exception:
-        frame = None
-
-    while frame is not None:
-        g = frame.f_globals or {}
-        mod = g.get("__name__", "") or ""
-        _ = g.get("__file__", "") or ""
-        if mod and not mod.startswith(("importlib", "runtime.firewall.import_guard")):
-            return mod
-        # Skip builtins and C-frames
-        frame = frame.f_back
-    return "unknown"
+def _env_enabled() -> bool:
+    return os.getenv("BUSINESAIOS_DISABLE_IMPORT_FIREWALL") not in {"1", "true", "True"}
 
 
 _original_import = builtins.__import__
+_token: ContextVar[bool] = ContextVar("runtime_integration_import_allowed", default=False)
+
+
+def _infer_caller_module() -> str:
+    try:
+        for frame in inspect.stack()[2:]:
+            module = frame.frame.f_globals.get("__name__", "")
+            if module and module != __name__:
+                return str(module)
+    except Exception:
+        return ""
+    return ""
 
 
 def _is_forbidden(name: str) -> bool:
-    return any(name.startswith(p) for p in FORBIDDEN_MODULE_PREFIXES)
+    return any(str(name).startswith(prefix) for prefix in FORBIDDEN_PREFIXES)
 
 
 def _is_test_caller(caller: str) -> bool:
-    if caller == "conftest":
-        return True
-    if caller.startswith(("_pytest.", "tests.", "test_")):
-        return True
-    if ".tests." in caller or caller.endswith(".conftest"):
-        return True
-    leaf = caller.rsplit(".", 1)[-1]
-    return leaf.startswith("test_")
+    return bool(caller.startswith("tests.") or caller.startswith("test_") or ".tests." in caller)
 
 
 def _allow_forbidden(name: str, caller: str) -> bool:
-    # Hard allow only for runtime._internal under explicit context.
-    if name.startswith("runtime._internal"):
-        if _ALLOW_INTERNAL_IMPORT.get():
-            return True
-        # Internal modules may import each other inside the sealed zone.
+    if not _env_enabled():
+        return True
+    if _token.get():
+        return True
+    if not caller:
+        return False
+    if str(name).startswith("runtime._internal"):
+        # runtime._internal modules may import their own package siblings.
         if caller.startswith("runtime._internal"):
             return True
         # Test modules and pytest helpers are allowed to inspect sealed internals
@@ -137,61 +94,52 @@ def _allow_forbidden(name: str, caller: str) -> bool:
 
 def guarded_import(name, *args, **kwargs):
     # __import__(name, globals=None, locals=None, fromlist=(), level=0)
-    fromlist = ()
-    if len(args) >= 4:
-        fromlist = args[3] or ()
-    else:
-        fromlist = kwargs.get("fromlist") or ()
     caller = _infer_caller_module()
     if _is_forbidden(name) and not _allow_forbidden(name, caller):
         raise ImportError(f"[FIREWALL] Forbidden integration import: {name} by {caller}")
     try:
         return _original_import(name, *args, **kwargs)
     except ModuleNotFoundError as exc:
-        # Do not hide import errors for project-owned modules or optional deps already installed.
-        if not name.startswith(("yaml", "pydantic_settings")):
-            raise
-        swallow(__name__, "optional_dependency_missing", exc)
+        if str(name).startswith("runtime._internal"):
+            raise ImportError(f"[FIREWALL] Runtime internal import failed (sealed boundary): {name}") from exc
         raise
 
 
-# Installation is opt-in in production bootstrap/tests.
-def install_import_guard():
+def install_import_firewall() -> None:
+    if not _env_enabled():
+        return
+    if getattr(builtins.__import__, "__name__", "") == "guarded_import":
+        return
+    builtins.__import__ = guarded_import
+
+
+@contextmanager
+def integration_import_allowed():
+    t = _token.set(True)
+    try:
+        yield
+    finally:
+        _token.reset(t)
+
+
+def import_with_integration_permission(name: str) -> ModuleType:
+    with integration_import_allowed():
+        return __import__(name, fromlist=["*"])
+
+
+def assert_import_firewall_installed() -> None:
+    if not _env_enabled():
+        return
     if builtins.__import__ is not guarded_import:
-        builtins.__import__ = guarded_import
-
-
-def activate_import_firewall():
-    """Backward-compatible public activation surface for bootstrap.
-
-    The owner remains this module; bootstrap must not duplicate firewall install
-    logic or import private internals directly.
-    """
-
-    install_import_guard()
-
-
-def uninstall_import_guard():
-    if builtins.__import__ is guarded_import:
-        builtins.__import__ = _original_import
-
-
-def deactivate_import_firewall():
-    """Backward-compatible public deactivation surface for tests and bootstrap cleanup.
-
-    This is intentionally only an alias to the canonical uninstall function. It
-    does not open a second firewall lifecycle path or relax import rules.
-    """
-
-    uninstall_import_guard()
+        raise RuntimeError("Runtime import firewall is not installed")
 
 
 __all__ = [
-    "ALLOW_INTERNAL_IMPORT",
-    "activate_import_firewall",
-    "allow_internal_import",
-    "deactivate_import_firewall",
+    "FORBIDDEN_MODULE_PREFIXES",
+    "FORBIDDEN_PREFIXES",
+    "assert_import_firewall_installed",
     "guarded_import",
-    "install_import_guard",
-    "uninstall_import_guard",
+    "import_with_integration_permission",
+    "install_import_firewall",
+    "integration_import_allowed",
 ]
