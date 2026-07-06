@@ -101,7 +101,7 @@ class JobWorkerSupervisor:
         deadline = None if timeout_seconds is None else (normalize_now().timestamp() + max(0.0, float(timeout_seconds)))
         with self._lock:
             threads = list(self._threads.items())
-        for worker_id, thread in threads:
+        for _worker_id, thread in threads:
             remaining = None
             if deadline is not None:
                 remaining = max(0.0, deadline - normalize_now().timestamp())
