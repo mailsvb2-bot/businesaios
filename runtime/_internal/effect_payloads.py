@@ -47,7 +47,7 @@ def _bool(payload: Mapping[str, Any], key: str, *, default: bool) -> bool:
         return value
     if value is None:
         return default
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return bool(value)
     if isinstance(value, str):
         lowered = value.strip().lower()
