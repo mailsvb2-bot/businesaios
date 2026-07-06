@@ -24,7 +24,7 @@ def assert_no_secrets(payload: dict) -> None:
                 if _is_suspect(k):
                     raise RuntimeError("Secret leak into Decision Ring")
                 walk(v)
-        elif isinstance(obj, (list, tuple)):
+        elif isinstance(obj, list | tuple):
             for it in obj:
                 walk(it)
 
