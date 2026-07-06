@@ -37,7 +37,7 @@ class HttpRequest:
         for key, value in dict(self.params or {}).items():
             if value is None:
                 continue
-            if isinstance(value, Iterable) and not isinstance(value, (str, bytes, bytearray, Mapping)):
+            if isinstance(value, Iterable) and not isinstance(value, str | bytes | bytearray | Mapping):
                 pairs[str(key)] = tuple(str(item) for item in value if item is not None)
             else:
                 pairs[str(key)] = str(value)
