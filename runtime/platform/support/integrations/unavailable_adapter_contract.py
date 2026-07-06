@@ -20,7 +20,7 @@ def _normalized_surface_name(value: str, *, field_name: str) -> str:
 def _payload_keys(payload: Mapping[str, Any] | None) -> tuple[str, ...]:
     if payload is None:
         return ()
-    return tuple(sorted(str(key) for key in payload.keys())[:_MAX_PAYLOAD_KEYS])
+    return tuple(sorted(str(key) for key in payload)[:_MAX_PAYLOAD_KEYS])
 
 
 def build_unavailable_adapter_message(*, adapter_name: str, operation: str, payload: Mapping[str, Any] | None = None) -> str:
