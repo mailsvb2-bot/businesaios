@@ -66,9 +66,8 @@ def get_events(event_log: Any, decision_id: str, event_type: str) -> list[dict]:
 
     try:
         for ev in iter_events(event_log):
-            if isinstance(ev, dict):
-                if str(ev.get("decision_id")) == did and str(ev.get("event_type") or ev.get("type")) == et:
-                    out.append(ev)
+            if isinstance(ev, dict) and str(ev.get("decision_id")) == did and str(ev.get("event_type") or ev.get("type")) == et:
+                out.append(ev)
     except Exception:
         return []
     return out
