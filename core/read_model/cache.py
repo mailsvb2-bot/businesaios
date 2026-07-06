@@ -56,9 +56,8 @@ class ReadModelCache:
         now_ms = _now_ms()
         with self._lock:
             e = self._data.get(key)
-            if e is not None:
-                if int(e.watermark_ms) == int(watermark_ms) and (now_ms - int(e.computed_at_ms)) <= int(win * 1000):
-                    return e.value  # type: ignore[return-value]
+            if e is not None and int(e.watermark_ms) == int(watermark_ms) and (now_ms - int(e.computed_at_ms)) <= int(win * 1000):
+                return e.value  # type: ignore[return-value]
 
         val = compute()
         with self._lock:
