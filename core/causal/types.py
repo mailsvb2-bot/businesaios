@@ -33,7 +33,7 @@ class CausalDataset:
     rows: Sequence[CausalRow]
 
     def validate(self) -> None:
-        if not isinstance(self.rows, (list, tuple)):
+        if not isinstance(self.rows, list | tuple):
             raise TypeError("rows must be a sequence")
         if not self.rows:
             raise ValueError("dataset is empty")
