@@ -18,7 +18,7 @@ def extract_correlation_key(snapshot_store, snapshot_id: str) -> str | None:
             return None
         import json
 
-        obj = json.loads(raw.decode("utf-8")) if isinstance(raw, (bytes, bytearray)) else None
+        obj = json.loads(raw.decode("utf-8")) if isinstance(raw, bytes | bytearray) else None
         if not isinstance(obj, dict):
             return None
         meta = obj.get("meta")
