@@ -13,6 +13,7 @@ class EffectResultStatus(StrEnum):
     FAILURE = "failure"
     RETRYABLE = "retryable"
     SKIPPED = "skipped"
+
 def _text(value: Any) -> str:
     return str(value or "").strip()
 def _safe_dict(value: Any) -> dict[str, Any]:
@@ -97,7 +98,7 @@ def canonical_effect_result(action_type: str | EffectActionType, raw_result: Any
     status = normalize_effect_result_status(payload.get("status") or payload.get("code"), ok=ok, retryable=retryable)
     external_refs_raw = payload.get("external_refs")
     external_refs: list[str] = []
-    if isinstance(external_refs_raw, (list, tuple, set)):
+    if isinstance(external_refs_raw, list | tuple | set):
         external_refs = [str(item).strip() for item in external_refs_raw if str(item).strip()]
     elif _text(payload.get("external_ref")):
         external_refs = [_text(payload.get("external_ref"))]
