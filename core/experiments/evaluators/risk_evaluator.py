@@ -28,7 +28,6 @@ class RiskEvaluator:
             return RiskLevel(str(self._policy.negative_uplift_level))
         if p_value >= float(self._policy.medium_p_value_threshold):
             return RiskLevel(str(self._policy.medium_level))
-        if p_value < float(self._policy.low_p_value_threshold):
-            if not bool(self._policy.require_positive_uplift_for_low_risk) or uplift > 0.0:
-                return RiskLevel(str(self._policy.low_level))
+        if p_value < float(self._policy.low_p_value_threshold) and (not bool(self._policy.require_positive_uplift_for_low_risk) or uplift > 0.0):
+            return RiskLevel(str(self._policy.low_level))
         return RiskLevel(str(self._policy.medium_level))
