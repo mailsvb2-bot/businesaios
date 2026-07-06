@@ -43,7 +43,7 @@ def _count_non_empty_non_comment_lines(text: str) -> int:
 
 
 def _is_simple_forwarder_return(node: ast.AST) -> bool:
-    return isinstance(node, ast.Pass) or (isinstance(node, ast.Return) and isinstance(node.value, (ast.Call, ast.Name, ast.Attribute, ast.Constant)))
+    return isinstance(node, ast.Pass) or (isinstance(node, ast.Return) and isinstance(node.value, ast.Call | ast.Name | ast.Attribute | ast.Constant))
 
 
 def _call_name(node: ast.Call) -> str | None:
@@ -68,7 +68,7 @@ def scan_legacy_wrappers(config: LegacyCanonConfig) -> tuple[WrapperViolation, .
         for node in tree.body:
             if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 continue
-            if isinstance(node, (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign)):
+            if isinstance(node, ast.Import | ast.ImportFrom | ast.Assign | ast.AnnAssign):
                 continue
             if isinstance(node, ast.FunctionDef):
                 if node.name in config.allowed_thin_wrapper_calls:
