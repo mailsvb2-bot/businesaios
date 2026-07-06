@@ -7,7 +7,7 @@ from runtime.messaging_policy_alert_subscriptions.subscription_level import norm
 def _parse_csv_list(value) -> tuple[str, ...]:
     if isinstance(value, str):
         parts = value.split(",")
-    elif isinstance(value, (list, tuple, set)):
+    elif isinstance(value, list | tuple | set):
         parts = value
     else:
         parts = []
@@ -42,7 +42,7 @@ def _parse_subscription_item(value) -> dict | None:
 def parse_alert_subscriptions_form(payload) -> list[dict]:
     if isinstance(payload, dict):
         raw_items = payload.get("items") or ()
-    elif isinstance(payload, (list, tuple)):
+    elif isinstance(payload, list | tuple):
         raw_items = payload
     else:
         raw_items = ()
