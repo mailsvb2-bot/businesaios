@@ -2,10 +2,19 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
 from application.governance.governance_service import GovernanceService
 
 CANON_HEADLESS_GOVERNANCE_CLI = True
+
+
+def _write_text_stdout(text: str) -> None:
+    sys.stdout.write(str(text) + "\n")
+
+
+def _write_json_stdout(payload: object) -> None:
+    _write_text_stdout(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -51,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "select":
         payload = governance.select_baseline(run_ids=args.run_id)
-        print(json.dumps(payload or {}, ensure_ascii=False, indent=2, sort_keys=True))
+        _write_json_stdout(payload or {})
         return 0 if payload else 1
 
     if args.command == "promote":
@@ -61,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
             label=args.label,
             metadata={"via": "cli"},
         )
-        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        _write_json_stdout(payload)
         return 0
 
     if args.command == "promote-scenario":
@@ -72,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
             label=args.label,
             metadata={"via": "cli"},
         )
-        print(json.dumps(payload or {}, ensure_ascii=False, indent=2, sort_keys=True))
+        _write_json_stdout(payload or {})
         return 0 if payload else 1
 
     if args.command == "audit":
@@ -80,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
             baseline_name=args.baseline_name,
             candidate_run_id=args.candidate_run_id,
         )
-        print(payload["report_text"])
+        _write_text_stdout(payload["report_text"])
         return 0
 
     if args.command == "rollback":
@@ -90,11 +99,11 @@ def main(argv: list[str] | None = None) -> int:
             reason=args.reason,
             metadata={"via": "cli"},
         )
-        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        _write_json_stdout(payload)
         return 0
 
     if args.command == "timeline":
-        print(governance.rollback_timeline(baseline_name=args.baseline_name))
+        _write_text_stdout(governance.rollback_timeline(baseline_name=args.baseline_name))
         return 0
 
     if args.command == "trend":
@@ -102,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
             baseline_name=args.baseline_name,
             candidate_run_ids=args.candidate_run_id,
         )
-        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        _write_json_stdout(payload)
         return 0
 
     return 2
