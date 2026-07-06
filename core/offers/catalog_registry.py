@@ -82,7 +82,7 @@ def default_offer_catalog_registry() -> OfferCatalogRegistry:
     try:
         base = repo_root / "products" / "offer_catalogs"
         loader = YamlOfferCatalogLoaderV1(base_dir=base)
-        for cid, cat in (loader.load_all() or {}).items():
+        for _cid, cat in (loader.load_all() or {}).items():
             reg.register(cat)
 
         # Backward compatibility: also try legacy path products/offers/*.yaml.
