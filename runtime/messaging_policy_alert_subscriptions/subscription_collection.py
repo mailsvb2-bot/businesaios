@@ -4,7 +4,7 @@ from runtime.messaging_policy_alert_subscriptions.subscription_parser import par
 
 
 def parse_subscription_list(value, *, tenant_id: str) -> tuple:
-    if not isinstance(value, (list, tuple)):
+    if not isinstance(value, list | tuple):
         return ()
     out = []
     for item in value:
