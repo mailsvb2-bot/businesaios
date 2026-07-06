@@ -207,7 +207,7 @@ def _query_items(params: Mapping[str, Any] | None) -> list[tuple[str, Any]]:
         if value is None:
             continue
         name = str(key)
-        if isinstance(value, Iterable) and not isinstance(value, (str, bytes, bytearray, Mapping)):
+        if isinstance(value, Iterable) and not isinstance(value, str | bytes | bytearray | Mapping):
             for item in value:
                 if item is not None:
                     items.append((name, item))
