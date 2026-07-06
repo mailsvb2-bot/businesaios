@@ -15,7 +15,7 @@ def _safe_dict(value: Any) -> dict[str, Any]:
 
 
 def _safe_list(value: Any) -> list[Any]:
-    return list(value) if isinstance(value, (list, tuple)) else []
+    return list(value) if isinstance(value, list | tuple) else []
 
 
 def _safe_bool(value: Any) -> bool:
