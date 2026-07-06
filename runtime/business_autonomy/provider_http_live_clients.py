@@ -81,10 +81,10 @@ class VendorHttpLiveTransport:
 
     def _load_secrets(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str) -> dict[str, str]:
         values = {}
-        for field in provider.secret_fields:
-            ref = SecretRef(tenant_id=str(tenant_id), connector_id=provider.connector_id, scope=str(business_id), secret_name=f"{provider.connector_id}.{field.secret_name}")
+        for secret_field in provider.secret_fields:
+            ref = SecretRef(tenant_id=str(tenant_id), connector_id=provider.connector_id, scope=str(business_id), secret_name=f"{provider.connector_id}.{secret_field.secret_name}")
             try:
-                values[field.secret_name] = self.secret_vault.get(ref).decode('utf-8')
+                values[secret_field.secret_name] = self.secret_vault.get(ref).decode('utf-8')
             except Exception:
                 continue
         return values
