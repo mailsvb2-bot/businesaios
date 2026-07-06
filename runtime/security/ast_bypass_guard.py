@@ -88,9 +88,8 @@ class _Visitor(ast.NodeVisitor):
     def visit_Import(self, node: ast.Import) -> None:  # noqa: N802
         for n in node.names:
             mod = n.name
-            if any(mod.startswith(p) for p in FORBIDDEN_MODULE_PREFIXES):
-                if not _is_allowed_file(self.rel):
-                    self.violations.append(f"{self.rel}:{node.lineno} -> import {mod}")
+            if any(mod.startswith(p) for p in FORBIDDEN_MODULE_PREFIXES) and not _is_allowed_file(self.rel):
+                self.violations.append(f"{self.rel}:{node.lineno} -> import {mod}")
             head = mod.split(".")[0]
             if head in FORBIDDEN_MODULES:
                 if head in {"requests", "httpx", "urllib", "urllib3", "socket", "aiohttp"} and self.rel == ALLOWED_NETWORK_FILE:
@@ -101,9 +100,8 @@ class _Visitor(ast.NodeVisitor):
         if int(getattr(node, "level", 0) or 0) > 0:
             return
         mod = node.module or ""
-        if any(mod.startswith(p) for p in FORBIDDEN_MODULE_PREFIXES):
-            if not _is_allowed_file(self.rel):
-                self.violations.append(f"{self.rel}:{node.lineno} -> from {mod} import …")
+        if any(mod.startswith(p) for p in FORBIDDEN_MODULE_PREFIXES) and not _is_allowed_file(self.rel):
+            self.violations.append(f"{self.rel}:{node.lineno} -> from {mod} import …")
         head = mod.split(".")[0]
         if head in FORBIDDEN_MODULES:
             if head in {"requests", "httpx", "urllib", "urllib3", "socket", "aiohttp"} and self.rel == ALLOWED_NETWORK_FILE:
@@ -116,27 +114,41 @@ class _Visitor(ast.NodeVisitor):
             self.violations.append(f"{self.rel}:{node.lineno} -> call {node.func.id}(…)")
 
         # Dynamic import bypass: importlib.import_module("runtime._internal...")
-        if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
-            if node.func.value.id == "importlib" and node.func.attr == "import_module":
-                if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                    mod = node.args[0].value
-                    if any(mod.startswith(p) for p in FORBIDDEN_MODULE_PREFIXES):
-                        if not _is_allowed_file(self.rel):
-                            self.violations.append(f"{self.rel}:{node.lineno} -> importlib.import_module({mod!r})")
+        if (
+            isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "importlib"
+            and node.func.attr == "import_module"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
+            mod = node.args[0].value
+            if any(mod.startswith(p) for p in FORBIDDEN_MODULE_PREFIXES) and not _is_allowed_file(self.rel):
+                self.violations.append(f"{self.rel}:{node.lineno} -> importlib.import_module({mod!r})")
 
         # Dynamic import bypass: __import__("runtime._internal...")
-        if isinstance(node.func, ast.Name) and node.func.id == "__import__":
-            if node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
-                mod = node.args[0].value
-                if any(mod.startswith(p) for p in FORBIDDEN_MODULE_PREFIXES):
-                    if not _is_allowed_file(self.rel):
-                        self.violations.append(f"{self.rel}:{node.lineno} -> __import__({mod!r})")
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "__import__"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        ):
+            mod = node.args[0].value
+            if any(mod.startswith(p) for p in FORBIDDEN_MODULE_PREFIXES) and not _is_allowed_file(self.rel):
+                self.violations.append(f"{self.rel}:{node.lineno} -> __import__({mod!r})")
 
         # getattr(runtime, "_internal") bypass
-        if isinstance(node.func, ast.Name) and node.func.id == "getattr":
-            if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant) and node.args[1].value == "_internal":
-                if not _is_allowed_file(self.rel):
-                    self.violations.append(f"{self.rel}:{node.lineno} -> getattr(…, '_internal')")
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and node.args[1].value == "_internal"
+            and not _is_allowed_file(self.rel)
+        ):
+            self.violations.append(f"{self.rel}:{node.lineno} -> getattr(…, '_internal')")
 
         self.generic_visit(node)
 
