@@ -111,9 +111,12 @@ class PaymentJobsLoop:
                 raw_payload = _maybe_parse_json(it.get("payload"))
             raw_payload = raw_payload if isinstance(raw_payload, dict) else {}
             # Compatibility: some outboxes store type at top-level and keep payload as raw YooKassa JSON
-            if isinstance(it, dict) and str(it.get("type") or "").strip() == "yookassa_webhook":
-                if not str(raw_payload.get("type") or "").strip():
-                    raw_payload = {"type": "yookassa_webhook", "payload": raw_payload}
+            if (
+                isinstance(it, dict)
+                and str(it.get("type") or "").strip() == "yookassa_webhook"
+                and not str(raw_payload.get("type") or "").strip()
+            ):
+                raw_payload = {"type": "yookassa_webhook", "payload": raw_payload}
             try:
                 payload = _normalize_webhook_job(raw_payload)
             except Exception as e:
