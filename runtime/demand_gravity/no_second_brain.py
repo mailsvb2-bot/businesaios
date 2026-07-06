@@ -50,7 +50,7 @@ def assert_payload_has_no_decision_fields(payload: Mapping[str, object]) -> None
                 if key_text in FORBIDDEN_DEMAND_PAYLOAD_KEYS:
                     violations.append(next_path)
                 visit(item, next_path)
-        elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        elif isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
             for index, item in enumerate(value):
                 visit(item, f"{path}[{index}]")
 
