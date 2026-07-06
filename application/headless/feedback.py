@@ -25,7 +25,7 @@ def _bounded_fallback_allows_goal_completion(*, request: Any, action_type: str, 
     if not policy or not bool(policy.get("enabled", False)):
         return False
     allowed = policy.get("allowed_action_types")
-    if isinstance(allowed, (list, tuple, set)) and allowed:
+    if isinstance(allowed, list | tuple | set) and allowed:
         normalized = {str(item) for item in allowed if str(item).strip()}
         if action_type not in normalized:
             return False
