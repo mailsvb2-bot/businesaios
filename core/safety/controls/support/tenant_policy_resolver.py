@@ -99,7 +99,7 @@ def _policy_overrides(snapshot: TenantConfigSnapshot | None, key: str) -> Mappin
 def _merge_dataclass(base: Any, overrides: Mapping[str, Any]) -> Any:
     if not overrides:
         return base
-    allowed = {field_name: getattr(base, field_name) for field_name in getattr(base, '__dataclass_fields__', {}).keys()}
+    allowed = {field_name: getattr(base, field_name) for field_name in getattr(base, '__dataclass_fields__', {})}
     merged = dict(allowed)
     for key, value in dict(overrides).items():
         if key in merged:
