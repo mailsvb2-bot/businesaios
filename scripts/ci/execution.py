@@ -127,9 +127,8 @@ def execute(request: ExecutionRequest) -> ExecutionReport:
     for step in plan.steps:
         _cleanup_before_lock_tests(report, next_step_name=step.name)
         handler = handler_for_step(step.name)
-        with measure_time() as watch:
-            with _step_environment(gate=plan.gate, step_name=step.name):
-                ok, message = handler()
+        with measure_time() as watch, _step_environment(gate=plan.gate, step_name=step.name):
+            ok, message = handler()
 
         status = "passed" if ok else ("skipped" if "skipped by contract" in message else "failed")
         result = StepResult(
