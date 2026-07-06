@@ -125,8 +125,14 @@ def install_import_firewall() -> None:
     builtins.__import__ = guarded_import
 
 
+def deactivate_import_firewall() -> None:
+    if builtins.__import__ is guarded_import:
+        builtins.__import__ = _original_import
+
+
 activate_import_firewall = install_import_firewall
 ACTIVATE_IMPORT_FIREWALL = install_import_firewall
+DEACTIVATE_IMPORT_FIREWALL = deactivate_import_firewall
 
 
 @contextmanager
@@ -163,11 +169,13 @@ def assert_import_firewall_installed() -> None:
 __all__ = [
     "ACTIVATE_IMPORT_FIREWALL",
     "ALLOW_INTERNAL_IMPORT",
+    "DEACTIVATE_IMPORT_FIREWALL",
     "FORBIDDEN_MODULE_PREFIXES",
     "FORBIDDEN_PREFIXES",
     "activate_import_firewall",
     "allow_internal_import",
     "assert_import_firewall_installed",
+    "deactivate_import_firewall",
     "guarded_import",
     "import_with_integration_permission",
     "install_import_firewall",
