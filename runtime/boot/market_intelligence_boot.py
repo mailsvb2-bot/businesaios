@@ -88,11 +88,10 @@ class MarketIntelligenceBoot:
                 observability=self.runtime_observability,
             )
         plane = self.managed_runtime_plane
-        if plane is None and self.runtime_registry is not None and hasattr(self.runtime_registry, 'has') and hasattr(self.runtime_registry, 'get'):
-            if self.runtime_registry.has(RuntimeServiceName.MANAGED_RUNTIME_PLANE):
-                candidate = self.runtime_registry.get(RuntimeServiceName.MANAGED_RUNTIME_PLANE)
-                if isinstance(candidate, ManagedRuntimePlane):
-                    plane = candidate
+        if plane is None and self.runtime_registry is not None and hasattr(self.runtime_registry, 'has') and hasattr(self.runtime_registry, 'get') and self.runtime_registry.has(RuntimeServiceName.MANAGED_RUNTIME_PLANE):
+            candidate = self.runtime_registry.get(RuntimeServiceName.MANAGED_RUNTIME_PLANE)
+            if isinstance(candidate, ManagedRuntimePlane):
+                plane = candidate
         if plane is not None:
             plane.register_runtime(
                 name=RuntimeServiceName.MARKET_INTELLIGENCE_RUNTIME,
