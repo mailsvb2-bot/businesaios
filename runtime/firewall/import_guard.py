@@ -9,6 +9,7 @@ verified receipts, audit logs and runtime handlers.
 from __future__ import annotations
 
 import builtins
+import importlib
 import os
 import sys
 from contextlib import contextmanager
@@ -149,7 +150,7 @@ ALLOW_INTERNAL_IMPORT = allow_internal_import
 
 def import_with_integration_permission(name: str) -> ModuleType:
     with integration_import_allowed():
-        return __import__(name, fromlist=["*"])
+        return importlib.import_module(name)
 
 
 def assert_import_firewall_installed() -> None:
