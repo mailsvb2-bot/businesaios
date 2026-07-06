@@ -17,7 +17,7 @@ def _record_recovery_trace(*, executor, env, stage: str, **fields: object) -> No
     method = getattr(observability, "record_recovery_trace", None) if observability is not None else None
     if not callable(method):
         return
-    payload = {k: v for k, v in dict(fields).items() if isinstance(v, (str, int, float))}
+    payload = {k: v for k, v in dict(fields).items() if isinstance(v, str | int | float)}
     payload.setdefault("decision_id", str(getattr(getattr(env, "decision", None), "decision_id", "") or ""))
     payload.setdefault("action", str(getattr(getattr(env, "decision", None), "action", "") or ""))
     generated_at_ms = 0
