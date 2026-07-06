@@ -37,6 +37,6 @@ class ChannelPreference:
         primary = str(data.get("primary") or "telegram")
         enabled_raw = data.get("enabled")
         verified_raw = data.get("verified")
-        enabled = tuple(enabled_raw) if isinstance(enabled_raw, (list, tuple)) else (primary,)
-        verified = tuple(verified_raw) if isinstance(verified_raw, (list, tuple)) else ()
+        enabled = tuple(enabled_raw) if isinstance(enabled_raw, list | tuple) else (primary,)
+        verified = tuple(verified_raw) if isinstance(verified_raw, list | tuple) else ()
         return cls(primary=primary, enabled=enabled, verified=verified)
