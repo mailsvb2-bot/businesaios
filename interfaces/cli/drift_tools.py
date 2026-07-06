@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from execution.baseline_history import FileBaselineHistoryStore
@@ -14,6 +15,14 @@ from execution.rollback_audit_timeline import RollbackAuditTimelineBuilder
 from execution.run_diff_builder import RunDiffBuilder
 
 CANON_HEADLESS_DRIFT_CLI = True
+
+
+def _write_text_stdout(text: str) -> None:
+    sys.stdout.write(str(text) + "\n")
+
+
+def _write_json_stdout(payload: object) -> None:
+    _write_text_stdout(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -62,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
             drift=drift,
             diff=diff,
         )
-        print(text)
+        _write_text_stdout(text)
         return 0
 
     if args.command == "rollback":
@@ -80,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
             reason=args.reason,
             metadata={"via": "cli"},
         )
-        print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+        _write_json_stdout(payload)
         return 0
 
     if args.command == "timeline":
@@ -91,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
             rollback_record=rollbacks.read(baseline_name=args.baseline_name),
             history_rows=history.read_all(baseline_name=args.baseline_name),
         )
-        print(text)
+        _write_text_stdout(text)
         return 0
 
     return 2
