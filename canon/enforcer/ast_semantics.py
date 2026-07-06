@@ -16,7 +16,7 @@ def full_attr_name(node: ast.AST) -> str:
 
 
 def is_stub_function(node: ast.AST) -> bool:
-    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
         return False
     body = list(node.body)
     if not body:
@@ -41,7 +41,7 @@ def returns_literal_true(node: ast.AST) -> bool:
 
 
 def looks_like_integration_stub(fn: ast.AST) -> bool:
-    if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    if not isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef):
         return False
     if is_stub_function(fn):
         return True
