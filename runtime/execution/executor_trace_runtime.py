@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from contextlib import nullcontext
+from contextlib import nullcontext, suppress
 from dataclasses import replace
 
 from observability.distributed_trace_context import trace_context_from_envelope, trace_context_scope
@@ -44,7 +44,7 @@ def _record_runtime_trace_story(*, executor, env: DecisionEnvelope, trace_kind: 
     method = getattr(observability, method_name, None)
     if not callable(method):
         return
-    payload = {k: v for k, v in dict(fields).items() if isinstance(v, (str, int, float))}
+    payload = {k: v for k, v in dict(fields).items() if isinstance(v, str | int | float)}
     payload.setdefault("decision_id", str(getattr(getattr(env, "decision", None), "decision_id", "") or ""))
     payload.setdefault("action", str(getattr(getattr(env, "decision", None), "action", "") or ""))
     try:
@@ -131,14 +131,12 @@ def execute_with_trace(*, executor, env: DecisionEnvelope) -> ExecutionResult:
                 correlation_id=str(env.decision.correlation_id),
             )
         except Exception as exc:
-            try:
+            with suppress(Exception):
                 record_execution_outcome(
                     action=str(getattr(env.decision, 'action', '') or ''),
                     payload=payload,
                     success=False,
                 )
-            except Exception:
-                pass
             executor._record_action_audit(
                 env=env,
                 trace_id=trace_id,
@@ -208,14 +206,12 @@ def execute_core_flow(*, executor, env: DecisionEnvelope, depth: int, timescale,
                 )
             return result
     except Exception as exc:
-        try:
+        with suppress(Exception):
             record_execution_outcome(
                 action=str(getattr(env.decision, 'action', '') or ''),
                 payload=payload,
                 success=False,
             )
-        except Exception:
-            pass
         if reliability is not None:
             try:
                 reliability.mark_failed(env, reason=f'runtime_execute:{type(exc).__name__}')
