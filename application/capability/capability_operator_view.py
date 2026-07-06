@@ -29,7 +29,7 @@ def _first_text(*values: object) -> str:
 def _merge_signal_collections(*values: object) -> tuple[Any, ...]:
     merged: list[Any] = []
     for value in values:
-        if not isinstance(value, (list, tuple)):
+        if not isinstance(value, list | tuple):
             continue
         for item in value:
             if item not in merged:
@@ -55,7 +55,7 @@ def _merge_dict_payload(base: Mapping[str, Any] | None, extra: Mapping[str, Any]
         if isinstance(merged[key], Mapping) and isinstance(value, Mapping):
             merged[key] = _merge_dict_payload(_safe_dict(merged[key]), _safe_dict(value))
             continue
-        if isinstance(merged[key], (list, tuple)) and isinstance(value, (list, tuple)):
+        if isinstance(merged[key], list | tuple) and isinstance(value, list | tuple):
             merged[key] = list(_merge_signal_collections(merged[key], value))
             continue
         merged[key] = value

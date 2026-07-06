@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from contextlib import suppress
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
@@ -702,10 +703,8 @@ class BusinessAutonomyDelayedOutcomeBridge:
             tmp_path.replace(self.state_path)
         finally:
             if tmp_path.exists():
-                try:
+                with suppress(OSError):
                     tmp_path.unlink()
-                except OSError:
-                    pass
 
 
 __all__ = [

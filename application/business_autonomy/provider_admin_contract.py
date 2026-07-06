@@ -58,8 +58,8 @@ class ProviderDefinition:
             raise ValueError("adapter_key is required")
         if not str(self.domain or "").strip():
             raise ValueError("domain is required")
-        for field in self.secret_fields:
-            field.validate()
+        for secret_field in self.secret_fields:
+            secret_field.validate()
 
 
 @dataclass(frozen=True)

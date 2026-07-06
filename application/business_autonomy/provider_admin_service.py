@@ -154,24 +154,24 @@ class ProviderAdminService:
         versioning = ProviderSecretVersioningService(self.secret_vault)
         transport_binding = ProviderTransportBindings().describe(provider)
         webhook_route = ProviderWebhookRouteRegistry().describe(provider)
-        for field in provider.secret_fields:
-            raw_value = str(submission.secrets.get(field.field_key) or "").strip()
-            if field.required and not raw_value:
-                raise ValueError(f"missing required secret field: {field.field_key}")
+        for secret_field in provider.secret_fields:
+            raw_value = str(submission.secrets.get(secret_field.field_key) or "").strip()
+            if secret_field.required and not raw_value:
+                raise ValueError(f"missing required secret field: {secret_field.field_key}")
             if not raw_value:
                 continue
-            versioning.archive_current_secret(provider=provider, tenant_id=normalized_tenant, business_id=normalized_business, secret_name=field.secret_name, requested_by=submission.requested_by, reason='activate_or_update')
+            versioning.archive_current_secret(provider=provider, tenant_id=normalized_tenant, business_id=normalized_business, secret_name=secret_field.secret_name, requested_by=submission.requested_by, reason='activate_or_update')
             secret_ref = SecretRef(
                 tenant_id=normalized_tenant,
                 connector_id=provider.connector_id,
                 scope=normalized_business,
-                secret_name=f"{provider.connector_id}.{field.secret_name}",
+                secret_name=f"{provider.connector_id}.{secret_field.secret_name}",
             )
             record = SecretRecord(
                 ref=secret_ref,
                 ciphertext=b"pending",
                 source=SecretSource.CONNECTOR,
-                metadata={"provider_key": provider.provider_key, "field_key": field.field_key, "business_id": normalized_business},
+                metadata={"provider_key": provider.provider_key, "field_key": secret_field.field_key, "business_id": normalized_business},
             )
             self.secret_vault.put(record, plaintext=raw_value.encode("utf-8"))
             secret_names.append(secret_ref.secret_name)
@@ -179,7 +179,7 @@ class ProviderAdminService:
             tenant_id=normalized_tenant,
             connector_id=provider.connector_id,
             allowed_secret_names=tuple(sorted(secret_names)),
-            allowed_secret_kinds=tuple(sorted({field.secret_kind for field in provider.secret_fields})),
+            allowed_secret_kinds=tuple(sorted({secret_field.secret_kind for field in provider.secret_fields})),
             allowed_operations=(SecretAccessOperation.READ, SecretAccessOperation.WRITE, SecretAccessOperation.ROTATE),
             metadata={"provider_key": provider.provider_key, "business_id": normalized_business},
         )
@@ -313,8 +313,8 @@ class ProviderAdminService:
         current = self.activation_store.get(tenant_id=normalized_tenant, business_id=normalized_business, provider_key=provider.provider_key)
         if current is None:
             raise KeyError(f"provider not activated: {provider.provider_key}")
-        for field in provider.secret_fields:
-            ref = SecretRef(tenant_id=normalized_tenant, connector_id=provider.connector_id, scope=normalized_business, secret_name=f"{provider.connector_id}.{field.secret_name}")
+        for secret_field in provider.secret_fields:
+            ref = SecretRef(tenant_id=normalized_tenant, connector_id=provider.connector_id, scope=normalized_business, secret_name=f"{provider.connector_id}.{secret_field.secret_name}")
             try:
                 self.secret_vault.deactivate(ref)
             except Exception:
@@ -400,19 +400,19 @@ class ProviderAdminService:
             raise ValueError('secrets are required for rotation')
         updated_fields = []
         versioning = ProviderSecretVersioningService(self.secret_vault)
-        for field in provider.secret_fields:
-            raw_value = normalized_secrets.get(field.field_key)
+        for secret_field in provider.secret_fields:
+            raw_value = normalized_secrets.get(secret_field.field_key)
             if raw_value is None:
-                raw_value = normalized_secrets.get(field.secret_name)
+                raw_value = normalized_secrets.get(secret_field.secret_name)
             if raw_value is None:
                 continue
-            if field.required and not str(raw_value).strip():
-                raise ValueError(f'missing required secret field: {field.field_key}')
-            versioning.archive_current_secret(provider=provider, tenant_id=normalized_tenant, business_id=normalized_business, secret_name=field.secret_name, requested_by=requested_by, reason='rotate')
-            ref = SecretRef(tenant_id=normalized_tenant, connector_id=provider.connector_id, scope=normalized_business, secret_name=f"{provider.connector_id}.{field.secret_name}")
-            record = SecretRecord(ref=ref, ciphertext=b'pending', source=SecretSource.CONNECTOR, metadata={'provider_key': provider.provider_key, 'field_key': field.field_key, 'rotated_by': str(requested_by).strip() or 'admin_console'})
+            if secret_field.required and not str(raw_value).strip():
+                raise ValueError(f'missing required secret field: {secret_field.field_key}')
+            versioning.archive_current_secret(provider=provider, tenant_id=normalized_tenant, business_id=normalized_business, secret_name=secret_field.secret_name, requested_by=requested_by, reason='rotate')
+            ref = SecretRef(tenant_id=normalized_tenant, connector_id=provider.connector_id, scope=normalized_business, secret_name=f"{provider.connector_id}.{secret_field.secret_name}")
+            record = SecretRecord(ref=ref, ciphertext=b'pending', source=SecretSource.CONNECTOR, metadata={'provider_key': provider.provider_key, 'field_key': secret_field.field_key, 'rotated_by': str(requested_by).strip() or 'admin_console'})
             self.secret_vault.put(record, plaintext=str(raw_value).encode('utf-8'))
-            updated_fields.append(field.secret_name)
+            updated_fields.append(secret_field.secret_name)
         if not updated_fields:
             raise ValueError('no matching provider secret fields supplied')
         refreshed = self.reconnect_provider(tenant_id=normalized_tenant, business_id=normalized_business, provider_key=provider.provider_key, requested_by=requested_by, probe_mode='dry_run', activate_runtime=provider.domain == 'platform_infra')

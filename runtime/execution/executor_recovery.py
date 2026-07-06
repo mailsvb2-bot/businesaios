@@ -22,18 +22,17 @@ def finalize_if_already_executed(*, executor: Any, outbox: Any, event_log: Any, 
     tenant_id = _decision_tenant_id(env.decision)
     current_status = status(outbox, decision_id=decision_id, tenant_id=tenant_id)
 
-    if expected_event and current_status in {"pending", "delivering", "inflight"} and event_log is not None:
-        if hasattr(event_log, "has_event") and event_log.has_event(decision_id, expected_event):
-            persistence = finalize_recovered_outcome(
-                executor=executor,
-                env=env,
-                reason="finalize_if_already_executed",
-                backend_name="runtime_recovery_from_proof",
-            )
-            return ExecutionResult(
-                ok=True,
-                output={"status": "already_executed", "recovery": "marked_delivered", "persistence": persistence},
-                decision_id=decision_id,
-                correlation_id=env.decision.correlation_id,
-            )
+    if expected_event and current_status in {"pending", "delivering", "inflight"} and event_log is not None and hasattr(event_log, "has_event") and event_log.has_event(decision_id, expected_event):
+        persistence = finalize_recovered_outcome(
+            executor=executor,
+            env=env,
+            reason="finalize_if_already_executed",
+            backend_name="runtime_recovery_from_proof",
+        )
+        return ExecutionResult(
+            ok=True,
+            output={"status": "already_executed", "recovery": "marked_delivered", "persistence": persistence},
+            decision_id=decision_id,
+            correlation_id=env.decision.correlation_id,
+        )
     return None
