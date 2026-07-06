@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from execution.baseline_manager import FileBaselineStore
@@ -11,6 +12,10 @@ from execution.promotion_gate import PromotionGate
 from execution.run_selector import RunSelector
 
 CANON_HEADLESS_BASELINE_CLI = True
+
+
+def _write_json_stdout(payload: object) -> None:
+    sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -42,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
             run_selector=RunSelector(),
         )
         selected = selector.choose(records=records)
-        print(json.dumps(selected or {}, ensure_ascii=False, indent=2, sort_keys=True))
+        _write_json_stdout(selected or {})
         return 0 if selected else 1
 
     if args.command == "promote":
@@ -55,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
             promoted_at_label=args.label,
             metadata={"via": "cli"},
         )
-        print(json.dumps(store.read(baseline_name=args.baseline_name), ensure_ascii=False, indent=2, sort_keys=True))
+        _write_json_stdout(store.read(baseline_name=args.baseline_name))
         return 0
 
     return 2
