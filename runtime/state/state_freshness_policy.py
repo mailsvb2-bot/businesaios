@@ -39,10 +39,9 @@ class StateFreshnessPolicy:
             normalized = str(prefix).strip(".")
             if not normalized:
                 continue
-            if field_path == normalized or field_path.startswith(normalized + "."):
-                if len(normalized) > len(best_prefix):
-                    best_prefix = normalized
-                    best_policy = policy
+            if (field_path == normalized or field_path.startswith(normalized + ".")) and len(normalized) > len(best_prefix):
+                best_prefix = normalized
+                best_policy = policy
 
         if best_policy is not None:
             return best_policy
