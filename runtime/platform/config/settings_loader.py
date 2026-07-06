@@ -148,9 +148,8 @@ def load_settings(*, force_reload: bool = False) -> Settings:
             raise RuntimeError("Production strict mode: RUN_MODE=demo is forbidden when APP_ENV/ENV=prod")
         if run_mode == "telegram" and not s.telegram.bot_token:
             raise RuntimeError(f"Production strict mode: {_TELEGRAM_TOKEN_LABEL} is required when RUN_MODE=telegram")
-        if s.payments.provider.lower() == "yookassa":
-            if not s.payments.yookassa_shop_id or not s.payments.yookassa_secret_key:
-                raise RuntimeError("Production strict mode: YooKassa credentials are required")
+        if s.payments.provider.lower() == "yookassa" and (not s.payments.yookassa_shop_id or not s.payments.yookassa_secret_key):
+            raise RuntimeError("Production strict mode: YooKassa credentials are required")
 
     if run_mode == "telegram" and s.telegram.health_port == 0:
         s = replace(s, telegram=replace(s.telegram, health_port=8085))

@@ -79,7 +79,7 @@ def apply_step_feedback(
             'primary_ref': str(refs[0]) if refs else '',
             'reason': str(feedback.get('error') or feedback.get('reason') or ''),
             'goal_score': float(feedback.get('goal_score') or 0.0),
-            'constraint_keys': sorted(str(key) for key in (dict(request_meta.get('constraints') or {}) if isinstance(request_meta, dict) else {}).keys()),
+            'constraint_keys': sorted(str(key) for key in (dict(request_meta.get('constraints') or {}) if isinstance(request_meta, dict) else {})),
         },
     )
     current['recent_runs'] = recent_runs

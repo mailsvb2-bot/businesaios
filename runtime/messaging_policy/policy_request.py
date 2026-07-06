@@ -16,7 +16,7 @@ def _normalize_optional(value: str | None) -> str | None:
 
 
 def _normalize_many(value) -> tuple[str, ...]:
-    if not isinstance(value, (list, tuple, set)):
+    if not isinstance(value, list | tuple | set):
         return ()
     out: list[str] = []
     for item in value:

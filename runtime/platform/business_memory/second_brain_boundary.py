@@ -40,7 +40,7 @@ _FORBIDDEN_NESTED_KEYS = frozenset(
 
 
 def _is_sequence(value: Any) -> bool:
-    return isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
+    return isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray)
 
 
 def _sanitize_nested(value: Any, *, forbidden: frozenset[str]) -> Any:

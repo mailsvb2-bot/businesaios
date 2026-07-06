@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Any
 
 from bootstrap.safety_control_boot import build_safety_control_runtime
@@ -86,10 +87,8 @@ def record_action_success(*, action: str, payload: Any) -> None:
         canonical_breaker_key(action=str(action), tenant_id=tenant_id)
     )
     action_id = canonical_action_id(action=str(action), tenant_id=tenant_id, payload=data)
-    try:
+    with suppress(Exception):
         runtime.profile.rollback_planner.mark_executed(tenant_id=tenant_id, action_id=action_id)
-    except Exception:
-        pass
     owner = _worker_owner(payload)
     try:
         if owner and hasattr(runtime.profile.approval_repository, 'acquire_lease'):

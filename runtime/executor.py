@@ -371,9 +371,7 @@ class RuntimeExecutor:
             tenant_id=_decision_tenant_id(env.decision),
             owner_id="runtime-executor",
         )
-        if not claimed:
-            return False
-        return True
+        return claimed
 
     def _already_claimed_result(self, env: DecisionEnvelope) -> ExecutionResult:
         return ExecutionResult(
