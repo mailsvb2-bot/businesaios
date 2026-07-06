@@ -52,9 +52,8 @@ class PolicySemanticsGuard:
     def _fail_on_mapping_conflict(payload: Mapping[str, Any], *, canonical_key: str, canonical_value: Mapping[str, Any], aliases: tuple[str, ...]) -> None:
         canonical = _canonical_json(dict(canonical_value or {}))
         for alias in aliases:
-            if alias in payload and canonical_key in payload:
-                if _canonical_json(_mapping(payload.get(alias))) != canonical:
-                    raise ValueError(f"policy semantic conflict: {alias} != {canonical_key}")
+            if alias in payload and canonical_key in payload and _canonical_json(_mapping(payload.get(alias))) != canonical:
+                raise ValueError(f"policy semantic conflict: {alias} != {canonical_key}")
 
 
 __all__ = [
