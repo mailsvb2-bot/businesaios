@@ -34,13 +34,10 @@ def from_env() -> AutonomyPolicyV1:
 
 def check_step_allowed(step_action: str, *, policy: AutonomyPolicyV1) -> str | None:
     a = str(step_action or "")
-    if a.startswith("ads_") or "ads" in a:
-        if not policy.allow_ads:
-            return "ads_disabled"
-    if "pricing" in a:
-        if not policy.allow_pricing:
-            return "pricing_disabled"
-    if "llm" in a:
-        if not policy.allow_llm:
-            return "llm_disabled"
+    if (a.startswith("ads_") or "ads" in a) and not policy.allow_ads:
+        return "ads_disabled"
+    if "pricing" in a and not policy.allow_pricing:
+        return "pricing_disabled"
+    if "llm" in a and not policy.allow_llm:
+        return "llm_disabled"
     return None
