@@ -9,11 +9,11 @@ verified receipts, audit logs and runtime handlers.
 from __future__ import annotations
 
 import builtins
-import inspect
 import os
+import sys
 from contextlib import contextmanager
 from contextvars import ContextVar
-from types import ModuleType
+from types import FrameType, ModuleType
 
 FORBIDDEN_PREFIXES = (
     "interfaces.payment.yookassa",
@@ -51,15 +51,26 @@ _original_import = builtins.__import__
 _token: ContextVar[bool] = ContextVar("runtime_integration_import_allowed", default=False)
 
 
+def _next_caller_frame(frame: FrameType | None) -> FrameType | None:
+    while frame is not None:
+        module = str(frame.f_globals.get("__name__", "") or "")
+        if module and module != __name__:
+            return frame
+        frame = frame.f_back
+    return None
+
+
 def _infer_caller_module() -> str:
     try:
-        for frame in inspect.stack()[2:]:
-            module = frame.frame.f_globals.get("__name__", "")
-            if module and module != __name__:
-                return str(module)
+        # Hot import-path guard: avoid inspect.stack(), which resolves source files
+        # and can make boot-smoke crawl through large import graphs.
+        frame = sys._getframe(2)
+        caller = _next_caller_frame(frame)
+        if caller is None:
+            return ""
+        return str(caller.f_globals.get("__name__", "") or "")
     except Exception:
         return ""
-    return ""
 
 
 def _is_forbidden(name: str) -> bool:
