@@ -67,9 +67,8 @@ class PersistentOperationalBudgetLedger:
     ) -> None:
         with self._lock:
             normalized_execution_id = self._execution_identity(tenant_id, execution_id)
-            if normalized_execution_id is not None:
-                if normalized_execution_id in self._committed_execution_ids:
-                    return
+            if normalized_execution_id is not None and normalized_execution_id in self._committed_execution_ids:
+                return
 
             hour_key = (str(tenant_id), str(hour_bucket))
             day_key = (str(tenant_id), str(day_bucket))
@@ -224,4 +223,4 @@ class PersistentOperationalBudgetLedger:
 __all__ = [
     "OperationalLedgerLoadError",
     "PersistentOperationalBudgetLedger",
-]
+]
