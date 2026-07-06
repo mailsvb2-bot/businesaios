@@ -60,7 +60,7 @@ def _tuple_refs(*parts: object) -> tuple[str, ...]:
             text = _text(part)
             if text:
                 refs.append(text)
-        elif isinstance(part, (list, tuple, set)):
+        elif isinstance(part, list | tuple | set):
             for item in part:
                 text = _text(item)
                 if text:
