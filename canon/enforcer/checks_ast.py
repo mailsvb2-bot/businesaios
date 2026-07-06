@@ -46,8 +46,8 @@ def check_ast_semantics(report: Any, root: Path = REPO_ROOT) -> None:
             continue
 
         lines = text.count("\n") + 1
-        funcs = sum(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) for n in ast.walk(tree))
-        imports = sum(isinstance(n, (ast.Import, ast.ImportFrom)) for n in ast.walk(tree))
+        funcs = sum(isinstance(n, ast.FunctionDef | ast.AsyncFunctionDef) for n in ast.walk(tree))
+        imports = sum(isinstance(n, ast.Import | ast.ImportFrom) for n in ast.walk(tree))
         if (
             lines > GOD_MODULE_LINE_THRESHOLD
             or funcs > GOD_MODULE_FUNC_THRESHOLD
@@ -76,7 +76,6 @@ def check_ast_semantics(report: Any, root: Path = REPO_ROOT) -> None:
                         hint="Replace with structured log + audit/proof event + explicit failure outcome.",
                     )
                     break
-
         # Fake-ready integrations: AST-driven to avoid false positives from prose/comments.
         if rel.startswith("interfaces/"):
             for node in ast.walk(tree):
@@ -164,16 +163,15 @@ def check_ast_semantics(report: Any, root: Path = REPO_ROOT) -> None:
                         )
 
             if rel.startswith("runtime/"):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    if node.name in FORBIDDEN_DECISION_FUNCTION_NAMES_OUTSIDE_CORE:
-                        report.add(
-                            severity="critical",
-                            kind="runtime-decision-logic",
-                            path=rel,
-                            line=node.lineno,
-                            message=f"Runtime defines forbidden decision-like function: {node.name}",
-                            hint="Move decision logic into core/ai/decision_core.py.",
-                        )
+                if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name in FORBIDDEN_DECISION_FUNCTION_NAMES_OUTSIDE_CORE:
+                    report.add(
+                        severity="critical",
+                        kind="runtime-decision-logic",
+                        path=rel,
+                        line=node.lineno,
+                        message=f"Runtime defines forbidden decision-like function: {node.name}",
+                        hint="Move decision logic into core/ai/decision_core.py.",
+                    )
 
                 if isinstance(node, ast.Call):
                     fn = full_attr_name(node.func)
