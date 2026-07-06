@@ -9,12 +9,10 @@ def within_date_window(*, timestamp_ms: int = 0, created_at: str = '', date_from
         current = safe_parse_iso_to_epoch_ms(created_at)
     if current <= 0:
         return not date_from and not date_to
-    if str(date_from or '').strip():
-        if current < safe_parse_iso_to_epoch_ms(str(date_from)):
-            return False
-    if str(date_to or '').strip():
-        if current > safe_parse_iso_to_epoch_ms(str(date_to)):
-            return False
+    if str(date_from or '').strip() and current < safe_parse_iso_to_epoch_ms(str(date_from)):
+        return False
+    if str(date_to or '').strip() and current > safe_parse_iso_to_epoch_ms(str(date_to)):
+        return False
     return True
 
 
