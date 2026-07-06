@@ -23,7 +23,7 @@ class Keyring:
             sec = meta.get("secret")
             if isinstance(sec, str):
                 sec = sec.encode("utf-8")
-            if not isinstance(sec, (bytes, bytearray)):
+            if not isinstance(sec, bytes | bytearray):
                 raise TypeError("SECRET_MUST_BE_BYTES")
             self._keys[str(kid)] = KeyMeta(secret=bytes(sec), revoked=bool(meta.get("revoked", False)))
         if str(active_kid) not in self._keys:
