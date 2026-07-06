@@ -113,6 +113,10 @@ def install_import_firewall() -> None:
     builtins.__import__ = guarded_import
 
 
+activate_import_firewall = install_import_firewall
+ACTIVATE_IMPORT_FIREWALL = install_import_firewall
+
+
 @contextmanager
 def integration_import_allowed():
     t = _token.set(True)
@@ -145,9 +149,11 @@ def assert_import_firewall_installed() -> None:
 
 
 __all__ = [
+    "ACTIVATE_IMPORT_FIREWALL",
     "ALLOW_INTERNAL_IMPORT",
     "FORBIDDEN_MODULE_PREFIXES",
     "FORBIDDEN_PREFIXES",
+    "activate_import_firewall",
     "allow_internal_import",
     "assert_import_firewall_installed",
     "guarded_import",
