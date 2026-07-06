@@ -29,7 +29,7 @@ class DiracOperatorService:
             return psi
         event_overrides: dict[str, tuple[float, float, float, float]] = {}
         for key, value in dict(ctx.operator_overrides or {}).items():
-            if isinstance(value, (list, tuple)) and len(value) == 4:
+            if isinstance(value, list | tuple) and len(value) == 4:
                 event_overrides[str(key)] = tuple(float(v) for v in value)
         try:
             catalog = self._catalog_resolver.resolve(
