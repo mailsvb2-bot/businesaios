@@ -11,9 +11,7 @@ def within_date_window(*, timestamp_ms: int = 0, created_at: str = '', date_from
         return not date_from and not date_to
     if str(date_from or '').strip() and current < safe_parse_iso_to_epoch_ms(str(date_from)):
         return False
-    if str(date_to or '').strip() and current > safe_parse_iso_to_epoch_ms(str(date_to)):
-        return False
-    return True
+    return not (str(date_to or '').strip() and current > safe_parse_iso_to_epoch_ms(str(date_to)))
 
 
 def user_matches(*, expected_user_id: str, actual_user_id: str) -> bool:
