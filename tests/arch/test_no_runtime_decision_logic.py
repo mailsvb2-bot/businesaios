@@ -12,7 +12,7 @@ def test_runtime_handlers_no_decision_logic():
         text = _module_text(path)
         tree = ast.parse(text)
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 name = node.name
                 for word in FORBIDDEN:
                     assert word not in name, f"Decision logic in runtime handler: {path}:{name}"
