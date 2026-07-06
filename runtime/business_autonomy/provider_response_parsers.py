@@ -108,7 +108,7 @@ class ProviderResponseParsers:
                 return str(err.get('code') or err.get('type') or err.get('status') or '') or None
             for key in ('code', 'status', 'error_code'):
                 value = body.get(key)
-                if isinstance(value, (int, str)) and str(value).strip() and (provider_key != 'telegram_bot' or key != 'status'):
+                if isinstance(value, int | str) and str(value).strip() and (provider_key != 'telegram_bot' or key != 'status'):
                     return str(value)
         return None
 
@@ -127,7 +127,7 @@ class ProviderResponseParsers:
         if isinstance(body, dict):
             preview = {}
             for key, value in list(body.items())[:8]:
-                if isinstance(value, (str, int, float, bool)) or value is None:
+                if isinstance(value, str | int | float | bool) or value is None:
                     preview[key] = value
                 elif isinstance(value, list):
                     preview[key] = f'list[{len(value)}]'

@@ -138,7 +138,7 @@ class SecretsResolutionPolicy:
                 )
                 for child_key, child_value in dict(value).items()
             }
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, list | tuple):
             resolved_items = [
                 self._resolve_value(
                     item,
@@ -158,7 +158,7 @@ class SecretsResolutionPolicy:
             return value.strip()
         if isinstance(value, Mapping):
             return {str(child_key): self._redact_value(key=f"{key}.{child_key}", value=child_value) for child_key, child_value in dict(value).items()}
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, list | tuple):
             redacted = [self._redact_value(key=f"{key}[]", value=item) for item in value]
             return redacted if isinstance(value, list) else tuple(redacted)
         normalized_key = str(key or "").strip().lower()

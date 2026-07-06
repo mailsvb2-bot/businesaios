@@ -45,7 +45,7 @@ def scan_hidden_logic(config:
                     findings.append(HiddenLogicFinding(relpath, node.lineno, node.name, FindingSeverity.CRITICAL, "forbidden decision-brain class exists outside canonical DecisionCore"))
                 elif find_canonical_for(node.name) == "DecisionCore":
                     findings.append(HiddenLogicFinding(relpath, node.lineno, node.name, FindingSeverity.MAJOR, "DecisionCore synonym class exists outside canonical decision zone"))
-            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 lowered = node.name.lower()
                 if node.name in config.forbidden_decision_method_names:
                     findings.append(HiddenLogicFinding(relpath, node.lineno, node.name, FindingSeverity.CRITICAL, "forbidden decision-emission method exists outside canonical path"))
