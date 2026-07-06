@@ -9,7 +9,7 @@ from .errors import AdsConnectorError
 def _coerce_rows(*, connector_name: str, method_name: str, rows: Any) -> tuple[dict[str, Any], ...]:
     if rows is None:
         return ()
-    if not isinstance(rows, Iterable) or isinstance(rows, (str, bytes, bytearray, Mapping)):
+    if not isinstance(rows, Iterable) or isinstance(rows, str | bytes | bytearray | Mapping):
         raise AdsConnectorError(
             f"{connector_name}: {method_name} must return an iterable of mapping rows"
         )
