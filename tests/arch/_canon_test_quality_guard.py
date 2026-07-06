@@ -47,6 +47,7 @@ class ParsedArchTest:
     def rel(self) -> str:
         return str(self.path.relative_to(ROOT))
 
+
 def arch_test_files() -> list[Path]:
     if not ARCH_TEST_ROOT.exists():
         return []
@@ -56,21 +57,27 @@ def arch_test_files() -> list[Path]:
             result.append(path)
     return sorted(result)
 
+
 def parse_arch_test(path: Path) -> ParsedArchTest:
     text = path.read_text(encoding="utf-8")
     return ParsedArchTest(path=path, tree=ast.parse(text), text=text)
 
+
 def lower(value: str) -> str:
     return value.strip().lower()
+
 
 def test_function_names(tree: ast.AST) -> list[str]:
     return [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")]
 
+
 def assertion_count(tree: ast.AST) -> int:
     return sum(1 for node in ast.walk(tree) if isinstance(node, ast.Assert))
 
+
 def imported_module_count(tree: ast.AST) -> int:
-    return sum(1 for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom)))
+    return sum(1 for node in ast.walk(tree) if isinstance(node, ast.Import | ast.ImportFrom))
+
 
 def call_names(tree: ast.AST) -> list[str]:
     result=[]
@@ -82,6 +89,7 @@ def call_names(tree: ast.AST) -> list[str]:
                 result.append(node.func.attr)
     return result
 
+
 def has_quality_signal(parsed: ParsedArchTest) -> bool:
     text = lower(parsed.text)
     if any(signal in text for signal in QUALITY_SIGNAL_NAMES):
@@ -89,15 +97,19 @@ def has_quality_signal(parsed: ParsedArchTest) -> bool:
     names=[lower(name) for name in call_names(parsed.tree)]
     return any(name in {"parse","read_text","glob","rglob","exists","relative_to"} for name in names)
 
+
 def has_forbidden_snippet(parsed: ParsedArchTest) -> bool:
     text = lower(parsed.text)
     return any(snippet in text for snippet in FORBIDDEN_SNIPPETS)
 
+
 def suspiciously_short(parsed: ParsedArchTest) -> bool:
     return len(parsed.text.strip()) < MIN_TEXT_LENGTH
 
+
 def has_real_test_functions(parsed: ParsedArchTest) -> bool:
     return len(test_function_names(parsed.tree)) >= 1
+
 
 def is_import_only_like(parsed: ParsedArchTest) -> bool:
     if assertion_count(parsed.tree) == 0:
@@ -105,6 +117,7 @@ def is_import_only_like(parsed: ParsedArchTest) -> bool:
     if imported_module_count(parsed.tree) > 0 and not has_quality_signal(parsed):
         return True
     return False
+
 
 def exempt(path: Path) -> bool:
     return path.name in EXEMPT_FILES
