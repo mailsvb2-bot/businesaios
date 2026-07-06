@@ -1,82 +1,57 @@
-"""Canonical impulse contract for BusinesAIOS Behavioral OS.
-
-This module defines a *portable* mapping from canonical event types
-to small bounded impulses in the 4D behavioral spacetime:
-
-  (I, T, V, P) + anti
-
-I: intent / need
-T: trust / risk
-V: value recognition
-P: payment readiness
-
-The goal is not to "fit" weights, but to provide a strict, testable,
-domain-agnostic *baseline physics* for Ring/DecisionCore.
-Products may override via configuration, but must keep bounds.
-"""
-
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from config.behavior_impulse_policy import (
-    DEFAULT_IMPULSE_BOUNDS_POLICY,
-    BehaviorImpulsePolicy,
-)
-from core.retention.event_types import normalize_event_type
+from config.impulse_bounds_policy import DEFAULT_IMPULSE_BOUNDS_POLICY, ImpulseBoundsPolicy
 
 
 @dataclass(frozen=True)
 class Impulse:
-    dI: float
-    dT: float
-    dV: float
-    dP: float
-    anti: float
+    dI: float = 0.0
+    dT: float = 0.0
+    dV: float = 0.0
+    dP: float = 0.0
+    anti_impulse: float = 0.0
 
     def as_tuple(self) -> tuple[float, float, float, float, float]:
-        return (float(self.dI), float(self.dT), float(self.dV), float(self.dP), float(self.anti))
+        return (float(self.dI), float(self.dT), float(self.dV), float(self.dP), float(self.anti_impulse))
 
 
-def _clip(x: float, lo: float, hi: float) -> float:
-    x = float(x)
-    if x < lo:
-        return float(lo)
-    if x > hi:
-        return float(hi)
-    return float(x)
+@dataclass(frozen=True)
+class ImpulseApplication:
+    event_type: str
+    domain: str
+    delta: Impulse
+    source: str = "default_catalog"
 
 
-# Hard bounds for a *single* impulse application.
-# Kept intentionally small; dynamics accumulate through repeated exposure.
-MAX_STEP = DEFAULT_IMPULSE_BOUNDS_POLICY.max_step
-MAX_ANTI_STEP = DEFAULT_IMPULSE_BOUNDS_POLICY.max_anti_step
+def clamp01(x: float) -> float:
+    return max(0.0, min(1.0, float(x)))
 
 
-def _event_impulses_from_policy(policy: BehaviorImpulsePolicy) -> dict[str, Impulse]:
-    return {name: Impulse(*values) for name, values in policy.event_impulses.items()}
-
-
-DEFAULT_IMPULSE_POLICY = BehaviorImpulsePolicy()
-EVENT_IMPULSES: dict[str, Impulse] = _event_impulses_from_policy(DEFAULT_IMPULSE_POLICY)
+def apply_impulse(
+    *,
+    state: dict[str, Any],
+    impulse: Impulse,
+    policy: ImpulseBoundsPolicy = DEFAULT_IMPULSE_BOUNDS_POLICY,
+) -> dict[str, float]:
+    z = DEFAULT_IMPULSE_BOUNDS_POLICY.zero_value
+    return {
+        "intent": clamp01(float(state.get("intent", z)) + impulse.dI),
+        "trust": clamp01(float(state.get("trust", z)) + impulse.dT),
+        "value": clamp01(float(state.get("value", z)) + impulse.dV),
+        "permission": clamp01(float(state.get("permission", z)) + impulse.dP),
+        "anti_impulse": clamp01(float(state.get("anti_impulse", z)) + impulse.anti_impulse),
+    }
 
 
 def impulse_for_event(
-    event: Mapping[str, Any],
     *,
-    policy: BehaviorImpulsePolicy = DEFAULT_IMPULSE_POLICY,
-) -> tuple[float, float, float, float, float]:
-    """Return bounded (dI,dT,dV,dP,anti) for a canonical event.
-
-    - Unknown events map to zeros (must not break runtime).
-    - offer_outcome selects a specific impulse based on payload.success.
-    - Some impulses are payload-sensitive (rage, fatigue, early_stop).
-    """
-
-    et_raw = str(event.get("event_type") or "")
-    et = normalize_event_type(et_raw)
+    event: dict[str, Any],
+    policy: ImpulseBoundsPolicy = DEFAULT_IMPULSE_BOUNDS_POLICY,
+) -> Impulse:
+    et = str(event.get("event_type") or event.get("type") or "").strip()
     payload = event.get("payload")
     if not isinstance(payload, dict):
         payload = {}
@@ -84,20 +59,18 @@ def impulse_for_event(
     base_tuple = policy.event_impulses.get(et)
     if base_tuple is None:
         z = DEFAULT_IMPULSE_BOUNDS_POLICY.zero_value
-        return (z, z, z, z, z)
+        return Impulse(z, z, z, z, z)
 
     dI, dT, dV, dP, anti = Impulse(*base_tuple).as_tuple()
     z = DEFAULT_IMPULSE_BOUNDS_POLICY.zero_value
 
     # Payload-sensitive refinements (bounded).
-    if et == "ui_click":
-        if float(payload.get("rage", z) or z) > z:
-            anti += policy.bounds.ui_rage_anti_delta
-            dT += policy.bounds.ui_rage_trust_delta
+    if et == "ui_click" and float(payload.get("rage", z) or z) > z:
+        anti += policy.bounds.ui_rage_anti_delta
+        dT += policy.bounds.ui_rage_trust_delta
 
-    if et in {"offer_shown", "paywall_opened"}:
-        if float(payload.get("fatigue", z) or z) > z:
-            anti += policy.bounds.fatigue_anti_delta
+    if et in {"offer_shown", "paywall_opened"} and float(payload.get("fatigue", z) or z) > z:
+        anti += policy.bounds.fatigue_anti_delta
 
     if et == "audio_stopped":
         # early-stop penalty is applied only if pos/len is known.
@@ -108,21 +81,11 @@ def impulse_for_event(
 
     if et == "offer_outcome":
         # A unified, stable event that can be emitted by timeouts/jobs.
-        success = bool(payload.get("success"))
-        if success:
-            dT += policy.bounds.offer_success_trust_delta
-            dP += policy.bounds.offer_success_payment_delta
-            dV += policy.bounds.offer_success_value_delta
-            anti += policy.bounds.offer_success_anti_delta
-        else:
-            dT += policy.bounds.offer_failure_trust_delta
-            dP += policy.bounds.offer_failure_payment_delta
-            anti += policy.bounds.offer_failure_anti_delta
+        outcome = str(payload.get("outcome") or "").strip().lower()
+        if outcome in {"accepted", "paid", "converted"}:
+            dV += policy.bounds.outcome_accept_value_delta
+            dT += policy.bounds.outcome_accept_trust_delta
+        elif outcome in {"dismissed", "ignored", "timeout"}:
+            anti += policy.bounds.outcome_dismiss_anti_delta
 
-    # Final hard clipping.
-    dI = _clip(dI, -MAX_STEP, MAX_STEP)
-    dT = _clip(dT, -MAX_STEP, MAX_STEP)
-    dV = _clip(dV, -MAX_STEP, MAX_STEP)
-    dP = _clip(dP, -MAX_STEP, MAX_STEP)
-    anti = _clip(anti, -MAX_ANTI_STEP, MAX_ANTI_STEP)
-    return (float(dI), float(dT), float(dV), float(dP), float(anti))
+    return Impulse(dI=dI, dT=dT, dV=dV, dP=dP, anti_impulse=anti)
