@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import suppress
 from typing import Any
 
 from runtime.execution.executor_audit import emit_decision_executed
@@ -139,10 +140,8 @@ def finalize_recovered_outcome(*, executor: Any, env: Any, reason: str, backend_
     )
     reliability = getattr(executor, "_reliability", None)
     if reliability is not None:
-        try:
+        with suppress(Exception):
             reliability.mark_completed(env)
-        except Exception:
-            pass
     _checkpoint(
         executor=executor,
         env=env,
@@ -163,79 +162,26 @@ def finalize_recovered_outcome(*, executor: Any, env: Any, reason: str, backend_
             "owner": "runtime.execution.outcome_persistence_lock",
             "event_type": "decision_executed",
             "decision_id": decision_id,
-            "source": "existing_proof_event",
+            "recovery": str(reason),
+            "verification_status": "verified_from_existing_proof",
         },
-        "recovery": str(reason),
     }
 
 
-def finalize_terminal_recovery_outcome(*, executor: Any, env: Any, reason: str, backend_name: str = "runtime_recovery_terminal") -> dict[str, Any]:
+def finalize_failed_outcome(*, executor: Any, env: Any, reason: str, output: Mapping[str, Any] | None = None) -> dict[str, Any]:
     decision = getattr(env, "decision", None)
     decision_id, tenant_id = _decision_identity(env)
     if not decision_id:
         raise OutcomePersistenceLockError("missing_decision_id")
-    metadata = {
-        "reason": str(reason),
-        "terminal": True,
-        "action": str(getattr(decision, "action", "") or ""),
-    }
-    mark_delivered(
-        getattr(executor, "_outbox", None),
-        decision_id=decision_id,
-        tenant_id=tenant_id,
-        owner_id="runtime-recovery",
-        backend_name=str(backend_name),
-        external_id=decision_id,
-        metadata=metadata,
-    )
-    _checkpoint(
-        executor=executor,
-        env=env,
-        stage="state_update",
-        payload={
-            "owner": "runtime.execution.outcome_persistence_lock",
-            "outbox": "terminal_recovery_delivered",
-            "decision_id": decision_id,
-            "reason": str(reason),
-        },
-    )
-    _checkpoint(
-        executor=executor,
-        env=env,
-        stage="evidence",
-        payload={
-            "owner": "runtime.execution.outcome_persistence_lock",
-            "event_type": "recovery_terminal",
-            "decision_id": decision_id,
-            "reason": str(reason),
-        },
-    )
-    return {
-        "state_update": {
-            "owner": "runtime.execution.outcome_persistence_lock",
-            "decision_id": decision_id,
-            "tenant_id": tenant_id,
-            "outbox_state": "delivered",
-        },
-        "evidence_record": {
-            "owner": "runtime.execution.outcome_persistence_lock",
-            "event_type": "recovery_terminal",
-            "decision_id": decision_id,
-            "reason": str(reason),
-        },
-    }
-
-
-def quarantine_recovery_outcome(*, executor: Any, env: Any, reason: str, backend_name: str = "runtime_recovery_quarantine") -> dict[str, Any]:
-    decision_id, tenant_id = _decision_identity(env)
-    if not decision_id:
-        raise OutcomePersistenceLockError("missing_decision_id")
+    payload = _safe_dict(output)
     move_to_dead_letter(
         getattr(executor, "_outbox", None),
         decision_id=decision_id,
         tenant_id=tenant_id,
-        owner_id="runtime-recovery",
-        error=str(reason),
+        owner_id="runtime-executor",
+        reason=str(reason),
+        backend_name="runtime_executor",
+        metadata={"reason": str(reason), "output": payload, "action": str(getattr(decision, "action", "") or "")},
     )
     _checkpoint(
         executor=executor,
@@ -246,7 +192,6 @@ def quarantine_recovery_outcome(*, executor: Any, env: Any, reason: str, backend
             "outbox": "dead_letter",
             "decision_id": decision_id,
             "reason": str(reason),
-            "backend": str(backend_name),
         },
     )
     _checkpoint(
@@ -255,8 +200,7 @@ def quarantine_recovery_outcome(*, executor: Any, env: Any, reason: str, backend
         stage="evidence",
         payload={
             "owner": "runtime.execution.outcome_persistence_lock",
-            "event_type": "recovery_quarantine",
-            "decision_id": decision_id,
+            "proof_event": "execution_failed",
             "reason": str(reason),
         },
     )
@@ -269,20 +213,8 @@ def quarantine_recovery_outcome(*, executor: Any, env: Any, reason: str, backend
         },
         "evidence_record": {
             "owner": "runtime.execution.outcome_persistence_lock",
-            "event_type": "recovery_quarantine",
+            "event_type": "execution_failed",
             "decision_id": decision_id,
             "reason": str(reason),
         },
     }
-
-
-__all__ = [
-    "CANON_RUNTIME_OUTCOME_PERSISTENCE_LOCK_OWNER",
-    "CANON_RUNTIME_OUTCOME_PERSISTENCE_SINGLE_STATE_UPDATE",
-    "CANON_RUNTIME_OUTCOME_PERSISTENCE_SINGLE_EVIDENCE_OWNER",
-    "OutcomePersistenceLockError",
-    "persist_verified_outcome",
-    "finalize_recovered_outcome",
-    "finalize_terminal_recovery_outcome",
-    "quarantine_recovery_outcome",
-]
