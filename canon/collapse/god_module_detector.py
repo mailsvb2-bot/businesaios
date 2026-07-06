@@ -31,7 +31,7 @@ def _non_empty_line_count(text: str) -> int:
 
 
 def _class_complexity(node: ast.ClassDef) -> int:
-    methods = [item for item in node.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    methods = [item for item in node.body if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef)]
     return 0 if not methods else sum(len(item.body) for item in methods)
 
 
@@ -54,9 +54,9 @@ def scan_god_modules(config: LegacyCanonConfig) -> tuple[GodModuleFinding, ...]:
         lines, decision_surface = _non_empty_line_count(text), config.is_decision_surface(relpath)
         if _needs_ast_complexity_scan(text=text, lines=lines, config=config, decision_surface=decision_surface):
             tree = ast.parse(text, filename=str(path))
-            functions = sum(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) for node in ast.walk(tree))
+            functions = sum(isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) for node in ast.walk(tree))
             classes = sum(_class_complexity(node) >= 3 for node in ast.walk(tree) if isinstance(node, ast.ClassDef))
-            imports = sum(isinstance(node, (ast.Import, ast.ImportFrom)) for node in ast.walk(tree))
+            imports = sum(isinstance(node, ast.Import | ast.ImportFrom) for node in ast.walk(tree))
         else:
             functions, classes, imports = _textual_count(text, ("def ", "async def ")), _textual_count(text, ("class ",)), _textual_count(text, ("import ", "from "))
         critical, major = [], []
