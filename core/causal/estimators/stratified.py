@@ -43,7 +43,7 @@ class StratifiedEstimator(CausalEstimator):
         eff_sum = 0.0
         used = 0
         dropped = 0
-        for k, items in groups.items():
+        for _k, items in groups.items():
             treated = [y for t, y in items if t >= 0.5]
             control = [y for t, y in items if t < 0.5]
             if len(treated) < int(self.min_group) or len(control) < int(self.min_group):
