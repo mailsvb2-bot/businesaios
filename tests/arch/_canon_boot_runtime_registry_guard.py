@@ -36,7 +36,7 @@ def parse_file(path: Path) -> ParsedFile:
 
 
 def function_names(tree: ast.AST) -> list[str]:
-    return [node.name for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    return [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)]
 
 
 def assigned_constant_names(tree: ast.AST) -> list[str]:
