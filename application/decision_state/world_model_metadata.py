@@ -9,9 +9,9 @@ from typing import Any
 def _jsonable(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(k): _jsonable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [_jsonable(v) for v in value]
-    if isinstance(value, (str, int, float, bool)) or value is None:
+    if isinstance(value, str | int | float | bool) or value is None:
         return value
     return str(value)
 
@@ -87,7 +87,7 @@ def summarize_pricing_world_state(*, state: Any) -> dict[str, Any] | None:
         "marginal_cost",
     ):
         value = ws.get(key)
-        if isinstance(value, (int, float, str, bool)) or value is None:
+        if isinstance(value, int | float | str | bool) or value is None:
             out[key] = value
 
     if not out:
