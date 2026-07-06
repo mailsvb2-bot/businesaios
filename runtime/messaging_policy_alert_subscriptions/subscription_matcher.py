@@ -10,6 +10,4 @@ def subscription_matches(*, subscription, alert_item, affected_user_id: str) -> 
         return False
     if subscription.code_filters and str(alert_item.code or "") not in set(subscription.code_filters):
         return False
-    if subscription.user_scope and str(affected_user_id or "") not in set(subscription.user_scope):
-        return False
-    return True
+    return not (subscription.user_scope and str(affected_user_id or "") not in set(subscription.user_scope))
