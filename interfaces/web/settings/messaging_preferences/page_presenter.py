@@ -62,7 +62,7 @@ _OPTIONS = (
 def _read_verified_channels(value: Any) -> tuple[str, ...]:
     if isinstance(value, dict):
         raw = value.get("verified") or ()
-    elif isinstance(value, (list, tuple, set)):
+    elif isinstance(value, list | tuple | set):
         raw = value
     else:
         raw = ()
