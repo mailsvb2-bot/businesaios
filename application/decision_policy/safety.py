@@ -43,14 +43,13 @@ def _rollout_enabled(*, feature_key: str, tenant_id: str, user_id: str, percent:
 def _legacy_high_impact_gate(*, action: str, tenant_id: str, user_id: str, event_log: Any) -> tuple[bool, str, dict[str, Any]]:
     cfg = DecisionSafetyConfig.from_env()
     is_high = str(action or "").startswith(_HIGH_IMPACT_PREFIXES)
-    if is_high:
-        if not _rollout_enabled(
-            feature_key="ai_ceo_high_impact",
-            tenant_id=str(tenant_id),
-            user_id=str(user_id),
-            percent=int(cfg.high_impact_rollout_pct or 0),
-        ):
-            return False, "rollout_disabled", {"rollout_pct": int(cfg.high_impact_rollout_pct or 0)}
+    if is_high and not _rollout_enabled(
+        feature_key="ai_ceo_high_impact",
+        tenant_id=str(tenant_id),
+        user_id=str(user_id),
+        percent=int(cfg.high_impact_rollout_pct or 0),
+    ):
+        return False, "rollout_disabled", {"rollout_pct": int(cfg.high_impact_rollout_pct or 0)}
 
     ok, dbg = allow_action(
         policy=BlastRadiusPolicy(max_per_hour=int(cfg.blast_radius_max_per_hour or 0)),
