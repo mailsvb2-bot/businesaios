@@ -14,7 +14,7 @@ def _text(value: object, *, default: str = '') -> str:
 
 
 def _tuple_text(value: object) -> tuple[str, ...]:
-    if isinstance(value, (list, tuple, set)):
+    if isinstance(value, list | tuple | set):
         out = [str(item).strip() for item in value if str(item).strip()]
         return tuple(out)
     text = _text(value)
@@ -258,9 +258,9 @@ class ProviderContractRegistry:
         return {
             'providers': {key: value.as_dict() for key, value in self._manifests.items()},
             'aliases': dict(self._aliases),
-            'request_contracts': sorted(f'{provider}:{op}' for provider, op in self._request_contracts.keys()),
-            'schema_contracts': sorted(f'{provider}:{op}' for provider, op in self._schema_contracts.keys()),
-            'auth_contracts': sorted(self._auth_contracts.keys()),
+            'request_contracts': sorted(f'{provider}:{op}' for provider, op in self._request_contracts),
+            'schema_contracts': sorted(f'{provider}:{op}' for provider, op in self._schema_contracts),
+            'auth_contracts': sorted(self._auth_contracts),
         }
 
 
