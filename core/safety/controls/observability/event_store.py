@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from contextlib import suppress
 import json
+from contextlib import suppress
 from pathlib import Path
 from threading import RLock
 
@@ -12,8 +12,6 @@ from ..safety_supervisor import SafetySupervisor
 from .metrics_export import SafetyMetricsExporter
 
 CANON_SAFETY_EVENT_STORE = True
-
-
 
 
 class JsonlSafetyEventStore:
@@ -39,9 +37,8 @@ class JsonlSafetyEventStore:
             'details': dict(event.details),
             'observed_at': str(event.observed_at),
         }
-        with self._lock:
-            with self._path.open('a', encoding='utf-8') as fh:
-                fh.write(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str) + "\n")
+        with self._lock, self._path.open('a', encoding='utf-8') as fh:
+            fh.write(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str) + "\n")
         if self._metrics is not None:
             with suppress(Exception):
                 self._metrics.record_event(event)
