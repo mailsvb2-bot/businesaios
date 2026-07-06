@@ -39,10 +39,9 @@ def find_second_execution_imports(root: Path) -> list[str]:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module == "scripts.ci.execution":
-                if path.name != "cli.py":
-                    offenders.append(path.relative_to(root).as_posix())
-                    break
+            if isinstance(node, ast.ImportFrom) and node.module == "scripts.ci.execution" and path.name != "cli.py":
+                offenders.append(path.relative_to(root).as_posix())
+                break
     return offenders
 
 
