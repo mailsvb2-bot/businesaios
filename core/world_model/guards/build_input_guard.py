@@ -19,7 +19,7 @@ class BuildInputGuard:
             raise WorldModelIntegrityError("world_model missing channel")
         if not str(build_input.geo).strip():
             raise WorldModelIntegrityError("world_model missing geo")
-        for key in build_input.context.keys():
+        for key in build_input.context:
             lowered = str(key).strip().lower()
             if lowered in FORBIDDEN_DECISION_KEYS:
                 raise WorldModelIntegrityError(f"world_model forbidden decision-like context key={key}")
