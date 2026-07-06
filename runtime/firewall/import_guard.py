@@ -129,6 +129,9 @@ def allow_internal_import():
         yield
 
 
+ALLOW_INTERNAL_IMPORT = allow_internal_import
+
+
 def import_with_integration_permission(name: str) -> ModuleType:
     with integration_import_allowed():
         return __import__(name, fromlist=["*"])
@@ -142,6 +145,7 @@ def assert_import_firewall_installed() -> None:
 
 
 __all__ = [
+    "ALLOW_INTERNAL_IMPORT",
     "FORBIDDEN_MODULE_PREFIXES",
     "FORBIDDEN_PREFIXES",
     "allow_internal_import",
