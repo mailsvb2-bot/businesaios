@@ -24,7 +24,7 @@ def _is_type(v: Any, t: str) -> bool:
     if t == "boolean":
         return isinstance(v, bool)
     if t == "number":
-        return isinstance(v, (int, float))
+        return isinstance(v, int | float)
     if t == "integer":
         return isinstance(v, int) and not isinstance(v, bool)
     return True  # unknown -> do not block
@@ -46,6 +46,5 @@ def validate_action_payload(registry: ActionSchemaRegistry, action: str, payload
 
     props = schema.get("properties", {})
     for k, ks in props.items():
-        if k in payload and isinstance(ks, dict) and "type" in ks:
-            if not _is_type(payload[k], ks["type"]):
-                raise PayloadValidationError(action, f"field {k} must be {ks['type']}")
+        if k in payload and isinstance(ks, dict) and "type" in ks and not _is_type(payload[k], ks["type"]):
+            raise PayloadValidationError(action, f"field {k} must be {ks['type']}")
