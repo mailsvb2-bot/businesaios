@@ -72,7 +72,7 @@ def apply_causal_constraints(*, state: Any, trace: Any, user_id: str, policy: De
             input={},
             output={
                 "schema_version": causal_evidence.get("schema_version"),
-                "keys": sorted([k for k in causal_evidence.keys() if k != "schema_version"]),
+                "keys": sorted([k for k in causal_evidence if k != "schema_version"]),
             },
         )
         pricing_evidence = causal_evidence.get("pricing") if isinstance(causal_evidence.get("pricing"), dict) else None
