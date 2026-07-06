@@ -32,9 +32,7 @@ def _approval_gate_enabled(*, payload: dict[str, Any], meta: dict[str, Any], imp
         return True
     if bool(payload.get("requires_human_approval") or meta.get("requires_human_approval")):
         return True
-    if str(payload.get("external_confirmation_mode") or meta.get("external_confirmation_mode") or "").strip() and bool(payload.get("approval_policy") or meta.get("approval_policy")):
-        return True
-    return False
+    return bool(str(payload.get("external_confirmation_mode") or meta.get("external_confirmation_mode") or "").strip() and (payload.get("approval_policy") or meta.get("approval_policy")))
 
 
 def _build_default_approval_execution_gate() -> ApprovalExecutionGate:
@@ -239,7 +237,7 @@ def _build_actor(*, payload: dict[str, Any], meta: dict[str, Any]) -> ActorConte
 
 
 def _normalize_roles(value: object) -> tuple[RoleId, ...]:
-    if isinstance(value, (list, tuple, set)):
+    if isinstance(value, list | tuple | set):
         raw = tuple(str(item) for item in value)
     else:
         raw = (str(value or "owner"),)

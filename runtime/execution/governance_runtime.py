@@ -31,9 +31,7 @@ def _approval_gate_enabled(*, payload: dict[str, Any], meta: dict[str, Any], imp
         return True
     if bool(payload.get('requires_human_approval') or meta.get('requires_human_approval')):
         return True
-    if str(payload.get('external_confirmation_mode') or meta.get('external_confirmation_mode') or '').strip() and bool(payload.get('approval_policy') or meta.get('approval_policy')):
-        return True
-    return False
+    return bool(str(payload.get('external_confirmation_mode') or meta.get('external_confirmation_mode') or '').strip() and (payload.get('approval_policy') or meta.get('approval_policy')))
 
 def _build_default_approval_execution_gate() -> ApprovalExecutionGate:
     audit_log = PersistentGovernanceAuditLog()
@@ -132,7 +130,7 @@ def _apply_approval_workflow_resolution(*, workflow: Any, approval_decision: App
 
 def _gate_metadata(*, payload: dict[str, Any], meta: dict[str, Any], env: Any, impact: ActionImpact) -> dict[str, object]:
     tags = payload.get('tags', meta.get('tags'))
-    if isinstance(tags, (list, tuple, set, frozenset)):
+    if isinstance(tags, list | tuple | set | frozenset):
         normalized_tags = [str(item).strip() for item in tags if str(item).strip()]
     elif tags is None:
         normalized_tags = []
@@ -502,7 +500,7 @@ def _build_actor(*, payload: dict[str, Any], meta: dict[str, Any], tenant_id: st
 
 def _normalize_roles(value: Any) -> frozenset[RoleId]:
     values: Iterable[Any]
-    if isinstance(value, (list, tuple, set, frozenset)):
+    if isinstance(value, list | tuple | set | frozenset):
         values = value
     elif value is None:
         values = ()

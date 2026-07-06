@@ -31,9 +31,8 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def _validate_catalog(doc: dict[str, Any]) -> None:
-    if "catalog_id" in doc:
-        if not isinstance(doc.get("catalog_id"), str) or not doc["catalog_id"].strip():
-            raise ValueError("BAD_catalog_id")
+    if "catalog_id" in doc and (not isinstance(doc.get("catalog_id"), str) or not doc["catalog_id"].strip()):
+        raise ValueError("BAD_catalog_id")
 
     if "offers" not in doc:
         raise ValueError("MISSING_offers")

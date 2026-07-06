@@ -19,9 +19,8 @@ def main() -> int:
         rel = py.relative_to(root)
         text = py.read_text(encoding="utf-8", errors="ignore")
         for a, b in FORBIDDEN_DEPENDENCIES:
-            if str(rel).startswith(a + "/"):
-                if f"import {b}" in text or f"from {b}" in text:
-                    violations.append(f"{rel}: forbidden dependency from {a} -> {b}")
+            if str(rel).startswith(a + "/") and (f"import {b}" in text or f"from {b}" in text):
+                violations.append(f"{rel}: forbidden dependency from {a} -> {b}")
     if violations:
         print("\n".join(violations))
         return 2

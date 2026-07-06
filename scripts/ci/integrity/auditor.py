@@ -153,7 +153,7 @@ def check_single_decision_core(files: list[Path], spec: dict[str, Any]) -> list[
         if tree is None:
             continue
         for node in ast.walk(tree):
-            if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            if not isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
             if node.name not in executable_names:
                 continue
@@ -312,7 +312,7 @@ def check_import_boundaries(files: list[Path]) -> list[Finding]:
         if not forbidden_terms:
             continue
         for node in ast.walk(tree):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
+            if isinstance(node, ast.Import | ast.ImportFrom):
                 names: list[str] = []
                 if isinstance(node, ast.Import):
                     names = [alias.name for alias in node.names]

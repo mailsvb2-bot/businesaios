@@ -54,13 +54,11 @@ class _TenantAudit(ast.NodeVisitor):
             base = self._base_name(func.value)
             keywords = {kw.arg for kw in node.keywords if kw.arg}
 
-            if attr == 'append_event' and 'tenant_id' not in keywords:
-                if self.relpath not in RAW_EVENTSTORE_APPEND_ALLOWLIST and self._looks_like_event_store_base(base):
-                    self._add(node, 'raw_append_event', f'{base}.append_event(...) without strict tenant_id=')
+            if attr == 'append_event' and 'tenant_id' not in keywords and self.relpath not in RAW_EVENTSTORE_APPEND_ALLOWLIST and self._looks_like_event_store_base(base):
+                self._add(node, 'raw_append_event', f'{base}.append_event(...) without strict tenant_id=')
 
-            if attr in {'iter_events', 'count_events'} and 'tenant_id' not in keywords:
-                if self.relpath not in RAW_EVENTSTORE_READ_ALLOWLIST and self._looks_like_event_store_base(base):
-                    self._add(node, 'raw_iter_events', f'{base}.{attr}(...) without tenant_id=')
+            if attr in {'iter_events', 'count_events'} and 'tenant_id' not in keywords and self.relpath not in RAW_EVENTSTORE_READ_ALLOWLIST and self._looks_like_event_store_base(base):
+                self._add(node, 'raw_iter_events', f'{base}.{attr}(...) without tenant_id=')
 
         self.generic_visit(node)
 
