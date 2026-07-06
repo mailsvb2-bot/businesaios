@@ -12,7 +12,7 @@ def _contains_secret_keys(obj) -> bool:
                 return True
             if _contains_secret_keys(v):
                 return True
-    elif isinstance(obj, (list, tuple)):
+    elif isinstance(obj, list | tuple):
         return any(_contains_secret_keys(x) for x in obj)
     return False
 
