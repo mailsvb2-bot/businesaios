@@ -44,15 +44,13 @@ class AutoDeployGuard:
         env = self._env()
 
         # In production, auto-deploy must be explicitly enabled.
-        if env == "prod" and kind == "deploy":
-            if not env_bool("ENABLE_AUTODEPLOY", False):
-                return AutoDeployVerdict(ok=False, reason="autodeploy_disabled")
+        if env == "prod" and kind == "deploy" and not env_bool("ENABLE_AUTODEPLOY", False):
+            return AutoDeployVerdict(ok=False, reason="autodeploy_disabled")
 
         # Global cooldown (prevents thrashing).
         now_ms = int(time.time() * 1000)
-        if kind == "deploy":
-            if self._last_deploy_ms and (now_ms - self._last_deploy_ms) < int(self._min_interval_s * 1000):
-                return AutoDeployVerdict(ok=False, reason="cooldown")
+        if kind == "deploy" and self._last_deploy_ms and (now_ms - self._last_deploy_ms) < int(self._min_interval_s * 1000):
+            return AutoDeployVerdict(ok=False, reason="cooldown")
 
         # Clamp rollout percentage to a safe maximum.
         pct = proposal.get("rollout_pct", 10)
