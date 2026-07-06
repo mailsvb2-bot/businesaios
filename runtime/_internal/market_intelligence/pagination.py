@@ -68,7 +68,7 @@ class PaginationWindow:
 
 
 def normalize_items(value: object) -> tuple[dict[str, Any], ...]:
-    if isinstance(value, Iterable) and not isinstance(value, (str, bytes, Mapping)):
+    if isinstance(value, Iterable) and not isinstance(value, str | bytes | Mapping):
         return tuple(dict(item) for item in value if isinstance(item, Mapping))
     return ()
 
