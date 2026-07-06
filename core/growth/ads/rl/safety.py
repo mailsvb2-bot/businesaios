@@ -74,9 +74,8 @@ def decide_safety(
         return SafetyVerdict(False, "budget_increase_pct_exceeded")
 
     # Rollout gate: even safe action might be plan-only if user is outside canary bucket.
-    if bool(spec.canary):
-        if not enforce_rollout_pct(rollout_pct=float(spec.rollout_pct), seed=str(rollout_seed), policy=safety_policy):
-            return SafetyVerdict(False, "canary_bucket_blocked")
+    if bool(spec.canary) and not enforce_rollout_pct(rollout_pct=float(spec.rollout_pct), seed=str(rollout_seed), policy=safety_policy):
+        return SafetyVerdict(False, "canary_bucket_blocked")
 
     # Central rollout guard (DecisionCore-level) as extra safety.
     if rollout_guard is not None:
