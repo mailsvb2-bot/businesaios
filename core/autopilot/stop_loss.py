@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Mapping
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -67,11 +68,9 @@ def _format_stop_loss_details(details: dict[str, Any] | None) -> str:
     for k in ("cac_minor", "profit_minor", "spend_minor", "limit", "days"):
         if k in details:
             val = details.get(k)
-            if k in {"cac_minor", "profit_minor", "spend_minor", "limit"} and isinstance(val, (int, float, str)):
-                try:
+            if k in {"cac_minor", "profit_minor", "spend_minor", "limit"} and isinstance(val, int | float | str):
+                with suppress(TypeError, ValueError):
                     val = _fmt_money_minor(val)
-                except (TypeError, ValueError):
-                    pass
             reason_lines.append(f"• {k}: {val}")
 
     # include any other keys deterministically
@@ -98,100 +97,20 @@ def build_stop_loss_plan(
     existing: StopLossState,
     session_patch: dict[str, Any] | None = None,
     callback_query_id: str | None = None,
-    emit_event: bool = True,
-) -> dict[str, Any]:
-    """Build an execute_plan@v1 payload to activate stop-loss.
-
-    It sets user setting autopilot:stop_loss and optionally patches autopilot:session.
-    """
-
-    now_ms = int(time.time() * 1000)
-    st = existing
-    if not st.active:
-        st = build_stop_loss_state_from_verdict(verdict=verdict, now_ms=now_ms)
-
-    steps = []
-    if emit_event:
-        steps.append(
-            {
-                "action": "emit_event@v1",
-                "payload": {
-                    "user_id": str(user_id),
-                    "event_type": "autopilot_stop_loss_triggered@v1",
-                    "payload": {"reason": str(st.reason), "details": dict(st.details or {})},
-                    "source": "autopilot",
-                },
-            }
-        )
-
-    steps.append(
-        {
-            "action": "set_user_setting@v1",
-            "payload": {"user_id": str(user_id), "key": STOP_LOSS_SETTING_KEY, "value": st.to_dict()},
-        }
-    )
-
-    if isinstance(session_patch, dict) and session_patch:
-        steps.append(
-            {
-                "action": "set_user_setting@v1",
-                "payload": {
-                    "user_id": str(user_id),
-                    "key": "autopilot:session",
-                    "value": dict(session_patch),
-                },
-            }
-        )
-
-    msg = (
-        "⚠️ Авто-stop-loss сработал.\n\n"
-        f"Причина: {st.reason}\n"
-        "Автопилот перешёл в режим *аудита* (без изменений).\n\n"
-        "Что делать:\n"
-        "1) Проверь трекинг конверсий/оплат\n"
-        "2) Проверь оффер и цену\n"
-        "3) Если всё ок — сбрось stop-loss в меню Autopilot."
-    )
-
-    steps.append(
-        {
-            "action": "send_message@v1",
-            "payload": {
-                "user_id": str(user_id),
-                "text": msg,
-                "reply_markup": {"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": "autopilot:menu"}]]},
-                "callback_query_id": callback_query_id,
-                "track_event_type": "autopilot_stop_loss_notified@v1",
-                "track_payload": {"reason": str(st.reason)},
-            },
-        }
-    )
-
-    return {"user_id": str(user_id), "steps": steps}
-
-
-def build_clear_stop_loss_plan(*, user_id: str, callback_query_id: str | None = None) -> dict[str, Any]:
-    steps = [
-        {
-            "action": "set_user_setting@v1",
-            "payload": {
-                "user_id": str(user_id),
-                "key": STOP_LOSS_SETTING_KEY,
-                "value": {"active": False, "reason": "", "since_ms": 0},
-            },
-        },
-        {
-            "action": "emit_event@v1",
-            "payload": {"user_id": str(user_id), "event_type": "autopilot_stop_loss_cleared@v1", "payload": {}, "source": "autopilot"},
-        },
-        {
-            "action": "send_message@v1",
-            "payload": {
-                "user_id": str(user_id),
-                "text": "✅ Stop-loss сброшен. Автопилот снова может предлагать изменения.",
-                "reply_markup": {"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": "autopilot:menu"}]]},
-                "callback_query_id": callback_query_id,
-            },
-        },
+) -> list[dict[str, Any]]:
+    state = build_stop_loss_state_from_verdict(verdict=verdict)
+    if existing.active and existing.reason == state.reason:
+        return []
+    payload = {
+        "user_id": str(user_id),
+        "stop_loss": state.to_dict(),
+        "session_patch": dict(session_patch or {}),
+        "reason_text": f"Автопилот остановлен: {state.reason}{_format_stop_loss_details(state.details)}",
+    }
+    actions: list[dict[str, Any]] = [
+        {"action_type": "update_session", "payload": payload},
+        {"action_type": "notify_user", "payload": {"user_id": str(user_id), "text": payload["reason_text"]}},
     ]
-    return {"user_id": str(user_id), "steps": steps}
+    if callback_query_id:
+        actions.append({"action_type": "answer_callback", "payload": {"callback_query_id": callback_query_id, "text": "Автопилот остановлен"}})
+    return actions
