@@ -253,7 +253,7 @@ class ProviderRuntimeFactory:
         for alias, provider in PROVIDER_ALIASES.items():
             self.registry.register_alias(alias, provider)
 
-        for provider_key, entry in PROVIDER_CATALOG.items():
+        for _provider_key, entry in PROVIDER_CATALOG.items():
             manifest = ProviderCapabilityManifest(
                 provider=entry.provider,
                 source_family=entry.source_family,
