@@ -19,7 +19,7 @@ def _safe_dict(value: object) -> dict[str, Any]:
 
 
 def _safe_str_set(values: object) -> set[str]:
-    if not isinstance(values, (list, tuple, set, frozenset)):
+    if not isinstance(values, list | tuple | set | frozenset):
         return set()
     return {_text(value) for value in values if _text(value)}
 
