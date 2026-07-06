@@ -46,7 +46,7 @@ class _SemanticNormalizer(ast.NodeTransformer):
         ast.Constant) -> ast.AST:
         if isinstance(node.value, str):
             return ast.copy_location(ast.Constant(value="__str__"), node)
-        if isinstance(node.value, (int, float, complex)):
+        if isinstance(node.value, int | float | complex):
             return ast.copy_location(ast.Constant(value=0), node)
         return node
 
@@ -101,7 +101,7 @@ def _is_enum_like_class(node:
 
 def _class_method_weight(node:
     ast.ClassDef) -> int:
-    return sum(_statement_weight(item.body) for item in node.body if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)))
+    return sum(_statement_weight(item.body) for item in node.body if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef))
 
 
 def _semantic_hash(node:
@@ -129,7 +129,7 @@ def scan_duplicate_logic(config:
         if not any(token in source.lower() for token in config.duplicate_logic_name_hints):
             continue
         for node in ast.walk(ast.parse(source, filename=str(path))):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and _name_is_interesting(config, node.name) and _statement_weight(node.body) >= 3:
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and _name_is_interesting(config, node.name) and _statement_weight(node.body) >= 3:
                 semantic_hash = _semantic_hash(node)
                 buckets.setdefault(("function", semantic_hash), []).append(DuplicateFragment(relpath, node.lineno, "function", node.name, semantic_hash))
             elif isinstance(node, ast.ClassDef) and _name_is_interesting(config, node.name) and not _is_exception_like_class(node) and not _is_enum_like_class(node) and _class_method_weight(node) >= 4:
