@@ -149,6 +149,7 @@ def _ruff_check() -> tuple[bool, str, dict[str, object]]:
         "ruff_critical_select": list(_CRITICAL_RUFF_SELECT),
         "claims_full_ruff_clean": False,
         "claims_production_ready": False,
+        "targeted_strict_debt_enforced": True,
     }
     if not targets:
         payload["status"] = "blocked"
@@ -171,6 +172,14 @@ def _ruff_check() -> tuple[bool, str, dict[str, object]]:
         return False, "ruff critical baseline failed", payload
 
     payload.update(_targeted_debt_report(targets=targets, config=config))
+    targeted_measured = bool(payload.get("targeted_strict_debt_measured"))
+    targeted_total = int(payload.get("targeted_strict_debt_total") or 0)
+    targeted_clean = targeted_measured and targeted_total == 0
+    payload["targeted_strict_debt_clean"] = targeted_clean
+    if not targeted_clean:
+        payload["status"] = "blocked"
+        payload["violations"] = ["targeted_strict_debt_lock_failed"]
+        return False, "targeted strict ruff debt lock failed", payload
 
     if _strict_ruff_required():
         strict = run_command(_ruff_base_args(targets=targets, config=config), env={"PYTHONNOUSERSITE": "1"}, timeout=180)
@@ -181,20 +190,11 @@ def _ruff_check() -> tuple[bool, str, dict[str, object]]:
             payload["violations"] = ["full_ruff_strict_failed"]
             return False, "full ruff strict check failed", payload
         payload["status"] = "ready"
-        return True, "ruff critical baseline and strict full check passed", payload
+        return True, "ruff critical baseline, targeted strict lock, and strict full check passed", payload
 
-    targeted_measured = bool(payload.get("targeted_strict_debt_measured"))
-    targeted_total = int(payload.get("targeted_strict_debt_total") or 0)
-    if targeted_measured and targeted_total == 0:
-        payload["status"] = "ready_with_unenforced_full_ruff"
-        payload["targeted_strict_debt_clean"] = True
-        payload["warnings"] = ["full_ruff_strict_not_enforced"]
-        return True, "ruff critical baseline passed; targeted strict debt clean; full ruff strict check is not enforced", payload
-
-    payload["status"] = "ready_with_debt"
-    payload["targeted_strict_debt_clean"] = False
-    payload["warnings"] = ["full_ruff_strict_not_enforced", "legacy_ruff_debt_present_or_unmeasured"]
-    return True, "ruff critical baseline passed; targeted strict debt remains or was not measured", payload
+    payload["status"] = "ready_with_unenforced_full_ruff"
+    payload["warnings"] = ["full_ruff_strict_not_enforced"]
+    return True, "ruff critical baseline passed; targeted strict debt lock passed; full ruff strict check is not enforced", payload
 
 
 def run() -> tuple[bool, str]:
