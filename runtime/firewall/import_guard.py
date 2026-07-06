@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Runtime import firewall for sealed integration internals.
 
 This guard prevents production code from importing sealed internal integration
@@ -8,13 +6,14 @@ boundary. The goal is to keep external effects routed through typed actions,
 verified receipts, audit logs and runtime handlers.
 """
 
+from __future__ import annotations
+
 import builtins
 import inspect
 import os
 from contextlib import contextmanager
 from contextvars import ContextVar
 from types import ModuleType
-from typing import Any
 
 FORBIDDEN_PREFIXES = (
     "interfaces.payment.yookassa",
@@ -42,6 +41,7 @@ ALLOWED_CALLERS = {
 }
 
 FORBIDDEN_MODULE_PREFIXES = FORBIDDEN_PREFIXES
+
 
 def _env_enabled() -> bool:
     return os.getenv("BUSINESAIOS_DISABLE_IMPORT_FIREWALL") not in {"1", "true", "True"}
@@ -122,6 +122,13 @@ def integration_import_allowed():
         _token.reset(t)
 
 
+@contextmanager
+def allow_internal_import():
+    """Backward-compatible runtime-internal import permission context."""
+    with integration_import_allowed():
+        yield
+
+
 def import_with_integration_permission(name: str) -> ModuleType:
     with integration_import_allowed():
         return __import__(name, fromlist=["*"])
@@ -137,6 +144,7 @@ def assert_import_firewall_installed() -> None:
 __all__ = [
     "FORBIDDEN_MODULE_PREFIXES",
     "FORBIDDEN_PREFIXES",
+    "allow_internal_import",
     "assert_import_firewall_installed",
     "guarded_import",
     "import_with_integration_permission",
