@@ -8,7 +8,7 @@ from runtime.messaging.channel_normalizer import normalize_channel
 
 
 def _normalize_many(value) -> tuple[str, ...]:
-    if not isinstance(value, (list, tuple, set)):
+    if not isinstance(value, list | tuple | set):
         return ()
     out: list[str] = []
     for item in value:
