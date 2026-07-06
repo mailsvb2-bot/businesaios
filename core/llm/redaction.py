@@ -43,6 +43,6 @@ def safe_metadata(meta: dict) -> dict:
     for k, v in (meta or {}).items():
         if str(k).lower() in {"user_text", "prompt", "messages", "email", "phone", "card"}:
             continue
-        if isinstance(v, (str, int, float, bool)) and len(str(v)) <= 256:
+        if isinstance(v, str | int | float | bool) and len(str(v)) <= 256:
             allow[k] = v
     return allow
