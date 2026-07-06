@@ -35,7 +35,7 @@ class RemediationWorkflowAssembler:
             except Exception:
                 tree = None
             if tree is not None:
-                imports = sum(1 for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom)))
+                imports = sum(1 for node in ast.walk(tree) if isinstance(node, ast.Import | ast.ImportFrom))
         python_lines = sum(1 for line in text.splitlines() if line.strip())
         return {'python_lines': python_lines, 'imports': imports}
 
