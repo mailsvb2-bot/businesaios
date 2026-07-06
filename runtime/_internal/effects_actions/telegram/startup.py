@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 
 from runtime._internal.effects_clients.http_client import http_json as _http_json
 from runtime._internal.effects_clients.telegram_startup import classify_startup
@@ -39,7 +40,8 @@ def telegram_self_check_effect(self, *, token: str | None = None) -> dict:
         source = env_str("TELEGRAM_TOKEN_SOURCE", "unknown").strip() or "unknown"
         line = f"[telegram] OK: token valid (source={source}), webhook off, polling ready"
         try:
-            print(line, flush=True)
+            sys.stdout.write(line + "\n")
+            sys.stdout.flush()
         except Exception:
             swallow(__name__, 'runtime/_internal/_effects_impl.py')
         logging.getLogger(__name__).info(line)
