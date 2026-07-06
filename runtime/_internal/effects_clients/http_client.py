@@ -30,7 +30,7 @@ def safe_result(obj: Any) -> Any:
     """Avoid huge/unsafe payloads in event log."""
     if obj is None:
         return None
-    if isinstance(obj, (str, int, float, bool)):
+    if isinstance(obj, str | int | float | bool):
         return obj
     if isinstance(obj, dict):
         out: dict[str, Any] = {}
@@ -47,7 +47,7 @@ def _query_items(params: Mapping[str, Any] | None) -> list[tuple[str, Any]]:
         if value is None:
             continue
         name = str(key)
-        if isinstance(value, Iterable) and not isinstance(value, (str, bytes, bytearray, Mapping)):
+        if isinstance(value, Iterable) and not isinstance(value, str | bytes | bytearray | Mapping):
             for item in value:
                 if item is not None:
                     items.append((name, item))
