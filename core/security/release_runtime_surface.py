@@ -97,9 +97,7 @@ def is_runtime_release_excluded(rel: str, path: Path) -> bool:
         return True
     if path.suffix in RUNTIME_RELEASE_EXCLUDE_SUFFIXES:
         return True
-    if _matches_glob(normalized):
-        return True
-    return False
+    return bool(_matches_glob(normalized))
 
 
 
