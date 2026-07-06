@@ -168,6 +168,12 @@ def finalize_recovered_outcome(*, executor: Any, env: Any, reason: str, backend_
     }
 
 
+def finalize_terminal_recovery_outcome(*, executor: Any, env: Any, reason: str, backend_name: str = "runtime_recovery_terminal") -> dict[str, Any]:
+    """Finalize a recovery item that is intentionally terminal without re-execution."""
+
+    return finalize_recovered_outcome(executor=executor, env=env, reason=reason, backend_name=backend_name)
+
+
 def finalize_failed_outcome(*, executor: Any, env: Any, reason: str, output: Mapping[str, Any] | None = None) -> dict[str, Any]:
     decision = getattr(env, "decision", None)
     decision_id, tenant_id = _decision_identity(env)
@@ -218,3 +224,9 @@ def finalize_failed_outcome(*, executor: Any, env: Any, reason: str, output: Map
             "reason": str(reason),
         },
     }
+
+
+def quarantine_recovery_outcome(*, executor: Any, env: Any, reason: str, output: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """Move an unrecoverable recovery item to the canonical dead-letter path."""
+
+    return finalize_failed_outcome(executor=executor, env=env, reason=reason, output=output)
