@@ -22,6 +22,6 @@ def parse_operator_catalog(data: Mapping[str, Any]) -> OperatorCatalog:
         payload[key] = {
             str(k): float(v)
             for k, v in raw.items()
-            if isinstance(v, (int, float))
+            if isinstance(v, int | float)
         }
     return catalog_from_raw(payload)
