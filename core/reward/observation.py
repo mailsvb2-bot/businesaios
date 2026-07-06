@@ -55,9 +55,8 @@ def finalize_reward(*, engine: Any, env: Any, execution_output: Any, reward: flo
         act = str(env.decision.action)
         if act == "grant_access@v1":
             r += 10.0
-        if act == "reconcile_payments@v1" and isinstance(execution_output, dict):
-            if str(execution_output.get("status")) in {"succeeded", "payment_succeeded"}:
-                r += 20.0
+        if act == "reconcile_payments@v1" and isinstance(execution_output, dict) and str(execution_output.get("status")) in {"succeeded", "payment_succeeded"}:
+            r += 20.0
     except Exception:
         swallow(__name__, 'core/reward/observation.py')
     if r > engine._max_abs_reward:
