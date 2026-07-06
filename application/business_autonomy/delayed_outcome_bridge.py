@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-from contextlib import suppress
 from collections.abc import Mapping
+from contextlib import suppress
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
