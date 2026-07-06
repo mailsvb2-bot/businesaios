@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 import json
 from pathlib import Path
 from threading import RLock
@@ -42,17 +43,13 @@ class JsonlSafetyEventStore:
             with self._path.open('a', encoding='utf-8') as fh:
                 fh.write(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str) + "\n")
         if self._metrics is not None:
-            try:
+            with suppress(Exception):
                 self._metrics.record_event(event)
-            except Exception:
-                pass
         if self._supervisor is not None:
-            try:
+            with suppress(Exception):
                 self._supervisor.record_intervention_ratio(tenant_id=str(event.tenant_id), ratio=1.0 if str(event.status) in {'block', 'review'} else 0.0)
                 if str(event.stage) == 'outcome':
                     self._supervisor.record_failure_ratio(tenant_id=str(event.tenant_id), ratio=0.0 if str(event.status) == 'success' else 1.0)
-            except Exception:
-                pass
         return event
 
 
