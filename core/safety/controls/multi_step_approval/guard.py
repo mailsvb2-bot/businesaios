@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from datetime import UTC, datetime
 
 from ..action_catalog import ActionSafetyCatalog, build_default_action_catalog
@@ -30,10 +31,8 @@ class MultiStepApprovalGuard:
             return ControlDecision(control=self.control_name, status=ControlStatus.ALLOW, reason="approval_not_required")
         action_id = canonical_action_id(action=ctx.action, tenant_id=ctx.tenant_id, payload=payload)
         ticket = self._escalation.apply(self._repository.get(action_id), base_required=self._policy.min_approvals)
-        try:
+        with suppress(Exception):
             self._repository.put(ticket)
-        except Exception:
-            pass
         if ticket.state is ApprovalWorkflowState.REJECTED:
             return ControlDecision(control=self.control_name, status=ControlStatus.BLOCK, reason='approval_rejected', details={'action_id': action_id, 'rejections': list(ticket.rejections)})
         if ticket.state is ApprovalWorkflowState.SUPERSEDED:
