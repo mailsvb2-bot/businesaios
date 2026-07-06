@@ -150,16 +150,15 @@ def dispatch_effects(*, executor: Any, env: Any, depth: int, enqueue: bool):
     emit_effect_window(executor._events, opened=True, decision=env.decision)
     set_effect_capability(executor._cap_token)
     try:
-        with correlation_key_scope(str(ck) if ck else None):
-            with span_with_sla(
-                event_log=executor._events,
-                stage="handler",
-                user_id=(env.decision.payload or {}).get("user_id", "unknown") if isinstance(env.decision.payload, dict) else "unknown",
-                decision_id=str(env.decision.decision_id),
-                correlation_id=str(env.decision.correlation_id),
-                correlation_key=str(ck) if ck else None,
-            ):
-                out = executor._handlers.dispatch(env.decision.action, env.decision.payload, executor._effects, env)
+        with correlation_key_scope(str(ck) if ck else None), span_with_sla(
+            event_log=executor._events,
+            stage="handler",
+            user_id=(env.decision.payload or {}).get("user_id", "unknown") if isinstance(env.decision.payload, dict) else "unknown",
+            decision_id=str(env.decision.decision_id),
+            correlation_id=str(env.decision.correlation_id),
+            correlation_key=str(ck) if ck else None,
+        ):
+            out = executor._handlers.dispatch(env.decision.action, env.decision.payload, executor._effects, env)
     except Exception as exc:
         _mark_execution_failed(executor=executor, env=env, reason=f"dispatch_exception:{type(exc).__name__}")
         _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_dispatch_failed", payload={"error_type": type(exc).__name__})
