@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol
+
 from runtime.bootstrap.bootstrap_contract import BootstrapEnvironment
 from runtime.bootstrap.bootstrap_lock import BootstrapLock
 from runtime.bootstrap.runtime_builder import build_runtime

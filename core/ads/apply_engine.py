@@ -15,6 +15,7 @@ core.ads.apply.* modules.
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from core.ads.apply.contract import AdsApplyRequest, AdsApplyResult
 from core.ads.apply.limits import AdsApplyLimits
 from core.ads.apply_engine_execution import build_dry_run_result, perform_apply_flow

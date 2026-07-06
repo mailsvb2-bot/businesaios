@@ -16,13 +16,15 @@ replays a deterministic action (price point).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterable
+
 from config.pricing_retention_policy import (
     DEFAULT_PRICING_OFF_POLICY_DEFAULTS,
     PricingOffPolicyDefaults,
 )
+
 
 @dataclass(frozen=True)
 class IPSEstimate:

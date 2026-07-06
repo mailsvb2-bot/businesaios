@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-
-
 from kernel.decision_space import DecisionSpace
 
 CANON_KERNEL_DECISION_CONTRACT_COMPAT = True

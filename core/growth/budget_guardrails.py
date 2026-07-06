@@ -5,21 +5,17 @@ Even when Ads Connector is enabled, budget is enforced here.
 
 from __future__ import annotations
 
-
-from dataclasses import dataclass
-from typing import Any
 from collections.abc import Mapping
+from dataclasses import dataclass
+from dataclasses import dataclass as _dc
+from datetime import UTC, datetime
+from typing import Any, Protocol
 
 from config.growth_budget_guardrails_policy import (
     DEFAULT_GROWTH_BUDGET_GUARDRAILS_POLICY,
     GrowthBudgetGuardrailsPolicy,
 )
 
-
-
-from dataclasses import dataclass as _dc
-from datetime import UTC, datetime
-from typing import Protocol
 
 @dataclass(frozen=True)
 class BudgetPolicy:

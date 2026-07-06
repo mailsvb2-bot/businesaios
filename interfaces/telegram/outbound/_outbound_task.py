@@ -5,9 +5,9 @@ Single responsibility: define the data shape for an outbound Telegram task.
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
 
 PriorityArg = int | str
 

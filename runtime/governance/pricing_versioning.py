@@ -20,8 +20,10 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
+
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_path, env_str
+
 
 def _stable_json(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -29,7 +31,7 @@ def _stable_json(obj: Any) -> str:
 
 def compute_pricing_fingerprint(pricing_config: Any) -> str:
     if hasattr(pricing_config, "__dict__"):
-        data = dict(getattr(pricing_config, "__dict__") or {})
+        data = dict(pricing_config.__dict__ or {})
     else:
         try:
             data = asdict(pricing_config)  # type: ignore[arg-type]

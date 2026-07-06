@@ -17,14 +17,16 @@ Products may override via configuration, but must keep bounds.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping
+
 from config.behavior_impulse_policy import (
     DEFAULT_IMPULSE_BOUNDS_POLICY,
     BehaviorImpulsePolicy,
 )
 from core.retention.event_types import normalize_event_type
+
 
 @dataclass(frozen=True)
 class Impulse:

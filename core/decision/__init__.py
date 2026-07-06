@@ -8,7 +8,6 @@ initialization cycle.
 
 from __future__ import annotations
 
-
 import sys
 from importlib import import_module
 from typing import Any

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping, Sequence
 
 from advisory.revenue_os import PaywallVariant, PricePoint, RevenueOSFacade, RevenueSnapshot, SubscriptionPlan
 from runtime.monetization.contracts import utc_now

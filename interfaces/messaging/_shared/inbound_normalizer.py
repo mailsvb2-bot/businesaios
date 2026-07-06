@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from interfaces.messaging._shared.runner_helpers import normalize_inbound_dict
 

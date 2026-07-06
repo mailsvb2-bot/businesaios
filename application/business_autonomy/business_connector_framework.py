@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
-from collections.abc import Mapping, Sequence
 
 from application.business_autonomy.channel_adapter_registry import TypedChannelAdapterRegistry
 from application.business_autonomy.channel_contracts import ChannelCapabilityDescriptor, ChannelKind

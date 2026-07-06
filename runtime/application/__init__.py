@@ -9,7 +9,6 @@ preserve ABI without creating a second owner.
 
 from __future__ import annotations
 
-
 import importlib
 import sys
 from typing import Any

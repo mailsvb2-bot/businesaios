@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping
 
 from application.business_autonomy.channel_adapter_registry import TypedChannelAdapterRegistry
 from application.business_autonomy.channel_backed_adapter import ChannelBackedBusinessAdapter
@@ -130,8 +130,8 @@ def _identity_from_onboarding_request(request: BusinessOnboardingRequest) -> Cha
     channel_kind = _coerce_channel_kind(getattr(request, 'channel_kind', 'chatbot'))
     adapter_key = str(getattr(request, 'adapter_key', '') or f"{_raw_channel_kind(getattr(request, 'channel_kind', channel_kind))}.default")
     return ChannelIdentity(
-        business_id=str(getattr(request, 'business_id')),
-        tenant_id=str(getattr(request, 'tenant_id')),
+        business_id=str(request.business_id),
+        tenant_id=str(request.tenant_id),
         channel_kind=channel_kind,
         adapter_key=adapter_key,
         external_ref=str(getattr(request, 'external_ref', '') or adapter_key),

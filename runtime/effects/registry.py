@@ -5,10 +5,8 @@ This file groups effect handlers by domain modules.
 
 from __future__ import annotations
 
-
+from collections.abc import Callable, Mapping
 from types import MappingProxyType
-from collections.abc import Callable
-from collections.abc import Mapping
 
 ActionHandler = Callable[..., object]
 

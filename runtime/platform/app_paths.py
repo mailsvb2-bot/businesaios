@@ -6,7 +6,6 @@ fallback for older single-product installs.
 
 from __future__ import annotations
 
-
 from pathlib import Path
 
 from runtime.platform.config.env_flags import env_str

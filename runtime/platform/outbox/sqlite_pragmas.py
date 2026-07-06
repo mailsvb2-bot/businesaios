@@ -10,7 +10,6 @@ This module is safe to import from platform_layer/* (allowed by architecture tes
 
 from __future__ import annotations
 
-
 import sqlite3
 
 from observability.platform.observability.silent import swallow

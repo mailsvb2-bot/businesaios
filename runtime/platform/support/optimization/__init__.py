@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-
 from runtime.platform.support.optimization.promotion_decision import PromotionDecision
 
 CANONICAL_OPTIMIZATION_PUBLIC_MODULE = "runtime.platform.support.optimization"

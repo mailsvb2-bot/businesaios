@@ -7,6 +7,7 @@ from typing import Any
 
 from runtime.platform.security_sqlite_backends.common import _connect, _ensure_parent
 
+
 class SQLiteReencryptionProgressLedgerBackend:
     def __init__(self, db_path: str, event_cls: type) -> None:
         self._db_path = str(db_path)

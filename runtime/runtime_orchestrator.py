@@ -12,7 +12,6 @@ from runtime.readiness import Readiness
 from runtime.runtime_state import RuntimeState
 from shared.registry import ComponentRegistry, ServiceRegistry
 
-
 CANON_RUNTIME_ROOT_READINESS_OWNER = True
 CANON_RUNTIME_ROOT_NO_ASSEMBLY = True
 CANON_RUNTIME_ROOT_NO_DECISION_LOGIC = True

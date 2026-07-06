@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from runtime.canon import CANONICAL_DECISION_CORE_MODULE
 
 ARCHITECTURE_NAME = "BUSINESAIOS RL Support Constitution"

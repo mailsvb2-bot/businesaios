@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 
 from config.experiments_defaults import DEFAULT_EXPERIMENT_DEFAULTS
 from core.experiments.enums import (

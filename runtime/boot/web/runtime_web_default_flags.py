@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from runtime.boot.web.observability_boot_plan import MessagingPolicyObservabilityBootFlags
 
 CANON_BOOT_WIRING_ONLY = True

@@ -24,7 +24,7 @@ def build_snapshot_from_fragments(*, tenant_id: str, business_id: str, scope_typ
         elif aggregation_mode == 'cost_primary':
             derived_spend_total += int(getattr(fragment, 'cost_total_minor', 0) or 0)
             if derived_cac_minor is None and getattr(fragment, 'unit_cost_minor', None) is not None:
-                derived_cac_minor = int(getattr(fragment, 'unit_cost_minor'))
+                derived_cac_minor = int(fragment.unit_cost_minor)
         issues.extend(str(item) for item in fragment.issues)
         ready = ready and bool(fragment.ready_for_export)
     if corrected < booked:

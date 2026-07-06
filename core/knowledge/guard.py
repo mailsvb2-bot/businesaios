@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from .contracts import KnowledgeGuard as KnowledgeGuardContract
 from .guards.stale_memory_guard import StaleMemoryGuard

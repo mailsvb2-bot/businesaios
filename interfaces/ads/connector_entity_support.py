@@ -7,8 +7,9 @@ connector call sites.
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Sequence
+from typing import Any
+
 from .base import AdsObjectRef, AdsPlatform, Campaign, MetricPoint
 from .connector_mapping_support import (
     parse_metric_day,
@@ -17,6 +18,7 @@ from .connector_mapping_support import (
     resolve_first_present,
 )
 from .connector_shared import as_float, as_int, as_optional_float, as_optional_int, safe_ratio
+
 
 def build_campaign_from_row(
     *,

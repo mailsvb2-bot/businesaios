@@ -13,7 +13,7 @@ def iter_events(event_log: Any):
     if hasattr(store, "iter_events"):
         return store.iter_events(tenant_id=str(event_log._tenant.tenant_id), start_ms=0, end_ms=2**63 - 1)
     if hasattr(store, "_events"):
-        return iter(getattr(store, "_events"))
+        return iter(store._events)
     return iter(store)
 
 

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Iterable, Sequence
-
+from dataclasses import dataclass
 
 from application.decisioning.candidate_space import build_candidate_space
 

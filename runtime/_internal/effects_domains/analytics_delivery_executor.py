@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from runtime._internal.effects_domains.analytics_delivery import build_analytics_webhook_effect
 from runtime._internal.http_transport import sync_post_json

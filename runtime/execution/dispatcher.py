@@ -5,12 +5,10 @@ Keeps RuntimeExecutor small and avoids hidden centers of gravity.
 
 from __future__ import annotations
 
-
 from typing import Any
 
 from runtime.platform.config.env_flags import env_str
 from runtime.security.capability_gate import clear_effect_capability, set_effect_capability
-
 
 _MISSING_BOT_TOKEN = "_".join(("TELEGRAM", "BOT", "TOKEN", "MISSING"))
 _OFFLINE_EFFECT_MARKERS = {

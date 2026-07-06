@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from contextlib import ExitStack
 from typing import Any
+
 from bootstrap.failure_policy import resolve_optional_boot_component
 
 CANON_BOOT_WIRING_ONLY = True

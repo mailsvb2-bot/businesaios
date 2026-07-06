@@ -13,5 +13,5 @@ def resolve_capability_telemetry_updater(runtime_obj) -> MessagingCapabilityTele
             registry=resolve_channel_health_registry(runtime_obj),
         )
         with suppress(Exception):
-            setattr(runtime_obj, 'messaging_capability_telemetry_updater', updater)
+            runtime_obj.messaging_capability_telemetry_updater = updater
     return updater

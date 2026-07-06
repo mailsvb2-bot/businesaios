@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Callable
-from collections.abc import Mapping
 
 from execution.market_intelligence_loop import MarketIntelligenceLoop
 from execution.market_intelligence_orchestration import MarketIntelligenceOrchestration, SyncSchedule

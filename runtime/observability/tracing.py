@@ -8,11 +8,10 @@ Goals:
 
 from __future__ import annotations
 
-
 import contextvars
+from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
-from collections.abc import Iterator
 
 from runtime.observability.error_handling import swallow
 from runtime.observability.perf import Span, emit_sla_violation

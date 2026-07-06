@@ -11,12 +11,14 @@ but it strongly reduces accidental bypasses.
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from runtime.firewall.process_guard import (
     clear_effect_capability,
     require_effect_capability,
     set_effect_capability,
 )
 from runtime.ports.effects import EffectsPort
+
 
 @dataclass
 class GuardedEffectsPort(EffectsPort):

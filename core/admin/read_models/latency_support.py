@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from core.admin.read_models.common_support import resolve_now_ms
 
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol
-from collections.abc import Iterable
 
 from config.ads_aggregates_policy import DEFAULT_ADS_AGGREGATES_POLICY, AdsAggregatesPolicy
 

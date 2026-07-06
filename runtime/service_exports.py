@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from runtime.application.contracts import RuntimeServiceExports
 
-
 CANON_COMPAT_SHIM = True
 
 __all__ = ["CANON_COMPAT_SHIM", "RuntimeServiceExports"]

@@ -37,5 +37,7 @@ from .click_economics_bridge import (
     build_click_economics_truth_fragment,
     build_click_economics_truth_snapshot_from_client_outcome,
 )
-from .cross_domain_reconciliation import build_cross_domain_reconciliation_snapshot as build_cross_domain_reconciliation_snapshot
+from .cross_domain_reconciliation import (
+    build_cross_domain_reconciliation_snapshot as build_cross_domain_reconciliation_snapshot,
+)
 from .spend_bridge import build_spend_truth_fragment, build_spend_truth_snapshot_from_client_outcome

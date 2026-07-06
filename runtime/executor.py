@@ -16,8 +16,6 @@ from __future__ import annotations
 # Historical entrypoint bundle markers retained for arch-locks:
 # build_executor_entrypoint_bundle(
 # entrypoint_bundle.run(executor=self, env=env)
-
-
 import logging
 import os
 from collections.abc import Mapping
@@ -30,7 +28,11 @@ from governance.economic_layer import EconomicAutonomyLayer
 from governance.time_scale import TimeScale
 from runtime._internal.economic_execution_contract import (
     SealedEconomicExecutionContract as SealedEconomicExecutionContract,
+)
+from runtime._internal.economic_execution_contract import (
     build_click_provider_dispatch_execution_contract as build_click_provider_dispatch_execution_contract,
+)
+from runtime._internal.economic_execution_contract import (
     build_spend_runtime_execution_contract as build_spend_runtime_execution_contract,
 )
 from runtime.decision import DecisionEnvelope

@@ -13,6 +13,7 @@ from __future__ import annotations
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
+
 from core.tenancy.normalization import require_tenant_id
 from runtime.queue import _sqlite_job_store_terminal_methods as _sqlite_job_store_terminal_methods
 from runtime.queue._sqlite_job_store_claims import (

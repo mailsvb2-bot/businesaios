@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 
 from core.behavior.adapters.decisioncore_adapter import build_decisioncore_behavior_payload
 from core.behavior.assemblers.org_field_assembler import assemble_org_field

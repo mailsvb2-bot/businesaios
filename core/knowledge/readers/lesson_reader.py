@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from ..contracts import LessonReader as LessonReaderContract
 from ..contracts import LessonRepository

@@ -9,9 +9,9 @@ logic or alternate execution workflow.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from types import SimpleNamespace
 from typing import Any
-from collections.abc import Iterable
 
 from runtime.execution.executor_commit import (
     _decision_tenant_id,

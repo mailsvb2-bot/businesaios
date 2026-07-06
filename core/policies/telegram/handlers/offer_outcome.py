@@ -14,6 +14,7 @@ from core.policies.telegram.helpers import ProposedAction
 from core.tenancy.normalization import normalize_tenant_id_or_unknown
 from core.ux.telegram_keyboards import kb_main
 
+
 def handle_offer_outcome(
     ctx: TelegramCtx,
     *,

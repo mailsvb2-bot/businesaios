@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Iterable
+from typing import Any
 
 from contracts.behavior_graph import Edge, EdgeType, Node, NodeType
 from core.behavior_graph.event_mapping import map_events

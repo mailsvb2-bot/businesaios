@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-
 import logging
 from typing import Any
+
 from runtime.platform.config.env_flags import env_bool, env_float, env_int
 
 CANON_BOOT_WIRING_ONLY = True

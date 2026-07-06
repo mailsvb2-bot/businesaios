@@ -6,7 +6,6 @@ caller asks for them, while the historical yaml_loader alias remains available.
 
 from __future__ import annotations
 
-
 import sys
 from importlib import import_module
 from typing import Any
@@ -29,7 +28,7 @@ def _install_config_aliases() -> None:
     target_module = import_module("config.yaml_loader_shared")
     qualified_name = f"{__name__}.yaml_loader"
     sys.modules.setdefault(qualified_name, target_module)
-    setattr(package, "yaml_loader", target_module)
+    package.yaml_loader = target_module
 
 
 def __getattr__(name: str) -> Any:

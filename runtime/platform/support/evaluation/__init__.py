@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Protocol
-from collections.abc import Iterable, Mapping
 
 from runtime.platform.support.contracts.evaluation import EvaluationResult
 

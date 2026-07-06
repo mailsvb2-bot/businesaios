@@ -12,6 +12,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+
 def extract_telegram_user_id(update: dict) -> int | None:
     """Extract Telegram sender user id from update (best-effort).
 

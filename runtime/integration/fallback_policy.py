@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
-
-
-from collections.abc import Mapping
 from runtime.market.market_snapshot import MarketSnapshot
 from runtime.state import apply_synthesized_world_view
+
 
 @dataclass(frozen=True)
 class FallbackPolicy:

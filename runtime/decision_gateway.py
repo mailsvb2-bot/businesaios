@@ -7,7 +7,6 @@ Historical helper APIs remain available as transitional ABI only.
 
 from __future__ import annotations
 
-
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any

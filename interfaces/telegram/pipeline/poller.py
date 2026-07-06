@@ -6,7 +6,6 @@ No SDK or network imports live here.
 
 from __future__ import annotations
 
-
 import logging
 import time
 from dataclasses import dataclass

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import atexit
 from dataclasses import dataclass
+
 from bootstrap.logging_setup import setup_logging
 from runtime.bootstrap_process import apply_process_hygiene, maybe_disable_singleton_lock_in_dev_test
 from runtime.bootstrap_prod_guards import (

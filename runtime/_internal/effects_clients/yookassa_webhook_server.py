@@ -10,9 +10,11 @@ import hmac
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
+
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_str
 from runtime.tenancy import normalize_tenant_id
+
 
 def _extract_webhook_tenant_id(raw: dict[str, Any]) -> str:
     obj = raw.get("object") if isinstance(raw.get("object"), dict) else {}

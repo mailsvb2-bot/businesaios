@@ -7,7 +7,7 @@ No API changes to EffectsPort.
 from __future__ import annotations
 
 from typing import Any
-from runtime.observability.telemetry import CANON_RUNTIME_TELEMETRY_OWNER as _CANON_RUNTIME_TELEMETRY_OWNER
+
 from runtime._internal.effect_types import EffectActionType
 from runtime._internal.effects_actions.telegram.media import send_audio_effect
 from runtime._internal.effects_actions.telegram.messaging import send_message_effect
@@ -21,6 +21,7 @@ from runtime._internal.effects_actions.telegram_actions_transport import (
     send_chat_action_effect,
     send_message_transport_effect,
 )
+from runtime.observability.telemetry import CANON_RUNTIME_TELEMETRY_OWNER as _CANON_RUNTIME_TELEMETRY_OWNER
 
 CANON_RUNTIME_OBSERVABILITY_OWNER = _CANON_RUNTIME_TELEMETRY_OWNER
 

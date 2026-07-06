@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+
 @dataclass(frozen=True)
 class OfferWindow:
     day_from: int

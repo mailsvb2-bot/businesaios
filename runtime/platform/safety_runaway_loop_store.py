@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from sqlite3 import Connection
-from collections.abc import Iterator
 
 from runtime.platform.safety_sqlite_migrations import SafetySqliteMigrator, SchemaMigrationPlan
 

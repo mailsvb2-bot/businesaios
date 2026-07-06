@@ -16,6 +16,7 @@ from core.policies.telegram.handlers.admin.pricing import handle_pricing
 from core.policies.telegram.handlers.admin.roles_perms import handle_roles_perms
 from core.policies.telegram.helpers import ProposedAction
 
+
 def _has_perm(ctx: TelegramCtx, perm: str) -> bool:
     if bool(getattr(ctx, "is_superadmin", False)):
         return True

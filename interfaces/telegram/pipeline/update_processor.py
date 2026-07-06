@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
+
 from core.behavior.behavioral_state_builder import BehavioralStateBuilder
 from core.observability.perf import Span
 from interfaces.telegram.parsing.telegram_context import build_context

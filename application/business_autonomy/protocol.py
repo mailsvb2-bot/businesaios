@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Protocol
 from collections.abc import Sequence
+from typing import Protocol
 
 from application.business_autonomy.contracts import (
     BusinessCapability,

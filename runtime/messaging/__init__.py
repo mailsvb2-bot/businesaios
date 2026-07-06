@@ -7,13 +7,10 @@ without changing the exposed runtime behavior.
 
 from __future__ import annotations
 
-
 from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.messaging.channel_spec import ChannelSpec
-
-
-
 from runtime.messaging.inbound_to_world_state import map_inbound_to_world_state
+
 
 def _spec(key: str, family: str, env_prefix: str, default_mode: str, delivery_backend: str) -> ChannelSpec:
     return ChannelSpec(key, family, env_prefix, default_mode, delivery_backend)

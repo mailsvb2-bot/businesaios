@@ -12,6 +12,7 @@ import uuid
 from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import Any
+
 from core.ai.decision import Decision
 from kernel.decision_crypto import signed_envelope_from_decision
 from runtime.wiring import StorageConfig, build_durable_stores, describe_storage_readiness

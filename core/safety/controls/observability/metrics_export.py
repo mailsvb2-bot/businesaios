@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from observability.tenant_metrics_registry import TenantMetricsRegistry
-
 from core.safety.controls.observability.contracts import SafetyEvent
+from observability.tenant_metrics_registry import TenantMetricsRegistry
 
 CANON_SAFETY_METRICS_EXPORT = True
 

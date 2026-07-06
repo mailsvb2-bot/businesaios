@@ -112,7 +112,7 @@ class AutonomyDecisionStep:
             "correlation_id": str(envelope.decision.correlation_id or ""),
             "objective_name": "profit_adjusted_growth",
         }
-        return getattr(executable_action_contract, "ExecutableAction")(**action_payload)
+        return executable_action_contract.ExecutableAction(**action_payload)
 
     def _should_enforce_capability_plan(self) -> bool:
         executor = getattr(self._contract, '_executor', None)

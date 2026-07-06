@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
-from collections.abc import Mapping
 
 from config.config_versioning import ConfigVersion
 

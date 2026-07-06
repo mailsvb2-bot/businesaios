@@ -13,10 +13,9 @@ This adapter is used by core/privacy services via dependency injection.
 
 from __future__ import annotations
 
-
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterable
 
 _PLACEHOLDER_TENANTS = {"", "default", "legacy", "none", "null"}
 

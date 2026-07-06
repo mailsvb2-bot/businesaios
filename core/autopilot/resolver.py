@@ -8,9 +8,11 @@ Source of truth:
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
+
 from core.autopilot.loader import load_autopilot_contract_from_env
+
 
 def resolve_autopilot_contract(*, product: Mapping[str, Any] | None, tenant_id: str) -> Any:
     ref = ""

@@ -15,6 +15,7 @@ from runtime._internal.effects_actions.llm_completion_support import (
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
 
+
 class LLMEffectsMixin:
     def compose_marketing_message(
         self,

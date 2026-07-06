@@ -9,24 +9,46 @@ from __future__ import annotations
 from core.ux.keyboards.admin import kb_staff_menu as kb_staff_menu
 from core.ux.keyboards.autopilot import (
     kb_ads_apply_pending as kb_ads_apply_pending,
+)
+from core.ux.keyboards.autopilot import (
     kb_autopilot_menu as kb_autopilot_menu,
+)
+from core.ux.keyboards.autopilot import (
     kb_growth_menu as kb_growth_menu,
+)
+from core.ux.keyboards.autopilot import (
     kb_profit_sprint_lead_sources as kb_profit_sprint_lead_sources,
 )
-from core.ux.keyboards.main import kb_back_main as kb_back_main, kb_main as kb_main
+from core.ux.keyboards.main import kb_back_main as kb_back_main
+from core.ux.keyboards.main import kb_main as kb_main
 from core.ux.keyboards.payments import (
     kb_gift_menu as kb_gift_menu,
+)
+from core.ux.keyboards.payments import (
     kb_pay_selected as kb_pay_selected,
+)
+from core.ux.keyboards.payments import (
     kb_sub as kb_sub,
+)
+from core.ux.keyboards.payments import (
     kb_tariffs as kb_tariffs,
 )
 from core.ux.keyboards.settings import (
     kb_demo_kind as kb_demo_kind,
+)
+from core.ux.keyboards.settings import (
     kb_mood_rate as kb_mood_rate,
+)
+from core.ux.keyboards.settings import (
     kb_settings_menu as kb_settings_menu,
+)
+from core.ux.keyboards.settings import (
     kb_state_menu as kb_state_menu,
+)
+from core.ux.keyboards.settings import (
     kb_weather as kb_weather,
 )
+
 
 def kb_ai_ceo_menu() -> dict:
     from core.ux.telegram_keyboards_ai_ceo import kb_ai_ceo_menu as _kb_ai_ceo_menu

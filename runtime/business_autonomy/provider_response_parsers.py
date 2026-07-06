@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 

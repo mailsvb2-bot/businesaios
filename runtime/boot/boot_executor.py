@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from bootstrap.decision_core_contract import RuntimeDecisionCorePort
 from bootstrap.governance_execution_boot import build_default_governance_execution_guard
 from governance.economic_layer import EconomicAutonomyLayer

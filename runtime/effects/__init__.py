@@ -8,21 +8,26 @@ Other code should import this facade instead of importing runtime._internal dire
 
 from __future__ import annotations
 
-
 import importlib
 from typing import Any
 
 from runtime.firewall.import_guard import allow_internal_import
 from runtime.health.server import HealthSnapshot
 
-
 # -------- LLM (network facade) --------
 from .llm_effects import (
     llm_generate_anthropic as llm_generate_anthropic,
-    llm_generate_gigachat as llm_generate_gigachat,
-    llm_generate_openai_compat as llm_generate_openai_compat,
-    llm_generate_yandexgpt as llm_generate_yandexgpt,
 )  # noqa: F401
+from .llm_effects import (
+    llm_generate_gigachat as llm_generate_gigachat,
+)
+from .llm_effects import (
+    llm_generate_openai_compat as llm_generate_openai_compat,
+)
+from .llm_effects import (
+    llm_generate_yandexgpt as llm_generate_yandexgpt,
+)
+
 # Domain helpers (pure, no I/O)
 from .telegram_effects import classify_startup  # noqa: F401
 

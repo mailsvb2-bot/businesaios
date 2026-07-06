@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+
 from runtime.queue.job_contract import JobState, normalize_now
 from runtime.queue.job_store import JobStore
 from runtime.queue.queue_leadership import QueueLeadershipCoordinator

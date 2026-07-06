@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from scripts.ci import step_ids
-from scripts.ci import step_doctor
-from scripts.ci import step_registry
+from scripts.ci import step_doctor, step_ids, step_registry
 
 
 def test_step_registry_exposes_all_canonical_step_ids() -> None:

@@ -5,7 +5,6 @@ from pathlib import Path
 from threading import RLock
 
 from core.safety.controls.observability.contracts import SafetyEvent
-
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 
 from ..safety_supervisor import SafetySupervisor

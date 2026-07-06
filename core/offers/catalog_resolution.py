@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from core.offers.catalog_registry import OfferCatalogRegistry
 from core.offers.offer_catalog_resolver import OfferCatalogResolver

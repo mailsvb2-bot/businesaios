@@ -16,8 +16,9 @@ from __future__ import annotations
 import itertools
 import queue
 import threading
-from typing import Any
 from collections.abc import Callable
+from typing import Any
+
 from interfaces.telegram.outbound.outbound_alerter import OutboundAlerterMixin
 from interfaces.telegram.outbound.outbound_backpressure import put_task
 from interfaces.telegram.outbound.outbound_enqueue_api import OutboundEnqueueApiMixin

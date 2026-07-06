@@ -14,7 +14,9 @@ Convention (env-based default provider):
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from core.flags.provider import FeatureFlagProvider, FlagContext
+
 
 @dataclass(frozen=True)
 class KillSwitchState:

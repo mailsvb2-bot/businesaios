@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Generic, TypeVar
 from collections.abc import Mapping
+from typing import Generic, TypeVar
 
 from interfaces.common.registry_capability_contract import build_registry_entry
 

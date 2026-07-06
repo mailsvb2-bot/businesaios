@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from collections.abc import Callable
-from collections.abc import Sequence
 
 from core.math.advanced_models import best_response_price, optimal_price_from_grid, point_price_elasticity
 

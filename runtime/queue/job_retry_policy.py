@@ -6,9 +6,10 @@ It classifies errors only to decide retry delay / dead-letter outcome.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from random import randint
-from collections.abc import Iterable
+
 from runtime.queue.job_contract import JobRecord
 
 CANON_RUNTIME_QUEUE_RETRY_POLICY = True

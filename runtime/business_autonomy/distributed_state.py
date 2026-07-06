@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Lock
 from typing import Any
-from collections.abc import Mapping, Sequence
 from uuid import uuid4
 
 from governance.persistence_codec import atomic_write_json, read_json_or_default

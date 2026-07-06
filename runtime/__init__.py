@@ -10,6 +10,7 @@ from __future__ import annotations
 import sys
 from importlib import import_module
 from types import ModuleType
+
 from shared.registry import ComponentRegistry, ServiceRegistry
 
 CANON_RUNTIME_NAMESPACE = True

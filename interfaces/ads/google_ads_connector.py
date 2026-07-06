@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
-from collections.abc import Iterable, Sequence
 
 from interfaces.common.auth_session import AuthSession
 from interfaces.common.connector_capabilities import ConnectorCapabilities

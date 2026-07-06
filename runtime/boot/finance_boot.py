@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, MutableMapping
 from types import SimpleNamespace
 from typing import Any
-from collections.abc import Callable
-from collections.abc import MutableMapping
 
 from runtime.boot.finance_boot_registry import (
     build_finance_job_specs,
@@ -96,12 +95,12 @@ def attach_finance_runtime(target: object, runtime: StrategicFinanceRuntime | No
     state = getattr(target, "state", None)
     if state is None:
         state = SimpleNamespace()
-        setattr(target, "state", state)
-    setattr(state, "finance_runtime", attached_runtime)
-    setattr(state, "finance_job_registry", jobs)
-    setattr(state, "finance_event_registry", events)
-    setattr(state, "finance_job_specs", build_finance_job_specs())
-    setattr(state, "finance_job_orchestrator", orchestrator)
+        target.state = state
+    state.finance_runtime = attached_runtime
+    state.finance_job_registry = jobs
+    state.finance_event_registry = events
+    state.finance_job_specs = build_finance_job_specs()
+    state.finance_job_orchestrator = orchestrator
     return target
 
 
@@ -114,10 +113,10 @@ def attach_finance_host_runtime(target: object, *, host_binding: FinanceHostRunt
     state = getattr(target, "state", None)
     if state is None:
         state = SimpleNamespace()
-        setattr(target, "state", state)
-    setattr(state, "host_job_catalog", host_binding.job_catalog)
-    setattr(state, "finance_event_read_model", host_binding.event_read_model)
-    setattr(state, "finance_observability", host_binding.observability_sink)
+        target.state = state
+    state.host_job_catalog = host_binding.job_catalog
+    state.finance_event_read_model = host_binding.event_read_model
+    state.finance_observability = host_binding.observability_sink
     return target
 
 

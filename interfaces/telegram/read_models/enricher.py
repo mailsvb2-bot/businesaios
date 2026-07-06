@@ -17,6 +17,7 @@ import logging
 import os
 import time
 from typing import Any
+
 from core.observability.errors import log_exception_throttled
 from core.observability.perf import AutoAccelerator, rolling_latency_summary
 from interfaces.telegram.read_models.admin_access import is_superadmin, load_admin_metrics, resolve_admin_metrics
@@ -28,6 +29,7 @@ from interfaces.telegram.read_models.user_bundle import load_user_bundle
 from interfaces.telegram.read_models.world_state_runtime import build_world_state_for_chat
 from kernel.world_state import WorldStateV1
 from runtime.platform.config.feature_flags import FeatureFlags
+
 
 def _now_ms() -> int:
     return int(time.time() * 1000)

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from scripts.ci import step_doctor, step_registry
 from scripts.ci.baseline_contract import BASELINE_REQUIREMENTS
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.regression_impact_dotfix import blocked_artifact_paths, required_fast_steps_for_paths
-from scripts.ci import step_doctor, step_registry
 from tests.arch.test_agi_no_second_brain_surfaces import FORBIDDEN_SURFACES
 
 

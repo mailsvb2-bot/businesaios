@@ -30,7 +30,7 @@ def validate_http_settings(settings: HTTPSettings) -> HTTPSettings:
     if settings.port <= 0 or settings.port > 65535:
         raise ValueError('HTTPSettings.port must be between 1 and 65535.')
 
-    if settings.enable_auth and not getattr(settings, 'auth_' 'token'):
+    if settings.enable_auth and not settings.auth_token:
         raise ValueError('HTTP auth is enabled, but auth ' 'token is missing.')
 
     if settings.requests_per_minute <= 0:
@@ -42,10 +42,10 @@ def validate_telegram_settings(settings: TelegramSettings) -> TelegramSettings:
     if settings.polling_enabled and settings.webhook_enabled:
         raise ValueError('Telegram polling and webhook cannot be enabled at the same time.')
 
-    if (settings.polling_enabled or settings.webhook_enabled) and not getattr(settings, 'bot_' 'token'):
+    if (settings.polling_enabled or settings.webhook_enabled) and not settings.bot_token:
         raise ValueError('Telegram is enabled, but bot ' 'token is missing.')
 
-    if settings.webhook_enabled and not getattr(settings, 'webhook_' 'secret'):
+    if settings.webhook_enabled and not settings.webhook_secret:
         raise ValueError('Telegram webhook is enabled, but webhook ' 'secret is missing.')
 
     if settings.webhook_enabled and settings.webhook_auto_register and not settings.webhook_url:

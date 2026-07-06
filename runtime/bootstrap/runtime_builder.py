@@ -7,6 +7,7 @@ internal support surface, not a public entrypoint.
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from boot.runtime_boot_guard import validate_runtime_boot
 from boot.runtime_boot_report import RuntimeBootReport
 from boot.wiring.runtime_dependency_resolver import RuntimeDependencyResolver

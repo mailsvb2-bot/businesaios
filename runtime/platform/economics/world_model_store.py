@@ -7,7 +7,6 @@ This facade intentionally owns no implementation logic.
 
 from __future__ import annotations
 
-
 from runtime.platform.economics.world_model_store_contracts import (
     FileWorldModelStore,
     WorldModelStorePort,

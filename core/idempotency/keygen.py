@@ -13,6 +13,7 @@ import hashlib
 import json
 from typing import Any
 
+
 def make_idempotency_key(payload: dict[str, Any]) -> str:
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()

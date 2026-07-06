@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from threading import RLock
 from typing import Protocol, runtime_checkable
+
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_operational_contracts import QueueAlert, QueueSLOReport
 from runtime.queue.queue_slo import QueueSLOEvaluator

@@ -6,7 +6,6 @@ package alias to avoid a second one-symbol shim file.
 
 from __future__ import annotations
 
-
 from runtime.package_alias_namespace import build_package_alias_namespace
 
 CANON_RUNTIME_PACKAGE_ALIAS_NAMESPACE = True

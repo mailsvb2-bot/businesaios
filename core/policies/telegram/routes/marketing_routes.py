@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose
 from core.policies.telegram.tariffs import (

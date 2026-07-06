@@ -12,6 +12,7 @@ from core.ai_ceo.contracts import CEOIntentV1, CEOPlanStepV1
 from core.ai_ceo.ledger import GrowthSnapshotV1
 from core.ai_ceo.planner_support import build_default_plan_steps
 
+
 def build_minimal_plan_steps(
     *, tenant_id: str, user_id: str, snapshot: GrowthSnapshotV1, intent: CEOIntentV1 | None
 ) -> list[CEOPlanStepV1]:

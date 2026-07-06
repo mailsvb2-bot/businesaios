@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, fields
 from typing import Any
+
 from runtime.runtime_infra import RuntimeInfra
 
 CANON_BOOT_WIRING_ONLY = True

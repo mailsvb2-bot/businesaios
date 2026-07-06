@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 from application.capability.capability_health_policy import CapabilityHealthPolicy
 from application.capability.capability_health_scoring import (

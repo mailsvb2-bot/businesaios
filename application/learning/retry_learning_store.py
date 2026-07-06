@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 
 CANON_RETRY_LEARNING_STORE = True
 

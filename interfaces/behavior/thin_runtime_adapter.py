@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 
 from core.behavior.builders.behavioral_state_builder import build_behavioral_state
 from core.behavior.runtime.soft_backoff_preset import apply_soft_backoff_preset

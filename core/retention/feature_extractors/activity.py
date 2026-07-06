@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
-from collections.abc import Iterable
 
 from config.scoring_behavior_policy import (
     DEFAULT_RETENTION_ACTIVITY_POLICY,

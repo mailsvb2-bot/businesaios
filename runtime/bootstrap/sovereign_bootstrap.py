@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import threading
 from dataclasses import dataclass, field
+
 from runtime.bootstrap.bootstrap_attestation import build_bootstrap_attestation
 from runtime.bootstrap.bootstrap_attestation_store import persist_bootstrap_attestation
 from runtime.bootstrap.bootstrap_audit_trail import (
@@ -25,6 +26,7 @@ from runtime.bootstrap.startup_validator import (
     validate_single_bootstrap_path,
     validate_startup_environment,
 )
+
 
 @dataclass
 class _BootstrapState:

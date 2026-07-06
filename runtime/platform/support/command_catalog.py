@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from runtime.platform.support.command_registry import is_known_command, known_command_set
 
 CLI_COMMANDS = known_command_set((

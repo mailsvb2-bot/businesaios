@@ -9,6 +9,7 @@ from typing import Any
 
 from runtime.platform.security_sqlite_backends.common import _connect, _ensure_parent
 
+
 class SQLiteSecurityIncidentDrillHistoryBackend:
     def __init__(self, db_path: str) -> None:
         self._db_path = str(db_path)

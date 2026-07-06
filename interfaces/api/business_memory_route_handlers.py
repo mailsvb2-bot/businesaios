@@ -15,8 +15,10 @@ from entrypoints.api.business_memory_models import (
 )
 from entrypoints.api.headless_runtime_provider import (
     HeadlessRuntimeProvider,
-    build_headless_runtime as build_headless_runtime,
     build_headless_runtime_provider,
+)
+from entrypoints.api.headless_runtime_provider import (
+    build_headless_runtime as build_headless_runtime,
 )
 
 CANON_API_BUSINESS_MEMORY_ROUTE_HANDLERS_COMPAT = True

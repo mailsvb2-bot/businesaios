@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 from contracts.action_impact_contract import ActionCategory, ActionImpact
 from execution.approval_execution_gate import ApprovalExecutionGate
@@ -51,14 +51,14 @@ def _execution_approval_gate(executor: Any) -> ApprovalExecutionGate:
     gate = getattr(executor, '_approval_execution_gate', None)
     if gate is None:
         gate = _build_default_approval_execution_gate()
-        setattr(executor, '_approval_execution_gate', gate)
+        executor._approval_execution_gate = gate
     return gate
 
 def _execution_operator_override_store(executor: Any):
     store = getattr(executor, '_operator_override_store', None)
     if store is None:
         store = build_default_operator_override_store()
-        setattr(executor, '_operator_override_store', store)
+        executor._operator_override_store = store
     return store
 
 def _extract_operator_override_id(*, payload: dict[str, Any], meta: dict[str, Any]) -> str | None:
@@ -127,7 +127,7 @@ def _materialize_operator_override_approval(*, guard: Any, ctx: Any, impact: Act
     return approval_id
 
 def _apply_approval_workflow_resolution(*, workflow: Any, approval_decision: ApprovalDecision) -> Any:
-    resolver = getattr(workflow, 'decide')
+    resolver = workflow.decide
     return resolver(approval_decision)
 
 def _gate_metadata(*, payload: dict[str, Any], meta: dict[str, Any], env: Any, impact: ActionImpact) -> dict[str, object]:

@@ -13,10 +13,11 @@ Design constraints:
 
 from __future__ import annotations
 
-import sys
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+
 from core.security.release_manifest_io import iter_release_files, sha256_file
 
 sys.dont_write_bytecode = True

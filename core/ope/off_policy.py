@@ -9,8 +9,9 @@ Inputs are simple dict-like mappings to avoid tight coupling.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
+
 
 @dataclass(frozen=True)
 class OPEStats:

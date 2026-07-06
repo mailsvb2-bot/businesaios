@@ -10,6 +10,7 @@ from __future__ import annotations
 import inspect
 from importlib import import_module
 
+
 def _is_bootstrap_context_active() -> bool:
     try:
         module = import_module("runtime.boot.entrypoint_context")

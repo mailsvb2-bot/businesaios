@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
 from runtime.boot.product_system_builder import SystemBuilder
 from runtime.platform.config.env_flags import env_bool, env_str
 from runtime.tenancy import normalize_tenant_id

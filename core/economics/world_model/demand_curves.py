@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
-from collections.abc import Iterable, Sequence
 
 from .types import DemandObservation
 

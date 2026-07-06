@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 from config.llm_provider_policy import DEFAULT_LLM_PROVIDER_POLICY, LLMProviderPolicy
 

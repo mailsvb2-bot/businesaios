@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
 
 from runtime.execution.execution_path_lock import build_execution_path_lock_spec, run_locked_executor_entrypoint
 from runtime.execution.executor_entrypoint import execute_with_entrypoint_span, run_default_execute_call

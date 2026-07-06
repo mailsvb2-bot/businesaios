@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from runtime.execution.executor_audit import emit_decision_executed
 from runtime.execution.executor_commit import (

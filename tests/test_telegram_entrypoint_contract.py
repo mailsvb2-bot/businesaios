@@ -5,7 +5,6 @@ from pathlib import Path
 
 from kernel.world_state import WorldStateV1
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

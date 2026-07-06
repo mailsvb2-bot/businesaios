@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 
 from application.business_autonomy.contracts import BusinessCapability, CapabilityKind
 from application.business_autonomy.protocol import ExternalBusinessAdapter

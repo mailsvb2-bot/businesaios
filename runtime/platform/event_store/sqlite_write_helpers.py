@@ -7,7 +7,6 @@ Responsibility:
 
 from __future__ import annotations
 
-
 import logging
 import sqlite3
 from typing import Any

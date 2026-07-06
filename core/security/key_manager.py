@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import secrets
 from collections.abc import Callable
+
 from core.security.keyring import Keyring
+
 
 def rotate_key(*, store: Callable[[str], None]) -> str:
     """Generate a new random signing key (hex) and persist it via `store`."""

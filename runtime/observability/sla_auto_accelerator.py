@@ -12,8 +12,10 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from typing import Any
+
 from runtime.platform.config.env_flags import env_int
 from runtime.read_models.cache_window import set_cache_window_seconds
+
 
 @dataclass(frozen=True)
 class SlaAcceleratorConfig:

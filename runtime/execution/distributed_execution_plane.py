@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from hashlib import sha256
 from typing import Any, Protocol
-from collections.abc import Mapping, Sequence
 
 CANON_DISTRIBUTED_EXECUTION_PLANE = True
 

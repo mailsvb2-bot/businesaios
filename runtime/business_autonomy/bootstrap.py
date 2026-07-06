@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 
 from application.business_autonomy.adapters.ads_production_adapters import (
     GoogleAdsProductionAdapter,

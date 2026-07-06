@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections.abc import Callable
 
 from config.env_flags import env_bool, env_path
 from config.yaml_loader_shared import load_yaml

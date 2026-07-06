@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 CANON_CLIENT_OUTCOME_EXPORT = True
 

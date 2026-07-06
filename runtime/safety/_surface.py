@@ -16,7 +16,6 @@ from core.safety.operational.runtime_bootstrap import (
 )
 from runtime.safety.contract import RUNTIME_SAFETY_PUBLIC_API, SAFETY_CONTROLS_CANON
 
-
 __all__ = [
     'CANON_RUNTIME_SAFETY_NAMESPACE',
     "ControlDecision",

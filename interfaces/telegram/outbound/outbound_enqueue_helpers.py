@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 
 def enqueue_best_effort_with_suppression(
@@ -31,9 +31,9 @@ def enqueue_best_effort_with_suppression(
 
 
 def parse_legacy_task(task: Any, *, default_priority: int) -> tuple[str, Any, Any, dict, bool, int]:
-    method = getattr(task, "method")
+    method = task.method
     chat_id = getattr(task, "chat_id", None)
-    fn = getattr(task, "fn")
+    fn = task.fn
     meta = dict(getattr(task, "meta", {}) or {})
     critical = bool(getattr(task, "critical", True))
     prio = int(getattr(task, "priority", int(default_priority)))

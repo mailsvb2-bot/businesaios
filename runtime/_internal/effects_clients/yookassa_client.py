@@ -6,9 +6,12 @@ import base64
 import uuid
 from decimal import Decimal
 from typing import Any
+
 from runtime._internal.http_transport import HttpTransport
 from runtime.platform.config.env_flags import env_str
+
 from .http_client import http_json, safe_result
+
 
 def resolve_credentials() -> tuple[str, str, str]:
     """Resolve provider creds for staging/prod without guessing."""

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+
 def _user_id(payload: Any) -> str:
     if isinstance(payload, dict):
         return str(payload.get("user_id", "unknown"))

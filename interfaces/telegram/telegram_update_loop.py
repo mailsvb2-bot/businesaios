@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 from interfaces.telegram.telegram_action_models import (
     TelegramIncomingMessage,

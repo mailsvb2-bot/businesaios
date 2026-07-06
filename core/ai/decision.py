@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from core.ai.decision_contracts import Decision as Decision, DecisionEnvelope
+from core.ai.decision_contracts import Decision as Decision
+from core.ai.decision_contracts import DecisionEnvelope
 
 
 def _contains_secret_keys(obj) -> bool:

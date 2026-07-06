@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
-
-
 from datetime import UTC, datetime
+from typing import Any
 
 from .base import AdsConnectorError, ConnectedAccount
 from .connector_shared import resolve_secret_required

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Protocol
 from collections.abc import Iterable
+from typing import Protocol
 
 from kernel.decision_candidate import DecisionCandidate
 

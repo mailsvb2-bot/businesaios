@@ -8,7 +8,6 @@ and keeps the public matrix honest.
 
 from __future__ import annotations
 
-
 from interfaces.common.registry_capability_contract import build_registry_entry
 
 CONNECTORS = {

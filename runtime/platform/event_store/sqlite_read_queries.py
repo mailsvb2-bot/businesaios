@@ -7,10 +7,9 @@ intentionally small and deterministic.
 
 from __future__ import annotations
 
-
 import sqlite3
-from typing import Any
 from collections.abc import Iterable, Sequence
+from typing import Any
 
 from .sqlite_helpers import _exclusive_end_ms, _row_to_event
 

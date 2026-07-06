@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping as AbcMapping
 from typing import Any
 
-from application.decision_runtime.gate import gate_action_or_raise
 from application.decision_policy.policy_stage import propose_action
+from application.decision_runtime.gate import gate_action_or_raise
 from application.decision_state.state_enrichment import (
     apply_causal_constraints,
     apply_price_constraints,

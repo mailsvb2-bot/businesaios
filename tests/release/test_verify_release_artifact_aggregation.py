@@ -5,7 +5,6 @@ from pathlib import Path
 
 from scripts.ci import step_verify_release
 
-
 _REQUIRED_READY_PAYLOADS = {
     "postgres_contract.json": {
         "artifact": "postgres_contract",

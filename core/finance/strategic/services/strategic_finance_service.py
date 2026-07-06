@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 from core.finance.strategic.assumptions.assumption_audit_log import AssumptionAuditLog
 from core.finance.strategic.builders.board_summary_builder import BoardSummaryBuilder

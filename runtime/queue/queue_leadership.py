@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+
 from reliability.distributed_lock import InMemoryDistributedLock
 from reliability.leader_election import LeaderElection, LeadershipLease
 from runtime.queue.job_contract import normalize_now
-from runtime.queue.queue_operational_contracts import QueueLeadershipReport
 from runtime.queue.job_fencing import build_process_scoped_worker_id
+from runtime.queue.queue_operational_contracts import QueueLeadershipReport
 
 CANON_RUNTIME_QUEUE_LEADERSHIP = True
 

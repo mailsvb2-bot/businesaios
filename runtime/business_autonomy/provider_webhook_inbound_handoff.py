@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from runtime.messaging.inbound_message import InboundMessage
 from runtime.messaging.inbound_to_world_state import map_inbound_to_world_state

@@ -6,7 +6,6 @@ instead of importing core proof registry internals directly.
 
 from __future__ import annotations
 
-
 from core.actions.proof_registry import ACTION_PROOF_EVENT
 from runtime.proofs.contract import PROOF_REGISTRY_CANON, RUNTIME_PROOFS_PUBLIC_API
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from core.users.roles import UserRoleInfo
 from core.ux.callbacks import (
     CB_ADS_APPLY_CANCEL,
@@ -23,7 +24,9 @@ from core.ux.callbacks import (
     CB_PROFIT_SPRINT_LEAD_SOCIAL,
     CB_PROFIT_SPRINT_START,
 )
+
 from .common import mk
+
 
 def kb_autopilot_menu(*, role: UserRoleInfo | None = None) -> dict[str, Any]:
     r = (role or UserRoleInfo("owner")).role

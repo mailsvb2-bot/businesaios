@@ -6,7 +6,6 @@ state. This module must not compute actions or execute effects.
 
 from __future__ import annotations
 
-
 import logging
 
 from config.decision_safety_policy import DEFAULT_POLICY_SELECTOR_POLICY, PolicySelectorPolicy

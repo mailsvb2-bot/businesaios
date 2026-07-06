@@ -6,11 +6,10 @@ This module makes those invocations inspectable instead of only printing to stde
 
 from __future__ import annotations
 
-
 import json
 import os
-from pathlib import Path
 from collections.abc import Mapping
+from pathlib import Path
 
 
 def _audit_path() -> Path | None:

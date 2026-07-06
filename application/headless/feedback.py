@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Mapping
 
 from application.capability.capability_operator_view import merge_capability_views
 from execution.business_operating_memory import (

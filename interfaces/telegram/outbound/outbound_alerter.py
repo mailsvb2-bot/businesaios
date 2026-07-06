@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import queue
 import time
+
 from core.observability.silent import swallow
 from interfaces.telegram.outbound.outbound_alert_helpers import (
     build_alert_event_payload,
     build_alert_reason,
     format_bucket_metrics,
 )
+
 
 class OutboundAlerterMixin:
     """SLA alerting and self-heal backlog purge.

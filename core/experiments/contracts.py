@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Protocol
 from collections.abc import Iterable
+from typing import Protocol
 
 from core.experiments.types import (
     EvaluationSummary,

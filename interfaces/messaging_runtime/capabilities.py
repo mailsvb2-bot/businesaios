@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from interfaces.messaging_runtime.channel_aliases import canonical_channel_name
 

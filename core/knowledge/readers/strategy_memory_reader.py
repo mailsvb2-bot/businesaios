@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from collections.abc import Sequence
 
 from ..contracts import LessonRepository, PatternRepository
 from ..contracts import StrategyMemoryReader as StrategyMemoryReaderContract

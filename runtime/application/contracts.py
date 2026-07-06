@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Protocol
+
 from application.decision.decision_service import DecisionApplicationService
 from runtime.access_policies import validate_capability_access
 from runtime.application._ports_impl import (

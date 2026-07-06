@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Protocol
 from collections.abc import Sequence
+from typing import Protocol
 
 from .contracts_window import FinanceWindow
 from .types import ExpenseRecord, LedgerEntry, PaymentRecord, PayoutRecord, RevenueRecord

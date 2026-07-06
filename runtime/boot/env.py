@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-
 import os
+
 from runtime.boot.canonical.env import normalize_env
 from runtime.platform.config.env_access import env_bool, env_float, env_int, env_str
 

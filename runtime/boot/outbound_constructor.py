@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import importlib
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 CANON_BOOT_WIRING_ONLY = True
 CANON_OUTBOUND_CONSTRUCTOR_CALL = True

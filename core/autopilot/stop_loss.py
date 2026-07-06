@@ -7,9 +7,10 @@ It does NOT execute side-effects.
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping
+
 from core.autopilot.guardrails import GuardrailVerdict
 
 STOP_LOSS_SETTING_KEY = "autopilot:stop_loss"

@@ -7,9 +7,10 @@ not re-implement span wiring locally.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Mapping
+
 from runtime.observability.tracing import correlation_key_scope, span_with_sla
 
 CANON_RUNTIME_TELEMETRY_OWNER = True

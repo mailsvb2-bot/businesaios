@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-from scripts.ci import regression_impact_hardened
-from scripts.ci import step_ids
-from scripts.ci import step_doctor
-from scripts.ci import step_registry
-from scripts.ci import step_regression_impact
+from scripts.ci import regression_impact_hardened, step_doctor, step_ids, step_registry, step_regression_impact
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.regression_impact import (
     IMPACT_RULES,

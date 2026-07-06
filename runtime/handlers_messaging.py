@@ -8,7 +8,6 @@ No hidden second brain.
 
 from __future__ import annotations
 
-
 import logging
 
 from runtime.messaging.channel_normalizer import normalize_channel

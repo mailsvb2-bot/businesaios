@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 
+
 def sigmoid(x: float) -> float:
     # stable-ish sigmoid for moderate x
     return 1.0 / (1.0 + math.exp(-x))

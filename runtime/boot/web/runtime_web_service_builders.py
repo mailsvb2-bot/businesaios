@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+
 from runtime.boot.web.messaging_policy_alert_subscription_service import (
     build_messaging_policy_alert_subscription_service,
 )

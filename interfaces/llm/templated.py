@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from .base import LLMClient, LLMMessage, LLMResponse
 

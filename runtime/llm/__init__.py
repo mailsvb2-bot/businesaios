@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from runtime.public_api_alias import install_public_api_alias
-
-
 from collections.abc import Callable
 
 from core.llm import (
@@ -16,6 +13,7 @@ from core.llm import (
 )
 from core.llm.agent.agent import LLMAgent, LLMAgentConfig
 from core.llm.contracts import LLMMessage, LLMRequest
+from runtime.public_api_alias import install_public_api_alias
 
 Transport = Callable[[str, str, dict[str, object], int], dict[str, object]]
 

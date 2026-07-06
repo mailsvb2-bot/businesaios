@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+
 from core.tenancy.scope import TenantId, as_tenant_id
+
 
 @dataclass
 class _Entry:

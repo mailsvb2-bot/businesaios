@@ -3,11 +3,15 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
-from collections.abc import Iterable, Mapping
 
+from application.memory.business_memory_compactor import (
+    BusinessMemoryCompactionReport,
+    BusinessMemoryCompactor,
+)
 from application.memory.business_memory_lock import FileBusinessMemoryLock
 from application.memory.business_memory_matcher import BusinessMemoryMatcher
 from application.memory.business_memory_policy import BusinessMemoryPolicy
@@ -18,10 +22,6 @@ from application.memory.business_operating_memory_types import (
     MemoryTrendSnapshot,
     PatternEvidence,
     SignalMemoryRecord,
-)
-from application.memory.business_memory_compactor import (
-    BusinessMemoryCompactionReport,
-    BusinessMemoryCompactor,
 )
 from execution.business_memory_store_support import (
     BUSINESS_MEMORY_SCHEMA_VERSION,

@@ -14,7 +14,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
 from runtime.ads import ObserveTickResult, observe_tick_once
+
 
 @dataclass(frozen=True)
 class JobDeps:

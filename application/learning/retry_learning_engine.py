@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 from application.learning.failure_pattern_detector import (
     FailureEvent,

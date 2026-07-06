@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 
 BOOTSTRAP_CONTRACT_VERSION = "sovereign-bootstrap-v3"
 class BootstrapMode(str, Enum):

@@ -8,7 +8,6 @@ only to keep import paths stable; it contains NO DB driver imports and NO integr
 
 from __future__ import annotations
 
-
 from typing import Any
 
 

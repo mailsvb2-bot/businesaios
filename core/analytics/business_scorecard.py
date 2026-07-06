@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
-from collections.abc import Iterable, Mapping, Sequence
 
 from core.contracts.business_scorecard import (
     AnalyticsDiagnosis,

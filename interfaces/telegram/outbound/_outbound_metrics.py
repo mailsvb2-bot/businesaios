@@ -6,7 +6,6 @@ and compute a structured snapshot. No I/O, no threading, no side-effects.
 from __future__ import annotations
 
 
-
 def percentile(values: list[float], p: float) -> float:
     """p-th percentile of values (0..100). Returns 0.0 for empty list."""
     if not values:

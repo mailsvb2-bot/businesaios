@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from runtime.knowledge import (
     KnowledgeCommandService,
     KnowledgeExplainService,

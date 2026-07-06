@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from core.economics.capital_allocation_engine import CapitalAllocationEngine, CapitalState, WorldState
 from core.economics.capital_allocation_engine import CapitalPlan as AllocationPlan
 from core.economics.contracts import CapitalScenarioBuilderPort, EconomicsContext

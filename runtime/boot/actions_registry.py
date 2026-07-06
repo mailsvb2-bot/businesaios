@@ -12,11 +12,10 @@ This file is intentionally boring and explicit.
 
 from __future__ import annotations
 
-
-
+from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Literal
-from collections.abc import Iterator
+
 from runtime.boot.actions_catalog import (
     BUILTIN_HANDLER_ACTIONS,
     EFFECT_ONLY_ACTIONS,

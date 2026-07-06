@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
-from collections.abc import Iterable, Sequence
 
 from .base import (
     AdsPlatform,

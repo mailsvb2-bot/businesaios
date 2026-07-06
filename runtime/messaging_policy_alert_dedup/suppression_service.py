@@ -8,6 +8,7 @@ from runtime.messaging_policy_alert_dedup.dedup_key import build_alert_notificat
 from runtime.messaging_policy_alert_dedup.suppression_decision import AlertSuppressionDecision
 from runtime.messaging_policy_alert_dedup.time_now import now_epoch_s
 
+
 class AlertNotificationSuppressionService:
     def __init__(self, *, store, cooldown_s: int = DEFAULT_ALERT_NOTIFICATION_COOLDOWN_S):
         self._store = store

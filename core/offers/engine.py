@@ -11,9 +11,10 @@ fallback to legacy offer catalog if needed.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping
+
 from core.marketing.variants import choose_variant as choose_marketing_variant
 from core.offers.catalog_registry import OfferCatalogRegistry, default_offer_catalog_registry
 from core.offers.catalog_resolution import resolve_catalog

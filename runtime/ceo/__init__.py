@@ -7,9 +7,10 @@ an extra re-export file around.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterable, Mapping
+
 from core.actions import build_schema_registry
 from runtime.actions import ACTION_EXECUTE_PLAN_V1
 from runtime.application.contracts import build_runtime_application_service_from_raw

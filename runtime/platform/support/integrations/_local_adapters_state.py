@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from runtime.platform.support.integrations._local_adapters_memory import (
     ExperimentTrackerAdapter,
     FeatureStoreAdapter,

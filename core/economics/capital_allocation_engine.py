@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import exp
+
 from config.economics_domain_policy import DEFAULT_CAPITAL_ALLOCATION_POLICY, CapitalAllocationPolicy
 from core.economics.contracts import CapitalAllocationSelectorPort, EconomicsContext
 from core.economics.recommendation_policy import ensure_economics_recommendations

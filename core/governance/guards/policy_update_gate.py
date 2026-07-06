@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from threading import Lock
 from typing import Any
-from collections.abc import Iterable
 
 from core.events.log import EventLog
 

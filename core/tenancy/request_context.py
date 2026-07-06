@@ -14,11 +14,10 @@ Fallback behavior:
 
 from __future__ import annotations
 
-
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from collections.abc import Iterator
 
 from core.tenancy.scope import TenantId, as_tenant_id
 from core.tenancy.tenant import current_tenant_id

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from collections.abc import Mapping
 
 from runtime.bootstrap.bootstrap_contract import (
     BootstrapAuditEvent,

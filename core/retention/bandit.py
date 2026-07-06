@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import random
 import time
+
 from core.retention.ports import RetentionStore
+
 
 def choose_arm(
     store: RetentionStore,

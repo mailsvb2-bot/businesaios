@@ -7,7 +7,6 @@ This module provides a stable name + contract to prevent concept drift.
 
 from __future__ import annotations
 
-
 from runtime.governance.auto_deploy_guard import AutoDeployGuard, build_auto_deploy_guard_from_env
 
 # Canonical alias (same behavior, different term).

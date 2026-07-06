@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-
-from datetime import date
 from collections.abc import AsyncIterator, Sequence
+from datetime import date
 
 from interfaces.ads.base import AdsConnector
 from interfaces.ads.capabilities import AdsCapabilities

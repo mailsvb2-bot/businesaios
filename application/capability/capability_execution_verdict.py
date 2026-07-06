@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Mapping
 
 from application.autonomy.autonomy_tiers import evaluate_autonomy_tier
 from execution.action_budget_engine import ActionBudgetEngine

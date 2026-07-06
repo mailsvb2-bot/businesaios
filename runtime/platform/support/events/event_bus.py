@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from runtime.platform.support.events import EventBus as EventBus
 
 __all__ = ['EventBus']

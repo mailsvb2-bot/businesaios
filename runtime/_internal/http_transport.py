@@ -3,9 +3,9 @@ from __future__ import annotations
 import importlib
 import json as _json
 import os
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable, Iterable, Mapping
 
 
 def _socket_module():

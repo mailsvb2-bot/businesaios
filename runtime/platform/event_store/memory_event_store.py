@@ -109,6 +109,6 @@ class MemoryEventStore(list):
         store = getattr(self, "_settings", None)
         if store is None:
             store = {}
-            setattr(self, "_settings", store)
+            self._settings = store
         from copy import deepcopy
         store[(str(tenant_id), str(key))] = deepcopy(value)

@@ -7,7 +7,6 @@ This module MUST NOT start Telegram runtime.
 
 from __future__ import annotations
 
-
 import logging
 from typing import Any
 

@@ -6,9 +6,8 @@ other sync entrypoints such as runtime boot/apply surfaces.
 
 from __future__ import annotations
 
-
-from typing import TypeVar
 from collections.abc import Awaitable
+from typing import TypeVar
 
 import shared.asyncio_bridge as _shared_asyncio_bridge
 

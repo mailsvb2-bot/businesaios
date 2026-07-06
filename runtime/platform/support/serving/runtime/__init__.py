@@ -4,7 +4,6 @@ import importlib
 import sys
 from types import ModuleType
 
-
 from .model_cache import ModelCache
 
 CANON_COMPAT_SHIM = True

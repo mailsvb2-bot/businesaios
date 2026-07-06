@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 from interfaces.telegram.outbound.outbound_call_result import unwrap_call_result
 from interfaces.telegram.outbound.outbound_enqueue_warning import maybe_emit_queue_high_warning

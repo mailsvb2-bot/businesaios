@@ -7,8 +7,6 @@ active domain surface.
 
 from __future__ import annotations
 
-
-
 from core.product.contracts import *  # noqa: F401,F403
 from core.product.enums import *  # noqa: F401,F403
 from core.product.errors import *  # noqa: F401,F403

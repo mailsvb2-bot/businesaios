@@ -10,7 +10,6 @@ This module must never introduce business decisions or a second execution path.
 
 from __future__ import annotations
 
-
 import os
 import platform
 import threading

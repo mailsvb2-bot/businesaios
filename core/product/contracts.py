@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from typing import Protocol
 from collections.abc import Sequence
+from typing import Protocol
 
 from core.product.types import (
     FeatureRecord,
     FeatureScore,
     PackagingProposal,
-    ProductFeature as ProductFeature,
     RoadmapCapacity,
     RoadmapProposal,
+)
+from core.product.types import (
+    ProductFeature as ProductFeature,
 )
 
 

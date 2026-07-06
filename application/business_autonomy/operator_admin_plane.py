@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
-from collections.abc import Mapping, Sequence
 
 CANON_UNIFIED_OPERATOR_ADMIN_PLANE = True
 

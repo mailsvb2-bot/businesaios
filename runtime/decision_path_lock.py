@@ -8,9 +8,9 @@ It must not become a second decision engine and must not add pre-decision busine
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
 
 CANON_DECISION_PATH_LOCK_SINGLE_OWNER = True
 CANON_DECISION_PATH_LOCK_FAIL_CLOSED = True

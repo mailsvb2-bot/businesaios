@@ -5,10 +5,12 @@ These functions are deterministic and side-effect free.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping
+
 from contracts.autopilot_contract import AutopilotContract
+
 
 def _to_int(v: object, *, default: int = 0) -> int:
     """Best-effort int conversion (deterministic, no logging)."""

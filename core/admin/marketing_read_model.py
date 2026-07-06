@@ -11,6 +11,7 @@ The chosen variant is logged via send_message@v1 track_event_type.
 from __future__ import annotations
 
 from typing import Any
+
 from core.read_model.cache import global_cache, watermark_for
 
 DEFAULTS: dict[str, dict[str, str]] = {

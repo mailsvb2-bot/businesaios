@@ -6,10 +6,8 @@ carry subtly different validation or execution paths.
 
 from __future__ import annotations
 
-
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from collections.abc import Callable
-from collections.abc import Iterable, Mapping
 
 from runtime.platform.support._command_surface import run_named_command
 from runtime.platform.support.command_registry import require_known_command

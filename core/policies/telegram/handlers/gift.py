@@ -8,10 +8,12 @@ from __future__ import annotations
 import secrets
 import time
 from collections.abc import Callable
+
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose
 from core.ux.callbacks import CB_GIFT_CREATE, CB_GIFT_MENU
 from core.ux.telegram_keyboards import kb_gift_menu, kb_main
+
 
 def handle_gift(
     ctx: TelegramCtx,

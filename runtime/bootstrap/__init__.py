@@ -15,7 +15,6 @@ public surface while delegating full runtime assembly to
 
 from __future__ import annotations
 
-
 import atexit
 from importlib import import_module
 from typing import Any

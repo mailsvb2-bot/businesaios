@@ -11,9 +11,9 @@ This module is deterministic and has no network / side-effects.
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping
 
 ADS_APPLY_SETTING_KEY = "ads:apply_enabled"
 ADS_APPLY_ENABLED_SINCE_MS_KEY = "ads:apply_enabled_since_ms"

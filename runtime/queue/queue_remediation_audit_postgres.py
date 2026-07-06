@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime
+
 from runtime.platform.postgres_port import PostgresPort
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_remediation_audit_sqlite import (

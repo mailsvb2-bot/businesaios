@@ -17,9 +17,9 @@ from runtime.platform.security_sqlite_backends.group_02 import (
     SQLiteSecurityQuarantineRegistryBackend,
 )
 from runtime.platform.security_sqlite_backends.group_03 import (
+    SignedOperatorApprovalStoreBackend,
     SQLiteSecurityIncidentDrillHistoryBackend,
     SQLiteSecurityOperatorWorkflowStoreBackend,
-    SignedOperatorApprovalStoreBackend,
 )
 
 __all__ = [

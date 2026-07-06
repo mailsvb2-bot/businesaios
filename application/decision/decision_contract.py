@@ -79,7 +79,7 @@ def build_executable_action(
 ):
     from contracts import executable_action as executable_action_contract
 
-    action_cls = getattr(executable_action_contract, 'ExecutableAction')
+    action_cls = executable_action_contract.ExecutableAction
     return action_cls(
         **build_executable_action_payload(
             candidate=candidate,

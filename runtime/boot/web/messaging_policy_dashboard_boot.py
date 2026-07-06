@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+
 from runtime.boot.web.messaging_policy_service_graph import build_messaging_policy_service_graph
 from runtime.boot.web.runtime_web_service_builders import build_messaging_policy_dashboard_bundle
 

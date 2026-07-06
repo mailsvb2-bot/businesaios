@@ -3,11 +3,11 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 from uuid import uuid4
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult

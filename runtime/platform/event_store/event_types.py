@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 # Canonical vocabulary used by:
 # - runtime telemetry
 # - retention extractor

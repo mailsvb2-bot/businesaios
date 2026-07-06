@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-
 import logging
 from dataclasses import dataclass
 from typing import Any
+
 from runtime.boot.failure_policy import raise_or_log_boot_failure
 from runtime.boot.web.runtime_web_bundle import RuntimeWebBundle
 from runtime.boot.web.runtime_web_bundle_factory import build_runtime_web_bundle

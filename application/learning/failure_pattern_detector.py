@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
-from collections.abc import Iterable, Mapping, Sequence
 
 from execution.error_family_classifier import ErrorFamilyClassifier
 

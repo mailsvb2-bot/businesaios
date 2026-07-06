@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
 MEMORY_FILES = [
     Path("application/memory/business_operating_memory.py"),
     Path("application/memory/business_memory_compactor.py"),

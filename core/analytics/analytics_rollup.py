@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 from core.contracts.analytics_rollup import FleetAnalyticsRollup, TenantAnalyticsRollup
 

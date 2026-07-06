@@ -14,9 +14,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
 from runtime.observability.telemetry import CANON_RUNTIME_TELEMETRY_OWNER as _CANON_RUNTIME_TELEMETRY_OWNER
 from runtime.platform.delivery_state import DeliveryState
 from runtime.ports.effects import EffectsPort
+
 from .effect_router import EffectRouter
 from .effects_actions.llm_actions import LLMEffectsMixin
 from .effects_actions.offer_patch_actions import OfferPatchEffectsMixin
@@ -34,10 +36,20 @@ from .http_transport import (
     HTTPResponse,
     HttpTransport,
     build_http_transport,
+)
+from .http_transport import (
     form_urlencode as _form_body_encoder,
+)
+from .http_transport import (
     runtime_network_mode as _runtime_network_mode,
+)
+from .http_transport import (
     sync_get as _sync_get,
+)
+from .http_transport import (
     sync_post_json as _sync_post_json,
+)
+from .http_transport import (
     url_with_params as _url_with_params,
 )
 

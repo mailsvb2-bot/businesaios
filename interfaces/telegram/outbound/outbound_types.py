@@ -6,9 +6,9 @@ Extracted from outbound_queue.py to eliminate god-module.
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
 
 PriorityArg = int | str
 

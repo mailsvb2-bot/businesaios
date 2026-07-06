@@ -8,6 +8,7 @@ brain or bypassing the single decision-execution contract.
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from application.decision.ports import DecisionExecutionPortProtocol
 
 CANON_COMPAT_SHIM = True

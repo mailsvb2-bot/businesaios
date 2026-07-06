@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import date
 from typing import Any
-from collections.abc import Awaitable, Callable, Iterable, Sequence
 
 from .base import Campaign, MetricPoint
 from .connector_provider_support import provider_list_rows, provider_metric_rows

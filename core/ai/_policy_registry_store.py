@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, MutableMapping
 from dataclasses import dataclass, field
 from typing import Generic, TypeVar
-from collections.abc import Iterable, MutableMapping
 
 T = TypeVar("T")
 

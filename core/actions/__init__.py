@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from importlib import import_module
 from typing import Any
+
 from core.actions.allowed_actions import ALLOWED_ACTIONS
 from core.actions.catalog_entry import CatalogEntry
 from core.actions.catalog_groups import build_catalog_groups

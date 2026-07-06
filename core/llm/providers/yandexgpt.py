@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
 
 from ..contracts import LLMClient, LLMMessage, LLMRequest, LLMResponse, LLMUsage
 from ..redaction import safe_metadata

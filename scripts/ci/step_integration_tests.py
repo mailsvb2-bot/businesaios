@@ -4,7 +4,6 @@ from scripts.ci.config import project_shape_config
 from scripts.ci.paths import repo_root
 from scripts.ci.pytest_tools import run_pytest_with_report
 
-
 _HEADLESS_SMOKE_FILES = (
     "tests/integration/headless/test_cli_run_smoke.py",
     "tests/integration/headless/test_cli_scenario_smoke.py",

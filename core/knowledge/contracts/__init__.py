@@ -13,6 +13,20 @@ Split into submodules by role:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Protocol
+
+from ..types import (
+    Lesson,
+    LessonDraft,
+    LessonQuery,
+    MemoryLink,
+    MemoryRetrieval,
+    OutcomeFact,
+    Pattern,
+    PatternDraft,
+    StrategyMemoryEntry,
+)
 from .builders import (
     BusinessCaseBuilder,
     LessonBuilder,
@@ -46,19 +60,6 @@ from .writers import (
     LessonWriter,
     MemoryLinkWriter,
     PatternWriter,
-)
-from typing import Protocol
-from collections.abc import Sequence
-from ..types import (
-    Lesson,
-    LessonDraft,
-    LessonQuery,
-    MemoryLink,
-    MemoryRetrieval,
-    OutcomeFact,
-    Pattern,
-    PatternDraft,
-    StrategyMemoryEntry,
 )
 
 CANON_COMPAT_SHIM = True

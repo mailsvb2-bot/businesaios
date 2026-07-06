@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from typing import Any
+
 from kernel.decision_crypto import (
     assert_envelope_signature_surface,
     load_keyring_secret,
     verify_signed_material,
 )
 from runtime.enforcement import payload_hash
+
 
 def verify_signature_and_integrity(*, env: Any, keyring: Any, schemas: Any, expected_issuer_id: str, supported_envelope_version: int, max_replay_ms: int, ttl_skew_ms: int, now_ms: int) -> None:
     assert_envelope_signature_surface(env)

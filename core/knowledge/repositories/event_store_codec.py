@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 from contracts.event_store import EventRecord, EventStoreReader, EventStoreWriter, iter_events_strict
 

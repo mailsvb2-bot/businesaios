@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from runtime._internal.http_transport import HttpTransport
 from runtime.observability.error_handling import swallow
 

@@ -7,17 +7,19 @@ locks without creating a second product-system pipeline.
 
 from __future__ import annotations
 
+from bootstrap.product_system_builder_contracts import RuntimeView
 from bootstrap.product_system_builder_pipeline import (  # noqa: F401
     EnforcerAdapter,
     SelectorAdapter,
     WiringAdapter,
     build_product_system_wiring_adapter,
 )
-from bootstrap.product_system_builder_pipeline import _wire_default_builtin_modules as _owner_wire_default_builtin_modules
+from bootstrap.product_system_builder_pipeline import (
+    _wire_default_builtin_modules as _owner_wire_default_builtin_modules,
+)
 from runtime.modules.builtin_modules import DEFAULT_RUNTIME_MODULE_IDS
 from runtime.modules.module_protocol import ModuleWiringContext
 from runtime.modules.registry import ModuleRegistry
-from bootstrap.product_system_builder_contracts import RuntimeView
 
 CANON_BOOT_WIRING_ONLY = True
 CANON_PRODUCT_SYSTEM_WIRING_ADAPTER_OWNER = True

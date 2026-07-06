@@ -1,8 +1,8 @@
 """Canonical route handlers for business autonomy operational visibility."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Mapping
 
 from application.business_autonomy.delayed_outcome_bridge import BusinessAutonomyDelayedOutcomeBridge
 from application.business_autonomy.safety_core import build_safety_core_admin_surface

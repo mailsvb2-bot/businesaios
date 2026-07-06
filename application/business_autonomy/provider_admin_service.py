@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
-from collections.abc import Mapping
 
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest

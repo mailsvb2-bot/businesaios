@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from runtime.actions import ACTION_AI_CEO_PLAN_V1
 from runtime.ai_ceo import render_plan_text
 from runtime.decisioning import DecisionRouteViolation

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+
 from runtime.runtime_observability import RuntimeObservability
 
 CANON_MANAGED_RUNTIME_PLANE = True

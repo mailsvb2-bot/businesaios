@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from time import time
 from typing import Any
-from collections.abc import Mapping
 
 
 def _now_ms() -> int:

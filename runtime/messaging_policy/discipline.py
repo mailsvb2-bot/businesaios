@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.messaging_policy.policy_plan import PolicyPlan

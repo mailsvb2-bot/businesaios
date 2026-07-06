@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from core.behavior.operator_catalogs.models import OperatorCatalog, catalog_from_raw
 

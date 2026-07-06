@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any
-from collections.abc import Iterable
 
 from core.admin.read_models.common_support import (
     count_distinct_users_window,

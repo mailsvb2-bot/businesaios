@@ -7,8 +7,10 @@ state, but must never compute executable actions.
 from __future__ import annotations
 
 import hashlib
+
 from core.policies.domain import PolicyRef, RolloutConfig
 from core.policies.registry import PolicyRegistry
+
 
 class CanaryPolicyResolver:
     def __init__(self, registry: PolicyRegistry, cfg: RolloutConfig):

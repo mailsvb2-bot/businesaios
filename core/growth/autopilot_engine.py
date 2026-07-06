@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
 from application.decisioning.decision_output_guard import assert_non_decision_payload
 from core.growth.autopilot_contracts import (
     GrowthAutopilotContext,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from bootstrap.assembly_runtime import (
     build_event_log_and_bindings,
     resolve_tenant_and_pricing,

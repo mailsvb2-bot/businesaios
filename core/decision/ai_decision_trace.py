@@ -12,6 +12,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import Any
 
+
 @dataclass(frozen=True)
 class TraceStep:
     name: str

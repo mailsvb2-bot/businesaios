@@ -11,6 +11,7 @@ This module is just a small adapter around that implementation.
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from config.llm_ratelimit_policy import DEFAULT_LLM_RATELIMIT_POLICY, LLMRateLimitPolicy
 from core.ratelimit.token_bucket import (
     MemoryRateLimitStore,
@@ -21,6 +22,7 @@ from core.ratelimit.token_bucket import (
     TokenBucketLimiter as _TokenBucketLimiter,
 )
 from core.tenancy.scope import TenantId
+
 
 @dataclass(frozen=True)
 class _Cfg:

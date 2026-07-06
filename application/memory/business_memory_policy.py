@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping, Sequence
 
 from runtime.platform.business_memory.second_brain_boundary import sanitize_business_memory_payload
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import time
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from runtime._internal.effects_actions.telegram.transport import telegram_send_audio_transport
 from runtime.observability.error_handling import swallow

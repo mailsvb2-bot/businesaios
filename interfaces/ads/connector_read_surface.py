@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import date
 from typing import Any, TypeVar
-from collections.abc import Awaitable, Callable, Iterable, Sequence
 
 T = TypeVar("T")
 

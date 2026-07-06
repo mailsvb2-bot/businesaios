@@ -10,8 +10,8 @@ packet inputs.
 from __future__ import annotations
 
 import importlib
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 CANON_RUNTIME_DECISION_INPUT_PROVIDER_CALL = True
 _FULL_KWARGS = (

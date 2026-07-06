@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from config.economics_domain_policy import (
     DEFAULT_ECONOMIC_BRAIN_POLICY,
     DEFAULT_ECONOMICS_SIGNAL_DEFAULTS,

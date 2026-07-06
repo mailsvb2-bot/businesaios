@@ -5,9 +5,10 @@ Autopilot should always output 1-3 concrete tasks for the owner.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping
+
 
 @dataclass(frozen=True)
 class TaskItem:

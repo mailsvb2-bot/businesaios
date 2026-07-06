@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
-from collections.abc import Mapping
 
 
 class ControlStatus(str, Enum):

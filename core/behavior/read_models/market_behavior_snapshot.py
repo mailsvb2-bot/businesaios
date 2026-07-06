@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from core.behavior.assemblers.market_field_assembler import assemble_market_field
 from core.behavior.assemblers.person_field_assembler import assemble_person_field

@@ -11,6 +11,7 @@ from dataclasses import dataclass, fields
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Protocol
+
 from governance.constitution import Constitution
 from governance.economic_layer import EconomicAutonomyLayer
 from runtime.effects import load_effects_impl

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol
-from collections.abc import Callable
 
 from ..action_context import SafetyActionContext
 from .models import RollbackPlan

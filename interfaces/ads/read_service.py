@@ -11,8 +11,9 @@ dedicated gateway with guardrails + audit.
 
 from __future__ import annotations
 
-from datetime import date
 from collections.abc import Iterable, Sequence
+from datetime import date
+
 from interfaces.ads.base import (
     AdsPlatform,
     AdsReadConnector,
@@ -22,6 +23,7 @@ from interfaces.ads.base import (
     OAuthAuthorizeURL,
 )
 from interfaces.ads.registry import AdsConnectorRegistry
+
 
 class AdsReadService:
     """Read-only facade over registered ads connectors."""

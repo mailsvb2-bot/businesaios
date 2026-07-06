@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
 from config.pricing_retention_policy import (
     DEFAULT_PRICING_STOP_LOSS_POLICY,
     PricingStopLossPolicy,
@@ -20,6 +21,7 @@ from core.pricing.stop_loss_parts.metrics import (
     conv_and_rev_per_trial,
     stats_trials_successes,
 )
+
 
 def should_apply_price(
     event_store: Any,

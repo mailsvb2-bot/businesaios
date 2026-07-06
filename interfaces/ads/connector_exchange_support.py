@@ -7,10 +7,12 @@ business decisions; they only normalize connector I/O.
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
+
 from .base import AdsConnectorError, AdsPlatform, ConnectedAccount
 from .connector_oauth_helpers import build_connected_account
+
 
 def _first_present(raw: Mapping[str, Any], keys: Iterable[str]) -> Any:
     for key in keys:

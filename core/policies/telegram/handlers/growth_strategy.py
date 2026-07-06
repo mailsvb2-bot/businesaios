@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose, propose_message
 from core.ux.callbacks import (

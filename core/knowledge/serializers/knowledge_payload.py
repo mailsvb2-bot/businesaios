@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from ..enums import ConfidenceLevel, KnowledgeKind, LessonStatus, SourceKind
 from ..types import Lesson, MemoryLink, Pattern, TagSet

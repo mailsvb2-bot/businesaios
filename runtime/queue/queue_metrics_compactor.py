@@ -7,6 +7,7 @@ change queue execution state and must never become a planning layer.
 from __future__ import annotations
 
 from datetime import datetime
+
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_metrics_contracts import QueueMetricsCompactionReport
 from runtime.queue.queue_metrics_rollup_sqlite import SqliteQueueMetricsRollupStore

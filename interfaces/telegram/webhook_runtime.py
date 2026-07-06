@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Mapping
 
 from interfaces.telegram.runner_components import build_runner_components
 from interfaces.telegram.runner_loop import run_periodic_loops

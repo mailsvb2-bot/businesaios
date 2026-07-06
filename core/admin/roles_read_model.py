@@ -9,8 +9,8 @@ Strict tenant contract:
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Iterable
+from typing import Any
 
 ROLE_ADMIN = "admin"
 ROLE_MARKETING = "marketing"

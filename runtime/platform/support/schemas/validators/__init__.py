@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from typing import Any
 
 from runtime.platform.support.schemas.schema_catalog import is_valid_payload

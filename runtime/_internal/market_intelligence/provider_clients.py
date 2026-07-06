@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from collections.abc import Callable
-from collections.abc import Mapping
 
 from contracts.platforms.market_intelligence_advanced_contract import ProviderCursor
 from runtime._internal.market_intelligence.cursor_store import FileProviderCursorStore

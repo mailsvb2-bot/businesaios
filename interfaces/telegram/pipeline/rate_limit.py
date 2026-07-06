@@ -15,6 +15,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 
+
 @dataclass
 class RateLimitVerdict:
     allow: bool

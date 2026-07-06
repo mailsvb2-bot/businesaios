@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
 from collections.abc import Iterable
+from typing import Any
 
 from config.strategic_growth_policy import DEFAULT_GROWTH_SIGNALS_POLICY, GrowthSignalsPolicy
 from core.actions.names import ACTION_ADS_APPLY_EXECUTE_V1

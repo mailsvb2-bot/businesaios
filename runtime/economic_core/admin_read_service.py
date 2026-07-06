@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterable
 
 from economics.contracts import TruthFragment
 from runtime.economic_core.assembler import assemble_truth_fragments

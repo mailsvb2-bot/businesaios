@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, timedelta
 from typing import Any
-from collections.abc import Iterable
 
 from core.actions.action_names import ADS_APPLY_EXECUTE_V1
 from core.ads.autopilot.contract import EXPECTED_DECISION_ISSUER

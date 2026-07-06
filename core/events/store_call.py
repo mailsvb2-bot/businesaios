@@ -6,8 +6,8 @@ implementation could be mistaken for a signature mismatch.
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 from core.utils.call_signature import accepts_keyword as _accepts_keyword
 

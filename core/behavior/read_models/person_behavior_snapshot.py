@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from core.behavior.adapters.decisioncore_adapter import build_decisioncore_behavior_payload
 from core.behavior.assemblers.person_field_assembler import assemble_person_field

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from collections.abc import MutableMapping
+from collections.abc import Callable, MutableMapping
 
 from runtime.finance import AllocationRecommended, ForecastRevised, ScenarioSelected
 from runtime.finance.job_spec import FinanceJobSpec

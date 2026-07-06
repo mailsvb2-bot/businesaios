@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_metrics_compactor import QueueMetricsCompactionReport, QueueMetricsCompactor
 from runtime.queue.queue_metrics_rollup_sqlite import SqliteQueueMetricsRollupStore

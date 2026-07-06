@@ -11,9 +11,10 @@ It must not introduce queue policy or a second decision center.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from threading import Lock, Thread
-from collections.abc import Iterable
+
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.job_stop_token import JobStopToken
 from runtime.queue.job_worker import JobWorker

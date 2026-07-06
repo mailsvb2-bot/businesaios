@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+
 from runtime.queue.job_contract import JobLease, JobRecord, normalize_now, utc_now
 from runtime.queue.job_store_backend import JobStoreBackend
 from runtime.queue.job_visibility_timeout import JobVisibilityTimeout, JobVisibilityWindow

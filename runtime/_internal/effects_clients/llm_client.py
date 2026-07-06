@@ -7,9 +7,12 @@ Kept internal to runtime/_internal.
 from __future__ import annotations
 
 from typing import Any
+
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_str
+
 from .http_client import http_json
+
 
 def generate_openai_compat(*, base_url: str, api_key: str, payload: dict[str, Any], timeout_s: int = 20) -> dict[str, Any]:
     """OpenAI-compatible LLM call executed in sealed effects."""

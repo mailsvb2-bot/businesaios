@@ -6,10 +6,9 @@ masking internal provider errors as signature mismatches.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from inspect import Parameter, signature
 from typing import Any
-from collections.abc import Callable
-from collections.abc import Iterable
 
 CANON_CALL_SIGNATURE_HELPERS = True
 

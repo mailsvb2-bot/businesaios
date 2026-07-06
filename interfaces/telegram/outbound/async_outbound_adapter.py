@@ -15,9 +15,11 @@ import asyncio
 import logging
 import threading
 import time
-from typing import Any
 from collections.abc import Callable
+from typing import Any
+
 from interfaces.telegram.outbound.async_outbound_queue import AsyncTelegramOutboundQueue
+
 
 class AsyncTelegramOutboundQueueAdapter:
     """Sync-compatible facade over AsyncTelegramOutboundQueue."""

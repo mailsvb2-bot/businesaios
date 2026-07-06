@@ -19,7 +19,6 @@ from storage import (
 from storage.schema_version_store import SchemaVersionRecord
 from storage.tenant_partitioning import build_partition_key, describe_tenant_partition, normalize_storage_tenant_id
 
-
 _ALLOWED_LEGACY_FACTORY_PREFIXES = (
     "tests/",
     "migrations/",

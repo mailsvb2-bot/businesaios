@@ -1,10 +1,11 @@
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from sqlite3 import Connection
-from collections.abc import Iterator
 
 from runtime.platform.safety_sqlite_migrations import SafetySqliteMigrator, SchemaMigrationPlan
+
 
 class CircuitBreakerState:
     def __init__(self, *, key: str, consecutive_failures: int = 0, opened: bool = False) -> None:

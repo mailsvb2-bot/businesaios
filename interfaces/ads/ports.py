@@ -8,7 +8,9 @@ Why:
 from __future__ import annotations
 
 from typing import Any, Protocol
+
 from .base import AdsPlatform
+
 
 class SecretVault(Protocol):
     def get_secret(self, key: str) -> str: ...

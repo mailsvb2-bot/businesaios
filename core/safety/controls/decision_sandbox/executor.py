@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 from ..action_context import SafetyActionContext
 from .models import SandboxOutcome

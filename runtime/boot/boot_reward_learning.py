@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from runtime.boot.core_assembly_parts import build_reward_and_learning_components
 
 CANON_BOOT_WIRING_ONLY = True

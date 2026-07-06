@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from ..contracts import RetrievalQualityEvaluator
 from ..types import MemoryRetrieval, MemorySummary, StrategyMemoryEntry

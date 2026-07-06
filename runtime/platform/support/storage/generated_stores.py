@@ -6,7 +6,6 @@ subclass of one of the two base store types.
 
 from __future__ import annotations
 
-
 from runtime.platform.support.storage.base_stores import ArtifactStore, DatasetStore
 
 _STORE_SPECS: dict[str, tuple[str, type]] = {

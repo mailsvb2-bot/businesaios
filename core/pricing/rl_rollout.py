@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+
 from core.flags.provider import FeatureFlagProvider, FlagContext
+
 
 @dataclass(frozen=True)
 class RolloutDecision:

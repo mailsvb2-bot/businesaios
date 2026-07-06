@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 
 def best_response_price(

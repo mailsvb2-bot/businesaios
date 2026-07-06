@@ -17,9 +17,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from runtime.lazy_namespace import install_module_aliases
-
-
 from contracts.event_store import (
     EventStore,
     EventStoreReader,
@@ -27,6 +24,7 @@ from contracts.event_store import (
     iter_events_strict,
     supports_event_store,
 )
+from runtime.lazy_namespace import install_module_aliases
 
 CANON_EVENT_STORE_NAMESPACE = True
 

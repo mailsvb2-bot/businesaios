@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from runtime.platform.delivery_state import ACCEPTED_PHASE, FINALIZED_PHASE, RECOVERY_PHASE
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any, Protocol
-from collections.abc import Iterable
 
 from core.growth.ads_config_fingerprint import ads_config_fingerprint
 

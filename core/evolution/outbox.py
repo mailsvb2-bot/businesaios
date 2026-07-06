@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+
 @dataclass(frozen=True)
 class EvolutionJob:
     job_id: str
@@ -36,7 +37,7 @@ class EvolutionOutbox:
         from importlib import import_module
 
         module = import_module("runtime.platform.outbox.sqlite_evolution_outbox")
-        SqliteEvolutionOutbox = getattr(module, "SqliteEvolutionOutbox")
+        SqliteEvolutionOutbox = module.SqliteEvolutionOutbox
         impl = SqliteEvolutionOutbox(SqliteEvolutionOutbox.default_path_from_env())
         return EvolutionOutbox(impl)
 

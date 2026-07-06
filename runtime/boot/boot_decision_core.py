@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from bootstrap.world_model_boot_check import build_and_verify_default_world_model
 from core.ai.decision_core import DecisionCore
 

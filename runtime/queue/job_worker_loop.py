@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.job_stop_token import JobStopToken
 from runtime.queue.job_worker import JobWorker, WorkerTickReport

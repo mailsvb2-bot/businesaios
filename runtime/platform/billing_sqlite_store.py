@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from sqlite3 import IntegrityError
-from collections.abc import Iterator
 
 from billing.commercial_cycle_contract import CommercialCollectionResult
 from billing.ledger_event import LedgerEntry, LedgerPosting

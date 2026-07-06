@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from collections.abc import Mapping
 
 from ..enums import SourceKind
 from ..types import LessonDraft, TagSet

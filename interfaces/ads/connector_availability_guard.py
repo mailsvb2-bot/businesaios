@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 DEMO_CONNECTOR_REASON = 'connector_not_bundled'
 

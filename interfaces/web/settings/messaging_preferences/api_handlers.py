@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from interfaces.web.settings.messaging_preferences.page_dict import page_to_dict
 from interfaces.web.settings.messaging_preferences.page_presenter import present_page

@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scripts.ci.baseline_contract import BASELINE_REQUIREMENTS, baseline_requirement_ids, missing_scenario_paths, required_gates
+from scripts.ci.baseline_contract import (
+    BASELINE_REQUIREMENTS,
+    baseline_requirement_ids,
+    missing_scenario_paths,
+    required_gates,
+)
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.step_baseline_contract import run as run_baseline_contract
 

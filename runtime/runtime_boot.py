@@ -10,7 +10,7 @@ CANON_NO_ROOT_ASSEMBLY_LOGIC = True
 
 
 def _load_sovereign_bootstrap_runtime():
-    return getattr(import_module("runtime.bootstrap.sovereign_bootstrap"), "bootstrap_runtime")
+    return import_module("runtime.bootstrap.sovereign_bootstrap").bootstrap_runtime
 
 
 def boot_runtime() -> RuntimeRegistry:

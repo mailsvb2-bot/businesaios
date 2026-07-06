@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
-from collections.abc import Iterable
 
 from config.growth_trust_policy import DEFAULT_GROWTH_TRUST_POLICY, GrowthTrustPolicy
 

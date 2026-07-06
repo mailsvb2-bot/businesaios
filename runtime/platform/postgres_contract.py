@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
-from collections.abc import Mapping
 
 from runtime.execution.crash_window_recovery_contract import CrashWindowRecoveryAction
 

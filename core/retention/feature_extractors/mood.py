@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 from collections.abc import Iterable
+from typing import Any
 
 from config.retention_mood_policy import (
     DEFAULT_RETENTION_MOOD_POLICY,

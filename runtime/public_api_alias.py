@@ -36,7 +36,7 @@ def install_public_api_alias(module_name: str, *, expose_attribute: bool = True)
         current = getattr(alias_target, 'public_api', None)
         if current not in (None, alias_target):
             raise RuntimeError(f'public api attribute collision: {nested_alias}')
-        setattr(alias_target, 'public_api', alias_target)
+        alias_target.public_api = alias_target
 
 
 __all__ = [

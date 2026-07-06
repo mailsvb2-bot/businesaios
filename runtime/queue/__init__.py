@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib
 from typing import Any
+
 from runtime.public_api_alias import install_public_api_alias
 
 CANON_RUNTIME_QUEUE_NAMESPACE = True

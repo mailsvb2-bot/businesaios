@@ -7,10 +7,12 @@ It is safe to use in read-only layers.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
+
 from config.cache_window_policy import DEFAULT_CACHE_WINDOW_POLICY, CacheWindowPolicy
+
 
 @dataclass
 class CacheWindow:

@@ -8,7 +8,9 @@ from __future__ import annotations
 import threading
 import time
 from typing import Any
+
 from runtime.platform.config.env_flags import env_float
+
 
 def initialize_effects_runtime_state(effects: Any) -> None:
     if effects._last_sent is None:

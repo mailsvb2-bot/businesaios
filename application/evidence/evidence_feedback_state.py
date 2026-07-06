@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, MutableMapping
 from dataclasses import is_dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
-from collections.abc import Mapping, MutableMapping
 
 from execution.business_operating_memory import (
     project_business_memory_evidence,
@@ -64,7 +64,7 @@ def apply_feedback_to_world_state(
             compact_evidence=compact_evidence,
             receipt=receipt,
         )
-        setattr(world_state, 'meta', patched)
+        world_state.meta = patched
         return world_state
     state = _ensure_mapping(world_state)
     state['meta'] = _apply_feedback_to_meta(

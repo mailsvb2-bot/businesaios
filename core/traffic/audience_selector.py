@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class AudienceSelector:
     """Keyword-heuristic interest suggester (pure, deterministic, no I/O).

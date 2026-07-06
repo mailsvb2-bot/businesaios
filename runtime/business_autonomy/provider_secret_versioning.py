@@ -143,7 +143,7 @@ class ProviderSecretVersioningService:
                 yield envelope.record
             return
         if hasattr(self.secret_vault, 'list_records'):
-            for record in getattr(self.secret_vault, 'list_records')():
+            for record in self.secret_vault.list_records():
                 if record.ref.tenant_id != tenant_id:
                     continue
                 if str(record.ref.connector_id or '') != provider.connector_id:

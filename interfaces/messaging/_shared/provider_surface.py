@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from interfaces.messaging._shared.provider_runtime import ProviderAdapter, ProviderRunner, build_config_for
 
+
 def make_adapter_type(*, runner_factory):
     class Adapter(ProviderAdapter):
         def __init__(self):

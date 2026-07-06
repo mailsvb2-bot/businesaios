@@ -15,7 +15,7 @@ SCHEMA_VERSION = 6
 
 
 class _ApprovalTicketMap(MutableMapping[str, ApprovalTicket]):
-    def __init__(self, repo: 'PlatformSqliteApprovalRepository') -> None:
+    def __init__(self, repo: PlatformSqliteApprovalRepository) -> None:
         self._repo = repo
 
     def __getitem__(self, key: str) -> ApprovalTicket:

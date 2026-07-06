@@ -3,7 +3,6 @@ from __future__ import annotations
 from runtime.platform.postgres_contract import PostgresRuntimeProof, evaluate_postgres_contract
 from runtime.platform.postgres_live_probe import PostgresLiveProbeConfig
 
-
 _READY_PROOF = dict(
     database_url_present=True,
     postgres_enabled=True,

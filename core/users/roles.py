@@ -11,10 +11,9 @@ This is intentionally dumb and explicit.
 
 from __future__ import annotations
 
-
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
-from collections.abc import Mapping
 
 UserRole = Literal["owner", "marketer", "operator"]
 

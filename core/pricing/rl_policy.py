@@ -11,8 +11,9 @@ that expect a 'choose_action' shape.
 from __future__ import annotations
 
 import random
-from typing import Any
 from collections.abc import Sequence
+from typing import Any
+
 
 class RLPricePolicy:
     def __init__(self, actions: Sequence[Any]):

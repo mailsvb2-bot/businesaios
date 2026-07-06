@@ -7,8 +7,8 @@ handles stable JSON/row transformations for the canonical delivery-state owner.
 from __future__ import annotations
 
 import json
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 FINALIZED_PHASE = "finalized"
 

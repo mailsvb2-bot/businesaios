@@ -8,8 +8,8 @@ router.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from runtime.audit_log import RuntimeAuditLog
 
+from runtime.audit_log import RuntimeAuditLog
 
 CANON_RUNTIME_OBSERVABILITY_OWNER = True
 CANON_RUNTIME_OBSERVABILITY_AUDIT_ONLY = True

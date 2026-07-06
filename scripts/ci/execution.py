@@ -9,7 +9,11 @@ from scripts.ci.coverage_report import write_coverage_stub_xml
 from scripts.ci.goal import optimization_goal
 from scripts.ci.junit_report import write_junit_xml
 from scripts.ci.paths import execution_dir, junit_dir, reports_dir
-from scripts.ci.plan_registry import plan_for_gate, requires_release_proof_environment, requires_release_dependency_lock_environment
+from scripts.ci.plan_registry import (
+    plan_for_gate,
+    requires_release_dependency_lock_environment,
+    requires_release_proof_environment,
+)
 from scripts.ci.reports import write_report
 from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state
 from scripts.ci.step_registry import handler_for_step

@@ -10,12 +10,11 @@ live adapters.
 
 from __future__ import annotations
 
-
 import importlib.util
 import json
 import sys
-from typing import Any
 from collections.abc import Iterable, Mapping
+from typing import Any
 
 from runtime.platform.event_store.append_contract import AppendEvent, normalize_append_event
 from runtime.platform.postgres_port import PostgresPort

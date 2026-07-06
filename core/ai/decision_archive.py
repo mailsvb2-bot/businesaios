@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
+
 from core.ai.decision import DecisionEnvelope
+
 
 class DecisionArchive(Protocol):
     def put(self, env: DecisionEnvelope) -> None: ...

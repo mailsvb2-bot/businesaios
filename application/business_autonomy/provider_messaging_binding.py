@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 

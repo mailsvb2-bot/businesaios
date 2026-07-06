@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from importlib import import_module
 from collections.abc import Mapping
+from importlib import import_module
 
 
 def assert_world_state_boundary(advisory_flags: Mapping[str, str]) -> None:
-    fn = getattr(import_module("canon.integration_boundaries"), "assert_world_state_boundary")
+    fn = import_module("canon.integration_boundaries").assert_world_state_boundary
     fn(advisory_flags)
 
 

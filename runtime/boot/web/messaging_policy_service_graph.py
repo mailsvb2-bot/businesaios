@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from runtime.boot.web.messaging_policy_trace_search_service_builder import build_messaging_policy_trace_search_service
 from runtime.messaging_policy_alerts.service import MessagingPolicyAlertService
 from runtime.messaging_policy_dashboard.service import MessagingPolicyDashboardService

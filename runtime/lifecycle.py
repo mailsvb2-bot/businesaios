@@ -16,7 +16,7 @@ class Lifecycle:
         self._state = state
 
     def mark_booted(self) -> None:
-        setattr(self._state, "booted", True)
+        self._state.booted = True
 
     def mark_ready(self) -> None:
-        setattr(self._state, "ready", True)
+        self._state.ready = True

@@ -5,7 +5,6 @@ Pure functions taking an open sqlite3.Connection.
 from __future__ import annotations
 
 
-
 def upsert_user_features_daily(
     db,
     *,

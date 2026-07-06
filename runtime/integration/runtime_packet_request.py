@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from runtime.advisory.autonomy_advisory_packet import AutonomyAdvisoryPacket
 from runtime.market.market_snapshot import MarketSnapshot

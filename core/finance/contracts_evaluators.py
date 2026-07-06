@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from decimal import Decimal
 from typing import Protocol
-from collections.abc import Sequence
 
 from .types import LiquiditySnapshot, PaymentRecord, RevenueRecord
 

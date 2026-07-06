@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+
 from runtime.actions import ACTION_AI_CEO_PLAN_V1
 from runtime.boot.actions_registry import all_actions
 

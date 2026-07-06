@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from typing import Any
+
 from core.ux.callbacks import CB_GIFT_CREATE, CB_MENU_MAIN, CB_SUB_MENU
+
 from .common import mk
+
 
 def kb_gift_menu() -> dict[str, Any]:
     return mk(

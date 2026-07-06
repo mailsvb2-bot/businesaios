@@ -5,9 +5,17 @@ import os
 from scripts.ci.paths import repo_root
 from scripts.ci.regression_impact import (
     IMPACT_RULES,
+)
+from scripts.ci.regression_impact import (
     blocked_artifact_paths as _legacy_blocked_artifact_paths,
+)
+from scripts.ci.regression_impact import (
     impacted_rules as _legacy_impacted_rules,
+)
+from scripts.ci.regression_impact import (
     missing_fast_steps_for_paths as _legacy_missing_fast_steps_for_paths,
+)
+from scripts.ci.regression_impact import (
     required_fast_steps_for_paths as _legacy_required_fast_steps_for_paths,
 )
 from scripts.ci.subprocess_io import run_command

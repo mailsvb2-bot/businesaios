@@ -7,7 +7,6 @@ canonical module path.
 
 from __future__ import annotations
 
-
 from runtime.platform.support.integrations._local_adapters_io import SQLAdapter, TracingAdapter
 from runtime.platform.support.integrations._local_adapters_state import (
     ExperimentTrackerAdapter,

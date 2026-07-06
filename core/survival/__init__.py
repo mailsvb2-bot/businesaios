@@ -6,10 +6,8 @@ live in the top-level ``survival`` package.
 
 from __future__ import annotations
 
-
 import sys
 from importlib import import_module
-
 
 from survival.controller import SurvivalController, SurvivalMode, SurvivalVerdict
 from survival.metrics import SurvivalMetrics

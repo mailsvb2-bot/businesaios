@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
-from collections.abc import Iterable, Mapping
 
 from application.business_autonomy.integration_capability_catalog import CapabilityStatus, list_integration_capabilities
 from application.business_autonomy.provider_admin_contract import ProviderDefinition

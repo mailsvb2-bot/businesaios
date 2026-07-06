@@ -6,7 +6,6 @@ Public API is unchanged; callers must keep importing
 
 from __future__ import annotations
 
-
 import logging
 import sqlite3
 

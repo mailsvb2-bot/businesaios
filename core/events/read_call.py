@@ -6,9 +6,9 @@ store implementation could be mistaken for a signature mismatch.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from typing import Any
-from collections.abc import Callable
-from collections.abc import Iterable
+
 from core.utils.call_signature import accepted_kwargs as _accepted_kwargs
 from core.utils.call_signature import accepts_keyword as _accepts_keyword
 from core.utils.call_signature import supports_zero_arg_call as _supports_zero_arg_call

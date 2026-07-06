@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from interfaces.web.debug.messaging_policy_alerts.route_bundle import MessagingPolicyAlertsRouteBundle
 from interfaces.web.debug.messaging_policy_dashboard.route_bundle import MessagingPolicyDashboardRouteBundle
 from interfaces.web.debug.messaging_policy_observability_nav.route_bundle import (

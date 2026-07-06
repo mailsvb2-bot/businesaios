@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import importlib
+from collections.abc import Callable
 from inspect import Parameter, signature
 from typing import Any
-from collections.abc import Callable
 
 from runtime.ports.effects import EffectsPort
 

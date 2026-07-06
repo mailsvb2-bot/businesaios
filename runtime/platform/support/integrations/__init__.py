@@ -7,7 +7,6 @@ preserving the same public classes.
 
 from __future__ import annotations
 
-
 from runtime.platform.support.integrations.local_adapters import (
     ExperimentTrackerAdapter,
     FeatureStoreAdapter,

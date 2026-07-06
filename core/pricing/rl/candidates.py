@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 
-
 def round_step(v: float, step: int) -> int:
     step = max(1, int(step))
     return int(round(float(v) / step) * step)

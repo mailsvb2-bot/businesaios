@@ -42,7 +42,7 @@ def regenerate_marketing_copy(payload: dict[str, Any]) -> dict[str, Any]:
     # Lazy import to avoid core->platform import edge on module load.
     from importlib import import_module
 
-    SqliteEventStore = getattr(import_module("runtime.platform.event_store.sqlite_event_store"), "SqliteEventStore")
+    SqliteEventStore = import_module("runtime.platform.event_store.sqlite_event_store").SqliteEventStore
 
     with SqliteEventStore(events_path) as store:
         store.emit(

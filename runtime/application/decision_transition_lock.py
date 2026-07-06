@@ -7,9 +7,10 @@ application-facing adapters delegate to one already-owned transition call
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Callable
+
 from core.strategic_horizon.engine import CANONICAL_DECISION_OPTIMIZE_METHOD
 
 CANON_RUNTIME_APPLICATION_DECISION_TRANSITION_SINGLE_OWNER = True

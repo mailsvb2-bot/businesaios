@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from learning.registry import ArtifactRegistry
 from runtime.boot import (
     EconomicBrain,

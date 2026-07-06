@@ -13,7 +13,9 @@ other modules can depend on without re-implementing throttling.
 from __future__ import annotations
 
 from typing import Any
+
 from core.observability.throttled_logger import exception_throttled
+
 
 def log_exception_throttled(
     logger: Any,

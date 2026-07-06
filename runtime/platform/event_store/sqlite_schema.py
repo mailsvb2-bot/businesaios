@@ -5,7 +5,6 @@ Extracted from sqlite_event_store.py to eliminate god-module.
 
 from __future__ import annotations
 
-
 import sqlite3
 
 from observability.platform.observability.silent import swallow

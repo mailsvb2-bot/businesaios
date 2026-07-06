@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 
+
 class Clock:
     def now_ms(self) -> int:
         raise NotImplementedError

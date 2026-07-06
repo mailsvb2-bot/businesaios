@@ -6,9 +6,7 @@ Extracted from sqlite_event_store.py.
 
 from __future__ import annotations
 
-
 import sqlite3
-
 
 
 def upsert_user_features_daily(

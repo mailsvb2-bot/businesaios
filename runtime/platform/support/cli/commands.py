@@ -6,7 +6,6 @@ operator surface for offline tooling instead of decorative no-op entrypoints.
 
 from __future__ import annotations
 
-
 import json
 import os
 import sys

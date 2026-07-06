@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 from interfaces.messaging._shared.adapter_base import AdapterBase
 from interfaces.messaging._shared.delivery_mapper import map_delivery_result

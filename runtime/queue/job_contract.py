@@ -9,11 +9,12 @@ Operational only:
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
-from collections.abc import Mapping
+
 from core.tenancy.normalization import require_tenant_id
 
 CANON_RUNTIME_QUEUE_CONTRACT = True

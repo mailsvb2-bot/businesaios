@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict
 from typing import Any
-from collections.abc import Mapping
 
 from contracts.action_impact_contract import ActionCategory, ActionImpact
 from execution.approval_execution_gate import ApprovalExecutionGate
@@ -54,7 +54,7 @@ def _execution_approval_gate(executor: Any) -> ApprovalExecutionGate:
     gate = getattr(executor, "_approval_execution_gate", None)
     if gate is None:
         gate = _build_default_approval_execution_gate()
-        setattr(executor, "_approval_execution_gate", gate)
+        executor._approval_execution_gate = gate
     return gate
 
 
@@ -62,7 +62,7 @@ def _execution_operator_override_store(executor: Any):
     store = getattr(executor, "_operator_override_store", None)
     if store is None:
         store = build_default_operator_override_store()
-        setattr(executor, "_operator_override_store", store)
+        executor._operator_override_store = store
     return store
 
 
@@ -200,7 +200,7 @@ def _governance_audit_log(executor: Any, guard: Any | None = None):
             return audit_log
 
     audit_log = PersistentGovernanceAuditLog()
-    setattr(executor, "_governance_audit_log", audit_log)
+    executor._governance_audit_log = audit_log
     return audit_log
 
 

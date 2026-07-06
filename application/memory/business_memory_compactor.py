@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from typing import Any
-from collections.abc import Iterable
 
 from application.memory.business_memory_policy import BusinessMemoryPolicy
 from application.memory.business_operating_memory_types import (
@@ -13,7 +13,6 @@ from application.memory.business_operating_memory_types import (
     PatternEvidence,
     SignalMemoryRecord,
 )
-
 
 CANON_BUSINESS_MEMORY_COMPACTOR = True
 

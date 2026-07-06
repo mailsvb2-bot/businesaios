@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping
+from typing import Any
 
 from application.effects.effect_outcome_vocabulary import normalize_outcome_status
 from application.governance.canonical_governance_evidence import canonical_governance_evidence

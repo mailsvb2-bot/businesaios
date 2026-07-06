@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
 from typing import Any
-from collections.abc import Iterator, Mapping
 
 from runtime.platform.app_paths import runtime_data_dir
 

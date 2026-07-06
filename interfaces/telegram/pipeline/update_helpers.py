@@ -94,9 +94,9 @@ def emit_behavior_telemetry(*, event_log: Any, ctx: Any, ws: Any) -> None:
     kind = "callback" if bool(getattr(ctx, "is_callback", False)) else "message"
     button_id = None
     if bool(getattr(ctx, "is_callback", False)) and getattr(ctx, "callback_data", None):
-        button_id = str(getattr(ctx, "callback_data"))[:128]
+        button_id = str(ctx.callback_data)[:128]
     elif getattr(ctx, "command", None):
-        button_id = str(getattr(ctx, "command"))[:128]
+        button_id = str(ctx.command)[:128]
     tel = BehaviorTelemetryV1(
         user_id=str(ws.user_id or ctx.chat_id),
         tenant_id=str(ws.tenant_id or "default"),

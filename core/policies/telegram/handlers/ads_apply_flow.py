@@ -14,6 +14,7 @@ from core.policies.telegram.handlers.ads_apply import handle_ads_apply
 from core.policies.telegram.helpers import ProposedAction
 from core.ux.callbacks import CB_ADS_APPLY_CANCEL, CB_ADS_APPLY_CONFIRM, CB_ADS_APPLY_PREVIEW
 
+
 def handle_ads_apply_flow(ctx: TelegramCtx, *, user_id: str) -> ProposedAction | None:
     """Route ads-apply callbacks to the canonical handler.
 

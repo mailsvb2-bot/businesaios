@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import time
 from typing import Any
+
 from config.final_hidden_logic_policy import DEFAULT_BEHAVIOR_TELEMETRY_POLICY
 from core.behavior.dirac_behavior import Complex4, DiracBehaviorModel
 from core.behavior.org_field import OrgField, aggregate_org_observables
 from core.events.read_model_support import best_effort_iter_events, best_effort_latest_events
+
 
 def behavior_snapshot(
     event_store: Any,

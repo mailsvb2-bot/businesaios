@@ -12,12 +12,14 @@ Actual deployment/rollback is executed ONLY via RuntimeExecutor after a Decision
 
 from __future__ import annotations
 
-from core.tenancy.tenant import current_tenant_id
 import time
-from dataclasses import dataclass
 from collections.abc import Iterable
+from dataclasses import dataclass
+
 from config.final_hidden_logic_policy import DEFAULT_LEARNING_SYSTEM_POLICY
+from core.tenancy.tenant import current_tenant_id
 from kernel.world_state import WorldStateV1
+
 
 @dataclass
 class BanditStats:

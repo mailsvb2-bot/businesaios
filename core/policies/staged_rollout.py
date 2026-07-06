@@ -9,11 +9,13 @@ and must pass RuntimeGuard + DecisionLedger + RuntimeExecutor.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol
-from collections.abc import Iterable
+
 from config.staged_rollout_policy import DEFAULT_STAGED_ROLLOUT_POLICY, StagedRolloutPolicy
+
 
 class RolloutStage(str, Enum):
     OFFLINE = "offline"

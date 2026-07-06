@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Mapping, Sequence
+from typing import Any
 
 CANON_BUSINESS_MEMORY_SECOND_BRAIN_BOUNDARY = True
 

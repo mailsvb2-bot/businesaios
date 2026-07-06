@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sys
 from importlib import import_module
+
 from kernel.decision_candidate import DecisionCandidate
 from kernel.decision_context import DecisionContext
 from kernel.decision_reason import DecisionReason

@@ -7,8 +7,10 @@ No API changes to EffectsPort.
 from __future__ import annotations
 
 from typing import Any
+
 from runtime._internal.effect_types import EffectActionType
 from runtime.security.runtime_asserts import assert_called_from_executor
+
 
 class WeatherEffectsMixin:
     def send_weather(

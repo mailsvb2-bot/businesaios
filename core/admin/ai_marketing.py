@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import hashlib
 from typing import Any
+
 from config.admin_marketing_policy import DEFAULT_ADMIN_MARKETING_POLICY, AdminMarketingPolicy
 from core.economics.brain import EconomicBrain
 from core.economics.types import EconomicState
+
 
 def _stable_choice(key: str, options: list[str]) -> str:
     if not options:

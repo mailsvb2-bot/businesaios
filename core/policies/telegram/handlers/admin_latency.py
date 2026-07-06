@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from core.admin.read_model import latency_breakdown, latency_brief, sla_breaches_brief
 from core.policies.telegram.context import TelegramCtx
 from core.policies.telegram.helpers import ProposedAction, propose_message

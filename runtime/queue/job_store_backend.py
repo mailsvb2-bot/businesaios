@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Protocol, runtime_checkable
+
 from runtime.queue.job_contract import JobRecord, JobState
 
 CANON_RUNTIME_QUEUE_JOB_STORE_BACKEND = True

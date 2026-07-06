@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from core.ai_ceo.contracts import CEOPlanStepV1
 from core.ai_ceo.ledger import GrowthSnapshotV1
 from core.ai_ceo.ledger import to_dict as snapshot_to_dict

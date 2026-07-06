@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+
 def mark_execution_once(*, ledger: Any, env: Any) -> None:
-    try_mark = getattr(ledger, "try_mark_executed")
+    try_mark = ledger.try_mark_executed
     if not bool(try_mark(env)):
         raise RuntimeError("DUPLICATE_EXECUTION")
 

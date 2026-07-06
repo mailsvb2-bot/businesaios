@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import ast
 import json
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from collections.abc import Iterable
 
 from scripts.ci.paths import repo_root
 

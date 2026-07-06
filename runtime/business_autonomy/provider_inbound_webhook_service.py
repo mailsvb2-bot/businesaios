@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
 from collections.abc import Mapping
+from dataclasses import dataclass, field
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookIngressResult

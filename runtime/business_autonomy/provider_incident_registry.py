@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from collections.abc import Mapping
 from uuid import uuid4
 
 from application.business_autonomy.persistence import business_autonomy_runtime_dir

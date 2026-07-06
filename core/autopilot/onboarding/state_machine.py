@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
-from collections.abc import Mapping
 
 from core.observability.structured_logging import log_exception_throttled
 

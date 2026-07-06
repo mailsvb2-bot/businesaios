@@ -6,7 +6,6 @@ import sys
 from importlib import import_module
 from types import ModuleType
 
-
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 from interfaces.api.inference_admin_route_handlers import InferenceAdminRouteHandlers
 from interfaces.api.inference_capacity_route_handlers import InferenceCapacityRouteHandlers

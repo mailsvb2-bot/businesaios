@@ -9,6 +9,7 @@ from __future__ import annotations
 import threading
 from collections import deque
 
+
 class OutboundMetricsCollector:
     """Thread-safe collector of (priority, wait_ms, exec_ms) samples."""
 

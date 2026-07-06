@@ -10,6 +10,7 @@ from __future__ import annotations
 from interfaces.messaging._shared.provider_surface import make_adapter_type, make_runner_type
 from interfaces.messaging_runtime.channel_factory import build_channel_binding
 
+
 def make_channel_runner(*, provider: str, env_prefix: str, default_mode: str):
     return make_runner_type(provider=provider, env_prefix=env_prefix, default_mode=default_mode)
 

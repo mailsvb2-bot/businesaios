@@ -6,7 +6,6 @@ an alternative runtime assembly path, registry surface, or decision owner.
 
 from __future__ import annotations
 
-
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path

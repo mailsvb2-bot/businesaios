@@ -13,12 +13,14 @@ Invariants:
 from __future__ import annotations
 
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Iterable
+
 from core.observability.silent import swallow
-from runtime.platform.config.env_flags import env_bool, env_str
 from interfaces.telegram.runtime.telegram_runtime_worldstate_builder import build_system_world_state
+from runtime.platform.config.env_flags import env_bool, env_str
+
 
 def _env_bool(name: str, default: bool) -> bool:
     return bool(env_bool(name, default))

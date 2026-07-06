@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any, Protocol
-from collections.abc import Mapping
 
 from runtime.demand_gravity.admin_view import serialize_demand_candidate
 from runtime.demand_gravity.contracts import DemandCandidate, DemandSignal

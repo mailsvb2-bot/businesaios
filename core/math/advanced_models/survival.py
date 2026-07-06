@@ -45,4 +45,4 @@ def exponential_hazard_probability(*, rate_lambda: float, time_horizon: float) -
     return 1.0 - math.exp(-rate_lambda * time_horizon)
 
 
-setattr(KaplanMeierEstimator, "fit", KaplanMeierEstimator.estimate)
+KaplanMeierEstimator.fit = KaplanMeierEstimator.estimate

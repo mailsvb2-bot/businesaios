@@ -12,8 +12,8 @@ It must stay *lazy* and must not import OfferEngine/registries at import-time.
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Iterable, Iterator, MutableMapping
+from typing import Any
 
 
 def _load_offers() -> dict[str, Any]:

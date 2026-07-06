@@ -8,7 +8,7 @@ def resolve_channel_health_registry(runtime_obj) -> ChannelHealthRegistry:
     if registry is None:
         registry = ChannelHealthRegistry()
         try:
-            setattr(runtime_obj, "messaging_channel_health_registry", registry)
+            runtime_obj.messaging_channel_health_registry = registry
         except Exception:
             pass
     return registry

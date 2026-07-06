@@ -4,9 +4,9 @@ import asyncio
 import itertools
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
-from collections.abc import Awaitable, Callable
 
 from core.observability.errors import log_exception_throttled
 from core.ratelimit.token_bucket import AsyncTokenBucket

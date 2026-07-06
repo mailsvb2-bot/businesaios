@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from threading import RLock
+
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 from runtime.queue.job_contract import normalize_now
 from runtime.queue.queue_operational_contracts import QueueJanitorReport, QueueLeadershipReport

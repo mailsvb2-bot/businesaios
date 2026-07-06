@@ -10,6 +10,7 @@ This module is intentionally small and deterministic.
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from runtime.boot.actions_registry import ActionSpecV1
 from runtime.ratelimit import (
     MemoryRateLimitStore,
@@ -18,6 +19,7 @@ from runtime.ratelimit import (
     TokenBucketLimiter,
 )
 from runtime.tenancy import TenantId
+
 
 @dataclass(frozen=True)
 class RuntimeLimitVerdict:

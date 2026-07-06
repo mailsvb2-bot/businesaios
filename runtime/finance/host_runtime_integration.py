@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from collections.abc import Callable
-from collections.abc import Mapping
 
 from runtime.events import EventLog
 from runtime.finance.event_publisher import FinanceEventPublisher

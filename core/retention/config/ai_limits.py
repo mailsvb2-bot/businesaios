@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Final
+
 from core.retention.config.pricing_ladder import ALLOWED_DISCOUNTS_PCT
+
 
 @dataclass(frozen=True)
 class AiLimits:

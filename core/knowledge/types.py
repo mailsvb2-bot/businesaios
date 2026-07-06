@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from collections.abc import Mapping, Sequence
 
 from config.world_model_defaults import DEFAULT_WORLD_MODEL_DEFAULTS
 

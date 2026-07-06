@@ -11,12 +11,14 @@ remain behind explicit entitlement checks and budget guardrails.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 from typing import Any, Protocol
-from collections.abc import Iterable, Sequence
+
 from .errors import AdsConnectorError
+
 
 class AdsPlatform(str, Enum):
     META = "meta"
