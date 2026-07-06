@@ -28,9 +28,7 @@ def eligible(*, behavior: Mapping[str, Any], rule) -> bool:
         return False
     if eng < float(getattr(rule, "min_engagement", 0.0) or 0.0):
         return False
-    if fat > float(getattr(rule, "max_fatigue", 1.0) or 1.0):
-        return False
-    return True
+    return fat <= float(getattr(rule, "max_fatigue", 1.0) or 1.0)
 
 
 def choose_slot(*, behavior: Mapping[str, Any]) -> str:

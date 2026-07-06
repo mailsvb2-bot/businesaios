@@ -98,7 +98,7 @@ class LearningSystem:
                     return proposal
 
         # Simple guardrail: propose rollback if current policy collapses
-        for pid, st in self._stats.items():
+        for _pid, st in self._stats.items():
             if st.n >= self._min_samples and st.mean < self._collapse_threshold:
                 proposal = {"kind": "rollback", "reason": "reward_collapse"}
                 ph = str(proposal)

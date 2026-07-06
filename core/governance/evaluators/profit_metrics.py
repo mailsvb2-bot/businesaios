@@ -19,7 +19,7 @@ def _to_utc_dt(ts: Any) -> datetime | None:
     if isinstance(ts, datetime):
         return ts.astimezone(UTC)
     try:
-        if isinstance(ts, (int, float)):
+        if isinstance(ts, int | float):
             v = float(ts)
             if v > 2_000_000_000_000:
                 return datetime.fromtimestamp(v / DEFAULT_PROFIT_METRICS_POLICY.minor_units_multiplier, tz=UTC)

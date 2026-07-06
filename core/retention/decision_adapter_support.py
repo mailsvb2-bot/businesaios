@@ -92,7 +92,7 @@ def try_build_offer_step(
     try:
         if isinstance(pc, dict) and str(pc.get("mode") or "").strip().lower() == "safe":
             prefixes = pc.get("disallow_offer_prefixes")
-            if isinstance(prefixes, (list, tuple)) and decision.offer_arm:
+            if isinstance(prefixes, list | tuple) and decision.offer_arm:
                 arm = str(decision.offer_arm)
                 for pfx in prefixes:
                     if isinstance(pfx, str) and arm.startswith(pfx):

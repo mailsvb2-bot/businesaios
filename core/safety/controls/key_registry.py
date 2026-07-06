@@ -58,7 +58,7 @@ class SafetyKeyRegistry:
         current_id = self.current.key_id
         if current_id not in accepted:
             accepted.insert(0, current_id)
-        for key_id in self._keys.keys():
+        for key_id in self._keys:
             if key_id not in accepted:
                 accepted.append(key_id)
         return tuple(accepted)
