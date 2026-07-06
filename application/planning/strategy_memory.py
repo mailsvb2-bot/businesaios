@@ -233,8 +233,8 @@ class StrategyMemoryService:
         decomposition_patterns = dict(snapshot.decomposition_patterns)
         task_patterns = dict(snapshot.task_patterns)
         tasks = plan.get("tasks") or ()
-        task_count = len(tasks) if isinstance(tasks, (list, tuple)) else 1
-        for task in tasks if isinstance(tasks, (list, tuple)) else ():
+        task_count = len(tasks) if isinstance(tasks, list | tuple) else 1
+        for task in tasks if isinstance(tasks, list | tuple) else ():
             row = _safe_dict(task)
             phase = _text(row.get("phase"))
             task_id = _text(row.get("task_id"))

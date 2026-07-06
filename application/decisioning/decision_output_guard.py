@@ -14,7 +14,7 @@ def assert_non_decision_payload(value: object) -> RecommendationSet:
     if isinstance(value, Mapping):
         _reject_decision_like_mapping(value)
         return [dict(value)]
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
         out: RecommendationSet = []
         for item in value:
             if not isinstance(item, Mapping):

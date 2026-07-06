@@ -145,13 +145,13 @@ class BusinessMemoryPolicy:
 
     def sanitize_jsonish(self, value: object, *, depth: int = 0) -> Any:
         if depth >= int(self.max_nested_depth):
-            if isinstance(value, (str, int, float, bool)) or value is None:
+            if isinstance(value, str | int | float | bool) or value is None:
                 return self.sanitize_text(value, max_length=self.max_summary_length) if isinstance(value, str) else value
             return self.sanitize_text(repr(value), max_length=160)
 
         if isinstance(value, str):
             return self.sanitize_text(value, max_length=self.max_summary_length)
-        if isinstance(value, (int, float, bool)) or value is None:
+        if isinstance(value, int | float | bool) or value is None:
             return value
         if isinstance(value, Mapping):
             result: dict[str, Any] = {}
@@ -164,7 +164,7 @@ class BusinessMemoryPolicy:
                     continue
                 result[key] = cleaned
             return result
-        if isinstance(value, (list, tuple, set)):
+        if isinstance(value, list | tuple | set):
             result: list[Any] = []
             for item in list(value)[: int(self.max_nested_sequence_items)]:
                 cleaned = self.sanitize_jsonish(item, depth=depth + 1)

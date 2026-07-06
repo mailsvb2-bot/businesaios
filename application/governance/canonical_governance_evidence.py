@@ -17,7 +17,7 @@ def _safe_dict(value: object) -> dict[str, Any]:
 
 
 def _safe_list(value: object) -> list[str]:
-    if isinstance(value, (list, tuple, set)):
+    if isinstance(value, list | tuple | set):
         return [str(item).strip() for item in value if str(item).strip()]
     text = str(value or '').strip()
     return [text] if text else []
