@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import asdict
 
 from application.capability.action_capability_matrix import build_action_capability_matrix_payload
@@ -11,6 +12,10 @@ from execution.headless_boot import build_headless_runtime
 from interfaces.common.connector_registry_matrix import build_connector_registry_matrix_payload
 
 CANON_HEADLESS_CLI = True
+
+
+def _write_json_stdout(payload: object) -> None:
+    sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -58,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
             matrix = [item for item in matrix if str(item.get('action_type') or '') == wanted]
         if getattr(args, 'only_prod_ready', False):
             matrix = [item for item in matrix if bool(item.get('prod_ready'))]
-        print(json.dumps(matrix, ensure_ascii=False, indent=2, sort_keys=True))
+        _write_json_stdout(matrix)
         return 0
 
     if args.command == "connector-matrix":
@@ -73,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
             matrix = [item for item in matrix if bool(item.get('implemented'))]
         if getattr(args, 'only_prod_ready', False):
             matrix = [item for item in matrix if bool(item.get('production_ready'))]
-        print(json.dumps(matrix, ensure_ascii=False, indent=2, sort_keys=True))
+        _write_json_stdout(matrix)
         return 0
 
     runtime = build_headless_runtime(entrypoint="headless_cli")
@@ -94,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         report = runtime.contract.execute_autopilot(request)
         if not getattr(args, "quiet", False):
-            print(json.dumps(asdict(report), ensure_ascii=False, indent=2, sort_keys=True))
+            _write_json_stdout(asdict(report))
         return 0 if report.completed else 1
 
     if args.command == "scenario":
@@ -106,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         report = runtime.contract.execute_autopilot(request)
         if not getattr(args, "quiet", False):
-            print(json.dumps(asdict(report), ensure_ascii=False, indent=2, sort_keys=True))
+            _write_json_stdout(asdict(report))
         return 0 if report.completed else 1
 
     parser.error("unknown command")
