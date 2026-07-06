@@ -48,9 +48,8 @@ class HeadlessStopPolicy:
             return StopDecision(True, "goal_reached")
         if bool(operator_required) or bool(feedback.get("operator_required")):
             return StopDecision(True, "operator_required")
-        if bool(step_attempted) and bool(step_executed) and not bool(step_verified):
-            if int(consecutive_failures) >= int(self.max_failures):
-                return StopDecision(True, "verification_failed")
+        if bool(step_attempted) and bool(step_executed) and not bool(step_verified) and int(consecutive_failures) >= int(self.max_failures):
+            return StopDecision(True, "verification_failed")
         if not bool(step_executed) and int(consecutive_failures) >= int(self.max_failures):
             return StopDecision(True, "execution_failed")
         if int(step_index) + 1 >= int(max_steps):
