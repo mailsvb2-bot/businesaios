@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from canon.enforcer.checks_ast import check_ast_semantics
@@ -14,6 +15,10 @@ from canon.enforcer.reporting import EnforcerReport, Violation
 from canon.enforcer.rules import REPO_ROOT
 
 __all__ = ["EnforcerReport", "Violation", "main", "run_enforcer"]
+
+
+def _write_text_stdout(text: str) -> None:
+    sys.stdout.write(str(text) + "\n")
 
 
 def run_enforcer(root: str | Path = REPO_ROOT) -> EnforcerReport:
@@ -33,9 +38,9 @@ def run_enforcer(root: str | Path = REPO_ROOT) -> EnforcerReport:
 
 def main() -> int:
     report = run_enforcer(REPO_ROOT)
-    print(report.render_text())
-    print("\nJSON REPORT:")
-    print(report.to_json())
+    _write_text_stdout(report.render_text())
+    _write_text_stdout("\nJSON REPORT:")
+    _write_text_stdout(report.to_json())
     return 0 if report.ok else 1
 
 
