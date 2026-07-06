@@ -50,7 +50,7 @@ def _is_test_file(path: Path) -> bool:
 def _test_functions(tree: ast.AST) -> list[ast.FunctionDef | ast.AsyncFunctionDef]:
     funcs: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
     for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("test_"):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith("test_"):
             funcs.append(node)
     return funcs
 
@@ -75,7 +75,7 @@ def _has_reason_keyword(node: ast.AST) -> bool:
 def _is_trivial_body(body: list[ast.stmt]) -> bool:
     meaningful = [
         stmt for stmt in body
-        if not isinstance(stmt, (ast.Expr,)) or not isinstance(getattr(stmt, "value", None), ast.Constant) or stmt.value.value is not None
+        if not isinstance(stmt, ast.Expr) or not isinstance(getattr(stmt, "value", None), ast.Constant) or stmt.value.value is not None
     ]
     if not meaningful:
         return True
@@ -220,7 +220,6 @@ def build_report() -> TestQualityReport:
                     f"Test `{func.name}` has no obvious assert/pytest assertion.",
                     "Confirm this is an intentional smoke/import test, or add an explicit assertion.",
                 ))
-
     ok = not any(f.severity == "P0" for f in findings)
     return TestQualityReport(
         ok=ok,
