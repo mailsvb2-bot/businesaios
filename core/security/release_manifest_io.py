@@ -65,9 +65,7 @@ def _is_excluded(rel: str, path: Path) -> bool:
         return True
     if rel in MANIFEST_ONLY_EXCLUDE_EXACT:
         return True
-    if any(part in MANIFEST_ONLY_EXCLUDE_DIR_NAMES for part in Path(rel).parts):
-        return True
-    return False
+    return any(part in MANIFEST_ONLY_EXCLUDE_DIR_NAMES for part in Path(rel).parts)
 
 
 

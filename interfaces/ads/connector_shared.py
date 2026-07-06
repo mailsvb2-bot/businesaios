@@ -28,7 +28,7 @@ def _normalized_mapping(payload: Any) -> dict[str, Any]:
 def _stable_jsonable(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {str(k): _stable_jsonable(v) for k, v in sorted(value.items(), key=lambda item: str(item[0]))}
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [_stable_jsonable(v) for v in value]
     if isinstance(value, set):
         return sorted(_stable_jsonable(v) for v in value)
@@ -72,7 +72,7 @@ def _first_scalar(value: Any) -> str:
             if found not in (None, "", [], ()):  # keep 0 valid
                 return str(found).strip()
         return ""
-    if isinstance(value, (list, tuple, set)):
+    if isinstance(value, list | tuple | set):
         values = [str(item).strip() for item in value if str(item).strip()]
         if len(values) == 1:
             return values[0]
@@ -274,7 +274,7 @@ def normalize_rows(payload: Any, *, key: str) -> list[dict[str, Any]]:
         rows = payload
     if isinstance(rows, Mapping):
         rows = [rows]
-    if not isinstance(rows, Iterable) or isinstance(rows, (str, bytes)):
+    if not isinstance(rows, Iterable) or isinstance(rows, str | bytes):
         return []
     return [dict(row) for row in rows if isinstance(row, Mapping)]
 
@@ -285,7 +285,6 @@ def summarize_rows(rows: list[dict[str, Any]]) -> tuple[float, int, float, int]:
     clicks = sum(as_int(row.get("clicks"), 0) for row in rows)
     conversions = sum(as_int(row.get("conversions"), 0) for row in rows)
     ctr = safe_ratio(clicks, impressions)
-    cpc = safe_ratio(spend, clicks)
     return spend, impressions, ctr, conversions or int(safe_ratio(clicks, 10))
 
 

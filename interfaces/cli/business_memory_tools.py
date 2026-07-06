@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
 from execution.headless_boot import build_headless_runtime
 
 CANON_HEADLESS_BUSINESS_MEMORY_CLI = True
+
+
+def _write_json_stdout(payload: object) -> None:
+    sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -55,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         return 2
 
-    print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+    _write_json_stdout(payload)
     return 0
 
 
