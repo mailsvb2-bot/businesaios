@@ -8,6 +8,7 @@ from core.strategic_horizon.mode_inference import can_expand, can_optimize, infe
 from core.strategic_horizon.vector_math import compute_risk_budget, growth_pressure, learning_regime, select_horizon
 
 CANONICAL_DECISION_OPTIMIZE_METHOD = "optimize"
+MAX_RISK_BUDGET = 1.0
 
 
 

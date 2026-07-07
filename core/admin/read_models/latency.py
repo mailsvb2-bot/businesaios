@@ -106,3 +106,102 @@ def read_latency_dashboard(
         )
     rows.sort(key=lambda r: (r.p95_ms, r.max_ms, r.samples), reverse=True)
     return LatencyDashboardModel(tenant_id=tenant_scope, days=int(days), samples=int(samples), rows=tuple(rows[:limit]))
+
+def latency_breakdown(
+    event_store: Any,
+    *,
+    tenant_id: str = "default",
+    days: int = 7,
+    limit: int = 20,
+    now_ms: int | None = None,
+) -> dict[str, Any]:
+    """Return the canonical per-button latency dashboard as a serializable dict."""
+
+    model = read_latency_dashboard(
+        event_store=event_store,
+        tenant_id=tenant_id,
+        days=days,
+        limit=limit,
+        now_ms=now_ms,
+    )
+    return {
+        "tenant_id": model.tenant_id,
+        "days": int(model.days),
+        "samples": int(model.samples),
+        "rows": [
+            {
+                "button_key": row.button_key,
+                "samples": int(row.samples),
+                "p50_ms": int(row.p50_ms),
+                "p95_ms": int(row.p95_ms),
+                "max_ms": int(row.max_ms),
+            }
+            for row in model.rows
+        ],
+    }
+
+
+def latency_brief(
+    event_store: Any,
+    *,
+    tenant_id: str = "default",
+    days: int = 7,
+    now_ms: int | None = None,
+) -> dict[str, Any]:
+    """Return compact latency health for admin overview surfaces."""
+
+    model = read_latency_dashboard(
+        event_store=event_store,
+        tenant_id=tenant_id,
+        days=days,
+        limit=1,
+        now_ms=now_ms,
+    )
+    worst = model.rows[0] if model.rows else None
+    return {
+        "tenant_id": model.tenant_id,
+        "days": int(model.days),
+        "samples": int(model.samples),
+        "worst_button_key": worst.button_key if worst is not None else "",
+        "worst_p95_ms": int(worst.p95_ms) if worst is not None else 0,
+        "worst_max_ms": int(worst.max_ms) if worst is not None else 0,
+    }
+
+
+def sla_breaches_brief(
+    event_store: Any,
+    *,
+    tenant_id: str = "default",
+    days: int = 7,
+    p95_threshold_ms: int = 1500,
+    now_ms: int | None = None,
+) -> dict[str, Any]:
+    """Return count of button latency rows whose p95 exceeds the SLA threshold."""
+
+    threshold = max(0, int(p95_threshold_ms))
+    model = read_latency_dashboard(
+        event_store=event_store,
+        tenant_id=tenant_id,
+        days=days,
+        limit=100,
+        now_ms=now_ms,
+    )
+    breaches = [row for row in model.rows if int(row.p95_ms) > threshold]
+    return {
+        "tenant_id": model.tenant_id,
+        "days": int(model.days),
+        "threshold_ms": threshold,
+        "breaches": len(breaches),
+        "buttons": [row.button_key for row in breaches],
+    }
+
+
+__all__ = [
+    "LatencyButtonRow",
+    "LatencyDashboardModel",
+    "latency_breakdown",
+    "latency_brief",
+    "read_latency_dashboard",
+    "sla_breaches_brief",
+]
+
