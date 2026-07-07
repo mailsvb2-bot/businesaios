@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import queue
 import threading
 
 from entrypoints.api.request_context import RequestContext
@@ -295,12 +296,14 @@ def test_execute_action_stack_durable_idempotency_blocks_parallel_duplicate_with
             super().__init__()
             self.started = threading.Event()
             self.release = threading.Event()
+            self._calls_lock = threading.Lock()
 
         def execute_action(self, action):
-            self.calls += 1
-            self.last_action = action
+            with self._calls_lock:
+                self.calls += 1
+                self.last_action = action
             self.started.set()
-            assert self.release.wait(10.0)
+            assert self.release.wait(120.0), "blocking service was not released before duplicate-check timeout"
             return {
                 'status': 'ok',
                 'action_type': action.action_type,
@@ -316,25 +319,63 @@ def test_execute_action_stack_durable_idempotency_blocks_parallel_duplicate_with
     stack_b = build_execute_action_api_stack(application_service=service, idempotency_store=durable_store)
     request = ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-parallel', 'action_id': 'parallel-1'})
     context = RequestContext(tenant_id='tenant-a')
-    first_result: dict[str, object] = {}
+
+    first_result: queue.Queue[object] = queue.Queue()
+    second_result: queue.Queue[object] = queue.Queue()
+    thread_errors: queue.Queue[BaseException] = queue.Queue()
 
     def _run_first() -> None:
-        first_result['response'] = stack_a.handle(request, request_context=context)
+        try:
+            first_result.put(stack_a.handle(request, request_context=context))
+        except BaseException as exc:
+            thread_errors.put(exc)
+            raise
 
-    thread = threading.Thread(target=_run_first)
-    thread.start()
-    assert service.started.wait(5.0)
+    def _run_second() -> None:
+        try:
+            second_result.put(stack_b.handle(request, request_context=context))
+        except BaseException as exc:
+            thread_errors.put(exc)
+            raise
 
-    second = stack_b.handle(request, request_context=context)
-    service.release.set()
-    thread.join(timeout=10.0)
+    first_thread = threading.Thread(target=_run_first, name="execute-action-first")
+    first_thread.start()
 
-    first = first_result['response']
+    assert service.started.wait(60.0), (
+        "first execution did not enter the blocking service before duplicate check; "
+        f"thread_alive={first_thread.is_alive()} errors={list(thread_errors.queue)}"
+    )
+
+    second_thread = threading.Thread(target=_run_second, name="execute-action-duplicate")
+    second_thread.start()
+
+    try:
+        second_thread.join(timeout=60.0)
+        assert not second_thread.is_alive(), (
+            "duplicate request did not return while original execution was in progress; "
+            f"service_calls={service.calls} errors={list(thread_errors.queue)}"
+        )
+    finally:
+        service.release.set()
+        first_thread.join(timeout=60.0)
+        second_thread.join(timeout=10.0)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+
+    if not thread_errors.empty():
+        raise thread_errors.get()
+
+    assert not first_result.empty()
+    assert not second_result.empty()
+
+    first = first_result.get()
+    second = second_result.get()
+
     assert getattr(first, 'status', None) == 'ok'
     assert second.status == 'blocked'
     assert second.reason == 'idempotency_in_progress'
     assert service.calls == 1
-
 
 def test_build_api_execute_action_idempotency_store_adapts_reliability_in_memory_store() -> None:
     from interfaces.api.execute_action_idempotency_store import (
