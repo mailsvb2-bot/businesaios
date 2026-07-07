@@ -38,6 +38,7 @@ ALLOWED_CALLERS = {
     "runtime.recovery",
     "runtime.effect_registry",
     "runtime.startup",
+    "runtime.lazy_namespace",
     "tests.test_runtime_import_firewall",
 }
 
@@ -151,7 +152,37 @@ def allow_internal_import():
         yield
 
 
-ALLOW_INTERNAL_IMPORT = allow_internal_import
+class _InternalImportPermission:
+    """Compatibility permission object for sealed runtime-internal imports.
+
+    Historical callers use .set/.reset directly; newer callers can use it as a
+    context factory. Both routes still toggle the single canonical ContextVar.
+    """
+
+    def __init__(self) -> None:
+        self._tokens = []
+
+    def set(self, value: bool):
+        return _token.set(bool(value))
+
+    def reset(self, token) -> None:
+        _token.reset(token)
+
+    def __call__(self):
+        return integration_import_allowed()
+
+    def __enter__(self):
+        token = _token.set(True)
+        self._tokens.append(token)
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        if self._tokens:
+            _token.reset(self._tokens.pop())
+        return False
+
+
+ALLOW_INTERNAL_IMPORT = _InternalImportPermission()
 
 
 def import_with_integration_permission(name: str) -> ModuleType:

@@ -163,6 +163,7 @@ def finalize_recovered_outcome(*, executor: Any, env: Any, reason: str, backend_
             "event_type": "decision_executed",
             "decision_id": decision_id,
             "recovery": str(reason),
+            "source": "existing_proof_event",
             "verification_status": "verified_from_existing_proof",
         },
     }

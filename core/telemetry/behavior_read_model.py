@@ -13,6 +13,7 @@ from config.final_hidden_logic_policy import DEFAULT_BEHAVIOR_TELEMETRY_POLICY
 from core.behavior.dirac_behavior import Complex4, DiracBehaviorModel
 from core.behavior.org_field import OrgField, aggregate_org_observables
 from core.events.read_model_support import best_effort_iter_events, best_effort_latest_events
+from core.observability.silent import swallow
 
 
 def behavior_snapshot(
@@ -82,20 +83,25 @@ def behavior_snapshot(
         prev_ts = None
 
         # --- Dirac-inspired behavior model (lead) ---
+        # This enrichment is best-effort: a behavior-physics issue must not erase
+        # stable counters such as messages_total/callbacks_total from the read model.
         model = DiracBehaviorModel()
         psi0 = Complex4.zeros().renormalize(target_norm=DEFAULT_BEHAVIOR_TELEMETRY_POLICY.target_norm)
-        psi_final, obs = model.evolve(psi=psi0, events=evs_sorted, now_ms=int(now_ms), context={"anti": DEFAULT_BEHAVIOR_TELEMETRY_POLICY.org_context_anti})
-        out.update(
-            {
-                "engagement_score": float(obs.get("engagement_score", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
-                "hesitation_score": float(obs.get("hesitation_score", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
-                "purchase_probability": float(obs.get("purchase_probability", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
-                "fatigue_index": float(obs.get("fatigue_index", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
-                "trust_index": float(obs.get("trust_index", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
-                "coherence": float(obs.get("coherence", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
-                "anti": float(obs.get("anti", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
-            }
-        )
+        try:
+            psi_final, obs = model.evolve(psi=psi0, events=evs_sorted, now_ms=int(now_ms), context={"anti": DEFAULT_BEHAVIOR_TELEMETRY_POLICY.org_context_anti})
+            out.update(
+                {
+                    "engagement_score": float(obs.get("engagement_score", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
+                    "hesitation_score": float(obs.get("hesitation_score", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
+                    "purchase_probability": float(obs.get("purchase_probability", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
+                    "fatigue_index": float(obs.get("fatigue_index", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
+                    "trust_index": float(obs.get("trust_index", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
+                    "coherence": float(obs.get("coherence", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
+                    "anti": float(obs.get("anti", DEFAULT_BEHAVIOR_TELEMETRY_POLICY.engagement_zero)),
+                }
+            )
+        except Exception:
+            swallow(__name__, "core/telemetry/behavior_read_model.behavior_snapshot.dirac")
 
         # --- Optional B2B org field aggregation ---
         # If events include payload.actor_role, we aggregate per-role.
