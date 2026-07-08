@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from core.observability.silent import swallow
-from runtime.boot.env import env_float, env_int
+from runtime.platform.config.env_access import env_float, env_int
 
 logger = logging.getLogger(__name__)
 

@@ -3,8 +3,13 @@
   "name": "BusinessAIOS Integrity Auditor",
   "goal": "Verify architectural integrity, DecisionCore singularity, canonical flow completeness, no-second-brain discipline, guarded execution, admin visibility, evidence, replay, config, and dead-capability risks.",
   "thresholds": {
-    "fail_on_severity": ["P0"],
-    "warn_on_severity": ["P1", "P2"],
+    "fail_on_severity": [
+      "P0"
+    ],
+    "warn_on_severity": [
+      "P1",
+      "P2"
+    ],
     "minimum_architectural_integrity": 70,
     "minimum_decisioncore_integrity": 70,
     "minimum_flow_completeness": 60,
@@ -87,10 +92,80 @@
     "action"
   ],
   "canonical_name_groups": [
-    ["tenant", "account", "business", "workspace"],
-    ["user", "client", "customer"],
-    ["decision", "command", "action", "effect"],
-    ["memory", "state", "context", "world_model"],
-    ["payment", "billing", "invoice", "order"]
-  ]
+    [
+      "tenant",
+      "account",
+      "business",
+      "workspace"
+    ],
+    [
+      "user",
+      "client",
+      "customer"
+    ],
+    [
+      "decision",
+      "command",
+      "action",
+      "effect"
+    ],
+    [
+      "memory",
+      "state",
+      "context",
+      "world_model"
+    ],
+    [
+      "payment",
+      "billing",
+      "invoice",
+      "order"
+    ]
+  ],
+  "canonical_name_alias_policy": {
+    "tenant": {
+      "canonical": "tenant",
+      "aliases": [
+        "account",
+        "business",
+        "workspace"
+      ],
+      "reason": "tenant is the canonical isolation boundary; account/business/workspace are documented product/domain aliases and must not create competing authority."
+    },
+    "user": {
+      "canonical": "user",
+      "aliases": [
+        "client",
+        "customer"
+      ],
+      "reason": "user is the canonical actor; client/customer are domain-facing aliases and must route through the same user/customer identity model."
+    },
+    "action": {
+      "canonical": "action",
+      "aliases": [
+        "decision",
+        "command",
+        "effect"
+      ],
+      "reason": "action is the executable registry unit; decisions, commands and effects are phases of the same canonical signal/state/decision/policy/guard/execution/verification/evidence/archive flow."
+    },
+    "state": {
+      "canonical": "state",
+      "aliases": [
+        "memory",
+        "context",
+        "world_model"
+      ],
+      "reason": "state is canonical; memory/context/world_model are bounded projections and must not become a second brain."
+    },
+    "billing": {
+      "canonical": "billing",
+      "aliases": [
+        "payment",
+        "invoice",
+        "order"
+      ],
+      "reason": "billing is canonical financial control-plane vocabulary; payment/invoice/order are lifecycle concepts guarded by the same policy/evidence controls."
+    }
+  }
 }
