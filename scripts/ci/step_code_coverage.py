@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass
 
 from scripts.ci.paths import coverage_dir, repo_root
@@ -105,6 +106,10 @@ def _coverage_paths():
     }
 
 
+def _python_command(*args: str) -> list[str]:
+    return [sys.executable, *args]
+
+
 def _write_summary(payload: dict[str, object]) -> None:
     path = _coverage_paths()["summary"]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -112,7 +117,7 @@ def _write_summary(payload: dict[str, object]) -> None:
 
 
 def _coverage_available() -> bool:
-    outcome = run_command(["python", "-c", "import coverage; print(coverage.__version__)"], timeout=20)
+    outcome = run_command(_python_command("-c", "import coverage; print(coverage.__version__)"), timeout=20)
     return outcome.returncode == 0
 
 
@@ -132,9 +137,7 @@ def _coverage_warnings(percent: float) -> list[str]:
 
 def _coverage_run_command(shard: CoverageShard) -> list[str]:
     return [
-        "python",
-        "-m",
-        "coverage",
+        *_python_command("-m", "coverage"),
         "run",
         "--parallel-mode",
         "--branch",
@@ -165,7 +168,7 @@ def run() -> tuple[bool, str]:
         _write_summary(payload)
         return False, "coverage.py is required for code coverage gate"
 
-    erase = run_command(["python", "-m", "coverage", "erase"], timeout=30)
+    erase = run_command(_python_command("-m", "coverage", "erase"), timeout=30)
     if erase.returncode != 0:
         _write_summary({
             "artifact": "code_coverage",
@@ -204,7 +207,7 @@ def run() -> tuple[bool, str]:
 
         completed_shards.append(shard.name)
 
-    combine = run_command(["python", "-m", "coverage", "combine"], timeout=60)
+    combine = run_command(_python_command("-m", "coverage", "combine"), timeout=60)
     if combine.returncode != 0:
         payload = {
             "artifact": "code_coverage",
@@ -221,10 +224,10 @@ def run() -> tuple[bool, str]:
         _write_summary(payload)
         return False, "coverage combine failed"
 
-    json_outcome = run_command(["python", "-m", "coverage", "json", "-o", str(paths["json"])], timeout=60)
-    xml_outcome = run_command(["python", "-m", "coverage", "xml", "-o", str(paths["xml"])], timeout=60)
-    html_outcome = run_command(["python", "-m", "coverage", "html", "-d", str(paths["html"])], timeout=120)
-    report_outcome = run_command(["python", "-m", "coverage", "report", "--fail-under", str(MIN_TOTAL_COVERAGE)], timeout=60)
+    json_outcome = run_command(_python_command("-m", "coverage", "json", "-o", str(paths["json"])), timeout=60)
+    xml_outcome = run_command(_python_command("-m", "coverage", "xml", "-o", str(paths["xml"])), timeout=60)
+    html_outcome = run_command(_python_command("-m", "coverage", "html", "-d", str(paths["html"])), timeout=120)
+    report_outcome = run_command(_python_command("-m", "coverage", "report", "--fail-under", str(MIN_TOTAL_COVERAGE)), timeout=60)
 
     coverage_payload = json.loads(paths["json"].read_text(encoding="utf-8")) if paths["json"].exists() else {}
     total = dict(coverage_payload.get("totals") or {})
