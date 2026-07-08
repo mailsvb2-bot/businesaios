@@ -56,6 +56,7 @@ _REGISTRY: dict[str, StepHandler] = {
     unit_tests(): _lazy_handler("scripts.ci.step_unit_tests"),
     integration_tests(): _lazy_handler("scripts.ci.step_integration_tests"),
     _step_ids.business_critical_tests(): _lazy_handler("scripts.ci.step_business_critical_tests"),
+    _step_ids.user_scenario_gate(): _lazy_handler("scripts.ci.step_user_scenario_gate"),
     _step_ids.targeted_domain_tests(): _lazy_handler("scripts.ci.step_targeted_domain_tests"),
     _step_ids.integrity_auditor(): _lazy_handler("scripts.ci.step_integrity_auditor"),
     _step_ids.integrity_cargo_tests(): _lazy_handler("scripts.ci.step_integrity_cargo_tests"),

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from scripts.ci import step_doctor, step_registry
 from scripts.ci.baseline_contract import BASELINE_REQUIREMENTS
-from scripts.ci.plan_registry import plan_for_gate
+from scripts.ci.plan_registry import allowed_gates, plan_for_gate
 from scripts.ci.regression_impact_dotfix import blocked_artifact_paths, required_fast_steps_for_paths
 from tests.arch.test_agi_no_second_brain_surfaces import FORBIDDEN_SURFACES
 
@@ -80,3 +80,17 @@ def test_baseline_billing_recovery_contract_is_mapped() -> None:
     required = required_fast_steps_for_paths(("billing/recovery_store.py",))
     assert "import-smoke" in required
     assert "lock-tests" in required
+
+
+def test_baseline_user_scenario_acceptance_gate_is_declared() -> None:
+    _assert_scenario_self_reference("BAIOS-BASE-009", "test_baseline_user_scenario_acceptance_gate_is_declared")
+    requirement = _requirement("BAIOS-BASE-009")
+    assert requirement.domain == "acceptance"
+    assert "acceptance" in allowed_gates()
+    assert _gate_steps("acceptance") == (
+        "assert-project-shape",
+        "dependency-lock",
+        "doctor-check",
+        "user-scenario-gate",
+    )
+    assert "user-scenario-gate" in step_registry.all_step_names()

@@ -31,6 +31,10 @@ def _integrity_auditor_step() -> str:
     return "".join(("integrity", "-", "auditor"))
 
 
+def _user_scenario_gate_step() -> str:
+    return "".join(("user", "-", "scenario", "-", "gate"))
+
+
 def _release_proof_steps() -> tuple[str, ...]:
     return (
         "postgres-contract",
@@ -55,6 +59,7 @@ def allowed_gates() -> tuple[str, ...]:
         "doctor",
         "fast",
         "full",
+        "acceptance",
         "business-critical",
         "targeted-domain",
         "integrity",
@@ -202,6 +207,14 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
         )
     if gate == "business-critical":
         return _business_critical_common("business-critical")
+    if gate == "acceptance":
+        return _plan(
+            "acceptance",
+            "assert-project-shape",
+            "dependency-lock",
+            "doctor-check",
+            _user_scenario_gate_step(),
+        )
     if gate == "coverage":
         return _coverage_common("coverage")
     if gate == "rust-safety":

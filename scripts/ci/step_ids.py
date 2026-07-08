@@ -21,6 +21,7 @@ _STEP_IDS = {
     "unit_tests": _sid("unit", "tests"),
     "integration_tests": _sid("integration", "tests"),
     "business_critical_tests": _sid("business", "critical", "tests"),
+    "user_scenario_gate": _sid("user", "scenario", "gate"),
     "targeted_domain_tests": _sid("targeted", "domain", "tests"),
     "integrity_auditor": _sid("integrity", "auditor"),
     "integrity_cargo_tests": _sid("integrity", "cargo", "tests"),

@@ -28,6 +28,7 @@ BASELINE_REQUIREMENTS: tuple[BaselineRequirement, ...] = (
     BaselineRequirement("BAIOS-BASE-006", "generated artifacts stay out of source changes", "repo-hygiene", "tests/baseline/test_baseline_contract_scenarios.py::test_baseline_generated_artifact_contract_is_blocked", ("fast", "full", "release", "pre-release")),
     BaselineRequirement("BAIOS-BASE-007", "storage compatibility remains regression-mapped", "storage", "tests/baseline/test_baseline_contract_scenarios.py::test_baseline_storage_compatibility_contract_is_mapped", ("fast", "full", "release", "pre-release")),
     BaselineRequirement("BAIOS-BASE-008", "billing recovery remains regression-mapped", "billing", "tests/baseline/test_baseline_contract_scenarios.py::test_baseline_billing_recovery_contract_is_mapped", ("fast", "full", "release", "pre-release")),
+    BaselineRequirement("BAIOS-BASE-009", "user scenario acceptance gate remains declared", "acceptance", "tests/baseline/test_baseline_contract_scenarios.py::test_baseline_user_scenario_acceptance_gate_is_declared", ("acceptance",)),
 )
 
 
