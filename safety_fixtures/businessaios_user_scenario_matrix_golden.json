@@ -1,0 +1,225 @@
+{
+  "cases": [
+    {
+      "expected": {
+        "allowed": true,
+        "reason": "allow"
+      },
+      "input": {
+        "approved_limit": 1,
+        "binding_tenant_id": "tenant-cli",
+        "business_id": "biz-cli",
+        "entrypoint": "headless",
+        "evidence_required": true,
+        "goal": "inspect capabilities",
+        "idempotency_from": "new",
+        "idempotency_to": "reserved",
+        "outbox_from": "pending",
+        "outbox_to": "sent",
+        "requested_outbound": 1,
+        "tenant_id": "tenant-cli"
+      },
+      "name": "capability_matrix_user_surface_allows_guarded_headless_read",
+      "scenario": "capability_matrix"
+    },
+    {
+      "expected": {
+        "allowed": true,
+        "reason": "allow"
+      },
+      "input": {
+        "approved_limit": 1,
+        "binding_tenant_id": "tenant-cli",
+        "business_id": "biz-cli",
+        "entrypoint": "headless",
+        "evidence_required": true,
+        "goal": "inspect connectors",
+        "idempotency_from": "new",
+        "idempotency_to": "reserved",
+        "outbox_from": "pending",
+        "outbox_to": "sent",
+        "requested_outbound": 1,
+        "tenant_id": "tenant-cli"
+      },
+      "name": "connector_matrix_user_surface_allows_guarded_headless_read",
+      "scenario": "connector_matrix"
+    },
+    {
+      "expected": {
+        "allowed": true,
+        "reason": "allow"
+      },
+      "input": {
+        "approved_limit": 1,
+        "binding_tenant_id": "tenant-cli",
+        "business_id": "biz-cli",
+        "entrypoint": "cli",
+        "evidence_required": true,
+        "goal": "get 10 clients",
+        "idempotency_from": "new",
+        "idempotency_to": "reserved",
+        "outbox_from": "pending",
+        "outbox_to": "sent",
+        "requested_outbound": 1,
+        "tenant_id": "tenant-cli"
+      },
+      "name": "cli_run_user_goal_allows_single_guarded_execution_step",
+      "scenario": "cli_run"
+    },
+    {
+      "expected": {
+        "allowed": true,
+        "reason": "allow"
+      },
+      "input": {
+        "approved_limit": 1,
+        "binding_tenant_id": "tenant-cli",
+        "business_id": "biz-cli",
+        "entrypoint": "cli",
+        "evidence_required": true,
+        "goal": "run acceptance scenario",
+        "idempotency_from": "new",
+        "idempotency_to": "reserved",
+        "outbox_from": "pending",
+        "outbox_to": "sent",
+        "requested_outbound": 1,
+        "tenant_id": "tenant-cli"
+      },
+      "name": "cli_scenario_user_goal_allows_single_canonical_bootstrap",
+      "scenario": "cli_scenario"
+    },
+    {
+      "expected": {
+        "allowed": true,
+        "reason": "allow"
+      },
+      "input": {
+        "approved_limit": 1,
+        "binding_tenant_id": "tenant-sdk",
+        "business_id": "biz-sdk",
+        "entrypoint": "sdk",
+        "evidence_required": true,
+        "goal": "execute via sdk",
+        "idempotency_from": "new",
+        "idempotency_to": "reserved",
+        "outbox_from": "pending",
+        "outbox_to": "sent",
+        "requested_outbound": 1,
+        "tenant_id": "tenant-sdk"
+      },
+      "name": "sdk_execute_user_surface_allows_guarded_runtime_build",
+      "scenario": "sdk_execute"
+    },
+    {
+      "expected": {
+        "allowed": false,
+        "reason": "tenant_id_required"
+      },
+      "input": {
+        "approved_limit": 1,
+        "binding_tenant_id": "",
+        "business_id": "biz-cli",
+        "entrypoint": "cli",
+        "evidence_required": true,
+        "goal": "guarded user scenario",
+        "idempotency_from": "new",
+        "idempotency_to": "reserved",
+        "outbox_from": "pending",
+        "outbox_to": "sent",
+        "requested_outbound": 1,
+        "tenant_id": ""
+      },
+      "name": "user_scenario_denies_missing_tenant",
+      "scenario": "cli_run"
+    },
+    {
+      "expected": {
+        "allowed": false,
+        "reason": "blast_radius_exceeded"
+      },
+      "input": {
+        "approved_limit": 10,
+        "binding_tenant_id": "tenant-cli",
+        "business_id": "biz-cli",
+        "entrypoint": "cli",
+        "evidence_required": true,
+        "goal": "guarded user scenario",
+        "idempotency_from": "new",
+        "idempotency_to": "reserved",
+        "outbox_from": "pending",
+        "outbox_to": "sent",
+        "requested_outbound": 100000,
+        "tenant_id": "tenant-cli"
+      },
+      "name": "user_scenario_denies_blast_radius_overrun",
+      "scenario": "cli_run"
+    },
+    {
+      "expected": {
+        "allowed": false,
+        "reason": "duplicate_committed_execution"
+      },
+      "input": {
+        "approved_limit": 1,
+        "binding_tenant_id": "tenant-sdk",
+        "business_id": "biz-sdk",
+        "entrypoint": "sdk",
+        "evidence_required": true,
+        "goal": "guarded user scenario",
+        "idempotency_from": "committed",
+        "idempotency_to": "committed",
+        "outbox_from": "pending",
+        "outbox_to": "sent",
+        "requested_outbound": 1,
+        "tenant_id": "tenant-sdk"
+      },
+      "name": "user_scenario_denies_duplicate_committed_execution",
+      "scenario": "sdk_execute"
+    },
+    {
+      "expected": {
+        "allowed": false,
+        "reason": "terminal_outbox_transition_forbidden"
+      },
+      "input": {
+        "approved_limit": 1,
+        "binding_tenant_id": "tenant-cli",
+        "business_id": "biz-cli",
+        "entrypoint": "cli",
+        "evidence_required": true,
+        "goal": "guarded user scenario",
+        "idempotency_from": "new",
+        "idempotency_to": "reserved",
+        "outbox_from": "verified",
+        "outbox_to": "pending",
+        "requested_outbound": 1,
+        "tenant_id": "tenant-cli"
+      },
+      "name": "user_scenario_denies_terminal_outbox_rewrite",
+      "scenario": "cli_scenario"
+    },
+    {
+      "expected": {
+        "allowed": false,
+        "reason": "evidence_required"
+      },
+      "input": {
+        "approved_limit": 1,
+        "binding_tenant_id": "tenant-cli",
+        "business_id": "biz-cli",
+        "entrypoint": "headless",
+        "evidence_required": false,
+        "goal": "guarded user scenario",
+        "idempotency_from": "new",
+        "idempotency_to": "reserved",
+        "outbox_from": "pending",
+        "outbox_to": "sent",
+        "requested_outbound": 1,
+        "tenant_id": "tenant-cli"
+      },
+      "name": "user_scenario_denies_missing_evidence",
+      "scenario": "connector_matrix"
+    }
+  ],
+  "version": "businessaios_user_scenario_matrix.v1"
+}

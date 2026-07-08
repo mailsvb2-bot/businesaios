@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod fixture_runner;
+pub mod user_scenario_matrix;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SafetyVerdict {

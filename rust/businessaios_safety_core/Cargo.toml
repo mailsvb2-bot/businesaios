@@ -18,6 +18,10 @@ path = "src/bin/safety_fixture_runner.rs"
 name = "demand_gravity_fixture_runner"
 path = "src/bin/demand_gravity_fixture_runner.rs"
 
+[[bin]]
+name = "user_scenario_matrix_runner"
+path = "src/bin/user_scenario_matrix_runner.rs"
+
 [lints.rust]
 unsafe_code = "forbid"
 

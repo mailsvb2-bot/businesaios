@@ -265,6 +265,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "lock-tests",
             "unit-tests",
             "integration-tests",
+            _user_scenario_gate_step(),
             "business-critical-tests",
             "rust-safety-core",
         )
@@ -286,6 +287,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "lock-tests",
             "unit-tests",
             "integration-tests",
+            _user_scenario_gate_step(),
             "business-critical-tests",
             "code-coverage",
             "rust-safety-core",
@@ -331,6 +333,7 @@ def plan_for_gate(gate: str) -> ExecutionPlan:
             "lock-tests",
             "unit-tests",
             "integration-tests",
+            _user_scenario_gate_step(),
             "business-critical-tests",
             "code-coverage",
             "rust-safety-core",

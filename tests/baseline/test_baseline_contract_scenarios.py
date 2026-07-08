@@ -94,3 +94,6 @@ def test_baseline_user_scenario_acceptance_gate_is_declared() -> None:
         "user-scenario-gate",
     )
     assert "user-scenario-gate" in step_registry.all_step_names()
+    assert "user-scenario-gate" in _gate_steps("full")
+    assert "user-scenario-gate" in _gate_steps("release")
+    assert "user-scenario-gate" in _gate_steps("pre-release")
