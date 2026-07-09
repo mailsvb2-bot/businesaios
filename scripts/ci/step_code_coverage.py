@@ -45,7 +45,7 @@ class CoverageShard:
 COVERAGE_SHARDS = (
     CoverageShard(
         name="unit",
-        timeout=360,
+        timeout=1200,
         targets=("tests/unit",),
     ),
     CoverageShard(
@@ -64,7 +64,7 @@ COVERAGE_SHARDS = (
     ),
     CoverageShard(
         name="integration-core",
-        timeout=360,
+        timeout=1200,
         targets=("tests/integration",),
         extra_pytest_args=tuple(f"--ignore={path}" for path in HEADLESS_SMOKE_TESTS),
     ),

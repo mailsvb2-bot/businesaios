@@ -1,22 +1,21 @@
-from __future__ import annotations
-
 """Final owner: adapters.api.fastapi.control_plane_routes."""
 
-CANON_FASTAPI_CONTROL_PLANE_ROUTES_FINAL_OWNER = True
-
+from __future__ import annotations
 
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from governance.approval_contract import ApprovalOutcome
-from governance.rbac_contract import Permission, RoleId
+from adapters.api.fastapi.analytics_ops_routes import register_analytics_ops_routes
+from adapters.api.fastapi.analytics_signed_export_routes import register_analytics_signed_export_routes
 from adapters.api.fastapi.router_support import authorize_request, first_role, json_body, tenant_if_present
 from entrypoints.api.control_plane_security_guard import ControlPlaneSecurityGuard
 from entrypoints.api.rbac_route_guards import RoutePermissionGuard
 from entrypoints.api.request_context import RequestContext
-from adapters.api.fastapi.analytics_ops_routes import register_analytics_ops_routes
-from adapters.api.fastapi.analytics_signed_export_routes import register_analytics_signed_export_routes
+from governance.approval_contract import ApprovalOutcome
+from governance.rbac_contract import Permission, RoleId
+
+CANON_FASTAPI_CONTROL_PLANE_ROUTES_FINAL_OWNER = True
 
 
 def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundle, tenant_guard, rate_limit_bundle, audit_handlers, approval_handlers, admin_handlers, connector_admin_handlers, provider_admin_handlers, metrics_handlers, webhook_handlers, queue_ops_handlers, security_guard: ControlPlaneSecurityGuard, analytics_ops_handlers=None, analytics_signed_export_handlers=None) -> None:
@@ -326,7 +325,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         business_id = str(body.get('business_id') or '').strip() or 'default-business'
         provider_key = str(body.get('provider_key') or '').strip()
         action_name = 'api.control_plane.provider_admin.mark_compromised'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'provider-mark-compromised:{provider_key}', business_id=business_id, body=body)
         return provider_admin_handlers.mark_provider_secret_compromised(payload={**body, 'tenant_id': tenant_id})
 
@@ -338,7 +337,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         business_id = str(body.get('business_id') or '').strip() or 'default-business'
         provider_key = str(body.get('provider_key') or '').strip()
         action_name = 'api.control_plane.provider_runtime.schedule_retry'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'provider-schedule-retry:{provider_key}', business_id=business_id, body=body)
         return provider_admin_handlers.schedule_provider_retry(payload={**body, 'tenant_id': tenant_id})
 
@@ -347,7 +346,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.provider_runtime_retry_jobs'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'provider-runtime-retry-jobs:{tenant_id}:{business_id}:{provider_key}', business_id=business_id)
         return provider_admin_handlers.list_provider_retry_jobs(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=limit)
 
@@ -356,7 +355,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.provider_runtime_export_history'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'provider-runtime-export-history:{tenant_id}:{business_id}:{provider_key}', business_id=business_id)
         return provider_admin_handlers.list_provider_export_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=limit)
 
@@ -520,7 +519,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.provider_runtime_sync_history'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'provider-runtime-sync-history:{tenant_id}:{business_id}:{provider_key}', business_id=business_id)
         return provider_admin_handlers.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=limit)
 
@@ -528,7 +527,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     async def control_plane_provider_runtime_response_parser(request: Request, provider_key: str) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
         action_name = 'api.control_plane.provider_runtime.response_parser'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id=f'provider-runtime-response-parser:{provider_key}')
         return provider_admin_handlers.describe_provider_response_parser(provider_key=provider_key)
 
@@ -537,7 +536,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.provider_runtime.live_probe'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'provider-runtime-live-probe:{tenant_id}:{business_id}:{provider_key}', business_id=business_id)
         return provider_admin_handlers.probe_provider_live(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, mode=mode)
 
@@ -548,7 +547,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         tenant_id = tenant_guard.enforce(principal=principal, request_context=request_context, body=body)
         business_id = str(body.get('business_id') or '').strip()
         action_name = 'api.control_plane.provider_runtime.paginate'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'provider-runtime-paginate:{tenant_id}:{business_id}:{body.get("provider_key")}', business_id=business_id, body=body)
         return provider_admin_handlers.paginate_provider_sync(payload=body)
 
@@ -556,7 +555,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
     async def control_plane_provider_runtime_live_client(request: Request, provider_key: str) -> dict[str, Any]:
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
         action_name = 'api.control_plane.provider_runtime.live_client'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=principal.tenant_id, resource_id=f'provider-runtime-live-client:{provider_key}')
         return provider_admin_handlers.describe_provider_live_client(provider_key=provider_key)
 
@@ -567,7 +566,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         tenant_id = tenant_guard.enforce(principal=principal, request_context=request_context, body=body)
         business_id = str(body.get('business_id') or '').strip()
         action_name = 'api.control_plane.provider_runtime.queue_dispatch'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'provider-runtime-queue-dispatch:{tenant_id}:{business_id}:{body.get("provider_key")}', business_id=business_id, body=body)
         return provider_admin_handlers.enqueue_provider_sync(payload=body)
 
@@ -577,7 +576,7 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         body = await json_body(request)
         tenant_id = tenant_guard.enforce(principal=principal, request_context=request_context, body=body)
         action_name = 'api.control_plane.provider_runtime.queue_tick'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'provider-runtime-queue-tick:{tenant_id}', body=body)
         return provider_admin_handlers.tick_provider_sync_queue(tenant_id=tenant_id)
 
@@ -605,6 +604,6 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         request_context, principal = authorize_request(request=request, auth_bundle=auth_bundle)
         tenant_guard.enforce(principal=principal, request_context=request_context, tenant_id=tenant_id)
         action_name = 'api.control_plane.provider_runtime.queue_jobs'
-        RoutePermissionGuard(permission=Permission.MANAGE_CONNECTORS, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
+        RoutePermissionGuard(permission=Permission.MANAGE_TENANT_POLICY, action_name=action_name).enforce(principal=principal, request_context=request_context, authz=authz_bundle)
         enforce_control_plane_security(principal=principal, request_context=request_context, action_name=action_name, tenant_id=tenant_id, resource_id=f'provider-runtime-queue-jobs:{tenant_id}:{business_id}:{provider_key}', business_id=business_id or None)
         return provider_admin_handlers.list_provider_queue_jobs(tenant_id=tenant_id, business_id=business_id or None, provider_key=provider_key, limit=limit)
