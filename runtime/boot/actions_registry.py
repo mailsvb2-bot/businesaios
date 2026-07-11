@@ -2,7 +2,7 @@
 
 Purpose:
 - eliminate "second brain" by forcing every runtime action to be explicitly registered
-- attach minimal contract metadata (idempotency + limits) per action
+- attach minimal contract metadata (idempotency + limits + verification) per action
 - keep the public registry surface thin by delegating declarative data to
   ``runtime.boot.actions_catalog``
 - enable lock-tests to fail CI on drift / unregistered actions
@@ -23,14 +23,17 @@ from runtime.boot.actions_catalog import (
     SPEC_ROWS,
     build_inline_allowlist,
     build_specs_registry,
+    execution_category_for_action,
+    external_confirmation_mode_for_action,
     handler_actions_from,
 )
 
 CANON_BOOT_WIRING_ONLY = True
 
 
-
 LimitKind = Literal["none", "general", "llm", "ads", "payments", "admin"]
+ExecutionCategory = Literal["external_effect", "internal_bookkeeping", "advisory"]
+ExternalConfirmationMode = Literal["required", "not_required"]
 
 
 @dataclass(frozen=True)
@@ -48,6 +51,8 @@ class ActionSpecV1:
     handler_ref: str = ""
     requires_idempotency_key: bool = True
     limits: ActionLimitsV1 = ActionLimitsV1()
+    execution_category: ExecutionCategory = "internal_bookkeeping"
+    external_confirmation_mode: ExternalConfirmationMode = "not_required"
 
 
 def _spec(name: str, handler_ref: str, *, idem: bool, kind: LimitKind, pt: int, pu: int) -> ActionSpecV1:
@@ -56,6 +61,8 @@ def _spec(name: str, handler_ref: str, *, idem: bool, kind: LimitKind, pt: int, 
         handler_ref=handler_ref,
         requires_idempotency_key=bool(idem),
         limits=ActionLimitsV1(kind=kind, per_tenant_per_min=int(pt), per_user_per_min=int(pu)),
+        execution_category=execution_category_for_action(name),
+        external_confirmation_mode=external_confirmation_mode_for_action(name),
     )
 
 
@@ -74,10 +81,10 @@ INLINE_ALLOWLIST: set[str] = build_inline_allowlist(names=INLINE_ALLOWLIST_NAMES
 
 
 def get_spec(action: str) -> ActionSpecV1:
-    a = str(action)
-    if a not in SPECS:
-        raise KeyError(a)
-    return SPECS[a]
+    name = str(action)
+    if name not in SPECS:
+        raise KeyError(name)
+    return SPECS[name]
 
 
 def all_actions() -> set[str]:
@@ -93,6 +100,8 @@ __all__ = [
     "ActionSpecV1",
     "BUILTIN_HANDLER_ACTIONS",
     "EFFECT_ONLY_ACTIONS",
+    "ExecutionCategory",
+    "ExternalConfirmationMode",
     "INLINE_ALLOWLIST",
     "LimitKind",
     "SPECS",
