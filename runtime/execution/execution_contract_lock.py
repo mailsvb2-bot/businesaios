@@ -20,6 +20,8 @@ from runtime.execution.outcome_persistence_lock import persist_verified_outcome
 
 CANON_RUNTIME_EXECUTION_CONTRACT_LOCK_OWNER = True
 CANON_RUNTIME_EXECUTION_CONTRACT_NO_DECISION_LOGIC = True
+CANON_RUNTIME_EXECUTION_CONTRACT_NO_SELF_ISSUED_EVIDENCE = True
+
 
 class ExecutionContractLockError(RuntimeError):
     pass
@@ -79,21 +81,6 @@ def _extract_router_evidence(output: Mapping[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _default_router_evidence(*, env: Any, output: Mapping[str, Any]) -> dict[str, Any]:
-    decision = getattr(env, 'decision', None)
-    decision_id = str(getattr(decision, 'decision_id', '') or '')
-    status = str(output.get('status') or 'verified')
-    return {
-        'verified': True,
-        'status': status if status else 'verified',
-        'code': 'executor_receipt_verified',
-        'source': 'runtime_execution_contract',
-        'external_refs': [decision_id] if decision_id else [],
-        'confidence': 1.0,
-        'observed_at': _decision_observed_at(env),
-    }
-
-
 def _build_action_payload(*, env: Any) -> dict[str, Any]:
     decision = getattr(env, "decision", None)
     payload = _safe_dict(getattr(decision, "payload", {}) or {})
@@ -130,13 +117,17 @@ def verify_execution_contract(*, executor: Any, env: Any, output: Mapping[str, A
     normalized_output = _safe_dict(output)
     verifier = getattr(executor, "_evidence_verifier", None) or EvidenceVerifier()
     router_evidence = _extract_router_evidence(normalized_output)
-    if not router_evidence:
-        router_evidence = _default_router_evidence(env=env, output=normalized_output)
+
+    # Constitutional rule: the execution contract may observe evidence, but it
+    # may never manufacture positive router evidence for itself. Internal,
+    # advisory and bookkeeping actions remain supported through the existing
+    # action category / external_confirmation_mode contract and their execution
+    # receipt. External effects must supply observable router/connector evidence.
     result = verifier.verify(
         action=_build_action_payload(env=env),
         execution_receipt=_build_execution_receipt(env=env, output=normalized_output),
         feedback=_extract_feedback_payload(normalized_output),
-        router_evidence=router_evidence,
+        router_evidence=router_evidence or None,
     ).to_dict()
     verification = _safe_dict(result.get("verification"))
     verified = bool(result.get("verified"))
@@ -187,6 +178,7 @@ def commit_verified_execution(*, executor: Any, env: Any, output: Mapping[str, A
 __all__ = [
     "CANON_RUNTIME_EXECUTION_CONTRACT_LOCK_OWNER",
     "CANON_RUNTIME_EXECUTION_CONTRACT_NO_DECISION_LOGIC",
+    "CANON_RUNTIME_EXECUTION_CONTRACT_NO_SELF_ISSUED_EVIDENCE",
     "ExecutionContractLockError",
     "VerificationStageResult",
     "verify_execution_contract",
