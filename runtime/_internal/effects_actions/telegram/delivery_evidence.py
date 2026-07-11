@@ -30,6 +30,7 @@ def build_delivery_evidence(*, ok: bool, meta: Mapping[str, Any] | None, action_
         or mode in {"queued", "accepted"}
         or (bool(payload.get("dedup")) and not finalized)
     )
+    verified = bool(finalized or accepted_for_delivery)
 
     if finalized:
         source = "connector"
@@ -47,6 +48,7 @@ def build_delivery_evidence(*, ok: bool, meta: Mapping[str, Any] | None, action_
     return {
         "source": source,
         "action_type": str(action_type),
+        "verified": verified,
         "status": status,
         "summary": phase or mode or status,
         "external_refs": _external_refs(payload),
