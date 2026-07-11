@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from scripts.ci.integrity.auditor import run_audit, write_reports
+from scripts.ci.integrity.runner import run_audit, write_reports
 
 
 def _blocking_excerpt(report) -> str:
