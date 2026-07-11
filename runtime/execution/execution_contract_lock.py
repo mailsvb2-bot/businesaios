@@ -92,6 +92,8 @@ def _action_verification_contract(action_name: str, payload: Mapping[str, Any]) 
     requested_mode = str(payload.get("external_confirmation_mode") or payload.get("confirmation_mode") or "").strip().casefold()
     if canonical_mode == "required" or requested_mode == "required":
         return category, "required"
+    if canonical_mode == "conditional":
+        return category, "not_required" if bool(payload.get("dry_run", True)) else "required"
     return category, "not_required"
 
 
