@@ -12,6 +12,7 @@ from typing import Any
 
 from runtime.ads import AdsApplyEngine, bind_runtime_state, maturity_gate
 from runtime.governance import ActuationRegistry
+from runtime.handlers.ads_apply_evidence import attach_ads_apply_outcome
 from runtime.handlers.ads_apply_helpers import (
     build_apply_request,
     emit_apply_audit,
@@ -31,6 +32,22 @@ from runtime.ports.effects import EffectsPort
 CANON_THIN_HANDLER = True
 ACTION_NAME = "ads_apply_execute@v1"
 
+
+def _blocked_notification(*, effects: EffectsPort, decision_id: str, correlation_id: str, user_id: str, text: str, **kwargs: Any) -> dict[str, Any]:
+    notification = effects.send_message(
+        decision_id=decision_id,
+        correlation_id=correlation_id,
+        user_id=user_id,
+        text=text,
+        **kwargs,
+    )
+    return attach_ads_apply_outcome(
+        notification=notification,
+        status="blocked",
+        detail={"reason": "pre_apply_blocked"},
+    )
+
+
 def handle_ads_apply_execute(payload: dict[str, Any], effects: EffectsPort, env: Any, *, engine: AdsApplyEngine | None, event_store: Any | None = None) -> Any:
     ActuationRegistry.register(domain="ads.apply", controller_id=ACTION_NAME, source=__file__)
     ActuationRegistry.assert_single_executor(domain="ads.apply")
@@ -40,7 +57,8 @@ def handle_ads_apply_execute(payload: dict[str, Any], effects: EffectsPort, env:
         route = extract_ads_apply_route(payload=p, env=env)
     except AutopilotApplyRouteViolation as exc:
         fallback_decision_id, fallback_correlation_id = _best_effort_route_ids(payload=p, env=env)
-        return effects.send_message(
+        return _blocked_notification(
+            effects=effects,
             decision_id=fallback_decision_id,
             correlation_id=fallback_correlation_id,
             user_id=str(p.get("user_id") or ""),
@@ -55,11 +73,11 @@ def handle_ads_apply_execute(payload: dict[str, Any], effects: EffectsPort, env:
     user_id = str(p.get("user_id") or "")
     idem_key = str(p.get("idempotency_key") or "")
     if not idem_key.strip():
-        return effects.send_message(
+        return _blocked_notification(
+            effects=effects,
             decision_id=route.decision_id,
             correlation_id=route.correlation_id,
             user_id=str(p.get("user_id") or ""),
-            chat_id=str(p.get("chat_id") or ""),
             text="❌ Нужен Idempotency-Key для Ads Apply (защита от повторов). Повтори действие из UI.",
         )
     req, gate_state, _tenant_id, user_id = build_apply_request(p)
@@ -103,7 +121,7 @@ def handle_ads_apply_execute(payload: dict[str, Any], effects: EffectsPort, env:
             )
 
     summary = summary_text(status=res.status, detail=res.detail)
-    return effects.send_message(
+    notification = effects.send_message(
         decision_id=route.decision_id,
         correlation_id=route.correlation_id,
         user_id=user_id,
@@ -111,4 +129,9 @@ def handle_ads_apply_execute(payload: dict[str, Any], effects: EffectsPort, env:
         callback_query_id=p.get("callback_query_id"),
         track_event_type="ads_apply_executed@v1",
         track_payload={"status": res.status},
+    )
+    return attach_ads_apply_outcome(
+        notification=notification,
+        status=res.status,
+        detail=res.detail,
     )
