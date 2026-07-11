@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Any
 
 from runtime._internal.effect_types import EffectActionType
+from runtime._internal.effects_actions.telegram.delivery_evidence import build_delivery_evidence
 from runtime._internal.effects_actions.telegram.messaging_parts import (
     build_outbound_message,
     build_single_sender,
@@ -11,60 +11,6 @@ from runtime._internal.effects_actions.telegram.messaging_parts import (
     track_business_event,
     track_delivery,
 )
-
-
-def _delivery_external_refs(meta: Mapping[str, Any]) -> list[str]:
-    refs: list[str] = []
-    receipt = meta.get("receipt") if isinstance(meta.get("receipt"), Mapping) else {}
-    for value in (
-        meta.get("external_id"),
-        receipt.get("external_id"),
-        meta.get("delivery_key"),
-    ):
-        text = str(value or "").strip()
-        if text and text not in refs:
-            refs.append(text)
-    return refs
-
-
-def _delivery_evidence(*, ok: bool, meta: Mapping[str, Any] | None) -> dict[str, Any]:
-    payload = dict(meta or {})
-    finalized = bool(payload.get("delivery_finalized", False))
-    phase = str(payload.get("delivery_phase") or "").strip().casefold()
-    mode = str(payload.get("mode") or "").strip().casefold()
-    accepted_for_delivery = bool(ok) and (
-        phase == "accepted_for_delivery"
-        or mode in {"queued", "accepted"}
-        or (bool(payload.get("dedup")) and not finalized)
-    )
-
-    if finalized:
-        source = "connector"
-        status = "verified"
-        confidence = 1.0
-    elif accepted_for_delivery:
-        source = "ledger"
-        status = "observed"
-        confidence = 1.0
-    else:
-        source = "connector"
-        status = "failed" if not ok else "observed"
-        confidence = 0.0 if not ok else 1.0
-
-    return {
-        "source": source,
-        "action_type": str(EffectActionType.TELEGRAM_SEND_MESSAGE),
-        "status": status,
-        "summary": phase or mode or status,
-        "external_refs": _delivery_external_refs(payload),
-        "confidence": confidence,
-        "payload": {
-            "delivery_phase": phase or None,
-            "delivery_finalized": finalized,
-            "mode": mode or None,
-            "dedup": bool(payload.get("dedup", False)),
-        },
-    }
 
 
 def send_message_effect(
@@ -125,7 +71,11 @@ def send_message_effect(
     return {
         "ok": bool(ok),
         "meta": meta,
-        "evidence": _delivery_evidence(ok=bool(ok), meta=meta),
+        "evidence": build_delivery_evidence(
+            ok=bool(ok),
+            meta=meta,
+            action_type=str(EffectActionType.TELEGRAM_SEND_MESSAGE),
+        ),
     }
 
 
