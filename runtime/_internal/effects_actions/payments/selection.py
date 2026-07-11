@@ -2,8 +2,26 @@ from __future__ import annotations
 
 from typing import Any
 
+from runtime._internal.effect_types import EffectActionType
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
+
+
+def _payment_gateway_evidence(*, ok: bool, external_id: str | None, provider: str, meta: dict[str, Any]) -> dict[str, Any]:
+    external_ref = str(external_id or "").strip()
+    verified = bool(ok) and bool(external_ref)
+    return {
+        "source": "payment_gateway",
+        "action_type": str(EffectActionType.PAYMENTS_YOOKASSA_CREATE),
+        "status": "verified" if verified else "failed",
+        "summary": "payment_created" if verified else "payment_provider_confirmation_missing",
+        "external_refs": [external_ref] if external_ref else [],
+        "confidence": 1.0 if verified else 0.0,
+        "payload": {
+            "provider": str(provider),
+            "provider_status": ((meta or {}).get("yookassa") or {}).get("status") if isinstance((meta or {}).get("yookassa"), dict) else None,
+        },
+    }
 
 
 def select_tariff_effect(
@@ -33,14 +51,14 @@ def select_tariff_effect(
         try:
             payload["plan_id"] = int(plan_id)
         except Exception:
-            swallow(__name__, 'runtime/_internal/_effects_impl.py')
+            swallow(__name__, "runtime/_internal/_effects_impl.py")
     if title:
         payload["title"] = str(title)[:128]
     if expected_price is not None:
         try:
             payload["expected_price"] = int(expected_price)
         except Exception:
-            swallow(__name__, 'runtime/_internal/_effects_impl.py')
+            swallow(__name__, "runtime/_internal/_effects_impl.py")
 
     effects.event_log.emit(
         event_type="tariff_selected",
@@ -61,7 +79,7 @@ def select_tariff_effect(
                 channel="telegram",
             )
         except Exception:
-            swallow(__name__, 'runtime/_internal/_effects_impl.py')
+            swallow(__name__, "runtime/_internal/_effects_impl.py")
     return {"ok": True}
 
 
@@ -98,14 +116,17 @@ def capture_payment_effect(
         payload={"amount": int(amount), "currency": str(currency), "provider": str(provider), "ok": bool(ok), "meta": meta},
     )
 
+    external_id: str | None = None
     try:
         from core.payments.contracts import validate_payment_external_id
 
-        ext_id = None
+        raw_external_id = None
         if isinstance(meta, dict):
-            ext_id = (meta or {}).get("yookassa", {}).get("id")
+            provider_payload = (meta or {}).get("yookassa")
+            if isinstance(provider_payload, dict):
+                raw_external_id = provider_payload.get("id")
         if ok and provider_norm in {"yookassa", "yoo", "yoo_kassa"}:
-            ext_id = validate_payment_external_id(str(ext_id or ""))
+            external_id = validate_payment_external_id(str(raw_external_id or ""))
             effects.event_log.emit(
                 event_type="payment_created",
                 source="payments",
@@ -113,12 +134,12 @@ def capture_payment_effect(
                 decision_id=str(decision_id),
                 correlation_id=str(correlation_id),
                 payload={
-                    "external_id": str(ext_id),
+                    "external_id": str(external_id),
                     "status": (meta or {}).get("yookassa", {}).get("status") if isinstance(meta, dict) else None,
                     "provider": "yookassa",
                 },
             )
-    except Exception as e:
+    except Exception as exc:
         try:
             effects.event_log.emit(
                 event_type="payment_create_failed",
@@ -126,8 +147,21 @@ def capture_payment_effect(
                 user_id=str(user_id),
                 decision_id=str(decision_id),
                 correlation_id=str(correlation_id),
-                payload={"provider": str(provider), "reason": "missing_or_invalid_external_id", "error": str(e)[:500]},
+                payload={"provider": str(provider), "reason": "missing_or_invalid_external_id", "error": str(exc)[:500]},
             )
         except Exception:
-            swallow(__name__, 'runtime/_internal/_effects_impl.py')
-    return {"ok": bool(ok), "meta": meta}
+            swallow(__name__, "runtime/_internal/_effects_impl.py")
+
+    return {
+        "ok": bool(ok),
+        "meta": meta,
+        "evidence": _payment_gateway_evidence(
+            ok=bool(ok),
+            external_id=external_id,
+            provider=provider_norm or str(provider),
+            meta=dict(meta or {}),
+        ),
+    }
+
+
+__all__ = ["capture_payment_effect", "select_tariff_effect"]
