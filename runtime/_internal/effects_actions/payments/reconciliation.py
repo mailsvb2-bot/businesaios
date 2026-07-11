@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -13,6 +14,53 @@ from runtime._internal.effects_actions.payments.reconciliation_support import (
 )
 from runtime.security.runtime_asserts import assert_called_from_executor
 
+_PAYMENT_EVENT_NAMESPACE = uuid.UUID("cb6838ad-0545-4d2e-8c8e-253a6fab1b48")
+
+
+def _terminal_event_id(*, event_type: str, external_id: str, original_decision_id: str) -> str:
+    key = f"businesaios:payments:{event_type}:{original_decision_id}:{external_id}"
+    return str(uuid.uuid5(_PAYMENT_EVENT_NAMESPACE, key))
+
+
+def _event_id_exists(*, effects: Any, event_id: str) -> bool:
+    try:
+        return any(str(event.get("event_id") or "") == str(event_id) for event in effects.event_log.iter_events())
+    except Exception:
+        return False
+
+
+def _emit_terminal_event_once(
+    effects: Any,
+    *,
+    event_type: str,
+    source: str,
+    user_id: str,
+    decision_id: str,
+    correlation_id: str,
+    original_decision_id: str,
+    external_id: str,
+    payload: dict[str, Any],
+) -> str:
+    event_id = _terminal_event_id(
+        event_type=event_type,
+        external_id=str(external_id),
+        original_decision_id=str(original_decision_id),
+    )
+    try:
+        effects.event_log.emit(
+            event_type=str(event_type),
+            source=str(source),
+            user_id=str(user_id),
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+            payload=dict(payload),
+            event_id=event_id,
+        )
+    except Exception:
+        if not _event_id_exists(effects=effects, event_id=event_id):
+            raise
+    return event_id
+
 
 def _emit_payment_captured(
     effects: Any,
@@ -24,19 +72,129 @@ def _emit_payment_captured(
     user_id: str,
     external_id: str,
     status: str,
-) -> None:
-    effects.event_log.emit(
+) -> str:
+    return _emit_terminal_event_once(
+        effects,
         event_type="payment_captured",
         source="payments",
         user_id=str(user_id),
         decision_id=str(original_decision_id or reconciliation_decision_id),
         correlation_id=str(original_correlation_id or reconciliation_correlation_id),
+        original_decision_id=str(original_decision_id),
+        external_id=str(external_id),
         payload={
             "external_id": str(external_id),
             "status": str(status),
             "reconciled_by_decision_id": str(reconciliation_decision_id),
             "reconciliation_correlation_id": str(reconciliation_correlation_id),
         },
+    )
+
+
+def _emit_payment_status_event(
+    effects: Any,
+    *,
+    event_type: str,
+    original_decision_id: str,
+    reconciliation_decision_id: str,
+    reconciliation_correlation_id: str,
+    user_id: str,
+    external_id: str,
+    status: str,
+) -> str:
+    return _emit_terminal_event_once(
+        effects,
+        event_type=str(event_type),
+        source="payments",
+        user_id=str(user_id),
+        decision_id=str(reconciliation_decision_id),
+        correlation_id=str(reconciliation_correlation_id),
+        original_decision_id=str(original_decision_id),
+        external_id=str(external_id),
+        payload={"external_id": str(external_id), "status": str(status)},
+    )
+
+
+def _record_success(
+    effects: Any,
+    *,
+    original_decision_id: str,
+    original_correlation_id: str,
+    reconciliation_decision_id: str,
+    reconciliation_correlation_id: str,
+    user_id: str,
+    external_id: str,
+    status: str,
+    notification_id: str | None = None,
+    event: str | None = None,
+) -> None:
+    _emit_payment_status_event(
+        effects,
+        event_type="payment_succeeded",
+        original_decision_id=str(original_decision_id),
+        reconciliation_decision_id=str(reconciliation_decision_id),
+        reconciliation_correlation_id=str(reconciliation_correlation_id),
+        user_id=str(user_id),
+        external_id=str(external_id),
+        status=str(status),
+    )
+    mark_ledger_terminal(
+        effects=effects,
+        envelope_id=str(original_decision_id),
+        terminal_status="succeeded",
+    )
+    _emit_payment_captured(
+        effects,
+        original_decision_id=str(original_decision_id),
+        original_correlation_id=str(original_correlation_id),
+        reconciliation_decision_id=str(reconciliation_decision_id),
+        reconciliation_correlation_id=str(reconciliation_correlation_id),
+        user_id=str(user_id),
+        external_id=str(external_id),
+        status=str(status),
+    )
+    try_mark_terminal_outbox(
+        effects=effects,
+        external_id=str(external_id),
+        terminal_status="succeeded",
+        notification_id=notification_id,
+        event=event or "payment_captured",
+    )
+
+
+def _record_failure(
+    effects: Any,
+    *,
+    original_decision_id: str,
+    reconciliation_decision_id: str,
+    reconciliation_correlation_id: str,
+    user_id: str,
+    external_id: str,
+    status: str,
+    notification_id: str | None = None,
+    event: str | None = None,
+) -> None:
+    mark_ledger_terminal(
+        effects=effects,
+        envelope_id=str(original_decision_id),
+        terminal_status="failed",
+    )
+    _emit_payment_status_event(
+        effects,
+        event_type="payment_failed",
+        original_decision_id=str(original_decision_id),
+        reconciliation_decision_id=str(reconciliation_decision_id),
+        reconciliation_correlation_id=str(reconciliation_correlation_id),
+        user_id=str(user_id),
+        external_id=str(external_id),
+        status=str(status),
+    )
+    try_mark_terminal_outbox(
+        effects=effects,
+        external_id=str(external_id),
+        terminal_status="failed",
+        notification_id=notification_id,
+        event=event or "payment_failed",
     )
 
 
@@ -71,15 +229,10 @@ def reconcile_payments_effect(
                 skipped_already += 1
                 continue
             status = str(effects._yookassa_get_payment_status(external_payment_id=str(ext_id))).lower()
+            envelope_id = str(ev.get("decision_id") or ev.get("envelope_id") or "")
+            original_correlation_id = str(ev.get("correlation_id") or "")
             if status in SUCCESS_STATUSES:
-                if not try_mark_terminal_outbox(effects=effects, external_id=str(ext_id), terminal_status="succeeded"):
-                    skipped_already += 1
-                    continue
-                processed_any += 1
-                envelope_id = str(ev.get("decision_id") or ev.get("envelope_id") or "")
-                original_correlation_id = str(ev.get("correlation_id") or "")
-                mark_ledger_terminal(effects=effects, envelope_id=envelope_id, terminal_status="succeeded")
-                _emit_payment_captured(
+                _record_success(
                     effects,
                     original_decision_id=envelope_id,
                     original_correlation_id=original_correlation_id,
@@ -89,29 +242,18 @@ def reconcile_payments_effect(
                     external_id=str(ext_id),
                     status=status,
                 )
-                effects.event_log.emit(
-                    event_type="payment_succeeded",
-                    source="payments",
-                    user_id=str(uid),
-                    decision_id=str(decision_id),
-                    correlation_id=str(correlation_id),
-                    payload={"external_id": str(ext_id), "status": status},
-                )
-            elif status in FAILED_STATUSES:
-                if not try_mark_terminal_outbox(effects=effects, external_id=str(ext_id), terminal_status="failed"):
-                    skipped_already += 1
-                    continue
                 processed_any += 1
-                envelope_id = str(ev.get("decision_id") or ev.get("envelope_id") or "")
-                mark_ledger_terminal(effects=effects, envelope_id=envelope_id, terminal_status="failed")
-                effects.event_log.emit(
-                    event_type="payment_failed",
-                    source="payments",
+            elif status in FAILED_STATUSES:
+                _record_failure(
+                    effects,
+                    original_decision_id=envelope_id,
+                    reconciliation_decision_id=str(decision_id),
+                    reconciliation_correlation_id=str(correlation_id),
                     user_id=str(uid),
-                    decision_id=str(decision_id),
-                    correlation_id=str(correlation_id),
-                    payload={"external_id": str(ext_id), "status": status},
+                    external_id=str(ext_id),
+                    status=status,
                 )
+                processed_any += 1
 
         effects.event_log.emit(
             event_type="payments_reconciled",
@@ -181,11 +323,8 @@ def reconcile_payment_effect(
     terminal = "succeeded" if status in SUCCESS_STATUSES else ("failed" if status in FAILED_STATUSES else "pending")
     if terminal == "pending":
         return True
-    if not try_mark_terminal_outbox(effects=effects, external_id=ext_id, terminal_status=terminal):
-        return True
-    mark_ledger_terminal(effects=effects, envelope_id=str(ctx.get("envelope_id") or ""), terminal_status=terminal)
     if terminal == "succeeded":
-        _emit_payment_captured(
+        _record_success(
             effects,
             original_decision_id=str(ctx.get("envelope_id") or ""),
             original_correlation_id=str(ctx.get("correlation_id") or ""),
@@ -194,16 +333,29 @@ def reconcile_payment_effect(
             user_id=uid,
             external_id=ext_id,
             status=status,
+            notification_id=notification_id,
+            event=event,
         )
-    effects.event_log.emit(
-        event_type=("payment_succeeded" if terminal == "succeeded" else "payment_failed"),
-        source="payments",
-        user_id=uid,
-        decision_id=str(decision_id),
-        correlation_id=str(correlation_id),
-        payload={"external_id": ext_id, "status": status},
-    )
+    else:
+        _record_failure(
+            effects,
+            original_decision_id=str(ctx.get("envelope_id") or ""),
+            reconciliation_decision_id=str(decision_id),
+            reconciliation_correlation_id=str(correlation_id),
+            user_id=uid,
+            external_id=ext_id,
+            status=status,
+            notification_id=notification_id,
+            event=event,
+        )
     return True
 
 
-__all__ = ["reconcile_payment_effect", "reconcile_payments_effect"]
+__all__ = [
+    "_emit_payment_captured",
+    "_record_failure",
+    "_record_success",
+    "_terminal_event_id",
+    "reconcile_payment_effect",
+    "reconcile_payments_effect",
+]
