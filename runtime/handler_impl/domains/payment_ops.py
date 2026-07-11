@@ -1,6 +1,22 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_int, required_str
+
+
+def _effect_ok(value: object) -> bool:
+    if isinstance(value, Mapping) and "ok" in value:
+        return bool(value.get("ok"))
+    return bool(value)
+
+
+def _effect_evidence(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    evidence = value.get("evidence")
+    return dict(evidence) if isinstance(evidence, Mapping) else None
 
 
 def handle_capture_payment(payload, effects, env):
@@ -37,7 +53,7 @@ def handle_create_payment_and_send_link(payload, effects, env):
             raw = conf.get("confirmation_url") or conf.get("url")
             url = str(raw).strip() if raw else None
     msg = "Ссылка на оплату: " + url if url else "Платёж создан. Если ссылка не пришла — напиши /status через минуту."
-    effects.send_message(
+    delivery_res = effects.send_message(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
         user_id=user_id,
@@ -45,7 +61,17 @@ def handle_create_payment_and_send_link(payload, effects, env):
         priority="high",
         critical=True,
     )
-    return pay_res
+
+    payment_evidence = _effect_evidence(pay_res)
+    delivery_evidence = _effect_evidence(delivery_res)
+    connector_snapshots = [item for item in (payment_evidence, delivery_evidence) if item is not None]
+    return {
+        "ok": _effect_ok(pay_res) and _effect_ok(delivery_res),
+        "payment": pay_res,
+        "delivery": delivery_res,
+        "feedback": {"connector_snapshots": connector_snapshots},
+        "evidence": delivery_evidence or payment_evidence or {},
+    }
 
 
 def handle_reconcile_payments(payload, effects, env):
