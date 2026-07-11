@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from scripts.ci.integrity import auditor
-from scripts.ci.integrity.second_brain_alias_scan import check_decision_authority_aliases
+from scripts.ci.integrity.decision_authority_alias_scan import check_decision_authority_aliases
 
 
 def _scan(path: Path) -> list[auditor.Finding]:
@@ -44,9 +44,6 @@ def test_snake_case_decision_core_instance_binding_is_allowed(tmp_path: Path) ->
     assert _scan(path) == []
 
 
-def test_canonical_integrity_runner_exports_restored_contract() -> None:
-    from scripts.ci.integrity import runner
-
-    assert runner.CANON_INTEGRITY_AUDITOR_RUNNER is True
-    assert callable(runner.run_audit)
-    assert callable(runner.write_reports)
+def test_canonical_integrity_auditor_keeps_single_owner_contract() -> None:
+    assert callable(auditor.run_audit)
+    assert callable(auditor.write_reports)
