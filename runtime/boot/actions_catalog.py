@@ -98,8 +98,6 @@ EFFECT_ONLY_ACTIONS: frozenset[str] = frozenset({
 # already-issued actions and never select or alter a DecisionCore action.
 EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
     {
-        "ads_apply_execute@v1",
-        "answer_callback@v1",
         "capture_payment@v1",
         "create_payment_and_send_link@v1",
         "one_click_value@v1",
@@ -109,6 +107,8 @@ EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
         "send_weather@v1",
     }
 )
+CONDITIONAL_EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset({"ads_apply_execute@v1"})
+BEST_EFFORT_EXTERNAL_ACTIONS: frozenset[str] = frozenset({"answer_callback@v1"})
 ADVISORY_ACTIONS: frozenset[str] = frozenset(
     {
         "admin_user_card@v1",
@@ -131,15 +131,22 @@ ADVISORY_ACTIONS: frozenset[str] = frozenset(
 
 def execution_category_for_action(action: str) -> str:
     name = str(action)
-    if name in EXTERNAL_EFFECT_ACTIONS:
+    if name in EXTERNAL_EFFECT_ACTIONS or name in CONDITIONAL_EXTERNAL_EFFECT_ACTIONS:
         return "external_effect"
+    if name in BEST_EFFORT_EXTERNAL_ACTIONS:
+        return "external_best_effort"
     if name in ADVISORY_ACTIONS:
         return "advisory"
     return "internal_bookkeeping"
 
 
 def external_confirmation_mode_for_action(action: str) -> str:
-    return "required" if str(action) in EXTERNAL_EFFECT_ACTIONS else "not_required"
+    name = str(action)
+    if name in EXTERNAL_EFFECT_ACTIONS:
+        return "required"
+    if name in CONDITIONAL_EXTERNAL_EFFECT_ACTIONS:
+        return "conditional"
+    return "not_required"
 
 
 def build_specs_registry(*, rows: Iterable[Sequence[str | int | bool]], spec_factory, registry_type):
@@ -167,7 +174,9 @@ def handler_actions_from(all_actions: Iterable[str]) -> set[str]:
 
 __all__ = [
     "ADVISORY_ACTIONS",
+    "BEST_EFFORT_EXTERNAL_ACTIONS",
     "BUILTIN_HANDLER_ACTIONS",
+    "CONDITIONAL_EXTERNAL_EFFECT_ACTIONS",
     "EFFECT_ONLY_ACTIONS",
     "EXTERNAL_EFFECT_ACTIONS",
     "INLINE_ALLOWLIST_NAMES",
