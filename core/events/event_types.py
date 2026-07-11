@@ -27,6 +27,17 @@ ENTITLEMENT_GRANTED = "entitlement_granted"
 MESSAGE_SENT = "message_sent"
 MESSAGE_FAILED = "message_failed"
 
+# Canonical payment proof lifecycle.
+PAYMENT_CREATE_ATTEMPTED = "payment_create_attempted"
+PAYMENT_CREATED = "payment_created"
+PAYMENT_CREATE_FAILED = "payment_create_failed"
+PAYMENT_CHECKED = "payment_checked"
+PAYMENT_CAPTURED = "payment_captured"
+PAYMENT_SUCCEEDED = "payment_succeeded"
+PAYMENT_FAILED = "payment_failed"
+PAYMENTS_RECONCILED = "payments_reconciled"
+PAYMENTS_RECONCILE_FAILED = "payments_reconcile_failed"
+
 # AI / governance
 DECISION_ISSUED = "decision_issued"
 DECISION_EXECUTED = "decision_executed"
@@ -98,6 +109,15 @@ KNOWN_EVENT_TYPES: set[str] = {
     ENTITLEMENT_GRANTED,
     MESSAGE_SENT,
     MESSAGE_FAILED,
+    PAYMENT_CREATE_ATTEMPTED,
+    PAYMENT_CREATED,
+    PAYMENT_CREATE_FAILED,
+    PAYMENT_CHECKED,
+    PAYMENT_CAPTURED,
+    PAYMENT_SUCCEEDED,
+    PAYMENT_FAILED,
+    PAYMENTS_RECONCILED,
+    PAYMENTS_RECONCILE_FAILED,
     DECISION_ISSUED,
     DECISION_EXECUTED,
     DECISION_BLOCKED,
@@ -126,7 +146,6 @@ KNOWN_EVENT_TYPES: set[str] = {
     FINANCE_ALLOCATION_RECOMMENDED,
     FINANCE_JOB_STARTED,
     FINANCE_JOB_COMPLETED,
-
 }
 
 
