@@ -32,8 +32,8 @@ CANON_BOOT_WIRING_ONLY = True
 
 
 LimitKind = Literal["none", "general", "llm", "ads", "payments", "admin"]
-ExecutionCategory = Literal["external_effect", "internal_bookkeeping", "advisory"]
-ExternalConfirmationMode = Literal["required", "not_required"]
+ExecutionCategory = Literal["external_effect", "external_best_effort", "internal_bookkeeping", "advisory"]
+ExternalConfirmationMode = Literal["required", "conditional", "not_required"]
 
 
 @dataclass(frozen=True)
