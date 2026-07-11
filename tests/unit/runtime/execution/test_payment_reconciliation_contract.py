@@ -47,6 +47,18 @@ def _effects(events, *, payment_outbox=None) -> SimpleNamespace:
     )
 
 
+def _captured_kwargs() -> dict[str, str]:
+    return {
+        "original_decision_id": "decision-create-8",
+        "original_correlation_id": "correlation-create-8",
+        "reconciliation_decision_id": "decision-reconcile-8",
+        "reconciliation_correlation_id": "correlation-reconcile-8",
+        "user_id": "user-8",
+        "external_id": "payment-8",
+        "status": "succeeded",
+    }
+
+
 def test_payment_checked_is_not_terminal_and_can_be_reconciled_again() -> None:
     effects = _effects(
         [
@@ -147,16 +159,7 @@ def test_payment_terminal_event_id_is_deterministic_per_original_decision_and_pa
 def test_payment_captured_is_attributed_to_original_payment_decision() -> None:
     effects = _effects([])
 
-    event_id = _emit_payment_captured(
-        effects,
-        original_decision_id="decision-create-8",
-        original_correlation_id="correlation-create-8",
-        reconciliation_decision_id="decision-reconcile-8",
-        reconciliation_correlation_id="correlation-reconcile-8",
-        user_id="user-8",
-        external_id="payment-8",
-        status="succeeded",
-    )
+    event_id = _emit_payment_captured(effects, **_captured_kwargs())
 
     event = effects.event_log.events[-1]
     assert event["event_type"] == "payment_captured"
@@ -164,3 +167,15 @@ def test_payment_captured_is_attributed_to_original_payment_decision() -> None:
     assert event["decision_id"] == "decision-create-8"
     assert event["correlation_id"] == "correlation-create-8"
     assert event["payload"]["reconciled_by_decision_id"] == "decision-reconcile-8"
+
+
+def test_repeated_payment_captured_emit_keeps_one_deterministic_proof_event() -> None:
+    effects = _effects([])
+
+    first = _emit_payment_captured(effects, **_captured_kwargs())
+    second = _emit_payment_captured(effects, **_captured_kwargs())
+
+    assert first == second
+    captured = [event for event in effects.event_log.events if event.get("event_type") == "payment_captured"]
+    assert len(captured) == 1
+    assert captured[0]["event_id"] == first
