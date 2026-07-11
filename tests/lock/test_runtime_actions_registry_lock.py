@@ -47,6 +47,27 @@ def test_every_action_has_limits_and_handler_contract():
 
 
 @pytest.mark.lock
+def test_every_action_has_closed_verification_contract():
+    allowed_categories = {
+        "external_effect",
+        "external_best_effort",
+        "internal_bookkeeping",
+        "advisory",
+    }
+    allowed_modes = {"required", "conditional", "not_required"}
+
+    for name, spec in SPECS.items():
+        assert spec.execution_category in allowed_categories, f"unknown execution category: {name}={spec.execution_category}"
+        assert spec.external_confirmation_mode in allowed_modes, f"unknown confirmation mode: {name}={spec.external_confirmation_mode}"
+        if spec.external_confirmation_mode == "required":
+            assert spec.execution_category == "external_effect", f"required confirmation on non-external action: {name}"
+        if spec.external_confirmation_mode == "conditional":
+            assert spec.execution_category == "external_effect", f"conditional confirmation on non-external action: {name}"
+        if spec.execution_category == "external_best_effort":
+            assert spec.external_confirmation_mode == "not_required", f"best-effort action became blocking: {name}"
+
+
+@pytest.mark.lock
 def test_idempotency_requirement_is_explicit_and_consistent():
     read_only = {"noop@v1", "poll_telegram_updates@v1", "telegram_self_check@v1"}
     for name, spec in SPECS.items():
