@@ -25,8 +25,14 @@ def _pytest_active() -> bool:
     return bool(env_str("PYTEST_CURRENT_TEST", ""))
 
 
-def _offline_effect_noop(handler_output: dict[str, Any]) -> bool:
-    if not _pytest_active():
+def offline_effect_noop(handler_output: Any) -> bool:
+    """Recognize the existing hermetic pytest-only transport no-op contract.
+
+    This is never a production verification bypass: without an active pytest
+    context it always returns False.
+    """
+
+    if not _pytest_active() or not isinstance(handler_output, dict):
         return False
     meta = handler_output.get("meta")
     if not isinstance(meta, dict):
@@ -53,13 +59,12 @@ def effect_succeeded(handler_output: Any) -> bool:
     if isinstance(handler_output, dict) and "ok" in handler_output:
         if bool(handler_output.get("ok")):
             return True
-        return _offline_effect_noop(handler_output)
+        return offline_effect_noop(handler_output)
     return bool(handler_output)
 
 
 def dispatch_action(*, handlers, effects, cap_token: str, action: str, payload: dict) -> Any:
     """Dispatch an action to its handler under an issued capability."""
-
     handler = handlers.get(action)
     if handler is None:
         raise RuntimeError(f"UNKNOWN_ACTION:{action}")
@@ -69,3 +74,6 @@ def dispatch_action(*, handlers, effects, cap_token: str, action: str, payload: 
         return handler(payload, effects)
     finally:
         clear_effect_capability(tok)
+
+
+__all__ = ["dispatch_action", "effect_succeeded", "offline_effect_noop"]
