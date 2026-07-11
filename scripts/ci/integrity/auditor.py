@@ -153,7 +153,7 @@ def check_single_decision_core(files: list[Path], spec: dict[str, Any]) -> list[
         if tree is None:
             continue
         for node in ast.walk(tree):
-            if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            if not isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
                 continue
             if node.name not in executable_names:
                 continue
@@ -312,7 +312,7 @@ def check_import_boundaries(files: list[Path]) -> list[Finding]:
         if not forbidden_terms:
             continue
         for node in ast.walk(tree):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
+            if isinstance(node, ast.Import | ast.ImportFrom):
                 names: list[str] = []
                 if isinstance(node, ast.Import):
                     names = [alias.name for alias in node.names]
@@ -332,21 +332,52 @@ def check_import_boundaries(files: list[Path]) -> list[Finding]:
     return out
 
 
+def _documented_alias_groups(spec: dict[str, Any]) -> set[tuple[str, ...]]:
+    policy = spec.get("canonical_name_alias_policy", {})
+    if not isinstance(policy, dict):
+        return set()
+
+    groups: set[tuple[str, ...]] = set()
+    for item in policy.values():
+        if not isinstance(item, dict):
+            continue
+        canonical = item.get("canonical")
+        aliases = item.get("aliases", [])
+        reason = item.get("reason", "")
+        if not isinstance(canonical, str) or not canonical.strip():
+            continue
+        if not isinstance(aliases, list) or not aliases:
+            continue
+        if not all(isinstance(alias, str) and alias.strip() for alias in aliases):
+            continue
+        if not isinstance(reason, str) or not reason.strip():
+            continue
+        groups.add(tuple(sorted({canonical, *aliases})))
+    return groups
+
+
 def check_naming_synonyms(files: list[Path], spec: dict[str, Any]) -> list[Finding]:
     all_text = "\n".join(collect_text_index(files).values()).lower()
     out: list[Finding] = []
+    documented_groups = _documented_alias_groups(spec)
+
     for group in spec["canonical_name_groups"]:
         present = [term for term in group if re.search(rf"\b{re.escape(term)}\b", all_text)]
-        if len(present) >= 3:
-            out.append(finding(
-                "P1_NAMING_SYNONYMS",
-                "P1",
-                "Potential canonical naming drift",
-                "repo",
-                1,
-                "Multiple synonym names are widely present: " + ", ".join(present),
-                "Define canonical terminology and explicit aliases in architecture docs/spec.",
-            ))
+        if len(present) < 3:
+            continue
+
+        if tuple(sorted(group)) in documented_groups:
+            continue
+
+        out.append(finding(
+            "P1_NAMING_SYNONYMS",
+            "P1",
+            "Potential canonical naming drift",
+            "repo",
+            1,
+            "Multiple synonym names are widely present: " + ", ".join(present),
+            "Define canonical terminology and explicit aliases in architecture docs/spec.",
+        ))
     return out
 
 
