@@ -16,6 +16,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from application.evidence.evidence_verifier import EvidenceVerifier
+from runtime.execution.evidence_trust import (
+    external_confirmation_required,
+    extract_trusted_router_evidence,
+    result_has_trusted_external_evidence,
+    sanitize_feedback_payload,
+)
 from runtime.execution.outcome_persistence_lock import persist_verified_outcome
 
 CANON_RUNTIME_EXECUTION_CONTRACT_LOCK_OWNER = True
@@ -73,14 +79,6 @@ def _extract_feedback_payload(output: Mapping[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _extract_router_evidence(output: Mapping[str, Any]) -> dict[str, Any]:
-    for key in ("router_evidence", "verification", "evidence"):
-        value = output.get(key)
-        if isinstance(value, Mapping):
-            return dict(value)
-    return {}
-
-
 def _build_action_payload(*, env: Any) -> dict[str, Any]:
     decision = getattr(env, "decision", None)
     payload = _safe_dict(getattr(decision, "payload", {}) or {})
@@ -113,31 +111,66 @@ def _build_execution_receipt(*, env: Any, output: Mapping[str, Any]) -> dict[str
     }
 
 
+def _enforce_external_evidence_trust(
+    *,
+    action: Mapping[str, Any],
+    result: Mapping[str, Any],
+    verification: Mapping[str, Any],
+    verified: bool,
+) -> tuple[dict[str, Any], bool]:
+    normalized = dict(verification)
+    if not verified or not external_confirmation_required(action):
+        return normalized, verified
+    if result_has_trusted_external_evidence(result):
+        return normalized, verified
+
+    normalized.update(
+        {
+            "verified": False,
+            "status": "untrusted_evidence",
+            "code": "untrusted_external_evidence",
+            "message": "external effect lacks explicitly attributed trusted evidence",
+            "source_of_truth": "none",
+            "retryable": False,
+        }
+    )
+    return normalized, False
+
+
 def verify_execution_contract(*, executor: Any, env: Any, output: Mapping[str, Any] | None) -> VerificationStageResult:
     normalized_output = _safe_dict(output)
     verifier = getattr(executor, "_evidence_verifier", None) or EvidenceVerifier()
-    router_evidence = _extract_router_evidence(normalized_output)
+    action = _build_action_payload(env=env)
+    router_evidence = extract_trusted_router_evidence(normalized_output)
+    feedback = sanitize_feedback_payload(_extract_feedback_payload(normalized_output))
 
     # Constitutional rule: the execution contract may observe evidence, but it
-    # may never manufacture positive router evidence for itself. Internal,
-    # advisory and bookkeeping actions remain supported through the existing
-    # action category / external_confirmation_mode contract and their execution
-    # receipt. External effects must supply observable router/connector evidence.
+    # may never manufacture or promote unattributed positive evidence for itself.
+    # Internal/advisory/bookkeeping actions preserve their receipt-only contract;
+    # external effects require explicitly attributed router/connector evidence.
     result = verifier.verify(
-        action=_build_action_payload(env=env),
+        action=action,
         execution_receipt=_build_execution_receipt(env=env, output=normalized_output),
-        feedback=_extract_feedback_payload(normalized_output),
+        feedback=feedback,
         router_evidence=router_evidence or None,
     ).to_dict()
     verification = _safe_dict(result.get("verification"))
     verified = bool(result.get("verified"))
+    verification, verified = _enforce_external_evidence_trust(
+        action=action,
+        result=result,
+        verification=verification,
+        verified=verified,
+    )
     evidence_bundle = _safe_dict(result.get("evidence_bundle"))
+    outcome = _safe_dict(verification.get("outcome") or {})
+    external_refs = list(verification.get("external_refs") or outcome.get("external_refs") or [])
     next_step_context = {
         "decision_id": str(getattr(getattr(env, "decision", None), "decision_id", "") or ""),
         "correlation_id": str(getattr(getattr(env, "decision", None), "correlation_id", "") or ""),
         "verified": verified,
         "verification_status": str(verification.get("status") or ("verified" if verified else "failed")),
-        "external_refs": list(_safe_dict(verification.get("outcome") or {}).get("external_refs") or []),
+        "external_refs": external_refs,
     }
     _checkpoint(
         executor=executor,
