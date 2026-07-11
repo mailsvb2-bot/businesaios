@@ -4,8 +4,8 @@ from typing import Any
 
 from runtime.observability.error_handling import swallow
 
-RUNTIME_EFFECTS_IMPL_PATH = 'runtime/_internal/_effects_impl.py'
-TERMINAL_EVENTS = {"payment_checked", "payment_succeeded", "payment_failed"}
+RUNTIME_EFFECTS_IMPL_PATH = "runtime/_internal/_effects_impl.py"
+TERMINAL_EVENTS = {"payment_captured", "payment_succeeded", "payment_failed"}
 SUCCESS_STATUSES = {"succeeded", "success", "paid"}
 FAILED_STATUSES = {"canceled", "cancelled", "failed"}
 
@@ -30,9 +30,12 @@ def event_already_processed(*, effects: Any, external_id: str) -> bool:
     return False
 
 
-def resolve_created_payment_context(*, effects: Any, external_id: str) -> tuple[str, str]:
-    envelope_id = ""
-    user_id = "system"
+def resolve_created_payment_context(*, effects: Any, external_id: str) -> dict[str, str]:
+    context = {
+        "envelope_id": "",
+        "user_id": "system",
+        "correlation_id": "",
+    }
     try:
         for event in effects.event_log.iter_events():
             if (event.get("event_type") or event.get("type")) != "payment_created":
@@ -40,12 +43,13 @@ def resolve_created_payment_context(*, effects: Any, external_id: str) -> tuple[
             payload = event.get("payload") or {}
             if str(payload.get("external_id") or "") != str(external_id):
                 continue
-            envelope_id = str(event.get("decision_id") or event.get("envelope_id") or "")
-            user_id = str(event.get("user_id") or user_id)
+            context["envelope_id"] = str(event.get("decision_id") or event.get("envelope_id") or "")
+            context["user_id"] = str(event.get("user_id") or context["user_id"])
+            context["correlation_id"] = str(event.get("correlation_id") or "")
             break
     except Exception:
-        return "", user_id
-    return envelope_id, user_id
+        return context
+    return context
 
 
 def try_mark_terminal_outbox(*, effects: Any, external_id: str, terminal_status: str, notification_id: str | None = None, event: str | None = None) -> bool:
