@@ -4,40 +4,42 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
+from runtime._internal.effect_types import EffectActionType
+from runtime._internal.effects_actions.telegram.delivery_evidence import build_delivery_evidence
 from runtime._internal.effects_actions.telegram.transport import telegram_send_audio_transport
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
 def _mark_accepted(state: Any, *, audio_id: str, meta: Mapping[str, Any], user_id: str) -> None:
-    if state is None or not hasattr(state, 'mark_accepted'):
+    if state is None or not hasattr(state, "mark_accepted"):
         return
     try:
         state.mark_accepted(
             str(audio_id),
-            payload_digest=None if meta.get('payload_digest') is None else str(meta.get('payload_digest')),
-            metadata={'method': 'sendAudio', 'chat_id': str(user_id), **dict(meta or {}), 'delivery_phase': 'accepted_for_delivery'},
+            payload_digest=None if meta.get("payload_digest") is None else str(meta.get("payload_digest")),
+            metadata={"method": "sendAudio", "chat_id": str(user_id), **dict(meta or {}), "delivery_phase": "accepted_for_delivery"},
         )
     except Exception:
         return
 
 
 def _mark_delivered(state: Any, *, audio_id: str, meta: Mapping[str, Any], user_id: str) -> None:
-    if state is None or not hasattr(state, 'mark_delivered'):
+    if state is None or not hasattr(state, "mark_delivered"):
         return
     try:
         state.mark_delivered(
             str(audio_id),
-            external_id=None if meta.get('external_id') is None else str(meta.get('external_id')),
-            payload_digest=None if meta.get('payload_digest') is None else str(meta.get('payload_digest')),
-            metadata={'method': 'sendAudio', 'chat_id': str(user_id), **dict(meta or {}), 'delivery_phase': 'finalized'},
+            external_id=None if meta.get("external_id") is None else str(meta.get("external_id")),
+            payload_digest=None if meta.get("payload_digest") is None else str(meta.get("payload_digest")),
+            metadata={"method": "sendAudio", "chat_id": str(user_id), **dict(meta or {}), "delivery_phase": "finalized"},
         )
     except Exception:
         return
 
 
 def _existing_receipt(state: Any, *, audio_id: str) -> dict[str, Any] | None:
-    if state is None or not hasattr(state, 'get_receipt'):
+    if state is None or not hasattr(state, "get_receipt"):
         return None
     try:
         receipt = state.get_receipt(str(audio_id))
@@ -59,7 +61,16 @@ def send_audio_effect(
 ) -> dict:
     assert_called_from_executor()
     if channel != "telegram":
-        return {"ok": True, "meta": {"channel": channel, "mode": "noop"}}
+        meta = {"channel": channel, "mode": "noop", "delivery_finalized": False}
+        return {
+            "ok": True,
+            "meta": meta,
+            "evidence": build_delivery_evidence(
+                ok=True,
+                meta=meta,
+                action_type=str(EffectActionType.TELEGRAM_SEND_AUDIO),
+            ),
+        }
 
     try:
         if effects._audio_lock is not None and effects._last_audio_sent_at is not None:
@@ -72,7 +83,7 @@ def send_audio_effect(
             with effects._audio_lock:
                 effects._last_audio_sent_at[str(user_id)] = time.monotonic()
     except Exception:
-        swallow(__name__, 'runtime/_internal/_effects_impl.py')
+        swallow(__name__, "runtime/_internal/_effects_impl.py")
 
     audio_id = f"telegram_audio:{user_id}:{decision_id}:{str(kind or 'voice')}:{str(path)}"
 
@@ -92,9 +103,9 @@ def send_audio_effect(
                     ok, meta = True, {"channel": channel, "dedup": True, "mode": "memory", "delivery_finalized": True}
                 else:
                     now = time.monotonic()
-                    for k, ts in list(effects._audio_delivery_keys.items()):
-                        if (now - float(ts)) > 3600.0:
-                            effects._audio_delivery_keys.pop(k, None)
+                    for key, timestamp in list(effects._audio_delivery_keys.items()):
+                        if (now - float(timestamp)) > 3600.0:
+                            effects._audio_delivery_keys.pop(key, None)
                     effects._audio_delivery_keys[audio_id] = now
                     ok, meta = _deliver()
         except Exception:
@@ -102,20 +113,34 @@ def send_audio_effect(
     elif effects.delivery_state is not None:
         existing = _existing_receipt(effects.delivery_state, audio_id=audio_id)
         if existing is not None:
-            phase = str(existing.get('delivery_phase') or existing.get('metadata', {}).get('delivery_phase') or 'finalized')
-            ok, meta = True, {'channel': channel, 'dedup': True, 'receipt': existing, 'delivery_phase': phase, 'delivery_finalized': phase == 'finalized'}
+            phase = str(existing.get("delivery_phase") or existing.get("metadata", {}).get("delivery_phase") or "finalized")
+            ok, meta = True, {
+                "channel": channel,
+                "dedup": True,
+                "receipt": existing,
+                "delivery_phase": phase,
+                "delivery_finalized": phase == "finalized",
+            }
         else:
             ok, meta = _deliver()
-            mode = str((meta or {}).get('mode') or '')
-            finalized = bool(ok) and mode not in {'queued', 'noop'}
-            meta = {**dict(meta or {}), 'delivery_finalized': finalized}
+            mode = str((meta or {}).get("mode") or "")
+            finalized = bool(ok) and mode not in {"queued", "noop"}
+            meta = {**dict(meta or {}), "delivery_finalized": finalized}
             if finalized:
                 _mark_delivered(effects.delivery_state, audio_id=audio_id, meta=meta, user_id=str(user_id))
-            elif bool(ok) and mode == 'queued':
-                meta['delivery_phase'] = 'accepted_for_delivery'
+            elif bool(ok) and mode == "queued":
+                meta["delivery_phase"] = "accepted_for_delivery"
                 _mark_accepted(effects.delivery_state, audio_id=audio_id, meta=meta, user_id=str(user_id))
     else:
         ok, meta = _deliver()
+
+    meta = dict(meta or {})
+    meta.setdefault("delivery_key", audio_id)
+    if "delivery_finalized" not in meta:
+        mode = str(meta.get("mode") or "")
+        meta["delivery_finalized"] = bool(ok) and mode not in {"queued", "noop", "accepted"}
+    if bool(ok) and str(meta.get("mode") or "") == "queued":
+        meta.setdefault("delivery_phase", "accepted_for_delivery")
 
     effects.event_log.emit(
         event_type="audio_sent",
@@ -125,4 +150,15 @@ def send_audio_effect(
         correlation_id=str(correlation_id),
         payload={"ok": bool(ok), "path": str(path), "kind": str(kind or "voice"), "meta": meta},
     )
-    return {"ok": bool(ok), "meta": meta}
+    return {
+        "ok": bool(ok),
+        "meta": meta,
+        "evidence": build_delivery_evidence(
+            ok=bool(ok),
+            meta=meta,
+            action_type=str(EffectActionType.TELEGRAM_SEND_AUDIO),
+        ),
+    }
+
+
+__all__ = ["send_audio_effect"]
