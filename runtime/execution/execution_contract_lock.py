@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from application.evidence.evidence_verifier import EvidenceVerifier
+from runtime.boot.actions_registry import get_spec
 from runtime.execution.evidence_trust import (
     external_confirmation_required,
     extract_trusted_router_evidence,
@@ -27,6 +28,7 @@ from runtime.execution.outcome_persistence_lock import persist_verified_outcome
 CANON_RUNTIME_EXECUTION_CONTRACT_LOCK_OWNER = True
 CANON_RUNTIME_EXECUTION_CONTRACT_NO_DECISION_LOGIC = True
 CANON_RUNTIME_EXECUTION_CONTRACT_NO_SELF_ISSUED_EVIDENCE = True
+CANON_RUNTIME_EXECUTION_CONTRACT_REGISTRY_BOUND_VERIFICATION = True
 
 
 class ExecutionContractLockError(RuntimeError):
@@ -79,18 +81,35 @@ def _extract_feedback_payload(output: Mapping[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _action_verification_contract(action_name: str, payload: Mapping[str, Any]) -> tuple[str, str]:
+    try:
+        spec = get_spec(action_name)
+    except KeyError:
+        return "external_effect", "required"
+
+    category = str(spec.execution_category)
+    canonical_mode = str(spec.external_confirmation_mode)
+    requested_mode = str(payload.get("external_confirmation_mode") or payload.get("confirmation_mode") or "").strip().casefold()
+    if canonical_mode == "required" or requested_mode == "required":
+        return category, "required"
+    return category, "not_required"
+
+
 def _build_action_payload(*, env: Any) -> dict[str, Any]:
     decision = getattr(env, "decision", None)
     payload = _safe_dict(getattr(decision, "payload", {}) or {})
+    action_name = str(getattr(decision, "action", "") or "")
     decision_id = str(getattr(decision, "decision_id", "") or "")
+    category, confirmation_mode = _action_verification_contract(action_name, payload)
     return {
-        "action_type": str(getattr(decision, "action", "") or ""),
+        **payload,
+        "action_type": action_name,
         "action_id": str(payload.get("action_id") or decision_id),
         "decision_id": decision_id,
         "correlation_id": str(getattr(decision, "correlation_id", "") or ""),
-        "external_confirmation_mode": str(payload.get("external_confirmation_mode") or payload.get("confirmation_mode") or "auto"),
+        "external_confirmation_mode": confirmation_mode,
+        "action_category": category,
         "requested_at": _decision_observed_at(env),
-        **payload,
     }
 
 
@@ -212,6 +231,7 @@ __all__ = [
     "CANON_RUNTIME_EXECUTION_CONTRACT_LOCK_OWNER",
     "CANON_RUNTIME_EXECUTION_CONTRACT_NO_DECISION_LOGIC",
     "CANON_RUNTIME_EXECUTION_CONTRACT_NO_SELF_ISSUED_EVIDENCE",
+    "CANON_RUNTIME_EXECUTION_CONTRACT_REGISTRY_BOUND_VERIFICATION",
     "ExecutionContractLockError",
     "VerificationStageResult",
     "verify_execution_contract",
