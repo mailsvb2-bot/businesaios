@@ -28,6 +28,8 @@ coverage.xml
 htmlcov/
 build/
 dist/
+target/
+rust/**/target/
 artifacts/ci/
 *.sqlite-wal
 *.sqlite-shm
