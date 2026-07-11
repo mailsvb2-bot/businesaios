@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from runtime.actions import ACTION_ADS_APPLY_EXECUTE_V1
 from runtime.handlers import ActionHandlerRegistry
+from runtime.handlers.ads_apply_evidence import attach_ads_apply_outcome
 
 CANON_BOOT_WIRING_ONLY = True
+
 
 def register_ads_handlers(*, handlers: ActionHandlerRegistry, event_store, ads_runtime, ads_autopilot_engine, ads_apply_engine) -> None:
     from runtime.handlers.ads_apply_execute import handle_ads_apply_execute as _ads_apply_execute
@@ -29,7 +31,7 @@ def register_ads_handlers(*, handlers: ActionHandlerRegistry, event_store, ads_r
 
     def _ads_apply_exec(payload, effects, env):
         if ads_runtime is None:
-            return effects.send_message(
+            notification = effects.send_message(
                 decision_id=env.decision.decision_id,
                 correlation_id=env.decision.correlation_id,
                 user_id=str((payload or {}).get("user_id") or "unknown"),
@@ -37,6 +39,11 @@ def register_ads_handlers(*, handlers: ActionHandlerRegistry, event_store, ads_r
                 reply_markup={"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": "ads:apply:menu"}]]},
                 callback_query_id=(payload or {}).get("callback_query_id"),
                 critical=False,
+            )
+            return attach_ads_apply_outcome(
+                notification=notification,
+                status="blocked",
+                detail={"reason": "ads_runtime_not_configured"},
             )
         return _ads_apply_execute(payload, effects, env, engine=ads_apply_engine, event_store=event_store)
 
