@@ -6,6 +6,7 @@ import pytest
 
 from runtime.execution.execution_contract_lock import (
     ExecutionContractLockError,
+    _build_action_payload,
     verify_execution_contract,
 )
 
@@ -27,11 +28,11 @@ def _executor() -> SimpleNamespace:
 
 def _external_env(action_id: str) -> SimpleNamespace:
     return _env(
-        action="send_message",
+        action="send_message@v1",
         payload={
             "action_id": action_id,
-            "external_confirmation_mode": "required",
-            "action_category": "write",
+            "external_confirmation_mode": "not_required",
+            "action_category": "internal_bookkeeping",
         },
     )
 
@@ -47,11 +48,11 @@ def test_external_effect_cannot_self_verify_from_executor_receipt() -> None:
 
 def test_internal_bookkeeping_keeps_receipt_only_execution_contract() -> None:
     env = _env(
-        action="record_internal_checkpoint",
+        action="emit_event@v1",
         payload={
             "action_id": "action-2",
             "external_confirmation_mode": "not_required",
-            "action_category": "internal_bookkeeping",
+            "action_category": "external_effect",
         },
     )
 
@@ -170,8 +171,37 @@ def test_explicit_connector_snapshot_preserves_external_effect_functionality() -
     assert result.next_step_context["external_refs"] == ["telegram-message-77"]
 
 
+def test_registry_contract_cannot_be_downgraded_by_payload() -> None:
+    action = _build_action_payload(env=_external_env("action-8"))
+
+    assert action["action_type"] == "send_message@v1"
+    assert action["external_confirmation_mode"] == "required"
+    assert action["action_category"] == "external_effect"
+
+
+def test_payload_cannot_override_canonical_decision_identity() -> None:
+    env = _env(
+        action="emit_event@v1",
+        payload={
+            "action_type": "send_message@v1",
+            "decision_id": "forged-decision",
+            "correlation_id": "forged-correlation",
+            "external_confirmation_mode": "required",
+        },
+    )
+
+    action = _build_action_payload(env=env)
+
+    assert action["action_type"] == "emit_event@v1"
+    assert action["decision_id"] == "decision-1"
+    assert action["correlation_id"] == "correlation-1"
+    assert action["action_category"] == "internal_bookkeeping"
+    assert action["external_confirmation_mode"] == "required"
+
+
 def test_execution_contract_exports_no_self_issued_evidence_marker() -> None:
     from runtime.execution import execution_contract_lock
 
     assert execution_contract_lock.CANON_RUNTIME_EXECUTION_CONTRACT_NO_SELF_ISSUED_EVIDENCE is True
+    assert execution_contract_lock.CANON_RUNTIME_EXECUTION_CONTRACT_REGISTRY_BOUND_VERIFICATION is True
     assert not hasattr(execution_contract_lock, "_default_router_evidence")
