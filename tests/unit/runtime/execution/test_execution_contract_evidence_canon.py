@@ -155,11 +155,12 @@ def test_explicit_connector_snapshot_preserves_external_effect_functionality() -
             "feedback": {
                 "connector_snapshots": [
                     {
-                        "source": "telegram",
+                        "source": "connector",
                         "verified": True,
                         "status": "verified",
                         "external_refs": ["telegram-message-77"],
                         "confidence": 1.0,
+                        "provider": "telegram",
                     }
                 ]
             },
@@ -167,7 +168,7 @@ def test_explicit_connector_snapshot_preserves_external_effect_functionality() -
     )
 
     assert result.verified is True
-    assert result.verification["source_of_truth"] == "telegram"
+    assert result.verification["source_of_truth"] == "connector"
     assert result.next_step_context["external_refs"] == ["telegram-message-77"]
 
 
