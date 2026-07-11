@@ -19,6 +19,7 @@ _AUTHORITY_TOKENS = (
     "localbrain",
 )
 _AUTHORITY_METHODS = frozenset({"decide", "issue", "optimize"})
+_INTERFACE_SUFFIXES = ("Port", "Protocol", "Contract", "Spec", "Ref")
 _RUNTIME_DECISION_CORE_TRIPWIRE_PATH = "boot/runtime_service_contracts.py"
 _RUNTIME_DECISION_CORE_TRIPWIRE_NAME = "RuntimeDecisionCore"
 _RUNTIME_DECISION_CORE_TRIPWIRE_MARKER = "CANON_RUNTIME_DECISION_CORE_COMPAT_TRIPWIRE"
@@ -60,6 +61,53 @@ def _class_method_names(node: ast.ClassDef) -> set[str]:
         for child in node.body
         if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef)
     }
+
+
+def _decorator_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        base = _decorator_name(node.value)
+        return f"{base}.{node.attr}" if base else node.attr
+    return ""
+
+
+def _method_is_abstract_contract(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    decorator_names = {_decorator_name(item) for item in node.decorator_list}
+    if any(name.endswith("abstractmethod") for name in decorator_names):
+        return True
+
+    statements = list(node.body)
+    if statements and isinstance(statements[0], ast.Expr) and isinstance(statements[0].value, ast.Constant) and isinstance(statements[0].value.value, str):
+        statements = statements[1:]
+    if len(statements) != 1:
+        return False
+
+    statement = statements[0]
+    if isinstance(statement, ast.Pass):
+        return True
+    if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Constant) and statement.value.value is Ellipsis:
+        return True
+    if isinstance(statement, ast.Raise):
+        exc = statement.exc
+        if isinstance(exc, ast.Call):
+            exc = exc.func
+        if isinstance(exc, ast.Name) and exc.id == "NotImplementedError":
+            return True
+        if isinstance(exc, ast.Attribute) and exc.attr == "NotImplementedError":
+            return True
+    return False
+
+
+def _is_pure_authority_interface(node: ast.ClassDef) -> bool:
+    if not node.name.endswith(_INTERFACE_SUFFIXES):
+        return False
+    authority_methods = [
+        child
+        for child in node.body
+        if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef) and child.name in _AUTHORITY_METHODS
+    ]
+    return bool(authority_methods) and all(_method_is_abstract_contract(method) for method in authority_methods)
 
 
 def _class_has_true_marker(node: ast.ClassDef, marker: str) -> bool:
@@ -150,6 +198,8 @@ def _alias_findings_for_path(path: Path, spec: dict[str, Any]) -> list[auditor.F
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
             if _is_fail_closed_runtime_decision_core_tripwire(relative=relative, node=node):
+                continue
+            if _is_pure_authority_interface(node):
                 continue
             authority_methods = _class_method_names(node) & _AUTHORITY_METHODS
             if _is_authority_definition_name(node.name, executable_names) or (
