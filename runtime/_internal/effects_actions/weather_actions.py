@@ -26,8 +26,9 @@ class WeatherEffectsMixin:
         if not city:
             city = "Amsterdam"
         ok, txt, meta = self._open_meteo_weather(city)
-        # Deliver as a normal message (idempotent via decision_id)
-        self.send_message(
+        # Deliver as a normal message (idempotent via decision_id). The delivery
+        # effect owns proof of the user-visible external action.
+        delivery = self.send_message(
             decision_id=decision_id,
             correlation_id=correlation_id,
             user_id=str(user_id),
@@ -44,7 +45,10 @@ class WeatherEffectsMixin:
             correlation_id=correlation_id,
             payload={"ok": bool(ok), "city": city, "meta": meta},
         )
-        return {"ok": bool(ok), "meta": meta}
+        result = {"ok": bool(ok), "meta": meta, "delivery": delivery}
+        if isinstance(delivery, dict) and isinstance(delivery.get("evidence"), dict):
+            result["evidence"] = dict(delivery["evidence"])
+        return result
 
     def _open_meteo_weather(self, city: str) -> tuple[bool, str, dict[str, Any]]:
         from runtime._internal.router_support import execute_effect_action_sync
@@ -55,4 +59,3 @@ class WeatherEffectsMixin:
             {"city": str(city or "").strip()},
         )
         return bool(out.get("ok", False)), str(out.get("text") or ""), dict(out.get("meta") or {})
-
