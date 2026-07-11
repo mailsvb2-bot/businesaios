@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 from typing import Any
 
@@ -8,9 +9,27 @@ from scripts.ci.integrity import auditor
 
 CANON_SECOND_BRAIN_ALIAS_SCAN = True
 
+_AUTHORITY_TOKENS = (
+    "decisioncore",
+    "decisionengine",
+    "plannerengine",
+    "secondbrain",
+    "shadowbrain",
+    "alternatebrain",
+    "localbrain",
+)
+_AUTHORITY_METHODS = frozenset({"decide", "issue", "optimize"})
+_RUNTIME_DECISION_CORE_TRIPWIRE_PATH = "boot/runtime_service_contracts.py"
+_RUNTIME_DECISION_CORE_TRIPWIRE_NAME = "RuntimeDecisionCore"
+_RUNTIME_DECISION_CORE_TRIPWIRE_MARKER = "CANON_RUNTIME_DECISION_CORE_COMPAT_TRIPWIRE"
+
 
 def _normalized(name: str) -> str:
     return "".join(ch for ch in str(name or "").casefold() if ch.isalnum())
+
+
+def _normalized_type_stem(name: str) -> str:
+    return re.sub(r"v?\d+$", "", _normalized(name))
 
 
 def _looks_like_decision_authority_alias(name: str, executable_names: set[str]) -> bool:
@@ -19,23 +38,71 @@ def _looks_like_decision_authority_alias(name: str, executable_names: set[str]) 
         return True
 
     # Snake-case names such as `decision_core` are dependency/instance bindings,
-    # not executable authority type surfaces. The scanner targets exported or
-    # assignable authority aliases such as RuntimeDecisionCore/DecisionEngine.
+    # not exported authority type surfaces. Assignment/import checks target
+    # exported aliases such as RuntimeDecisionCore or DecisionEngine.
     if not any(ch.isupper() for ch in text):
         return False
 
     normalized = _normalized(text)
-    return any(
-        token in normalized
-        for token in (
-            "decisioncore",
-            "decisionengine",
-            "plannerengine",
-            "secondbrain",
-            "shadowbrain",
-            "alternatebrain",
-            "localbrain",
-        )
+    return any(token in normalized for token in _AUTHORITY_TOKENS)
+
+
+def _is_authority_definition_name(name: str, executable_names: set[str]) -> bool:
+    if str(name) in executable_names:
+        return True
+    stem = _normalized_type_stem(name)
+    return any(stem.endswith(token) for token in _AUTHORITY_TOKENS)
+
+
+def _class_method_names(node: ast.ClassDef) -> set[str]:
+    return {
+        child.name
+        for child in node.body
+        if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
+
+
+def _class_has_true_marker(node: ast.ClassDef, marker: str) -> bool:
+    for child in node.body:
+        if not isinstance(child, ast.Assign):
+            continue
+        if not isinstance(child.value, ast.Constant) or child.value.value is not True:
+            continue
+        if any(isinstance(target, ast.Name) and target.id == marker for target in child.targets):
+            return True
+    return False
+
+
+def _init_raises_runtime_error(node: ast.ClassDef) -> bool:
+    init = next(
+        (
+            child
+            for child in node.body
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef) and child.name == "__init__"
+        ),
+        None,
+    )
+    if init is None:
+        return False
+    for child in ast.walk(init):
+        if not isinstance(child, ast.Raise) or not isinstance(child.exc, ast.Call):
+            continue
+        func = child.exc.func
+        if isinstance(func, ast.Name) and func.id == "RuntimeError":
+            return True
+        if isinstance(func, ast.Attribute) and func.attr == "RuntimeError":
+            return True
+    return False
+
+
+def _is_fail_closed_runtime_decision_core_tripwire(*, relative: str, node: ast.ClassDef) -> bool:
+    if relative != _RUNTIME_DECISION_CORE_TRIPWIRE_PATH or node.name != _RUNTIME_DECISION_CORE_TRIPWIRE_NAME:
+        return False
+    methods = _class_method_names(node)
+    return (
+        _class_has_true_marker(node, _RUNTIME_DECISION_CORE_TRIPWIRE_MARKER)
+        and _init_raises_runtime_error(node)
+        and not (methods & _AUTHORITY_METHODS)
     )
 
 
@@ -54,6 +121,18 @@ def _assigned_names(node: ast.Assign | ast.AnnAssign | ast.NamedExpr) -> tuple[a
     return tuple(names)
 
 
+def _definition_finding(*, path: Path, node: ast.AST, name: str, kind: str) -> auditor.Finding:
+    return auditor.finding(
+        "P0_DECISION_AUTHORITY_DEFINITION",
+        "P0",
+        "Competing executable decision authority definition",
+        path,
+        getattr(node, "lineno", 1),
+        f"{kind} `{name}` exposes a competing decision-authority surface outside canonical DecisionCore.",
+        "Delete the authority. Keep decision issuance exclusively in core.ai.decision_core.DecisionCore.",
+    )
+
+
 def _alias_findings_for_path(path: Path, spec: dict[str, Any]) -> list[auditor.Finding]:
     relative = auditor.rel(path)
     if relative.startswith("tests/") or relative in auditor.ALLOWED_NEGATIVE_BRAIN_GUARD_PATHS:
@@ -69,6 +148,21 @@ def _alias_findings_for_path(path: Path, spec: dict[str, Any]) -> list[auditor.F
     findings: list[auditor.Finding] = []
 
     for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            if _is_fail_closed_runtime_decision_core_tripwire(relative=relative, node=node):
+                continue
+            authority_methods = _class_method_names(node) & _AUTHORITY_METHODS
+            if _is_authority_definition_name(node.name, executable_names) or (
+                authority_methods and _looks_like_decision_authority_alias(node.name, executable_names)
+            ):
+                findings.append(_definition_finding(path=path, node=node, name=node.name, kind="Class"))
+            continue
+
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            if _is_authority_definition_name(node.name, executable_names):
+                findings.append(_definition_finding(path=path, node=node, name=node.name, kind="Function"))
+            continue
+
         if isinstance(node, ast.ImportFrom):
             for alias in node.names:
                 if alias.asname is None:
