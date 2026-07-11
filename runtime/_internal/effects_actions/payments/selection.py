@@ -109,12 +109,19 @@ def capture_payment_effect(
         ok, meta = False, {"provider": str(provider), "mode": "unsupported"}
 
     effects.event_log.emit(
-        event_type="payment_captured",
+        event_type="payment_create_attempted",
         source="payments",
         user_id=str(user_id),
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
-        payload={"amount": int(amount), "currency": str(currency), "provider": str(provider), "ok": bool(ok), "meta": meta},
+        payload={
+            "amount": int(amount),
+            "currency": str(currency),
+            "provider": str(provider),
+            "capture_requested": True,
+            "ok": bool(ok),
+            "meta": meta,
+        },
     )
 
     external_id: str | None = None
