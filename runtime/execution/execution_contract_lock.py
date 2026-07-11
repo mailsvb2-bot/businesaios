@@ -30,6 +30,8 @@ CANON_RUNTIME_EXECUTION_CONTRACT_NO_DECISION_LOGIC = True
 CANON_RUNTIME_EXECUTION_CONTRACT_NO_SELF_ISSUED_EVIDENCE = True
 CANON_RUNTIME_EXECUTION_CONTRACT_REGISTRY_BOUND_VERIFICATION = True
 
+_NON_ACTUATION_OUTCOMES = frozenset({"dry_run", "blocked", "duplicate", "skipped", "failed"})
+
 
 class ExecutionContractLockError(RuntimeError):
     pass
@@ -81,7 +83,11 @@ def _extract_feedback_payload(output: Mapping[str, Any]) -> dict[str, Any]:
     return {}
 
 
-def _action_verification_contract(action_name: str, payload: Mapping[str, Any]) -> tuple[str, str]:
+def _action_verification_contract(
+    action_name: str,
+    payload: Mapping[str, Any],
+    output: Mapping[str, Any] | None = None,
+) -> tuple[str, str]:
     try:
         spec = get_spec(action_name)
     except KeyError:
@@ -93,16 +99,21 @@ def _action_verification_contract(action_name: str, payload: Mapping[str, Any]) 
     if canonical_mode == "required" or requested_mode == "required":
         return category, "required"
     if canonical_mode == "conditional":
-        return category, "not_required" if bool(payload.get("dry_run", True)) else "required"
+        if bool(payload.get("dry_run", True)):
+            return category, "not_required"
+        outcome = str(_safe_dict(output).get("ads_apply_status") or "").strip().casefold()
+        if outcome in _NON_ACTUATION_OUTCOMES:
+            return category, "not_required"
+        return category, "required"
     return category, "not_required"
 
 
-def _build_action_payload(*, env: Any) -> dict[str, Any]:
+def _build_action_payload(*, env: Any, output: Mapping[str, Any] | None = None) -> dict[str, Any]:
     decision = getattr(env, "decision", None)
     payload = _safe_dict(getattr(decision, "payload", {}) or {})
     action_name = str(getattr(decision, "action", "") or "")
     decision_id = str(getattr(decision, "decision_id", "") or "")
-    category, confirmation_mode = _action_verification_contract(action_name, payload)
+    category, confirmation_mode = _action_verification_contract(action_name, payload, output)
     return {
         **payload,
         "action_type": action_name,
@@ -161,7 +172,7 @@ def _enforce_external_evidence_trust(
 def verify_execution_contract(*, executor: Any, env: Any, output: Mapping[str, Any] | None) -> VerificationStageResult:
     normalized_output = _safe_dict(output)
     verifier = getattr(executor, "_evidence_verifier", None) or EvidenceVerifier()
-    action = _build_action_payload(env=env)
+    action = _build_action_payload(env=env, output=normalized_output)
     router_evidence = extract_trusted_router_evidence(normalized_output)
     feedback = sanitize_feedback_payload(_extract_feedback_payload(normalized_output))
 
