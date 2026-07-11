@@ -1,0 +1,71 @@
+from __future__ import annotations
+
+from runtime.boot.actions_catalog import (
+    BEST_EFFORT_EXTERNAL_ACTIONS,
+    CONDITIONAL_EXTERNAL_EFFECT_ACTIONS,
+    EXTERNAL_EFFECT_ACTIONS,
+)
+from runtime.boot.actions_registry import SPECS, get_spec
+
+
+def test_every_registered_action_has_closed_verification_contract() -> None:
+    allowed_categories = {
+        "external_effect",
+        "external_best_effort",
+        "internal_bookkeeping",
+        "advisory",
+    }
+    allowed_modes = {"required", "conditional", "not_required"}
+
+    assert SPECS
+    for spec in SPECS:
+        assert spec.execution_category in allowed_categories
+        assert spec.external_confirmation_mode in allowed_modes
+
+
+def test_required_external_actions_are_owned_by_canonical_registry() -> None:
+    required = {
+        spec.name
+        for spec in SPECS
+        if spec.external_confirmation_mode == "required"
+    }
+
+    assert required == set(EXTERNAL_EFFECT_ACTIONS)
+    assert all(get_spec(name).execution_category == "external_effect" for name in required)
+
+
+def test_ads_apply_is_the_only_conditional_external_action() -> None:
+    conditional = {
+        spec.name
+        for spec in SPECS
+        if spec.external_confirmation_mode == "conditional"
+    }
+
+    assert conditional == set(CONDITIONAL_EXTERNAL_EFFECT_ACTIONS)
+    assert conditional == {"ads_apply_execute@v1"}
+
+
+def test_best_effort_external_actions_cannot_silently_become_required() -> None:
+    best_effort = {
+        spec.name
+        for spec in SPECS
+        if spec.execution_category == "external_best_effort"
+    }
+
+    assert best_effort == set(BEST_EFFORT_EXTERNAL_ACTIONS)
+    assert best_effort == {"answer_callback@v1"}
+    assert all(get_spec(name).external_confirmation_mode == "not_required" for name in best_effort)
+
+
+def test_high_risk_user_effects_require_observable_confirmation() -> None:
+    for action in (
+        "capture_payment@v1",
+        "create_payment_and_send_link@v1",
+        "send_audio@v1",
+        "send_marketing_offer@v1",
+        "send_message@v1",
+        "send_weather@v1",
+    ):
+        spec = get_spec(action)
+        assert spec.execution_category == "external_effect"
+        assert spec.external_confirmation_mode == "required"
