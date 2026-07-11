@@ -14,10 +14,17 @@ def _normalized(name: str) -> str:
 
 
 def _looks_like_decision_authority_alias(name: str, executable_names: set[str]) -> bool:
-    normalized = _normalized(name)
-    configured = {_normalized(item) for item in executable_names}
-    if normalized in configured:
+    text = str(name or "")
+    if text in executable_names:
         return True
+
+    # Snake-case names such as `decision_core` are dependency/instance bindings,
+    # not executable authority type surfaces. The scanner targets exported or
+    # assignable authority aliases such as RuntimeDecisionCore/DecisionEngine.
+    if not any(ch.isupper() for ch in text):
+        return False
+
+    normalized = _normalized(text)
     return any(
         token in normalized
         for token in (
@@ -64,10 +71,9 @@ def _alias_findings_for_path(path: Path, spec: dict[str, Any]) -> list[auditor.F
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             for alias in node.names:
-                exported_name = alias.asname or alias.name
                 if alias.asname is None:
                     continue
-                if not _looks_like_decision_authority_alias(exported_name, executable_names):
+                if not _looks_like_decision_authority_alias(alias.asname, executable_names):
                     continue
                 findings.append(
                     auditor.finding(
