@@ -14,6 +14,32 @@ from runtime._internal.effects_actions.payments.reconciliation_support import (
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
+def _emit_payment_captured(
+    effects: Any,
+    *,
+    original_decision_id: str,
+    original_correlation_id: str,
+    reconciliation_decision_id: str,
+    reconciliation_correlation_id: str,
+    user_id: str,
+    external_id: str,
+    status: str,
+) -> None:
+    effects.event_log.emit(
+        event_type="payment_captured",
+        source="payments",
+        user_id=str(user_id),
+        decision_id=str(original_decision_id or reconciliation_decision_id),
+        correlation_id=str(original_correlation_id or reconciliation_correlation_id),
+        payload={
+            "external_id": str(external_id),
+            "status": str(status),
+            "reconciled_by_decision_id": str(reconciliation_decision_id),
+            "reconciliation_correlation_id": str(reconciliation_correlation_id),
+        },
+    )
+
+
 def reconcile_payments_effect(
     effects: Any, *, decision_id: str, correlation_id: str, window_min: int = 30
 ) -> dict | bool:
@@ -51,7 +77,18 @@ def reconcile_payments_effect(
                     continue
                 processed_any += 1
                 envelope_id = str(ev.get("decision_id") or ev.get("envelope_id") or "")
+                original_correlation_id = str(ev.get("correlation_id") or "")
                 mark_ledger_terminal(effects=effects, envelope_id=envelope_id, terminal_status="succeeded")
+                _emit_payment_captured(
+                    effects,
+                    original_decision_id=envelope_id,
+                    original_correlation_id=original_correlation_id,
+                    reconciliation_decision_id=str(decision_id),
+                    reconciliation_correlation_id=str(correlation_id),
+                    user_id=str(uid),
+                    external_id=str(ext_id),
+                    status=status,
+                )
                 effects.event_log.emit(
                     event_type="payment_succeeded",
                     source="payments",
@@ -147,6 +184,17 @@ def reconcile_payment_effect(
     if not try_mark_terminal_outbox(effects=effects, external_id=ext_id, terminal_status=terminal):
         return True
     mark_ledger_terminal(effects=effects, envelope_id=str(ctx.get("envelope_id") or ""), terminal_status=terminal)
+    if terminal == "succeeded":
+        _emit_payment_captured(
+            effects,
+            original_decision_id=str(ctx.get("envelope_id") or ""),
+            original_correlation_id=str(ctx.get("correlation_id") or ""),
+            reconciliation_decision_id=str(decision_id),
+            reconciliation_correlation_id=str(correlation_id),
+            user_id=uid,
+            external_id=ext_id,
+            status=status,
+        )
     effects.event_log.emit(
         event_type=("payment_succeeded" if terminal == "succeeded" else "payment_failed"),
         source="payments",
@@ -156,3 +204,6 @@ def reconcile_payment_effect(
         payload={"external_id": ext_id, "status": status},
     )
     return True
+
+
+__all__ = ["reconcile_payment_effect", "reconcile_payments_effect"]
