@@ -37,6 +37,7 @@ def build_ads_apply_evidence(*, status: str, detail: Mapping[str, Any] | None) -
     return {
         "source": "connector" if applied else "runtime_execution_contract",
         "action_type": "ads.apply",
+        "verified": provider_observed,
         "status": "verified" if provider_observed else ("failed" if applied else "observed"),
         "summary": "ads_provider_apply_observed" if provider_observed else f"ads_apply_{normalized_status or 'unknown'}",
         "external_refs": _provider_refs(provider or {}),
