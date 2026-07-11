@@ -37,6 +37,13 @@ def test_non_authoritative_runtime_service_alias_is_allowed(tmp_path: Path) -> N
     assert _scan(path) == []
 
 
+def test_snake_case_decision_core_instance_binding_is_allowed(tmp_path: Path) -> None:
+    path = tmp_path / "instance_binding.py"
+    path.write_text("decision_core = build_canonical_decision_core()\n", encoding="utf-8")
+
+    assert _scan(path) == []
+
+
 def test_canonical_integrity_runner_exports_restored_contract() -> None:
     from scripts.ci.integrity import runner
 
