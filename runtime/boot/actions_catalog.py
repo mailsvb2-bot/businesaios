@@ -94,6 +94,53 @@ EFFECT_ONLY_ACTIONS: frozenset[str] = frozenset({
     "suggest_offer_patch@v1",
 })
 
+# Verification semantics belong to the canonical action catalog. They describe
+# already-issued actions and never select or alter a DecisionCore action.
+EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
+    {
+        "ads_apply_execute@v1",
+        "answer_callback@v1",
+        "capture_payment@v1",
+        "create_payment_and_send_link@v1",
+        "one_click_value@v1",
+        "send_audio@v1",
+        "send_marketing_offer@v1",
+        "send_message@v1",
+        "send_weather@v1",
+    }
+)
+ADVISORY_ACTIONS: frozenset[str] = frozenset(
+    {
+        "admin_user_card@v1",
+        "ads_rl_suggest@v1",
+        "ads_rl_report@v1",
+        "ai_ceo_plan@v1",
+        "behavior_graph_neighbors@v1",
+        "behavior_graph_node@v1",
+        "behavior_graph_path@v1",
+        "growth_propose@v1",
+        "growth_strategy_backlog@v1",
+        "growth_strategy_generate@v1",
+        "poll_telegram_updates@v1",
+        "pricing_select@v1",
+        "suggest_offer_patch@v1",
+        "telegram_self_check@v1",
+    }
+)
+
+
+def execution_category_for_action(action: str) -> str:
+    name = str(action)
+    if name in EXTERNAL_EFFECT_ACTIONS:
+        return "external_effect"
+    if name in ADVISORY_ACTIONS:
+        return "advisory"
+    return "internal_bookkeeping"
+
+
+def external_confirmation_mode_for_action(action: str) -> str:
+    return "required" if str(action) in EXTERNAL_EFFECT_ACTIONS else "not_required"
+
 
 def build_specs_registry(*, rows: Iterable[Sequence[str | int | bool]], spec_factory, registry_type):
     registry = {}
@@ -119,11 +166,15 @@ def handler_actions_from(all_actions: Iterable[str]) -> set[str]:
 
 
 __all__ = [
+    "ADVISORY_ACTIONS",
     "BUILTIN_HANDLER_ACTIONS",
     "EFFECT_ONLY_ACTIONS",
+    "EXTERNAL_EFFECT_ACTIONS",
     "INLINE_ALLOWLIST_NAMES",
     "SPEC_ROWS",
     "build_inline_allowlist",
     "build_specs_registry",
+    "execution_category_for_action",
+    "external_confirmation_mode_for_action",
     "handler_actions_from",
 ]
