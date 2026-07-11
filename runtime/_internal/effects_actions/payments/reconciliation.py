@@ -46,6 +46,8 @@ def _emit_terminal_event_once(
         external_id=str(external_id),
         original_decision_id=str(original_decision_id),
     )
+    if _event_id_exists(effects=effects, event_id=event_id):
+        return event_id
     try:
         effects.event_log.emit(
             event_type=str(event_type),
