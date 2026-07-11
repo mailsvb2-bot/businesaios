@@ -48,6 +48,28 @@ def _existing_receipt(state: Any, *, audio_id: str) -> dict[str, Any] | None:
     return dict(receipt or {}) if isinstance(receipt, Mapping) else None
 
 
+def _answer_audio_callback(
+    effects: Any,
+    *,
+    callback_query_id: str | None,
+    user_id: str,
+    decision_id: str,
+    correlation_id: str,
+) -> None:
+    callback_id = str(callback_query_id or "").strip()
+    if not callback_id:
+        return
+    try:
+        effects._telegram_answer_callback(
+            callback_id,
+            user_id=str(user_id),
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+        )
+    except Exception:
+        swallow(__name__, "runtime/_internal/_effects_impl.py")
+
+
 def send_audio_effect(
     effects: Any,
     *,
@@ -57,11 +79,19 @@ def send_audio_effect(
     path: str,
     kind: str = "voice",
     caption: str | None = None,
+    callback_query_id: str | None = None,
     channel: str = "telegram",
 ) -> dict:
     assert_called_from_executor()
     if channel != "telegram":
         meta = {"channel": channel, "mode": "noop", "delivery_finalized": False}
+        _answer_audio_callback(
+            effects,
+            callback_query_id=callback_query_id,
+            user_id=user_id,
+            decision_id=decision_id,
+            correlation_id=correlation_id,
+        )
         return {
             "ok": True,
             "meta": meta,
@@ -149,6 +179,13 @@ def send_audio_effect(
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
         payload={"ok": bool(ok), "path": str(path), "kind": str(kind or "voice"), "meta": meta},
+    )
+    _answer_audio_callback(
+        effects,
+        callback_query_id=callback_query_id,
+        user_id=user_id,
+        decision_id=decision_id,
+        correlation_id=correlation_id,
     )
     return {
         "ok": bool(ok),
