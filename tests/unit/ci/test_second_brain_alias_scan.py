@@ -59,6 +59,46 @@ def test_local_decision_engine_definition_is_p0_even_with_version_suffix(tmp_pat
     assert [item.check_id for item in findings] == ["P0_DECISION_AUTHORITY_DEFINITION"]
 
 
+def test_abstract_decision_core_port_is_allowed(tmp_path: Path) -> None:
+    path = tmp_path / "port.py"
+    path.write_text(
+        "from abc import ABC, abstractmethod\n"
+        "class DecisionCorePort(ABC):\n"
+        "    @abstractmethod\n"
+        "    def decide(self, state):\n"
+        "        ...\n",
+        encoding="utf-8",
+    )
+
+    assert _scan(path) == []
+
+
+def test_protocol_style_decision_core_contract_is_allowed(tmp_path: Path) -> None:
+    path = tmp_path / "protocol.py"
+    path.write_text(
+        "class DecisionCoreProtocol:\n"
+        "    def decide(self, state):\n"
+        "        raise NotImplementedError\n",
+        encoding="utf-8",
+    )
+
+    assert _scan(path) == []
+
+
+def test_concrete_decision_core_port_is_still_p0(tmp_path: Path) -> None:
+    path = tmp_path / "fake_port.py"
+    path.write_text(
+        "class DecisionCorePort:\n"
+        "    def decide(self, state):\n"
+        "        return {'action': 'hidden'}\n",
+        encoding="utf-8",
+    )
+
+    findings = _scan(path)
+
+    assert [item.check_id for item in findings] == ["P0_DECISION_AUTHORITY_DEFINITION"]
+
+
 def test_decision_core_contract_type_without_authority_methods_is_allowed(tmp_path: Path) -> None:
     path = tmp_path / "contract.py"
     path.write_text(
