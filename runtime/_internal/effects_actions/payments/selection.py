@@ -13,6 +13,7 @@ def _payment_gateway_evidence(*, ok: bool, external_id: str | None, provider: st
     return {
         "source": "payment_gateway",
         "action_type": str(EffectActionType.PAYMENTS_YOOKASSA_CREATE),
+        "verified": verified,
         "status": "verified" if verified else "failed",
         "summary": "payment_created" if verified else "payment_provider_confirmation_missing",
         "external_refs": [external_ref] if external_ref else [],
