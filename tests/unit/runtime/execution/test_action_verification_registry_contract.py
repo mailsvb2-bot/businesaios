@@ -57,15 +57,27 @@ def test_best_effort_external_actions_cannot_silently_become_required() -> None:
     assert all(get_spec(name).external_confirmation_mode == "not_required" for name in best_effort)
 
 
-def test_high_risk_user_effects_require_observable_confirmation() -> None:
+def test_business_critical_effects_require_observable_confirmation() -> None:
     for action in (
+        "admin_set_perm@v1",
+        "admin_set_role@v1",
+        "apply_pricing_change@v1",
         "capture_payment@v1",
         "create_payment_and_send_link@v1",
-        "send_audio@v1",
+        "deploy_policy@v1",
+        "grant_access@v1",
+        "rollback_policy@v1",
         "send_marketing_offer@v1",
         "send_message@v1",
         "send_weather@v1",
+        "set_marketing_copy@v1",
+        "set_user_setting@v1",
     ):
         spec = get_spec(action)
         assert spec.execution_category == "external_effect"
         assert spec.external_confirmation_mode == "required"
+
+
+def test_consumer_audio_and_mood_actions_are_not_registered() -> None:
+    assert "send_audio@v1" not in SPECS
+    assert "log_mood@v1" not in SPECS
