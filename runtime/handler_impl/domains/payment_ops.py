@@ -1,6 +1,46 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_int, required_str
+from runtime.tenancy import normalize_tenant_id
+
+
+def _tenant_id(payload: Mapping[str, Any], env) -> str:
+    decision = getattr(env, "decision", None)
+    for candidate in (
+        payload.get("tenant_id"),
+        getattr(decision, "tenant_id", None) if decision is not None else None,
+        getattr(env, "tenant_id", None),
+    ):
+        tenant_id = normalize_tenant_id(candidate)
+        if tenant_id:
+            return tenant_id
+    return ""
+
+
+def _payment_metadata(payload: Mapping[str, Any], env) -> dict[str, Any]:
+    metadata = optional_dict(payload, "metadata") or {}
+    tenant_id = _tenant_id(payload, env)
+    if tenant_id:
+        metadata.setdefault("tenant_id", tenant_id)
+    product_id = optional_str(payload, "product_id")
+    if product_id:
+        metadata.setdefault("product_id", product_id)
+    order_id = optional_str(payload, "order_id") or str(env.decision.decision_id)
+    metadata.setdefault("order_id", order_id)
+    return metadata
+
+
+def _trusted_effect_proof(result: object) -> dict[str, Any] | None:
+    if not isinstance(result, Mapping):
+        return None
+    for key in ("router_evidence", "evidence", "verification"):
+        candidate = result.get(key)
+        if isinstance(candidate, Mapping) and str(candidate.get("source") or "").strip():
+            return dict(candidate)
+    return None
 
 
 def handle_capture_payment(payload, effects, env):
@@ -12,13 +52,14 @@ def handle_capture_payment(payload, effects, env):
         amount=required_int(payload, "amount", min_value=1),
         currency=required_str(payload, "currency"),
         provider=str(payload.get("provider", "yookassa") or "yookassa"),
-        metadata=optional_dict(payload, "metadata"),
+        metadata=_payment_metadata(payload, env),
     )
 
 
 def handle_create_payment_and_send_link(payload, effects, env):
     payload = require_mapping(payload)
     user_id = required_str(payload, "user_id")
+    tenant_id = _tenant_id(payload, env)
     pay_res = effects.capture_payment(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
@@ -26,7 +67,7 @@ def handle_create_payment_and_send_link(payload, effects, env):
         amount=required_int(payload, "amount", min_value=1),
         currency=required_str(payload, "currency"),
         provider=str(payload.get("provider", "yookassa") or "yookassa"),
-        metadata=optional_dict(payload, "metadata"),
+        metadata=_payment_metadata(payload, env),
     )
     url = None
     if isinstance(pay_res, dict):
@@ -40,6 +81,7 @@ def handle_create_payment_and_send_link(payload, effects, env):
     delivery_res = effects.send_message(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=tenant_id,
         user_id=user_id,
         text=msg,
         priority="high",
@@ -47,23 +89,23 @@ def handle_create_payment_and_send_link(payload, effects, env):
     )
     payment_ok = bool(pay_res.get("ok")) if isinstance(pay_res, dict) else bool(pay_res)
     delivery_ok = bool(delivery_res.get("ok")) if isinstance(delivery_res, dict) else bool(delivery_res)
-    payment_evidence = pay_res.get("router_evidence") if isinstance(pay_res, dict) else None
-    delivery_evidence = delivery_res.get("router_evidence") if isinstance(delivery_res, dict) else None
+    payment_evidence = _trusted_effect_proof(pay_res)
+    delivery_evidence = _trusted_effect_proof(delivery_res)
+    composite_ok = bool(payment_ok and delivery_ok and payment_evidence and delivery_evidence)
+    feedback = {
+        "connector_snapshots": [payment_evidence, delivery_evidence]
+        if composite_ok
+        else []
+    }
     return {
-        "ok": bool(payment_ok and delivery_ok),
-        "status": "verified" if payment_ok and delivery_ok else "failed",
+        "ok": composite_ok,
+        "status": "verified" if composite_ok else "failed",
         "payment": pay_res,
         "delivery": delivery_res,
         "payment_evidence": payment_evidence,
         "delivery_evidence": delivery_evidence,
-        "router_evidence": payment_evidence if payment_ok and delivery_ok else None,
-        "feedback": {
-            "connector_snapshots": [
-                item
-                for item in (payment_evidence, delivery_evidence)
-                if isinstance(item, dict)
-            ]
-        },
+        "router_evidence": delivery_evidence if composite_ok else None,
+        "feedback": feedback,
     }
 
 
