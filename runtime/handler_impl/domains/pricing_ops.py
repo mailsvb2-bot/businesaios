@@ -50,6 +50,8 @@ def handle_select_tariff(payload, effects, env):
     return effects.select_tariff(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=required_str(payload, "tenant_id"),
+        product_id=required_str(payload, "product_id"),
         user_id=required_str(payload, "user_id"),
         tariff=required_str(payload, "tariff"),
         days=required_int(payload, "days", min_value=1),
