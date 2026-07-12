@@ -27,6 +27,7 @@ from runtime.messaging_policy_readmodel.boot_runtime import boot_messaging_polic
 
 CANON_BOOT_WIRING_ONLY = True
 
+
 def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_registry_ctx):
     ctx.enter(BootPhase.P30_STORES)
     event_store, ledger, snapshot_store, decision_archive, outbox, payment_outbox = boot_phase_30_durable_stores(stack, base=base, storage=storage)
@@ -69,8 +70,11 @@ def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_regist
     settings_services = {'settings': settings, 'FeatureFlags': FeatureFlags, 'composer': composer}
     ctx.set_value('marketing_llm_composer', composer, min_phase=BootPhase.P40_SETTINGS_FLAGS)
     ctx.set_value('marketing_llm', llm_components['marketing_llm'], min_phase=BootPhase.P40_SETTINGS_FLAGS)
+    from core.pricing.rl.selection_service import PricingSelectionService
     from runtime.boot.builders.ai_ceo_planner import build_runtime_ai_ceo_planner
+
     ctx.set_value('ai_ceo_planner', build_runtime_ai_ceo_planner(event_store=event_store), min_phase=BootPhase.P40_SETTINGS_FLAGS)
+    ctx.set_value('pricing_selection_service', PricingSelectionService(), min_phase=BootPhase.P40_SETTINGS_FLAGS)
     validate_payments_webhook_prod_strict(settings)
     for key, value in settings_services.items():
         ctx.set_value(key, value, min_phase=BootPhase.P40_SETTINGS_FLAGS)
@@ -122,6 +126,7 @@ def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_regist
             'ads_runtime': ctx.get_value('ads_runtime') is not None,
             'marketing_llm': ctx.get_value('marketing_llm') is not None,
             'finance_runtime': finance_bundle['finance_runtime'] is not None,
+            'pricing_selection_service': ctx.get_value('pricing_selection_service') is not None,
             'api_security_owner_bundle': security_surface.api_security_owner_bundle is not None,
         },
     )
