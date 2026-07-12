@@ -47,7 +47,7 @@ def _effects(events, *, payment_outbox=None) -> SimpleNamespace:
     )
 
 
-def _captured_kwargs() -> dict[str, str]:
+def _captured_kwargs() -> dict:
     return {
         "original_decision_id": "decision-create-8",
         "original_correlation_id": "correlation-create-8",
@@ -56,6 +56,11 @@ def _captured_kwargs() -> dict[str, str]:
         "user_id": "user-8",
         "external_id": "payment-8",
         "status": "succeeded",
+        "business_metadata": {
+            "tenant_id": "business-a",
+            "product_id": "crm-pro",
+            "order_id": "order-8",
+        },
     }
 
 
@@ -113,7 +118,7 @@ def test_payment_failed_is_terminal_proof_and_repairs_missing_marker() -> None:
     assert outbox.status == "failed"
 
 
-def test_created_payment_context_matches_dict_contract_used_by_reconciler() -> None:
+def test_created_payment_context_preserves_business_product_order_causality() -> None:
     effects = _effects(
         [
             {
@@ -121,7 +126,15 @@ def test_created_payment_context_matches_dict_contract_used_by_reconciler() -> N
                 "decision_id": "decision-create-7",
                 "correlation_id": "correlation-create-7",
                 "user_id": "user-7",
-                "payload": {"external_id": "payment-7"},
+                "payload": {
+                    "external_id": "payment-7",
+                    "metadata": {
+                        "tenant_id": "business-a",
+                        "product_id": "crm-pro",
+                        "order_id": "order-7",
+                        "ignored_provider_field": "not-causal",
+                    },
+                },
             }
         ]
     )
@@ -132,6 +145,11 @@ def test_created_payment_context_matches_dict_contract_used_by_reconciler() -> N
         "envelope_id": "decision-create-7",
         "user_id": "user-7",
         "correlation_id": "correlation-create-7",
+        "metadata": {
+            "tenant_id": "business-a",
+            "product_id": "crm-pro",
+            "order_id": "order-7",
+        },
     }
 
 
@@ -156,7 +174,7 @@ def test_payment_terminal_event_id_is_deterministic_per_original_decision_and_pa
     assert first != different
 
 
-def test_payment_captured_is_attributed_to_original_payment_decision() -> None:
+def test_payment_captured_is_attributed_to_original_payment_decision_and_scope() -> None:
     effects = _effects([])
 
     event_id = _emit_payment_captured(effects, **_captured_kwargs())
@@ -167,6 +185,11 @@ def test_payment_captured_is_attributed_to_original_payment_decision() -> None:
     assert event["decision_id"] == "decision-create-8"
     assert event["correlation_id"] == "correlation-create-8"
     assert event["payload"]["reconciled_by_decision_id"] == "decision-reconcile-8"
+    assert event["payload"]["metadata"] == {
+        "tenant_id": "business-a",
+        "product_id": "crm-pro",
+        "order_id": "order-8",
+    }
 
 
 def test_repeated_payment_captured_emit_keeps_one_deterministic_proof_event() -> None:
