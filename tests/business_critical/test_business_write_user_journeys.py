@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import inspect
-import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
+from config.yaml_loader_shared import load_yaml
 from runtime._internal.effects_actions import telegram_actions
 from runtime._internal.effects_actions.payments import access
 from runtime._internal.effects_domains import admin_pricing, marketing, user_state
@@ -69,6 +70,49 @@ class FakeAccessEffects:
 
     def send_message(self, **kwargs):
         return {"ok": True}
+
+
+def _catalog_spec(*, price: int = 100, version: str = "version-old") -> dict:
+    return {
+        "catalog_id": "business-a:crm-pro:test",
+        "pricing_version": version,
+        "offers": [
+            {
+                "offer_id": "crm-pro-monthly",
+                "base_price_rub": int(price),
+                "rules": {},
+                "variants": {
+                    "a": {
+                        "title": "CRM Pro",
+                        "body": "Business CRM plan",
+                    }
+                },
+                "meta": {"plan_id": 1},
+            }
+        ],
+    }
+
+
+def _write_catalog(root: Path, *, price: int = 100, version: str = "version-old") -> Path:
+    path = root / "business-a" / "crm-pro" / "test.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        yaml.safe_dump(_catalog_spec(price=price, version=version), allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _patch_catalog_root(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
+    real_env_path = admin_pricing.env_path
+
+    def fake_env_path(name: str, default: str) -> Path:
+        if name == "OFFER_CATALOGS_DATA_DIR":
+            return root
+        return real_env_path(name, default)
+
+    monkeypatch.setattr(admin_pricing, "env_path", fake_env_path)
+    monkeypatch.setattr(admin_pricing, "env_bool", lambda *_args, **_kwargs: False)
 
 
 def test_telegram_polling_port_contract_uses_timeout_s_without_token(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -218,21 +262,13 @@ def test_entitlement_grant_emits_canonical_event_and_ledger_proof(monkeypatch: p
     ]
 
 
-def test_pricing_change_rolls_back_files_when_audit_event_cannot_persist(
+def test_pricing_change_rolls_back_catalog_when_audit_event_cannot_persist(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    plans_path = tmp_path / "plans.json"
-    override_path = tmp_path / "pricing_version_override.txt"
-    original_plans = [{"plan_id": 1, "price": 100}]
-    plans_path.write_text(json.dumps(original_plans), encoding="utf-8")
-    override_path.write_text("version-old\n", encoding="utf-8")
-
-    def fake_env_path(name: str, _default: str) -> Path:
-        return plans_path if name == "PLANS_PATH" else override_path
-
-    monkeypatch.setattr(admin_pricing, "env_path", fake_env_path)
-    monkeypatch.setattr(admin_pricing, "env_bool", lambda *_args, **_kwargs: False)
+    catalog_path = _write_catalog(tmp_path)
+    original_catalog = load_yaml(catalog_path, allow_empty=False, cache=False)
+    _patch_catalog_root(monkeypatch, tmp_path)
     owner = SimpleNamespace(event_log=FakeEventLog(fail_event="admin_pricing_change_applied"))
 
     with pytest.raises(RuntimeError, match="event-store-down"):
@@ -241,29 +277,24 @@ def test_pricing_change_rolls_back_files_when_audit_event_cannot_persist(
             decision_id="decision-pricing",
             correlation_id="correlation-pricing",
             admin_id="admin-1",
-            plan_id=1,
+            tenant_id="business-a",
+            product_id="crm-pro",
+            environment="test",
+            offer_id="crm-pro-monthly",
             new_price=900,
             pricing_version="version-new",
             requested_by="admin-2",
         )
 
-    assert json.loads(plans_path.read_text(encoding="utf-8")) == original_plans
-    assert override_path.read_text(encoding="utf-8") == "version-old\n"
+    assert load_yaml(catalog_path, allow_empty=False, cache=False) == original_catalog
 
 
-def test_pricing_change_returns_ledger_proof_only_after_storage_and_event_commit(
+def test_pricing_change_returns_ledger_proof_only_after_catalog_and_event_commit(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    plans_path = tmp_path / "plans.json"
-    override_path = tmp_path / "pricing_version_override.txt"
-    plans_path.write_text(json.dumps([{"plan_id": 1, "price": 100}]), encoding="utf-8")
-
-    def fake_env_path(name: str, _default: str) -> Path:
-        return plans_path if name == "PLANS_PATH" else override_path
-
-    monkeypatch.setattr(admin_pricing, "env_path", fake_env_path)
-    monkeypatch.setattr(admin_pricing, "env_bool", lambda *_args, **_kwargs: False)
+    catalog_path = _write_catalog(tmp_path)
+    _patch_catalog_root(monkeypatch, tmp_path)
     event_log = FakeEventLog()
     owner = SimpleNamespace(event_log=event_log)
 
@@ -272,14 +303,24 @@ def test_pricing_change_returns_ledger_proof_only_after_storage_and_event_commit
         decision_id="decision-pricing",
         correlation_id="correlation-pricing",
         admin_id="admin-1",
-        plan_id=1,
+        tenant_id="business-a",
+        product_id="crm-pro",
+        environment="test",
+        offer_id="crm-pro-monthly",
         new_price=900,
         pricing_version="version-new",
         requested_by="admin-2",
     )
 
-    assert json.loads(plans_path.read_text(encoding="utf-8"))[0]["price"] == 900
-    assert override_path.read_text(encoding="utf-8").strip() == "version-new"
+    catalog = load_yaml(catalog_path, allow_empty=False, cache=False)
+    assert catalog["offers"][0]["base_price_rub"] == 900
+    assert catalog["pricing_version"] == "version-new"
     assert event_log.events[-1]["event_type"] == "admin_pricing_change_applied"
+    assert event_log.events[-1]["payload"]["tenant_id"] == "business-a"
+    assert event_log.events[-1]["payload"]["product_id"] == "crm-pro"
+    assert event_log.events[-1]["payload"]["offer_id"] == "crm-pro-monthly"
     assert result["router_evidence"]["source"] == "ledger"
     assert result["router_evidence"]["verified"] is True
+    assert result["router_evidence"]["external_refs"] == [
+        "pricing:business-a:crm-pro:test:offer:crm-pro-monthly:version:version-new"
+    ]
