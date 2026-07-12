@@ -4,6 +4,7 @@ from runtime.handlers import ActionHandlerRegistry
 
 CANON_BOOT_WIRING_ONLY = True
 
+
 def register_growth_handlers(*, handlers: ActionHandlerRegistry, event_store, behavior_graph_store, marketing_llm) -> None:
     from runtime.handlers.behavior_graph import (
         handle_behavior_graph_build,
@@ -30,9 +31,9 @@ def register_growth_handlers(*, handlers: ActionHandlerRegistry, event_store, be
         handle_onboarding_text as _ps_text,
     )
 
-    handlers.register("profit_sprint_onboarding_start@v1", lambda payload, effects, env: _ps_start(payload, effects, env, event_store=event_store))
-    handlers.register("profit_sprint_onboarding_text@v1", lambda payload, effects, env: _ps_text(payload, effects, env, event_store=event_store))
-    handlers.register("profit_sprint_onboarding_lead_source@v1", lambda payload, effects, env: _ps_lead(payload, effects, env, event_store=event_store))
+    handlers.register("profit_sprint_onboarding_start@v1", _ps_start)
+    handlers.register("profit_sprint_onboarding_text@v1", _ps_text)
+    handlers.register("profit_sprint_onboarding_lead_source@v1", _ps_lead)
 
     handlers.register("growth_strategy_generate@v1", lambda payload, effects, env: _growth_generate(payload, effects, env, event_store=event_store, llm=marketing_llm))
     handlers.register("growth_strategy_backlog@v1", lambda payload, effects, env: _growth_backlog(payload, effects, env, event_store=event_store))
