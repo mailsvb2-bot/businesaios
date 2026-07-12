@@ -19,45 +19,65 @@ class EventStoreLike(Protocol):
     ) -> Iterable[dict[str, Any]]: ...
 
 
-def latest_payment_status(*, event_store: EventStoreLike, tenant_id: str = "default", user_id: str) -> dict[str, Any]:
-    """Return latest known payment status for user.
+def latest_payment_status(
+    *,
+    event_store: EventStoreLike,
+    tenant_id: str = "default",
+    user_id: str,
+) -> dict[str, Any]:
+    """Return latest payment status inside one tenant/user boundary."""
 
-    This is a best-effort event-sourced read model.
-    """
+    tenant = str(tenant_id)
     uid = str(user_id)
+    event_types = (
+        "payment_created",
+        "payment_succeeded",
+        "payment_failed",
+        "payment_captured",
+    )
     wm = watermark_for(
         event_store,
-        tenant_id=str(tenant_id),
+        tenant_id=tenant,
         user_id=uid,
-        event_types=("payment_created", "payment_succeeded", "payment_failed", "payment_captured"),
+        event_types=event_types,
     )
 
     def _compute() -> dict[str, Any]:
-        # Fast-path: prefer DB-side latest-event lookup if available.
         latest: dict[str, Any] | None = best_effort_latest_event(
             event_store=event_store,
-            where='core/payments/read_model.latest_payment_status',
-            tenant_id=str(tenant_id),
+            where="core/payments/read_model.latest_payment_status",
+            tenant_id=tenant,
             user_id=uid,
-            event_types=("payment_created", "payment_succeeded", "payment_failed", "payment_captured"),
+            event_types=event_types,
             legacy_event_type="payment_created",
         )
 
         if latest is None:
-            for ev in event_store.iter_events(tenant_id=str(tenant_id), start_ms=0, end_ms=None, event_type=None, user_id=uid):
-                if ev.get("event_type") in {"payment_created", "payment_succeeded", "payment_failed", "payment_captured"}:
-                    latest = ev
+            for event in event_store.iter_events(
+                tenant_id=tenant,
+                start_ms=0,
+                end_ms=None,
+                event_type=None,
+                user_id=uid,
+            ):
+                if event.get("event_type") in set(event_types):
+                    latest = event
         if not latest:
             return {"status": "none"}
-        et = str(latest.get("event_type"))
+
+        event_type = str(latest.get("event_type"))
         payload = latest.get("payload") or {}
-        if et == "payment_succeeded":
+        if event_type == "payment_succeeded":
             return {"status": "succeeded", **(payload if isinstance(payload, dict) else {})}
-        if et in {"payment_failed"}:
+        if event_type == "payment_failed":
             return {"status": "failed", **(payload if isinstance(payload, dict) else {})}
-        if et in {"payment_created", "payment_captured"}:
-            st = str(payload.get("status") or "pending")
-            return {"status": st.lower(), **(payload if isinstance(payload, dict) else {})}
+        if event_type in {"payment_created", "payment_captured"}:
+            status = str(payload.get("status") or "pending")
+            return {"status": status.lower(), **(payload if isinstance(payload, dict) else {})}
         return {"status": "unknown"}
 
-    return global_cache().get(key=("payment_status", uid), compute=_compute, watermark_ms=wm)
+    return global_cache().get(
+        key=("payment_status", tenant, uid),
+        compute=_compute,
+        watermark_ms=wm,
+    )
