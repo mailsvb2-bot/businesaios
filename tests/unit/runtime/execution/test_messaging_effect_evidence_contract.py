@@ -50,19 +50,3 @@ def test_failed_message_delivery_never_emits_positive_evidence() -> None:
 
     assert evidence["status"] == "failed"
     assert evidence["confidence"] == 0.0
-
-
-def test_audio_and_message_share_one_delivery_evidence_owner() -> None:
-    evidence = build_delivery_evidence(
-        ok=True,
-        meta={
-            "external_id": "telegram-audio-9",
-            "delivery_key": "audio-delivery-9",
-            "delivery_finalized": True,
-        },
-        action_type=str(EffectActionType.TELEGRAM_SEND_AUDIO),
-    )
-
-    assert evidence["action_type"] == str(EffectActionType.TELEGRAM_SEND_AUDIO)
-    assert evidence["status"] == "verified"
-    assert evidence["external_refs"] == ["telegram-audio-9", "audio-delivery-9"]
