@@ -1,22 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
-
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_int, required_str
-
-
-def _effect_ok(value: object) -> bool:
-    if isinstance(value, Mapping) and "ok" in value:
-        return bool(value.get("ok"))
-    return bool(value)
-
-
-def _effect_evidence(value: object) -> dict[str, Any] | None:
-    if not isinstance(value, Mapping):
-        return None
-    evidence = value.get("evidence")
-    return dict(evidence) if isinstance(evidence, Mapping) else None
 
 
 def handle_capture_payment(payload, effects, env):
@@ -61,16 +45,25 @@ def handle_create_payment_and_send_link(payload, effects, env):
         priority="high",
         critical=True,
     )
-
-    payment_evidence = _effect_evidence(pay_res)
-    delivery_evidence = _effect_evidence(delivery_res)
-    connector_snapshots = [item for item in (payment_evidence, delivery_evidence) if item is not None]
+    payment_ok = bool(pay_res.get("ok")) if isinstance(pay_res, dict) else bool(pay_res)
+    delivery_ok = bool(delivery_res.get("ok")) if isinstance(delivery_res, dict) else bool(delivery_res)
+    payment_evidence = pay_res.get("router_evidence") if isinstance(pay_res, dict) else None
+    delivery_evidence = delivery_res.get("router_evidence") if isinstance(delivery_res, dict) else None
     return {
-        "ok": _effect_ok(pay_res) and _effect_ok(delivery_res),
+        "ok": bool(payment_ok and delivery_ok),
+        "status": "verified" if payment_ok and delivery_ok else "failed",
         "payment": pay_res,
         "delivery": delivery_res,
-        "feedback": {"connector_snapshots": connector_snapshots},
-        "evidence": delivery_evidence or payment_evidence or {},
+        "payment_evidence": payment_evidence,
+        "delivery_evidence": delivery_evidence,
+        "router_evidence": payment_evidence if payment_ok and delivery_ok else None,
+        "feedback": {
+            "connector_snapshots": [
+                item
+                for item in (payment_evidence, delivery_evidence)
+                if isinstance(item, dict)
+            ]
+        },
     }
 
 
@@ -105,8 +98,8 @@ def handle_grant_access(payload, effects, env):
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
         user_id=required_str(payload, "user_id"),
-        tenant_id=optional_str(payload, "tenant_id"),
-        product_id=optional_str(payload, "product_id"),
+        tenant_id=required_str(payload, "tenant_id"),
+        product_id=required_str(payload, "product_id"),
         grant_key=optional_str(payload, "grant_key"),
         full_access=bool(payload.get("full_access", True)),
         notify_text=optional_str(payload, "notify_text"),
