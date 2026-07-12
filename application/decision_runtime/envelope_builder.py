@@ -26,14 +26,30 @@ class BuiltEnvelope:
     state_bytes: bytes
 
 
-def bind_product_metadata(*, payload: dict[str, Any] | None, product_id: str | None, domain: str | None, product_version: str | None) -> TaggedPayload:
+def bind_product_metadata(
+    *,
+    payload: dict[str, Any] | None,
+    product_id: str | None,
+    domain: str | None,
+    product_version: str | None,
+    tenant_id: str | None = None,
+) -> TaggedPayload:
+    """Seal state-derived execution scope into the payload before signing.
+
+    Tenant and product scope are identity constraints, not policy suggestions.
+    When canonical state supplies a value it overwrites a conflicting policy
+    payload so the safety gate and signed execution path use the same scope.
+    """
+
     bound = dict(payload or {})
+    if tenant_id is not None:
+        bound["tenant_id"] = str(tenant_id)
     if product_id is not None:
-        bound.setdefault("product_id", product_id)
+        bound["product_id"] = str(product_id)
     if domain is not None:
-        bound.setdefault("domain", domain)
+        bound["domain"] = str(domain)
     if product_version is not None:
-        bound.setdefault("product_version", product_version)
+        bound["product_version"] = str(product_version)
     return TaggedPayload(payload=bound, product_id=product_id, domain=domain, product_version=product_version)
 
 
