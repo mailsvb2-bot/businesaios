@@ -215,15 +215,19 @@ def apply_pricing_change_effect(
     decision_id: str,
     correlation_id: str,
     admin_id: str,
-    plan_id: int,
+    tenant_id: str,
+    product_id: str,
     new_price: int,
     pricing_version: str,
+    environment: str | None = None,
+    offer_id: str | None = None,
+    plan_id: int | None = None,
     request_id: str | None = None,
     requested_by: str | None = None,
     reason: str | None = None,
 ) -> dict[str, Any]:
     from runtime._internal.effects_domains.admin_pricing import (
-        prepare_plan_price_update,
+        prepare_offer_price_update,
         validate_pricing_change,
     )
 
@@ -236,21 +240,22 @@ def apply_pricing_change_effect(
     if event_log is None:
         raise RuntimeError("PRICING_EVENT_LOG_REQUIRED")
 
-    transaction = prepare_plan_price_update(
-        plan_id=int(plan_id),
+    transaction = prepare_offer_price_update(
+        tenant_id=str(tenant_id),
+        product_id=str(product_id),
+        environment=environment,
+        offer_id=offer_id,
+        plan_id=plan_id,
         new_price=int(new_price),
         pricing_version=str(pricing_version),
     )
     try:
         result = transaction.apply()
         payload = {
-            "plan_id": int(plan_id),
-            "new_price": int(new_price),
-            "pricing_version": str(pricing_version),
+            **dict(result),
             "request_id": str(request_id or ""),
             "requested_by": str(requested_by or ""),
             "reason": str(reason or ""),
-            "result": dict(result),
         }
         event_log.emit(
             event_type="admin_pricing_change_applied",
@@ -267,13 +272,17 @@ def apply_pricing_change_effect(
         raise
     transaction.finalize()
 
+    catalog_id = str(result.get("catalog_id") or "")
+    resolved_offer_id = str(result.get("offer_id") or "")
     return {
         "ok": True,
         "status": "verified",
         "result": dict(result),
         "router_evidence": _ledger_evidence(
             code="pricing_change_recorded",
-            external_ref=f"pricing:{pricing_version}:plan:{int(plan_id)}",
+            external_ref=(
+                f"pricing:{catalog_id}:offer:{resolved_offer_id}:version:{pricing_version}"
+            ),
             payload=payload,
         ),
     }
@@ -285,15 +294,23 @@ def request_pricing_change_effect(
     decision_id: str,
     correlation_id: str,
     admin_id: str,
-    plan_id: int,
+    tenant_id: str,
+    product_id: str,
     new_price: int,
     request_id: str,
+    environment: str | None = None,
+    offer_id: str | None = None,
+    plan_id: int | None = None,
     suggested_pricing_version: str | None = None,
     reason: str | None = None,
 ) -> dict[str, Any]:
     event_log = getattr(owner, "event_log", None)
     payload = {
-        "plan_id": int(plan_id),
+        "tenant_id": str(tenant_id),
+        "product_id": str(product_id),
+        "environment": str(environment or ""),
+        "offer_id": str(offer_id or ""),
+        "plan_id": int(plan_id) if plan_id is not None else None,
         "new_price": int(new_price),
         "request_id": str(request_id),
         "suggested_pricing_version": str(suggested_pricing_version or ""),
