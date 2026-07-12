@@ -54,11 +54,25 @@ def event_already_processed(*, effects: Any, external_id: str) -> bool:
     return True
 
 
-def resolve_created_payment_context(*, effects: Any, external_id: str) -> dict[str, str]:
-    context = {
+def _business_metadata(payload: object) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    metadata = payload.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    return {
+        key: metadata[key]
+        for key in ("tenant_id", "product_id", "order_id")
+        if str(metadata.get(key) or "").strip()
+    }
+
+
+def resolve_created_payment_context(*, effects: Any, external_id: str) -> dict[str, Any]:
+    context: dict[str, Any] = {
         "envelope_id": "",
         "user_id": "system",
         "correlation_id": "",
+        "metadata": {},
     }
     try:
         for event in effects.event_log.iter_events():
@@ -70,6 +84,7 @@ def resolve_created_payment_context(*, effects: Any, external_id: str) -> dict[s
             context["envelope_id"] = str(event.get("decision_id") or event.get("envelope_id") or "")
             context["user_id"] = str(event.get("user_id") or context["user_id"])
             context["correlation_id"] = str(event.get("correlation_id") or "")
+            context["metadata"] = _business_metadata(payload)
             break
     except Exception:
         return context
