@@ -52,6 +52,16 @@ def _parse_yaml_text(raw_text: str, *, allow_empty: bool) -> dict[str, Any]:
     return dict(raw)
 
 
+def _cache_key(path: Path) -> str:
+    return str(path.expanduser().resolve())
+
+
+def invalidate_yaml_cache(path: str | Path) -> None:
+    """Invalidate one path in the single process-wide YAML cache."""
+
+    _CACHE.pop(_cache_key(Path(path)), None)
+
+
 def load_yaml(source: str | Path, *, allow_empty: bool = True, cache: bool = True) -> dict[str, Any]:
     if isinstance(source, Path):
         p = source.expanduser().resolve()
@@ -82,3 +92,11 @@ def load_yaml_optional(path: Path, *, default: dict[str, Any] | None = None, cac
     if not p.exists():
         return dict(default or {})
     return load_yaml(p, cache=cache)
+
+
+__all__ = [
+    "YamlLoadResult",
+    "invalidate_yaml_cache",
+    "load_yaml",
+    "load_yaml_optional",
+]
