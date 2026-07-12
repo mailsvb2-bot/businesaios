@@ -64,6 +64,16 @@ def _emit_terminal_event_once(
     return event_id
 
 
+def _metadata(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        key: value[key]
+        for key in ("tenant_id", "product_id", "order_id")
+        if str(value.get(key) or "").strip()
+    }
+
+
 def _emit_payment_captured(
     effects: Any,
     *,
@@ -74,7 +84,9 @@ def _emit_payment_captured(
     user_id: str,
     external_id: str,
     status: str,
+    business_metadata: dict[str, Any] | None = None,
 ) -> str:
+    metadata = _metadata(business_metadata)
     return _emit_terminal_event_once(
         effects,
         event_type="payment_captured",
@@ -89,6 +101,7 @@ def _emit_payment_captured(
             "status": str(status),
             "reconciled_by_decision_id": str(reconciliation_decision_id),
             "reconciliation_correlation_id": str(reconciliation_correlation_id),
+            "metadata": metadata,
         },
     )
 
@@ -103,6 +116,7 @@ def _emit_payment_status_event(
     user_id: str,
     external_id: str,
     status: str,
+    business_metadata: dict[str, Any] | None = None,
 ) -> str:
     return _emit_terminal_event_once(
         effects,
@@ -113,7 +127,11 @@ def _emit_payment_status_event(
         correlation_id=str(reconciliation_correlation_id),
         original_decision_id=str(original_decision_id),
         external_id=str(external_id),
-        payload={"external_id": str(external_id), "status": str(status)},
+        payload={
+            "external_id": str(external_id),
+            "status": str(status),
+            "metadata": _metadata(business_metadata),
+        },
     )
 
 
@@ -127,6 +145,7 @@ def _record_success(
     user_id: str,
     external_id: str,
     status: str,
+    business_metadata: dict[str, Any] | None = None,
     notification_id: str | None = None,
     event: str | None = None,
 ) -> None:
@@ -139,6 +158,7 @@ def _record_success(
         user_id=str(user_id),
         external_id=str(external_id),
         status=str(status),
+        business_metadata=business_metadata,
     )
     mark_ledger_terminal(
         effects=effects,
@@ -154,6 +174,7 @@ def _record_success(
         user_id=str(user_id),
         external_id=str(external_id),
         status=str(status),
+        business_metadata=business_metadata,
     )
     try_mark_terminal_outbox(
         effects=effects,
@@ -173,6 +194,7 @@ def _record_failure(
     user_id: str,
     external_id: str,
     status: str,
+    business_metadata: dict[str, Any] | None = None,
     notification_id: str | None = None,
     event: str | None = None,
 ) -> None:
@@ -190,6 +212,7 @@ def _record_failure(
         user_id=str(user_id),
         external_id=str(external_id),
         status=str(status),
+        business_metadata=business_metadata,
     )
     try_mark_terminal_outbox(
         effects=effects,
@@ -233,6 +256,7 @@ def reconcile_payments_effect(
             status = str(effects._yookassa_get_payment_status(external_payment_id=str(ext_id))).lower()
             envelope_id = str(ev.get("decision_id") or ev.get("envelope_id") or "")
             original_correlation_id = str(ev.get("correlation_id") or "")
+            business_metadata = _metadata(payload.get("metadata"))
             if status in SUCCESS_STATUSES:
                 _record_success(
                     effects,
@@ -243,6 +267,7 @@ def reconcile_payments_effect(
                     user_id=str(uid),
                     external_id=str(ext_id),
                     status=status,
+                    business_metadata=business_metadata,
                 )
                 processed_any += 1
             elif status in FAILED_STATUSES:
@@ -254,6 +279,7 @@ def reconcile_payments_effect(
                     user_id=str(uid),
                     external_id=str(ext_id),
                     status=status,
+                    business_metadata=business_metadata,
                 )
                 processed_any += 1
 
@@ -268,14 +294,14 @@ def reconcile_payments_effect(
         if processed_any == 0 and skipped_already > 0:
             return {"ok": True, "status": "already_checked"}
         return {"ok": True, "status": "checked", "processed": int(processed_any)}
-    except Exception as e:
+    except Exception as exc:
         effects.event_log.emit(
             event_type="payments_reconcile_failed",
             source="payments",
             user_id="system",
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
-            payload={"error": str(e)},
+            payload={"error": str(exc)},
         )
         return False
 
@@ -300,14 +326,14 @@ def reconcile_payment_effect(
 
     try:
         status = str(effects._yookassa_get_payment_status(external_payment_id=ext_id)).lower()
-    except Exception as e:
+    except Exception as exc:
         effects.event_log.emit(
             event_type="payment_checked",
             source="payments",
             user_id="system",
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
-            payload={"external_id": ext_id, "status": "error", "error": repr(e), "notification_id": notification_id, "event": event, "user_id_hint": (str(user_id_hint) if user_id_hint else None)},
+            payload={"external_id": ext_id, "status": "error", "error": repr(exc), "notification_id": notification_id, "event": event, "user_id_hint": (str(user_id_hint) if user_id_hint else None)},
         )
         raise
 
@@ -322,6 +348,7 @@ def reconcile_payment_effect(
 
     ctx = resolve_created_payment_context(effects=effects, external_id=ext_id)
     uid = str(user_id_hint or ctx.get("user_id") or "system")
+    business_metadata = _metadata(ctx.get("metadata"))
     terminal = "succeeded" if status in SUCCESS_STATUSES else ("failed" if status in FAILED_STATUSES else "pending")
     if terminal == "pending":
         return True
@@ -335,6 +362,7 @@ def reconcile_payment_effect(
             user_id=uid,
             external_id=ext_id,
             status=status,
+            business_metadata=business_metadata,
             notification_id=notification_id,
             event=event,
         )
@@ -347,6 +375,7 @@ def reconcile_payment_effect(
             user_id=uid,
             external_id=ext_id,
             status=status,
+            business_metadata=business_metadata,
             notification_id=notification_id,
             event=event,
         )
