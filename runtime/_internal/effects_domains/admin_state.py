@@ -31,7 +31,6 @@ class AdminStateEffectsMixin:
         channel: str = "telegram",
     ) -> Any:
         assert_called_from_executor()
-
         return perform_admin_toggle(
             self,
             decision_id=str(decision_id),
@@ -63,7 +62,6 @@ class AdminStateEffectsMixin:
         channel: str = "telegram",
     ) -> Any:
         assert_called_from_executor()
-
         return perform_admin_toggle(
             self,
             decision_id=str(decision_id),
@@ -80,28 +78,35 @@ class AdminStateEffectsMixin:
             event_log=self.event_log,
         )
 
-
     def apply_pricing_change(
         self,
         *,
         decision_id: str,
         correlation_id: str,
         admin_id: str,
-        plan_id: int,
+        tenant_id: str,
+        product_id: str,
         new_price: int,
         pricing_version: str,
+        environment: str | None = None,
+        offer_id: str | None = None,
+        plan_id: int | None = None,
         request_id: str | None = None,
         requested_by: str | None = None,
         reason: str | None = None,
     ) -> Any:
-        """Apply governed pricing change. I/O delegated to admin_pricing."""
+        """Apply a governed price change to one tenant/product offer catalog."""
         assert_called_from_executor()
         return apply_pricing_change_effect(
             self,
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
             admin_id=str(admin_id),
-            plan_id=int(plan_id),
+            tenant_id=str(tenant_id),
+            product_id=str(product_id),
+            environment=environment,
+            offer_id=offer_id,
+            plan_id=plan_id,
             new_price=int(new_price),
             pricing_version=str(pricing_version),
             request_id=request_id,
@@ -109,33 +114,39 @@ class AdminStateEffectsMixin:
             reason=reason,
         )
 
-
     def request_pricing_change(
         self,
         *,
         decision_id: str,
         correlation_id: str,
         admin_id: str,
-        plan_id: int,
+        tenant_id: str,
+        product_id: str,
         new_price: int,
         request_id: str,
+        environment: str | None = None,
+        offer_id: str | None = None,
+        plan_id: int | None = None,
         suggested_pricing_version: str | None = None,
         reason: str | None = None,
     ) -> Any:
-        """Create a pricing change request (no side-effects)."""
+        """Record a scoped pricing-change request without applying it."""
         assert_called_from_executor()
         return request_pricing_change_effect(
             self,
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
             admin_id=str(admin_id),
-            plan_id=int(plan_id),
+            tenant_id=str(tenant_id),
+            product_id=str(product_id),
+            environment=environment,
+            offer_id=offer_id,
+            plan_id=plan_id,
             new_price=int(new_price),
             request_id=str(request_id),
             suggested_pricing_version=suggested_pricing_version,
             reason=reason,
         )
-
 
     def reject_pricing_change(
         self,
