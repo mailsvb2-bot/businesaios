@@ -223,7 +223,7 @@ def apply_pricing_change_effect(
     reason: str | None = None,
 ) -> dict[str, Any]:
     from runtime._internal.effects_domains.admin_pricing import (
-        execute_plan_price_update,
+        prepare_plan_price_update,
         validate_pricing_change,
     )
 
@@ -232,31 +232,41 @@ def apply_pricing_change_effect(
         requested_by=requested_by,
         pricing_version=str(pricing_version),
     )
-    result = execute_plan_price_update(
+    event_log = getattr(owner, "event_log", None)
+    if event_log is None:
+        raise RuntimeError("PRICING_EVENT_LOG_REQUIRED")
+
+    transaction = prepare_plan_price_update(
         plan_id=int(plan_id),
         new_price=int(new_price),
         pricing_version=str(pricing_version),
     )
-    event_log = getattr(owner, "event_log", None)
-    if event_log is None:
-        raise RuntimeError("PRICING_EVENT_LOG_REQUIRED")
-    payload = {
-        "plan_id": int(plan_id),
-        "new_price": int(new_price),
-        "pricing_version": str(pricing_version),
-        "request_id": str(request_id or ""),
-        "requested_by": str(requested_by or ""),
-        "reason": str(reason or ""),
-        "result": dict(result),
-    }
-    event_log.emit(
-        event_type="admin_pricing_change_applied",
-        source="admin_state",
-        user_id=str(admin_id),
-        decision_id=str(decision_id),
-        correlation_id=str(correlation_id),
-        payload=payload,
-    )
+    try:
+        result = transaction.apply()
+        payload = {
+            "plan_id": int(plan_id),
+            "new_price": int(new_price),
+            "pricing_version": str(pricing_version),
+            "request_id": str(request_id or ""),
+            "requested_by": str(requested_by or ""),
+            "reason": str(reason or ""),
+            "result": dict(result),
+        }
+        event_log.emit(
+            event_type="admin_pricing_change_applied",
+            source="admin_state",
+            user_id=str(admin_id),
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+            payload=payload,
+        )
+    except Exception:
+        if transaction.applied:
+            transaction.rollback()
+        transaction.finalize()
+        raise
+    transaction.finalize()
+
     return {
         "ok": True,
         "status": "verified",
