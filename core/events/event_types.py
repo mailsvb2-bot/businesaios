@@ -7,7 +7,6 @@ Storage implementations may import this module, but core code must not depend
 on platform_layer paths.
 """
 
-
 UI_CLICK = "ui_click"
 PAYWALL_OPENED = "paywall_opened"
 PAYWALL_CLOSED = "paywall_closed"
@@ -17,15 +16,23 @@ PURCHASE_ATTEMPT = "purchase_attempt"
 PURCHASE_SUCCESS = "purchase_success"
 PURCHASE_FAILED = "purchase_failed"
 OFFER_OUTCOME = "offer_outcome"
-MOOD_LOGGED = "mood_logged"
-AUDIO_SENT = "audio_sent"
-AUDIO_STARTED = "audio_started"
-AUDIO_PROGRESS = "audio_progress"
-AUDIO_STOPPED = "audio_stopped"
-AUDIO_COMPLETED = "audio_completed"
 ENTITLEMENT_GRANTED = "entitlement_granted"
 MESSAGE_SENT = "message_sent"
 MESSAGE_FAILED = "message_failed"
+USER_SETTING_SET = "user_setting_set"
+TARIFF_SELECTED = "tariff_selected"
+MARKETING_COPY_SET = "marketing_copy_set"
+VARIANT_SHOWN = "variant_shown"
+VARIANT_CHOSEN = "variant_chosen"
+ADMIN_ROLE_SET = "admin_role_set"
+ADMIN_PERM_SET = "admin_perm_set"
+ADMIN_NOTIFICATION_SENT = "admin_notification_sent"
+ADMIN_NOTIFICATION_FAILED = "admin_notification_failed"
+ADMIN_PRICING_CHANGE_REQUESTED = "admin_pricing_change_requested"
+ADMIN_PRICING_CHANGE_REJECTED = "admin_pricing_change_rejected"
+ADMIN_PRICING_CHANGE_APPLIED = "admin_pricing_change_applied"
+POLICY_DEPLOYED = "policy_deployed"
+POLICY_ROLLED_BACK = "policy_rolled_back"
 
 # Canonical payment proof lifecycle.
 PAYMENT_CREATE_ATTEMPTED = "payment_create_attempted"
@@ -71,7 +78,6 @@ FINANCE_ALLOCATION_RECOMMENDED = "finance.allocation_recommended"
 FINANCE_JOB_STARTED = "finance.job_started"
 FINANCE_JOB_COMPLETED = "finance.job_completed"
 
-
 RETENTION_EVENT_TYPES: set[str] = {
     PAYWALL_OPENED,
     PAYWALL_CLOSED,
@@ -81,10 +87,6 @@ RETENTION_EVENT_TYPES: set[str] = {
     PURCHASE_SUCCESS,
     PURCHASE_FAILED,
     OFFER_OUTCOME,
-    AUDIO_STARTED,
-    AUDIO_PROGRESS,
-    AUDIO_STOPPED,
-    AUDIO_COMPLETED,
     ENTITLEMENT_GRANTED,
     MESSAGE_SENT,
     MESSAGE_FAILED,
@@ -100,15 +102,23 @@ KNOWN_EVENT_TYPES: set[str] = {
     PURCHASE_SUCCESS,
     PURCHASE_FAILED,
     OFFER_OUTCOME,
-    MOOD_LOGGED,
-    AUDIO_SENT,
-    AUDIO_STARTED,
-    AUDIO_PROGRESS,
-    AUDIO_STOPPED,
-    AUDIO_COMPLETED,
     ENTITLEMENT_GRANTED,
     MESSAGE_SENT,
     MESSAGE_FAILED,
+    USER_SETTING_SET,
+    TARIFF_SELECTED,
+    MARKETING_COPY_SET,
+    VARIANT_SHOWN,
+    VARIANT_CHOSEN,
+    ADMIN_ROLE_SET,
+    ADMIN_PERM_SET,
+    ADMIN_NOTIFICATION_SENT,
+    ADMIN_NOTIFICATION_FAILED,
+    ADMIN_PRICING_CHANGE_REQUESTED,
+    ADMIN_PRICING_CHANGE_REJECTED,
+    ADMIN_PRICING_CHANGE_APPLIED,
+    POLICY_DEPLOYED,
+    POLICY_ROLLED_BACK,
     PAYMENT_CREATE_ATTEMPTED,
     PAYMENT_CREATED,
     PAYMENT_CREATE_FAILED,
@@ -148,12 +158,13 @@ KNOWN_EVENT_TYPES: set[str] = {
     FINANCE_JOB_COMPLETED,
 }
 
-
 ALIASES: dict[str, str] = {
     "paywall_open": PAYWALL_OPENED,
     "paywall_close": PAYWALL_CLOSED,
     "offer_click_primary": OFFER_CLICKED,
     "offer_click_secondary": OFFER_CLICKED,
+    # Legacy entitlement event name. New writes use ENTITLEMENT_GRANTED.
+    "access_granted": ENTITLEMENT_GRANTED,
 }
 
 
