@@ -38,7 +38,6 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("deploy_policy@v1", "runtime.handlers_ops:handle_deploy_policy", True, "general", 120, 60),
     ("emit_event@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
     ("grant_access@v1", "runtime.handlers_ops:handle_grant_access", True, "payments", 60, 30),
-    ("log_mood@v1", "runtime.handlers_ops:handle_log_mood", True, "general", 120, 60),
     ("noop@v1", "runtime.handlers_messaging:handle_noop", False, "none", 999999, 999999),
     ("one_click_value@v1", "runtime.handlers_messaging:handle_one_click_value", True, "llm", 60, 30),
     ("poll_telegram_updates@v1", "runtime.handlers_messaging:handle_poll_telegram_updates", False, "general", 120, 60),
@@ -51,7 +50,6 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("request_pricing_change@v1", "runtime.handlers_ops:handle_request_pricing_change", True, "general", 120, 60),
     ("rollback_policy@v1", "runtime.handlers_ops:handle_rollback_policy", True, "general", 120, 60),
     ("select_tariff@v1", "runtime.handlers_ops:handle_select_tariff", True, "payments", 60, 30),
-    ("send_audio@v1", "runtime.handlers_ops:handle_send_audio", True, "general", 120, 60),
     ("send_marketing_offer@v1", "runtime.handlers_messaging:handle_send_marketing_offer", True, "llm", 60, 30),
     ("send_message@v1", "runtime.handlers_messaging:handle_send_message", True, "general", 120, 60),
     ("send_weather@v1", "runtime.handlers_ops:handle_send_weather", True, "general", 120, 60),
@@ -98,13 +96,20 @@ EFFECT_ONLY_ACTIONS: frozenset[str] = frozenset({
 # already-issued actions and never select or alter a DecisionCore action.
 EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
     {
+        "admin_set_perm@v1",
+        "admin_set_role@v1",
+        "apply_pricing_change@v1",
         "capture_payment@v1",
         "create_payment_and_send_link@v1",
+        "deploy_policy@v1",
+        "grant_access@v1",
         "one_click_value@v1",
-        "send_audio@v1",
+        "rollback_policy@v1",
         "send_marketing_offer@v1",
         "send_message@v1",
         "send_weather@v1",
+        "set_marketing_copy@v1",
+        "set_user_setting@v1",
     }
 )
 CONDITIONAL_EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset({"ads_apply_execute@v1"})
