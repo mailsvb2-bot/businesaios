@@ -212,13 +212,15 @@ class TelegramClient:
                 external_id = None
                 if isinstance(result.get("result"), Mapping):
                     external_id = result.get("result", {}).get("message_id")
-                mark_transport_delivered(self.delivery_state,
+                mark_transport_delivered(
+                    self.delivery_state,
                     delivery_key=str(delivery_key),
                     external_id=None if external_id is None else str(external_id),
                     payload_digest=str(payload_digest),
                     metadata=dict(delivered_metadata or {}),
                 )
             return result
+
         return _run
 
     def _enqueue_transport(self, *, method: str, chat_id: str | None, payload: Mapping[str, Any], priority: Any, critical: bool, meta: Mapping[str, Any], fn: Callable[[], Any]) -> bool:
@@ -348,13 +350,15 @@ class TelegramClient:
                 if queued:
                     existing_phase = receipt_phase(existing, default=ACCEPTED_PHASE) if existing is not None else None
                     if existing_phase == ACCEPTED_PHASE:
-                        recover_stale_receipt(self.delivery_state,
+                        recover_stale_receipt(
+                            self.delivery_state,
                             delivery_key=delivery_key,
                             payload_digest=payload_digest,
                             metadata={**accepted_metadata, "delivery_phase": RECOVERY_PHASE},
                         )
                     else:
-                        mark_transport_accepted(self.delivery_state,
+                        mark_transport_accepted(
+                            self.delivery_state,
                             delivery_key=delivery_key,
                             payload_digest=payload_digest,
                             metadata=accepted_metadata,
@@ -375,119 +379,5 @@ class TelegramClient:
             if ok:
                 mark_transport_delivered(self.delivery_state, delivery_key=delivery_key, external_id=external_id, payload_digest=payload_digest, metadata={"method": "sendMessage", "chat_id": str(chat_id), "mode": "direct"})
             return ok, meta
-        except Exception as e:
-            return False, {"mode": "direct", "error": str(e)[:200], "delivery_key": delivery_key, "payload_digest": payload_digest, "delivery_finalized": False}
-
-    def send_audio(
-        self,
-        *,
-        chat_id: str,
-        audio_url: str,
-        caption: str | None = None,
-        priority: Any = "normal",
-        critical: bool = True,
-        timeout_s: int = 60,
-    ) -> tuple[bool, dict[str, Any]]:
-        token = _token()
-        payload: dict[str, Any] = {"chat_id": str(chat_id), "audio": str(audio_url)}
-        if isinstance(caption, str) and caption.strip():
-            payload["caption"] = caption.strip()
-            payload["parse_mode"] = "HTML"
-        payload_digest = _payload_digest(payload)
-        delivery_key = _delivery_key(method="sendAudio", chat_id=str(chat_id), payload=payload)
-        existing = existing_receipt(self.delivery_state, delivery_key=delivery_key)
-        url = f"{telegram_api_base()}/bot{token}/sendAudio" if token else ""
-        if existing is not None:
-            recovered = self._maybe_requeue_existing_receipt(
-                existing=existing,
-                method="sendAudio",
-                chat_id=str(chat_id),
-                payload=payload,
-                priority=priority,
-                critical=bool(critical),
-                timeout_s=int(timeout_s or 60),
-                url=url,
-                delivery_key=delivery_key,
-                payload_digest=payload_digest,
-            )
-            current = recovered or existing
-            phase = receipt_phase(current)
-            return True, {"mode": "queued_recovery" if recovered is not None else "dedup", "delivery_key": delivery_key, "payload_digest": payload_digest, "external_id": current.get("external_id"), "receipt": current, "delivery_phase": phase, "delivery_finalized": phase == FINALIZED_PHASE}
-        if not token:
-            if _strict_token_required():
-                return False, {"error": "TELEGRAM_BOT_TOKEN_MISSING", "delivery_key": delivery_key, "payload_digest": payload_digest}
-            return True, {"mode": "noop", "reason": "TELEGRAM_BOT_TOKEN_MISSING", "delivery_key": delivery_key, "payload_digest": payload_digest}
-
-        if self.outbound_queue is not None:
-            try:
-                accepted_metadata = delivery_metadata(
-                    method="sendAudio",
-                    chat_id=str(chat_id),
-                    payload=payload,
-                    timeout_s=int(timeout_s or 60),
-                    priority=priority,
-                    critical=bool(critical),
-                    mode="queued",
-                    delivery_key=delivery_key,
-                    payload_digest=payload_digest,
-                    extra={"delivery_phase": ACCEPTED_PHASE},
-                )
-                queued = self._enqueue_transport(
-                    method="sendAudio",
-                    chat_id=str(chat_id),
-                    payload=payload,
-                    priority=priority,
-                    critical=bool(critical),
-                    meta={**accepted_metadata, "delivery_phase": "queued"},
-                    fn=self._queue_callable(
-                        url=url,
-                        payload=payload,
-                        timeout_s=int(timeout_s or 60),
-                        delivery_key=delivery_key,
-                        payload_digest=payload_digest,
-                        delivered_metadata=delivery_metadata(
-                            method="sendAudio",
-                            chat_id=str(chat_id),
-                            payload=payload,
-                            timeout_s=int(timeout_s or 60),
-                            priority=priority,
-                            critical=bool(critical),
-                            mode="queued_worker",
-                            delivery_key=delivery_key,
-                            payload_digest=payload_digest,
-                            extra={"delivery_phase": FINALIZED_PHASE},
-                        ),
-                    ),
-                )
-                if queued:
-                    existing_phase = receipt_phase(existing, default=ACCEPTED_PHASE) if existing is not None else None
-                    if existing_phase == ACCEPTED_PHASE:
-                        recover_stale_receipt(self.delivery_state,
-                            delivery_key=delivery_key,
-                            payload_digest=payload_digest,
-                            metadata={**accepted_metadata, "delivery_phase": RECOVERY_PHASE},
-                        )
-                    else:
-                        mark_transport_accepted(self.delivery_state,
-                            delivery_key=delivery_key,
-                            payload_digest=payload_digest,
-                            metadata=accepted_metadata,
-                        )
-                    receipt = existing_receipt(self.delivery_state, delivery_key=delivery_key)
-                    phase = receipt_phase(receipt, default=ACCEPTED_PHASE)
-                    return True, {"mode": "queued", "delivery_key": delivery_key, "payload_digest": payload_digest, "delivery_finalized": phase == "finalized", "delivery_phase": phase, "receipt": receipt}
-            except Exception:
-                swallow(__name__, "send_audio.queue")
-        try:
-            out = self._http_post(url=url, payload=payload, timeout_s=int(timeout_s or 60))
-            ok = bool(out.get("ok")) if isinstance(out, dict) else True
-            result = dict(out or {}) if isinstance(out, dict) else {}
-            external_id = None
-            if isinstance(result.get("result"), Mapping):
-                external_id = result.get("result", {}).get("message_id")
-            meta = {"mode": "direct", "delivery_key": delivery_key, "payload_digest": payload_digest, "result": result, "external_id": None if external_id is None else str(external_id), "delivery_finalized": bool(ok)}
-            if ok:
-                mark_transport_delivered(self.delivery_state, delivery_key=delivery_key, external_id=external_id, payload_digest=payload_digest, metadata={"method": "sendAudio", "chat_id": str(chat_id), "mode": "direct"})
-            return ok, meta
-        except Exception as e:
-            return False, {"mode": "direct", "error": str(e)[:200], "delivery_key": delivery_key, "payload_digest": payload_digest, "delivery_finalized": False}
+        except Exception as exc:
+            return False, {"mode": "direct", "error": str(exc)[:200], "delivery_key": delivery_key, "payload_digest": payload_digest, "delivery_finalized": False}
