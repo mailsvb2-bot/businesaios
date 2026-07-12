@@ -18,7 +18,11 @@ from application.decision_runtime.runtime import (
     select_and_propose,
     validate_and_gate_action,
 )
-from application.decision_state.state_enrichment import enrich_state_with_world_model, extract_product_metadata
+from application.decision_state.state_enrichment import (
+    enrich_state_with_world_model,
+    extract_product_metadata,
+    extract_tenant_id,
+)
 from core.observability.perf import Span, emit_sla_violation
 from core.observability.throttled_logger import exception_throttled
 
@@ -57,11 +61,13 @@ def run_decision(*, core: Any, state: Any, envelope_version: int, logger: Any) -
             events=core._events,
             trace=trace,
         )
-        product_meta, product_id, domain, product_version = extract_product_metadata(state)
+        _product_meta, product_id, domain, product_version = extract_product_metadata(state)
+        tenant_id = extract_tenant_id(state)
         tagged, payload = build_payload(
             state=state,
             out=out,
             pinned_world_model_meta=pinned_world_model_meta,
+            tenant_id=tenant_id,
             product_id=product_id,
             domain=domain,
             product_version=product_version,
