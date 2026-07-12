@@ -7,9 +7,27 @@ from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
-def _payment_gateway_evidence(*, ok: bool, external_id: str | None, provider: str, meta: dict[str, Any]) -> dict[str, Any]:
+def _business_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
+    data = dict(metadata or {})
+    return {
+        key: data[key]
+        for key in ("tenant_id", "product_id", "order_id")
+        if str(data.get(key) or "").strip()
+    }
+
+
+def _payment_gateway_evidence(
+    *,
+    ok: bool,
+    external_id: str | None,
+    provider: str,
+    meta: dict[str, Any],
+    business_metadata: dict[str, Any],
+) -> dict[str, Any]:
     external_ref = str(external_id or "").strip()
     verified = bool(ok) and bool(external_ref)
+    provider_payload = (meta or {}).get("yookassa")
+    provider_status = provider_payload.get("status") if isinstance(provider_payload, dict) else None
     return {
         "source": "payment_gateway",
         "action_type": str(EffectActionType.PAYMENTS_YOOKASSA_CREATE),
@@ -20,7 +38,8 @@ def _payment_gateway_evidence(*, ok: bool, external_id: str | None, provider: st
         "confidence": 1.0 if verified else 0.0,
         "payload": {
             "provider": str(provider),
-            "provider_status": ((meta or {}).get("yookassa") or {}).get("status") if isinstance((meta or {}).get("yookassa"), dict) else None,
+            "provider_status": provider_status,
+            **dict(business_metadata),
         },
     }
 
@@ -30,6 +49,8 @@ def select_tariff_effect(
     *,
     decision_id: str,
     correlation_id: str,
+    tenant_id: str,
+    product_id: str,
     user_id: str,
     tariff: str,
     days: int,
@@ -42,24 +63,33 @@ def select_tariff_effect(
     notify_reply_markup: dict[str, Any] | None = None,
 ) -> dict:
     assert_called_from_executor()
+    tenant = str(tenant_id or "").strip()
+    product = str(product_id or "").strip()
+    if not tenant:
+        raise RuntimeError("TENANT_ID_REQUIRED")
+    if not product:
+        raise RuntimeError("PRODUCT_ID_REQUIRED")
+
+    bound_tenant = str(getattr(effects.event_log, "_tenant_id", "") or "").strip()
+    if bound_tenant and bound_tenant != tenant:
+        raise RuntimeError(
+            f"TENANT_CONTEXT_MISMATCH:event_log={bound_tenant}:selection={tenant}"
+        )
+
     payload: dict[str, Any] = {
+        "tenant_id": tenant,
+        "product_id": product,
         "tariff": str(tariff),
         "days": int(days),
         "period": str(period),
         "amount": int(amount),
     }
     if plan_id is not None:
-        try:
-            payload["plan_id"] = int(plan_id)
-        except Exception:
-            swallow(__name__, "runtime/_internal/_effects_impl.py")
+        payload["plan_id"] = int(plan_id)
     if title:
         payload["title"] = str(title)[:128]
     if expected_price is not None:
-        try:
-            payload["expected_price"] = int(expected_price)
-        except Exception:
-            swallow(__name__, "runtime/_internal/_effects_impl.py")
+        payload["expected_price"] = int(expected_price)
 
     effects.event_log.emit(
         event_type="tariff_selected",
@@ -69,19 +99,21 @@ def select_tariff_effect(
         correlation_id=str(correlation_id),
         payload=payload,
     )
+    notification: Any = None
     if notify_text:
         try:
-            effects.send_message(
+            notification = effects.send_message(
                 decision_id=str(decision_id),
                 correlation_id=str(correlation_id),
+                tenant_id=tenant,
                 user_id=str(user_id),
                 text=str(notify_text)[:3500],
                 reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
                 channel="telegram",
             )
-        except Exception:
-            swallow(__name__, "runtime/_internal/_effects_impl.py")
-    return {"ok": True}
+        except Exception as exc:
+            notification = {"ok": False, "error": exc.__class__.__name__}
+    return {"ok": True, "selection": payload, "notification": notification}
 
 
 def capture_payment_effect(
@@ -97,13 +129,15 @@ def capture_payment_effect(
 ) -> dict:
     assert_called_from_executor()
     provider_norm = str(provider).lower().strip()
+    payment_metadata = dict(metadata or {})
+    causal_metadata = _business_metadata(payment_metadata)
     if provider_norm in {"yookassa", "yoo", "yoo_kassa"}:
         ok, meta = effects._yookassa_create_payment(
             decision_id=str(decision_id),
             amount=int(amount),
             currency=str(currency),
             user_id=str(user_id),
-            metadata=metadata or {},
+            metadata=payment_metadata,
         )
     else:
         ok, meta = False, {"provider": str(provider), "mode": "unsupported"}
@@ -120,6 +154,7 @@ def capture_payment_effect(
             "provider": str(provider),
             "capture_requested": True,
             "ok": bool(ok),
+            "metadata": causal_metadata,
             "meta": meta,
         },
     )
@@ -145,6 +180,9 @@ def capture_payment_effect(
                     "external_id": str(external_id),
                     "status": (meta or {}).get("yookassa", {}).get("status") if isinstance(meta, dict) else None,
                     "provider": "yookassa",
+                    "amount": int(amount),
+                    "currency": str(currency),
+                    "metadata": causal_metadata,
                 },
             )
     except Exception as exc:
@@ -155,7 +193,12 @@ def capture_payment_effect(
                 user_id=str(user_id),
                 decision_id=str(decision_id),
                 correlation_id=str(correlation_id),
-                payload={"provider": str(provider), "reason": "missing_or_invalid_external_id", "error": str(exc)[:500]},
+                payload={
+                    "provider": str(provider),
+                    "reason": "missing_or_invalid_external_id",
+                    "error": str(exc)[:500],
+                    "metadata": causal_metadata,
+                },
             )
         except Exception:
             swallow(__name__, "runtime/_internal/_effects_impl.py")
@@ -168,6 +211,7 @@ def capture_payment_effect(
             external_id=external_id,
             provider=provider_norm or str(provider),
             meta=dict(meta or {}),
+            business_metadata=causal_metadata,
         ),
     }
 
