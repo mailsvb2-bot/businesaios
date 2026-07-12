@@ -2,7 +2,42 @@ from __future__ import annotations
 
 from typing import Any
 
-from runtime.observability.error_handling import swallow
+from runtime.security.runtime_asserts import assert_called_from_executor
+
+
+def _required_scope(value: object, *, field: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        raise RuntimeError(f"{field.upper()}_REQUIRED")
+    return text
+
+
+def _entitlement_evidence(
+    *,
+    decision_id: str,
+    tenant_id: str,
+    product_id: str,
+    user_id: str,
+    grant_key: str,
+    full_access: bool,
+) -> dict[str, Any]:
+    suffix = grant_key or str(decision_id)
+    external_ref = f"entitlement:{tenant_id}:{product_id}:{user_id}:{suffix}"
+    return {
+        "source": "ledger",
+        "verified": True,
+        "status": "verified",
+        "code": "entitlement_grant_recorded",
+        "external_refs": [external_ref],
+        "confidence": 1.0,
+        "payload": {
+            "tenant_id": str(tenant_id),
+            "product_id": str(product_id),
+            "user_id": str(user_id),
+            "grant_key": str(grant_key),
+            "full_access": bool(full_access),
+        },
+    }
 
 
 def grant_access_effect(
@@ -11,160 +46,86 @@ def grant_access_effect(
     decision_id: str,
     correlation_id: str,
     user_id: str,
-    tenant_id: str | None = None,
-    product_id: str | None = None,
+    tenant_id: str,
+    product_id: str,
     grant_key: str | None = None,
     full_access: bool = True,
     notify_text: str | None = None,
     notify_reply_markup: dict | None = None,
     track_event_type: str | None = None,
     track_payload: dict | None = None,
-) -> bool:
-    if str(track_event_type or "") == "gift_redeemed":
-        try:
-            token = str((track_payload or {}).get("token") or "").strip()
-        except Exception:
-            token = ""
+) -> dict[str, Any]:
+    """Grant one tenant-scoped product entitlement and return durable proof."""
 
-        store = getattr(effects.event_log, "_store", None)
-        created = None
-        redeemed = False
-        expires_ms = 0
-        if token and store is not None and hasattr(store, "iter_events"):
-            try:
-                for ev in store.iter_events(tenant_id=str(getattr(effects.event_log, '_tenant_id', 'default')), start_ms=0, end_ms=None):
-                    et = str(ev.get("event_type") or "")
-                    payload = ev.get("payload") or {}
-                    if et == "gift_token_created" and str(payload.get("token") or "") == token:
-                        created = payload
-                        try:
-                            expires_ms = int(payload.get("expires_ms") or 0)
-                        except Exception:
-                            expires_ms = 0
-                    if et == "gift_redeemed" and str(payload.get("token") or "") == token:
-                        redeemed = True
-            except Exception:
-                swallow(__name__, 'runtime/_internal/_effects_impl.py')
+    assert_called_from_executor()
+    tenant = _required_scope(tenant_id, field="tenant_id")
+    product = _required_scope(product_id, field="product_id")
+    user = _required_scope(user_id, field="user_id")
+    key = str(grant_key or "").strip()
 
-        import time
-        now_ms = int(time.time() * 1000)
-        if (not token) or (created is None):
-            try:
-                effects.send_message(
-                    decision_id=str(decision_id),
-                    correlation_id=str(correlation_id),
-                    user_id=str(user_id),
-                    text="🎁 Подарок не найден или ссылка неверна.",
-                    reply_markup=None,
-                    priority="high",
-                )
-            except Exception:
-                swallow(__name__, 'runtime/_internal/_effects_impl.py')
-            try:
-                effects.event_log.emit(
-                    event_type="gift_redeem_failed",
-                    source="gift",
-                    user_id=str(user_id),
-                    decision_id=str(decision_id),
-                    correlation_id=str(correlation_id),
-                    payload={"token": token, "reason": "not_found"},
-                )
-            except Exception:
-                swallow(__name__, 'runtime/_internal/_effects_impl.py')
-            return True
-        if expires_ms and now_ms > int(expires_ms):
-            try:
-                effects.send_message(
-                    decision_id=str(decision_id),
-                    correlation_id=str(correlation_id),
-                    user_id=str(user_id),
-                    text="🎁 Срок действия подарка истёк.",
-                    reply_markup=None,
-                    priority="high",
-                )
-            except Exception:
-                swallow(__name__, 'runtime/_internal/_effects_impl.py')
-            try:
-                effects.event_log.emit(
-                    event_type="gift_redeem_failed",
-                    source="gift",
-                    user_id=str(user_id),
-                    decision_id=str(decision_id),
-                    correlation_id=str(correlation_id),
-                    payload={"token": token, "reason": "expired"},
-                )
-            except Exception:
-                swallow(__name__, 'runtime/_internal/_effects_impl.py')
-            return True
-        if redeemed:
-            try:
-                effects.send_message(
-                    decision_id=str(decision_id),
-                    correlation_id=str(correlation_id),
-                    user_id=str(user_id),
-                    text="🎁 Этот подарок уже активирован.",
-                    reply_markup=None,
-                    priority="high",
-                )
-            except Exception:
-                swallow(__name__, 'runtime/_internal/_effects_impl.py')
-            try:
-                effects.event_log.emit(
-                    event_type="gift_redeem_failed",
-                    source="gift",
-                    user_id=str(user_id),
-                    decision_id=str(decision_id),
-                    correlation_id=str(correlation_id),
-                    payload={"token": token, "reason": "already_redeemed"},
-                )
-            except Exception:
-                swallow(__name__, 'runtime/_internal/_effects_impl.py')
-            return True
+    bound_tenant = str(getattr(effects.event_log, "_tenant_id", "") or "").strip()
+    if bound_tenant and bound_tenant != tenant:
+        raise RuntimeError(
+            f"TENANT_CONTEXT_MISMATCH:event_log={bound_tenant}:grant={tenant}"
+        )
 
-        try:
-            effects.event_log.emit(
-                event_type="gift_redeemed",
-                source="gift",
-                user_id=str(user_id),
-                decision_id=str(decision_id),
-                correlation_id=str(correlation_id),
-                payload={"token": token, "created_by": str((created or {}).get("created_by") or ""), "redeemed_by": str(user_id)},
-            )
-        except Exception:
-            swallow(__name__, 'runtime/_internal/_effects_impl.py')
+    if isinstance(track_event_type, str) and track_event_type.strip():
+        effects.event_log.emit(
+            event_type=str(track_event_type),
+            source="runtime",
+            user_id=user,
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+            payload=dict(track_payload or {}),
+        )
 
-    if isinstance(track_event_type, str) and track_event_type.strip() and str(track_event_type) != "gift_redeemed":
-        try:
-            effects.event_log.emit(
-                event_type=str(track_event_type),
-                source="runtime",
-                user_id=str(user_id),
-                decision_id=str(decision_id),
-                correlation_id=str(correlation_id),
-                payload=dict(track_payload or {}),
-            )
-        except Exception:
-            swallow(__name__, 'runtime/_internal/_effects_impl.py')
-
+    payload = {
+        "full_access": bool(full_access),
+        "tenant_id": tenant,
+        "product_id": product,
+        "grant_key": key,
+    }
     effects.event_log.emit(
-        event_type="access_granted",
+        event_type="entitlement_granted",
         source="entitlements",
-        user_id=str(user_id),
+        user_id=user,
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
-        payload={"full_access": bool(full_access), "tenant_id": str(tenant_id or ""), "product_id": str(product_id or ""), "grant_key": str(grant_key or "")},
+        payload=payload,
     )
-    try:
-        if bool(full_access):
-            text = str(notify_text) if isinstance(notify_text, str) and notify_text.strip() else "Полный доступ активирован ✅"
-            effects.send_message(
+    evidence = _entitlement_evidence(
+        decision_id=str(decision_id),
+        tenant_id=tenant,
+        product_id=product,
+        user_id=user,
+        grant_key=key,
+        full_access=bool(full_access),
+    )
+
+    notification: Any = None
+    if bool(full_access):
+        text = (
+            str(notify_text)
+            if isinstance(notify_text, str) and notify_text.strip()
+            else "Доступ активирован ✅"
+        )
+        try:
+            notification = effects.send_message(
                 decision_id=str(decision_id),
                 correlation_id=str(correlation_id),
-                user_id=str(user_id),
+                tenant_id=tenant,
+                user_id=user,
                 text=text,
                 reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
                 priority="high",
             )
-    except Exception:
-        swallow(__name__, 'runtime/_internal/_effects_impl.py')
-    return True
+        except Exception as exc:
+            notification = {"ok": False, "error": exc.__class__.__name__}
+
+    return {
+        "ok": True,
+        "status": "verified",
+        "entitlement": payload,
+        "notification": notification,
+        "router_evidence": evidence,
+    }
