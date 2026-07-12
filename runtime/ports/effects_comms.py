@@ -24,19 +24,6 @@ class EffectsCommsPort(Protocol):
         channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
-    def send_audio(
-        self,
-        *,
-        decision_id: str,
-        correlation_id: str,
-        user_id: str,
-        path: str,
-        kind: str = "voice",
-        caption: str | None = None,
-        callback_query_id: Optional[str] = None,
-        channel: str = "telegram",
-    ) -> Any: ...
-
     def send_weather(
         self,
         *,
