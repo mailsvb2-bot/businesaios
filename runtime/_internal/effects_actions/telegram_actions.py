@@ -1,7 +1,6 @@
-"""Sealed effect actions mixin.
+"""Sealed Telegram effect actions mixin.
 
 This module is INTERNAL to runtime/_internal.
-No API changes to EffectsPort.
 """
 
 from __future__ import annotations
@@ -9,7 +8,6 @@ from __future__ import annotations
 from typing import Any
 
 from runtime._internal.effect_types import EffectActionType
-from runtime._internal.effects_actions.telegram.media import send_audio_effect
 from runtime._internal.effects_actions.telegram.messaging import send_message_effect
 from runtime._internal.effects_actions.telegram_actions_callbacks import (
     answer_callback_internal_effect,
@@ -17,13 +15,13 @@ from runtime._internal.effects_actions.telegram_actions_callbacks import (
 )
 from runtime._internal.effects_actions.telegram_actions_polling import poll_telegram_updates_effect
 from runtime._internal.effects_actions.telegram_actions_transport import (
-    send_audio_transport_effect,
     send_chat_action_effect,
     send_message_transport_effect,
 )
 from runtime.observability.telemetry import CANON_RUNTIME_TELEMETRY_OWNER as _CANON_RUNTIME_TELEMETRY_OWNER
 
 CANON_RUNTIME_OBSERVABILITY_OWNER = _CANON_RUNTIME_TELEMETRY_OWNER
+
 
 def telegram_self_check_effect(effects: Any, *, token: str | None = None) -> dict:
     from runtime._internal.router_support import execute_effect_action_sync
@@ -111,22 +109,38 @@ class TelegramEffectsMixin:
         )
 
     def answer_callback(self, *, callback_query_id: str, text: str | None = None, show_alert: bool = False, **kwargs) -> dict:
-        return answer_callback_public_effect(self, callback_query_id=callback_query_id, text=text, show_alert=show_alert, **kwargs)
+        return answer_callback_public_effect(
+            self,
+            callback_query_id=callback_query_id,
+            text=text,
+            show_alert=show_alert,
+            **kwargs,
+        )
 
     def answer_callback_query(self, *, callback_query_id: str, text: str | None = None, show_alert: bool = False, **kwargs) -> dict:
-        return self.answer_callback(callback_query_id=callback_query_id, text=text, show_alert=show_alert, **kwargs)
+        return self.answer_callback(
+            callback_query_id=callback_query_id,
+            text=text,
+            show_alert=show_alert,
+            **kwargs,
+        )
 
-    def poll_telegram_updates(self, *, token: str, offset: int | None = None, timeout: int = 30, limit: int = 100) -> dict:
-        return poll_telegram_updates_effect(self, token=token, offset=offset, timeout=timeout, limit=limit)
-
-    def send_audio(self, *args, **kwargs) -> Any:
-        return send_audio_effect(self, *args, **kwargs)
+    def poll_telegram_updates(
+        self,
+        *,
+        offset: int | None = None,
+        timeout_s: int = 20,
+        limit: int = 50,
+    ) -> dict:
+        return poll_telegram_updates_effect(
+            self,
+            offset=offset,
+            timeout_s=int(timeout_s),
+            limit=int(limit),
+        )
 
     def send_message_transport(self, *args, **kwargs) -> Any:
         return send_message_transport_effect(self, *args, **kwargs)
-
-    def send_audio_transport(self, *args, **kwargs) -> Any:
-        return send_audio_transport_effect(self, *args, **kwargs)
 
     def send_chat_action(self, *args, **kwargs) -> Any:
         return send_chat_action_effect(self, *args, **kwargs)
