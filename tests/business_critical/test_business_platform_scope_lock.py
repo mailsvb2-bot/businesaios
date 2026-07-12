@@ -43,6 +43,15 @@ FORBIDDEN_CONSUMER_CAPABILITY_MARKERS = (
     "mood_last",
 )
 
+FORBIDDEN_GLOBAL_PRICING_STORAGE_MARKERS = (
+    "PLANS_PATH",
+    "data/plans.json",
+    "PRICING_VERSION_OVERRIDE_PATH",
+    "pricing_version_override",
+    "prepare_plan_price_update",
+    "execute_plan_price_update",
+)
+
 
 @pytest.mark.lock
 def test_business_platform_has_no_consumer_audio_or_mood_actions() -> None:
@@ -80,3 +89,26 @@ def test_canonical_platform_surfaces_do_not_reintroduce_consumer_capabilities() 
                 offenders.append(f"{relative}:{marker}")
 
     assert offenders == [], "consumer product capabilities leaked into BusinessAIOS platform:\n" + "\n".join(offenders)
+
+
+@pytest.mark.lock
+def test_pricing_runtime_has_no_global_single_product_storage_owner() -> None:
+    pricing_surfaces = (
+        ROOT / "runtime" / "_internal" / "effects_domains" / "admin_pricing.py",
+        ROOT / "runtime" / "_internal" / "effects_domains" / "admin_state_support.py",
+    )
+    offenders: list[str] = []
+    for path in pricing_surfaces:
+        text = path.read_text(encoding="utf-8")
+        for marker in FORBIDDEN_GLOBAL_PRICING_STORAGE_MARKERS:
+            if marker in text:
+                offenders.append(f"{path.relative_to(ROOT).as_posix()}:{marker}")
+
+    assert offenders == [], "legacy global pricing storage returned:\n" + "\n".join(offenders)
+
+
+@pytest.mark.lock
+def test_legacy_pricing_sidecar_helper_is_deleted() -> None:
+    assert not (
+        ROOT / "runtime" / "_internal" / "effects_domains" / "admin_pricing_support.py"
+    ).exists()
