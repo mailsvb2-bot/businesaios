@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_str
+from runtime.tenancy import normalize_tenant_id
 
 
 def handle_admin_set_role(payload, effects, env):
@@ -48,49 +49,81 @@ def handle_set_marketing_copy(payload, effects, env):
     )
 
 
+def _tenant_id(payload: dict, env) -> str:
+    decision = getattr(env, "decision", None)
+    candidates = (
+        payload.get("tenant_id"),
+        getattr(decision, "tenant_id", None) if decision is not None else None,
+        getattr(env, "tenant_id", None),
+    )
+    for candidate in candidates:
+        tenant_id = normalize_tenant_id(candidate)
+        if tenant_id:
+            return tenant_id
+    return ""
+
+
 def handle_admin_user_card(payload, effects, env, *, event_store):
     payload = require_mapping(payload or {})
+    tenant_id = _tenant_id(payload, env)
     admin_id = optional_str(payload, "admin_id") or ""
     target = optional_str(payload, "target_user_id") or ""
-    if not admin_id or not target:
+    if not tenant_id or not admin_id or not target:
         return effects.send_message(
             decision_id=env.decision.decision_id,
             correlation_id=env.decision.correlation_id,
+            tenant_id=tenant_id,
             user_id=admin_id or "system",
-            text="Некорректный запрос.",
+            text="Некорректный запрос: не указан бизнес, администратор или пользователь.",
             reply_markup=None,
         )
+
     try:
         from core.entitlements.read_model import compute_entitlements
         from core.payments.read_model import latest_payment_status
-        from core.users.read_model import mood_last, selected_tariff, user_settings
+        from core.users.read_model import selected_tariff, user_settings
 
-        pay = latest_payment_status(event_store=event_store, user_id=target)
-        ent = compute_entitlements(event_store, user_id=target)
-        s = user_settings(event_store, user_id=target)
-        tariff = selected_tariff(event_store, user_id=target)
-        moods = mood_last(event_store, user_id=target, limit=5)
-        access = "полный" if bool(ent.get("full_access")) else "базовый"
-        pay_status = str(pay.get("status") or "none")
-        city = str(s.get("city") or "-")
+        payment = latest_payment_status(
+            event_store=event_store,
+            tenant_id=tenant_id,
+            user_id=target,
+        )
+        entitlements = compute_entitlements(
+            event_store=event_store,
+            tenant_id=tenant_id,
+            user_id=target,
+        )
+        settings = user_settings(
+            event_store,
+            tenant_id=tenant_id,
+            user_id=target,
+        )
+        tariff = selected_tariff(
+            event_store,
+            tenant_id=tenant_id,
+            user_id=target,
+        )
+        access = "полный" if bool(entitlements.get("full_access")) else "базовый"
+        payment_status = str(payment.get("status") or "none")
+        city = str(settings.get("city") or "-")
         tariff_title = str((tariff or {}).get("title") or (tariff or {}).get("tariff") or "-")
-        mood_line = "-"
-        if moods:
-            last = moods[-1]
-            sc = last.get("score")
-            note = (last.get("note") or "").strip().replace("\n", " ")[:80]
-            mood_line = f"{sc}/10" + (f" — {note}" if note else "")
-        txt = (
+        text = (
             "🔎 Карточка пользователя\n\n"
-            f"ID: {target}\nДоступ: {access}\nОплата: {pay_status}\n"
-            f"Город: {city}\nТариф (выбор): {tariff_title}\nПоследнее состояние: {mood_line}\n"
+            f"Бизнес: {tenant_id}\n"
+            f"ID: {target}\n"
+            f"Доступ: {access}\n"
+            f"Оплата: {payment_status}\n"
+            f"Город: {city}\n"
+            f"Тариф (выбор): {tariff_title}\n"
         )
     except Exception:
-        txt = f"🔎 Карточка пользователя\n\nID: {target}\n(не удалось собрать данные)"
+        text = f"🔎 Карточка пользователя\n\nБизнес: {tenant_id}\nID: {target}\n(не удалось собрать данные)"
+
     return effects.send_message(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=tenant_id,
         user_id=admin_id,
-        text=txt,
+        text=text,
         reply_markup=None,
     )
