@@ -15,12 +15,10 @@ def build_registry(effects_impl) -> Mapping[str, ActionHandler]:
     reg: dict[str, ActionHandler] = {
         "send_message@v1": effects_impl.send_message,
         "compose_marketing_message@v1": effects_impl.compose_marketing_message,
-        "send_audio@v1": effects_impl.send_audio,
         "send_weather@v1": effects_impl.send_weather,
         "set_user_setting@v1": effects_impl.set_user_setting,
         "apply_offer_patch@v1": effects_impl.apply_offer_patch,
         "suggest_offer_patch@v1": effects_impl.suggest_offer_patch,
-        "log_mood@v1": effects_impl.log_mood,
         "admin_set_role@v1": effects_impl.admin_set_role,
         "admin_set_perm@v1": effects_impl.admin_set_perm,
         "set_marketing_copy@v1": effects_impl.set_marketing_copy,
