@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from execution.verification.evidence_types import evidence_status_is_positive
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_int, required_str
 from runtime.tenancy import normalize_tenant_id
 
@@ -41,6 +42,14 @@ def _trusted_effect_proof(result: object) -> dict[str, Any] | None:
         if isinstance(candidate, Mapping) and str(candidate.get("source") or "").strip():
             return dict(candidate)
     return None
+
+
+def _proof_is_positive(proof: Mapping[str, Any] | None) -> bool:
+    if not isinstance(proof, Mapping):
+        return False
+    if proof.get("verified") is False:
+        return False
+    return evidence_status_is_positive(proof.get("status")) or proof.get("verified") is True
 
 
 def handle_capture_payment(payload, effects, env):
@@ -91,7 +100,12 @@ def handle_create_payment_and_send_link(payload, effects, env):
     delivery_ok = bool(delivery_res.get("ok")) if isinstance(delivery_res, dict) else bool(delivery_res)
     payment_evidence = _trusted_effect_proof(pay_res)
     delivery_evidence = _trusted_effect_proof(delivery_res)
-    composite_ok = bool(payment_ok and delivery_ok and payment_evidence and delivery_evidence)
+    composite_ok = bool(
+        payment_ok
+        and delivery_ok
+        and _proof_is_positive(payment_evidence)
+        and _proof_is_positive(delivery_evidence)
+    )
     feedback = {
         "connector_snapshots": [payment_evidence, delivery_evidence]
         if composite_ok
