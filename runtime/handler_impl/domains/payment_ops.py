@@ -173,6 +173,7 @@ def handle_deploy_policy(payload, effects, env):
     return effects.deploy_policy(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=required_str(payload, "tenant_id"),
         candidate_policy_id=required_str(payload, "candidate_policy_id"),
         rollout_pct=rollout_pct,
     )
@@ -183,5 +184,6 @@ def handle_rollback_policy(payload, effects, env):
     return effects.rollback_policy(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=required_str(payload, "tenant_id"),
         reason=required_str(payload, "reason"),
     )
