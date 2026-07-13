@@ -52,15 +52,42 @@ FORBIDDEN_GLOBAL_PRICING_STORAGE_MARKERS = (
     "execute_plan_price_update",
 )
 
+GHOST_ACTIONS = (
+    "reward_observe@v1",
+    "growth_propose@v1",
+)
+
+
+def _action_names() -> set[str]:
+    return set(all_actions())
+
 
 @pytest.mark.lock
 def test_business_platform_has_no_consumer_audio_or_mood_actions() -> None:
-    actions = all_actions()
+    actions = _action_names()
 
     assert "send_audio@v1" not in actions
     assert "log_mood@v1" not in actions
     assert all("audio" not in action.casefold() for action in actions)
     assert all("mood" not in action.casefold() for action in actions)
+
+
+@pytest.mark.lock
+def test_unwired_reward_and_growth_ghost_actions_are_not_advertised() -> None:
+    actions = _action_names()
+
+    assert all(action not in actions for action in GHOST_ACTIONS)
+    assert not (ROOT / "runtime" / "handlers" / "reward_observe.py").exists()
+    assert not (ROOT / "runtime" / "handlers" / "growth_propose.py").exists()
+
+    core_boot = (ROOT / "runtime" / "boot" / "handler_groups" / "core.py").read_text(encoding="utf-8")
+    public_actions = (ROOT / "runtime" / "actions" / "__init__.py").read_text(encoding="utf-8")
+    action_names = (ROOT / "core" / "actions" / "names.py").read_text(encoding="utf-8")
+    combined = "\n".join((core_boot, public_actions, action_names))
+    for action in GHOST_ACTIONS:
+        assert action not in combined
+    for marker in ("reward_observer", "growth_proposal_service", "proposal_gateway"):
+        assert marker not in core_boot
 
 
 @pytest.mark.lock
