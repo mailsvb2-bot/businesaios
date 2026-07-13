@@ -44,6 +44,17 @@ PROFIT_SPRINT_ONBOARDING_START = "profit_sprint_onboarding_start@v1"
 PROFIT_SPRINT_ONBOARDING_TEXT = "profit_sprint_onboarding_text@v1"
 PROFIT_SPRINT_ONBOARDING_LEAD_SOURCE = "profit_sprint_onboarding_lead_source@v1"
 WEATHER_SENT = "weather_sent"
+AI_CEO_PLAN = "ai_ceo_plan@v1"
+AI_CEO_PLAN_BLOCKED = "ai_ceo_plan_blocked@v1"
+AI_CEO_PLAN_ERROR = "ai_ceo_plan_error@v1"
+ADS_RL_SUGGESTION = "ads_rl_suggestion@v1"
+ADS_RL_SUGGEST_BLOCKED = "ads_rl_suggest_blocked@v1"
+ADS_RL_SUGGEST_SKIPPED = "ads_rl_suggest_skipped@v1"
+ADS_RL_SUGGEST_OK = "ads_rl_suggest_ok@v1"
+GROWTH_STRATEGY_GENERATE = "growth_strategy_generate@v1"
+GROWTH_STRATEGY_BACKLOG = "growth_strategy_backlog@v1"
+GROWTH_STRATEGY_ACCEPT = "growth_strategy_accept@v1"
+GROWTH_STRATEGY_REJECT = "growth_strategy_reject@v1"
 GROWTH_STRATEGY_SNAPSHOT = "growth_strategy_snapshot@v1"
 GROWTH_STRATEGY_GENERATED = "growth_strategy_generated@v1"
 GROWTH_HYPOTHESIS_CREATED = "growth_hypothesis_created@v1"
@@ -147,6 +158,17 @@ KNOWN_EVENT_TYPES: set[str] = {
     PROFIT_SPRINT_ONBOARDING_TEXT,
     PROFIT_SPRINT_ONBOARDING_LEAD_SOURCE,
     WEATHER_SENT,
+    AI_CEO_PLAN,
+    AI_CEO_PLAN_BLOCKED,
+    AI_CEO_PLAN_ERROR,
+    ADS_RL_SUGGESTION,
+    ADS_RL_SUGGEST_BLOCKED,
+    ADS_RL_SUGGEST_SKIPPED,
+    ADS_RL_SUGGEST_OK,
+    GROWTH_STRATEGY_GENERATE,
+    GROWTH_STRATEGY_BACKLOG,
+    GROWTH_STRATEGY_ACCEPT,
+    GROWTH_STRATEGY_REJECT,
     GROWTH_STRATEGY_SNAPSHOT,
     GROWTH_STRATEGY_GENERATED,
     GROWTH_HYPOTHESIS_CREATED,
