@@ -5,6 +5,8 @@ from core.ai.schema_registry import DecisionSchema
 
 from .catalog_entry import CatalogEntry
 
+FieldType = type | tuple[type, ...]
+
 
 def _entry(
     action: str,
@@ -12,7 +14,7 @@ def _entry(
     *,
     required: set[str],
     optional: set[str],
-    field_types: dict[str, type],
+    field_types: dict[str, FieldType],
 ) -> CatalogEntry:
     return CatalogEntry(
         action=action,
@@ -99,12 +101,19 @@ def ads_catalog() -> dict[str, CatalogEntry]:
             optional={"plan", "commands", "steps", "gate_settings", "dry_run", "rollback_on_fail", "reason", "callback_query_id"},
             field_types={"tenant_id": str, "user_id": str, "idempotency_key": str, "plan": (dict, list), "commands": list, "steps": list, "gate_settings": dict, "dry_run": bool, "rollback_on_fail": bool, "reason": str, "callback_query_id": str},
         ),
+        "ads_rl_suggest@v1": _entry(
+            "ads_rl_suggest@v1",
+            1,
+            required={"tenant_id", "user_id"},
+            optional={"current_daily_budget_minor"},
+            field_types={"tenant_id": str, "user_id": str, "current_daily_budget_minor": int},
+        ),
     }
 
 
 def payments_catalog() -> dict[str, CatalogEntry]:
     payment_optional = {"product_id", "order_id", "provider", "metadata", "expected_amount", "pricing_version"}
-    payment_types = {"tenant_id": str, "product_id": str, "order_id": str, "user_id": str, "amount": int, "currency": str, "provider": str, "metadata": dict, "expected_amount": int, "pricing_version": str}
+    payment_types: dict[str, FieldType] = {"tenant_id": str, "product_id": str, "order_id": str, "user_id": str, "amount": int, "currency": str, "provider": str, "metadata": dict, "expected_amount": int, "pricing_version": str}
     return {
         "capture_payment@v1": _entry("capture_payment@v1", 1, required={"tenant_id", "user_id", "amount", "currency"}, optional=payment_optional, field_types=payment_types),
         "create_payment_and_send_link@v1": _entry("create_payment_and_send_link@v1", 1, required={"tenant_id", "user_id", "amount", "currency"}, optional=payment_optional, field_types=payment_types),
@@ -122,6 +131,13 @@ def growth_catalog() -> dict[str, CatalogEntry]:
         "send_weather@v1": _entry("send_weather@v1", 1, required={"tenant_id", "user_id", "city"}, optional=set(), field_types={"tenant_id": str, "user_id": str, "city": str}),
         ACTION_AI_CEO_PLAN_V1: _entry(ACTION_AI_CEO_PLAN_V1, 1, required={"tenant_id", "user_id"}, optional={"objective", "horizon"}, field_types={"tenant_id": str, "user_id": str, "objective": str, "horizon": str}),
         "pricing_select@v1": _entry("pricing_select@v1", 1, required={"tenant_id", "product_id", "user_id"}, optional={"candidates", "evidence"}, field_types={"tenant_id": str, "product_id": str, "user_id": str, "candidates": list, "evidence": dict}),
+        "profit_sprint_onboarding_start@v1": _entry("profit_sprint_onboarding_start@v1", 1, required={"tenant_id", "user_id"}, optional={"product_id", "callback_query_id"}, field_types={"tenant_id": str, "user_id": str, "product_id": str, "callback_query_id": str}),
+        "profit_sprint_onboarding_text@v1": _entry("profit_sprint_onboarding_text@v1", 1, required={"tenant_id", "user_id"}, optional={"product_id", "text", "value", "answer", "step", "field", "question", "callback_query_id"}, field_types={"tenant_id": str, "user_id": str, "product_id": str, "text": str, "value": str, "answer": str, "step": str, "field": str, "question": str, "callback_query_id": str}),
+        "profit_sprint_onboarding_lead_source@v1": _entry("profit_sprint_onboarding_lead_source@v1", 1, required={"tenant_id", "user_id"}, optional={"product_id", "lead_source", "value", "source", "callback_query_id"}, field_types={"tenant_id": str, "user_id": str, "product_id": str, "lead_source": str, "value": str, "source": str, "callback_query_id": str}),
+        "growth_strategy_generate@v1": _entry("growth_strategy_generate@v1", 1, required={"tenant_id", "user_id"}, optional={"goal", "n", "model", "callback_query_id"}, field_types={"tenant_id": str, "user_id": str, "goal": dict, "n": int, "model": str, "callback_query_id": str}),
+        "growth_strategy_backlog@v1": _entry("growth_strategy_backlog@v1", 1, required={"tenant_id", "user_id"}, optional={"limit", "callback_query_id"}, field_types={"tenant_id": str, "user_id": str, "limit": int, "callback_query_id": str}),
+        "growth_strategy_accept@v1": _entry("growth_strategy_accept@v1", 1, required={"tenant_id", "user_id", "hypothesis_id"}, optional={"callback_query_id"}, field_types={"tenant_id": str, "user_id": str, "hypothesis_id": str, "callback_query_id": str}),
+        "growth_strategy_reject@v1": _entry("growth_strategy_reject@v1", 1, required={"tenant_id", "user_id", "hypothesis_id"}, optional={"callback_query_id"}, field_types={"tenant_id": str, "user_id": str, "hypothesis_id": str, "callback_query_id": str}),
     }
 
 
