@@ -69,6 +69,8 @@ def handle_reject_pricing_change(payload, effects, env):
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
         admin_id=required_str(payload, "admin_id"),
+        tenant_id=required_str(payload, "tenant_id"),
+        product_id=optional_str(payload, "product_id"),
         request_id=required_str(payload, "request_id"),
         reason=optional_str(payload, "reason"),
     )
