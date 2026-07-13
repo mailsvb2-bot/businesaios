@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
@@ -62,12 +63,11 @@ def grant_access_effect(
     product = _required_scope(product_id, field="product_id")
     user = _required_scope(user_id, field="user_id")
     key = str(grant_key or "").strip()
-
-    bound_tenant = str(getattr(effects.event_log, "_tenant_id", "") or "").strip()
-    if bound_tenant and bound_tenant != tenant:
-        raise RuntimeError(
-            f"TENANT_CONTEXT_MISMATCH:event_log={bound_tenant}:grant={tenant}"
-        )
+    assert_event_log_tenant(
+        effects.event_log,
+        tenant_id=tenant,
+        operation="grant_access",
+    )
 
     if isinstance(track_event_type, str) and track_event_type.strip():
         effects.event_log.emit(
