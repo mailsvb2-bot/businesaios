@@ -9,6 +9,7 @@ def handle_admin_set_role(payload, effects, env):
     return effects.admin_set_role(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=required_str(payload, "tenant_id"),
         admin_id=required_str(payload, "admin_id"),
         target_user_id=required_str(payload, "target_user_id"),
         role=required_str(payload, "role"),
@@ -24,6 +25,7 @@ def handle_admin_set_perm(payload, effects, env):
     return effects.admin_set_perm(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=required_str(payload, "tenant_id"),
         admin_id=required_str(payload, "admin_id"),
         target_user_id=required_str(payload, "target_user_id"),
         perm=required_str(payload, "perm"),
@@ -39,6 +41,7 @@ def handle_set_marketing_copy(payload, effects, env):
     return effects.set_marketing_copy(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=required_str(payload, "tenant_id"),
         admin_id=required_str(payload, "admin_id"),
         step_key=required_str(payload, "step_key"),
         variant_a=required_str(payload, "variant_a"),
