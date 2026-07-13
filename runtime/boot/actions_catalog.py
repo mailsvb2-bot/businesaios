@@ -113,6 +113,8 @@ EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
         "profit_sprint_onboarding_lead_source@v1",
         "profit_sprint_onboarding_start@v1",
         "profit_sprint_onboarding_text@v1",
+        "reject_pricing_change@v1",
+        "request_pricing_change@v1",
         "rollback_policy@v1",
         "select_tariff@v1",
         "send_marketing_offer@v1",
