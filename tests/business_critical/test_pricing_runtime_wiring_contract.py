@@ -34,6 +34,8 @@ def _env() -> SimpleNamespace:
         decision=SimpleNamespace(
             decision_id="decision-pricing-select",
             correlation_id="correlation-pricing-select",
+            issuer_id="businesaios-core",
+            action="pricing_select@v1",
         )
     )
 
@@ -82,6 +84,7 @@ def test_real_pricing_selection_service_drives_tenant_aware_delivery() -> None:
 
     assert result["ok"] is True
     assert result["selection"]["offer_id"] == "pro"
+    assert result["selection_result"]["tenant_id"] == "business-a"
     assert effects.calls[-1]["tenant_id"] == "business-a"
     assert effects.calls[-1]["user_id"] == "user-1"
     assert effects.calls[-1]["text"] == "CRM Pro"
