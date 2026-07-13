@@ -15,7 +15,9 @@ PLATFORM_SCOPE_SURFACES = (
     "runtime/boot/actions_catalog.py",
     "runtime/handlers_ops.py",
     "runtime/handler_impl/domains/user_ops.py",
+    "runtime/ports/effects_admin.py",
     "runtime/ports/effects_comms.py",
+    "runtime/ports/effects_revenue.py",
     "runtime/effects/registry.py",
     "runtime/_internal/effect_types.py",
     "runtime/_internal/effect_payloads.py",
@@ -23,12 +25,14 @@ PLATFORM_SCOPE_SURFACES = (
     "runtime/_internal/effects_actions/telegram_actions.py",
     "runtime/_internal/effects_actions/telegram_actions_transport.py",
     "runtime/_internal/effects_actions/telegram/transport.py",
+    "core/actions/catalog_groups.py",
     "core/events/event_types.py",
     "core/users/read_model.py",
 )
 
 FORBIDDEN_CONSUMER_CAPABILITY_MARKERS = (
     "send_audio@v1",
+    "send_audio(",
     "handle_send_audio",
     "TELEGRAM_SEND_AUDIO",
     "telegram.send_audio",
@@ -38,6 +42,7 @@ FORBIDDEN_CONSUMER_CAPABILITY_MARKERS = (
     "audio_stopped",
     "audio_completed",
     "log_mood@v1",
+    "log_mood(",
     "handle_log_mood",
     "mood_logged",
     "mood_last",
