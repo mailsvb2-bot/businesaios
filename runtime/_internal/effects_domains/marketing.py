@@ -2,19 +2,32 @@ from __future__ import annotations
 
 from typing import Any
 
+from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
-def _marketing_copy_evidence(*, decision_id: str, admin_id: str, step_key: str) -> dict[str, Any]:
+def _marketing_copy_evidence(
+    *,
+    decision_id: str,
+    tenant_id: str,
+    admin_id: str,
+    step_key: str,
+) -> dict[str, Any]:
     return {
         "source": "ledger",
         "verified": True,
         "status": "verified",
         "code": "marketing_copy_recorded",
-        "external_refs": [f"marketing-copy:{decision_id}:{admin_id}:{step_key}"],
+        "external_refs": [
+            f"marketing-copy:{tenant_id}:{decision_id}:{admin_id}:{step_key}"
+        ],
         "confidence": 1.0,
-        "payload": {"admin_id": str(admin_id), "step_key": str(step_key)},
+        "payload": {
+            "tenant_id": str(tenant_id),
+            "admin_id": str(admin_id),
+            "step_key": str(step_key),
+        },
     }
 
 
@@ -28,6 +41,7 @@ class MarketingEffectsMixin:
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         admin_id: str,
         step_key: str,
         variant_a: str,
@@ -38,6 +52,11 @@ class MarketingEffectsMixin:
         channel: str = "telegram",
     ) -> Any:
         assert_called_from_executor()
+        tenant = assert_event_log_tenant(
+            self.event_log,
+            tenant_id=str(tenant_id),
+            operation="set_marketing_copy",
+        )
 
         if channel == "telegram" and isinstance(callback_query_id, str) and callback_query_id.strip():
             try:
@@ -51,6 +70,7 @@ class MarketingEffectsMixin:
                 swallow(__name__, "marketing_copy.answer_callback")
 
         payload = {
+            "tenant_id": tenant,
             "step_key": str(step_key),
             "variant_a": str(variant_a)[:2000],
             "variant_b": str(variant_b)[:2000],
@@ -65,6 +85,7 @@ class MarketingEffectsMixin:
         )
         evidence = _marketing_copy_evidence(
             decision_id=str(decision_id),
+            tenant_id=tenant,
             admin_id=str(admin_id),
             step_key=str(step_key),
         )
@@ -75,6 +96,7 @@ class MarketingEffectsMixin:
                 notification = self.send_message(  # type: ignore[attr-defined]
                     decision_id=str(decision_id),
                     correlation_id=str(correlation_id),
+                    tenant_id=tenant,
                     user_id=str(admin_id),
                     text=str(notify_text)[:3500],
                     reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
