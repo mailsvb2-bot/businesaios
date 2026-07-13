@@ -30,6 +30,7 @@ def handle_send_weather(payload, effects, env):
     return effects.send_weather(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=required_str(payload, "tenant_id"),
         user_id=required_str(payload, "user_id"),
         city=required_str(payload, "city"),
     )
