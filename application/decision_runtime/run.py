@@ -53,14 +53,6 @@ def run_decision(*, core: Any, state: Any, envelope_version: int, logger: Any) -
         span_router.extra = {"policy_id": getattr(policy, "id", "")}
         _emit_router_sla(core=core, user_id=user_id, correlation_key=correlation_key, span_router=span_router, logger=logger)
 
-        action_schema_version = validate_and_gate_action(
-            schemas=core._schemas,
-            state=state,
-            out=out,
-            user_id=str(user_id),
-            events=core._events,
-            trace=trace,
-        )
         _product_meta, product_id, domain, product_version = extract_product_metadata(state)
         tenant_id = extract_tenant_id(state)
         tagged, payload = build_payload(
@@ -71,6 +63,15 @@ def run_decision(*, core: Any, state: Any, envelope_version: int, logger: Any) -
             product_id=product_id,
             domain=domain,
             product_version=product_version,
+        )
+        action_schema_version = validate_and_gate_action(
+            schemas=core._schemas,
+            state=state,
+            out=out,
+            payload=payload,
+            user_id=str(user_id),
+            events=core._events,
+            trace=trace,
         )
         built = build_envelope(
             state=state,
