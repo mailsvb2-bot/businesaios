@@ -16,6 +16,18 @@ def _business_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _ledger_evidence(*, code: str, external_ref: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "source": "ledger",
+        "verified": True,
+        "status": "verified",
+        "code": str(code),
+        "external_refs": [str(external_ref)],
+        "confidence": 1.0,
+        "payload": dict(payload),
+    }
+
+
 def _payment_gateway_evidence(
     *,
     ok: bool,
@@ -61,14 +73,17 @@ def select_tariff_effect(
     expected_price: int | None = None,
     notify_text: str | None = None,
     notify_reply_markup: dict[str, Any] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     assert_called_from_executor()
     tenant = str(tenant_id or "").strip()
     product = str(product_id or "").strip()
+    user = str(user_id or "").strip()
     if not tenant:
         raise RuntimeError("TENANT_ID_REQUIRED")
     if not product:
         raise RuntimeError("PRODUCT_ID_REQUIRED")
+    if not user:
+        raise RuntimeError("USER_ID_REQUIRED")
 
     bound_tenant = str(getattr(effects.event_log, "_tenant_id", "") or "").strip()
     if bound_tenant and bound_tenant != tenant:
@@ -94,11 +109,17 @@ def select_tariff_effect(
     effects.event_log.emit(
         event_type="tariff_selected",
         source="user_state",
-        user_id=str(user_id),
+        user_id=user,
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
         payload=payload,
     )
+    evidence = _ledger_evidence(
+        code="tariff_selection_recorded",
+        external_ref=f"tariff:{tenant}:{product}:{user}:{decision_id}",
+        payload=payload,
+    )
+
     notification: Any = None
     if notify_text:
         try:
@@ -106,14 +127,20 @@ def select_tariff_effect(
                 decision_id=str(decision_id),
                 correlation_id=str(correlation_id),
                 tenant_id=tenant,
-                user_id=str(user_id),
+                user_id=user,
                 text=str(notify_text)[:3500],
                 reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
                 channel="telegram",
             )
         except Exception as exc:
             notification = {"ok": False, "error": exc.__class__.__name__}
-    return {"ok": True, "selection": payload, "notification": notification}
+    return {
+        "ok": True,
+        "status": "verified",
+        "selection": payload,
+        "notification": notification,
+        "router_evidence": evidence,
+    }
 
 
 def capture_payment_effect(
@@ -126,7 +153,7 @@ def capture_payment_effect(
     currency: str,
     provider: str,
     metadata: dict[str, Any] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     assert_called_from_executor()
     provider_norm = str(provider).lower().strip()
     payment_metadata = dict(metadata or {})
@@ -201,7 +228,7 @@ def capture_payment_effect(
                 },
             )
         except Exception:
-            swallow(__name__, "runtime/_internal/_effects_impl.py")
+            swallow(__name__, "runtime/_internal/effects_actions/payments/selection.py")
 
     return {
         "ok": bool(ok),
