@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from runtime._internal.effect_types import EffectActionType
+from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
 
@@ -75,21 +76,17 @@ def select_tariff_effect(
     notify_reply_markup: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     assert_called_from_executor()
-    tenant = str(tenant_id or "").strip()
+    tenant = assert_event_log_tenant(
+        effects.event_log,
+        tenant_id=str(tenant_id or "").strip(),
+        operation="select_tariff",
+    )
     product = str(product_id or "").strip()
     user = str(user_id or "").strip()
-    if not tenant:
-        raise RuntimeError("TENANT_ID_REQUIRED")
     if not product:
         raise RuntimeError("PRODUCT_ID_REQUIRED")
     if not user:
         raise RuntimeError("USER_ID_REQUIRED")
-
-    bound_tenant = str(getattr(effects.event_log, "_tenant_id", "") or "").strip()
-    if bound_tenant and bound_tenant != tenant:
-        raise RuntimeError(
-            f"TENANT_CONTEXT_MISMATCH:event_log={bound_tenant}:selection={tenant}"
-        )
 
     payload: dict[str, Any] = {
         "tenant_id": tenant,
@@ -158,6 +155,13 @@ def capture_payment_effect(
     provider_norm = str(provider).lower().strip()
     payment_metadata = dict(metadata or {})
     causal_metadata = _business_metadata(payment_metadata)
+    tenant = assert_event_log_tenant(
+        effects.event_log,
+        tenant_id=str(causal_metadata.get("tenant_id") or ""),
+        operation="capture_payment",
+    )
+    causal_metadata["tenant_id"] = tenant
+
     if provider_norm in {"yookassa", "yoo", "yoo_kassa"}:
         ok, meta = effects._yookassa_create_payment(
             decision_id=str(decision_id),
