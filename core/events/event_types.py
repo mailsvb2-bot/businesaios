@@ -44,6 +44,11 @@ PROFIT_SPRINT_ONBOARDING_START = "profit_sprint_onboarding_start@v1"
 PROFIT_SPRINT_ONBOARDING_TEXT = "profit_sprint_onboarding_text@v1"
 PROFIT_SPRINT_ONBOARDING_LEAD_SOURCE = "profit_sprint_onboarding_lead_source@v1"
 WEATHER_SENT = "weather_sent"
+GROWTH_STRATEGY_SNAPSHOT = "growth_strategy_snapshot@v1"
+GROWTH_HYPOTHESIS_CREATED = "growth_hypothesis_created@v1"
+GROWTH_HYPOTHESIS_SCORED = "growth_hypothesis_scored@v1"
+GROWTH_HYPOTHESIS_STATE = "growth_hypothesis_state@v1"
+GROWTH_EXPERIMENT_CREATED = "growth_experiment_created@v1"
 
 # Canonical payment proof lifecycle.
 PAYMENT_CREATE_ATTEMPTED = "payment_create_attempted"
@@ -141,6 +146,11 @@ KNOWN_EVENT_TYPES: set[str] = {
     PROFIT_SPRINT_ONBOARDING_TEXT,
     PROFIT_SPRINT_ONBOARDING_LEAD_SOURCE,
     WEATHER_SENT,
+    GROWTH_STRATEGY_SNAPSHOT,
+    GROWTH_HYPOTHESIS_CREATED,
+    GROWTH_HYPOTHESIS_SCORED,
+    GROWTH_HYPOTHESIS_STATE,
+    GROWTH_EXPERIMENT_CREATED,
     PAYMENT_CREATE_ATTEMPTED,
     PAYMENT_CREATED,
     PAYMENT_CREATE_FAILED,
