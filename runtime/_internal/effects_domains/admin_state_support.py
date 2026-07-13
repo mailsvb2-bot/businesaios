@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
 
 
@@ -101,6 +102,7 @@ def send_optional_notification(
     *,
     decision_id: str,
     correlation_id: str,
+    tenant_id: str,
     admin_id: str,
     notify_text: str | None,
     notify_reply_markup: dict[str, Any] | None,
@@ -114,6 +116,7 @@ def send_optional_notification(
         result = owner.send_message(  # type: ignore[attr-defined]
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
+            tenant_id=str(tenant_id),
             user_id=str(admin_id),
             text=str(notify_text)[:3500],
             reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
@@ -153,6 +156,7 @@ def perform_admin_toggle(
     *,
     decision_id: str,
     correlation_id: str,
+    tenant_id: str,
     admin_id: str,
     target_user_id: str,
     field_name: str,
@@ -164,6 +168,11 @@ def perform_admin_toggle(
     channel: str,
     event_log: Any,
 ) -> dict[str, Any]:
+    tenant = assert_event_log_tenant(
+        event_log,
+        tenant_id=str(tenant_id),
+        operation=f"admin_{field_name}_set",
+    )
     answer_callback_if_needed(
         owner,
         channel=channel,
@@ -184,10 +193,12 @@ def perform_admin_toggle(
         field_value=str(field_value),
         enabled=bool(enabled),
     )
+    payload["tenant_id"] = tenant
     notification = send_optional_notification(
         owner,
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
+        tenant_id=tenant,
         admin_id=str(admin_id),
         notify_text=notify_text,
         notify_reply_markup=notify_reply_markup,
@@ -195,7 +206,7 @@ def perform_admin_toggle(
         channel=channel,
         event_log=event_log,
     )
-    external_ref = f"{event_type}:{decision_id}:{target_user_id}:{field_value}:{int(bool(enabled))}"
+    external_ref = f"{event_type}:{tenant}:{decision_id}:{target_user_id}:{field_value}:{int(bool(enabled))}"
     return {
         "ok": True,
         "status": "verified",
@@ -239,9 +250,14 @@ def apply_pricing_change_effect(
     event_log = getattr(owner, "event_log", None)
     if event_log is None:
         raise RuntimeError("PRICING_EVENT_LOG_REQUIRED")
+    tenant = assert_event_log_tenant(
+        event_log,
+        tenant_id=str(tenant_id),
+        operation="apply_pricing_change",
+    )
 
     transaction = prepare_offer_price_update(
-        tenant_id=str(tenant_id),
+        tenant_id=tenant,
         product_id=str(product_id),
         environment=environment,
         offer_id=offer_id,
@@ -305,8 +321,15 @@ def request_pricing_change_effect(
     reason: str | None = None,
 ) -> dict[str, Any]:
     event_log = getattr(owner, "event_log", None)
+    if event_log is None:
+        raise RuntimeError("PRICING_EVENT_LOG_REQUIRED")
+    tenant = assert_event_log_tenant(
+        event_log,
+        tenant_id=str(tenant_id),
+        operation="request_pricing_change",
+    )
     payload = {
-        "tenant_id": str(tenant_id),
+        "tenant_id": tenant,
         "product_id": str(product_id),
         "environment": str(environment or ""),
         "offer_id": str(offer_id or ""),
@@ -316,16 +339,24 @@ def request_pricing_change_effect(
         "suggested_pricing_version": str(suggested_pricing_version or ""),
         "reason": str(reason or ""),
     }
-    if event_log is not None:
-        event_log.emit(
-            event_type="admin_pricing_change_requested",
-            source="admin_state",
-            user_id=str(admin_id),
-            decision_id=str(decision_id),
-            correlation_id=str(correlation_id),
+    event_log.emit(
+        event_type="admin_pricing_change_requested",
+        source="admin_state",
+        user_id=str(admin_id),
+        decision_id=str(decision_id),
+        correlation_id=str(correlation_id),
+        payload=payload,
+    )
+    return {
+        "ok": True,
+        "status": "verified",
+        "request": payload,
+        "router_evidence": _ledger_evidence(
+            code="pricing_change_request_recorded",
+            external_ref=f"pricing-request:{tenant}:{product_id}:{request_id}",
             payload=payload,
-        )
-    return {"ok": True, "request": payload}
+        ),
+    }
 
 
 def reject_pricing_change_effect(
@@ -334,21 +365,40 @@ def reject_pricing_change_effect(
     decision_id: str,
     correlation_id: str,
     admin_id: str,
+    tenant_id: str,
     request_id: str,
+    product_id: str | None = None,
     reason: str | None = None,
 ) -> dict[str, Any]:
     event_log = getattr(owner, "event_log", None)
+    if event_log is None:
+        raise RuntimeError("PRICING_EVENT_LOG_REQUIRED")
+    tenant = assert_event_log_tenant(
+        event_log,
+        tenant_id=str(tenant_id),
+        operation="reject_pricing_change",
+    )
     payload = {
+        "tenant_id": tenant,
+        "product_id": str(product_id or ""),
         "request_id": str(request_id),
         "reason": str(reason or ""),
     }
-    if event_log is not None:
-        event_log.emit(
-            event_type="admin_pricing_change_rejected",
-            source="admin_state",
-            user_id=str(admin_id),
-            decision_id=str(decision_id),
-            correlation_id=str(correlation_id),
+    event_log.emit(
+        event_type="admin_pricing_change_rejected",
+        source="admin_state",
+        user_id=str(admin_id),
+        decision_id=str(decision_id),
+        correlation_id=str(correlation_id),
+        payload=payload,
+    )
+    return {
+        "ok": True,
+        "status": "verified",
+        "rejection": payload,
+        "router_evidence": _ledger_evidence(
+            code="pricing_change_rejection_recorded",
+            external_ref=f"pricing-rejection:{tenant}:{product_id or '-'}:{request_id}",
             payload=payload,
-        )
-    return {"ok": True, "rejection": payload}
+        ),
+    }
