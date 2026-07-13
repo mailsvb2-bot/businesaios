@@ -11,6 +11,8 @@ class EffectsRevenuePort(Protocol):
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
+        product_id: str,
         user_id: str,
         tariff: str,
         days: int,
@@ -41,7 +43,7 @@ class EffectsRevenuePort(Protocol):
         decision_id: str,
         correlation_id: str,
         window_min: int = 30,
-    ) -> bool: ...
+    ) -> Any: ...
 
     def reconcile_payment(
         self,
@@ -52,7 +54,7 @@ class EffectsRevenuePort(Protocol):
         notification_id: str | None = None,
         event: str | None = None,
         user_id_hint: str | None = None,
-    ) -> bool: ...
+    ) -> Any: ...
 
     def grant_access(
         self,
@@ -60,15 +62,15 @@ class EffectsRevenuePort(Protocol):
         decision_id: str,
         correlation_id: str,
         user_id: str,
-        tenant_id: str | None = None,
-        product_id: str | None = None,
+        tenant_id: str,
+        product_id: str,
         grant_key: str | None = None,
         full_access: bool = True,
         notify_text: str | None = None,
         notify_reply_markup: Optional[Dict[str, Any]] = None,
         track_event_type: str | None = None,
         track_payload: Optional[Dict[str, Any]] = None,
-    ) -> bool: ...
+    ) -> Any: ...
 
     def deploy_policy(
         self,
@@ -77,7 +79,7 @@ class EffectsRevenuePort(Protocol):
         correlation_id: str,
         candidate_policy_id: str,
         rollout_pct: int,
-    ) -> bool: ...
+    ) -> Any: ...
 
     def rollback_policy(
         self,
@@ -85,4 +87,4 @@ class EffectsRevenuePort(Protocol):
         decision_id: str,
         correlation_id: str,
         reason: str,
-    ) -> bool: ...
+    ) -> Any: ...
