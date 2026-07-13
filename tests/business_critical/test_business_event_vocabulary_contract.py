@@ -21,6 +21,7 @@ BUSINESS_PLATFORM_EVENTS = (
     "growth_hypothesis_created@v1",
     "growth_hypothesis_scored@v1",
     "growth_hypothesis_state@v1",
+    "growth_strategy_generated@v1",
     "growth_strategy_snapshot@v1",
     "marketing_copy_set",
     "messaging_effect_warning",
