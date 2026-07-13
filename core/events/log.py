@@ -72,6 +72,12 @@ class EventLog:
         self._batch_depth = 0
         self._metrics = EventLogMetrics()
 
+    @property
+    def tenant_id(self) -> str:
+        """Return the immutable tenant scope bound to this event-log instance."""
+
+        return str(self._tenant.tenant_id)
+
     @contextmanager
     def batch(self):
         """Batch writes to the underlying store (if supported).
@@ -123,10 +129,6 @@ class EventLog:
         ensure_ctx_matches_event_log(ctx=ctx, tenant_id=str(self._tenant.tenant_id))
         return self.emit(event_type=event_type, source=source, user_id=user_id, payload=payload, decision_id=decision_id, correlation_id=correlation_id, timestamp_ms=timestamp_ms, event_id=event_id)
 
-
-
-
-
     def emit_legacy(
         self,
         *,
@@ -149,7 +151,7 @@ class EventLog:
         """
         _ensure_legacy_emit_allowed()
 
-    # _legacy_event_path marker: legacy emit path used
+        # _legacy_event_path marker: legacy emit path used
         marked_payload = _mark_legacy_payload(
             payload=payload,
             tenant_id=str(self._tenant.tenant_id),
@@ -200,7 +202,6 @@ class EventLog:
             event_id=event.get("event_id"),
         )
 
-
     def has_event(self, decision_id: str, event_type: str) -> bool:
         """Public proof-event existence check.
 
@@ -219,7 +220,6 @@ class EventLog:
 
         return _get_events_impl(self, decision_id, event_type)
 
-
     def iter_events(self):
         """Iterate events in a backend-agnostic way."""
         return _iter_events_impl(self)
@@ -235,7 +235,6 @@ class EventLog:
 
     def __iter__(self):
         return self.iter_events()
-
 
     def metrics_snapshot(self) -> dict[str, int]:
         return self._metrics.snapshot()
