@@ -125,8 +125,22 @@ def select_and_propose(*, selector: Any, state: Any, trace: Any) -> tuple[Any, A
     return policy, out
 
 
-def validate_and_gate_action(*, schemas: Any, state: Any, out: Any, user_id: str, events: Any, trace: Any) -> int:
-    action_schema_version = schemas.validate(out.action, out.payload)
+def validate_and_gate_action(
+    *,
+    schemas: Any,
+    state: Any,
+    out: Any,
+    user_id: str,
+    events: Any,
+    trace: Any,
+    payload: dict[str, Any] | None = None,
+) -> int:
+    action_payload = (
+        dict(payload)
+        if isinstance(payload, dict)
+        else (dict(out.payload) if isinstance(out.payload, dict) else {})
+    )
+    action_schema_version = schemas.validate(out.action, action_payload)
     trace.try_add_step(
         name="schema_validate",
         input={"action": getattr(out, "action", "")},
@@ -136,12 +150,16 @@ def validate_and_gate_action(*, schemas: Any, state: Any, out: Any, user_id: str
         product_meta = getattr(state, "product_metadata", None)
         if not isinstance(product_meta, dict):
             product_meta = {}
-        tid_for_gate = str(product_meta.get("tenant_id") or getattr(state, "tenant_id", "") or "")
-        payload = dict(out.payload) if isinstance(out.payload, dict) else {}
-        uid_for_gate = str(payload.get("user_id") or user_id)
+        tid_for_gate = str(
+            action_payload.get("tenant_id")
+            or product_meta.get("tenant_id")
+            or getattr(state, "tenant_id", "")
+            or ""
+        )
+        uid_for_gate = str(action_payload.get("user_id") or user_id)
         gate_action_or_raise(
             action=out.action,
-            payload=payload,
+            payload=action_payload,
             tenant_id=tid_for_gate,
             user_id=uid_for_gate,
             event_log=events,
