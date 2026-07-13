@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import dataclass
 
 from core.policies.domain import PolicyRef, PolicyStatus
+
+
+@dataclass(frozen=True)
+class PolicyRegistrySnapshot:
+    statuses: dict[str, PolicyStatus]
+    active: PolicyRef | None
+    canary: PolicyRef | None
 
 
 class PolicyRegistry:
@@ -43,6 +51,22 @@ class PolicyRegistry:
                 self._statuses[self._canary.policy_id] = PolicyStatus.ROLLED_BACK
             self._canary = None
 
+    def snapshot(self) -> PolicyRegistrySnapshot:
+        with self._lock:
+            return PolicyRegistrySnapshot(
+                statuses=dict(self._statuses),
+                active=self._active,
+                canary=self._canary,
+            )
+
+    def restore(self, snapshot: PolicyRegistrySnapshot) -> None:
+        if not isinstance(snapshot, PolicyRegistrySnapshot):
+            raise TypeError("snapshot must be PolicyRegistrySnapshot")
+        with self._lock:
+            self._statuses = dict(snapshot.statuses)
+            self._active = snapshot.active
+            self._canary = snapshot.canary
+
     def active(self) -> PolicyRef | None:
         return self._active
 
@@ -51,3 +75,6 @@ class PolicyRegistry:
 
     def status(self, policy_id: str) -> PolicyStatus | None:
         return self._statuses.get(policy_id)
+
+
+__all__ = ["PolicyRegistry", "PolicyRegistrySnapshot"]
