@@ -41,6 +41,7 @@ def handle_set_user_setting(payload, effects, env):
     return effects.set_user_setting(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=required_str(payload, "tenant_id"),
         user_id=required_str(payload, "user_id"),
         key=required_str(payload, "key"),
         value=payload.get("value"),
