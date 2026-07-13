@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
-def _ledger_evidence(*, decision_id: str, user_id: str, key: str, value: Any) -> dict[str, Any]:
-    ref = f"user-setting:{decision_id}:{user_id}:{key}"
+def _ledger_evidence(*, decision_id: str, tenant_id: str, user_id: str, key: str, value: Any) -> dict[str, Any]:
+    ref = f"user-setting:{tenant_id}:{decision_id}:{user_id}:{key}"
     return {
         "source": "ledger",
         "verified": True,
@@ -15,7 +16,12 @@ def _ledger_evidence(*, decision_id: str, user_id: str, key: str, value: Any) ->
         "code": "user_setting_recorded",
         "external_refs": [ref],
         "confidence": 1.0,
-        "payload": {"user_id": str(user_id), "key": str(key), "value": value},
+        "payload": {
+            "tenant_id": str(tenant_id),
+            "user_id": str(user_id),
+            "key": str(key),
+            "value": value,
+        },
     }
 
 
@@ -29,6 +35,7 @@ class UserStateEffectsMixin:
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         user_id: str,
         key: str,
         value: Any = None,
@@ -38,6 +45,11 @@ class UserStateEffectsMixin:
         channel: str = "telegram",
     ) -> Any:
         assert_called_from_executor()
+        tenant = assert_event_log_tenant(
+            self.event_log,
+            tenant_id=str(tenant_id),
+            operation="set_user_setting",
+        )
 
         if channel == "telegram" and isinstance(callback_query_id, str) and callback_query_id.strip():
             try:
@@ -50,7 +62,11 @@ class UserStateEffectsMixin:
             except Exception:
                 swallow(__name__, "user_setting.answer_callback")
 
-        payload = {"key": str(key), "value": value}
+        payload = {
+            "tenant_id": tenant,
+            "key": str(key),
+            "value": value,
+        }
         self.event_log.emit(
             event_type="user_setting_set",
             source="user_state",
@@ -61,6 +77,7 @@ class UserStateEffectsMixin:
         )
         evidence = _ledger_evidence(
             decision_id=str(decision_id),
+            tenant_id=tenant,
             user_id=str(user_id),
             key=str(key),
             value=value,
@@ -72,6 +89,7 @@ class UserStateEffectsMixin:
                 notification = self.send_message(  # type: ignore[attr-defined]
                     decision_id=str(decision_id),
                     correlation_id=str(correlation_id),
+                    tenant_id=tenant,
                     user_id=str(user_id),
                     text=str(notify_text)[:3500],
                     reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
