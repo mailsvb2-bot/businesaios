@@ -21,6 +21,8 @@ BUSINESS_PLATFORM_EVENTS = (
     "messaging_effect_warning",
     "policy_deployed",
     "policy_rolled_back",
+    "pricing_select@v1",
+    "pricing_select_blocked@v1",
     "product_selected@v1",
     "profit_sprint_onboarding_lead_source@v1",
     "profit_sprint_onboarding_start@v1",
@@ -29,6 +31,7 @@ BUSINESS_PLATFORM_EVENTS = (
     "user_setting_set",
     "variant_chosen",
     "variant_shown",
+    "weather_sent",
 )
 
 
