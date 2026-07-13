@@ -143,6 +143,7 @@ def test_user_setting_callback_gets_full_execution_context(monkeypatch: pytest.M
     result = effects.set_user_setting(
         decision_id="decision-setting",
         correlation_id="correlation-setting",
+        tenant_id="business-a",
         user_id="user-1",
         key="city",
         value="Berlin",
@@ -169,6 +170,7 @@ def test_admin_toggle_callback_gets_full_execution_context() -> None:
         owner,
         decision_id="decision-admin",
         correlation_id="correlation-admin",
+        tenant_id="business-a",
         admin_id="admin-1",
         target_user_id="user-2",
         field_name="role",
@@ -199,6 +201,7 @@ def test_marketing_copy_callback_gets_full_execution_context(monkeypatch: pytest
     result = effects.set_marketing_copy(
         decision_id="decision-marketing",
         correlation_id="correlation-marketing",
+        tenant_id="business-a",
         admin_id="admin-7",
         step_key="lead-followup",
         variant_a="A",
