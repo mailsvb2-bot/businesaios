@@ -46,6 +46,7 @@ def emit_toggle_event(
     event_type: str,
     decision_id: str,
     correlation_id: str,
+    tenant_id: str,
     admin_id: str,
     target_user_id: str,
     field_name: str,
@@ -53,6 +54,7 @@ def emit_toggle_event(
     enabled: bool,
 ) -> dict[str, Any]:
     payload = {
+        "tenant_id": str(tenant_id),
         "target_user_id": str(target_user_id),
         str(field_name): str(field_value),
         "enabled": bool(enabled),
@@ -187,13 +189,13 @@ def perform_admin_toggle(
         event_type=event_type,
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
+        tenant_id=tenant,
         admin_id=str(admin_id),
         target_user_id=str(target_user_id),
         field_name=str(field_name),
         field_value=str(field_value),
         enabled=bool(enabled),
     )
-    payload["tenant_id"] = tenant
     notification = send_optional_notification(
         owner,
         decision_id=str(decision_id),
