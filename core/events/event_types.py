@@ -33,6 +33,8 @@ ADMIN_NOTIFICATION_FAILED = "admin_notification_failed"
 ADMIN_PRICING_CHANGE_REQUESTED = "admin_pricing_change_requested"
 ADMIN_PRICING_CHANGE_REJECTED = "admin_pricing_change_rejected"
 ADMIN_PRICING_CHANGE_APPLIED = "admin_pricing_change_applied"
+PRICING_SELECT = "pricing_select@v1"
+PRICING_SELECT_BLOCKED = "pricing_select_blocked@v1"
 POLICY_DEPLOYED = "policy_deployed"
 POLICY_ROLLED_BACK = "policy_rolled_back"
 AUTOPILOT_STARTED = "autopilot_started"
@@ -41,6 +43,7 @@ AUTOPILOT_DECISION = "autopilot_decision"
 PROFIT_SPRINT_ONBOARDING_START = "profit_sprint_onboarding_start@v1"
 PROFIT_SPRINT_ONBOARDING_TEXT = "profit_sprint_onboarding_text@v1"
 PROFIT_SPRINT_ONBOARDING_LEAD_SOURCE = "profit_sprint_onboarding_lead_source@v1"
+WEATHER_SENT = "weather_sent"
 
 # Canonical payment proof lifecycle.
 PAYMENT_CREATE_ATTEMPTED = "payment_create_attempted"
@@ -127,6 +130,8 @@ KNOWN_EVENT_TYPES: set[str] = {
     ADMIN_PRICING_CHANGE_REQUESTED,
     ADMIN_PRICING_CHANGE_REJECTED,
     ADMIN_PRICING_CHANGE_APPLIED,
+    PRICING_SELECT,
+    PRICING_SELECT_BLOCKED,
     POLICY_DEPLOYED,
     POLICY_ROLLED_BACK,
     AUTOPILOT_STARTED,
@@ -135,6 +140,7 @@ KNOWN_EVENT_TYPES: set[str] = {
     PROFIT_SPRINT_ONBOARDING_START,
     PROFIT_SPRINT_ONBOARDING_TEXT,
     PROFIT_SPRINT_ONBOARDING_LEAD_SOURCE,
+    WEATHER_SENT,
     PAYMENT_CREATE_ATTEMPTED,
     PAYMENT_CREATED,
     PAYMENT_CREATE_FAILED,
