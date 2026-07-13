@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from dataclasses import replace
 from typing import Any
 
 from config.strategic_growth_policy import DEFAULT_GROWTH_STRATEGY_SERVICE_POLICY, GrowthStrategyServicePolicy
@@ -10,8 +11,10 @@ from .backlog_store import (
     append_experiment,
     append_hypothesis,
     append_score,
+    append_strategy_generated,
     append_strategy_snapshot,
     list_backlog,
+    load_generated_plan_for_decision,
     now_ms,
     set_hypothesis_state,
 )
@@ -19,6 +22,8 @@ from .contracts import ExperimentSpecV1, GrowthGoalV1, GrowthHypothesisV1, Growt
 from .llm_generator import generate_hypotheses
 from .scoring import rank_hypotheses, score_hypothesis
 from .signals import build_signals
+
+_GROWTH_ID_NAMESPACE = uuid.UUID("470d7825-fc2f-4ce9-bf89-f40954ecf226")
 
 
 class GrowthStrategyService:
@@ -44,39 +49,203 @@ class GrowthStrategyService:
         n: int | None = None,
         model: str = "",
     ) -> StrategyPlanV1:
-        g = goal or GrowthGoalV1()
-        signals = build_signals(self._event_store, tenant_id=str(tenant_id))
+        plan, _proof_event_id = self.generate_backlog_with_proof(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            decision_id=decision_id,
+            correlation_id=correlation_id,
+            goal=goal,
+            n=n,
+            model=model,
+        )
+        return plan
+
+    def generate_backlog_with_proof(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        decision_id: str,
+        correlation_id: str,
+        goal: GrowthGoalV1 | None = None,
+        n: int | None = None,
+        model: str = "",
+    ) -> tuple[StrategyPlanV1, str]:
+        tenant = str(tenant_id)
+        decision = str(decision_id)
+        existing = load_generated_plan_for_decision(
+            self._event_store,
+            tenant_id=tenant,
+            decision_id=decision,
+        )
+        if existing is not None:
+            return existing
+
+        growth_goal = goal or GrowthGoalV1()
+        signals = build_signals(self._event_store, tenant_id=tenant)
         hypothesis_count = self._policy.default_hypothesis_count if n is None else int(n)
-        append_strategy_snapshot(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), signals=signals)
+        append_strategy_snapshot(
+            self._event_store,
+            tenant_id=tenant,
+            user_id=str(user_id),
+            decision_id=decision,
+            correlation_id=str(correlation_id),
+            signals=signals,
+            goal=growth_goal,
+        )
 
-        hyps: tuple[GrowthHypothesisV1, ...] = ()
+        hypotheses: tuple[GrowthHypothesisV1, ...] = ()
         if self._llm is not None:
-            hyps = generate_hypotheses(self._llm, tenant_id=str(tenant_id), goal=g, signals=signals, n=hypothesis_count, model=str(model or ""))
-        if not hyps:
-            hyps = _fallback_hypotheses(tenant_id=str(tenant_id), signals=signals, goal=g)
+            hypotheses = generate_hypotheses(
+                self._llm,
+                tenant_id=tenant,
+                goal=growth_goal,
+                signals=signals,
+                n=hypothesis_count,
+                model=str(model or ""),
+            )
+        if not hypotheses:
+            hypotheses = _fallback_hypotheses(
+                tenant_id=tenant,
+                decision_id=decision,
+                signals=signals,
+                goal=growth_goal,
+            )
+        hypotheses = _stabilize_hypotheses(
+            hypotheses,
+            tenant_id=tenant,
+            decision_id=decision,
+        )
 
-        for h in hyps:
-            append_hypothesis(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), h=h)
-            append_score(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), score=score_hypothesis(h))
+        for hypothesis in hypotheses:
+            append_hypothesis(
+                self._event_store,
+                tenant_id=tenant,
+                user_id=str(user_id),
+                decision_id=decision,
+                correlation_id=str(correlation_id),
+                h=hypothesis,
+            )
+            append_score(
+                self._event_store,
+                tenant_id=tenant,
+                user_id=str(user_id),
+                decision_id=decision,
+                correlation_id=str(correlation_id),
+                score=score_hypothesis(hypothesis),
+            )
 
-        scored = rank_hypotheses(hyps)
+        scored = rank_hypotheses(hypotheses)
         score_by_id = {item.hypothesis_id: item.score for item in scored}
-        ranked = sorted(hyps, key=lambda h: score_by_id.get(h.hypothesis_id, self._policy.zero_rank_score), reverse=True)
-        return StrategyPlanV1(tenant_id=str(tenant_id), created_ms=now_ms(), goal=g, signals=signals, top_hypotheses=tuple(ranked), notes=("llm" if self._llm is not None else "no_llm", "advisory_ranking_only",))
+        ranked = tuple(
+            sorted(
+                hypotheses,
+                key=lambda hypothesis: score_by_id.get(
+                    hypothesis.hypothesis_id,
+                    self._policy.zero_rank_score,
+                ),
+                reverse=True,
+            )
+        )
+        created_ms = now_ms()
+        notes = (
+            "llm" if self._llm is not None else "no_llm",
+            "advisory_ranking_only",
+            "decision_idempotent",
+        )
+        completion_event_id = append_strategy_generated(
+            self._event_store,
+            tenant_id=tenant,
+            user_id=str(user_id),
+            decision_id=decision,
+            correlation_id=str(correlation_id),
+            goal=growth_goal,
+            hypothesis_ids=tuple(hypothesis.hypothesis_id for hypothesis in ranked),
+            created_ms=created_ms,
+            notes=notes,
+        )
+        durable = load_generated_plan_for_decision(
+            self._event_store,
+            tenant_id=tenant,
+            decision_id=decision,
+        )
+        if durable is not None:
+            return durable
+        return (
+            StrategyPlanV1(
+                tenant_id=tenant,
+                created_ms=created_ms,
+                goal=growth_goal,
+                signals=signals,
+                top_hypotheses=ranked,
+                notes=notes,
+            ),
+            completion_event_id,
+        )
 
     def backlog(self, *, tenant_id: str, limit: int | None = None):
         backlog_limit = self._policy.default_backlog_limit if limit is None else int(limit)
         return list_backlog(self._event_store, tenant_id=str(tenant_id), limit=backlog_limit)
 
-    def accept_hypothesis(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, hypothesis_id: str, note: str = "") -> str:
-        return set_hypothesis_state(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), hypothesis_id=str(hypothesis_id), state="accepted", note=str(note or ""))
+    def accept_hypothesis(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        decision_id: str,
+        correlation_id: str,
+        hypothesis_id: str,
+        note: str = "",
+    ) -> str:
+        return set_hypothesis_state(
+            self._event_store,
+            tenant_id=str(tenant_id),
+            user_id=str(user_id),
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+            hypothesis_id=str(hypothesis_id),
+            state="accepted",
+            note=str(note or ""),
+        )
 
-    def reject_hypothesis(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, hypothesis_id: str, note: str = "") -> str:
-        return set_hypothesis_state(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), hypothesis_id=str(hypothesis_id), state="rejected", note=str(note or ""))
+    def reject_hypothesis(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        decision_id: str,
+        correlation_id: str,
+        hypothesis_id: str,
+        note: str = "",
+    ) -> str:
+        return set_hypothesis_state(
+            self._event_store,
+            tenant_id=str(tenant_id),
+            user_id=str(user_id),
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+            hypothesis_id=str(hypothesis_id),
+            state="rejected",
+            note=str(note or ""),
+        )
 
-    def create_experiment_from_hypothesis(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, h: GrowthHypothesisV1) -> ExperimentSpecV1:
-        exp = ExperimentSpecV1(
-            experiment_id=str(uuid.uuid4()),
+    def create_experiment_from_hypothesis(
+        self,
+        *,
+        tenant_id: str,
+        user_id: str,
+        decision_id: str,
+        correlation_id: str,
+        h: GrowthHypothesisV1,
+    ) -> ExperimentSpecV1:
+        experiment_id = str(
+            uuid.uuid5(
+                _GROWTH_ID_NAMESPACE,
+                f"experiment:{tenant_id}:{decision_id}:{h.hypothesis_id}",
+            )
+        )
+        experiment = ExperimentSpecV1(
+            experiment_id=experiment_id,
             tenant_id=str(tenant_id),
             created_ms=now_ms(),
             hypothesis_id=str(h.hypothesis_id),
@@ -88,8 +257,46 @@ class GrowthStrategyService:
             steps=_default_steps(h, policy=self._policy),
             payload=dict(h.action_hints or {}),
         )
-        append_experiment(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), exp=exp)
-        return exp
+        append_experiment(
+            self._event_store,
+            tenant_id=str(tenant_id),
+            user_id=str(user_id),
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+            exp=experiment,
+        )
+        return experiment
+
+
+def _stable_hypothesis_id(*, tenant_id: str, decision_id: str, index: int) -> str:
+    return str(
+        uuid.uuid5(
+            _GROWTH_ID_NAMESPACE,
+            f"hypothesis:{tenant_id}:{decision_id}:{int(index)}",
+        )
+    )
+
+
+def _stabilize_hypotheses(
+    hypotheses: tuple[GrowthHypothesisV1, ...],
+    *,
+    tenant_id: str,
+    decision_id: str,
+) -> tuple[GrowthHypothesisV1, ...]:
+    created_ms = now_ms()
+    return tuple(
+        replace(
+            hypothesis,
+            hypothesis_id=_stable_hypothesis_id(
+                tenant_id=str(tenant_id),
+                decision_id=str(decision_id),
+                index=index,
+            ),
+            tenant_id=str(tenant_id),
+            created_ms=int(hypothesis.created_ms or created_ms),
+        )
+        for index, hypothesis in enumerate(hypotheses)
+    )
 
 
 def _default_steps(
@@ -105,12 +312,17 @@ def _default_steps(
     return tuple(steps)
 
 
-def _fallback_hypotheses(*, tenant_id: str, signals: GrowthSignalV1, goal: GrowthGoalV1) -> tuple[GrowthHypothesisV1, ...]:
+def _fallback_hypotheses(
+    *,
+    tenant_id: str,
+    decision_id: str,
+    signals: GrowthSignalV1,
+    goal: GrowthGoalV1,
+) -> tuple[GrowthHypothesisV1, ...]:
     now = int(time.time() * 1000)
-    out: list[GrowthHypothesisV1] = []
-    out.append(
+    hypotheses: list[GrowthHypothesisV1] = [
         GrowthHypothesisV1(
-            hypothesis_id=str(uuid.uuid4()),
+            hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, decision_id=decision_id, index=0),
             created_ms=now,
             tenant_id=str(tenant_id),
             stage="activation",
@@ -123,11 +335,9 @@ def _fallback_hypotheses(*, tenant_id: str, signals: GrowthSignalV1, goal: Growt
             metric="conversion_lead_to_purchase_pct",
             horizon_days=int(goal.horizon_days or 14),
             action_hints={"type": "telegram_flow", "flow": "offer_to_pay"},
-        )
-    )
-    out.append(
+        ),
         GrowthHypothesisV1(
-            hypothesis_id=str(uuid.uuid4()),
+            hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, decision_id=decision_id, index=1),
             created_ms=now,
             tenant_id=str(tenant_id),
             stage="retention",
@@ -140,12 +350,12 @@ def _fallback_hypotheses(*, tenant_id: str, signals: GrowthSignalV1, goal: Growt
             metric="revenue_minor",
             horizon_days=int(goal.horizon_days or 14),
             action_hints={"type": "telegram_followup", "schedule": [24, 72]},
-        )
-    )
+        ),
+    ]
     if "ads_apply_used" in set(signals.notes):
-        out.append(
+        hypotheses.append(
             GrowthHypothesisV1(
-                hypothesis_id=str(uuid.uuid4()),
+                hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, decision_id=decision_id, index=len(hypotheses)),
                 created_ms=now,
                 tenant_id=str(tenant_id),
                 stage="acquisition",
@@ -160,9 +370,9 @@ def _fallback_hypotheses(*, tenant_id: str, signals: GrowthSignalV1, goal: Growt
                 action_hints={"type": "ads_creative_refresh", "variants": 3},
             )
         )
-    out.append(
+    hypotheses.append(
         GrowthHypothesisV1(
-            hypothesis_id=str(uuid.uuid4()),
+            hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, decision_id=decision_id, index=len(hypotheses)),
             created_ms=now,
             tenant_id=str(tenant_id),
             stage="revenue",
@@ -177,4 +387,4 @@ def _fallback_hypotheses(*, tenant_id: str, signals: GrowthSignalV1, goal: Growt
             action_hints={"type": "pricing_package", "tiers": ["basic", "premium"]},
         )
     )
-    return tuple(out)
+    return tuple(hypotheses)
