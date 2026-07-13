@@ -9,6 +9,11 @@ def test_valid_provider_payment_id_emits_gateway_evidence() -> None:
         external_id="payment-42",
         provider="yookassa",
         meta={"yookassa": {"status": "pending"}},
+        business_metadata={
+            "tenant_id": "business-a",
+            "product_id": "crm-pro",
+            "order_id": "order-42",
+        },
     )
 
     assert evidence["source"] == "payment_gateway"
@@ -16,6 +21,9 @@ def test_valid_provider_payment_id_emits_gateway_evidence() -> None:
     assert evidence["external_refs"] == ["payment-42"]
     assert evidence["confidence"] == 1.0
     assert evidence["payload"]["provider_status"] == "pending"
+    assert evidence["payload"]["tenant_id"] == "business-a"
+    assert evidence["payload"]["product_id"] == "crm-pro"
+    assert evidence["payload"]["order_id"] == "order-42"
 
 
 def test_success_without_valid_provider_id_never_emits_positive_payment_evidence() -> None:
@@ -24,6 +32,7 @@ def test_success_without_valid_provider_id_never_emits_positive_payment_evidence
         external_id=None,
         provider="yookassa",
         meta={"yookassa": {"status": "pending"}},
+        business_metadata={},
     )
 
     assert evidence["status"] == "failed"
@@ -37,6 +46,7 @@ def test_provider_failure_never_emits_positive_payment_evidence() -> None:
         external_id="payment-should-not-verify",
         provider="yookassa",
         meta={"yookassa": {"status": "failed"}},
+        business_metadata={},
     )
 
     assert evidence["status"] == "failed"
