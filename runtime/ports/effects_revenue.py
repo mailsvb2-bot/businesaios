@@ -77,6 +77,7 @@ class EffectsRevenuePort(Protocol):
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         candidate_policy_id: str,
         rollout_pct: int,
     ) -> Any: ...
@@ -86,5 +87,6 @@ class EffectsRevenuePort(Protocol):
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         reason: str,
     ) -> Any: ...
