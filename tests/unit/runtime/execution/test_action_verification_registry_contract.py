@@ -66,7 +66,9 @@ def test_business_critical_effects_require_observable_confirmation() -> None:
         "create_payment_and_send_link@v1",
         "deploy_policy@v1",
         "grant_access@v1",
+        "pricing_select@v1",
         "rollback_policy@v1",
+        "select_tariff@v1",
         "send_marketing_offer@v1",
         "send_message@v1",
         "send_weather@v1",
@@ -78,6 +80,11 @@ def test_business_critical_effects_require_observable_confirmation() -> None:
         assert spec.external_confirmation_mode == "required"
 
 
-def test_consumer_audio_and_mood_actions_are_not_registered() -> None:
-    assert "send_audio@v1" not in SPECS
-    assert "log_mood@v1" not in SPECS
+def test_consumer_and_unwired_ghost_actions_are_not_registered() -> None:
+    for action in (
+        "send_audio@v1",
+        "log_mood@v1",
+        "reward_observe@v1",
+        "growth_propose@v1",
+    ):
+        assert action not in SPECS
