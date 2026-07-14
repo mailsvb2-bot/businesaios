@@ -68,9 +68,9 @@ def base_catalog() -> dict[str, CatalogEntry]:
         "enqueue_evolution_job@v1": _entry(
             "enqueue_evolution_job@v1",
             1,
-            required={"user_id", "job_kind"},
+            required={"tenant_id", "user_id", "job_kind"},
             optional={"payload"},
-            field_types={"user_id": str, "job_kind": str, "payload": dict},
+            field_types={"tenant_id": str, "user_id": str, "job_kind": str, "payload": dict},
         ),
         "execute_plan@v1": _entry(
             "execute_plan@v1",
