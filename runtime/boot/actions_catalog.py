@@ -60,9 +60,9 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("growth_strategy_accept@v1", "runtime.handlers.growth_strategy_state:handle_growth_strategy_accept", True, "general", 120, 60),
     ("growth_strategy_reject@v1", "runtime.handlers.growth_strategy_state:handle_growth_strategy_reject", True, "general", 120, 60),
     ("execute_plan@v1", "runtime.handlers:ActionHandlerRegistry.handle", True, "general", 120, 60),
-    ("enqueue_evolution_job@v1", "runtime.effects.registry:build_effects_registry", True, "general", 60, 30),
-    ("apply_offer_patch@v1", "runtime.effects.registry:build_effects_registry", True, "general", 60, 30),
-    ("suggest_offer_patch@v1", "runtime.effects.registry:build_effects_registry", True, "general", 60, 30),
+    ("enqueue_evolution_job@v1", "runtime.handlers.platform_effects:handle_enqueue_evolution_job", True, "general", 60, 30),
+    ("apply_offer_patch@v1", "runtime.handlers.platform_effects:handle_apply_offer_patch", True, "general", 60, 30),
+    ("suggest_offer_patch@v1", "runtime.handlers.platform_effects:handle_suggest_offer_patch", True, "general", 60, 30),
 )
 INLINE_ALLOWLIST_NAMES: tuple[str, ...] = (
     "emit_event@v1",
@@ -84,11 +84,7 @@ INLINE_ALLOWLIST_NAMES: tuple[str, ...] = (
 )
 
 BUILTIN_HANDLER_ACTIONS: frozenset[str] = frozenset({"execute_plan@v1"})
-EFFECT_ONLY_ACTIONS: frozenset[str] = frozenset({
-    "enqueue_evolution_job@v1",
-    "apply_offer_patch@v1",
-    "suggest_offer_patch@v1",
-})
+EFFECT_ONLY_ACTIONS: frozenset[str] = frozenset()
 
 # Verification semantics belong to the canonical action catalog. They describe
 # already-issued actions and never select or alter a DecisionCore action.
@@ -103,6 +99,7 @@ EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
         "capture_payment@v1",
         "create_payment_and_send_link@v1",
         "deploy_policy@v1",
+        "enqueue_evolution_job@v1",
         "grant_access@v1",
         "growth_strategy_accept@v1",
         "growth_strategy_backlog@v1",
@@ -124,7 +121,9 @@ EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
         "set_user_setting@v1",
     }
 )
-CONDITIONAL_EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset({"ads_apply_execute@v1"})
+CONDITIONAL_EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
+    {"ads_apply_execute@v1", "apply_offer_patch@v1"}
+)
 BEST_EFFORT_EXTERNAL_ACTIONS: frozenset[str] = frozenset({"answer_callback@v1"})
 ADVISORY_ACTIONS: frozenset[str] = frozenset(
     {
