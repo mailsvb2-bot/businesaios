@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from runtime.boot.actions_catalog import EFFECT_ONLY_ACTIONS
 from runtime.boot.actions_registry import INLINE_ALLOWLIST, SPECS, all_actions
 from runtime.boot.registration_manifest import registered_action_names
 
@@ -14,6 +15,11 @@ def test_actions_registry_matches_boot_registration_manifest():
 
 
 @pytest.mark.lock
+def test_registered_actions_cannot_bypass_handler_wiring() -> None:
+    assert EFFECT_ONLY_ACTIONS == frozenset()
+
+
+@pytest.mark.lock
 def test_no_unregistered_handlers_register_calls_anywhere():
     """Forbid introducing a new runtime-action without updating the canonical registry."""
     expected = all_actions()
@@ -22,9 +28,9 @@ def test_no_unregistered_handlers_register_calls_anywhere():
     from pathlib import Path
     for p in Path("runtime").rglob("*.py"):
         txt = p.read_text(encoding="utf-8")
-        for a in re.findall(r'handlers\.register\(\s*"([^"]+)"', txt):
-            if a not in expected:
-                offenders.append(f"{p}:{a}")
+        for action in re.findall(r'handlers\.register\(\s*"([^"]+)"', txt):
+            if action not in expected:
+                offenders.append(f"{p}:{action}")
     assert not offenders, "unregistered runtime-actions found:\n" + "\n".join(sorted(offenders))
 
 
