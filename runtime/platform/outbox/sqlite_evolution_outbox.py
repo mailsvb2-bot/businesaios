@@ -42,96 +42,134 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
+def _canonical_payload_json(payload: dict[str, Any]) -> str:
+    return json.dumps(dict(payload or {}), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
 class SqliteEvolutionOutbox:
     def __init__(self, path: str):
         self._path = str(path)
 
     @staticmethod
     def default_path_from_env() -> str:
-        p = env_str("EVOLUTION_DB_PATH", "").strip()
-        if not p:
+        path = env_str("EVOLUTION_DB_PATH", "").strip()
+        if not path:
             data_dir = str(env_path("DATA_DIR", os.path.join("runtime", "entrypoints", "data")))
-            p = os.path.join(data_dir, "evolution.db")
-        return p
+            path = os.path.join(data_dir, "evolution.db")
+        return path
 
     def _connect(self) -> sqlite3.Connection:
         os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
-        conn = sqlite3.connect(self._path, timeout=5.0, check_same_thread=False)
-        configure_sqlite(conn, prod=is_prod_env())
-        conn.executescript(DDL)
-        conn.commit()
-        return conn
+        connection = sqlite3.connect(self._path, timeout=5.0, check_same_thread=False)
+        configure_sqlite(connection, prod=is_prod_env())
+        connection.executescript(DDL)
+        connection.commit()
+        return connection
 
-    def enqueue(self, *, job_kind: str, payload: dict[str, Any] | None = None, job_id: str | None = None) -> str:
-        jid = str(job_id or uuid.uuid4())
+    def enqueue(
+        self,
+        *,
+        job_kind: str,
+        payload: dict[str, Any] | None = None,
+        job_id: str | None = None,
+    ) -> str:
+        job = str(job_id or uuid.uuid4()).strip()
+        kind = str(job_kind or "").strip()
+        if not job:
+            raise ValueError("job_id is required")
+        if not kind:
+            raise ValueError("job_kind is required")
+        payload_json = _canonical_payload_json(dict(payload or {}))
         now = _now_ms()
-        pl = dict(payload or {})
-        with self._connect() as db:
-            db.execute(
-                "INSERT OR REPLACE INTO evolution_jobs(job_id, job_kind, payload_json, status, created_ms, updated_ms, error) "
+
+        with self._connect() as database:
+            existing = database.execute(
+                "SELECT job_kind, payload_json, status FROM evolution_jobs WHERE job_id=?",
+                (job,),
+            ).fetchone()
+            if existing is not None:
+                existing_kind = str(existing[0] or "")
+                try:
+                    existing_payload = _canonical_payload_json(json.loads(existing[1] or "{}"))
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    existing_payload = str(existing[1] or "")
+                if existing_kind != kind or existing_payload != payload_json:
+                    raise RuntimeError(f"EVOLUTION_JOB_ID_CONFLICT:{job}")
+                # Idempotent retry: preserve pending/done/failed status and timestamps.
+                return job
+
+            database.execute(
+                "INSERT INTO evolution_jobs(job_id, job_kind, payload_json, status, created_ms, updated_ms, error) "
                 "VALUES(?,?,?,?,?,?,?)",
-                (jid, str(job_kind), json.dumps(pl, ensure_ascii=False, sort_keys=True), "pending", now, now, None),
+                (job, kind, payload_json, "pending", now, now, None),
             )
-            db.commit()
-        return jid
+            database.commit()
+        return job
 
     def list_pending(self, *, limit: int = 10) -> list[EvolutionJob]:
-        lim = max(1, min(100, int(limit)))
-        with self._connect() as db:
-            rows = db.execute(
+        bounded_limit = max(1, min(100, int(limit)))
+        with self._connect() as database:
+            rows = database.execute(
                 "SELECT job_id, job_kind, payload_json, status, created_ms, updated_ms, error "
                 "FROM evolution_jobs WHERE status='pending' ORDER BY updated_ms ASC LIMIT ?",
-                (lim,),
+                (bounded_limit,),
             ).fetchall()
-        out: list[EvolutionJob] = []
-        for r in rows:
+        output: list[EvolutionJob] = []
+        for row in rows:
             try:
-                payload = json.loads(r[2]) if r[2] else {}
+                payload = json.loads(row[2]) if row[2] else {}
             except Exception:
                 payload = {}
-            out.append(
+            output.append(
                 EvolutionJob(
-                    job_id=str(r[0]),
-                    job_kind=str(r[1]),
+                    job_id=str(row[0]),
+                    job_kind=str(row[1]),
                     payload=payload if isinstance(payload, dict) else {"value": payload},
-                    status=str(r[3]),
-                    created_ms=int(r[4]),
-                    updated_ms=int(r[5]),
-                    error=(str(r[6]) if r[6] is not None else None),
+                    status=str(row[3]),
+                    created_ms=int(row[4]),
+                    updated_ms=int(row[5]),
+                    error=(str(row[6]) if row[6] is not None else None),
                 )
             )
-        return out
+        return output
 
     def mark_done(self, job_id: str) -> None:
         now = _now_ms()
-        with self._connect() as db:
-            db.execute("UPDATE evolution_jobs SET status='done', updated_ms=?, error=NULL WHERE job_id=?", (now, str(job_id)))
-            db.commit()
+        with self._connect() as database:
+            database.execute(
+                "UPDATE evolution_jobs SET status='done', updated_ms=?, error=NULL WHERE job_id=?",
+                (now, str(job_id)),
+            )
+            database.commit()
 
     def mark_failed(self, job_id: str, error: str | None = None) -> None:
         now = _now_ms()
-        with self._connect() as db:
-            db.execute(
+        with self._connect() as database:
+            database.execute(
                 "UPDATE evolution_jobs SET status='failed', updated_ms=?, error=? WHERE job_id=?",
                 (now, (str(error)[:500] if error else None), str(job_id)),
             )
-            db.commit()
-
+            database.commit()
 
     def get_status(self, job_id: str) -> str | None:
-        with self._connect() as db:
-            row = db.execute("SELECT status FROM evolution_jobs WHERE job_id=?", (str(job_id),)).fetchone()
+        with self._connect() as database:
+            row = database.execute(
+                "SELECT status FROM evolution_jobs WHERE job_id=?",
+                (str(job_id),),
+            ).fetchone()
         return str(row[0]) if row else None
 
     def count_pending(self) -> int:
-        with self._connect() as db:
-            row = db.execute("SELECT COUNT(1) FROM evolution_jobs WHERE status='pending'").fetchone()
+        with self._connect() as database:
+            row = database.execute(
+                "SELECT COUNT(1) FROM evolution_jobs WHERE status='pending'"
+            ).fetchone()
             return int(row[0] if row else 0)
 
     def ping(self) -> bool:
         try:
-            with self._connect() as db:
-                db.execute("SELECT 1")
+            with self._connect() as database:
+                database.execute("SELECT 1")
             return True
         except Exception:
             return False
