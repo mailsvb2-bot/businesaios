@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, Protocol
 
-from core.events.read_model_support import best_effort_latest_event
 from core.read_model.cache import global_cache, watermark_for
 
 
@@ -19,16 +18,31 @@ class EventStoreLike(Protocol):
     ) -> Iterable[dict[str, Any]]: ...
 
 
+def _payment_product_id(payload: dict[str, Any]) -> str:
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        product_id = str(metadata.get("product_id") or "").strip()
+        if product_id:
+            return product_id
+    return str(payload.get("product_id") or "").strip()
+
+
 def latest_payment_status(
     *,
     event_store: EventStoreLike,
     tenant_id: str = "default",
     user_id: str,
+    product_id: str | None = None,
 ) -> dict[str, Any]:
-    """Return latest payment status inside one tenant/user boundary."""
+    """Return latest payment status inside one tenant/product/user boundary.
 
-    tenant = str(tenant_id)
-    uid = str(user_id)
+    Omitting ``product_id`` produces an explicit administrative aggregate view.
+    Authorization or product-specific UI must always provide the product scope.
+    """
+
+    tenant = str(tenant_id).strip()
+    uid = str(user_id).strip()
+    product = str(product_id or "").strip() or None
     event_types = (
         "payment_created",
         "payment_succeeded",
@@ -43,41 +57,57 @@ def latest_payment_status(
     )
 
     def _compute() -> dict[str, Any]:
-        latest: dict[str, Any] | None = best_effort_latest_event(
-            event_store=event_store,
-            where="core/payments/read_model.latest_payment_status",
+        candidates: list[dict[str, Any]] = []
+        for event in event_store.iter_events(
             tenant_id=tenant,
+            start_ms=0,
+            end_ms=None,
+            event_type=None,
             user_id=uid,
-            event_types=event_types,
-            legacy_event_type="payment_created",
+        ):
+            event_type = str(event.get("event_type") or event.get("type") or "")
+            if event_type not in event_types:
+                continue
+            payload = event.get("payload")
+            payload = dict(payload) if isinstance(payload, dict) else {}
+            event_product = _payment_product_id(payload)
+            if product is not None and event_product != product:
+                continue
+            candidates.append(dict(event))
+
+        if not candidates:
+            result = {"status": "none"}
+            if product is not None:
+                result["product_id"] = product
+            else:
+                result["scope"] = "aggregate_admin_view"
+            return result
+
+        latest = max(
+            candidates,
+            key=lambda event: int(event.get("timestamp_ms") or 0),
         )
-
-        if latest is None:
-            for event in event_store.iter_events(
-                tenant_id=tenant,
-                start_ms=0,
-                end_ms=None,
-                event_type=None,
-                user_id=uid,
-            ):
-                if event.get("event_type") in set(event_types):
-                    latest = event
-        if not latest:
-            return {"status": "none"}
-
-        event_type = str(latest.get("event_type"))
-        payload = latest.get("payload") or {}
+        event_type = str(latest.get("event_type") or latest.get("type") or "")
+        payload = latest.get("payload")
+        payload = dict(payload) if isinstance(payload, dict) else {}
         if event_type == "payment_succeeded":
-            return {"status": "succeeded", **(payload if isinstance(payload, dict) else {})}
-        if event_type == "payment_failed":
-            return {"status": "failed", **(payload if isinstance(payload, dict) else {})}
-        if event_type in {"payment_created", "payment_captured"}:
-            status = str(payload.get("status") or "pending")
-            return {"status": status.lower(), **(payload if isinstance(payload, dict) else {})}
-        return {"status": "unknown"}
+            status = "succeeded"
+        elif event_type == "payment_failed":
+            status = "failed"
+        elif event_type in {"payment_created", "payment_captured"}:
+            status = str(payload.get("status") or "pending").lower()
+        else:
+            status = "unknown"
+
+        result = {"status": status, **payload}
+        if product is not None:
+            result["product_id"] = product
+        else:
+            result["scope"] = "aggregate_admin_view"
+        return result
 
     return global_cache().get(
-        key=("payment_status", tenant, uid),
+        key=("payment_status", tenant, product or "*", uid),
         compute=_compute,
         watermark_ms=wm,
     )
