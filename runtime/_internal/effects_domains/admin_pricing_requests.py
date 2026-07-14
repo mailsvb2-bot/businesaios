@@ -40,6 +40,29 @@ def _events(event_log: Any) -> list[dict[str, Any]]:
     return [dict(event) for event in iterator() if isinstance(event, dict)]
 
 
+def assert_pricing_request_id_available(
+    event_log: Any,
+    *,
+    tenant_id: str,
+    request_id: str,
+) -> None:
+    tenant = str(tenant_id or "").strip()
+    request = str(request_id or "").strip()
+    if not tenant:
+        raise RuntimeError("TENANT_ID_REQUIRED")
+    if not request:
+        raise RuntimeError("REQUEST_ID_REQUIRED")
+    for event in _events(event_log):
+        if _event_type(event) != REQUEST_EVENT:
+            continue
+        payload = _payload(event)
+        if str(payload.get("tenant_id") or "").strip() != tenant:
+            continue
+        if str(payload.get("request_id") or "").strip() != request:
+            continue
+        raise RuntimeError(f"PRICING_CHANGE_REQUEST_ID_ALREADY_EXISTS:{tenant}:{request}")
+
+
 def resolve_pricing_change_request(
     event_log: Any,
     *,
@@ -62,6 +85,8 @@ def resolve_pricing_change_request(
             continue
         if str(payload.get("tenant_id") or "").strip() != tenant:
             continue
+        if matched is not None:
+            raise RuntimeError(f"PRICING_CHANGE_REQUEST_ID_NOT_UNIQUE:{tenant}:{request}")
         matched = event
 
     if matched is None:
@@ -152,6 +177,7 @@ def validate_pricing_apply_against_request(
 
 __all__ = [
     "PricingChangeRequest",
+    "assert_pricing_request_id_available",
     "assert_pricing_request_open",
     "resolve_pricing_change_request",
     "validate_pricing_apply_against_request",
