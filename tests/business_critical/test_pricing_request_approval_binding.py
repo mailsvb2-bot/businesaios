@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 import pytest
@@ -34,6 +35,26 @@ def _request_event(*, tenant: str = "business-a", request_id: str = "request-1")
             "new_price": 900,
             "request_id": request_id,
             "suggested_pricing_version": "version-approved",
+        },
+    }
+
+
+def _applied_event(*, request_id: str = "request-1") -> dict[str, Any]:
+    return {
+        "event_id": "event-applied-request-1",
+        "event_type": "admin_pricing_change_applied",
+        "user_id": "approver-admin",
+        "payload": {
+            "tenant_id": "business-a",
+            "product_id": "crm-pro",
+            "environment": "test",
+            "offer_id": "crm-pro-monthly",
+            "plan_id": 1,
+            "old_price": 100,
+            "new_price": 900,
+            "pricing_version": "version-approved",
+            "request_id": request_id,
+            "requested_by": "requester-admin",
         },
     }
 
@@ -94,18 +115,7 @@ def test_same_request_id_from_another_tenant_is_not_visible() -> None:
 
 
 def test_already_resolved_pricing_request_cannot_be_applied_twice() -> None:
-    event_log = FakeEventLog(
-        [
-            _request_event(),
-            {
-                "event_type": "admin_pricing_change_applied",
-                "payload": {
-                    "tenant_id": "business-a",
-                    "request_id": "request-1",
-                },
-            },
-        ]
-    )
+    event_log = FakeEventLog([_request_event(), _applied_event()])
 
     with pytest.raises(RuntimeError, match="PRICING_CHANGE_REQUEST_ALREADY_RESOLVED"):
         assert_pricing_request_open(
@@ -115,7 +125,7 @@ def test_already_resolved_pricing_request_cannot_be_applied_twice() -> None:
         )
 
 
-def test_mixin_uses_recorded_requester_and_rejects_spoofed_requested_by(
+def test_mixin_derives_requester_and_exposes_no_spoofable_requested_by_argument(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     event_log = FakeEventLog([_request_event()])
@@ -147,19 +157,4 @@ def test_mixin_uses_recorded_requester_and_rejects_spoofed_requested_by(
 
     assert result == {"ok": True}
     assert captured["requested_by"] == "requester-admin"
-
-    with pytest.raises(RuntimeError, match="PRICING_CHANGE_REQUESTER_MISMATCH"):
-        owner.apply_pricing_change(
-            decision_id="decision-spoof",
-            correlation_id="correlation-spoof",
-            admin_id="approver-admin",
-            tenant_id="business-a",
-            product_id="crm-pro",
-            environment="test",
-            offer_id="crm-pro-monthly",
-            plan_id=1,
-            new_price=900,
-            pricing_version="version-approved",
-            request_id="request-1",
-            requested_by="fake-requester",
-        )
+    assert "requested_by" not in inspect.signature(owner.apply_pricing_change).parameters
