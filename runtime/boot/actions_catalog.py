@@ -119,7 +119,11 @@ EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
     }
 )
 CONDITIONAL_EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
-    {"ads_apply_execute@v1", "apply_offer_patch@v1"}
+    {
+        "ads_apply_execute@v1",
+        "apply_offer_patch@v1",
+        "suggest_offer_patch@v1",
+    }
 )
 BEST_EFFORT_EXTERNAL_ACTIONS: frozenset[str] = frozenset({"answer_callback@v1"})
 ADVISORY_ACTIONS: frozenset[str] = frozenset(
@@ -129,7 +133,6 @@ ADVISORY_ACTIONS: frozenset[str] = frozenset(
         "behavior_graph_node@v1",
         "behavior_graph_path@v1",
         "poll_telegram_updates@v1",
-        "suggest_offer_patch@v1",
         "telegram_self_check@v1",
     }
 )
