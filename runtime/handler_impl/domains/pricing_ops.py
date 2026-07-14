@@ -38,8 +38,7 @@ def handle_apply_pricing_change(payload, effects, env):
         plan_id=plan_id,
         new_price=required_int(payload, "new_price", min_value=1),
         pricing_version=required_str(payload, "pricing_version"),
-        request_id=optional_str(payload, "request_id"),
-        requested_by=optional_str(payload, "requested_by"),
+        request_id=required_str(payload, "request_id"),
         reason=optional_str(payload, "reason"),
     )
 
