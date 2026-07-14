@@ -84,6 +84,29 @@ def test_offer_patch_unknown_mutating_mode_fails_closed_to_required() -> None:
     assert action["external_confirmation_mode"] == "required"
 
 
+def test_offer_suggestion_without_notification_remains_advisory_only() -> None:
+    action = _build_action_payload(
+        env=_env(action="suggest_offer_patch@v1", payload={}),
+        output={"ok": True, "status": "advisory"},
+    )
+
+    assert action["action_category"] == "external_effect"
+    assert action["external_confirmation_mode"] == "not_required"
+
+
+def test_offer_suggestion_notification_requires_connector_confirmation() -> None:
+    action = _build_action_payload(
+        env=_env(
+            action="suggest_offer_patch@v1",
+            payload={"notify_user_id": "owner-1"},
+        ),
+        output={"ok": True, "status": "verified"},
+    )
+
+    assert action["action_category"] == "external_effect"
+    assert action["external_confirmation_mode"] == "required"
+
+
 def test_best_effort_callback_preserves_non_blocking_ux_contract() -> None:
     action = _build_action_payload(
         env=_env(action="answer_callback@v1", payload={}),
