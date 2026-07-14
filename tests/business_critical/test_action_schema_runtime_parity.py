@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 from core.actions.catalog import build_catalog
+from runtime._internal.effects_domains.admin_state import AdminStateEffectsMixin
 from runtime.boot.actions_registry import all_actions, get_spec
+from runtime.ports.effects_admin import EffectsAdminPort
 
 
 FORBIDDEN_ACTIONS = {
@@ -71,3 +75,33 @@ def test_business_scope_is_required_by_external_tenant_owned_schemas() -> None:
         "set_user_setting@v1",
     ):
         assert "tenant_id" in catalog[action].schema.required, action
+
+
+@pytest.mark.lock
+def test_pricing_apply_cannot_bypass_immutable_request_governance() -> None:
+    catalog = build_catalog()
+    schema = catalog["apply_pricing_change@v1"].schema
+
+    assert "request_id" in schema.required
+    assert "requested_by" not in schema.required
+    assert "requested_by" not in schema.optional
+    assert "requested_by" not in schema.field_types
+
+    mixin_parameters = inspect.signature(
+        AdminStateEffectsMixin.apply_pricing_change
+    ).parameters
+    port_parameters = inspect.signature(
+        EffectsAdminPort.apply_pricing_change
+    ).parameters
+    for parameters in (mixin_parameters, port_parameters):
+        assert "request_id" in parameters
+        assert parameters["request_id"].default is inspect.Signature.empty
+        assert "requested_by" not in parameters
+
+
+@pytest.mark.lock
+def test_product_scoped_admin_views_and_rejections_are_schema_valid() -> None:
+    catalog = build_catalog()
+
+    assert "product_id" in catalog["admin_user_card@v1"].schema.optional
+    assert "product_id" in catalog["reject_pricing_change@v1"].schema.optional
