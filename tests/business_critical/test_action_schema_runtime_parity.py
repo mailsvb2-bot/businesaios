@@ -150,10 +150,11 @@ def test_product_scoped_admin_views_and_rejections_are_schema_valid() -> None:
 
 
 @pytest.mark.lock
-def test_growth_and_reward_delivery_contracts_remain_multimessenger() -> None:
+def test_growth_reward_and_ads_training_contracts_remain_multimessenger() -> None:
     catalog = build_catalog()
 
     for action in (
+        "ads_rl_train_tick@v1",
         "reward_observe@v1",
         "growth_propose@v1",
         "growth_strategy_generate@v1",

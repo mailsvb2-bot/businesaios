@@ -73,7 +73,7 @@ def test_autopilot_message_uses_tenant_user_and_signed_route_without_legacy_chat
 
 
 @pytest.mark.lock
-def test_rl_train_skipped_branch_uses_env_route_and_tenant_delivery(
+def test_rl_train_skipped_branch_is_not_business_success(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     effects = FakeEffects()
@@ -90,13 +90,18 @@ def test_rl_train_skipped_branch_uses_env_route_and_tenant_delivery(
             "decision_id": "spoofed-decision",
             "correlation_id": "spoofed-correlation",
             "decision_ids": [],
+            "channel": "whatsapp",
+            "channel_policy": {"fallback_channels": ["sms", "email"]},
         },
         effects,
         _env(),
         event_store=object(),
     )
 
-    assert result["ok"] is True
+    assert result["ok"] is False
+    assert result["status"] == "skipped"
+    assert result["delivery"]["ok"] is True
+    assert result["router_evidence"] is None
     call = effects.messages[-1]
     assert call["decision_id"] == "signed-decision-ads"
     assert call["correlation_id"] == "signed-correlation-ads"
@@ -105,6 +110,8 @@ def test_rl_train_skipped_branch_uses_env_route_and_tenant_delivery(
     assert "chat_id" not in call
     assert call["track_event_type"] == "ads_rl_train_skipped@v1"
     assert call["track_payload"]["tenant_id"] == "business-a"
+    assert call["channel"] == "whatsapp"
+    assert call["channel_policy"] == {"fallback_channels": ["sms", "email"]}
 
 
 @pytest.mark.lock

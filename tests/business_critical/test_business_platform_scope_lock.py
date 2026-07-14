@@ -137,3 +137,16 @@ def test_legacy_pricing_sidecar_helper_is_deleted() -> None:
         / "effects_domains"
         / "admin_pricing_support.py"
     ).exists()
+
+
+@pytest.mark.lock
+def test_ads_rl_has_one_executable_trainer_owner() -> None:
+    rl_root = ROOT / "core" / "ads" / "rl"
+    handler = (
+        ROOT / "runtime" / "handlers" / "ads_rl_train_tick.py"
+    ).read_text(encoding="utf-8")
+
+    assert (rl_root / "trainer.py").exists()
+    assert not (rl_root / "training.py").exists()
+    assert "from runtime.ads import" in handler
+    assert "RLTrainer" in handler

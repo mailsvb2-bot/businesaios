@@ -76,8 +76,8 @@ def ads_catalog() -> dict[str, CatalogEntry]:
             "ads_rl_train_tick@v1",
             1,
             required={"tenant_id", "user_id"},
-            optional={"decision_ids", "lookback_days", "min_matured", "min_transitions"},
-            field_types={"tenant_id": str, "user_id": str, "decision_ids": list, "lookback_days": int, "min_matured": int, "min_transitions": int},
+            optional={"decision_ids", "lookback_days", "min_matured", "min_transitions", "channel", "channel_policy"},
+            field_types={"tenant_id": str, "user_id": str, "decision_ids": list, "lookback_days": int, "min_matured": int, "min_transitions": int, "channel": str, "channel_policy": dict},
         ),
         "ads_autopilot_tick@v1": _entry(
             "ads_autopilot_tick@v1",

@@ -72,6 +72,7 @@ ADS_RL_SUGGEST_OK = "ads_rl_suggest_ok@v1"
 ADS_RL_TRAIN_SKIPPED = "ads_rl_train_skipped@v1"
 ADS_RL_TRAIN_REPORT = "ads_rl_train_report@v1"
 ADS_RL_TRAIN_OK = "ads_rl_train_ok@v1"
+ADS_RL_TRAIN_COMPLETED = "ads_rl_train_completed@v1"
 ADS_AUTOPILOT_TICK_BLOCKED = "ads_autopilot_tick_blocked@v1"
 ADS_AUTOPILOT_ERROR = "ads_autopilot_error@v1"
 ADS_AUTOPILOT_TICK = "ads_autopilot_tick@v1"
@@ -217,6 +218,7 @@ KNOWN_EVENT_TYPES: set[str] = {
     ADS_RL_TRAIN_SKIPPED,
     ADS_RL_TRAIN_REPORT,
     ADS_RL_TRAIN_OK,
+    ADS_RL_TRAIN_COMPLETED,
     ADS_AUTOPILOT_TICK_BLOCKED,
     ADS_AUTOPILOT_ERROR,
     ADS_AUTOPILOT_TICK,

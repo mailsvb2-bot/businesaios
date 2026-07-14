@@ -27,6 +27,7 @@ BUSINESS_PLATFORM_EVENTS = (
     "ads_rl_suggest_blocked@v1",
     "ads_rl_suggest_ok@v1",
     "ads_rl_suggest_skipped@v1",
+    "ads_rl_train_completed@v1",
     "ads_rl_train_ok@v1",
     "ads_rl_train_report@v1",
     "ads_rl_train_skipped@v1",
@@ -72,7 +73,6 @@ BUSINESS_PLATFORM_EVENTS = (
 @pytest.mark.lock
 def test_strict_event_vocabulary_contains_real_business_runtime_events() -> None:
     unknown = [event_type for event_type in BUSINESS_PLATFORM_EVENTS if not is_known(event_type)]
-
     assert unknown == []
 
 
