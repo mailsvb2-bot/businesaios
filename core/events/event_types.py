@@ -58,6 +58,7 @@ GROWTH_STRATEGY_BACKLOG = "growth_strategy_backlog@v1"
 GROWTH_STRATEGY_ACCEPT = "growth_strategy_accept@v1"
 GROWTH_STRATEGY_REJECT = "growth_strategy_reject@v1"
 GROWTH_STRATEGY_SNAPSHOT = "growth_strategy_snapshot@v1"
+GROWTH_STRATEGY_PLAN_MANIFEST = "growth_strategy_plan_manifest@v1"
 GROWTH_STRATEGY_GENERATED = "growth_strategy_generated@v1"
 GROWTH_HYPOTHESIS_CREATED = "growth_hypothesis_created@v1"
 GROWTH_HYPOTHESIS_SCORED = "growth_hypothesis_scored@v1"
@@ -174,6 +175,7 @@ KNOWN_EVENT_TYPES: set[str] = {
     GROWTH_STRATEGY_ACCEPT,
     GROWTH_STRATEGY_REJECT,
     GROWTH_STRATEGY_SNAPSHOT,
+    GROWTH_STRATEGY_PLAN_MANIFEST,
     GROWTH_STRATEGY_GENERATED,
     GROWTH_HYPOTHESIS_CREATED,
     GROWTH_HYPOTHESIS_SCORED,
