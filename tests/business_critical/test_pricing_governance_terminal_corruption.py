@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from runtime._internal.effects_domains.admin_pricing_governance import (
+from runtime._internal.effects_domains.admin_pricing_requests import (
     resolve_pricing_request_lifecycle,
 )
 
@@ -82,12 +82,20 @@ def _applied(*, event_id: str = "apply-event", user_id: str = "approver-1", new_
     )
 
 
+def _resolve(event_log: FakeEventLog):
+    return resolve_pricing_request_lifecycle(
+        event_log,
+        tenant_id="business-a",
+        request_id="request-1",
+    )
+
+
 @pytest.mark.lock
 def test_request_cannot_be_both_rejected_and_applied() -> None:
     event_log = FakeEventLog([_request(), _rejected(), _applied()])
 
     with pytest.raises(RuntimeError, match="PRICING_REQUEST_TERMINAL_CONFLICT:request-1"):
-        resolve_pricing_request_lifecycle(event_log, request_id="request-1")
+        _resolve(event_log)
 
 
 @pytest.mark.lock
@@ -101,7 +109,7 @@ def test_conflicting_duplicate_applied_events_are_rejected() -> None:
     )
 
     with pytest.raises(RuntimeError, match="PRICING_REQUEST_TERMINAL_CONFLICT:request-1"):
-        resolve_pricing_request_lifecycle(event_log, request_id="request-1")
+        _resolve(event_log)
 
 
 @pytest.mark.lock
@@ -115,7 +123,7 @@ def test_conflicting_duplicate_rejection_events_are_rejected() -> None:
     )
 
     with pytest.raises(RuntimeError, match="PRICING_REQUEST_TERMINAL_CONFLICT:request-1"):
-        resolve_pricing_request_lifecycle(event_log, request_id="request-1")
+        _resolve(event_log)
 
 
 @pytest.mark.lock
@@ -124,7 +132,7 @@ def test_identical_terminal_retry_is_not_treated_as_corruption() -> None:
     retry = _applied(event_id="apply-2")
     event_log = FakeEventLog([_request(), first, retry])
 
-    lifecycle = resolve_pricing_request_lifecycle(event_log, request_id="request-1")
+    lifecycle = _resolve(event_log)
 
     assert lifecycle.applied_event is not None
     assert lifecycle.rejected_event is None
