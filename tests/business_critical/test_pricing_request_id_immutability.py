@@ -59,7 +59,7 @@ def test_duplicated_historical_request_id_fails_closed_during_resolution() -> No
         )
 
 
-def test_admin_mixin_rejects_duplicate_request_before_effect_write(
+def test_admin_mixin_rejects_conflicting_request_before_effect_write(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     owner = admin_state.AdminStateEffectsMixin()
@@ -75,7 +75,7 @@ def test_admin_mixin_rejects_duplicate_request_before_effect_write(
 
     monkeypatch.setattr(admin_state, "request_pricing_change_effect", fake_request)
 
-    with pytest.raises(RuntimeError, match="PRICING_CHANGE_REQUEST_ID_ALREADY_EXISTS"):
+    with pytest.raises(RuntimeError, match="PRICING_REQUEST_SCOPE_MISMATCH"):
         owner.request_pricing_change(
             decision_id="decision-request",
             correlation_id="correlation-request",
