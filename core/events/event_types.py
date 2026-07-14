@@ -39,6 +39,9 @@ PRICING_SELECT = "pricing_select@v1"
 PRICING_SELECT_BLOCKED = "pricing_select_blocked@v1"
 POLICY_DEPLOYED = "policy_deployed"
 POLICY_ROLLED_BACK = "policy_rolled_back"
+EVOLUTION_JOB_ENQUEUED = "evolution_job_enqueued"
+OFFER_PATCH_APPLIED = "offer_patch_applied@v1"
+OFFER_PATCH_ROLLED_BACK = "offer_patch_rolled_back@v1"
 AUTOPILOT_STARTED = "autopilot_started"
 AUTOPILOT_RUN_STARTED = "autopilot_run_started"
 AUTOPILOT_DECISION = "autopilot_decision"
@@ -156,6 +159,9 @@ KNOWN_EVENT_TYPES: set[str] = {
     PRICING_SELECT_BLOCKED,
     POLICY_DEPLOYED,
     POLICY_ROLLED_BACK,
+    EVOLUTION_JOB_ENQUEUED,
+    OFFER_PATCH_APPLIED,
+    OFFER_PATCH_ROLLED_BACK,
     AUTOPILOT_STARTED,
     AUTOPILOT_RUN_STARTED,
     AUTOPILOT_DECISION,
