@@ -56,6 +56,7 @@ def test_business_scope_is_required_by_external_tenant_owned_schemas() -> None:
         "capture_payment@v1",
         "create_payment_and_send_link@v1",
         "deploy_policy@v1",
+        "enqueue_evolution_job@v1",
         "grant_access@v1",
         "growth_strategy_accept@v1",
         "growth_strategy_backlog@v1",
