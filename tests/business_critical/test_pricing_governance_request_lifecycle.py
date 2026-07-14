@@ -4,7 +4,8 @@ import uuid
 
 import pytest
 
-from runtime._internal.effects_domains import admin_pricing_governance, admin_state
+from runtime._internal.effects_domains import admin_pricing_requests as admin_pricing_governance
+from runtime._internal.effects_domains import admin_state
 from runtime._internal.effects_domains.admin_state import AdminStateEffectsMixin
 
 
@@ -140,7 +141,7 @@ def test_apply_without_durable_request_is_rejected_before_catalog_mutation(monke
 
     monkeypatch.setattr(admin_state, "apply_pricing_change_effect", fake_apply)
 
-    with pytest.raises(RuntimeError, match="PRICING_REQUEST_NOT_FOUND:request-1"):
+    with pytest.raises(RuntimeError, match="PRICING_CHANGE_REQUEST_NOT_FOUND:business-a:request-1"):
         _apply(effects)
 
     assert mutation_calls == 0
@@ -175,9 +176,9 @@ def test_apply_scope_must_match_original_request_exactly(monkeypatch: pytest.Mon
 
     monkeypatch.setattr(admin_state, "apply_pricing_change_effect", fake_apply)
 
-    with pytest.raises(RuntimeError, match="PRICING_REQUEST_SCOPE_MISMATCH:request-1"):
+    with pytest.raises(RuntimeError, match="PRICING_CHANGE_REQUEST_MISMATCH:request-1"):
         _apply(effects, product_id="different-product")
-    with pytest.raises(RuntimeError, match="PRICING_REQUEST_SCOPE_MISMATCH:request-1"):
+    with pytest.raises(RuntimeError, match="PRICING_CHANGE_REQUEST_MISMATCH:request-1"):
         _apply(effects, new_price=901)
 
     assert mutation_calls == 0
