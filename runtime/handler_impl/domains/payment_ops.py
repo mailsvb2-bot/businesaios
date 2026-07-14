@@ -83,7 +83,7 @@ def handle_create_payment_and_send_link(payload, effects, env):
         provider=str(body.get("provider", "yookassa") or "yookassa"),
         metadata=_payment_metadata(body, env),
     )
-    confirmation_url = None
+    raw_confirmation_url = None
     if isinstance(payment_result, dict):
         meta = payment_result.get("meta")
         provider_payload = (meta or {}).get("yookassa") if isinstance(meta, dict) else None
@@ -94,7 +94,12 @@ def handle_create_payment_and_send_link(payload, effects, env):
                 else {}
             )
             raw_url = confirmation.get("confirmation_url") or confirmation.get("url")
-            confirmation_url = str(raw_url).strip() if raw_url else None
+            raw_confirmation_url = str(raw_url).strip() if raw_url else None
+
+    payment_ok = bool(payment_result.get("ok")) if isinstance(payment_result, dict) else bool(payment_result)
+    payment_evidence = _trusted_effect_proof(payment_result)
+    payment_verified = bool(payment_ok and _proof_is_positive(payment_evidence))
+    confirmation_url = raw_confirmation_url if payment_verified else None
     message = (
         "Ссылка на оплату: " + confirmation_url
         if confirmation_url
@@ -109,15 +114,12 @@ def handle_create_payment_and_send_link(payload, effects, env):
         priority="high",
         critical=True,
     )
-    payment_ok = bool(payment_result.get("ok")) if isinstance(payment_result, dict) else bool(payment_result)
     delivery_ok = bool(delivery_result.get("ok")) if isinstance(delivery_result, dict) else bool(delivery_result)
-    payment_evidence = _trusted_effect_proof(payment_result)
     delivery_evidence = _trusted_effect_proof(delivery_result)
     composite_ok = bool(
-        payment_ok
+        payment_verified
         and confirmation_url
         and delivery_ok
-        and _proof_is_positive(payment_evidence)
         and _proof_is_positive(delivery_evidence)
     )
     return {
