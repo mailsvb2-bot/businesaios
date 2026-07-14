@@ -112,6 +112,8 @@ def test_payment_link_flow_is_not_successful_when_payment_creation_fails() -> No
 
     result = handle_create_payment_and_send_link(_payload(), effects, _env())
 
+    assert effects.sent[0]["text"] == "Платёж не подтверждён провайдером. Новая ссылка не создана."
+    assert "https://pay.example" not in effects.sent[0]["text"]
     assert result["ok"] is False
     assert result["payment"]["ok"] is False
     assert result["delivery"]["ok"] is True
@@ -124,6 +126,8 @@ def test_payment_link_flow_rejects_ok_payment_without_positive_provider_proof() 
 
     result = handle_create_payment_and_send_link(_payload(), effects, _env())
 
+    assert effects.sent[0]["text"] == "Платёж не подтверждён провайдером. Новая ссылка не создана."
+    assert "https://pay.example" not in effects.sent[0]["text"]
     assert result["payment"]["ok"] is True
     assert result["payment_evidence"]["verified"] is False
     assert result["delivery_evidence"]["verified"] is True
