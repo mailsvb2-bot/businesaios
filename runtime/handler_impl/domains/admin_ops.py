@@ -90,6 +90,7 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
         payment = latest_payment_status(
             event_store=event_store,
             tenant_id=tenant_id,
+            product_id=product_id,
             user_id=target,
         )
         entitlements = compute_entitlements(
