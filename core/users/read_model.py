@@ -96,34 +96,52 @@ def user_city(event_store: Any, *, tenant_id: str = "default", user_id: str, def
     return str(default or "")
 
 
-def selected_tariff(event_store: Any, *, tenant_id: str = "default", user_id: str) -> dict[str, Any] | None:
-    tenant = str(tenant_id)
-    uid = str(user_id)
+def selected_tariff(
+    event_store: Any,
+    *,
+    tenant_id: str = "default",
+    user_id: str,
+    product_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Return latest tariff inside one tenant/product/user boundary.
+
+    Omitting ``product_id`` returns the latest administrative aggregate view and
+    must not be used as the selected tariff for a particular product.
+    """
+
+    tenant = str(tenant_id).strip()
+    uid = str(user_id).strip()
+    product = str(product_id or "").strip() or None
     wm = watermark_for(event_store, tenant_id=tenant, user_id=uid, event_types=("tariff_selected",))
 
     def _compute() -> dict[str, Any] | None:
-        last = best_effort_latest_event(
-            event_store=event_store,
-            where="core/users/read_model.selected_tariff",
+        candidates: list[dict[str, Any]] = []
+        for event in _iter_user_events(
+            event_store,
             tenant_id=tenant,
             user_id=uid,
-            event_types=("tariff_selected",),
-            legacy_event_type="tariff_selected",
-        )
-        if last is None:
-            for ev in _iter_user_events(
-                event_store,
-                tenant_id=tenant,
-                user_id=uid,
-                types={"tariff_selected"},
-            ):
-                last = ev
-        if not last:
+            types={"tariff_selected"},
+        ):
+            payload = event.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            event_product = str(payload.get("product_id") or "").strip()
+            if product is not None and event_product != product:
+                continue
+            candidates.append(dict(event))
+        if not candidates:
             return None
+
+        last = max(
+            candidates,
+            key=lambda event: int(event.get("timestamp_ms") or 0),
+        )
         payload = last.get("payload") or {}
         if not isinstance(payload, dict):
             return None
-        return {
+        result = {
+            "tenant_id": tenant,
+            "product_id": str(payload.get("product_id") or "").strip() or product,
             "tariff": payload.get("tariff"),
             "period": payload.get("period"),
             "days": payload.get("days"),
@@ -133,9 +151,12 @@ def selected_tariff(event_store: Any, *, tenant_id: str = "default", user_id: st
             "expected_price": payload.get("expected_price"),
             "ts": last.get("timestamp_ms"),
         }
+        if product is None:
+            result["scope"] = "aggregate_admin_view"
+        return result
 
     return global_cache().get(
-        key=("selected_tariff", tenant, uid),
+        key=("selected_tariff", tenant, product or "*", uid),
         compute=_compute,
         watermark_ms=wm,
     )
