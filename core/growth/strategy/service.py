@@ -20,6 +20,7 @@ from .backlog_store import (
 )
 from .contracts import ExperimentSpecV1, GrowthGoalV1, GrowthHypothesisV1, GrowthSignalV1, StrategyPlanV1
 from .llm_generator import generate_hypotheses
+from .plan_manifest import load_plan_manifest, persist_plan_manifest
 from .scoring import rank_hypotheses, score_hypothesis
 from .signals import build_signals
 
@@ -71,72 +72,125 @@ class GrowthStrategyService:
         n: int | None = None,
         model: str = "",
     ) -> tuple[StrategyPlanV1, str]:
-        tenant = str(tenant_id)
-        decision = str(decision_id)
-        existing = load_generated_plan_for_decision(
+        tenant = str(tenant_id).strip()
+        user = str(user_id).strip()
+        decision = str(decision_id).strip()
+        correlation = str(correlation_id).strip()
+        if not tenant:
+            raise RuntimeError("TENANT_ID_REQUIRED")
+        if not user:
+            raise RuntimeError("USER_ID_REQUIRED")
+        if not decision:
+            raise RuntimeError("DECISION_ID_REQUIRED")
+        if not correlation:
+            raise RuntimeError("CORRELATION_ID_REQUIRED")
+
+        completed = load_generated_plan_for_decision(
             self._event_store,
             tenant_id=tenant,
             decision_id=decision,
         )
-        if existing is not None:
-            return existing
+        if completed is not None:
+            return completed
 
-        growth_goal = goal or GrowthGoalV1()
-        signals = build_signals(self._event_store, tenant_id=tenant)
-        hypothesis_count = self._policy.default_hypothesis_count if n is None else int(n)
-        append_strategy_snapshot(
+        manifest = load_plan_manifest(
             self._event_store,
             tenant_id=tenant,
-            user_id=str(user_id),
             decision_id=decision,
-            correlation_id=str(correlation_id),
-            signals=signals,
-            goal=growth_goal,
         )
+        if manifest is not None:
+            plan = manifest[0]
+        else:
+            plan = self._build_plan(
+                tenant_id=tenant,
+                decision_id=decision,
+                goal=goal or GrowthGoalV1(),
+                n=n,
+                model=model,
+            )
+            persist_plan_manifest(
+                self._event_store,
+                tenant_id=tenant,
+                user_id=user,
+                decision_id=decision,
+                correlation_id=correlation,
+                plan=plan,
+            )
 
+        self._persist_plan_details(
+            plan=plan,
+            tenant_id=tenant,
+            user_id=user,
+            decision_id=decision,
+            correlation_id=correlation,
+        )
+        completion_event_id = append_strategy_generated(
+            self._event_store,
+            tenant_id=tenant,
+            user_id=user,
+            decision_id=decision,
+            correlation_id=correlation,
+            goal=plan.goal,
+            hypothesis_ids=tuple(
+                hypothesis.hypothesis_id
+                for hypothesis in plan.top_hypotheses
+            ),
+            created_ms=int(plan.created_ms),
+            notes=tuple(plan.notes),
+        )
+        durable = load_generated_plan_for_decision(
+            self._event_store,
+            tenant_id=tenant,
+            decision_id=decision,
+        )
+        if durable is not None:
+            return durable
+        return plan, completion_event_id
+
+    def _build_plan(
+        self,
+        *,
+        tenant_id: str,
+        decision_id: str,
+        goal: GrowthGoalV1,
+        n: int | None,
+        model: str,
+    ) -> StrategyPlanV1:
+        signals = build_signals(self._event_store, tenant_id=tenant_id)
+        hypothesis_count = (
+            self._policy.default_hypothesis_count
+            if n is None
+            else int(n)
+        )
         hypotheses: tuple[GrowthHypothesisV1, ...] = ()
         if self._llm is not None:
-            hypotheses = generate_hypotheses(
-                self._llm,
-                tenant_id=tenant,
-                goal=growth_goal,
-                signals=signals,
-                n=hypothesis_count,
-                model=str(model or ""),
+            hypotheses = tuple(
+                generate_hypotheses(
+                    self._llm,
+                    tenant_id=tenant_id,
+                    goal=goal,
+                    signals=signals,
+                    n=hypothesis_count,
+                    model=str(model or ""),
+                )
             )
         if not hypotheses:
             hypotheses = _fallback_hypotheses(
-                tenant_id=tenant,
-                decision_id=decision,
+                tenant_id=tenant_id,
+                decision_id=decision_id,
                 signals=signals,
-                goal=growth_goal,
+                goal=goal,
             )
         hypotheses = _stabilize_hypotheses(
             hypotheses,
-            tenant_id=tenant,
-            decision_id=decision,
+            tenant_id=tenant_id,
+            decision_id=decision_id,
         )
-
-        for hypothesis in hypotheses:
-            append_hypothesis(
-                self._event_store,
-                tenant_id=tenant,
-                user_id=str(user_id),
-                decision_id=decision,
-                correlation_id=str(correlation_id),
-                h=hypothesis,
-            )
-            append_score(
-                self._event_store,
-                tenant_id=tenant,
-                user_id=str(user_id),
-                decision_id=decision,
-                correlation_id=str(correlation_id),
-                score=score_hypothesis(hypothesis),
-            )
-
         scored = rank_hypotheses(hypotheses)
-        score_by_id = {item.hypothesis_id: item.score for item in scored}
+        score_by_id = {
+            item.hypothesis_id: item.score
+            for item in scored
+        }
         ranked = tuple(
             sorted(
                 hypotheses,
@@ -147,41 +201,55 @@ class GrowthStrategyService:
                 reverse=True,
             )
         )
-        created_ms = now_ms()
-        notes = (
-            "llm" if self._llm is not None else "no_llm",
-            "advisory_ranking_only",
-            "decision_idempotent",
-        )
-        completion_event_id = append_strategy_generated(
-            self._event_store,
-            tenant_id=tenant,
-            user_id=str(user_id),
-            decision_id=decision,
-            correlation_id=str(correlation_id),
-            goal=growth_goal,
-            hypothesis_ids=tuple(hypothesis.hypothesis_id for hypothesis in ranked),
-            created_ms=created_ms,
-            notes=notes,
-        )
-        durable = load_generated_plan_for_decision(
-            self._event_store,
-            tenant_id=tenant,
-            decision_id=decision,
-        )
-        if durable is not None:
-            return durable
-        return (
-            StrategyPlanV1(
-                tenant_id=tenant,
-                created_ms=created_ms,
-                goal=growth_goal,
-                signals=signals,
-                top_hypotheses=ranked,
-                notes=notes,
+        return StrategyPlanV1(
+            tenant_id=tenant_id,
+            created_ms=now_ms(),
+            goal=goal,
+            signals=signals,
+            top_hypotheses=ranked,
+            notes=(
+                "llm" if self._llm is not None else "no_llm",
+                "advisory_ranking_only",
+                "decision_idempotent",
+                "manifest_sealed",
             ),
-            completion_event_id,
         )
+
+    def _persist_plan_details(
+        self,
+        *,
+        plan: StrategyPlanV1,
+        tenant_id: str,
+        user_id: str,
+        decision_id: str,
+        correlation_id: str,
+    ) -> None:
+        append_strategy_snapshot(
+            self._event_store,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            decision_id=decision_id,
+            correlation_id=correlation_id,
+            signals=plan.signals,
+            goal=plan.goal,
+        )
+        for hypothesis in plan.top_hypotheses:
+            append_hypothesis(
+                self._event_store,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                decision_id=decision_id,
+                correlation_id=correlation_id,
+                h=hypothesis,
+            )
+            append_score(
+                self._event_store,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                decision_id=decision_id,
+                correlation_id=correlation_id,
+                score=score_hypothesis(hypothesis),
+            )
 
     def backlog(self, *, tenant_id: str, limit: int | None = None):
         backlog_limit = self._policy.default_backlog_limit if limit is None else int(limit)
