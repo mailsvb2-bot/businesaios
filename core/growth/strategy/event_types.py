@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 GROWTH_STRATEGY_SNAPSHOT = "growth_strategy_snapshot@v1"
+GROWTH_STRATEGY_PLAN_MANIFEST = "growth_strategy_plan_manifest@v1"
 GROWTH_STRATEGY_GENERATED = "growth_strategy_generated@v1"
 GROWTH_HYPOTHESIS_CREATED = "growth_hypothesis_created@v1"
 GROWTH_HYPOTHESIS_SCORED = "growth_hypothesis_scored@v1"
