@@ -28,6 +28,7 @@ class DecisionSchema:
             "world_model_meta",
             "tenant_id",
             "business_id",
+            "actor_id",
             "product_id",
             "domain",
             "product_version",

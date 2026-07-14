@@ -16,6 +16,7 @@ class TaggedPayload:
     product_id: str | None
     domain: str | None
     product_version: str | None
+    actor_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -33,24 +34,48 @@ def bind_product_metadata(
     domain: str | None,
     product_version: str | None,
     tenant_id: str | None = None,
+    actor_id: str | None = None,
 ) -> TaggedPayload:
-    """Seal state-derived execution scope into the payload before signing.
+    """Seal state-derived identity into the payload before validation/signing.
 
-    Tenant and product scope are identity constraints, not policy suggestions.
-    When canonical state supplies a value it overwrites a conflicting policy
-    payload so the safety gate and signed execution path use the same scope.
+    Policy output may propose an action and its business parameters, but it
+    cannot choose the tenant or acting administrator. Target user_id stays
+    intact because it can identify the recipient of an admin or messaging
+    action rather than the actor.
     """
 
     bound = dict(payload or {})
-    if tenant_id is not None:
-        bound["tenant_id"] = str(tenant_id)
-    if product_id is not None:
-        bound["product_id"] = str(product_id)
-    if domain is not None:
-        bound["domain"] = str(domain)
-    if product_version is not None:
-        bound["product_version"] = str(product_version)
-    return TaggedPayload(payload=bound, product_id=product_id, domain=domain, product_version=product_version)
+    canonical_tenant = str(tenant_id or "").strip()
+    if canonical_tenant:
+        bound["tenant_id"] = canonical_tenant
+    else:
+        bound.pop("tenant_id", None)
+
+    for key, value in (
+        ("product_id", product_id),
+        ("domain", domain),
+        ("product_version", product_version),
+    ):
+        text = str(value or "").strip()
+        if text:
+            bound[key] = text
+
+    canonical_actor = str(actor_id or "").strip() or None
+    if canonical_actor is not None:
+        bound["actor_id"] = canonical_actor
+        if "admin_id" in bound:
+            bound["admin_id"] = canonical_actor
+    else:
+        bound.pop("actor_id", None)
+        bound.pop("admin_id", None)
+
+    return TaggedPayload(
+        payload=bound,
+        product_id=product_id,
+        domain=domain,
+        product_version=product_version,
+        actor_id=canonical_actor,
+    )
 
 
 def build_decision_envelope(*, state: Any, action: str, payload: dict[str, Any], policy_id: str, keyring: Any, issuer_id: str, ttl_ms: int, action_schema_version: int, envelope_version: int) -> BuiltEnvelope:

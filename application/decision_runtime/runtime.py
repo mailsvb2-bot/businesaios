@@ -156,7 +156,7 @@ def validate_and_gate_action(
             or getattr(state, "tenant_id", "")
             or ""
         )
-        uid_for_gate = str(action_payload.get("user_id") or user_id)
+        uid_for_gate = str(action_payload.get("actor_id") or user_id)
         gate_action_or_raise(
             action=out.action,
             payload=action_payload,

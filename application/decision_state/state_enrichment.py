@@ -10,6 +10,7 @@ from application.decision_state.state_constraints import (
 from application.decision_state.state_world_model_enricher import (
     attach_world_model_explainability,
     enrich_state_with_world_model,
+    extract_actor_id,
     extract_product_metadata,
     extract_tenant_id,
 )
@@ -27,6 +28,7 @@ __all__ = [
     "apply_causal_constraints",
     "apply_price_constraints",
     "enrich_state_with_world_model",
+    "extract_actor_id",
     "extract_product_metadata",
     "extract_tenant_id",
     "_attach_world_model_explainability",

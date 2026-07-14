@@ -20,6 +20,7 @@ from application.decision_runtime.runtime import (
 )
 from application.decision_state.state_enrichment import (
     enrich_state_with_world_model,
+    extract_actor_id,
     extract_product_metadata,
     extract_tenant_id,
 )
@@ -55,6 +56,7 @@ def run_decision(*, core: Any, state: Any, envelope_version: int, logger: Any) -
 
         _product_meta, product_id, domain, product_version = extract_product_metadata(state)
         tenant_id = extract_tenant_id(state)
+        actor_id = extract_actor_id(state)
         tagged, payload = build_payload(
             state=state,
             out=out,
@@ -63,6 +65,7 @@ def run_decision(*, core: Any, state: Any, envelope_version: int, logger: Any) -
             product_id=product_id,
             domain=domain,
             product_version=product_version,
+            actor_id=actor_id,
         )
         action_schema_version = validate_and_gate_action(
             schemas=core._schemas,

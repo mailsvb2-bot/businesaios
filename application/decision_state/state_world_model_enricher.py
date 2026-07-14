@@ -6,6 +6,7 @@ from typing import Any
 
 from application.decision_state.world_model_metadata import summarize_pricing_world_state
 from core.observability.throttled_logger import exception_throttled
+from core.tenancy.normalization import normalize_tenant_id
 
 logger = logging.getLogger(__name__)
 
@@ -19,11 +20,31 @@ def _mapping_attr(state: Any, name: str) -> dict[str, Any]:
 
 
 def extract_tenant_id(state: Any) -> str | None:
-    """Extract the canonical tenant isolation key used by the decision gate."""
+    """Extract the non-placeholder tenant isolation key used by the gate."""
 
     product_metadata = _mapping_attr(state, "product_metadata")
-    tenant_id = str(product_metadata.get("tenant_id") or getattr(state, "tenant_id", "") or "").strip()
+    tenant_id = normalize_tenant_id(
+        product_metadata.get("tenant_id")
+        or getattr(state, "tenant_id", "")
+    )
     return tenant_id or None
+
+
+def extract_actor_id(state: Any) -> str | None:
+    """Extract the canonical acting identity without reusing a target user."""
+
+    user = _mapping_attr(state, "user")
+    for candidate in (
+        getattr(state, "user_id", None),
+        user.get("actor_id"),
+        user.get("user_id"),
+        user.get("id"),
+        user.get("account_id"),
+    ):
+        actor_id = str(candidate or "").strip()
+        if actor_id and actor_id.casefold() not in {"unknown", "none", "null"}:
+            return actor_id
+    return None
 
 
 def extract_product_metadata(state: Any) -> tuple[dict[str, Any], str | None, str | None, str | None]:

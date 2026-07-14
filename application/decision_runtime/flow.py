@@ -15,6 +15,7 @@ def build_payload(
     product_id: str | None,
     domain: str | None,
     product_version: str | None,
+    actor_id: str | None = None,
 ):
     tagged = bind_product_metadata(
         payload=dict(out.payload) if isinstance(out.payload, dict) else {},
@@ -22,6 +23,7 @@ def build_payload(
         product_id=product_id,
         domain=domain,
         product_version=product_version,
+        actor_id=actor_id,
     )
     payload = attach_world_model_metadata(envelope_payload=tagged.payload, state=state)
     meta_block = dict(payload.get("meta") or {})
