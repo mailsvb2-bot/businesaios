@@ -59,23 +59,33 @@ def test_complete_user_action_surface_is_preserved_in_canonical_registry() -> No
 
 @pytest.mark.lock
 def test_reward_and_growth_compatibility_routes_are_canonically_wired() -> None:
-    core_boot = (
-        ROOT / "runtime" / "boot" / "handler_groups" / "core.py"
-    ).read_text(encoding="utf-8")
-    assert (
+    handler_groups = ROOT / "runtime" / "boot" / "handler_groups"
+    core_boot = (handler_groups / "core.py").read_text(encoding="utf-8")
+    ads_boot = (handler_groups / "ads.py").read_text(encoding="utf-8")
+    growth_boot = (handler_groups / "growth.py").read_text(encoding="utf-8")
+    reward_handler = (
         ROOT / "runtime" / "handlers" / "reward_observe.py"
-    ).exists()
-    assert (
+    ).read_text(encoding="utf-8")
+    growth_handler = (
         ROOT / "runtime" / "handlers" / "growth_propose.py"
-    ).exists()
-    for marker in (
-        "reward_observe@v1",
-        "growth_propose@v1",
+    ).read_text(encoding="utf-8")
+
+    assert 'handlers.register("reward_observe@v1"' in ads_boot
+    assert 'handlers.register("growth_propose@v1"' in growth_boot
+    assert "RewardComputer" in reward_handler
+    assert "handle_growth_strategy_generate" in growth_handler
+
+    combined_boot = "\n".join((core_boot, ads_boot, growth_boot))
+    for ghost in (
         "reward_observer",
         "growth_proposal_service",
         "proposal_gateway",
     ):
-        assert marker in core_boot
+        assert ghost not in combined_boot
+    assert "reward_observe@v1" not in core_boot
+    assert "growth_propose@v1" not in core_boot
+    assert "observer.observe" not in reward_handler
+    assert "proposal_gateway" not in growth_handler
 
 
 @pytest.mark.lock

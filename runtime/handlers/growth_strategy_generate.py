@@ -52,12 +52,21 @@ def _generation_evidence(*, event_id: str, tenant_id: str, plan) -> dict[str, An
     }
 
 
-def handle_growth_strategy_generate(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_store: Any, llm: Any = None) -> Any:
+def handle_growth_strategy_generate(
+    payload: dict[str, Any],
+    effects: EffectsPort,
+    env: Any,
+    *,
+    event_store: Any,
+    llm: Any = None,
+    track_event_type: str = ACTION_NAME,
+) -> Any:
     body = dict(payload or {})
     tenant_id = _required_text(body, "tenant_id")
     user_id = _required_text(body, "user_id")
     decision_id = str(env.decision.decision_id)
     correlation_id = str(env.decision.correlation_id)
+    event_type = str(track_event_type or ACTION_NAME).strip() or ACTION_NAME
 
     goal = _parse_goal(body.get("goal") or {})
     n = int(body.get("n") or 8)
@@ -88,11 +97,18 @@ def handle_growth_strategy_generate(payload: dict[str, Any], effects: EffectsPor
         reply_markup=_menu_markup(),
         callback_query_id=body.get("callback_query_id"),
         critical=False,
-        track_event_type=ACTION_NAME,
+        channel=str(body.get("channel") or "telegram"),
+        channel_policy=(
+            dict(body.get("channel_policy") or {})
+            if isinstance(body.get("channel_policy"), Mapping)
+            else None
+        ),
+        track_event_type=event_type,
         track_payload={
             "tenant_id": tenant_id,
             "completion_event_id": completion_event_id,
             "hypothesis_count": len(plan.top_hypotheses),
+            "canonical_action": ACTION_NAME,
         },
     )
     notification_evidence = _delivery_evidence(notification)

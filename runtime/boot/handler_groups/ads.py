@@ -13,10 +13,12 @@ def register_ads_handlers(*, handlers: ActionHandlerRegistry, event_store, ads_r
     from runtime.handlers.ads_rl_report import handle_ads_rl_report
     from runtime.handlers.ads_rl_suggest import handle_ads_rl_suggest
     from runtime.handlers.ads_rl_train_tick import handle_ads_rl_train_tick
+    from runtime.handlers.reward_observe import handle_reward_observe
 
     handlers.register("ads_rl_suggest@v1", lambda payload, effects, env: handle_ads_rl_suggest(payload, effects, env, event_store=event_store))
     handlers.register("ads_rl_train_tick@v1", lambda payload, effects, env: handle_ads_rl_train_tick(payload, effects, env, event_store=event_store))
     handlers.register("ads_rl_report@v1", lambda payload, effects, env: handle_ads_rl_report(payload, effects, env, event_store=event_store))
+    handlers.register("reward_observe@v1", lambda payload, effects, env: handle_reward_observe(payload, effects, env, event_store=event_store))
 
     handlers.register(
         "ads_autopilot_tick@v1",

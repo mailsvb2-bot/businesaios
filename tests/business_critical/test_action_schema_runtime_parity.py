@@ -147,3 +147,18 @@ def test_product_scoped_admin_views_and_rejections_are_schema_valid() -> None:
 
     assert "product_id" in catalog["admin_user_card@v1"].schema.optional
     assert "product_id" in catalog["reject_pricing_change@v1"].schema.optional
+
+
+@pytest.mark.lock
+def test_growth_and_reward_delivery_contracts_remain_multimessenger() -> None:
+    catalog = build_catalog()
+
+    for action in (
+        "reward_observe@v1",
+        "growth_propose@v1",
+        "growth_strategy_generate@v1",
+    ):
+        schema = catalog[action].schema
+        assert {"channel", "channel_policy"}.issubset(schema.optional), action
+        assert schema.field_types["channel"] is str
+        assert schema.field_types["channel_policy"] is dict

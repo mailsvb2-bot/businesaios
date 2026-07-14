@@ -5,6 +5,7 @@ from typing import Any
 
 from runtime.actions import ACTION_GROWTH_PROPOSE_V1
 from runtime.decisioning import DecisionRouteViolation, extract_strict_route_from_envelope
+from runtime.handlers.growth_strategy_generate import handle_growth_strategy_generate
 from runtime.handlers.route_failure_support import (
     best_effort_route_ids,
     blocked_error_payload,
@@ -14,16 +15,7 @@ from runtime.ports.effects import EffectsPort
 
 CANON_THIN_HANDLER = True
 ACTION_NAME = ACTION_GROWTH_PROPOSE_V1
-
-
-def _delivery_evidence(delivery: object) -> dict[str, Any] | None:
-    if not isinstance(delivery, Mapping):
-        return None
-    for key in ("router_evidence", "evidence", "verification"):
-        candidate = delivery.get(key)
-        if isinstance(candidate, Mapping) and str(candidate.get("source") or "").strip():
-            return dict(candidate)
-    return None
+_LEGACY_SIGNAL_FIELDS = ("conversion_rate", "roas")
 
 
 def _blocked(
@@ -59,13 +51,46 @@ def _blocked(
     }
 
 
+def _canonical_goal(body: Mapping[str, Any]) -> dict[str, Any]:
+    goal = (
+        dict(body.get("goal") or {})
+        if isinstance(body.get("goal"), Mapping)
+        else {}
+    )
+    constraints = [
+        str(item).strip()
+        for item in (goal.get("constraints") or ())
+        if str(item).strip()
+    ]
+    objective = str(body.get("objective") or "growth").strip()
+    if objective:
+        constraints.append(f"objective:{objective[:200]}")
+
+    signals = (
+        dict(body.get("signals") or {})
+        if isinstance(body.get("signals"), Mapping)
+        else {}
+    )
+    for field in _LEGACY_SIGNAL_FIELDS:
+        if field not in signals:
+            continue
+        try:
+            value = float(signals[field])
+        except (TypeError, ValueError):
+            continue
+        constraints.append(f"signal:{field}={value:.6g}")
+
+    goal["constraints"] = tuple(dict.fromkeys(constraints))
+    return goal
+
+
 def handle_growth_propose(
     payload: dict[str, Any],
     effects: EffectsPort,
     env: Any,
     *,
-    proposal_service: Any,
-    proposal_gateway: Any,
+    event_store: Any,
+    llm: Any = None,
 ) -> Any:
     body = dict(payload or {})
     try:
@@ -82,11 +107,6 @@ def handle_growth_propose(
             exc=exc,
         )
 
-    if proposal_service is None or proposal_gateway is None:
-        raise RuntimeError(
-            "boot failure: growth proposal service and gateway must be wired before handler dispatch"
-        )
-
     try:
         tenant_id = str(body.get("tenant_id") or "").strip()
         user_id = str(body.get("user_id") or "").strip()
@@ -94,18 +114,20 @@ def handle_growth_propose(
             raise DecisionRouteViolation("tenant_id is required")
         if not user_id:
             raise DecisionRouteViolation("user_id is required")
-        proposals = proposal_service.build_proposals(
-            tenant_id=tenant_id,
-            objective=str(body.get("objective") or "growth").strip(),
-            signals=dict(body.get("signals") or {}),
-        )
-        queued = proposal_service.queue(
-            gateway=proposal_gateway,
-            tenant_id=tenant_id,
-            decision_id=route.decision_id,
-            correlation_id=route.correlation_id,
-            issuer_id=route.issuer_id,
-            proposals=proposals,
+        if event_store is None:
+            raise RuntimeError("canonical event store is unavailable")
+
+        canonical_payload = dict(body)
+        canonical_payload["tenant_id"] = tenant_id
+        canonical_payload["user_id"] = user_id
+        canonical_payload["goal"] = _canonical_goal(body)
+        result = handle_growth_strategy_generate(
+            canonical_payload,
+            effects,
+            env,
+            event_store=event_store,
+            llm=llm,
+            track_event_type=ACTION_NAME,
         )
     except DecisionRouteViolation as exc:
         return _blocked(
@@ -116,29 +138,21 @@ def handle_growth_propose(
             reason="route_violation",
             exc=exc,
         )
+    except Exception as exc:
+        return _blocked(
+            payload=body,
+            effects=effects,
+            decision_id=route.decision_id,
+            correlation_id=route.correlation_id,
+            reason="canonical_growth_failed",
+            exc=exc,
+        )
 
-    delivery = effects.send_message(
-        decision_id=route.decision_id,
-        correlation_id=route.correlation_id,
-        tenant_id=tenant_id,
-        user_id=user_id,
-        text=f"📦 Growth proposals queued: {queued}",
-        track_event_type=ACTION_NAME,
-        track_payload={"tenant_id": tenant_id, "queued": queued},
-        channel=str(body.get("channel") or "telegram"),
-        channel_policy=(
-            dict(body.get("channel_policy") or {})
-            if isinstance(body.get("channel_policy"), Mapping)
-            else None
-        ),
-    )
-    evidence = _delivery_evidence(delivery)
-    delivery_ok = bool(delivery.get("ok")) if isinstance(delivery, Mapping) else bool(delivery)
-    verified = bool(delivery_ok and evidence)
-    return {
-        "ok": verified,
-        "status": "verified" if verified else "failed",
-        "queued": queued,
-        "delivery": delivery,
-        "router_evidence": evidence if verified else None,
-    }
+    if not isinstance(result, Mapping):
+        return result
+    outcome = dict(result)
+    plan = outcome.get("plan")
+    hypotheses = getattr(plan, "top_hypotheses", ()) if plan is not None else ()
+    outcome["queued"] = len(tuple(hypotheses or ()))
+    outcome["compatibility_action"] = ACTION_NAME
+    return outcome
