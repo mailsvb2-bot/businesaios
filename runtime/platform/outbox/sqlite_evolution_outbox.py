@@ -43,7 +43,22 @@ def _now_ms() -> int:
 
 
 def _canonical_payload_json(payload: dict[str, Any]) -> str:
-    return json.dumps(dict(payload or {}), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        dict(payload or {}),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _canonical_stored_payload(raw: object) -> str:
+    try:
+        decoded = json.loads(str(raw or "{}"))
+        if not isinstance(decoded, dict):
+            return str(raw or "")
+        return _canonical_payload_json(decoded)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return str(raw or "")
 
 
 class SqliteEvolutionOutbox:
@@ -54,13 +69,22 @@ class SqliteEvolutionOutbox:
     def default_path_from_env() -> str:
         path = env_str("EVOLUTION_DB_PATH", "").strip()
         if not path:
-            data_dir = str(env_path("DATA_DIR", os.path.join("runtime", "entrypoints", "data")))
+            data_dir = str(
+                env_path(
+                    "DATA_DIR",
+                    os.path.join("runtime", "entrypoints", "data"),
+                )
+            )
             path = os.path.join(data_dir, "evolution.db")
         return path
 
     def _connect(self) -> sqlite3.Connection:
         os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
-        connection = sqlite3.connect(self._path, timeout=5.0, check_same_thread=False)
+        connection = sqlite3.connect(
+            self._path,
+            timeout=5.0,
+            check_same_thread=False,
+        )
         configure_sqlite(connection, prod=is_prod_env())
         connection.executescript(DDL)
         connection.commit()
@@ -83,26 +107,25 @@ class SqliteEvolutionOutbox:
         now = _now_ms()
 
         with self._connect() as database:
-            existing = database.execute(
-                "SELECT job_kind, payload_json, status FROM evolution_jobs WHERE job_id=?",
-                (job,),
-            ).fetchone()
-            if existing is not None:
-                existing_kind = str(existing[0] or "")
-                try:
-                    existing_payload = _canonical_payload_json(json.loads(existing[1] or "{}"))
-                except (TypeError, ValueError, json.JSONDecodeError):
-                    existing_payload = str(existing[1] or "")
-                if existing_kind != kind or existing_payload != payload_json:
-                    raise RuntimeError(f"EVOLUTION_JOB_ID_CONFLICT:{job}")
-                # Idempotent retry: preserve pending/done/failed status and timestamps.
-                return job
-
             database.execute(
-                "INSERT INTO evolution_jobs(job_id, job_kind, payload_json, status, created_ms, updated_ms, error) "
-                "VALUES(?,?,?,?,?,?,?)",
+                "INSERT OR IGNORE INTO evolution_jobs("
+                "job_id, job_kind, payload_json, status, created_ms, updated_ms, error"
+                ") VALUES(?,?,?,?,?,?,?)",
                 (job, kind, payload_json, "pending", now, now, None),
             )
+            row = database.execute(
+                "SELECT job_kind, payload_json, status "
+                "FROM evolution_jobs WHERE job_id=?",
+                (job,),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError(f"EVOLUTION_JOB_PERSISTENCE_FAILED:{job}")
+            existing_kind = str(row[0] or "")
+            existing_payload = _canonical_stored_payload(row[1])
+            if existing_kind != kind or existing_payload != payload_json:
+                raise RuntimeError(f"EVOLUTION_JOB_ID_CONFLICT:{job}")
+            # INSERT OR IGNORE plus post-read validation closes the concurrent
+            # enqueue race while preserving pending/done/failed state.
             database.commit()
         return job
 
@@ -110,8 +133,9 @@ class SqliteEvolutionOutbox:
         bounded_limit = max(1, min(100, int(limit)))
         with self._connect() as database:
             rows = database.execute(
-                "SELECT job_id, job_kind, payload_json, status, created_ms, updated_ms, error "
-                "FROM evolution_jobs WHERE status='pending' ORDER BY updated_ms ASC LIMIT ?",
+                "SELECT job_id, job_kind, payload_json, status, created_ms, "
+                "updated_ms, error FROM evolution_jobs WHERE status='pending' "
+                "ORDER BY updated_ms ASC LIMIT ?",
                 (bounded_limit,),
             ).fetchall()
         output: list[EvolutionJob] = []
@@ -124,7 +148,11 @@ class SqliteEvolutionOutbox:
                 EvolutionJob(
                     job_id=str(row[0]),
                     job_kind=str(row[1]),
-                    payload=payload if isinstance(payload, dict) else {"value": payload},
+                    payload=(
+                        payload
+                        if isinstance(payload, dict)
+                        else {"value": payload}
+                    ),
                     status=str(row[3]),
                     created_ms=int(row[4]),
                     updated_ms=int(row[5]),
@@ -137,7 +165,8 @@ class SqliteEvolutionOutbox:
         now = _now_ms()
         with self._connect() as database:
             database.execute(
-                "UPDATE evolution_jobs SET status='done', updated_ms=?, error=NULL WHERE job_id=?",
+                "UPDATE evolution_jobs SET status='done', updated_ms=?, "
+                "error=NULL WHERE job_id=?",
                 (now, str(job_id)),
             )
             database.commit()
@@ -146,7 +175,8 @@ class SqliteEvolutionOutbox:
         now = _now_ms()
         with self._connect() as database:
             database.execute(
-                "UPDATE evolution_jobs SET status='failed', updated_ms=?, error=? WHERE job_id=?",
+                "UPDATE evolution_jobs SET status='failed', updated_ms=?, "
+                "error=? WHERE job_id=?",
                 (now, (str(error)[:500] if error else None), str(job_id)),
             )
             database.commit()
