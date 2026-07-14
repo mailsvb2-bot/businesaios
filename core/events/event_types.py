@@ -30,6 +30,8 @@ ADMIN_ROLE_SET = "admin_role_set"
 ADMIN_PERM_SET = "admin_perm_set"
 ADMIN_NOTIFICATION_SENT = "admin_notification_sent"
 ADMIN_NOTIFICATION_FAILED = "admin_notification_failed"
+ADMIN_USER_CARD = "admin_user_card@v1"
+ADMIN_USER_CARD_FAILED = "admin_user_card_failed@v1"
 ADMIN_PRICING_CHANGE_REQUESTED = "admin_pricing_change_requested"
 ADMIN_PRICING_CHANGE_REJECTED = "admin_pricing_change_rejected"
 ADMIN_PRICING_CHANGE_APPLIED = "admin_pricing_change_applied"
@@ -144,6 +146,8 @@ KNOWN_EVENT_TYPES: set[str] = {
     ADMIN_PERM_SET,
     ADMIN_NOTIFICATION_SENT,
     ADMIN_NOTIFICATION_FAILED,
+    ADMIN_USER_CARD,
+    ADMIN_USER_CARD_FAILED,
     ADMIN_PRICING_CHANGE_REQUESTED,
     ADMIN_PRICING_CHANGE_REJECTED,
     ADMIN_PRICING_CHANGE_APPLIED,
