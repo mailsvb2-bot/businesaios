@@ -13,6 +13,8 @@ BUSINESS_PLATFORM_EVENTS = (
     "admin_pricing_change_rejected",
     "admin_pricing_change_requested",
     "admin_role_set",
+    "admin_user_card@v1",
+    "admin_user_card_failed@v1",
     "ads_rl_suggestion@v1",
     "ads_rl_suggest_blocked@v1",
     "ads_rl_suggest_ok@v1",
