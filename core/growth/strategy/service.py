@@ -91,6 +91,13 @@ class GrowthStrategyService:
             decision_id=decision,
         )
         if completed is not None:
+            manifest = load_plan_manifest(
+                self._event_store,
+                tenant_id=tenant,
+                decision_id=decision,
+            )
+            if manifest is not None:
+                return manifest[0], completed[1]
             return completed
 
         manifest = load_plan_manifest(
@@ -144,6 +151,13 @@ class GrowthStrategyService:
             decision_id=decision,
         )
         if durable is not None:
+            normalized = load_plan_manifest(
+                self._event_store,
+                tenant_id=tenant,
+                decision_id=decision,
+            )
+            if normalized is not None:
+                return normalized[0], durable[1]
             return durable
         return plan, completion_event_id
 
