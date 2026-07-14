@@ -44,41 +44,11 @@ def base_catalog() -> dict[str, CatalogEntry]:
             optional={"chat_id", "reply_markup", "callback_query_id", "track_event_type", "track_payload", "kind", "priority", "critical", "best_effort", "channel", "channel_policy"},
             field_types={"tenant_id": str, "user_id": str, "text": str, "chat_id": int, "reply_markup": dict, "callback_query_id": str, "track_event_type": str, "track_payload": dict, "kind": str, "priority": str, "critical": bool, "best_effort": bool, "channel": str, "channel_policy": dict},
         ),
-        "track_event@v1": _entry(
-            "track_event@v1",
-            1,
-            required={"user_id", "event_type"},
-            optional={"payload", "source"},
-            field_types={"user_id": str, "event_type": str, "payload": dict, "source": str},
-        ),
-        "answer_callback@v1": _entry(
-            "answer_callback@v1",
-            1,
-            required={"callback_query_id"},
-            optional={"text", "show_alert"},
-            field_types={"callback_query_id": str, "text": str, "show_alert": bool},
-        ),
-        "emit_event@v1": _entry(
-            "emit_event@v1",
-            1,
-            required={"user_id", "event_type"},
-            optional={"payload", "source"},
-            field_types={"user_id": str, "event_type": str, "payload": dict, "source": str},
-        ),
-        "enqueue_evolution_job@v1": _entry(
-            "enqueue_evolution_job@v1",
-            1,
-            required={"tenant_id", "user_id", "job_kind"},
-            optional={"payload"},
-            field_types={"tenant_id": str, "user_id": str, "job_kind": str, "payload": dict},
-        ),
-        "execute_plan@v1": _entry(
-            "execute_plan@v1",
-            1,
-            required={"user_id", "steps"},
-            optional=set(),
-            field_types={"user_id": str, "steps": list},
-        ),
+        "track_event@v1": _entry("track_event@v1", 1, required={"user_id", "event_type"}, optional={"payload", "source"}, field_types={"user_id": str, "event_type": str, "payload": dict, "source": str}),
+        "answer_callback@v1": _entry("answer_callback@v1", 1, required={"callback_query_id"}, optional={"text", "show_alert"}, field_types={"callback_query_id": str, "text": str, "show_alert": bool}),
+        "emit_event@v1": _entry("emit_event@v1", 1, required={"user_id", "event_type"}, optional={"payload", "source"}, field_types={"user_id": str, "event_type": str, "payload": dict, "source": str}),
+        "enqueue_evolution_job@v1": _entry("enqueue_evolution_job@v1", 1, required={"tenant_id", "user_id", "job_kind"}, optional={"payload"}, field_types={"tenant_id": str, "user_id": str, "job_kind": str, "payload": dict}),
+        "execute_plan@v1": _entry("execute_plan@v1", 1, required={"user_id", "steps"}, optional=set(), field_types={"user_id": str, "steps": list}),
     }
 
 
@@ -101,12 +71,20 @@ def ads_catalog() -> dict[str, CatalogEntry]:
             optional={"plan", "commands", "steps", "gate_settings", "dry_run", "rollback_on_fail", "reason", "callback_query_id"},
             field_types={"tenant_id": str, "user_id": str, "idempotency_key": str, "plan": (dict, list), "commands": list, "steps": list, "gate_settings": dict, "dry_run": bool, "rollback_on_fail": bool, "reason": str, "callback_query_id": str},
         ),
-        "ads_rl_suggest@v1": _entry(
-            "ads_rl_suggest@v1",
+        "ads_rl_suggest@v1": _entry("ads_rl_suggest@v1", 1, required={"tenant_id", "user_id"}, optional={"current_daily_budget_minor"}, field_types={"tenant_id": str, "user_id": str, "current_daily_budget_minor": int}),
+        "ads_rl_train_tick@v1": _entry(
+            "ads_rl_train_tick@v1",
             1,
             required={"tenant_id", "user_id"},
-            optional={"current_daily_budget_minor"},
-            field_types={"tenant_id": str, "user_id": str, "current_daily_budget_minor": int},
+            optional={"decision_ids", "lookback_days", "min_matured", "min_transitions"},
+            field_types={"tenant_id": str, "user_id": str, "decision_ids": list, "lookback_days": int, "min_matured": int, "min_transitions": int},
+        ),
+        "ads_autopilot_tick@v1": _entry(
+            "ads_autopilot_tick@v1",
+            1,
+            required={"tenant_id", "user_id"},
+            optional={"objective", "offer", "audience", "channels", "constraints", "max_daily_budget_minor", "max_total_budget_minor", "currency", "allowed_platforms", "callback_query_id"},
+            field_types={"tenant_id": str, "user_id": str, "objective": (str, dict), "offer": dict, "audience": dict, "channels": list, "constraints": dict, "max_daily_budget_minor": int, "max_total_budget_minor": int, "currency": str, "allowed_platforms": list, "callback_query_id": str},
         ),
     }
 
