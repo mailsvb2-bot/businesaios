@@ -107,6 +107,7 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
         tariff = selected_tariff(
             event_store,
             tenant_id=tenant_id,
+            product_id=product_id,
             user_id=target,
         )
         access = "полный" if bool(entitlements.get("full_access")) else "базовый"
