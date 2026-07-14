@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, Protocol
 
-from core.events.read_model_support import best_effort_latest_event
 from core.read_model.cache import global_cache, watermark_for
 
 
@@ -24,15 +23,22 @@ def compute_entitlements(
     event_store: EventStoreLike,
     tenant_id: str = "default",
     user_id: str,
+    product_id: str | None = None,
 ) -> dict[str, Any]:
-    """Compute entitlements inside one tenant/user isolation boundary.
+    """Compute entitlements inside one tenant/product/user boundary.
 
-    New writes use ``entitlement_granted``. ``access_granted`` stays readable
-    only for historical compatibility.
+    ``product_id`` must be supplied for an authorization decision. Omitting it
+    returns an explicit administrative aggregate only; it must not be used to
+    authorize access to a particular product.
+
+    New writes use ``entitlement_granted``. Historical ``access_granted`` events
+    remain readable, but an unscoped legacy event is never promoted into a
+    product-specific entitlement.
     """
 
-    tenant = str(tenant_id)
-    uid = str(user_id)
+    tenant = str(tenant_id).strip()
+    uid = str(user_id).strip()
+    product = str(product_id or "").strip() or None
     event_types = ("entitlement_granted", "access_granted")
     wm = watermark_for(
         event_store,
@@ -42,20 +48,8 @@ def compute_entitlements(
     )
 
     def _compute() -> dict[str, Any]:
-        event = best_effort_latest_event(
-            event_store=event_store,
-            where="core/entitlements/read_model.compute_entitlements",
-            tenant_id=tenant,
-            user_id=uid,
-            event_types=event_types,
-            legacy_event_type="access_granted",
-        )
-        if event:
-            payload = event.get("payload") or {}
-            if bool(payload.get("full_access", True)):
-                return {"full_access": True}
-
         full_access = False
+        granted_products: set[str] = set()
         for event_type in event_types:
             for event in event_store.iter_events(
                 tenant_id=tenant,
@@ -65,12 +59,30 @@ def compute_entitlements(
                 user_id=uid,
             ):
                 payload = event.get("payload") or {}
-                if bool(payload.get("full_access", True)):
-                    full_access = True
-        return {"full_access": bool(full_access)}
+                if not isinstance(payload, dict):
+                    continue
+                event_product = str(payload.get("product_id") or "").strip()
+                if product is not None and event_product != product:
+                    continue
+                if not bool(payload.get("full_access", True)):
+                    continue
+                full_access = True
+                if event_product:
+                    granted_products.add(event_product)
+
+        if product is not None:
+            return {
+                "full_access": bool(full_access),
+                "product_id": product,
+            }
+        return {
+            "full_access": bool(full_access),
+            "product_ids": sorted(granted_products),
+            "scope": "aggregate_admin_view",
+        }
 
     return global_cache().get(
-        key=("entitlements", tenant, uid),
+        key=("entitlements", tenant, product or "*", uid),
         compute=_compute,
         watermark_ms=wm,
     )
