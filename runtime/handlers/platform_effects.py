@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
+from execution.verification.evidence_types import evidence_status_is_positive
 from runtime.handler_impl.core.payloads import (
     optional_dict,
     optional_str,
@@ -11,6 +13,23 @@ from runtime.handler_impl.core.payloads import (
 from runtime.ports.effects import EffectsPort
 
 CANON_THIN_HANDLER = True
+
+
+def _trusted_delivery_evidence(value: object) -> dict[str, Any] | None:
+    if not isinstance(value, Mapping):
+        return None
+    for key in ("router_evidence", "evidence", "verification"):
+        candidate = value.get(key)
+        if not isinstance(candidate, Mapping):
+            continue
+        source = str(candidate.get("source") or "").strip()
+        positive = (
+            candidate.get("verified") is True
+            or evidence_status_is_positive(candidate.get("status"))
+        )
+        if source and positive:
+            return dict(candidate)
+    return None
 
 
 def handle_enqueue_evolution_job(
@@ -35,7 +54,8 @@ def handle_suggest_offer_patch(
     env: Any,
 ) -> Any:
     body = require_mapping(payload)
-    return effects.suggest_offer_patch(
+    notify_user_id = optional_str(body, "notify_user_id")
+    result = effects.suggest_offer_patch(
         decision_id=str(env.decision.decision_id),
         correlation_id=str(env.decision.correlation_id),
         tenant_id=required_str(body, "tenant_id"),
@@ -43,9 +63,29 @@ def handle_suggest_offer_patch(
         env=required_str(body, "env"),
         offer_id=required_str(body, "offer_id"),
         action=required_str(body, "action"),
-        notify_user_id=optional_str(body, "notify_user_id"),
+        notify_user_id=notify_user_id,
         callback_query_id=optional_str(body, "callback_query_id"),
     )
+    if not notify_user_id:
+        return result
+
+    normalized = dict(result) if isinstance(result, Mapping) else {"result": result}
+    notification = normalized.get("notification")
+    proof = _trusted_delivery_evidence(notification)
+    notification_ok = (
+        bool(notification.get("ok"))
+        if isinstance(notification, Mapping)
+        else bool(notification)
+    )
+    verified = bool(notification_ok and proof)
+    normalized.update(
+        {
+            "ok": verified,
+            "status": "verified" if verified else "failed",
+            "router_evidence": proof if verified else None,
+        }
+    )
+    return normalized
 
 
 def handle_apply_offer_patch(
