@@ -1,7 +1,34 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_str
 from runtime.tenancy import normalize_tenant_id
+
+
+def _delivery_evidence(delivery: object) -> dict[str, Any] | None:
+    if not isinstance(delivery, Mapping):
+        return None
+    for key in ("router_evidence", "evidence", "verification"):
+        candidate = delivery.get(key)
+        if isinstance(candidate, Mapping) and str(candidate.get("source") or "").strip():
+            return dict(candidate)
+    return None
+
+
+def _card_outcome(*, delivery: Any, ok: bool, card: dict[str, Any] | None = None, reason: str = "") -> dict[str, Any]:
+    evidence = _delivery_evidence(delivery)
+    delivery_ok = bool(delivery.get("ok")) if isinstance(delivery, Mapping) else bool(delivery)
+    verified = bool(ok and delivery_ok and evidence)
+    return {
+        "ok": verified,
+        "status": "verified" if verified else ("blocked" if reason == "invalid_request" else "failed"),
+        "reason": str(reason),
+        "card": dict(card or {}),
+        "delivery": delivery,
+        "router_evidence": evidence if verified else None,
+    }
 
 
 def handle_admin_set_role(payload, effects, env):
@@ -67,13 +94,13 @@ def _tenant_id(payload: dict, env) -> str:
 
 
 def handle_admin_user_card(payload, effects, env, *, event_store):
-    payload = require_mapping(payload or {})
-    tenant_id = _tenant_id(payload, env)
-    product_id = optional_str(payload, "product_id")
-    admin_id = optional_str(payload, "admin_id") or ""
-    target = optional_str(payload, "target_user_id") or ""
+    body = require_mapping(payload or {})
+    tenant_id = _tenant_id(body, env)
+    product_id = optional_str(body, "product_id")
+    admin_id = optional_str(body, "admin_id") or ""
+    target = optional_str(body, "target_user_id") or ""
     if not tenant_id or not admin_id or not target:
-        return effects.send_message(
+        delivery = effects.send_message(
             decision_id=env.decision.decision_id,
             correlation_id=env.decision.correlation_id,
             tenant_id=tenant_id,
@@ -81,6 +108,7 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
             text="Некорректный запрос: не указан бизнес, администратор или пользователь.",
             reply_markup=None,
         )
+        return _card_outcome(delivery=delivery, ok=False, reason="invalid_request")
 
     try:
         from core.entitlements.read_model import compute_entitlements
@@ -119,6 +147,15 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
             if product_id
             else "Продукты с доступом: " + ", ".join(entitlements.get("product_ids") or []) + "\n"
         )
+        card = {
+            "tenant_id": tenant_id,
+            "product_id": product_id,
+            "target_user_id": target,
+            "access": access,
+            "payment_status": payment_status,
+            "city": city,
+            "tariff": tariff_title,
+        }
         text = (
             "🔎 Карточка пользователя\n\n"
             f"Бизнес: {tenant_id}\n"
@@ -129,15 +166,38 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
             f"Город: {city}\n"
             f"Тариф (выбор): {tariff_title}\n"
         )
-    except Exception:
+    except Exception as exc:
         product_line = f"\nПродукт: {product_id}" if product_id else ""
-        text = f"🔎 Карточка пользователя\n\nБизнес: {tenant_id}{product_line}\nID: {target}\n(не удалось собрать данные)"
+        delivery = effects.send_message(
+            decision_id=env.decision.decision_id,
+            correlation_id=env.decision.correlation_id,
+            tenant_id=tenant_id,
+            user_id=admin_id,
+            text=f"🔎 Карточка пользователя\n\nБизнес: {tenant_id}{product_line}\nID: {target}\n(не удалось собрать данные)",
+            reply_markup=None,
+            track_event_type="admin_user_card_failed@v1",
+            track_payload={
+                "tenant_id": tenant_id,
+                "product_id": product_id or "",
+                "target_user_id": target,
+                "error": exc.__class__.__name__,
+            },
+        )
+        return _card_outcome(delivery=delivery, ok=False, reason="read_model_failure")
 
-    return effects.send_message(
+    delivery = effects.send_message(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
         tenant_id=tenant_id,
         user_id=admin_id,
         text=text,
         reply_markup=None,
+        track_event_type="admin_user_card@v1",
+        track_payload={
+            "tenant_id": tenant_id,
+            "product_id": product_id or "",
+            "target_user_id": target,
+            "status": "ok",
+        },
     )
+    return _card_outcome(delivery=delivery, ok=True, card=card)
