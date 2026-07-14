@@ -83,14 +83,14 @@ INLINE_ALLOWLIST_NAMES: tuple[str, ...] = (
 BUILTIN_HANDLER_ACTIONS: frozenset[str] = frozenset({"execute_plan@v1"})
 EFFECT_ONLY_ACTIONS: frozenset[str] = frozenset()
 
-# Verification semantics belong to the canonical action catalog. They describe
-# already-issued actions and never select or alter a DecisionCore action.
 EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
     {
         "admin_set_perm@v1",
         "admin_set_role@v1",
         "admin_user_card@v1",
+        "ads_autopilot_tick@v1",
         "ads_rl_suggest@v1",
+        "ads_rl_train_tick@v1",
         "ai_ceo_plan@v1",
         "apply_pricing_change@v1",
         "capture_payment@v1",
