@@ -18,6 +18,12 @@ def _ledger_evidence(*, code: str, external_ref: str, payload: dict[str, Any]) -
     }
 
 
+def _emitted_event_id(event: Any) -> str:
+    if isinstance(event, dict):
+        return str(event.get("event_id") or "").strip()
+    return str(getattr(event, "event_id", "") or "").strip()
+
+
 def answer_callback_if_needed(
     owner: Any,
     *,
@@ -267,6 +273,7 @@ def apply_pricing_change_effect(
         new_price=int(new_price),
         pricing_version=str(pricing_version),
     )
+    event: Any = None
     try:
         result = transaction.apply()
         payload = {
@@ -275,7 +282,7 @@ def apply_pricing_change_effect(
             "requested_by": str(requested_by or ""),
             "reason": str(reason or ""),
         }
-        event_log.emit(
+        event = event_log.emit(
             event_type="admin_pricing_change_applied",
             source="admin_state",
             user_id=str(admin_id),
@@ -292,15 +299,16 @@ def apply_pricing_change_effect(
 
     catalog_id = str(result.get("catalog_id") or "")
     resolved_offer_id = str(result.get("offer_id") or "")
+    fallback_ref = (
+        f"pricing:{catalog_id}:offer:{resolved_offer_id}:version:{pricing_version}"
+    )
     return {
         "ok": True,
         "status": "verified",
         "result": dict(result),
         "router_evidence": _ledger_evidence(
             code="pricing_change_recorded",
-            external_ref=(
-                f"pricing:{catalog_id}:offer:{resolved_offer_id}:version:{pricing_version}"
-            ),
+            external_ref=_emitted_event_id(event) or fallback_ref,
             payload=payload,
         ),
     }
@@ -341,7 +349,7 @@ def request_pricing_change_effect(
         "suggested_pricing_version": str(suggested_pricing_version or ""),
         "reason": str(reason or ""),
     }
-    event_log.emit(
+    event = event_log.emit(
         event_type="admin_pricing_change_requested",
         source="admin_state",
         user_id=str(admin_id),
@@ -349,13 +357,14 @@ def request_pricing_change_effect(
         correlation_id=str(correlation_id),
         payload=payload,
     )
+    fallback_ref = f"pricing-request:{tenant}:{product_id}:{request_id}"
     return {
         "ok": True,
         "status": "verified",
         "request": payload,
         "router_evidence": _ledger_evidence(
             code="pricing_change_request_recorded",
-            external_ref=f"pricing-request:{tenant}:{product_id}:{request_id}",
+            external_ref=_emitted_event_id(event) or fallback_ref,
             payload=payload,
         ),
     }
@@ -386,7 +395,7 @@ def reject_pricing_change_effect(
         "request_id": str(request_id),
         "reason": str(reason or ""),
     }
-    event_log.emit(
+    event = event_log.emit(
         event_type="admin_pricing_change_rejected",
         source="admin_state",
         user_id=str(admin_id),
@@ -394,13 +403,16 @@ def reject_pricing_change_effect(
         correlation_id=str(correlation_id),
         payload=payload,
     )
+    fallback_ref = (
+        f"pricing-rejection:{tenant}:{product_id or '-'}:{request_id}"
+    )
     return {
         "ok": True,
         "status": "verified",
         "rejection": payload,
         "router_evidence": _ledger_evidence(
             code="pricing_change_rejection_recorded",
-            external_ref=f"pricing-rejection:{tenant}:{product_id or '-'}:{request_id}",
+            external_ref=_emitted_event_id(event) or fallback_ref,
             payload=payload,
         ),
     }
