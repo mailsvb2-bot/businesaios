@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 
 import pytest
 
 from core.growth.strategy import service as service_module
-from core.growth.strategy.contracts import GrowthHypothesisV1
+from core.growth.strategy.contracts import GrowthGoalV1, GrowthHypothesisV1, GrowthSignalV1
 from core.growth.strategy.event_types import (
     GROWTH_HYPOTHESIS_CREATED,
     GROWTH_STRATEGY_GENERATED,
@@ -103,6 +104,14 @@ class StrictDuplicateEventStore:
 
     def commit(self) -> None:
         return None
+
+
+class JsonRoundTripEventStore(StrictDuplicateEventStore):
+    """Models JSON serialization used by SQLite/Postgres event stores."""
+
+    def append_event(self, event: dict, *, commit: bool = True) -> None:
+        serialized = json.loads(json.dumps(event, ensure_ascii=False))
+        super().append_event(serialized, commit=commit)
 
 
 def _hypothesis(title: str) -> GrowthHypothesisV1:
@@ -203,3 +212,51 @@ def test_partial_growth_write_resumes_manifest_without_second_llm_call_or_duplic
     assert sum(event["event_type"] == GROWTH_HYPOTHESIS_CREATED for event in store.events) == 1
     assert sum(event["event_type"] == GROWTH_STRATEGY_GENERATED for event in store.events) == 1
     assert len({str(event["event_id"]) for event in store.events}) == len(store.events)
+
+
+@pytest.mark.lock
+def test_growth_manifest_preserves_tuple_contracts_across_json_storage(monkeypatch: pytest.MonkeyPatch) -> None:
+    store = JsonRoundTripEventStore()
+    calls = 0
+
+    def fake_generate(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        return (_hypothesis("JSON-safe hypothesis"),)
+
+    monkeypatch.setattr(service_module, "generate_hypotheses", fake_generate)
+    monkeypatch.setattr(
+        service_module,
+        "build_signals",
+        lambda *_args, **_kwargs: GrowthSignalV1(
+            tenant_id="business-a",
+            top_channels=("seo", "partners"),
+            notes=("no_purchases_recent",),
+        ),
+    )
+    service = GrowthStrategyService(event_store=store, llm=object())
+    goal = GrowthGoalV1(constraints=("max_spend", "no_auto_apply"))
+
+    first_plan, first_proof = service.generate_backlog_with_proof(
+        tenant_id="business-a",
+        user_id="owner-1",
+        decision_id="decision-growth-json",
+        correlation_id="correlation-growth-json",
+        goal=goal,
+    )
+    second_plan, second_proof = service.generate_backlog_with_proof(
+        tenant_id="business-a",
+        user_id="owner-1",
+        decision_id="decision-growth-json",
+        correlation_id="correlation-growth-json",
+        goal=goal,
+    )
+
+    assert calls == 1
+    assert first_proof == second_proof
+    assert first_plan == second_plan
+    assert isinstance(second_plan.goal.constraints, tuple)
+    assert isinstance(second_plan.signals.top_channels, tuple)
+    assert isinstance(second_plan.signals.notes, tuple)
+    assert second_plan.goal.constraints == ("max_spend", "no_auto_apply")
+    assert second_plan.signals.top_channels == ("seo", "partners")
