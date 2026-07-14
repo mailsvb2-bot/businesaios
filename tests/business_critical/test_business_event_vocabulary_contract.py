@@ -34,6 +34,7 @@ BUSINESS_PLATFORM_EVENTS = (
     "growth_strategy_backlog@v1",
     "growth_strategy_generate@v1",
     "growth_strategy_generated@v1",
+    "growth_strategy_plan_manifest@v1",
     "growth_strategy_reject@v1",
     "growth_strategy_snapshot@v1",
     "marketing_copy_set",
