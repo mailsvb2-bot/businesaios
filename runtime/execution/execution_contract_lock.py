@@ -90,6 +90,13 @@ def _conditional_confirmation_mode(
     payload: Mapping[str, Any],
     output: Mapping[str, Any],
 ) -> str:
+    if action_name == "suggest_offer_patch@v1":
+        return (
+            "required"
+            if str(payload.get("notify_user_id") or "").strip()
+            else "not_required"
+        )
+
     if action_name == "apply_offer_patch@v1":
         mode = str(payload.get("mode") or "dry_run").strip().casefold()
         if mode == "dry_run":
