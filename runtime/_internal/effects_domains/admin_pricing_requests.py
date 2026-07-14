@@ -138,6 +138,42 @@ def _coalesce_identical_events(
     return first
 
 
+def _assert_terminal_scope_matches_request(
+    *,
+    request: PricingChangeRequest,
+    applied_event: dict[str, Any] | None,
+    rejected_event: dict[str, Any] | None,
+) -> None:
+    conflict = f"PRICING_REQUEST_TERMINAL_CONFLICT:{request.request_id}"
+    if applied_event is not None:
+        payload = _payload(applied_event)
+        raw_plan_id = payload.get("plan_id")
+        observed_plan_id = int(raw_plan_id) if raw_plan_id is not None else None
+        if (
+            str(payload.get("tenant_id") or "").strip() != request.tenant_id
+            or str(payload.get("product_id") or "").strip() != request.product_id
+            or str(payload.get("environment") or "").strip() != request.environment
+            or str(payload.get("offer_id") or "").strip() != request.offer_id
+            or observed_plan_id != request.plan_id
+            or int(payload.get("new_price") or 0) != request.new_price
+            or str(payload.get("requested_by") or "").strip() != request.requested_by
+            or (
+                request.suggested_pricing_version
+                and str(payload.get("pricing_version") or "").strip()
+                != request.suggested_pricing_version
+            )
+        ):
+            raise RuntimeError(conflict)
+    if rejected_event is not None:
+        payload = _payload(rejected_event)
+        if (
+            str(payload.get("tenant_id") or "").strip() != request.tenant_id
+            or str(payload.get("product_id") or "").strip() != request.product_id
+            or str(payload.get("request_id") or "").strip() != request.request_id
+        ):
+            raise RuntimeError(conflict)
+
+
 def resolve_pricing_request_lifecycle(
     event_log: Any,
     *,
@@ -145,7 +181,7 @@ def resolve_pricing_request_lifecycle(
     request_id: str,
 ) -> PricingRequestLifecycle:
     tenant = _required(tenant_id, field="tenant_id")
-    request = _required(request_id, field="request_id")
+    request_id_text = _required(request_id, field="request_id")
 
     request_events: list[dict[str, Any]] = []
     applied_events: list[dict[str, Any]] = []
@@ -154,7 +190,7 @@ def resolve_pricing_request_lifecycle(
         payload = _payload(event)
         if str(payload.get("tenant_id") or "").strip() != tenant:
             continue
-        if str(payload.get("request_id") or "").strip() != request:
+        if str(payload.get("request_id") or "").strip() != request_id_text:
             continue
         event_type = _event_type(event)
         if event_type == REQUEST_EVENT:
@@ -166,12 +202,16 @@ def resolve_pricing_request_lifecycle(
 
     request_event = _coalesce_identical_events(
         request_events,
-        conflict_code=f"PRICING_CHANGE_REQUEST_ID_NOT_UNIQUE:{tenant}:{request}",
+        conflict_code=(
+            f"PRICING_CHANGE_REQUEST_ID_NOT_UNIQUE:{tenant}:{request_id_text}"
+        ),
     )
     if request_event is None:
-        raise RuntimeError(f"PRICING_CHANGE_REQUEST_NOT_FOUND:{tenant}:{request}")
+        raise RuntimeError(
+            f"PRICING_CHANGE_REQUEST_NOT_FOUND:{tenant}:{request_id_text}"
+        )
 
-    terminal_conflict = f"PRICING_REQUEST_TERMINAL_CONFLICT:{request}"
+    terminal_conflict = f"PRICING_REQUEST_TERMINAL_CONFLICT:{request_id_text}"
     applied_event = _coalesce_identical_events(
         applied_events,
         conflict_code=terminal_conflict,
@@ -183,9 +223,15 @@ def resolve_pricing_request_lifecycle(
     if applied_event is not None and rejected_event is not None:
         raise RuntimeError(terminal_conflict)
 
+    request = _request_from_event(request_event)
+    _assert_terminal_scope_matches_request(
+        request=request,
+        applied_event=applied_event,
+        rejected_event=rejected_event,
+    )
     return PricingRequestLifecycle(
         request_event=request_event,
-        request=_request_from_event(request_event),
+        request=request,
         applied_event=applied_event,
         rejected_event=rejected_event,
     )
