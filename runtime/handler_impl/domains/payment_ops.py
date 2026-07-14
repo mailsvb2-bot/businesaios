@@ -24,13 +24,16 @@ def _tenant_id(payload: Mapping[str, Any], env) -> str:
 def _payment_metadata(payload: Mapping[str, Any], env) -> dict[str, Any]:
     metadata = optional_dict(payload, "metadata") or {}
     tenant_id = _tenant_id(payload, env)
-    if tenant_id:
-        metadata.setdefault("tenant_id", tenant_id)
-    product_id = optional_str(payload, "product_id")
-    if product_id:
-        metadata.setdefault("product_id", product_id)
-    order_id = optional_str(payload, "order_id") or str(env.decision.decision_id)
-    metadata.setdefault("order_id", order_id)
+    if not tenant_id:
+        raise ValueError("TENANT_ID_REQUIRED")
+    product_id = required_str(payload, "product_id")
+    order_id = required_str(payload, "order_id")
+
+    # Business identity comes from the signed action payload. Arbitrary provider
+    # metadata may add fields but can never replace tenant/product/order scope.
+    metadata["tenant_id"] = tenant_id
+    metadata["product_id"] = product_id
+    metadata["order_id"] = order_id
     return metadata
 
 
@@ -69,6 +72,8 @@ def handle_create_payment_and_send_link(payload, effects, env):
     payload = require_mapping(payload)
     user_id = required_str(payload, "user_id")
     tenant_id = _tenant_id(payload, env)
+    if not tenant_id:
+        raise ValueError("TENANT_ID_REQUIRED")
     pay_res = effects.capture_payment(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
