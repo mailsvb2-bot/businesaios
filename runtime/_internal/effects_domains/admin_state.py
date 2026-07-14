@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from runtime._internal.effects_domains.admin_pricing_requests import (
+    assert_pricing_request_id_available,
     assert_pricing_request_open,
     resolve_pricing_change_request,
     validate_pricing_apply_against_request,
@@ -162,6 +163,11 @@ class AdminStateEffectsMixin:
     ) -> Any:
         """Record a scoped pricing-change request without applying it."""
         assert_called_from_executor()
+        assert_pricing_request_id_available(
+            self.event_log,
+            tenant_id=str(tenant_id),
+            request_id=str(request_id),
+        )
         return request_pricing_change_effect(
             self,
             decision_id=str(decision_id),
