@@ -84,6 +84,31 @@ def _extract_feedback_payload(output: Mapping[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _conditional_confirmation_mode(
+    *,
+    action_name: str,
+    payload: Mapping[str, Any],
+    output: Mapping[str, Any],
+) -> str:
+    if action_name == "apply_offer_patch@v1":
+        mode = str(payload.get("mode") or "dry_run").strip().casefold()
+        if mode == "dry_run":
+            return "not_required"
+        if mode not in {"apply", "rollback"}:
+            return "required"
+        outcome = str(output.get("status") or "").strip().casefold()
+        if outcome in _NON_ACTUATION_OUTCOMES:
+            return "not_required"
+        return "required"
+
+    if bool(payload.get("dry_run", True)):
+        return "not_required"
+    outcome = str(output.get("ads_apply_status") or output.get("status") or "").strip().casefold()
+    if outcome in _NON_ACTUATION_OUTCOMES:
+        return "not_required"
+    return "required"
+
+
 def _action_verification_contract(
     action_name: str,
     payload: Mapping[str, Any],
@@ -108,12 +133,11 @@ def _action_verification_contract(
     if canonical_mode == "required" or requested_mode == "required":
         return category, "required"
     if canonical_mode == "conditional":
-        if bool(payload.get("dry_run", True)):
-            return category, "not_required"
-        outcome = str(normalized_output.get("ads_apply_status") or "").strip().casefold()
-        if outcome in _NON_ACTUATION_OUTCOMES:
-            return category, "not_required"
-        return category, "required"
+        return category, _conditional_confirmation_mode(
+            action_name=str(action_name),
+            payload=payload,
+            output=normalized_output,
+        )
     return category, "not_required"
 
 
