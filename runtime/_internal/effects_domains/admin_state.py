@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from runtime._internal.effects_domains.admin_pricing_requests import (
+    assert_pricing_request_open,
+    resolve_pricing_change_request,
+    validate_pricing_apply_against_request,
+)
 from runtime._internal.effects_domains.admin_state_support import (
     apply_pricing_change_effect,
     perform_admin_toggle,
@@ -101,6 +106,27 @@ class AdminStateEffectsMixin:
     ) -> Any:
         """Apply a governed price change to one tenant/product offer catalog."""
         assert_called_from_executor()
+
+        effective_requested_by = requested_by
+        normalized_request_id = str(request_id or "").strip()
+        if normalized_request_id:
+            request = validate_pricing_apply_against_request(
+                self.event_log,
+                tenant_id=str(tenant_id),
+                request_id=normalized_request_id,
+                product_id=str(product_id),
+                environment=environment,
+                offer_id=offer_id,
+                plan_id=plan_id,
+                new_price=int(new_price),
+                pricing_version=str(pricing_version),
+            )
+            if requested_by and str(requested_by).strip() != request.requested_by:
+                raise RuntimeError(
+                    f"PRICING_CHANGE_REQUESTER_MISMATCH:{normalized_request_id}"
+                )
+            effective_requested_by = request.requested_by
+
         return apply_pricing_change_effect(
             self,
             decision_id=str(decision_id),
@@ -113,8 +139,8 @@ class AdminStateEffectsMixin:
             plan_id=plan_id,
             new_price=int(new_price),
             pricing_version=str(pricing_version),
-            request_id=request_id,
-            requested_by=requested_by,
+            request_id=normalized_request_id or None,
+            requested_by=effective_requested_by,
             reason=reason,
         )
 
@@ -164,13 +190,27 @@ class AdminStateEffectsMixin:
         reason: str | None = None,
     ) -> Any:
         assert_called_from_executor()
+        request = resolve_pricing_change_request(
+            self.event_log,
+            tenant_id=str(tenant_id),
+            request_id=str(request_id),
+        )
+        assert_pricing_request_open(
+            self.event_log,
+            tenant_id=request.tenant_id,
+            request_id=request.request_id,
+        )
+        if product_id and str(product_id).strip() != request.product_id:
+            raise RuntimeError(
+                f"PRICING_CHANGE_REQUEST_MISMATCH:{request.request_id}:product_id"
+            )
         return reject_pricing_change_effect(
             self,
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
             admin_id=str(admin_id),
-            tenant_id=str(tenant_id),
-            product_id=product_id,
-            request_id=str(request_id),
+            tenant_id=request.tenant_id,
+            product_id=request.product_id,
+            request_id=request.request_id,
             reason=reason,
         )
