@@ -22,25 +22,41 @@ def _manifest_event_id(*, tenant_id: str, decision_id: str) -> str:
     )
 
 
+def _decode_goal(raw: object) -> GrowthGoalV1:
+    data = dict(raw or {}) if isinstance(raw, dict) else {}
+    data["constraints"] = tuple(str(item) for item in data.get("constraints") or ())
+    return GrowthGoalV1(**data)
+
+
+def _decode_signals(raw: object) -> GrowthSignalV1:
+    data = dict(raw or {}) if isinstance(raw, dict) else {}
+    data["top_channels"] = tuple(str(item) for item in data.get("top_channels") or ())
+    data["notes"] = tuple(str(item) for item in data.get("notes") or ())
+    return GrowthSignalV1(**data)
+
+
+def _decode_hypothesis(raw: object) -> GrowthHypothesisV1:
+    data = dict(raw or {}) if isinstance(raw, dict) else {}
+    data["action_hints"] = dict(data.get("action_hints") or {})
+    return GrowthHypothesisV1(**data)
+
+
 def _decode_plan(payload: dict[str, Any]) -> StrategyPlanV1 | None:
     raw = payload.get("plan")
     if not isinstance(raw, dict):
         return None
     try:
-        goal = GrowthGoalV1(**dict(raw.get("goal") or {}))
-        signals = GrowthSignalV1(**dict(raw.get("signals") or {}))
-        hypotheses = tuple(
-            GrowthHypothesisV1(**dict(item))
-            for item in list(raw.get("top_hypotheses") or ())
-            if isinstance(item, dict)
-        )
         return StrategyPlanV1(
             schema_version=int(raw.get("schema_version") or 1),
             tenant_id=str(raw.get("tenant_id") or ""),
             created_ms=int(raw.get("created_ms") or 0),
-            goal=goal,
-            signals=signals,
-            top_hypotheses=hypotheses,
+            goal=_decode_goal(raw.get("goal")),
+            signals=_decode_signals(raw.get("signals")),
+            top_hypotheses=tuple(
+                _decode_hypothesis(item)
+                for item in list(raw.get("top_hypotheses") or ())
+                if isinstance(item, dict)
+            ),
             notes=tuple(str(item) for item in raw.get("notes") or ()),
         )
     except (TypeError, ValueError):
