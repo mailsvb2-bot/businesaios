@@ -34,7 +34,7 @@ def test_required_external_actions_are_owned_by_canonical_registry() -> None:
     assert all(get_spec(name).execution_category == "external_effect" for name in required)
 
 
-def test_ads_apply_is_the_only_conditional_external_action() -> None:
+def test_conditional_external_actions_are_explicit_and_closed() -> None:
     conditional = {
         spec.name
         for spec in SPECS
@@ -42,7 +42,11 @@ def test_ads_apply_is_the_only_conditional_external_action() -> None:
     }
 
     assert conditional == set(CONDITIONAL_EXTERNAL_EFFECT_ACTIONS)
-    assert conditional == {"ads_apply_execute@v1"}
+    assert conditional == {
+        "ads_apply_execute@v1",
+        "apply_offer_patch@v1",
+    }
+    assert all(get_spec(name).execution_category == "external_effect" for name in conditional)
 
 
 def test_best_effort_external_actions_cannot_silently_become_required() -> None:
@@ -68,6 +72,7 @@ def test_business_critical_effects_require_observable_confirmation() -> None:
         "capture_payment@v1",
         "create_payment_and_send_link@v1",
         "deploy_policy@v1",
+        "enqueue_evolution_job@v1",
         "grant_access@v1",
         "growth_strategy_accept@v1",
         "growth_strategy_backlog@v1",
