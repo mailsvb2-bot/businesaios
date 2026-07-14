@@ -56,6 +56,17 @@ ADS_RL_SUGGESTION = "ads_rl_suggestion@v1"
 ADS_RL_SUGGEST_BLOCKED = "ads_rl_suggest_blocked@v1"
 ADS_RL_SUGGEST_SKIPPED = "ads_rl_suggest_skipped@v1"
 ADS_RL_SUGGEST_OK = "ads_rl_suggest_ok@v1"
+ADS_RL_TRAIN_SKIPPED = "ads_rl_train_skipped@v1"
+ADS_RL_TRAIN_REPORT = "ads_rl_train_report@v1"
+ADS_RL_TRAIN_OK = "ads_rl_train_ok@v1"
+ADS_AUTOPILOT_TICK_BLOCKED = "ads_autopilot_tick_blocked@v1"
+ADS_AUTOPILOT_ERROR = "ads_autopilot_error@v1"
+ADS_AUTOPILOT_TICK = "ads_autopilot_tick@v1"
+ADS_APPLY_EXECUTE_BLOCKED = "ads_apply_execute_blocked@v1"
+ADS_APPLY_EXECUTED = "ads_apply_executed@v1"
+ADS_APPLY_AUDIT_EMIT_FAILED = "ads_apply_audit_emit_failed@v1"
+ADS_APPLY_MATURITY_MARK_FAILED = "ads_apply_maturity_mark_failed@v1"
+ADS_APPLY_DECISION_EXECUTED_EMIT_FAILED = "ads_apply_decision_executed_emit_failed@v1"
 GROWTH_STRATEGY_GENERATE = "growth_strategy_generate@v1"
 GROWTH_STRATEGY_BACKLOG = "growth_strategy_backlog@v1"
 GROWTH_STRATEGY_ACCEPT = "growth_strategy_accept@v1"
@@ -68,7 +79,6 @@ GROWTH_HYPOTHESIS_SCORED = "growth_hypothesis_scored@v1"
 GROWTH_HYPOTHESIS_STATE = "growth_hypothesis_state@v1"
 GROWTH_EXPERIMENT_CREATED = "growth_experiment_created@v1"
 
-# Canonical payment proof lifecycle.
 PAYMENT_CREATE_ATTEMPTED = "payment_create_attempted"
 PAYMENT_CREATED = "payment_created"
 PAYMENT_CREATE_FAILED = "payment_create_failed"
@@ -79,7 +89,6 @@ PAYMENT_FAILED = "payment_failed"
 PAYMENTS_RECONCILED = "payments_reconciled"
 PAYMENTS_RECONCILE_FAILED = "payments_reconcile_failed"
 
-# AI / governance
 DECISION_ISSUED = "decision_issued"
 DECISION_EXECUTED = "decision_executed"
 DECISION_BLOCKED = "decision_blocked"
@@ -88,7 +97,6 @@ DATA_EXPORT = "data_export"
 DATA_DELETE = "data_delete"
 RATE_LIMITED = "rate_limited"
 
-# Product Management
 PM_ARTIFACT_CREATED = "pm_artifact_created"
 PM_FEEDBACK_TRIAGED = "pm_feedback_triaged"
 PM_BACKLOG_PRIORITIZED = "pm_backlog_prioritized"
@@ -176,6 +184,17 @@ KNOWN_EVENT_TYPES: set[str] = {
     ADS_RL_SUGGEST_BLOCKED,
     ADS_RL_SUGGEST_SKIPPED,
     ADS_RL_SUGGEST_OK,
+    ADS_RL_TRAIN_SKIPPED,
+    ADS_RL_TRAIN_REPORT,
+    ADS_RL_TRAIN_OK,
+    ADS_AUTOPILOT_TICK_BLOCKED,
+    ADS_AUTOPILOT_ERROR,
+    ADS_AUTOPILOT_TICK,
+    ADS_APPLY_EXECUTE_BLOCKED,
+    ADS_APPLY_EXECUTED,
+    ADS_APPLY_AUDIT_EMIT_FAILED,
+    ADS_APPLY_MATURITY_MARK_FAILED,
+    ADS_APPLY_DECISION_EXECUTED_EMIT_FAILED,
     GROWTH_STRATEGY_GENERATE,
     GROWTH_STRATEGY_BACKLOG,
     GROWTH_STRATEGY_ACCEPT,
@@ -231,7 +250,6 @@ ALIASES: dict[str, str] = {
     "paywall_close": PAYWALL_CLOSED,
     "offer_click_primary": OFFER_CLICKED,
     "offer_click_secondary": OFFER_CLICKED,
-    # Legacy entitlement event name. New writes use ENTITLEMENT_GRANTED.
     "access_granted": ENTITLEMENT_GRANTED,
 }
 
