@@ -23,8 +23,17 @@ def _delivery_evidence(delivery: object) -> dict[str, Any] | None:
     return None
 
 
-def _blocked_message(*, payload: dict[str, Any], effects: EffectsPort, decision_id: str, correlation_id: str, text: str, reason: str, exc: Exception) -> Any:
-    return effects.send_message(
+def _blocked_message(
+    *,
+    payload: dict[str, Any],
+    effects: EffectsPort,
+    decision_id: str,
+    correlation_id: str,
+    text: str,
+    reason: str,
+    exc: Exception,
+) -> dict[str, Any]:
+    delivery = effects.send_message(
         decision_id=decision_id,
         correlation_id=correlation_id,
         tenant_id=str(payload.get("tenant_id") or "").strip(),
@@ -33,17 +42,24 @@ def _blocked_message(*, payload: dict[str, Any], effects: EffectsPort, decision_
         track_event_type="pricing_select_blocked@v1",
         track_payload=blocked_error_payload(reason=reason, exc=exc),
     )
+    return {
+        "ok": False,
+        "status": "blocked",
+        "reason": str(reason),
+        "delivery": delivery,
+        "router_evidence": None,
+    }
 
 
 def handle_pricing_select(payload: dict[str, Any], effects: EffectsPort, env: Any, *, selection_service: Any) -> Any:
-    p = dict(payload or {})
+    body = dict(payload or {})
     try:
-        route = extract_strict_route_from_envelope(payload=p, env=env)
+        route = extract_strict_route_from_envelope(payload=body, env=env)
         route.validate(expected_action=ACTION_NAME)
     except DecisionRouteViolation as exc:
-        fallback_decision_id, fallback_correlation_id = best_effort_route_ids(payload=p, env=env)
+        fallback_decision_id, fallback_correlation_id = best_effort_route_ids(payload=body, env=env)
         return _blocked_message(
-            payload=p,
+            payload=body,
             effects=effects,
             decision_id=fallback_decision_id,
             correlation_id=fallback_correlation_id,
@@ -55,9 +71,9 @@ def handle_pricing_select(payload: dict[str, Any], effects: EffectsPort, env: An
         raise RuntimeError("boot failure: pricing selection_service must be wired before handler dispatch")
 
     try:
-        tenant_id = str(p.get("tenant_id") or "").strip()
-        product_id = str(p.get("product_id") or "").strip()
-        user_id = str(p.get("user_id") or "").strip()
+        tenant_id = str(body.get("tenant_id") or "").strip()
+        product_id = str(body.get("product_id") or "").strip()
+        user_id = str(body.get("user_id") or "").strip()
         if not tenant_id:
             raise PricingRouteViolation("tenant_id is required")
         if not product_id:
@@ -65,7 +81,7 @@ def handle_pricing_select(payload: dict[str, Any], effects: EffectsPort, env: An
         if not user_id:
             raise PricingRouteViolation("user_id is required")
 
-        ctx = PricingSelectionContext(
+        context = PricingSelectionContext(
             tenant_id=tenant_id,
             decision_id=route.decision_id,
             correlation_id=route.correlation_id,
@@ -73,16 +89,19 @@ def handle_pricing_select(payload: dict[str, Any], effects: EffectsPort, env: An
             action=route.action,
         )
         selection_result = selection_service.select(
-            ctx=ctx,
-            candidates=list(p.get("candidates") or []),
-            evidence=dict(p.get("evidence") or {}),
+            ctx=context,
+            candidates=list(body.get("candidates") or []),
+            evidence=dict(body.get("evidence") or {}),
         )
         selected = selection_result.get("selected") if isinstance(selection_result, Mapping) else None
         selected_offer = dict(selected) if isinstance(selected, Mapping) else {}
+        if not selected_offer:
+            raise PricingRouteViolation("no selectable pricing candidate")
+
         text = str(
             selected_offer.get("message")
             or selected_offer.get("title")
-            or f"💸 Pricing selected: {bool(selected_offer)}"
+            or "💸 Pricing proposal selected"
         )
         delivery = effects.send_message(
             decision_id=route.decision_id,
@@ -95,22 +114,23 @@ def handle_pricing_select(payload: dict[str, Any], effects: EffectsPort, env: An
                 "tenant_id": tenant_id,
                 "product_id": product_id,
                 "offer_id": str(selected_offer.get("offer_id") or ""),
-                "selected": bool(selected_offer),
+                "selected": True,
             },
         )
         evidence = _delivery_evidence(delivery)
         delivery_ok = bool(delivery.get("ok")) if isinstance(delivery, Mapping) else bool(delivery)
+        verified = bool(delivery_ok and evidence)
         return {
-            "ok": delivery_ok,
-            "status": "verified" if delivery_ok and evidence else "failed",
+            "ok": verified,
+            "status": "verified" if verified else "failed",
             "selection": selected_offer,
             "selection_result": dict(selection_result) if isinstance(selection_result, Mapping) else {},
             "delivery": delivery,
-            "router_evidence": evidence,
+            "router_evidence": evidence if verified else None,
         }
     except PricingRouteViolation as exc:
         return _blocked_message(
-            payload=p,
+            payload=body,
             effects=effects,
             decision_id=route.decision_id,
             correlation_id=route.correlation_id,
