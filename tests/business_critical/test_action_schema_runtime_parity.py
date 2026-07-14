@@ -55,6 +55,7 @@ def test_business_scope_is_required_by_external_tenant_owned_schemas() -> None:
         "apply_pricing_change@v1",
         "capture_payment@v1",
         "create_payment_and_send_link@v1",
+        "deploy_policy@v1",
         "grant_access@v1",
         "growth_strategy_accept@v1",
         "growth_strategy_backlog@v1",
@@ -67,6 +68,7 @@ def test_business_scope_is_required_by_external_tenant_owned_schemas() -> None:
         "profit_sprint_onboarding_text@v1",
         "reject_pricing_change@v1",
         "request_pricing_change@v1",
+        "rollback_policy@v1",
         "select_tariff@v1",
         "send_marketing_offer@v1",
         "send_message@v1",
@@ -97,6 +99,26 @@ def test_pricing_apply_cannot_bypass_immutable_request_governance() -> None:
         assert "request_id" in parameters
         assert parameters["request_id"].default is inspect.Signature.empty
         assert "requested_by" not in parameters
+
+
+@pytest.mark.lock
+def test_payment_actions_require_complete_tenant_product_order_causality() -> None:
+    catalog = build_catalog()
+    expected = {
+        "tenant_id",
+        "product_id",
+        "order_id",
+        "user_id",
+        "amount",
+        "currency",
+    }
+    for action in (
+        "capture_payment@v1",
+        "create_payment_and_send_link@v1",
+    ):
+        schema = catalog[action].schema
+        assert expected.issubset(schema.required), action
+        assert {"product_id", "order_id"}.isdisjoint(schema.optional), action
 
 
 @pytest.mark.lock
