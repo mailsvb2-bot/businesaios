@@ -69,6 +69,7 @@ def _tenant_id(payload: dict, env) -> str:
 def handle_admin_user_card(payload, effects, env, *, event_store):
     payload = require_mapping(payload or {})
     tenant_id = _tenant_id(payload, env)
+    product_id = optional_str(payload, "product_id")
     admin_id = optional_str(payload, "admin_id") or ""
     target = optional_str(payload, "target_user_id") or ""
     if not tenant_id or not admin_id or not target:
@@ -94,6 +95,7 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
         entitlements = compute_entitlements(
             event_store=event_store,
             tenant_id=tenant_id,
+            product_id=product_id,
             user_id=target,
         )
         settings = user_settings(
@@ -110,9 +112,15 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
         payment_status = str(payment.get("status") or "none")
         city = str(settings.get("city") or "-")
         tariff_title = str((tariff or {}).get("title") or (tariff or {}).get("tariff") or "-")
+        scope_line = (
+            f"Продукт: {product_id}\n"
+            if product_id
+            else "Продукты с доступом: " + ", ".join(entitlements.get("product_ids") or []) + "\n"
+        )
         text = (
             "🔎 Карточка пользователя\n\n"
             f"Бизнес: {tenant_id}\n"
+            f"{scope_line}"
             f"ID: {target}\n"
             f"Доступ: {access}\n"
             f"Оплата: {payment_status}\n"
@@ -120,7 +128,8 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
             f"Тариф (выбор): {tariff_title}\n"
         )
     except Exception:
-        text = f"🔎 Карточка пользователя\n\nБизнес: {tenant_id}\nID: {target}\n(не удалось собрать данные)"
+        product_line = f"\nПродукт: {product_id}" if product_id else ""
+        text = f"🔎 Карточка пользователя\n\nБизнес: {tenant_id}{product_line}\nID: {target}\n(не удалось собрать данные)"
 
     return effects.send_message(
         decision_id=env.decision.decision_id,
