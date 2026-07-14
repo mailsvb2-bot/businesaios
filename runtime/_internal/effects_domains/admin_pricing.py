@@ -7,15 +7,117 @@ file or pricing-version sidecar.
 
 from __future__ import annotations
 
+import hashlib
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+try:
+    import fcntl as _fcntl
+except ModuleNotFoundError:  # pragma: no cover - non-POSIX fallback
+    _fcntl = None
+
 from config.yaml_loader_shared import invalidate_yaml_cache, load_yaml
 from core.offers.catalog_identity import catalog_registry_key
 from core.offers.catalogs.yaml_schema import validate_yaml_offer_catalog_spec
-from runtime.platform.config.env_flags import env_bool, env_path, env_str
+from runtime.platform.config.env_flags import env_bool, env_float, env_path, env_str
 
+
+
+_PROCESS_LOCKS_GUARD = threading.Lock()
+_PROCESS_LOCKS: dict[str, Any] = {}
+
+
+@dataclass
+class CatalogMutationLock:
+    lock_path: Path
+    process_lock: Any
+    handle: Any
+    released: bool = False
+
+    def release(self) -> None:
+        if self.released:
+            return
+        try:
+            if _fcntl is not None and self.handle is not None:
+                _fcntl.flock(self.handle.fileno(), _fcntl.LOCK_UN)
+        finally:
+            try:
+                if self.handle is not None:
+                    self.handle.close()
+            finally:
+                self.process_lock.release()
+                self.released = True
+
+
+def _acquire_catalog_lock(
+    catalog_path: Path,
+    *,
+    timeout_s: float | None = None,
+) -> CatalogMutationLock:
+    lock_path = catalog_path.with_suffix(
+        catalog_path.suffix + ".mutation.lock"
+    )
+    key = str(lock_path)
+    with _PROCESS_LOCKS_GUARD:
+        process_lock = _PROCESS_LOCKS.setdefault(
+            key,
+            threading.Lock(),
+        )
+
+    timeout = (
+        float(timeout_s)
+        if timeout_s is not None
+        else env_float(
+            "OFFER_CATALOG_MUTATION_LOCK_TIMEOUT_S",
+            5.0,
+            lo=0.05,
+            hi=60.0,
+        )
+    )
+    timeout = max(0.01, float(timeout))
+    if not process_lock.acquire(timeout=timeout):
+        raise RuntimeError(f"CATALOG_MUTATION_LOCK_TIMEOUT:{catalog_path}")
+
+    handle: Any = None
+    try:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        handle = lock_path.open("a+b")
+        if _fcntl is not None:
+            deadline = time.monotonic() + timeout
+            while True:
+                try:
+                    _fcntl.flock(
+                        handle.fileno(),
+                        _fcntl.LOCK_EX | _fcntl.LOCK_NB,
+                    )
+                    break
+                except BlockingIOError as exc:
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(
+                            f"CATALOG_MUTATION_LOCK_TIMEOUT:{catalog_path}"
+                        ) from exc
+                    time.sleep(0.02)
+        return CatalogMutationLock(
+            lock_path=lock_path,
+            process_lock=process_lock,
+            handle=handle,
+        )
+    except Exception:
+        if handle is not None:
+            handle.close()
+        process_lock.release()
+        raise
+
+
+def _digest_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def _file_digest(path: Path) -> str:
+    return _digest_bytes(path.read_bytes())
 
 def validate_pricing_change(
     *,
@@ -116,6 +218,9 @@ class PricingChangeTransaction:
     catalog_path: Path
     catalog_tmp: Path
     original_catalog: bytes
+    original_digest: str
+    prepared_digest: str
+    mutation_lock: CatalogMutationLock
     result: dict[str, Any]
     applied: bool = False
     finalized: bool = False
@@ -125,37 +230,65 @@ class PricingChangeTransaction:
             raise RuntimeError("PRICING_TRANSACTION_FINALIZED")
         if self.applied:
             return dict(self.result)
+        if _file_digest(self.catalog_path) != self.original_digest:
+            raise RuntimeError("PRICING_CONCURRENT_MODIFICATION")
+
         try:
             self.catalog_tmp.replace(self.catalog_path)
+            self.applied = True
+            if _file_digest(self.catalog_path) != self.prepared_digest:
+                raise RuntimeError("PRICING_COMMIT_DIGEST_MISMATCH")
             invalidate_yaml_cache(self.catalog_path)
         except Exception as exc:
             try:
-                self.rollback()
+                if self.applied:
+                    self.rollback()
             except Exception as rollback_exc:
                 raise RuntimeError(
-                    f"PRICING_ROLLBACK_FAILED:{rollback_exc.__class__.__name__}:{rollback_exc}"
+                    "PRICING_ROLLBACK_FAILED:"
+                    f"{rollback_exc.__class__.__name__}:{rollback_exc}"
                 ) from exc
-            raise RuntimeError(f"PRICING_COMMIT_FAILED:{exc.__class__.__name__}:{exc}") from exc
-        self.applied = True
+            if (
+                isinstance(exc, RuntimeError)
+                and str(exc).startswith("PRICING_")
+            ):
+                raise
+            raise RuntimeError(
+                f"PRICING_COMMIT_FAILED:{exc.__class__.__name__}:{exc}"
+            ) from exc
         return dict(self.result)
 
     def rollback(self) -> None:
         if self.finalized:
             raise RuntimeError("PRICING_TRANSACTION_FINALIZED")
-        restore_tmp = self.catalog_path.with_suffix(self.catalog_path.suffix + ".rollback.tmp")
-        restore_tmp.write_bytes(self.original_catalog)
-        restore_tmp.replace(self.catalog_path)
-        invalidate_yaml_cache(self.catalog_path)
-        self.applied = False
+        if self.applied:
+            if _file_digest(self.catalog_path) != self.prepared_digest:
+                raise RuntimeError("PRICING_ROLLBACK_CONFLICT")
+            restore_tmp = self.catalog_path.with_suffix(
+                self.catalog_path.suffix + ".rollback.tmp"
+            )
+            restore_tmp.write_bytes(self.original_catalog)
+            restore_tmp.replace(self.catalog_path)
+            if _file_digest(self.catalog_path) != self.original_digest:
+                raise RuntimeError("PRICING_ROLLBACK_DIGEST_MISMATCH")
+            invalidate_yaml_cache(self.catalog_path)
+            self.applied = False
         self._cleanup_temps()
 
     def finalize(self) -> None:
-        self._cleanup_temps()
-        self.finalized = True
+        if self.finalized:
+            return
+        try:
+            self._cleanup_temps()
+        finally:
+            self.mutation_lock.release()
+            self.finalized = True
 
     def _cleanup_temps(self) -> None:
         self.catalog_tmp.unlink(missing_ok=True)
-        self.catalog_path.with_suffix(self.catalog_path.suffix + ".rollback.tmp").unlink(missing_ok=True)
+        self.catalog_path.with_suffix(
+            self.catalog_path.suffix + ".rollback.tmp"
+        ).unlink(missing_ok=True)
 
 
 def prepare_offer_price_update(
@@ -168,6 +301,7 @@ def prepare_offer_price_update(
     offer_id: str | None = None,
     plan_id: int | None = None,
     catalog_path: Path | None = None,
+    lock_timeout_s: float | None = None,
 ) -> PricingChangeTransaction:
     tenant = _scope_segment(tenant_id, field="tenant_id")
     product = _scope_segment(product_id, field="product_id")
@@ -192,77 +326,102 @@ def prepare_offer_price_update(
             environment=env,
         )
     )
-    if not path.exists():
-        raise RuntimeError(f"OFFER_CATALOG_NOT_FOUND:{path}")
-
-    original_catalog = path.read_bytes()
-    try:
-        spec = load_yaml(path, allow_empty=False, cache=False)
-    except Exception as exc:
-        raise RuntimeError(f"OFFER_CATALOG_READ_FAILED:{exc}") from exc
-
-    catalog_id = catalog_registry_key(
-        tenant_id=tenant,
-        product_id=product,
-        environment=env,
+    mutation_lock = _acquire_catalog_lock(
+        path,
+        timeout_s=lock_timeout_s,
     )
-    spec = dict(spec)
-    spec.setdefault("catalog_id", catalog_id)
-    validate_yaml_offer_catalog_spec(spec)
-
-    offers = spec.get("offers")
-    if not isinstance(offers, list):
-        raise RuntimeError("OFFER_CATALOG_OFFERS_INVALID")
-    matched_offer_id = ""
-    old_price: int | None = None
-    for raw_offer in offers:
-        if not isinstance(raw_offer, dict):
-            continue
-        if not _matches_offer(
-            offer=raw_offer,
-            offer_id=selected_offer_id,
-            plan_id=selected_plan_id,
-        ):
-            continue
-        matched_offer_id = str(raw_offer.get("offer_id") or "").strip()
-        old_price = int(raw_offer.get("base_price_rub"))
-        raw_offer["base_price_rub"] = price
-        break
-    if not matched_offer_id:
-        selector = selected_offer_id or str(selected_plan_id)
-        raise RuntimeError(f"OFFER_NOT_FOUND:{selector}")
-
-    spec["pricing_version"] = version
-    validate_yaml_offer_catalog_spec(spec)
-
     tmp = path.with_suffix(path.suffix + ".pricing.tmp")
-    tmp.unlink(missing_ok=True)
     try:
-        _dump_yaml(tmp, spec)
-        prepared = load_yaml(tmp, allow_empty=False, cache=False)
-        validate_yaml_offer_catalog_spec(prepared)
-    except Exception as exc:
+        if not path.exists():
+            raise RuntimeError(f"OFFER_CATALOG_NOT_FOUND:{path}")
+
+        original_catalog = path.read_bytes()
+        original_digest = _digest_bytes(original_catalog)
+        try:
+            spec = load_yaml(path, allow_empty=False, cache=False)
+        except Exception as exc:
+            raise RuntimeError(f"OFFER_CATALOG_READ_FAILED:{exc}") from exc
+
+        catalog_id = catalog_registry_key(
+            tenant_id=tenant,
+            product_id=product,
+            environment=env,
+        )
+        spec = dict(spec)
+        spec.setdefault("catalog_id", catalog_id)
+        validate_yaml_offer_catalog_spec(spec)
+
+        offers = spec.get("offers")
+        if not isinstance(offers, list):
+            raise RuntimeError("OFFER_CATALOG_OFFERS_INVALID")
+        matched_offer_id = ""
+        old_price: int | None = None
+        for raw_offer in offers:
+            if not isinstance(raw_offer, dict):
+                continue
+            if not _matches_offer(
+                offer=raw_offer,
+                offer_id=selected_offer_id,
+                plan_id=selected_plan_id,
+            ):
+                continue
+            matched_offer_id = str(
+                raw_offer.get("offer_id") or ""
+            ).strip()
+            old_price = int(raw_offer.get("base_price_rub"))
+            raw_offer["base_price_rub"] = price
+            break
+        if not matched_offer_id:
+            selector = selected_offer_id or str(selected_plan_id)
+            raise RuntimeError(f"OFFER_NOT_FOUND:{selector}")
+
+        spec["pricing_version"] = version
+        validate_yaml_offer_catalog_spec(spec)
+
         tmp.unlink(missing_ok=True)
-        raise RuntimeError(f"PRICING_PREPARE_FAILED:{exc.__class__.__name__}:{exc}") from exc
+        try:
+            _dump_yaml(tmp, spec)
+            prepared = load_yaml(
+                tmp,
+                allow_empty=False,
+                cache=False,
+            )
+            validate_yaml_offer_catalog_spec(prepared)
+        except Exception as exc:
+            tmp.unlink(missing_ok=True)
+            raise RuntimeError(
+                f"PRICING_PREPARE_FAILED:{exc.__class__.__name__}:{exc}"
+            ) from exc
+        prepared_digest = _file_digest(tmp)
 
-    return PricingChangeTransaction(
-        catalog_path=path,
-        catalog_tmp=tmp,
-        original_catalog=original_catalog,
-        result={
-            "tenant_id": tenant,
-            "product_id": product,
-            "environment": env,
-            "catalog_id": str(spec.get("catalog_id") or catalog_id),
-            "offer_id": matched_offer_id,
-            "plan_id": selected_plan_id,
-            "old_price": old_price,
-            "new_price": price,
-            "pricing_version": version,
-            "catalog_path": str(path),
-        },
-    )
-
+        return PricingChangeTransaction(
+            catalog_path=path,
+            catalog_tmp=tmp,
+            original_catalog=original_catalog,
+            original_digest=original_digest,
+            prepared_digest=prepared_digest,
+            mutation_lock=mutation_lock,
+            result={
+                "tenant_id": tenant,
+                "product_id": product,
+                "environment": env,
+                "catalog_id": str(
+                    spec.get("catalog_id") or catalog_id
+                ),
+                "offer_id": matched_offer_id,
+                "plan_id": selected_plan_id,
+                "old_price": old_price,
+                "new_price": price,
+                "pricing_version": version,
+                "catalog_path": str(path),
+                "catalog_revision_before": original_digest,
+                "catalog_revision_after": prepared_digest,
+            },
+        )
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        mutation_lock.release()
+        raise
 
 def execute_offer_price_update(**kwargs: Any) -> dict[str, Any]:
     """Compatibility entrypoint for an immediate canonical catalog commit."""
