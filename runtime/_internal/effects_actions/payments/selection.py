@@ -163,7 +163,7 @@ def capture_payment_effect(
     causal_metadata["tenant_id"] = tenant
 
     if provider_norm in {"yookassa", "yoo", "yoo_kassa"}:
-        ok, meta = effects._yookassa_create_payment(
+        provider_ok, meta = effects._yookassa_create_payment(
             decision_id=str(decision_id),
             amount=int(amount),
             currency=str(currency),
@@ -171,7 +171,7 @@ def capture_payment_effect(
             metadata=payment_metadata,
         )
     else:
-        ok, meta = False, {"provider": str(provider), "mode": "unsupported"}
+        provider_ok, meta = False, {"provider": str(provider), "mode": "unsupported"}
 
     effects.event_log.emit(
         event_type="payment_create_attempted",
@@ -184,7 +184,7 @@ def capture_payment_effect(
             "currency": str(currency),
             "provider": str(provider),
             "capture_requested": True,
-            "ok": bool(ok),
+            "ok": bool(provider_ok),
             "metadata": causal_metadata,
             "meta": meta,
         },
@@ -199,7 +199,7 @@ def capture_payment_effect(
             provider_payload = (meta or {}).get("yookassa")
             if isinstance(provider_payload, dict):
                 raw_external_id = provider_payload.get("id")
-        if ok and provider_norm in {"yookassa", "yoo", "yoo_kassa"}:
+        if provider_ok and provider_norm in {"yookassa", "yoo", "yoo_kassa"}:
             external_id = validate_payment_external_id(str(raw_external_id or ""))
             effects.event_log.emit(
                 event_type="payment_created",
@@ -234,16 +234,20 @@ def capture_payment_effect(
         except Exception:
             swallow(__name__, "runtime/_internal/effects_actions/payments/selection.py")
 
+    verified = bool(provider_ok and external_id)
+    evidence = _payment_gateway_evidence(
+        ok=verified,
+        external_id=external_id,
+        provider=provider_norm or str(provider),
+        meta=dict(meta or {}),
+        business_metadata=causal_metadata,
+    )
     return {
-        "ok": bool(ok),
+        "ok": verified,
+        "status": "verified" if verified else "failed",
         "meta": meta,
-        "evidence": _payment_gateway_evidence(
-            ok=bool(ok),
-            external_id=external_id,
-            provider=provider_norm or str(provider),
-            meta=dict(meta or {}),
-            business_metadata=causal_metadata,
-        ),
+        "evidence": evidence,
+        "router_evidence": evidence if verified else None,
     }
 
 
