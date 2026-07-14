@@ -9,7 +9,10 @@ from runtime.boot.actions_registry import INLINE_ALLOWLIST, get_spec
 from runtime.boot.handler_groups.ops import register_ops_handlers
 from runtime.effects import registry as legacy_effect_registry
 from runtime.handlers import ActionHandlerRegistry
-from runtime.handlers.platform_effects import handle_apply_offer_patch
+from runtime.handlers.platform_effects import (
+    handle_apply_offer_patch,
+    handle_suggest_offer_patch,
+)
 
 
 PLATFORM_ACTIONS = {
@@ -22,10 +25,20 @@ PLATFORM_ACTIONS = {
 class FakePlatformEffects:
     def __init__(self) -> None:
         self.calls: list[dict] = []
+        self.suggestion_notification: object = None
 
     def apply_offer_patch(self, **kwargs):
         self.calls.append(dict(kwargs))
         return {"ok": True, "mode": kwargs["mode"]}
+
+    def suggest_offer_patch(self, **kwargs):
+        self.calls.append(dict(kwargs))
+        return {
+            "ok": True,
+            "status": "advisory",
+            "patch": {"headline": "New title"},
+            "notification": self.suggestion_notification,
+        }
 
 
 def _env() -> SimpleNamespace:
@@ -35,6 +48,19 @@ def _env() -> SimpleNamespace:
             correlation_id="correlation-platform",
         )
     )
+
+
+def _suggest_payload(*, notify_user_id: str | None = None) -> dict[str, str]:
+    payload = {
+        "tenant_id": "business-a",
+        "product": "crm-pro",
+        "env": "test",
+        "offer_id": "offer-1",
+        "action": "improve_copy",
+    }
+    if notify_user_id:
+        payload["notify_user_id"] = notify_user_id
+    return payload
 
 
 @pytest.mark.lock
@@ -105,6 +131,63 @@ def test_offer_patch_handler_requires_patch_only_for_preview_and_apply() -> None
             effects,
             _env(),
         )
+
+
+@pytest.mark.lock
+def test_offer_suggestion_without_notification_remains_advisory_result() -> None:
+    effects = FakePlatformEffects()
+
+    result = handle_suggest_offer_patch(
+        _suggest_payload(),
+        effects,
+        _env(),
+    )
+
+    assert result["ok"] is True
+    assert result["status"] == "advisory"
+    assert "router_evidence" not in result
+
+
+@pytest.mark.lock
+def test_offer_suggestion_notification_promotes_only_positive_connector_proof() -> None:
+    effects = FakePlatformEffects()
+    effects.suggestion_notification = {
+        "ok": True,
+        "evidence": {
+            "source": "connector",
+            "verified": True,
+            "status": "verified",
+            "external_refs": ["message-offer-suggestion-1"],
+            "confidence": 1.0,
+        },
+    }
+
+    result = handle_suggest_offer_patch(
+        _suggest_payload(notify_user_id="owner-1"),
+        effects,
+        _env(),
+    )
+
+    assert result["ok"] is True
+    assert result["status"] == "verified"
+    assert result["router_evidence"]["source"] == "connector"
+    assert result["router_evidence"]["external_refs"] == [
+        "message-offer-suggestion-1"
+    ]
+
+    effects.suggestion_notification = {
+        "ok": False,
+        "status": "notification_failed",
+    }
+    failed = handle_suggest_offer_patch(
+        _suggest_payload(notify_user_id="owner-1"),
+        effects,
+        _env(),
+    )
+
+    assert failed["ok"] is False
+    assert failed["status"] == "failed"
+    assert failed["router_evidence"] is None
 
 
 @pytest.mark.lock
