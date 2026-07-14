@@ -143,5 +143,79 @@ def test_same_external_user_id_cannot_leak_product_payment_or_entitlement_across
     assert selected_product(store, tenant_id="business-b", user_id="same-external-user")["product_id"] == "product-b"
     assert latest_payment_status(event_store=store, tenant_id="business-a", user_id="same-external-user")["status"] == "succeeded"
     assert latest_payment_status(event_store=store, tenant_id="business-b", user_id="same-external-user")["status"] == "failed"
-    assert compute_entitlements(event_store=store, tenant_id="business-a", user_id="same-external-user")["full_access"] is True
-    assert compute_entitlements(event_store=store, tenant_id="business-b", user_id="same-external-user")["full_access"] is False
+    assert compute_entitlements(
+        event_store=store,
+        tenant_id="business-a",
+        product_id="product-a",
+        user_id="same-external-user",
+    )["full_access"] is True
+    assert compute_entitlements(
+        event_store=store,
+        tenant_id="business-b",
+        product_id="product-b",
+        user_id="same-external-user",
+    )["full_access"] is False
+
+
+@pytest.mark.lock
+def test_entitlement_for_one_product_cannot_unlock_another_product_in_same_business() -> None:
+    store = FakeTenantEventStore(
+        [
+            _event(
+                tenant="business-a",
+                event_type="entitlement_granted",
+                payload={"product_id": "crm-pro", "full_access": True},
+            )
+        ]
+    )
+
+    crm_access = compute_entitlements(
+        event_store=store,
+        tenant_id="business-a",
+        product_id="crm-pro",
+        user_id="same-external-user",
+    )
+    hr_access = compute_entitlements(
+        event_store=store,
+        tenant_id="business-a",
+        product_id="hr-pro",
+        user_id="same-external-user",
+    )
+    aggregate = compute_entitlements(
+        event_store=store,
+        tenant_id="business-a",
+        user_id="same-external-user",
+    )
+
+    assert crm_access == {"full_access": True, "product_id": "crm-pro"}
+    assert hr_access == {"full_access": False, "product_id": "hr-pro"}
+    assert aggregate == {
+        "full_access": True,
+        "product_ids": ["crm-pro"],
+        "scope": "aggregate_admin_view",
+    }
+
+
+@pytest.mark.lock
+def test_unscoped_legacy_access_grant_does_not_unlock_specific_product() -> None:
+    store = FakeTenantEventStore(
+        [
+            _event(
+                tenant="business-a",
+                event_type="access_granted",
+                payload={"full_access": True},
+            )
+        ]
+    )
+
+    assert compute_entitlements(
+        event_store=store,
+        tenant_id="business-a",
+        product_id="crm-pro",
+        user_id="same-external-user",
+    )["full_access"] is False
+    assert compute_entitlements(
+        event_store=store,
+        tenant_id="business-a",
+        user_id="same-external-user",
+    )["full_access"] is True
