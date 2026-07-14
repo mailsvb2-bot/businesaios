@@ -45,6 +45,7 @@ def test_conditional_external_actions_are_explicit_and_closed() -> None:
     assert conditional == {
         "ads_apply_execute@v1",
         "apply_offer_patch@v1",
+        "suggest_offer_patch@v1",
     }
     assert all(get_spec(name).execution_category == "external_effect" for name in conditional)
 
