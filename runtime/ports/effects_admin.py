@@ -90,11 +90,10 @@ class EffectsAdminPort(Protocol):
         product_id: str,
         new_price: int,
         pricing_version: str,
+        request_id: str,
         environment: str | None = None,
         offer_id: str | None = None,
         plan_id: int | None = None,
-        request_id: str | None = None,
-        requested_by: str | None = None,
         reason: str | None = None,
     ) -> Any: ...
 
