@@ -54,6 +54,13 @@ def handle_apply_offer_patch(
     env: Any,
 ) -> Any:
     body = require_mapping(payload)
+    mode = str(body.get("mode") or "dry_run").strip().casefold()
+    if mode not in {"dry_run", "apply", "rollback"}:
+        raise ValueError("INVALID_OFFER_PATCH_MODE")
+    patch = optional_dict(body, "patch")
+    if mode in {"dry_run", "apply"} and not patch:
+        raise ValueError("OFFER_PATCH_REQUIRED")
+
     return effects.apply_offer_patch(
         decision_id=str(env.decision.decision_id),
         correlation_id=str(env.decision.correlation_id),
@@ -61,8 +68,8 @@ def handle_apply_offer_patch(
         product=required_str(body, "product"),
         env=required_str(body, "env"),
         offer_id=required_str(body, "offer_id"),
-        patch=optional_dict(body, "patch") or {},
-        mode=str(body.get("mode") or "dry_run"),
+        patch=patch or {},
+        mode=mode,
         notify_user_id=optional_str(body, "notify_user_id"),
         callback_query_id=optional_str(body, "callback_query_id"),
     )
