@@ -8,6 +8,7 @@ from core.actions.catalog import build_catalog
 from runtime._internal.effects_domains.admin_state import AdminStateEffectsMixin
 from runtime.boot.actions_registry import all_actions, get_spec
 from runtime.ports.effects_admin import EffectsAdminPort
+from runtime.ports.effects_platform import EffectsPlatformPort
 
 
 FORBIDDEN_ACTIONS = {
@@ -52,6 +53,7 @@ def test_business_scope_is_required_by_external_tenant_owned_schemas() -> None:
         "ads_apply_execute@v1",
         "ads_rl_suggest@v1",
         "ai_ceo_plan@v1",
+        "apply_offer_patch@v1",
         "apply_pricing_change@v1",
         "capture_payment@v1",
         "create_payment_and_send_link@v1",
@@ -76,6 +78,7 @@ def test_business_scope_is_required_by_external_tenant_owned_schemas() -> None:
         "send_weather@v1",
         "set_marketing_copy@v1",
         "set_user_setting@v1",
+        "suggest_offer_patch@v1",
     ):
         assert "tenant_id" in catalog[action].schema.required, action
 
@@ -120,6 +123,21 @@ def test_payment_actions_require_complete_tenant_product_order_causality() -> No
         schema = catalog[action].schema
         assert expected.issubset(schema.required), action
         assert {"product_id", "order_id"}.isdisjoint(schema.optional), action
+
+
+@pytest.mark.lock
+def test_platform_effect_ports_require_canonical_route_and_tenant_identity() -> None:
+    for method_name in (
+        "enqueue_evolution_job",
+        "suggest_offer_patch",
+        "apply_offer_patch",
+    ):
+        parameters = inspect.signature(
+            getattr(EffectsPlatformPort, method_name)
+        ).parameters
+        for field in ("decision_id", "correlation_id", "tenant_id"):
+            assert field in parameters, f"{method_name}:{field}"
+            assert parameters[field].default is inspect.Signature.empty
 
 
 @pytest.mark.lock
