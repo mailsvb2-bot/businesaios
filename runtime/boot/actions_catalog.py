@@ -78,9 +78,6 @@ INLINE_ALLOWLIST_NAMES: tuple[str, ...] = (
     "growth_strategy_accept@v1",
     "growth_strategy_reject@v1",
     "execute_plan@v1",
-    "enqueue_evolution_job@v1",
-    "apply_offer_patch@v1",
-    "suggest_offer_patch@v1",
 )
 
 BUILTIN_HANDLER_ACTIONS: frozenset[str] = frozenset({"execute_plan@v1"})
