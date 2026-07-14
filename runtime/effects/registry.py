@@ -1,39 +1,23 @@
-"""Action handler registry.
+"""Removed legacy effect-action registry compatibility surface.
 
-This file groups effect handlers by domain modules.
+Executable action names and handlers are owned exclusively by
+``runtime.boot.actions_registry`` and ``runtime.handlers.ActionHandlerRegistry``.
+Keeping a second mapping here previously allowed actions to appear supported
+without being dispatchable by RuntimeExecutor.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from types import MappingProxyType
-
-ActionHandler = Callable[..., object]
+CANON_LEGACY_EFFECT_REGISTRY_REMOVED = True
 
 
-def build_registry(effects_impl) -> Mapping[str, ActionHandler]:
-    reg: dict[str, ActionHandler] = {
-        "send_message@v1": effects_impl.send_message,
-        "compose_marketing_message@v1": effects_impl.compose_marketing_message,
-        "send_weather@v1": effects_impl.send_weather,
-        "set_user_setting@v1": effects_impl.set_user_setting,
-        "apply_offer_patch@v1": effects_impl.apply_offer_patch,
-        "suggest_offer_patch@v1": effects_impl.suggest_offer_patch,
-        "admin_set_role@v1": effects_impl.admin_set_role,
-        "admin_set_perm@v1": effects_impl.admin_set_perm,
-        "set_marketing_copy@v1": effects_impl.set_marketing_copy,
-        "record_variant_shown@v1": effects_impl.record_variant_shown,
-        "record_variant_chosen@v1": effects_impl.record_variant_chosen,
-        "enqueue_evolution_job@v1": effects_impl.enqueue_evolution_job,
-        "select_tariff@v1": effects_impl.select_tariff,
-        "capture_payment@v1": effects_impl.capture_payment,
-        "reconcile_payments@v1": effects_impl.reconcile_payments,
-        "reconcile_payment@v1": effects_impl.reconcile_payment,
-        "grant_access@v1": effects_impl.grant_access,
-        "deploy_policy@v1": effects_impl.deploy_policy,
-        "rollback_policy@v1": effects_impl.rollback_policy,
-        "poll_telegram_updates@v1": effects_impl.poll_telegram_updates,
-        "telegram_self_check@v1": effects_impl.telegram_self_check,
-    }
-    # Freeze registry to prevent accidental runtime mutation.
-    return MappingProxyType(reg)
+def build_registry(_effects_impl):
+    raise RuntimeError(
+        "LEGACY_EFFECT_ACTION_REGISTRY_REMOVED:use_runtime_handler_registry"
+    )
+
+
+__all__ = [
+    "CANON_LEGACY_EFFECT_REGISTRY_REMOVED",
+    "build_registry",
+]
