@@ -178,14 +178,13 @@ class AdminStateEffectsMixin:
         product_id: str,
         new_price: int,
         pricing_version: str,
+        request_id: str,
         environment: str | None = None,
         offer_id: str | None = None,
         plan_id: int | None = None,
-        request_id: str | None = None,
-        requested_by: str | None = None,
         reason: str | None = None,
     ) -> Any:
-        """Apply one governed price change or replay its durable proof."""
+        """Apply one durable pricing request or replay its proof."""
 
         assert_called_from_executor()
         tenant = assert_event_log_tenant(
@@ -193,34 +192,29 @@ class AdminStateEffectsMixin:
             tenant_id=str(tenant_id),
             operation="apply_pricing_change",
         )
-        effective_requested_by = str(requested_by or "").strip() or None
         normalized_request_id = str(request_id or "").strip()
-        if normalized_request_id:
-            lifecycle = resolve_pricing_request_lifecycle(
-                self.event_log,
-                tenant_id=tenant,
-                request_id=normalized_request_id,
-            )
-            assert_pricing_request_matches(
-                lifecycle,
-                product_id=str(product_id),
-                environment=environment,
-                offer_id=offer_id,
-                plan_id=plan_id,
-                new_price=int(new_price),
-                pricing_version=str(pricing_version),
-            )
-            if requested_by and str(requested_by).strip() != lifecycle.requested_by:
-                raise RuntimeError(
-                    f"PRICING_CHANGE_REQUESTER_MISMATCH:{normalized_request_id}"
-                )
-            if lifecycle.applied_event is not None:
-                return _replayed_apply_result(lifecycle)
-            assert_pricing_approval_allowed(
-                lifecycle,
-                admin_id=str(admin_id),
-            )
-            effective_requested_by = lifecycle.requested_by
+        if not normalized_request_id:
+            raise RuntimeError("PRICING_REQUEST_ID_REQUIRED")
+        lifecycle = resolve_pricing_request_lifecycle(
+            self.event_log,
+            tenant_id=tenant,
+            request_id=normalized_request_id,
+        )
+        assert_pricing_request_matches(
+            lifecycle,
+            product_id=str(product_id),
+            environment=environment,
+            offer_id=offer_id,
+            plan_id=plan_id,
+            new_price=int(new_price),
+            pricing_version=str(pricing_version),
+        )
+        if lifecycle.applied_event is not None:
+            return _replayed_apply_result(lifecycle)
+        assert_pricing_approval_allowed(
+            lifecycle,
+            admin_id=str(admin_id),
+        )
 
         return apply_pricing_change_effect(
             self,
@@ -234,8 +228,8 @@ class AdminStateEffectsMixin:
             plan_id=plan_id,
             new_price=int(new_price),
             pricing_version=str(pricing_version),
-            request_id=normalized_request_id or None,
-            requested_by=effective_requested_by,
+            request_id=normalized_request_id,
+            requested_by=lifecycle.requested_by,
             reason=reason,
         )
 
