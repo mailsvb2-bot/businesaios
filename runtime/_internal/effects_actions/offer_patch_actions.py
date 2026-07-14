@@ -79,18 +79,25 @@ def _notify(
 ) -> Any:
     if not user_id:
         return None
-    return owner.send_message(
-        decision_id=str(decision_id),
-        correlation_id=str(correlation_id),
-        tenant_id=str(tenant_id),
-        user_id=str(user_id),
-        text=str(text)[:3500],
-        reply_markup=None,
-        callback_query_id=callback_query_id,
-        channel="telegram",
-        priority="normal",
-        critical=False,
-    )
+    try:
+        return owner.send_message(
+            decision_id=str(decision_id),
+            correlation_id=str(correlation_id),
+            tenant_id=str(tenant_id),
+            user_id=str(user_id),
+            text=str(text)[:3500],
+            reply_markup=None,
+            callback_query_id=callback_query_id,
+            channel="telegram",
+            priority="normal",
+            critical=False,
+        )
+    except Exception as exc:
+        return {
+            "ok": False,
+            "status": "notification_failed",
+            "error": exc.__class__.__name__,
+        }
 
 
 class OfferPatchEffectsMixin:
@@ -197,7 +204,6 @@ class OfferPatchEffectsMixin:
                 }
             current_catalog = _read_bytes(catalog_path)
             backup_raw = backup_path.read_bytes()
-            # Validate the backup before replacing the live catalog.
             parsed = yaml.safe_load(backup_raw.decode("utf-8"))
             if not isinstance(parsed, dict):
                 raise RuntimeError("OFFER_PATCH_BACKUP_INVALID")
@@ -280,7 +286,6 @@ class OfferPatchEffectsMixin:
         original_backup = _read_bytes(backup_path)
         raw["offers"] = offers
         serialized = yaml.safe_dump(raw, sort_keys=False, allow_unicode=True)
-        # Parse the serialized form before touching the live path.
         if not isinstance(yaml.safe_load(serialized), dict):
             raise RuntimeError("OFFER_PATCH_RESULT_INVALID")
         try:
