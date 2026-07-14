@@ -4,7 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from runtime.governance import PolicyUpdateGateError
 from runtime.handler_impl.domains.admin_ops import handle_admin_user_card
+from runtime.handlers import ads_rl_suggest as ads_rl_suggest_module
 from runtime.handlers.ai_ceo_plan import handle_ai_ceo_plan
 from runtime.handlers.pricing_select import handle_pricing_select
 from runtime.pricing import PricingSelectionService
@@ -13,6 +15,7 @@ from runtime.pricing import PricingSelectionService
 class FakeEffects:
     def __init__(self) -> None:
         self.calls: list[dict] = []
+        self.events: list[dict] = []
 
     def send_message(self, **kwargs):
         self.calls.append(dict(kwargs))
@@ -26,6 +29,10 @@ class FakeEffects:
                 "confidence": 1.0,
             },
         }
+
+    def track_event(self, **kwargs):
+        self.events.append(dict(kwargs))
+        return {"ok": True}
 
 
 def _env(action: str) -> SimpleNamespace:
@@ -114,4 +121,36 @@ def test_admin_card_read_failure_is_not_success_even_when_error_message_is_deliv
     assert result["delivery"]["ok"] is True
     assert result["ok"] is False
     assert result["status"] == "failed"
+    assert result["router_evidence"] is None
+
+
+@pytest.mark.lock
+def test_ads_rl_cooldown_is_not_success_even_when_block_message_is_delivered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class BlockedGate:
+        def bind_event_store(self, _event_store) -> None:
+            return None
+
+        def propose(self, **_kwargs) -> None:
+            raise PolicyUpdateGateError("cooldown")
+
+    monkeypatch.setattr(ads_rl_suggest_module, "bind_runtime_state", lambda **_kwargs: None)
+    monkeypatch.setattr(ads_rl_suggest_module, "_SUGGEST_GATE", BlockedGate())
+    effects = FakeEffects()
+
+    result = ads_rl_suggest_module.handle_ads_rl_suggest(
+        {
+            "tenant_id": "business-a",
+            "user_id": "owner-1",
+        },
+        effects,
+        _env("ads_rl_suggest@v1"),
+        event_store=object(),
+    )
+
+    assert effects.calls[-1]["track_event_type"] == "ads_rl_suggest_blocked@v1"
+    assert result["delivery"]["ok"] is True
+    assert result["ok"] is False
+    assert result["status"] == "blocked"
     assert result["router_evidence"] is None
