@@ -9,6 +9,7 @@ from core.growth.strategy.contracts import GrowthHypothesisV1
 from core.growth.strategy.event_types import (
     GROWTH_HYPOTHESIS_CREATED,
     GROWTH_STRATEGY_GENERATED,
+    GROWTH_STRATEGY_PLAN_MANIFEST,
 )
 from core.growth.strategy.service import GrowthStrategyService
 
@@ -147,11 +148,12 @@ def test_completed_growth_decision_is_resumed_without_second_llm_generation(monk
     assert first_plan.top_hypotheses == second_plan.top_hypotheses
     assert first_plan.top_hypotheses[0].title == "Гипотеза 1"
     assert len({str(event["event_id"]) for event in store.events}) == len(store.events)
+    assert sum(event["event_type"] == GROWTH_STRATEGY_PLAN_MANIFEST for event in store.events) == 1
     assert sum(event["event_type"] == GROWTH_STRATEGY_GENERATED for event in store.events) == 1
 
 
 @pytest.mark.lock
-def test_partial_growth_write_resumes_original_durable_hypothesis_without_duplicates(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_partial_growth_write_resumes_manifest_without_second_llm_call_or_duplicates(monkeypatch: pytest.MonkeyPatch) -> None:
     store = StrictDuplicateEventStore()
     generation_calls = 0
     completion_calls = 0
@@ -182,6 +184,8 @@ def test_partial_growth_write_resumes_original_durable_hypothesis_without_duplic
             correlation_id="correlation-growth-partial",
         )
 
+    assert generation_calls == 1
+    assert sum(event["event_type"] == GROWTH_STRATEGY_PLAN_MANIFEST for event in store.events) == 1
     assert sum(event["event_type"] == GROWTH_HYPOTHESIS_CREATED for event in store.events) == 1
     assert sum(event["event_type"] == GROWTH_STRATEGY_GENERATED for event in store.events) == 0
 
@@ -192,9 +196,10 @@ def test_partial_growth_write_resumes_original_durable_hypothesis_without_duplic
         correlation_id="correlation-growth-partial",
     )
 
-    assert generation_calls == 2
+    assert generation_calls == 1
     assert completion_event_id
     assert plan.top_hypotheses[0].title == "Первоначальная гипотеза"
+    assert sum(event["event_type"] == GROWTH_STRATEGY_PLAN_MANIFEST for event in store.events) == 1
     assert sum(event["event_type"] == GROWTH_HYPOTHESIS_CREATED for event in store.events) == 1
     assert sum(event["event_type"] == GROWTH_STRATEGY_GENERATED for event in store.events) == 1
     assert len({str(event["event_id"]) for event in store.events}) == len(store.events)
