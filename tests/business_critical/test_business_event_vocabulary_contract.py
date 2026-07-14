@@ -83,7 +83,7 @@ def test_legacy_access_granted_normalizes_to_canonical_entitlement_event() -> No
 
 
 @pytest.mark.lock
-def test_consumer_audio_and_mood_events_are_not_known_platform_events() -> None:
+def test_preserved_audio_mood_and_gift_events_are_known_platform_events() -> None:
     for event_type in (
         "audio_sent",
         "audio_started",
@@ -91,5 +91,12 @@ def test_consumer_audio_and_mood_events_are_not_known_platform_events() -> None:
         "audio_stopped",
         "audio_completed",
         "mood_logged",
+        "gift_token_created",
+        "gift_redeemed",
+        "gift_redeem_failed",
+        "reward_observe@v1",
+        "reward_observe_blocked@v1",
+        "growth_propose@v1",
+        "growth_propose_blocked@v1",
     ):
-        assert is_known(event_type) is False
+        assert is_known(event_type) is True

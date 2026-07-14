@@ -21,6 +21,22 @@ class EffectsAdminPort(Protocol):
         channel: str = "telegram",
     ) -> Any: ...
 
+    def log_mood(
+        self,
+        *,
+        decision_id: str,
+        correlation_id: str,
+        tenant_id: str,
+        user_id: str,
+        score: int,
+        note: str | None = None,
+        notify_text: Optional[str] = None,
+        notify_reply_markup: Optional[Dict[str, Any]] = None,
+        callback_query_id: Optional[str] = None,
+        channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
+    ) -> Any: ...
+
     def admin_set_role(
         self,
         *,

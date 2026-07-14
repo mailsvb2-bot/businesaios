@@ -162,6 +162,68 @@ def selected_tariff(
     )
 
 
+def mood_last(
+    event_store: Any,
+    *,
+    tenant_id: str = "default",
+    user_id: str,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    tenant = str(tenant_id)
+    uid = str(user_id)
+    count = max(1, int(limit))
+    wm = watermark_for(
+        event_store,
+        tenant_id=tenant,
+        user_id=uid,
+        event_types=("mood_logged",),
+    )
+
+    def _compute() -> list[dict[str, Any]]:
+        events = list(
+            reversed(
+                best_effort_latest_events(
+                    event_store=event_store,
+                    where="core/users/read_model.mood_last",
+                    tenant_id=tenant,
+                    user_id=uid,
+                    event_types=("mood_logged",),
+                    legacy_event_type="mood_logged",
+                    limit=count,
+                )
+            )
+        )
+        if not events:
+            events = list(
+                _iter_user_events(
+                    event_store,
+                    tenant_id=tenant,
+                    user_id=uid,
+                    types={"mood_logged"},
+                )
+            )
+
+        items: list[dict[str, Any]] = []
+        for event in events:
+            payload = event.get("payload") or {}
+            if not isinstance(payload, dict):
+                continue
+            items.append(
+                {
+                    "ts": event.get("timestamp_ms"),
+                    "score": payload.get("score"),
+                    "note": payload.get("note"),
+                }
+            )
+        return items[-count:]
+
+    return global_cache().get(
+        key=("mood_last", tenant, uid, count),
+        compute=_compute,
+        watermark_ms=wm,
+    )
+
+
 def selected_product(
     event_store: Any,
     *,

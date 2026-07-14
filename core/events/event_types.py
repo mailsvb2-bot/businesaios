@@ -16,7 +16,16 @@ PURCHASE_ATTEMPT = "purchase_attempt"
 PURCHASE_SUCCESS = "purchase_success"
 PURCHASE_FAILED = "purchase_failed"
 OFFER_OUTCOME = "offer_outcome"
+MOOD_LOGGED = "mood_logged"
+AUDIO_SENT = "audio_sent"
+AUDIO_STARTED = "audio_started"
+AUDIO_PROGRESS = "audio_progress"
+AUDIO_STOPPED = "audio_stopped"
+AUDIO_COMPLETED = "audio_completed"
 ENTITLEMENT_GRANTED = "entitlement_granted"
+GIFT_TOKEN_CREATED = "gift_token_created"
+GIFT_REDEEMED = "gift_redeemed"
+GIFT_REDEEM_FAILED = "gift_redeem_failed"
 MESSAGE_SENT = "message_sent"
 MESSAGE_FAILED = "message_failed"
 MESSAGING_EFFECT_WARNING = "messaging_effect_warning"
@@ -37,6 +46,10 @@ ADMIN_PRICING_CHANGE_REJECTED = "admin_pricing_change_rejected"
 ADMIN_PRICING_CHANGE_APPLIED = "admin_pricing_change_applied"
 PRICING_SELECT = "pricing_select@v1"
 PRICING_SELECT_BLOCKED = "pricing_select_blocked@v1"
+REWARD_OBSERVE = "reward_observe@v1"
+REWARD_OBSERVE_BLOCKED = "reward_observe_blocked@v1"
+GROWTH_PROPOSE = "growth_propose@v1"
+GROWTH_PROPOSE_BLOCKED = "growth_propose_blocked@v1"
 POLICY_DEPLOYED = "policy_deployed"
 POLICY_ROLLED_BACK = "policy_rolled_back"
 EVOLUTION_JOB_ENQUEUED = "evolution_job_enqueued"
@@ -129,6 +142,10 @@ RETENTION_EVENT_TYPES: set[str] = {
     PURCHASE_SUCCESS,
     PURCHASE_FAILED,
     OFFER_OUTCOME,
+    AUDIO_STARTED,
+    AUDIO_PROGRESS,
+    AUDIO_STOPPED,
+    AUDIO_COMPLETED,
     ENTITLEMENT_GRANTED,
     MESSAGE_SENT,
     MESSAGE_FAILED,
@@ -144,7 +161,16 @@ KNOWN_EVENT_TYPES: set[str] = {
     PURCHASE_SUCCESS,
     PURCHASE_FAILED,
     OFFER_OUTCOME,
+    MOOD_LOGGED,
+    AUDIO_SENT,
+    AUDIO_STARTED,
+    AUDIO_PROGRESS,
+    AUDIO_STOPPED,
+    AUDIO_COMPLETED,
     ENTITLEMENT_GRANTED,
+    GIFT_TOKEN_CREATED,
+    GIFT_REDEEMED,
+    GIFT_REDEEM_FAILED,
     MESSAGE_SENT,
     MESSAGE_FAILED,
     MESSAGING_EFFECT_WARNING,
@@ -165,6 +191,10 @@ KNOWN_EVENT_TYPES: set[str] = {
     ADMIN_PRICING_CHANGE_APPLIED,
     PRICING_SELECT,
     PRICING_SELECT_BLOCKED,
+    REWARD_OBSERVE,
+    REWARD_OBSERVE_BLOCKED,
+    GROWTH_PROPOSE,
+    GROWTH_PROPOSE_BLOCKED,
     POLICY_DEPLOYED,
     POLICY_ROLLED_BACK,
     EVOLUTION_JOB_ENQUEUED,

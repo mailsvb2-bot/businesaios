@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from runtime._internal.effect_types import EffectActionType
+from runtime._internal.effects_actions.telegram.media import send_audio_effect
 from runtime._internal.effects_actions.telegram.messaging import send_message_effect
 from runtime._internal.effects_actions.telegram_actions_callbacks import (
     answer_callback_internal_effect,
@@ -15,6 +16,7 @@ from runtime._internal.effects_actions.telegram_actions_callbacks import (
 )
 from runtime._internal.effects_actions.telegram_actions_polling import poll_telegram_updates_effect
 from runtime._internal.effects_actions.telegram_actions_transport import (
+    send_audio_transport_effect,
     send_chat_action_effect,
     send_message_transport_effect,
 )
@@ -138,6 +140,12 @@ class TelegramEffectsMixin:
             timeout_s=int(timeout_s),
             limit=int(limit),
         )
+
+    def send_audio(self, *args, **kwargs) -> Any:
+        return send_audio_effect(self, *args, **kwargs)
+
+    def send_audio_transport(self, *args, **kwargs) -> Any:
+        return send_audio_transport_effect(self, *args, **kwargs)
 
     def send_message_transport(self, *args, **kwargs) -> Any:
         return send_message_transport_effect(self, *args, **kwargs)

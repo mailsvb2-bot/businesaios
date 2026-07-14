@@ -122,6 +122,7 @@ def _generic_endpoint_contract(action_type: EffectActionType, payload: Mapping[s
 def payload_contract_fields() -> dict[EffectActionType, tuple[str, ...]]:
     return {
         EffectActionType.TELEGRAM_SEND_MESSAGE: ("chat_id", "text", "reply_markup", "priority", "critical", "timeout_s"),
+        EffectActionType.TELEGRAM_SEND_AUDIO: ("chat_id", "audio_url", "caption", "priority", "critical", "timeout_s"),
         EffectActionType.TELEGRAM_ANSWER_CALLBACK: ("callback_query_id", "text", "show_alert"),
         EffectActionType.TELEGRAM_SEND_CHAT_ACTION: ("chat_id", "action"),
         EffectActionType.TELEGRAM_SELF_CHECK: ("token",),
@@ -147,6 +148,15 @@ def normalize_effect_payload(action_type: str | EffectActionType, payload: Any) 
             "priority": data.get("priority", "normal"),
             "critical": _bool(data, "critical", default=True),
             "timeout_s": _int(data, "timeout_s", default=30, minimum=1, maximum=300),
+        }
+    if key is EffectActionType.TELEGRAM_SEND_AUDIO:
+        return {
+            "chat_id": _require_text(key, data, "chat_id"),
+            "audio_url": _require_text(key, data, "audio_url"),
+            "caption": _optional_text(data, "caption"),
+            "priority": data.get("priority", "normal"),
+            "critical": _bool(data, "critical", default=True),
+            "timeout_s": _int(data, "timeout_s", default=60, minimum=1, maximum=300),
         }
     if key is EffectActionType.TELEGRAM_ANSWER_CALLBACK:
         return {

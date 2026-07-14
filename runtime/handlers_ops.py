@@ -29,6 +29,8 @@ from runtime.handler_impl.domains.pricing_ops import (
 )
 from runtime.handler_impl.domains.user_ops import (
     handle_answer_callback,
+    handle_log_mood,
+    handle_send_audio,
     handle_send_weather,
     handle_set_user_setting,
 )
@@ -43,12 +45,14 @@ __all__ = [
     "handle_create_payment_and_send_link",
     "handle_deploy_policy",
     "handle_grant_access",
+    "handle_log_mood",
     "handle_reconcile_payment",
     "handle_reconcile_payments",
     "handle_reject_pricing_change",
     "handle_request_pricing_change",
     "handle_rollback_policy",
     "handle_select_tariff",
+    "handle_send_audio",
     "handle_send_weather",
     "handle_set_marketing_copy",
     "handle_set_user_setting",

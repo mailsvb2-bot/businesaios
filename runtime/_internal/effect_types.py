@@ -6,6 +6,7 @@ from typing import Any
 
 class EffectActionType(StrEnum):
     TELEGRAM_SEND_MESSAGE = "telegram.send_message"
+    TELEGRAM_SEND_AUDIO = "telegram.send_audio"
     TELEGRAM_ANSWER_CALLBACK = "telegram.answer_callback"
     TELEGRAM_SEND_CHAT_ACTION = "telegram.send_chat_action"
     TELEGRAM_SELF_CHECK = "telegram.self_check"
@@ -21,6 +22,7 @@ class EffectActionType(StrEnum):
 
 EFFECT_ACTION_ALIASES: dict[str, EffectActionType] = {
     "telegram_send_message": EffectActionType.TELEGRAM_SEND_MESSAGE,
+    "telegram_send_audio": EffectActionType.TELEGRAM_SEND_AUDIO,
     "telegram_answer_callback": EffectActionType.TELEGRAM_ANSWER_CALLBACK,
     "telegram_send_chat_action": EffectActionType.TELEGRAM_SEND_CHAT_ACTION,
     "yookassa_create_payment": EffectActionType.PAYMENTS_YOOKASSA_CREATE,

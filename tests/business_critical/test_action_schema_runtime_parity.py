@@ -11,20 +11,17 @@ from runtime.ports.effects_admin import EffectsAdminPort
 from runtime.ports.effects_platform import EffectsPlatformPort
 
 
-FORBIDDEN_ACTIONS = {
-    "send_audio@v1",
-    "log_mood@v1",
-    "reward_observe@v1",
-    "growth_propose@v1",
-}
-
-
 @pytest.mark.lock
 def test_decision_schema_catalog_has_exact_runtime_action_name_parity() -> None:
     catalog = build_catalog()
 
     assert set(catalog) == all_actions()
-    assert FORBIDDEN_ACTIONS.isdisjoint(catalog)
+    assert {
+        "send_audio@v1",
+        "log_mood@v1",
+        "reward_observe@v1",
+        "growth_propose@v1",
+    }.issubset(catalog)
 
 
 @pytest.mark.lock
@@ -60,12 +57,15 @@ def test_business_scope_is_required_by_external_tenant_owned_schemas() -> None:
         "deploy_policy@v1",
         "enqueue_evolution_job@v1",
         "grant_access@v1",
+        "growth_propose@v1",
+        "log_mood@v1",
         "growth_strategy_accept@v1",
         "growth_strategy_backlog@v1",
         "growth_strategy_generate@v1",
         "growth_strategy_reject@v1",
         "one_click_value@v1",
         "pricing_select@v1",
+        "reward_observe@v1",
         "profit_sprint_onboarding_lead_source@v1",
         "profit_sprint_onboarding_start@v1",
         "profit_sprint_onboarding_text@v1",
@@ -73,6 +73,7 @@ def test_business_scope_is_required_by_external_tenant_owned_schemas() -> None:
         "request_pricing_change@v1",
         "rollback_policy@v1",
         "select_tariff@v1",
+        "send_audio@v1",
         "send_marketing_offer@v1",
         "send_message@v1",
         "send_weather@v1",

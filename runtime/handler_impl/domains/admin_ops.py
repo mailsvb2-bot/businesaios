@@ -113,7 +113,7 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
     try:
         from core.entitlements.read_model import compute_entitlements
         from core.payments.read_model import latest_payment_status
-        from core.users.read_model import selected_tariff, user_settings
+        from core.users.read_model import mood_last, selected_tariff, user_settings
 
         payment = latest_payment_status(
             event_store=event_store,
@@ -138,10 +138,21 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
             product_id=product_id,
             user_id=target,
         )
+        moods = mood_last(
+            event_store,
+            tenant_id=tenant_id,
+            user_id=target,
+            limit=5,
+        )
         access = "полный" if bool(entitlements.get("full_access")) else "базовый"
         payment_status = str(payment.get("status") or "none")
         city = str(settings.get("city") or "-")
         tariff_title = str((tariff or {}).get("title") or (tariff or {}).get("tariff") or "-")
+        mood_line = "-"
+        if moods:
+            latest_mood = moods[-1]
+            mood_note = str(latest_mood.get("note") or "").strip().replace("\n", " ")[:80]
+            mood_line = f"{latest_mood.get('score')}/10" + (f" — {mood_note}" if mood_note else "")
         scope_line = (
             f"Продукт: {product_id}\n"
             if product_id
@@ -155,6 +166,7 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
             "payment_status": payment_status,
             "city": city,
             "tariff": tariff_title,
+            "mood": mood_line,
         }
         text = (
             "🔎 Карточка пользователя\n\n"
@@ -165,6 +177,7 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
             f"Оплата: {payment_status}\n"
             f"Город: {city}\n"
             f"Тариф (выбор): {tariff_title}\n"
+            f"Последнее состояние: {mood_line}\n"
         )
     except Exception as exc:
         product_line = f"\nПродукт: {product_id}" if product_id else ""

@@ -7,50 +7,40 @@ import pytest
 from core.events import event_types
 from runtime._internal.effect_types import canonical_effect_action_types
 from runtime.boot.actions_registry import all_actions
+from runtime.messaging.channel_types import ALL_CHANNELS
 
 
 ROOT = Path(__file__).resolve().parents[2]
 
-PLATFORM_SCOPE_SURFACES = (
-    "runtime/boot/actions_catalog.py",
-    "runtime/handlers_ops.py",
-    "runtime/handler_impl/domains/user_ops.py",
-    "runtime/ports/effects_admin.py",
-    "runtime/ports/effects_comms.py",
-    "runtime/ports/effects_revenue.py",
-    "runtime/effects/registry.py",
-    "runtime/_internal/_effects_impl.py",
-    "runtime/_internal/effect_types.py",
-    "runtime/_internal/effect_payloads.py",
-    "runtime/_internal/effect_router.py",
-    "runtime/_internal/effects_actions/telegram_actions.py",
-    "runtime/_internal/effects_actions/telegram_actions_transport.py",
-    "runtime/_internal/effects_actions/telegram/transport.py",
-    "runtime/_internal/effects_clients/telegram_client.py",
-    "core/actions/catalog_groups.py",
-    "core/events/event_types.py",
-    "core/users/read_model.py",
-)
-
-FORBIDDEN_CONSUMER_CAPABILITY_MARKERS = (
+PRESERVED_USER_ACTIONS = {
     "send_audio@v1",
-    "send_audio(",
-    "sendAudio",
-    "handle_send_audio",
-    "TELEGRAM_SEND_AUDIO",
-    "telegram.send_audio",
-    "_audio_",
+    "log_mood@v1",
+    "reward_observe@v1",
+    "growth_propose@v1",
+}
+
+PRESERVED_MULTI_MESSENGER_CHANNELS = {
+    "telegram",
+    "whatsapp",
+    "sms",
+    "email",
+    "messenger",
+    "instagram",
+    "web_chat",
+    "api",
+}
+
+PRESERVED_USER_EVENTS = {
     "audio_sent",
     "audio_started",
     "audio_progress",
     "audio_stopped",
     "audio_completed",
-    "log_mood@v1",
-    "log_mood(",
-    "handle_log_mood",
     "mood_logged",
-    "mood_last",
-)
+    "gift_token_created",
+    "gift_redeemed",
+    "gift_redeem_failed",
+}
 
 FORBIDDEN_GLOBAL_PRICING_STORAGE_MARKERS = (
     "PLANS_PATH",
@@ -61,70 +51,53 @@ FORBIDDEN_GLOBAL_PRICING_STORAGE_MARKERS = (
     "execute_plan_price_update",
 )
 
-GHOST_ACTIONS = (
-    "reward_observe@v1",
-    "growth_propose@v1",
-)
 
-
-def _action_names() -> set[str]:
-    return set(all_actions())
+@pytest.mark.lock
+def test_complete_user_action_surface_is_preserved_in_canonical_registry() -> None:
+    assert PRESERVED_USER_ACTIONS.issubset(set(all_actions()))
 
 
 @pytest.mark.lock
-def test_business_platform_has_no_consumer_audio_or_mood_actions() -> None:
-    actions = _action_names()
-
-    assert "send_audio@v1" not in actions
-    assert "log_mood@v1" not in actions
-    assert all("audio" not in action.casefold() for action in actions)
-    assert all("mood" not in action.casefold() for action in actions)
-
-
-@pytest.mark.lock
-def test_unwired_reward_and_growth_ghost_actions_are_not_advertised() -> None:
-    actions = _action_names()
-
-    assert all(action not in actions for action in GHOST_ACTIONS)
-    assert not (ROOT / "runtime" / "handlers" / "reward_observe.py").exists()
-    assert not (ROOT / "runtime" / "handlers" / "growth_propose.py").exists()
-
-    core_boot = (ROOT / "runtime" / "boot" / "handler_groups" / "core.py").read_text(encoding="utf-8")
-    public_actions = (ROOT / "runtime" / "actions" / "__init__.py").read_text(encoding="utf-8")
-    action_names = (ROOT / "core" / "actions" / "names.py").read_text(encoding="utf-8")
-    combined = "\n".join((core_boot, public_actions, action_names))
-    for action in GHOST_ACTIONS:
-        assert action not in combined
-    for marker in ("reward_observer", "growth_proposal_service", "proposal_gateway"):
-        assert marker not in core_boot
+def test_reward_and_growth_compatibility_routes_are_canonically_wired() -> None:
+    core_boot = (
+        ROOT / "runtime" / "boot" / "handler_groups" / "core.py"
+    ).read_text(encoding="utf-8")
+    assert (
+        ROOT / "runtime" / "handlers" / "reward_observe.py"
+    ).exists()
+    assert (
+        ROOT / "runtime" / "handlers" / "growth_propose.py"
+    ).exists()
+    for marker in (
+        "reward_observe@v1",
+        "growth_propose@v1",
+        "reward_observer",
+        "growth_proposal_service",
+        "proposal_gateway",
+    ):
+        assert marker in core_boot
 
 
 @pytest.mark.lock
-def test_business_platform_effect_router_has_no_audio_effect_type() -> None:
-    effect_actions = canonical_effect_action_types()
+def test_audio_transport_remains_an_executor_owned_adapter() -> None:
+    assert "telegram.send_audio" in canonical_effect_action_types()
 
-    assert all("audio" not in action.casefold() for action in effect_actions)
-
-
-@pytest.mark.lock
-def test_business_platform_event_vocabulary_has_no_consumer_mood_audio_events() -> None:
-    known = event_types.KNOWN_EVENT_TYPES
-
-    assert all("audio" not in event_type.casefold() for event_type in known)
-    assert all("mood" not in event_type.casefold() for event_type in known)
+    legacy_registry = (
+        ROOT / "runtime" / "effects" / "registry.py"
+    ).read_text(encoding="utf-8")
+    assert "CANON_LEGACY_EFFECT_REGISTRY_REMOVED = True" in legacy_registry
+    for action in PRESERVED_USER_ACTIONS:
+        assert f'"{action}":' not in legacy_registry
 
 
 @pytest.mark.lock
-def test_canonical_platform_surfaces_do_not_reintroduce_consumer_capabilities() -> None:
-    offenders: list[str] = []
-    for relative in PLATFORM_SCOPE_SURFACES:
-        path = ROOT / relative
-        text = path.read_text(encoding="utf-8")
-        for marker in FORBIDDEN_CONSUMER_CAPABILITY_MARKERS:
-            if marker in text:
-                offenders.append(f"{relative}:{marker}")
+def test_preserved_user_events_are_in_the_strict_vocabulary() -> None:
+    assert PRESERVED_USER_EVENTS.issubset(event_types.KNOWN_EVENT_TYPES)
 
-    assert offenders == [], "consumer product capabilities leaked into BusinessAIOS platform:\n" + "\n".join(offenders)
+
+@pytest.mark.lock
+def test_user_functionality_restoration_does_not_narrow_multimessenger_surface() -> None:
+    assert PRESERVED_MULTI_MESSENGER_CHANNELS.issubset(set(ALL_CHANNELS))
 
 
 @pytest.mark.lock
@@ -138,7 +111,9 @@ def test_pricing_runtime_has_no_global_single_product_storage_owner() -> None:
         text = path.read_text(encoding="utf-8")
         for marker in FORBIDDEN_GLOBAL_PRICING_STORAGE_MARKERS:
             if marker in text:
-                offenders.append(f"{path.relative_to(ROOT).as_posix()}:{marker}")
+                offenders.append(
+                    f"{path.relative_to(ROOT).as_posix()}:{marker}"
+                )
 
     assert offenders == [], "legacy global pricing storage returned:\n" + "\n".join(offenders)
 
@@ -146,5 +121,9 @@ def test_pricing_runtime_has_no_global_single_product_storage_owner() -> None:
 @pytest.mark.lock
 def test_legacy_pricing_sidecar_helper_is_deleted() -> None:
     assert not (
-        ROOT / "runtime" / "_internal" / "effects_domains" / "admin_pricing_support.py"
+        ROOT
+        / "runtime"
+        / "_internal"
+        / "effects_domains"
+        / "admin_pricing_support.py"
     ).exists()

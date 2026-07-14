@@ -16,12 +16,14 @@ from runtime.handlers_ops import (
     handle_create_payment_and_send_link,
     handle_deploy_policy,
     handle_grant_access,
+    handle_log_mood,
     handle_reconcile_payment,
     handle_reconcile_payments,
     handle_reject_pricing_change,
     handle_request_pricing_change,
     handle_rollback_policy,
     handle_select_tariff,
+    handle_send_audio,
     handle_send_weather,
     handle_set_marketing_copy,
     handle_set_user_setting,
@@ -32,8 +34,10 @@ CANON_BOOT_WIRING_ONLY = True
 
 def register_ops_handlers(*, handlers: ActionHandlerRegistry, event_store) -> None:
     handlers.register("answer_callback@v1", handle_answer_callback)
+    handlers.register("send_audio@v1", handle_send_audio)
     handlers.register("send_weather@v1", handle_send_weather)
     handlers.register("set_user_setting@v1", handle_set_user_setting)
+    handlers.register("log_mood@v1", handle_log_mood)
     handlers.register("admin_set_role@v1", handle_admin_set_role)
     handlers.register("admin_set_perm@v1", handle_admin_set_perm)
     handlers.register("set_marketing_copy@v1", handle_set_marketing_copy)

@@ -362,6 +362,10 @@ class Effects(
     _telegram_webhook_cleared: bool = False
     _telegram_startup_checked: bool = False
     _last_err_ms: dict[str, int] | None = None
+    _audio_delivery_keys: dict[str, float] | None = None
+    _last_audio_sent_at: dict[str, float] | None = None
+    _audio_lock: Any | None = None
+    _min_audio_interval_s: float = 0.7
 
     def __post_init__(self):
         if self.http_transport is None:

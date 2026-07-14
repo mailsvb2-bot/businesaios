@@ -6,8 +6,11 @@ instead of accumulating every helper and mutable field concern.
 
 from __future__ import annotations
 
+import threading
 import time
 from typing import Any
+
+from runtime.platform.config.env_flags import env_float
 
 
 def initialize_effects_runtime_state(effects: Any) -> None:
@@ -17,8 +20,20 @@ def initialize_effects_runtime_state(effects: Any) -> None:
         effects._telegram_me = None
     effects._telegram_webhook_cleared = bool(effects._telegram_webhook_cleared)
     effects._telegram_startup_checked = bool(getattr(effects, "_telegram_startup_checked", False))
+    if effects._audio_delivery_keys is None:
+        effects._audio_delivery_keys = {}
+    if effects._last_audio_sent_at is None:
+        effects._last_audio_sent_at = {}
+    if effects._audio_lock is None:
+        effects._audio_lock = threading.Lock()
     if effects._last_err_ms is None:
         effects._last_err_ms = {}
+    effects._min_audio_interval_s = env_float(
+        "TELEGRAM_MIN_AUDIO_INTERVAL_S",
+        float(effects._min_audio_interval_s),
+        lo=0.0,
+        hi=60.0,
+    )
 
 
 def throttled_emit_error(
