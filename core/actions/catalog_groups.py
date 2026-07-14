@@ -112,11 +112,12 @@ def ads_catalog() -> dict[str, CatalogEntry]:
 
 
 def payments_catalog() -> dict[str, CatalogEntry]:
-    payment_optional = {"product_id", "order_id", "provider", "metadata", "expected_amount", "pricing_version"}
+    payment_optional = {"provider", "metadata", "expected_amount", "pricing_version"}
     payment_types: dict[str, FieldType] = {"tenant_id": str, "product_id": str, "order_id": str, "user_id": str, "amount": int, "currency": str, "provider": str, "metadata": dict, "expected_amount": int, "pricing_version": str}
+    payment_required = {"tenant_id", "product_id", "order_id", "user_id", "amount", "currency"}
     return {
-        "capture_payment@v1": _entry("capture_payment@v1", 1, required={"tenant_id", "user_id", "amount", "currency"}, optional=payment_optional, field_types=payment_types),
-        "create_payment_and_send_link@v1": _entry("create_payment_and_send_link@v1", 1, required={"tenant_id", "user_id", "amount", "currency"}, optional=payment_optional, field_types=payment_types),
+        "capture_payment@v1": _entry("capture_payment@v1", 1, required=payment_required, optional=payment_optional, field_types=payment_types),
+        "create_payment_and_send_link@v1": _entry("create_payment_and_send_link@v1", 1, required=payment_required, optional=payment_optional, field_types=payment_types),
         "reconcile_payments@v1": _entry("reconcile_payments@v1", 1, required=set(), optional={"window_min"}, field_types={"window_min": int}),
         "reconcile_payment@v1": _entry("reconcile_payment@v1", 1, required={"external_id"}, optional={"notification_id", "event", "user_id"}, field_types={"external_id": str, "notification_id": str, "event": str, "user_id": str}),
         "grant_access@v1": _entry("grant_access@v1", 1, required={"tenant_id", "product_id", "user_id"}, optional={"grant_key", "full_access", "notify_text", "notify_reply_markup", "track_event_type", "track_payload"}, field_types={"tenant_id": str, "product_id": str, "user_id": str, "grant_key": str, "full_access": bool, "notify_text": str, "notify_reply_markup": dict, "track_event_type": str, "track_payload": dict}),
@@ -149,8 +150,8 @@ def user_state_catalog() -> dict[str, CatalogEntry]:
 
 def governance_catalog() -> dict[str, CatalogEntry]:
     return {
-        "deploy_policy@v1": _entry("deploy_policy@v1", 1, required={"candidate_policy_id", "rollout_pct"}, optional=set(), field_types={"candidate_policy_id": str, "rollout_pct": int}),
-        "rollback_policy@v1": _entry("rollback_policy@v1", 1, required={"reason"}, optional=set(), field_types={"reason": str}),
+        "deploy_policy@v1": _entry("deploy_policy@v1", 1, required={"tenant_id", "candidate_policy_id", "rollout_pct"}, optional=set(), field_types={"tenant_id": str, "candidate_policy_id": str, "rollout_pct": int}),
+        "rollback_policy@v1": _entry("rollback_policy@v1", 1, required={"tenant_id", "reason"}, optional=set(), field_types={"tenant_id": str, "reason": str}),
         "admin_user_card@v1": _entry("admin_user_card@v1", 1, required={"tenant_id", "admin_id", "target_user_id"}, optional={"product_id"}, field_types={"tenant_id": str, "product_id": str, "admin_id": str, "target_user_id": str}),
         "admin_set_role@v1": _entry("admin_set_role@v1", 1, required={"tenant_id", "admin_id", "target_user_id", "role", "enabled"}, optional={"notify_text", "notify_reply_markup", "callback_query_id"}, field_types={"tenant_id": str, "admin_id": str, "target_user_id": str, "role": str, "enabled": bool, "notify_text": str, "notify_reply_markup": dict, "callback_query_id": str}),
         "admin_set_perm@v1": _entry("admin_set_perm@v1", 1, required={"tenant_id", "admin_id", "target_user_id", "perm", "enabled"}, optional={"notify_text", "notify_reply_markup", "callback_query_id"}, field_types={"tenant_id": str, "admin_id": str, "target_user_id": str, "perm": str, "enabled": bool, "notify_text": str, "notify_reply_markup": dict, "callback_query_id": str}),
