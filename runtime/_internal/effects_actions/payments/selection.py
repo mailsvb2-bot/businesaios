@@ -17,6 +17,19 @@ def _business_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _required_business_metadata(
+    metadata: dict[str, Any] | None,
+) -> dict[str, str]:
+    observed = _business_metadata(metadata)
+    required: dict[str, str] = {}
+    for field in ("tenant_id", "product_id", "order_id"):
+        value = str(observed.get(field) or "").strip()
+        if not value:
+            raise RuntimeError(f"{field.upper()}_REQUIRED")
+        required[field] = value
+    return required
+
+
 def _ledger_evidence(*, code: str, external_ref: str, payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "source": "ledger",
@@ -154,13 +167,16 @@ def capture_payment_effect(
     assert_called_from_executor()
     provider_norm = str(provider).lower().strip()
     payment_metadata = dict(metadata or {})
-    causal_metadata = _business_metadata(payment_metadata)
+    causal_metadata = _required_business_metadata(payment_metadata)
     tenant = assert_event_log_tenant(
         effects.event_log,
-        tenant_id=str(causal_metadata.get("tenant_id") or ""),
+        tenant_id=causal_metadata["tenant_id"],
         operation="capture_payment",
     )
     causal_metadata["tenant_id"] = tenant
+    # The provider receives the same sealed business identity recorded in audit
+    # events and evidence. Direct callers cannot override it in extra metadata.
+    payment_metadata.update(causal_metadata)
 
     if provider_norm in {"yookassa", "yoo", "yoo_kassa"}:
         provider_ok, meta = effects._yookassa_create_payment(
