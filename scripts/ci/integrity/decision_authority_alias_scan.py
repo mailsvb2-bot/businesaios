@@ -20,6 +20,20 @@ _AUTHORITY_TOKENS = (
 )
 _AUTHORITY_METHODS = frozenset({"decide", "issue", "optimize"})
 _INTERFACE_SUFFIXES = ("Port", "Protocol", "Contract", "Spec", "Ref")
+_SUSPICIOUS_AUTHORITY_PREFIXES = (
+    "alternate",
+    "autopilot",
+    "backup",
+    "experimental",
+    "fake",
+    "fallback",
+    "legacy",
+    "local",
+    "private",
+    "second",
+    "secondary",
+    "shadow",
+)
 _RUNTIME_DECISION_CORE_TRIPWIRE_PATH = "boot/runtime_service_contracts.py"
 _RUNTIME_DECISION_CORE_TRIPWIRE_NAME = "RuntimeDecisionCore"
 _RUNTIME_DECISION_CORE_TRIPWIRE_MARKER = "CANON_RUNTIME_DECISION_CORE_COMPAT_TRIPWIRE"
@@ -48,11 +62,35 @@ def _looks_like_decision_authority_alias(name: str, executable_names: set[str]) 
     return any(token in normalized for token in _AUTHORITY_TOKENS)
 
 
-def _is_authority_definition_name(name: str, executable_names: set[str]) -> bool:
+def _is_authority_type_definition_name(name: str, executable_names: set[str]) -> bool:
     if str(name) in executable_names:
         return True
     stem = _normalized_type_stem(name)
     return any(stem.endswith(token) for token in _AUTHORITY_TOKENS)
+
+
+def _is_authority_function_definition_name(name: str, executable_names: set[str]) -> bool:
+    text = str(name or "")
+    if text in executable_names:
+        return True
+
+    stem = _normalized_type_stem(text)
+    executable_stems = {_normalized_type_stem(item) for item in executable_names}
+    if stem in executable_stems or stem in _AUTHORITY_TOKENS:
+        return True
+
+    # CamelCase authority-shaped callables are exported executable surfaces.
+    if any(ch.isupper() for ch in text):
+        return any(stem.endswith(token) for token in _AUTHORITY_TOKENS)
+
+    # Snake-case lifecycle helpers such as validate_*, build_* and register_*
+    # are not authorities by name alone. Explicit shadow/fallback/alternate
+    # authority definitions remain forbidden.
+    return any(
+        stem.startswith(prefix) and stem.endswith(token)
+        for prefix in _SUSPICIOUS_AUTHORITY_PREFIXES
+        for token in _AUTHORITY_TOKENS
+    )
 
 
 def _class_method_names(node: ast.ClassDef) -> set[str]:
@@ -169,6 +207,23 @@ def _assigned_names(node: ast.Assign | ast.AnnAssign | ast.NamedExpr) -> tuple[a
     return tuple(names)
 
 
+def _value_can_expose_executable(value: ast.AST) -> bool:
+    if isinstance(value, ast.Constant):
+        return False
+    if isinstance(value, ast.Name | ast.Attribute | ast.Call | ast.Lambda | ast.Subscript):
+        return True
+    if isinstance(value, ast.IfExp):
+        return _value_can_expose_executable(value.body) or _value_can_expose_executable(value.orelse)
+    if isinstance(value, ast.List | ast.Set | ast.Tuple):
+        return any(_value_can_expose_executable(item) for item in value.elts)
+    if isinstance(value, ast.Dict):
+        return any(
+            item is not None and _value_can_expose_executable(item)
+            for item in value.values
+        )
+    return False
+
+
 def _definition_finding(*, path: Path, node: ast.AST, name: str, kind: str) -> auditor.Finding:
     return auditor.finding(
         "P0_DECISION_AUTHORITY_DEFINITION",
@@ -202,20 +257,22 @@ def _alias_findings_for_path(path: Path, spec: dict[str, Any]) -> list[auditor.F
             if _is_pure_authority_interface(node):
                 continue
             authority_methods = _class_method_names(node) & _AUTHORITY_METHODS
-            if _is_authority_definition_name(node.name, executable_names) or (
+            if _is_authority_type_definition_name(node.name, executable_names) or (
                 authority_methods and _looks_like_decision_authority_alias(node.name, executable_names)
             ):
                 findings.append(_definition_finding(path=path, node=node, name=node.name, kind="Class"))
             continue
 
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-            if _is_authority_definition_name(node.name, executable_names):
+            if _is_authority_function_definition_name(node.name, executable_names):
                 findings.append(_definition_finding(path=path, node=node, name=node.name, kind="Function"))
             continue
 
         if isinstance(node, ast.ImportFrom):
             for alias in node.names:
                 if alias.asname is None:
+                    continue
+                if alias.name.isupper() and alias.asname.isupper():
                     continue
                 if not _looks_like_decision_authority_alias(alias.asname, executable_names):
                     continue
@@ -236,7 +293,7 @@ def _alias_findings_for_path(path: Path, spec: dict[str, Any]) -> list[auditor.F
             continue
 
         value = getattr(node, "value", None)
-        if value is None:
+        if value is None or not _value_can_expose_executable(value):
             continue
         for target in _assigned_names(node):
             if not _looks_like_decision_authority_alias(target.id, executable_names):

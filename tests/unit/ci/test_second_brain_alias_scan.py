@@ -124,6 +124,68 @@ def test_snake_case_decision_core_instance_binding_is_allowed(tmp_path: Path) ->
     assert _scan(path) == []
 
 
+def test_literal_canon_markers_are_not_executable_aliases(tmp_path: Path) -> None:
+    path = tmp_path / "markers.py"
+    path.write_text(
+        "CANON_BUILD_DECISION_CORE_COMPAT_WRAPPER = True\n"
+        "CANON_RUNTIME_DECISION_CORE_NAME_RESERVED = 'DecisionCore'\n",
+        encoding="utf-8",
+    )
+
+    assert _scan(path) == []
+
+
+def test_non_authoritative_decision_core_lifecycle_helpers_are_allowed(tmp_path: Path) -> None:
+    path = tmp_path / "helpers.py"
+    path.write_text(
+        "def validate_headless_decision_core(value):\n"
+        "    return value is not None\n"
+        "def build_decision_core():\n"
+        "    return build_runtime_execution_service()\n"
+        "def register_decision_core(registry):\n"
+        "    return register_runtime_execution_service(registry)\n",
+        encoding="utf-8",
+    )
+
+    assert _scan(path) == []
+
+
+def test_canon_named_callable_alias_is_still_p0(tmp_path: Path) -> None:
+    path = tmp_path / "callable_marker.py"
+    path.write_text(
+        "CANON_RUNTIME_DECISION_CORE = RuntimeDecisionExecutionService\n",
+        encoding="utf-8",
+    )
+
+    findings = _scan(path)
+
+    assert [item.check_id for item in findings] == ["P0_DECISION_AUTHORITY_ALIAS"]
+
+
+def test_snake_case_shadow_decision_core_function_is_p0(tmp_path: Path) -> None:
+    path = tmp_path / "shadow_function.py"
+    path.write_text(
+        "def shadow_decision_core(state):\n"
+        "    return {'action': 'shadow'}\n",
+        encoding="utf-8",
+    )
+
+    findings = _scan(path)
+
+    assert [item.check_id for item in findings] == ["P0_DECISION_AUTHORITY_DEFINITION"]
+
+
+def test_constant_import_alias_is_not_executable(tmp_path: Path) -> None:
+    path = tmp_path / "constant_import.py"
+    path.write_text(
+        "from core.decision_core_contract import "
+        "CANONICAL_DECISION_CORE_PATH as CANON_DECISION_CORE_PATH\n",
+        encoding="utf-8",
+    )
+
+    assert _scan(path) == []
+
+
 def test_existing_runtime_decision_core_tripwire_stays_fail_closed() -> None:
     path = Path("boot/runtime_service_contracts.py")
 
