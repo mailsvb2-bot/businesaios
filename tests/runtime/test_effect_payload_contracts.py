@@ -22,7 +22,7 @@ def test_effect_payload_contract_registry_matches_router_support() -> None:
     assert set(payload_contract_fields()) == set(router.supported_action_enums())
 
 
-def test_normalize_effect_payload_applies_canonical_defaults() -> None:
+def test_normalize_effect_payload_requires_weather_city_and_applies_generic_defaults() -> None:
     with pytest.raises(
         EffectPayloadError,
         match=r"effect_payload_invalid:weather.open_meteo.current:missing_city",
