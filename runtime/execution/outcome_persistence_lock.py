@@ -183,7 +183,6 @@ def finalize_failed_outcome(*, executor: Any, env: Any, reason: str, output: Map
     decision_id, tenant_id = _decision_identity(env)
     if not decision_id:
         raise OutcomePersistenceLockError("missing_decision_id")
-    payload = _safe_dict(output)
     move_to_dead_letter(
         getattr(executor, "_outbox", None),
         decision_id=decision_id,
@@ -210,7 +209,6 @@ def finalize_failed_outcome(*, executor: Any, env: Any, reason: str, output: Map
             "owner": "runtime.execution.outcome_persistence_lock",
             "proof_event": "execution_failed",
             "reason": str(reason),
-            "output": payload,
         },
     )
     return {
@@ -225,7 +223,6 @@ def finalize_failed_outcome(*, executor: Any, env: Any, reason: str, output: Map
             "event_type": "execution_failed",
             "decision_id": decision_id,
             "reason": str(reason),
-            "output": payload,
         },
     }
 
