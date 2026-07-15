@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -17,7 +18,7 @@ def _env(*, action: str, payload: dict[str, object]) -> SimpleNamespace:
         correlation_id="correlation-1",
         action=action,
         payload=dict(payload),
-        issued_at_ms=1_750_000_000_000,
+        issued_at_ms=time.time_ns() // 1_000_000,
     )
     return SimpleNamespace(decision=decision)
 
