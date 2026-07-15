@@ -4,6 +4,10 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from runtime._internal.effects_actions.payments.reconciliation_ownership import (
+    assert_payment_metadata_tenant,
+    resolve_payment_user,
+)
 from runtime._internal.effects_actions.payments.reconciliation_support import (
     FAILED_STATUSES,
     SUCCESS_STATUSES,
@@ -12,6 +16,7 @@ from runtime._internal.effects_actions.payments.reconciliation_support import (
     resolve_created_payment_context,
     try_mark_terminal_outbox,
 )
+from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 _PAYMENT_EVENT_NAMESPACE = uuid.UUID("cb6838ad-0545-4d2e-8c8e-253a6fab1b48")
@@ -24,7 +29,10 @@ def _terminal_event_id(*, event_type: str, external_id: str, original_decision_i
 
 def _event_id_exists(*, effects: Any, event_id: str) -> bool:
     try:
-        return any(str(event.get("event_id") or "") == str(event_id) for event in effects.event_log.iter_events())
+        return any(
+            str(event.get("event_id") or "") == str(event_id)
+            for event in effects.event_log.iter_events()
+        )
     except Exception:
         return False
 
@@ -223,12 +231,49 @@ def _record_failure(
     )
 
 
+def _created_payment_context(
+    effects: Any,
+    *,
+    tenant_id: str,
+    external_id: str,
+    user_id_hint: str | None = None,
+) -> tuple[dict[str, Any], str, dict[str, Any]]:
+    context = resolve_created_payment_context(
+        effects=effects,
+        external_id=str(external_id),
+    )
+    if not str(context.get("envelope_id") or "").strip():
+        raise RuntimeError(f"PAYMENT_CONTEXT_NOT_FOUND:{external_id}")
+    metadata = assert_payment_metadata_tenant(
+        _metadata(context.get("metadata")),
+        tenant_id=str(tenant_id),
+        external_id=str(external_id),
+    )
+    user_id = resolve_payment_user(
+        context,
+        user_id_hint=user_id_hint,
+        external_id=str(external_id),
+    )
+    return context, user_id, metadata
+
+
 def reconcile_payments_effect(
-    effects: Any, *, decision_id: str, correlation_id: str, window_min: int = 30
+    effects: Any,
+    *,
+    decision_id: str,
+    correlation_id: str,
+    tenant_id: str,
+    window_min: int = 30,
 ) -> dict | bool:
     assert_called_from_executor()
+    tenant = assert_event_log_tenant(
+        effects.event_log,
+        tenant_id=str(tenant_id),
+        operation="reconcile_payments",
+    )
     if effects.ledger is None:
-        return True
+        raise RuntimeError("PAYMENT_LEDGER_REQUIRED")
+
     try:
         now = datetime.now(UTC)
         window_start = now - timedelta(minutes=int(window_min))
@@ -246,17 +291,22 @@ def reconcile_payments_effect(
             if ts < start_ms or ts >= end_ms:
                 continue
             payload = ev.get("payload") or {}
-            ext_id = payload.get("external_id")
-            uid = ev.get("user_id")
-            if not ext_id or not uid:
+            ext_id = str(payload.get("external_id") or "").strip()
+            if not ext_id:
                 continue
-            if event_already_processed(effects=effects, external_id=str(ext_id)):
+            context, uid, business_metadata = _created_payment_context(
+                effects,
+                tenant_id=tenant,
+                external_id=ext_id,
+            )
+            if event_already_processed(effects=effects, external_id=ext_id):
                 skipped_already += 1
                 continue
-            status = str(effects._yookassa_get_payment_status(external_payment_id=str(ext_id))).lower()
-            envelope_id = str(ev.get("decision_id") or ev.get("envelope_id") or "")
-            original_correlation_id = str(ev.get("correlation_id") or "")
-            business_metadata = _metadata(payload.get("metadata"))
+            status = str(
+                effects._yookassa_get_payment_status(external_payment_id=ext_id)
+            ).lower()
+            envelope_id = str(context.get("envelope_id") or "")
+            original_correlation_id = str(context.get("correlation_id") or "")
             if status in SUCCESS_STATUSES:
                 _record_success(
                     effects,
@@ -264,8 +314,8 @@ def reconcile_payments_effect(
                     original_correlation_id=original_correlation_id,
                     reconciliation_decision_id=str(decision_id),
                     reconciliation_correlation_id=str(correlation_id),
-                    user_id=str(uid),
-                    external_id=str(ext_id),
+                    user_id=uid,
+                    external_id=ext_id,
                     status=status,
                     business_metadata=business_metadata,
                 )
@@ -276,8 +326,8 @@ def reconcile_payments_effect(
                     original_decision_id=envelope_id,
                     reconciliation_decision_id=str(decision_id),
                     reconciliation_correlation_id=str(correlation_id),
-                    user_id=str(uid),
-                    external_id=str(ext_id),
+                    user_id=uid,
+                    external_id=ext_id,
                     status=status,
                     business_metadata=business_metadata,
                 )
@@ -289,11 +339,27 @@ def reconcile_payments_effect(
             user_id="system",
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
-            payload={"window_min": int(window_min), "processed": int(processed_any), "skipped_already": int(skipped_already)},
+            payload={
+                "tenant_id": tenant,
+                "window_min": int(window_min),
+                "processed": int(processed_any),
+                "skipped_already": int(skipped_already),
+            },
         )
         if processed_any == 0 and skipped_already > 0:
-            return {"ok": True, "status": "already_checked"}
-        return {"ok": True, "status": "checked", "processed": int(processed_any)}
+            return {
+                "ok": True,
+                "status": "already_checked",
+                "tenant_id": tenant,
+            }
+        return {
+            "ok": True,
+            "status": "checked",
+            "tenant_id": tenant,
+            "processed": int(processed_any),
+        }
+    except RuntimeError:
+        raise
     except Exception as exc:
         effects.event_log.emit(
             event_type="payments_reconcile_failed",
@@ -301,7 +367,7 @@ def reconcile_payments_effect(
             user_id="system",
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
-            payload={"error": str(exc)},
+            payload={"tenant_id": tenant, "error": str(exc)},
         )
         return False
 
@@ -311,52 +377,84 @@ def reconcile_payment_effect(
     *,
     decision_id: str,
     correlation_id: str,
+    tenant_id: str,
     external_payment_id: str,
     notification_id: str | None = None,
     event: str | None = None,
     user_id_hint: str | None = None,
-) -> bool:
+) -> dict[str, Any] | bool:
     assert_called_from_executor()
+    tenant = assert_event_log_tenant(
+        effects.event_log,
+        tenant_id=str(tenant_id),
+        operation="reconcile_payment",
+    )
     ext_id = str(external_payment_id or "").strip()
     if not ext_id:
-        return True
+        raise RuntimeError("EXTERNAL_PAYMENT_ID_REQUIRED")
 
+    context, uid, business_metadata = _created_payment_context(
+        effects,
+        tenant_id=tenant,
+        external_id=ext_id,
+        user_id_hint=user_id_hint,
+    )
     if event_already_processed(effects=effects, external_id=ext_id):
         return True
 
     try:
-        status = str(effects._yookassa_get_payment_status(external_payment_id=ext_id)).lower()
+        status = str(
+            effects._yookassa_get_payment_status(external_payment_id=ext_id)
+        ).lower()
     except Exception as exc:
         effects.event_log.emit(
             event_type="payment_checked",
             source="payments",
-            user_id="system",
+            user_id=uid,
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
-            payload={"external_id": ext_id, "status": "error", "error": repr(exc), "notification_id": notification_id, "event": event, "user_id_hint": (str(user_id_hint) if user_id_hint else None)},
+            payload={
+                "tenant_id": tenant,
+                "external_id": ext_id,
+                "status": "error",
+                "error": repr(exc),
+                "notification_id": notification_id,
+                "event": event,
+                "user_id_hint": str(user_id_hint) if user_id_hint else None,
+                "metadata": business_metadata,
+            },
         )
         raise
 
     effects.event_log.emit(
         event_type="payment_checked",
         source="payments",
-        user_id="system",
+        user_id=uid,
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
-        payload={"external_id": ext_id, "status": status, "notification_id": notification_id, "event": event, "user_id_hint": (str(user_id_hint) if user_id_hint else None)},
+        payload={
+            "tenant_id": tenant,
+            "external_id": ext_id,
+            "status": status,
+            "notification_id": notification_id,
+            "event": event,
+            "user_id_hint": str(user_id_hint) if user_id_hint else None,
+            "metadata": business_metadata,
+        },
     )
 
-    ctx = resolve_created_payment_context(effects=effects, external_id=ext_id)
-    uid = str(user_id_hint or ctx.get("user_id") or "system")
-    business_metadata = _metadata(ctx.get("metadata"))
-    terminal = "succeeded" if status in SUCCESS_STATUSES else ("failed" if status in FAILED_STATUSES else "pending")
+    terminal = (
+        "succeeded"
+        if status in SUCCESS_STATUSES
+        else ("failed" if status in FAILED_STATUSES else "pending")
+    )
     if terminal == "pending":
         return True
     if terminal == "succeeded":
         _record_success(
             effects,
-            original_decision_id=str(ctx.get("envelope_id") or ""),
-            original_correlation_id=str(ctx.get("correlation_id") or ""),
+            original_decision_id=str(context.get("envelope_id") or ""),
+            original_correlation_id=str(context.get("correlation_id") or ""),
             reconciliation_decision_id=str(decision_id),
             reconciliation_correlation_id=str(correlation_id),
             user_id=uid,
@@ -369,7 +467,7 @@ def reconcile_payment_effect(
     else:
         _record_failure(
             effects,
-            original_decision_id=str(ctx.get("envelope_id") or ""),
+            original_decision_id=str(context.get("envelope_id") or ""),
             reconciliation_decision_id=str(decision_id),
             reconciliation_correlation_id=str(correlation_id),
             user_id=uid,
@@ -379,7 +477,12 @@ def reconcile_payment_effect(
             notification_id=notification_id,
             event=event,
         )
-    return True
+    return {
+        "ok": True,
+        "status": status,
+        "tenant_id": tenant,
+        "metadata": business_metadata,
+    }
 
 
 __all__ = [

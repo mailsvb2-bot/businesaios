@@ -91,12 +91,14 @@ class PaymentsEffectsMixin:
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         window_min: int = 30,
     ) -> Any:
         return reconcile_payments_effect(
             self,
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
+            tenant_id=str(tenant_id),
             window_min=int(window_min),
         )
 
@@ -105,15 +107,17 @@ class PaymentsEffectsMixin:
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         external_payment_id: str,
         notification_id: str | None = None,
         event: str | None = None,
         user_id_hint: str | None = None,
-    ) -> bool:
+    ) -> Any:
         return reconcile_payment_effect(
             self,
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
+            tenant_id=str(tenant_id),
             external_payment_id=str(external_payment_id),
             notification_id=notification_id,
             event=event,

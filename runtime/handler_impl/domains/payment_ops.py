@@ -145,18 +145,26 @@ def handle_reconcile_payments(payload, effects, env):
     window_min = int(body.get("window_min", 30))
     if window_min <= 0:
         raise ValueError("INVALID_WINDOW_MIN")
+    tenant_id = _tenant_id(body, env)
+    if not tenant_id:
+        raise ValueError("TENANT_ID_REQUIRED")
     return effects.reconcile_payments(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=tenant_id,
         window_min=window_min,
     )
 
 
 def handle_reconcile_payment(payload, effects, env):
     body = require_mapping(payload)
+    tenant_id = _tenant_id(body, env)
+    if not tenant_id:
+        raise ValueError("TENANT_ID_REQUIRED")
     return effects.reconcile_payment(
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
+        tenant_id=tenant_id,
         external_payment_id=required_str(body, "external_id"),
         notification_id=optional_str(body, "notification_id"),
         event=body.get("event"),

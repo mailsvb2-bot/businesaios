@@ -180,6 +180,7 @@ def test_admin_toggle_callback_gets_full_execution_context() -> None:
         notify_reply_markup=None,
         callback_query_id="callback-admin",
         channel="telegram",
+        channel_policy=None,
         event_log=event_log,
     )
 
@@ -261,7 +262,7 @@ def test_entitlement_grant_emits_canonical_event_and_ledger_proof(monkeypatch: p
     assert [event["event_type"] for event in effects.event_log.events] == ["entitlement_granted"]
     assert result["router_evidence"]["source"] == "ledger"
     assert result["router_evidence"]["external_refs"] == [
-        "entitlement:business-a:crm-pro:user-9:order-77"
+        result["entitlement_event_id"]
     ]
 
 

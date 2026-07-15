@@ -257,6 +257,7 @@ def test_admin_toggle_mismatch_stops_before_callback_event_and_notification() ->
             notify_reply_markup=None,
             callback_query_id="callback-1",
             channel="telegram",
+            channel_policy=None,
             event_log=event_log,
         )
 
