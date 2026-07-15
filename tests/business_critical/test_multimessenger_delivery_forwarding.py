@@ -10,6 +10,11 @@ from runtime.handlers.delivery_contract import (
     delivery_kwargs,
 )
 from runtime.handlers.profit_sprint_onboarding import handle_onboarding_start
+from runtime.handlers.platform_effects import (
+    handle_apply_offer_patch,
+    handle_enqueue_evolution_job,
+    handle_suggest_offer_patch,
+)
 from runtime.handler_impl.domains.admin_ops import handle_admin_set_role
 from runtime.handler_impl.domains.payment_ops import (
     handle_create_payment_and_send_link,
@@ -23,6 +28,7 @@ from runtime.handler_impl.domains.user_ops import (
 from runtime.messaging.channel_types import ALL_CHANNELS
 from runtime.ports.effects_admin import EffectsAdminPort
 from runtime.ports.effects_comms import EffectsCommsPort
+from runtime.ports.effects_platform import EffectsPlatformPort
 from runtime.ports.effects_revenue import EffectsRevenuePort
 
 
@@ -57,6 +63,15 @@ class RecordingDomainEffects:
 
     def admin_set_role(self, **kwargs):
         return self._record("admin_set_role", kwargs)
+
+    def enqueue_evolution_job(self, **kwargs):
+        return self._record("enqueue_evolution_job", kwargs)
+
+    def suggest_offer_patch(self, **kwargs):
+        return self._record("suggest_offer_patch", kwargs)
+
+    def apply_offer_patch(self, **kwargs):
+        return self._record("apply_offer_patch", kwargs)
 
     def capture_payment(self, **kwargs):
         self._record("capture_payment", kwargs)
@@ -212,12 +227,78 @@ def test_effect_ports_expose_the_same_multimessenger_contract() -> None:
         EffectsAdminPort.set_marketing_copy,
         EffectsRevenuePort.select_tariff,
         EffectsRevenuePort.grant_access,
+        EffectsPlatformPort.enqueue_evolution_job,
+        EffectsPlatformPort.suggest_offer_patch,
+        EffectsPlatformPort.apply_offer_patch,
     )
 
     for method in methods:
         parameters = inspect.signature(method).parameters
         assert parameters["channel"].default == "telegram"
         assert parameters["channel_policy"].default is None
+
+
+@pytest.mark.lock
+@pytest.mark.parametrize(
+    "handler, payload, expected_method",
+    [
+        (
+            handle_enqueue_evolution_job,
+            {
+                "tenant_id": "business-a",
+                "user_id": "owner-1",
+                "job_kind": "offer_analysis",
+            },
+            "enqueue_evolution_job",
+        ),
+        (
+            handle_suggest_offer_patch,
+            {
+                "tenant_id": "business-a",
+                "product": "crm-pro",
+                "env": "test",
+                "offer_id": "offer-1",
+                "action": "improve_headline",
+            },
+            "suggest_offer_patch",
+        ),
+        (
+            handle_apply_offer_patch,
+            {
+                "tenant_id": "business-a",
+                "product": "crm-pro",
+                "env": "test",
+                "offer_id": "offer-1",
+                "patch": {"headline": "New title"},
+                "mode": "dry_run",
+            },
+            "apply_offer_patch",
+        ),
+    ],
+)
+def test_platform_handlers_forward_multimessenger_metadata(
+    handler,
+    payload: dict,
+    expected_method: str,
+) -> None:
+    effects = RecordingDomainEffects()
+    policy = {"fallback_channels": ["email", "sms"]}
+
+    handler(
+        {
+            **payload,
+            "channel": "whatsapp",
+            "channel_policy": policy,
+        },
+        effects,
+        _env(),
+    )
+
+    method, kwargs = effects.calls[-1]
+    assert method == expected_method
+    assert kwargs["channel"] == "whatsapp"
+    assert kwargs["channel_policy"] == policy
+    assert kwargs["channel_policy"] is not policy
 
 
 @pytest.mark.lock

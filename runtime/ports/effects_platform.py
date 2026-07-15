@@ -13,6 +13,8 @@ class EffectsPlatformPort(Protocol):
         user_id: str,
         job_kind: str,
         payload: dict[str, Any] | None = None,
+        channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any: ...
 
     def suggest_offer_patch(
@@ -27,6 +29,8 @@ class EffectsPlatformPort(Protocol):
         action: str,
         notify_user_id: str | None = None,
         callback_query_id: str | None = None,
+        channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any: ...
 
     def apply_offer_patch(
@@ -42,6 +46,8 @@ class EffectsPlatformPort(Protocol):
         mode: str = "dry_run",
         notify_user_id: str | None = None,
         callback_query_id: str | None = None,
+        channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any: ...
 
 

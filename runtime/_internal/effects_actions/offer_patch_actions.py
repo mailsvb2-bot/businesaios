@@ -76,6 +76,8 @@ def _notify(
     user_id: str | None,
     text: str,
     callback_query_id: str | None,
+    channel: str,
+    channel_policy: dict[str, Any] | None,
 ) -> Any:
     if not user_id:
         return None
@@ -88,7 +90,12 @@ def _notify(
             text=str(text)[:3500],
             reply_markup=None,
             callback_query_id=callback_query_id,
-            channel="telegram",
+            channel=str(channel),
+            channel_policy=(
+                dict(channel_policy)
+                if isinstance(channel_policy, dict)
+                else None
+            ),
             priority="normal",
             critical=False,
         )
@@ -113,6 +120,8 @@ class OfferPatchEffectsMixin:
         action: str,
         notify_user_id: str | None = None,
         callback_query_id: str | None = None,
+        channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         assert_called_from_executor()
         tenant = assert_event_log_tenant(
@@ -154,6 +163,8 @@ class OfferPatchEffectsMixin:
                 f"PATCH:\n{patch}"
             ),
             callback_query_id=callback_query_id,
+            channel=channel,
+            channel_policy=channel_policy,
         )
         return result
 
@@ -170,6 +181,8 @@ class OfferPatchEffectsMixin:
         mode: str = "dry_run",
         notify_user_id: str | None = None,
         callback_query_id: str | None = None,
+        channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         assert_called_from_executor()
         tenant = assert_event_log_tenant(
@@ -242,6 +255,8 @@ class OfferPatchEffectsMixin:
                 user_id=notify_user_id,
                 text=f"✅ Rollback выполнен: {offer}",
                 callback_query_id=callback_query_id,
+                channel=channel,
+                channel_policy=channel_policy,
             )
             return {
                 "ok": True,
@@ -279,6 +294,8 @@ class OfferPatchEffectsMixin:
                 user_id=notify_user_id,
                 text=f"🧩 Patch preview\nОффер: {offer}\nChanged: {changed}",
                 callback_query_id=callback_query_id,
+                channel=channel,
+                channel_policy=channel_policy,
             )
             return summary
 
@@ -331,6 +348,8 @@ class OfferPatchEffectsMixin:
             user_id=notify_user_id,
             text=f"✅ Patch applied\nОффер: {offer}\nChanged: {changed}",
             callback_query_id=callback_query_id,
+            channel=channel,
+            channel_policy=channel_policy,
         )
         return {
             **summary,
@@ -338,3 +357,4 @@ class OfferPatchEffectsMixin:
             "notification": notification,
             "router_evidence": evidence,
         }
+

@@ -81,7 +81,14 @@ def _bind_catalog(monkeypatch: pytest.MonkeyPatch, path: Path) -> None:
     )
 
 
-def _apply(effects: FakeEffects, *, mode: str, notify_user_id: str | None = None):
+def _apply(
+    effects: FakeEffects,
+    *,
+    mode: str,
+    notify_user_id: str | None = None,
+    channel: str = "telegram",
+    channel_policy: dict | None = None,
+):
     return effects.apply_offer_patch(
         decision_id="decision-offer-patch",
         correlation_id="correlation-offer-patch",
@@ -92,6 +99,8 @@ def _apply(effects: FakeEffects, *, mode: str, notify_user_id: str | None = None
         patch={"headline": "New title"},
         mode=mode,
         notify_user_id=notify_user_id,
+        channel=channel,
+        channel_policy=channel_policy,
     )
 
 
@@ -171,8 +180,18 @@ def test_notification_failure_cannot_replay_verified_catalog_mutation(
     effects = FakeEffects(FakeEventLog())
     effects.fail_notification = True
 
-    result = _apply(effects, mode="apply", notify_user_id="owner-1")
+    policy = {"fallback_channels": ["email", "sms"]}
+    result = _apply(
+        effects,
+        mode="apply",
+        notify_user_id="owner-1",
+        channel="whatsapp",
+        channel_policy=policy,
+    )
 
+    assert effects.messages[-1]["channel"] == "whatsapp"
+    assert effects.messages[-1]["channel_policy"] == policy
+    assert effects.messages[-1]["channel_policy"] is not policy
     assert result["ok"] is True
     assert result["status"] == "verified"
     assert result["notification"]["ok"] is False

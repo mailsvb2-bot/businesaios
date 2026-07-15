@@ -192,6 +192,7 @@ def test_audit_failure_retry_reuses_one_job_and_one_event(fake_outbox: FakeOutbo
 def test_notification_failure_does_not_erase_durable_evolution_enqueue_proof(fake_outbox: FakeOutbox) -> None:
     effects = FakeEffects(notification_fails=True)
 
+    policy = {"fallback_channels": ["email", "sms"]}
     result = effects.enqueue_evolution_job(
         decision_id="decision-evolution-3",
         correlation_id="correlation-evolution-3",
@@ -202,9 +203,14 @@ def test_notification_failure_does_not_erase_durable_evolution_enqueue_proof(fak
             "notify_text": "Задача поставлена",
             "notify_user_id": "admin-2",
         },
+        channel="viber",
+        channel_policy=policy,
     )
 
     assert len(fake_outbox.jobs) == 1
+    assert effects.messages[-1]["channel"] == "viber"
+    assert effects.messages[-1]["channel_policy"] == policy
+    assert effects.messages[-1]["channel_policy"] is not policy
     assert effects.messages[-1]["tenant_id"] == "business-a"
     assert effects.messages[-1]["user_id"] == "admin-2"
     assert result["ok"] is True

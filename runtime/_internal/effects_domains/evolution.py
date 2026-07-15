@@ -94,6 +94,8 @@ class EvolutionEffectsMixin:
         user_id: str,
         job_kind: str,
         payload: dict[str, Any] | None = None,
+        channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         assert_called_from_executor()
         tenant = assert_event_log_tenant(
@@ -177,7 +179,12 @@ class EvolutionEffectsMixin:
                         if job_payload.get("callback_query_id")
                         else None
                     ),
-                    channel="telegram",
+                    channel=str(channel),
+                    channel_policy=(
+                        dict(channel_policy)
+                        if isinstance(channel_policy, dict)
+                        else None
+                    ),
                 )
             except Exception:
                 swallow(__name__, "runtime/_internal/effects_domains/evolution.py")
@@ -198,3 +205,4 @@ class EvolutionEffectsMixin:
             "notification": notification,
             "router_evidence": evidence,
         }
+

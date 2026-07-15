@@ -10,6 +10,7 @@ from runtime.handler_impl.core.payloads import (
     require_mapping,
     required_str,
 )
+from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.ports.effects import EffectsPort
 
 CANON_THIN_HANDLER = True
@@ -45,6 +46,7 @@ def handle_enqueue_evolution_job(
         user_id=required_str(body, "user_id"),
         job_kind=required_str(body, "job_kind"),
         payload=optional_dict(body, "payload"),
+        **delivery_kwargs(body),
     )
 
 
@@ -65,6 +67,7 @@ def handle_suggest_offer_patch(
         action=required_str(body, "action"),
         notify_user_id=notify_user_id,
         callback_query_id=optional_str(body, "callback_query_id"),
+        **delivery_kwargs(body),
     )
     if not notify_user_id:
         return result
@@ -112,6 +115,7 @@ def handle_apply_offer_patch(
         mode=mode,
         notify_user_id=optional_str(body, "notify_user_id"),
         callback_query_id=optional_str(body, "callback_query_id"),
+        **delivery_kwargs(body),
     )
 
 

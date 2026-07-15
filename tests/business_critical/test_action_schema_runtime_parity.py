@@ -162,7 +162,9 @@ def test_user_delivery_contracts_remain_multimessenger() -> None:
         "ads_rl_suggest@v1",
         "ads_rl_train_tick@v1",
         "ai_ceo_plan@v1",
+        "apply_offer_patch@v1",
         "create_payment_and_send_link@v1",
+        "enqueue_evolution_job@v1",
         "grant_access@v1",
         "growth_propose@v1",
         "growth_strategy_accept@v1",
@@ -178,6 +180,7 @@ def test_user_delivery_contracts_remain_multimessenger() -> None:
         "send_weather@v1",
         "set_marketing_copy@v1",
         "set_user_setting@v1",
+        "suggest_offer_patch@v1",
     ):
         schema = catalog[action].schema
         assert {"channel", "channel_policy"}.issubset(schema.optional), action
