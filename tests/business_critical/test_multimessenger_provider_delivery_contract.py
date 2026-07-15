@@ -9,7 +9,23 @@ from interfaces.messaging._shared import outbound_sender
 from interfaces.messaging._shared.delivery_mapper import map_delivery_result
 from interfaces.messaging._shared.provider_config import ProviderConfig
 from runtime._internal.effects_actions.telegram import messaging as messaging_effect
+from runtime._internal.effects_actions.telegram.delivery_evidence import (
+    build_delivery_evidence,
+)
+from runtime._internal.effects_actions.telegram.messaging_parts import (
+    transport as delivery_transport,
+)
+from runtime.messaging import CHANNEL_SPECS
+from runtime.messaging.bootstrap import build_multichannel_dispatcher
+from runtime.messaging.delivery_result import DeliveryResult
 from runtime.messaging.outbound_message import OutboundMessage
+
+
+WEBHOOK_CHANNELS = tuple(
+    channel
+    for channel, spec in CHANNEL_SPECS.items()
+    if spec.mode_default == "webhook"
+)
 
 
 class FakeHTTPResponse:
@@ -105,6 +121,97 @@ def test_webhook_delivery_requires_a_real_provider_receipt(
 
 
 @pytest.mark.lock
+@pytest.mark.parametrize("channel", WEBHOOK_CHANNELS)
+def test_every_webhook_channel_requires_and_preserves_provider_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+    channel: str,
+) -> None:
+    spec = CHANNEL_SPECS[channel]
+    receipt = f"{channel}-provider-receipt"
+    monkeypatch.setattr(
+        outbound_sender.urllib_request,
+        "urlopen",
+        lambda *_args, **_kwargs: FakeHTTPResponse(
+            status=202,
+            payload={"status": "accepted", "message_id": receipt},
+        ),
+    )
+    monkeypatch.setattr(outbound_sender, "env_float", lambda *_args, **_kwargs: 8.0)
+    monkeypatch.setattr(outbound_sender, "env_str", lambda *_args, **_kwargs: "")
+
+    cfg = ProviderConfig(
+        provider=channel,
+        env_prefix=spec.provider_env_prefix,
+        mode=spec.mode_default,
+        endpoint="https://gateway.example.test/messages",
+        sender="business-sender",
+        token_present=False,
+    )
+    msg = _message(channel=channel)
+
+    raw = outbound_sender.send_outbound(cfg=cfg, msg=msg)
+    result = map_delivery_result(msg=msg, raw=raw)
+
+    assert raw["provider"] == channel
+    assert raw["accepted"] is True
+    assert raw["delivered"] is False
+    assert result.ok is True
+    assert result.external_id == receipt
+    assert result.external_id != msg.delivery_key
+
+
+@pytest.mark.lock
+@pytest.mark.parametrize("channel", WEBHOOK_CHANNELS)
+def test_every_webhook_dispatch_adapter_reaches_receipt_backed_transport(
+    monkeypatch: pytest.MonkeyPatch,
+    channel: str,
+) -> None:
+    spec = CHANNEL_SPECS[channel]
+    receipt = f"{channel}-dispatcher-receipt"
+    monkeypatch.setenv(f"{spec.provider_env_prefix}_MODE", "webhook")
+    monkeypatch.setenv(
+        f"{spec.provider_env_prefix}_ENDPOINT",
+        "https://gateway.example.test/messages",
+    )
+    monkeypatch.setenv(f"{spec.provider_env_prefix}_SENDER", "business-sender")
+    monkeypatch.setattr(
+        outbound_sender.urllib_request,
+        "urlopen",
+        lambda *_args, **_kwargs: FakeHTTPResponse(
+            status=202,
+            payload={"status": "accepted", "message_id": receipt},
+        ),
+    )
+    monkeypatch.setattr(outbound_sender, "env_float", lambda *_args, **_kwargs: 8.0)
+
+    result = build_multichannel_dispatcher().send(_message(channel=channel))
+
+    assert result.ok is True
+    assert result.channel == channel
+    assert result.mode == "accepted"
+    assert result.external_id == receipt
+
+
+@pytest.mark.lock
+@pytest.mark.parametrize("channel", ["web_chat", "api"])
+def test_disabled_safe_internal_adapter_never_reports_delivery_success(
+    monkeypatch: pytest.MonkeyPatch,
+    channel: str,
+) -> None:
+    spec = CHANNEL_SPECS[channel]
+    monkeypatch.setenv(
+        f"{spec.provider_env_prefix}_MODE",
+        "configured_noop",
+    )
+
+    result = build_multichannel_dispatcher().send(_message(channel=channel))
+
+    assert result.ok is False
+    assert result.mode == "configured_noop"
+    assert result.external_id == ""
+
+
+@pytest.mark.lock
 def test_webhook_2xx_without_provider_receipt_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -139,6 +246,192 @@ def test_webhook_2xx_without_provider_receipt_fails_closed(
 
 
 @pytest.mark.lock
+def test_webhook_rejects_a_locally_echoed_delivery_key_as_provider_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    msg = _message(channel="slack")
+    monkeypatch.setattr(
+        outbound_sender.urllib_request,
+        "urlopen",
+        lambda *_args, **_kwargs: FakeHTTPResponse(
+            status=202,
+            payload={"status": "accepted", "message_id": msg.delivery_key},
+        ),
+    )
+    monkeypatch.setattr(outbound_sender, "env_float", lambda *_args, **_kwargs: 8.0)
+    monkeypatch.setattr(outbound_sender, "env_str", lambda *_args, **_kwargs: "")
+    cfg = ProviderConfig(
+        provider="slack",
+        env_prefix="SLACK",
+        mode="webhook",
+        endpoint="https://gateway.example.test/messages",
+        sender="business-sender",
+        token_present=False,
+    )
+
+    raw = outbound_sender.send_outbound(cfg=cfg, msg=msg)
+    result = map_delivery_result(msg=msg, raw=raw)
+
+    assert raw["ok"] is False
+    assert raw["reason"] == "provider_receipt_not_external"
+    assert result.ok is False
+    assert result.external_id == ""
+
+
+@pytest.mark.lock
+@pytest.mark.parametrize(
+    "provider_payload",
+    [
+        {"ok": False, "status": "accepted", "message_id": "receipt-1"},
+        {"success": False, "status": "accepted", "message_id": "receipt-2"},
+        {"status": "failed", "message_id": "receipt-3"},
+        {"status": "accepted", "message_id": "receipt-4", "error": "quota"},
+    ],
+)
+def test_provider_declared_rejection_overrides_http_2xx_and_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+    provider_payload: dict,
+) -> None:
+    monkeypatch.setattr(
+        outbound_sender.urllib_request,
+        "urlopen",
+        lambda *_args, **_kwargs: FakeHTTPResponse(
+            status=200,
+            payload=provider_payload,
+        ),
+    )
+    monkeypatch.setattr(outbound_sender, "env_float", lambda *_args, **_kwargs: 8.0)
+    monkeypatch.setattr(outbound_sender, "env_str", lambda *_args, **_kwargs: "")
+    cfg = ProviderConfig(
+        provider="discord",
+        env_prefix="DISCORD",
+        mode="webhook",
+        endpoint="https://gateway.example.test/messages",
+        sender="business-sender",
+        token_present=False,
+    )
+    msg = _message(channel="discord")
+
+    raw = outbound_sender.send_outbound(cfg=cfg, msg=msg)
+    result = map_delivery_result(msg=msg, raw=raw)
+
+    assert raw["ok"] is False
+    assert raw["reason"] == "provider_rejected_message"
+    assert result.ok is False
+
+
+@pytest.mark.lock
+@pytest.mark.parametrize("status", ["sent", "success", "succeeded"])
+def test_nonfinal_provider_status_is_acceptance_not_fabricated_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+    status: str,
+) -> None:
+    monkeypatch.setattr(
+        outbound_sender.urllib_request,
+        "urlopen",
+        lambda *_args, **_kwargs: FakeHTTPResponse(
+            status=200,
+            payload={"status": status, "message_id": f"receipt-{status}"},
+        ),
+    )
+    monkeypatch.setattr(outbound_sender, "env_float", lambda *_args, **_kwargs: 8.0)
+    monkeypatch.setattr(outbound_sender, "env_str", lambda *_args, **_kwargs: "")
+    cfg = ProviderConfig(
+        provider="whatsapp",
+        env_prefix="WHATSAPP",
+        mode="webhook",
+        endpoint="https://gateway.example.test/messages",
+        sender="business-sender",
+        token_present=False,
+    )
+    msg = _message(channel="whatsapp")
+
+    raw = outbound_sender.send_outbound(cfg=cfg, msg=msg)
+    result = map_delivery_result(msg=msg, raw=raw)
+
+    assert raw["accepted"] is True
+    assert raw["delivered"] is False
+    assert result.ok is True
+    assert result.mode == "accepted"
+
+
+@pytest.mark.lock
+@pytest.mark.parametrize("status", ["delivered", "read"])
+def test_explicit_final_provider_status_remains_verified_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+    status: str,
+) -> None:
+    monkeypatch.setattr(
+        outbound_sender.urllib_request,
+        "urlopen",
+        lambda *_args, **_kwargs: FakeHTTPResponse(
+            status=200,
+            payload={"status": status, "message_id": f"receipt-{status}"},
+        ),
+    )
+    monkeypatch.setattr(outbound_sender, "env_float", lambda *_args, **_kwargs: 8.0)
+    monkeypatch.setattr(outbound_sender, "env_str", lambda *_args, **_kwargs: "")
+    cfg = ProviderConfig(
+        provider="messenger",
+        env_prefix="MESSENGER",
+        mode="webhook",
+        endpoint="https://gateway.example.test/messages",
+        sender="business-sender",
+        token_present=False,
+    )
+    msg = _message(channel="messenger")
+
+    raw = outbound_sender.send_outbound(cfg=cfg, msg=msg)
+    result = map_delivery_result(msg=msg, raw=raw)
+
+    assert raw["accepted"] is True
+    assert raw["delivered"] is True
+    assert result.ok is True
+    assert result.mode == "webhook"
+    assert result.detail["delivered"] is True
+
+
+@pytest.mark.lock
+@pytest.mark.parametrize(
+    "raw, expected_reason",
+    [
+        (
+            {
+                "ok": False,
+                "accepted": True,
+                "delivered": False,
+                "external_id": "provider-receipt",
+            },
+            "provider_result_contradictory",
+        ),
+        (
+            {
+                "ok": True,
+                "accepted": True,
+                "delivered": False,
+                "external_id": "__delivery_key__",
+            },
+            "provider_receipt_not_external",
+        ),
+    ],
+)
+def test_delivery_mapper_rejects_contradictory_or_local_success(
+    raw: dict,
+    expected_reason: str,
+) -> None:
+    msg = _message(channel="viber")
+    payload = dict(raw)
+    if payload["external_id"] == "__delivery_key__":
+        payload["external_id"] = msg.delivery_key
+
+    result = map_delivery_result(msg=msg, raw=payload)
+
+    assert result.ok is False
+    assert result.external_id == ""
+    assert result.detail["reason"] == expected_reason
+
+
+@pytest.mark.lock
 def test_configured_noop_can_never_be_delivery_success() -> None:
     cfg = ProviderConfig(
         provider="web_chat",
@@ -158,6 +451,34 @@ def test_configured_noop_can_never_be_delivery_success() -> None:
     assert raw["delivered"] is False
     assert result.ok is False
     assert result.external_id == ""
+
+
+@pytest.mark.lock
+def test_malformed_smtp_endpoint_fails_closed_without_transport_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        outbound_sender.smtplib,
+        "SMTP",
+        lambda *_args, **_kwargs: pytest.fail("SMTP must not be called"),
+    )
+    monkeypatch.setattr(outbound_sender, "env_str", lambda *_args, **_kwargs: "")
+    cfg = ProviderConfig(
+        provider="email",
+        env_prefix="EMAIL",
+        mode="smtp",
+        endpoint="smtp://smtp.example.test:not-a-port",
+        sender="sender@example.test",
+        token_present=False,
+    )
+    msg = _message(channel="email", user_id="owner@example.test")
+
+    raw = outbound_sender.send_outbound(cfg=cfg, msg=msg)
+    result = map_delivery_result(msg=msg, raw=raw)
+
+    assert raw["ok"] is False
+    assert raw["reason"] == "smtp_coordinates_missing"
+    assert result.ok is False
 
 
 @pytest.mark.lock
@@ -302,3 +623,81 @@ def test_smtp_success_means_server_acceptance_not_fabricated_delivery(
     assert result.ok is True
     assert result.mode == "accepted"
     assert result.external_id == sent["message"]["Message-ID"]
+
+
+@pytest.mark.lock
+def test_nontelegram_provider_acceptance_is_persisted_and_retry_safe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeDeliveryState:
+        def __init__(self) -> None:
+            self.receipts: dict[str, dict] = {}
+
+        def get_receipt(self, delivery_key: str):
+            return self.receipts.get(delivery_key)
+
+        def mark_accepted(self, delivery_key: str, *, payload_digest, metadata):
+            self.receipts[delivery_key] = {
+                "delivery_phase": "accepted_for_delivery",
+                "payload_digest": payload_digest,
+                "metadata": dict(metadata),
+            }
+
+    class FakeBridge:
+        def __init__(self) -> None:
+            self.calls: list[OutboundMessage] = []
+
+        def send(self, msg: OutboundMessage) -> DeliveryResult:
+            self.calls.append(msg)
+            return DeliveryResult(
+                ok=True,
+                channel=msg.channel,
+                mode="accepted",
+                external_id="provider-receipt-1",
+                detail={
+                    "accepted": True,
+                    "tenant_id": "forged-tenant",
+                    "user_id": "forged-user",
+                    "decision_id": "forged-decision",
+                    "correlation_id": "forged-correlation",
+                    "payload_digest": "forged-digest",
+                },
+            )
+
+    state = FakeDeliveryState()
+    bridge = FakeBridge()
+    effects = SimpleNamespace(delivery_state=state)
+    msg = _message(channel="line")
+    monkeypatch.setattr(
+        delivery_transport,
+        "get_multichannel_effects_bridge",
+        lambda: bridge,
+    )
+
+    first_ok, first_meta = delivery_transport.multichannel_delivery(effects, msg=msg)
+    second_ok, second_meta = delivery_transport.multichannel_delivery(effects, msg=msg)
+
+    assert first_ok is True
+    assert first_meta["delivery_phase"] == "accepted_for_delivery"
+    assert second_ok is True
+    assert second_meta["dedup"] is True
+    assert len(bridge.calls) == 1
+    stored = state.receipts[msg.delivery_key]
+    assert stored["payload_digest"] == msg.payload_digest
+    assert stored["metadata"]["tenant_id"] == "business-a"
+    assert stored["metadata"]["user_id"] == "recipient-1"
+    assert stored["metadata"]["decision_id"] == "decision-1"
+    assert stored["metadata"]["correlation_id"] == "correlation-1"
+    assert stored["metadata"]["payload_digest"] == msg.payload_digest
+
+    evidence = build_delivery_evidence(
+        ok=second_ok,
+        meta=second_meta,
+        action_type="messaging.send_message",
+    )
+    assert evidence["verified"] is True
+    assert evidence["status"] == "observed"
+    assert evidence["external_refs"] == [
+        "provider-receipt-1",
+        msg.delivery_key,
+    ]

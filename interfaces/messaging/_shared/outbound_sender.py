@@ -16,7 +16,18 @@ from runtime.platform.config.env_flags import env_bool, env_float, env_str
 
 NOOP_MODE = "configured_noop"
 _MAX_RESPONSE_BYTES = 1_048_576
-_DELIVERED_STATUSES = frozenset({"delivered", "sent", "success", "succeeded"})
+_DELIVERED_STATUSES = frozenset({"delivered", "read"})
+_REJECTED_STATUSES = frozenset(
+    {
+        "cancelled",
+        "canceled",
+        "error",
+        "failed",
+        "failure",
+        "rejected",
+        "undeliverable",
+    }
+)
 
 
 def _base_result(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
@@ -155,10 +166,27 @@ def _response_is_delivered(payload: Mapping[str, Any]) -> bool:
     return status in _DELIVERED_STATUSES
 
 
+def _response_is_rejected(payload: Mapping[str, Any]) -> bool:
+    if payload.get("ok") is False or payload.get("success") is False:
+        return True
+    status = str(payload.get("status") or payload.get("state") or "").strip().casefold()
+    if status in _REJECTED_STATUSES:
+        return True
+    error = payload.get("error")
+    if isinstance(error, Mapping):
+        return bool(error)
+    if isinstance(error, (str, list, tuple)):
+        return bool(error)
+    return False
+
+
 def _send_webhook(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
     endpoint = str(cfg.endpoint or "").strip()
-    parsed = urlparse(endpoint)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    try:
+        parsed = urlparse(endpoint)
+    except ValueError:
+        parsed = None
+    if parsed is None or parsed.scheme not in {"http", "https"} or not parsed.netloc:
         return _failure_result(
             cfg=cfg,
             msg=msg,
@@ -175,18 +203,26 @@ def _send_webhook(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    body = json.dumps(
-        _webhook_payload(cfg=cfg, msg=msg),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    request = urllib_request.Request(
-        endpoint,
-        data=body,
-        headers=headers,
-        method="POST",
-    )
+    try:
+        body = json.dumps(
+            _webhook_payload(cfg=cfg, msg=msg),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        request = urllib_request.Request(
+            endpoint,
+            data=body,
+            headers=headers,
+            method="POST",
+        )
+    except (TypeError, UnicodeError, ValueError) as exc:
+        return _failure_result(
+            cfg=cfg,
+            msg=msg,
+            reason="provider_request_invalid",
+            error=exc.__class__.__name__,
+        )
     timeout_s = float(
         env_float(
             f"{cfg.env_prefix}_TIMEOUT_S",
@@ -237,6 +273,13 @@ def _send_webhook(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any
         )
 
     response_payload = _decode_response(raw)
+    if _response_is_rejected(response_payload):
+        return _failure_result(
+            cfg=cfg,
+            msg=msg,
+            reason="provider_rejected_message",
+            status_code=status_code,
+        )
     external_id = (
         _nested_external_id(response_payload)
         or _header_external_id(response_headers)
@@ -246,6 +289,13 @@ def _send_webhook(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any
             cfg=cfg,
             msg=msg,
             reason="provider_receipt_missing",
+            status_code=status_code,
+        )
+    if external_id == msg.delivery_key:
+        return _failure_result(
+            cfg=cfg,
+            msg=msg,
+            reason="provider_receipt_not_external",
             status_code=status_code,
         )
 
@@ -268,11 +318,14 @@ def _smtp_coordinates(cfg: ProviderConfig) -> tuple[str, int, bool]:
     endpoint = str(cfg.endpoint or "").strip()
     if "://" not in endpoint:
         endpoint = f"smtp://{endpoint}"
-    parsed = urlparse(endpoint)
-    secure = parsed.scheme == "smtps"
-    if parsed.scheme not in {"smtp", "smtps"}:
+    try:
+        parsed = urlparse(endpoint)
+        secure = parsed.scheme == "smtps"
+        if parsed.scheme not in {"smtp", "smtps"}:
+            return "", 0, False
+        port = int(parsed.port or (465 if secure else 587))
+    except (TypeError, ValueError):
         return "", 0, False
-    port = int(parsed.port or (465 if secure else 587))
     return str(parsed.hostname or ""), port, secure
 
 

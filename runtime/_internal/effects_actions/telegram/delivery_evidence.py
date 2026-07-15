@@ -9,9 +9,15 @@ CANON_TELEGRAM_DELIVERY_EVIDENCE = True
 def _external_refs(meta: Mapping[str, Any]) -> list[str]:
     refs: list[str] = []
     receipt = meta.get("receipt") if isinstance(meta.get("receipt"), Mapping) else {}
+    receipt_metadata = (
+        receipt.get("metadata")
+        if isinstance(receipt.get("metadata"), Mapping)
+        else {}
+    )
     for value in (
         meta.get("external_id"),
         receipt.get("external_id"),
+        receipt_metadata.get("external_id"),
         meta.get("delivery_key"),
     ):
         text = str(value or "").strip()
