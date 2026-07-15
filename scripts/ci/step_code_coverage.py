@@ -137,13 +137,7 @@ def _coverage_warnings(percent: float) -> list[str]:
 
 def _coverage_run_command(shard: CoverageShard) -> list[str]:
     return [
-        *_python_command("-m", "coverage"),
-        "run",
-        "--parallel-mode",
-        "--branch",
-        "--source=.",
-        "-m",
-        "pytest",
+        *_python_command("-m", "scripts.ci.coverage_pytest_runner"),
         *_pytest_plugin_args(),
         "-q",
         *shard.targets,
@@ -204,7 +198,6 @@ def run() -> tuple[bool, str]:
             }
             _write_summary(payload)
             return False, f"coverage pytest run failed in shard={shard.name}"
-
         completed_shards.append(shard.name)
 
     combine = run_command(_python_command("-m", "coverage", "combine"), timeout=60)
