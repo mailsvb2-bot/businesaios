@@ -15,8 +15,8 @@ def run(argv: Sequence[str]) -> int:
     same boundary, but only after coverage has been stopped and saved.
     """
 
-    from coverage import Coverage
     import pytest
+    from coverage import Coverage
 
     coverage = Coverage(branch=True, source=["."], data_suffix=True)
     exit_code = 1
