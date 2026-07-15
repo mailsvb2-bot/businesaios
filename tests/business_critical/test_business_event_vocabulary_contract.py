@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from core.events.event_types import is_known, normalize_event_type
+from core.actions.names import ACTION_AI_CEO_PLAN_V1
+from core.events.event_types import AI_CEO_PLAN, is_known, normalize_event_type
 
 
 BUSINESS_PLATFORM_EVENTS = (
@@ -74,6 +75,11 @@ BUSINESS_PLATFORM_EVENTS = (
 def test_strict_event_vocabulary_contains_real_business_runtime_events() -> None:
     unknown = [event_type for event_type in BUSINESS_PLATFORM_EVENTS if not is_known(event_type)]
     assert unknown == []
+
+
+@pytest.mark.lock
+def test_ai_ceo_success_event_reuses_the_canonical_action_name() -> None:
+    assert AI_CEO_PLAN == ACTION_AI_CEO_PLAN_V1
 
 
 @pytest.mark.lock
