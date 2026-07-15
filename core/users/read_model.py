@@ -114,7 +114,41 @@ def selected_tariff(
     product = str(product_id or "").strip() or None
     wm = watermark_for(event_store, tenant_id=tenant, user_id=uid, event_types=("tariff_selected",))
 
+    def _result_from_event(event: dict[str, Any]) -> dict[str, Any] | None:
+        payload = event.get("payload") or {}
+        if not isinstance(payload, dict):
+            return None
+        result = {
+            "tenant_id": tenant,
+            "product_id": str(payload.get("product_id") or "").strip() or product,
+            "tariff": payload.get("tariff"),
+            "period": payload.get("period"),
+            "days": payload.get("days"),
+            "amount": payload.get("amount"),
+            "plan_id": payload.get("plan_id"),
+            "title": payload.get("title"),
+            "expected_price": payload.get("expected_price"),
+            "ts": event.get("timestamp_ms"),
+        }
+        if product is None:
+            result["scope"] = "aggregate_admin_view"
+        return result
+
     def _compute() -> dict[str, Any] | None:
+        if product is None:
+            latest = best_effort_latest_event(
+                event_store=event_store,
+                where="core/users/read_model.selected_tariff",
+                tenant_id=tenant,
+                user_id=uid,
+                event_types=("tariff_selected",),
+                legacy_event_type="tariff_selected",
+            )
+            if latest is not None:
+                result = _result_from_event(latest)
+                if result is not None:
+                    return result
+
         candidates: list[dict[str, Any]] = []
         for event in _iter_user_events(
             event_store,
@@ -132,28 +166,11 @@ def selected_tariff(
         if not candidates:
             return None
 
-        last = max(
+        latest = max(
             candidates,
             key=lambda event: int(event.get("timestamp_ms") or 0),
         )
-        payload = last.get("payload") or {}
-        if not isinstance(payload, dict):
-            return None
-        result = {
-            "tenant_id": tenant,
-            "product_id": str(payload.get("product_id") or "").strip() or product,
-            "tariff": payload.get("tariff"),
-            "period": payload.get("period"),
-            "days": payload.get("days"),
-            "amount": payload.get("amount"),
-            "plan_id": payload.get("plan_id"),
-            "title": payload.get("title"),
-            "expected_price": payload.get("expected_price"),
-            "ts": last.get("timestamp_ms"),
-        }
-        if product is None:
-            result["scope"] = "aggregate_admin_view"
-        return result
+        return _result_from_event(latest)
 
     return global_cache().get(
         key=("selected_tariff", tenant, product or "*", uid),
