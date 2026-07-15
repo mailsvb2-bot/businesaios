@@ -7,6 +7,8 @@ Storage implementations may import this module, but core code must not depend
 on platform_layer paths.
 """
 
+from core.actions.names import ACTION_AI_CEO_PLAN_V1
+
 UI_CLICK = "ui_click"
 PAYWALL_OPENED = "paywall_opened"
 PAYWALL_CLOSED = "paywall_closed"
@@ -62,7 +64,7 @@ PROFIT_SPRINT_ONBOARDING_START = "profit_sprint_onboarding_start@v1"
 PROFIT_SPRINT_ONBOARDING_TEXT = "profit_sprint_onboarding_text@v1"
 PROFIT_SPRINT_ONBOARDING_LEAD_SOURCE = "profit_sprint_onboarding_lead_source@v1"
 WEATHER_SENT = "weather_sent"
-AI_CEO_PLAN = "ai_ceo_plan@v1"
+AI_CEO_PLAN = ACTION_AI_CEO_PLAN_V1
 AI_CEO_PLAN_BLOCKED = "ai_ceo_plan_blocked@v1"
 AI_CEO_PLAN_ERROR = "ai_ceo_plan_error@v1"
 ADS_RL_SUGGESTION = "ads_rl_suggestion@v1"
