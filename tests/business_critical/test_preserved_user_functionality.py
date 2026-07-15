@@ -259,6 +259,164 @@ def test_valid_gift_uses_canonical_entitlement_primitive(
 
 
 @pytest.mark.lock
+def test_gift_and_entitlement_are_idempotent_for_same_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(access, "assert_called_from_executor", lambda: None)
+    events = [
+        {
+            "event_type": "gift_token_created",
+            "payload": {
+                "token": "gift-idempotent",
+                "product_id": "product-a",
+                "created_by": "admin-1",
+                "expires_ms": 0,
+            },
+        }
+    ]
+    effects = FakeEffects(FakeEventLog(events))
+    kwargs = {
+        "decision_id": "decision-gift",
+        "correlation_id": "correlation-gift",
+        "tenant_id": "business-a",
+        "product_id": "product-a",
+        "user_id": "user-1",
+        "track_event_type": "gift_redeemed",
+        "track_payload": {"token": "gift-idempotent"},
+    }
+
+    first = access.grant_access_effect(effects, **kwargs)
+    second = access.grant_access_effect(effects, **kwargs)
+
+    assert first["ok"] is True
+    assert second["ok"] is True
+    assert first["gift"]["replayed"] is False
+    assert second["gift"]["replayed"] is True
+    assert first["entitlement_replayed"] is False
+    assert second["entitlement_replayed"] is True
+    assert first["entitlement_event_id"] == second["entitlement_event_id"]
+    assert len(
+        [event for event in events if event["event_type"] == "gift_redeemed"]
+    ) == 1
+    assert len(
+        [
+            event
+            for event in events
+            if event["event_type"] == "entitlement_granted"
+        ]
+    ) == 1
+
+
+@pytest.mark.lock
+def test_gift_claim_rejects_competing_user_without_second_entitlement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(access, "assert_called_from_executor", lambda: None)
+    events = [
+        {
+            "event_type": "gift_token_created",
+            "payload": {
+                "token": "gift-exclusive",
+                "product_id": "product-a",
+                "created_by": "admin-1",
+                "expires_ms": 0,
+            },
+        }
+    ]
+    effects = FakeEffects(FakeEventLog(events))
+
+    first = access.grant_access_effect(
+        effects,
+        decision_id="decision-first",
+        correlation_id="correlation-first",
+        tenant_id="business-a",
+        product_id="product-a",
+        user_id="user-1",
+        track_event_type="gift_redeemed",
+        track_payload={"token": "gift-exclusive"},
+    )
+    competing = access.grant_access_effect(
+        effects,
+        decision_id="decision-competing",
+        correlation_id="correlation-competing",
+        tenant_id="business-a",
+        product_id="product-a",
+        user_id="user-2",
+        track_event_type="gift_redeemed",
+        track_payload={"token": "gift-exclusive"},
+    )
+
+    assert first["ok"] is True
+    assert competing["ok"] is False
+    assert competing["reason"] == "already_redeemed"
+    assert len(
+        [event for event in events if event["event_type"] == "gift_redeemed"]
+    ) == 1
+    entitlements = [
+        event for event in events if event["event_type"] == "entitlement_granted"
+    ]
+    assert len(entitlements) == 1
+    assert entitlements[0]["user_id"] == "user-1"
+
+
+@pytest.mark.lock
+def test_partial_gift_claim_retry_completes_missing_entitlement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(access, "assert_called_from_executor", lambda: None)
+    token = "gift-partial"
+    events = [
+        {
+            "event_type": "gift_token_created",
+            "payload": {
+                "token": token,
+                "product_id": "product-a",
+                "created_by": "admin-1",
+                "expires_ms": 0,
+            },
+        },
+        {
+            "event_id": access._gift_redemption_event_id(
+                tenant_id="business-a",
+                token=token,
+            ),
+            "event_type": "gift_redeemed",
+            "user_id": "user-1",
+            "payload": {
+                "tenant_id": "business-a",
+                "product_id": "product-a",
+                "token": token,
+                "created_by": "admin-1",
+                "redeemed_by": "user-1",
+            },
+        },
+    ]
+    effects = FakeEffects(FakeEventLog(events))
+
+    result = access.grant_access_effect(
+        effects,
+        decision_id="decision-retry",
+        correlation_id="correlation-retry",
+        tenant_id="business-a",
+        product_id="product-a",
+        user_id="user-1",
+        track_event_type="gift_redeemed",
+        track_payload={"token": token},
+    )
+
+    assert result["ok"] is True
+    assert result["gift"]["replayed"] is True
+    assert result["entitlement_replayed"] is False
+    assert len(
+        [
+            event
+            for event in events
+            if event["event_type"] == "entitlement_granted"
+        ]
+    ) == 1
+
+
+@pytest.mark.lock
 def test_reward_observe_uses_canonical_reward_and_reuses_durable_completion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
