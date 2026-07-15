@@ -15,6 +15,13 @@ def run(argv: Sequence[str]) -> int:
     same boundary, but only after coverage has been stopped and saved.
     """
 
+    # This runner accepts explicit ``-p`` plugins from the canonical CI command.
+    # Force entry-point autoload off before pytest initializes its plugin manager,
+    # otherwise the same plugin can be registered once by ``-p`` and again via
+    # setuptools entry points when the runner is invoked outside run_command().
+    os.environ["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+    os.environ["PYTHONNOUSERSITE"] = "1"
+
     import pytest
     from coverage import Coverage
 
