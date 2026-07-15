@@ -198,6 +198,7 @@ def run() -> tuple[bool, str]:
             }
             _write_summary(payload)
             return False, f"coverage pytest run failed in shard={shard.name}"
+
         completed_shards.append(shard.name)
 
     combine = run_command(_python_command("-m", "coverage", "combine"), timeout=60)
