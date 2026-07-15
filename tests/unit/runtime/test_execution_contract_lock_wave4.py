@@ -45,7 +45,21 @@ class _VerifiedEvidenceVerifier:
             def to_dict(self_nonlocal):
                 return {
                     'verified': True,
-                    'verification': {'status': 'verified', 'code': 'verified', 'outcome': {'external_refs': ['x-1']}},
+                    'verification': {
+                        'status': 'verified',
+                        'code': 'verified',
+                        'outcome': {'external_refs': ['x-1']},
+                        'engine': {
+                            'evidence': [
+                                {
+                                    'source': 'effect_router',
+                                    'kind': 'router_result',
+                                    'status': 'verified',
+                                    'external_refs': ['x-1'],
+                                }
+                            ]
+                        },
+                    },
                     'evidence_bundle': {'records': [{'source': 'executor'}]},
                     'context': {},
                 }
