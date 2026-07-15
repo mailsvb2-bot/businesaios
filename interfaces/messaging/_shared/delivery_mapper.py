@@ -6,12 +6,15 @@ from runtime.messaging.outbound_message import OutboundMessage
 
 def map_delivery_result(*, msg: OutboundMessage, raw: dict) -> DeliveryResult:
     payload = dict(raw or {})
-    delivered = bool(payload.get("delivered", payload.get("ok", False))) and not bool(payload.get("noop", False))
+    noop = bool(payload.get("noop", False))
+    external_id = str(payload.get("external_id") or "").strip()
+    delivered = bool(payload.get("delivered", False)) and not noop and bool(external_id)
+    accepted = bool(payload.get("accepted", False)) and not noop and bool(external_id)
     return DeliveryResult(
-        ok=delivered,
+        ok=bool(delivered or accepted),
         channel=msg.channel,
         mode=str(payload.get("mode") or "unknown"),
-        external_id=str(payload.get("external_id") or ""),
+        external_id=external_id,
         detail={
             "provider": payload.get("provider"),
             "reason": payload.get("reason"),
@@ -19,8 +22,9 @@ def map_delivery_result(*, msg: OutboundMessage, raw: dict) -> DeliveryResult:
             "sender": payload.get("sender"),
             "delivery_key": payload.get("delivery_key"),
             "text_preview": payload.get("text_preview"),
+            "accepted": accepted,
             "delivered": delivered,
-            "noop": bool(payload.get("noop", False)),
+            "noop": noop,
             "execution_state": payload.get("execution_state"),
             "observability_hint": payload.get("observability_hint"),
         },

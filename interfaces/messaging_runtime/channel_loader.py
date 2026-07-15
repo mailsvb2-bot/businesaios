@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from interfaces.messaging.discord import build_binding as build_discord_binding
 from interfaces.messaging.email import build_binding as build_email_binding
+from interfaces.messaging.instagram import build_binding as build_instagram_binding
 from interfaces.messaging.messenger import build_binding as build_messenger_binding
+from interfaces.messaging.slack import build_binding as build_slack_binding
 from interfaces.messaging.sms import build_binding as build_sms_binding
 from interfaces.messaging.whatsapp import build_binding as build_whatsapp_binding
 from interfaces.messaging_runtime.channel_aliases import canonical_channel_name
@@ -19,10 +22,13 @@ BINDING_BUILDERS = {
     "sms": build_sms_binding,
     "email": build_email_binding,
     "messenger": build_messenger_binding,
+    "instagram": build_instagram_binding,
     "viber": build_viber_binding,
     "line": build_line_binding,
     "wechat": build_wechat_binding,
     "kakaotalk": build_kakaotalk_binding,
+    "slack": build_slack_binding,
+    "discord": build_discord_binding,
     "webchat": build_webchat_binding,
     "api_gateway": build_api_gateway_binding,
 }
@@ -42,3 +48,4 @@ def load_bindings(*, enabled_channels: tuple[str, ...], senders: dict[str, objec
             sender = senders.get(channel)
         bindings.append(builder(sender=sender))
     return tuple(bindings)
+

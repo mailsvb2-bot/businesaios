@@ -68,15 +68,21 @@ def send_message_effect(
         track_event_type=msg.track_event_type,
         track_payload=msg.track_payload,
     )
+    evidence_action_type = (
+        str(EffectActionType.TELEGRAM_SEND_MESSAGE)
+        if msg.channel == "telegram"
+        else "messaging.send_message"
+    )
     return {
         "ok": bool(ok),
         "meta": meta,
         "evidence": build_delivery_evidence(
             ok=bool(ok),
             meta=meta,
-            action_type=str(EffectActionType.TELEGRAM_SEND_MESSAGE),
+            action_type=evidence_action_type,
         ),
     }
 
 
 __all__ = ["send_message_effect"]
+

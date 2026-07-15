@@ -5,6 +5,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from interfaces.messaging_runtime.capabilities import (
+    DEFAULT_CAPABILITIES,
+    get_capabilities,
+)
+from interfaces.messaging_runtime.channel_aliases import canonical_channel_name
+from interfaces.messaging_runtime.channel_loader import BINDING_BUILDERS
 from runtime.handlers.delivery_contract import (
     CANON_DELIVERY_METADATA_FORWARDER,
     delivery_kwargs,
@@ -25,7 +31,9 @@ from runtime.handler_impl.domains.user_ops import (
     handle_send_weather,
     handle_set_user_setting,
 )
-from runtime.messaging.channel_types import ALL_CHANNELS
+from runtime.messaging import CHANNEL_SPECS
+from runtime.messaging.bootstrap import build_multichannel_dispatcher
+from runtime.messaging.channel_types import ALL_CHANNELS, CHANNEL_TELEGRAM
 from runtime.ports.effects_admin import EffectsAdminPort
 from runtime.ports.effects_comms import EffectsCommsPort
 from runtime.ports.effects_platform import EffectsPlatformPort
@@ -102,6 +110,30 @@ def test_delivery_forwarder_preserves_every_canonical_channel(channel: str) -> N
     assert CANON_DELIVERY_METADATA_FORWARDER is True
     assert forwarded == {"channel": channel, "channel_policy": policy}
     assert forwarded["channel_policy"] is not policy
+
+
+@pytest.mark.lock
+def test_every_canonical_nontelegram_channel_has_a_real_dispatch_adapter() -> None:
+    dispatcher = build_multichannel_dispatcher()
+    expected_nontelegram = set(ALL_CHANNELS) - {CHANNEL_TELEGRAM}
+
+    assert set(CHANNEL_SPECS) == set(ALL_CHANNELS)
+    assert set(dispatcher.adapters) == expected_nontelegram
+    assert {"slack", "discord"}.issubset(dispatcher.adapters)
+
+
+@pytest.mark.lock
+def test_every_canonical_channel_survives_capability_policy_routing() -> None:
+    expected_runtime_names = {
+        canonical_channel_name(channel)
+        for channel in ALL_CHANNELS
+    }
+
+    assert set(DEFAULT_CAPABILITIES) == expected_runtime_names
+    assert set(BINDING_BUILDERS) == expected_runtime_names
+    for channel in ALL_CHANNELS:
+        capabilities = get_capabilities(channel)
+        assert capabilities.plain_text is True, channel
 
 
 @pytest.mark.lock

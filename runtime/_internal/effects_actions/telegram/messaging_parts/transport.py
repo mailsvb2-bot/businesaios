@@ -130,11 +130,16 @@ def multichannel_delivery(*, msg) -> tuple[bool, dict]:
     if not isinstance(result, DeliveryResult):
         raise RuntimeError("INVALID_DELIVERY_RESULT")
     meta = dict(result.detail or {})
+    meta["channel"] = result.channel
     meta["external_id"] = result.external_id
     meta["mode"] = result.mode
     meta["payload_digest"] = getattr(msg, "payload_digest", None)
     meta["delivery_key"] = msg.delivery_key
-    meta["delivery_finalized"] = bool(result.ok) and str(result.mode or "") not in {"queued", "accepted"}
+    mode = str(result.mode or "").strip().casefold()
+    finalized = bool(result.ok) and mode not in {"queued", "accepted"}
+    meta["delivery_finalized"] = finalized
+    if bool(result.ok) and not finalized:
+        meta["delivery_phase"] = "accepted_for_delivery"
     return bool(result.ok), meta
 
 
