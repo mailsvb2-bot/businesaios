@@ -82,7 +82,6 @@ def persist_verified_outcome(*, executor: Any, env: Any, verification: Mapping[s
         payload={
             "owner": "runtime.execution.outcome_persistence_lock",
             "proof_event": "decision_executed",
-            "verified": bool(verification_map.get("status") == "verified" or verification_map.get("verified") is True),
             "verification_status": str(verification_map.get("status") or "verified"),
         },
     )
@@ -102,19 +101,22 @@ def persist_verified_outcome(*, executor: Any, env: Any, verification: Mapping[s
     }
 
 
-def finalize_recovered_outcome(*, executor: Any, env: Any, reason: str, backend_name: str = "runtime_recovery_from_proof") -> dict[str, Any]:
+def finalize_recovered_outcome(*, executor: Any, env: Any, reason: str, backend_name: str = "runtime_recovery") -> dict[str, Any]:
     decision = getattr(env, "decision", None)
     decision_id, tenant_id = _decision_identity(env)
     if not decision_id:
         raise OutcomePersistenceLockError("missing_decision_id")
+    delivered_metadata = build_delivery_metadata(decision=decision, mode="recovered", owner_id="runtime-executor")
+    delivered_metadata["recovery_reason"] = str(reason)
     mark_delivered(
         getattr(executor, "_outbox", None),
         decision_id=decision_id,
         tenant_id=tenant_id,
-        owner_id="runtime-recovery",
+        owner_id="runtime-executor",
         backend_name=str(backend_name),
         external_id=decision_id,
-        metadata={"recovery": str(reason), "action": str(getattr(decision, "action", "") or "")},
+        payload_digest=delivered_metadata.get("payload_digest"),
+        metadata=delivered_metadata,
     )
     _checkpoint(
         executor=executor,
@@ -122,11 +124,12 @@ def finalize_recovered_outcome(*, executor: Any, env: Any, reason: str, backend_
         stage="state_update",
         payload={
             "owner": "runtime.execution.outcome_persistence_lock",
-            "outbox": "delivered_from_proof",
+            "outbox": "delivered",
             "decision_id": decision_id,
             "recovery": str(reason),
         },
     )
+    emit_decision_executed(getattr(executor, "_events", None), decision=decision)
     _checkpoint(
         executor=executor,
         env=env,
@@ -186,9 +189,7 @@ def finalize_failed_outcome(*, executor: Any, env: Any, reason: str, output: Map
         decision_id=decision_id,
         tenant_id=tenant_id,
         owner_id="runtime-executor",
-        reason=str(reason),
-        backend_name="runtime_executor",
-        metadata={"reason": str(reason), "output": payload, "action": str(getattr(decision, "action", "") or "")},
+        error=str(reason),
     )
     _checkpoint(
         executor=executor,
@@ -209,6 +210,7 @@ def finalize_failed_outcome(*, executor: Any, env: Any, reason: str, output: Map
             "owner": "runtime.execution.outcome_persistence_lock",
             "proof_event": "execution_failed",
             "reason": str(reason),
+            "output": payload,
         },
     )
     return {
@@ -223,6 +225,7 @@ def finalize_failed_outcome(*, executor: Any, env: Any, reason: str, output: Map
             "event_type": "execution_failed",
             "decision_id": decision_id,
             "reason": str(reason),
+            "output": payload,
         },
     }
 
