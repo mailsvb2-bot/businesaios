@@ -38,7 +38,7 @@ Output format:
 [
   {
     "stage": "acquisition|activation|retention|referral|revenue",
-    "channel": "organic|seo|content|referral|partnerships|email|sms|push|telegram|meta_ads|google_ads|tiktok_ads|vk_ads|yandex_direct|other_paid",
+    "channel": "organic|seo|content|referral|partnerships|email|sms|push|telegram|whatsapp|messenger|instagram|web_chat|api|line|wechat|kakaotalk|viber|slack|discord|meta_ads|google_ads|tiktok_ads|vk_ads|yandex_direct|other_paid",
     "title": "short",
     "mechanism": "why it works",
     "expected_impact": "e.g. +10% profit in 14 days",
@@ -52,7 +52,8 @@ Output format:
 
 Rules:
 - Be concrete and testable.
-- Prefer actions we can run in Telegram and Ads.
+- Prefer actions executable through supported messaging channels and Ads.
+- Use signals.top_channels when available; Telegram is supported but not assumed.
 - Avoid vague advice like "improve marketing".
 - Do NOT include any text outside JSON.
 """

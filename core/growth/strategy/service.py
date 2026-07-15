@@ -18,7 +18,15 @@ from .backlog_store import (
     now_ms,
     set_hypothesis_state,
 )
-from .contracts import ExperimentSpecV1, GrowthGoalV1, GrowthHypothesisV1, GrowthSignalV1, StrategyPlanV1
+from .contracts import (
+    GROWTH_MESSAGING_CHANNELS,
+    Channel,
+    ExperimentSpecV1,
+    GrowthGoalV1,
+    GrowthHypothesisV1,
+    GrowthSignalV1,
+    StrategyPlanV1,
+)
 from .llm_generator import generate_hypotheses
 from .plan_manifest import load_plan_manifest, persist_plan_manifest
 from .scoring import rank_hypotheses, score_hypothesis
@@ -402,13 +410,24 @@ def _fallback_hypotheses(
     goal: GrowthGoalV1,
 ) -> tuple[GrowthHypothesisV1, ...]:
     now = int(time.time() * 1000)
+    messaging_channel = _preferred_messaging_channel(signals)
+    flow_type = (
+        "telegram_flow"
+        if messaging_channel == "telegram"
+        else "messaging_flow"
+    )
+    followup_type = (
+        "telegram_followup"
+        if messaging_channel == "telegram"
+        else "messaging_followup"
+    )
     hypotheses: list[GrowthHypothesisV1] = [
         GrowthHypothesisV1(
             hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, decision_id=decision_id, index=0),
             created_ms=now,
             tenant_id=str(tenant_id),
             stage="activation",
-            channel="telegram",
+            channel=messaging_channel,
             title="Сократить путь до оплаты: 1 кнопка + готовый оффер",
             mechanism="Уменьшаем когнитивную нагрузку: после лида сразу даём 1 понятное предложение и кнопку оплаты.",
             expected_impact="+10% conversion lead→purchase за 14 дней",
@@ -416,14 +435,14 @@ def _fallback_hypotheses(
             risk="low",
             metric="conversion_lead_to_purchase_pct",
             horizon_days=int(goal.horizon_days or 14),
-            action_hints={"type": "telegram_flow", "flow": "offer_to_pay"},
+            action_hints={"type": flow_type, "flow": "offer_to_pay"},
         ),
         GrowthHypothesisV1(
             hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, decision_id=decision_id, index=1),
             created_ms=now,
             tenant_id=str(tenant_id),
             stage="retention",
-            channel="telegram",
+            channel=messaging_channel,
             title="Авто-followup через 24ч/72ч: полезность + кейс",
             mechanism="Тёплые лиды забывают. Триггеры возвращают внимание и доводят до покупки.",
             expected_impact="+5-10% revenue в 14 дней",
@@ -431,7 +450,7 @@ def _fallback_hypotheses(
             risk="low",
             metric="revenue_minor",
             horizon_days=int(goal.horizon_days or 14),
-            action_hints={"type": "telegram_followup", "schedule": [24, 72]},
+            action_hints={"type": followup_type, "schedule": [24, 72]},
         ),
     ]
     if "ads_apply_used" in set(signals.notes):
@@ -458,7 +477,7 @@ def _fallback_hypotheses(
             created_ms=now,
             tenant_id=str(tenant_id),
             stage="revenue",
-            channel="telegram",
+            channel=messaging_channel,
             title="Пакетирование: базовый + премиум (upsell)",
             mechanism="Часть клиентов готова платить больше за быстрый результат/доп. поддержку.",
             expected_impact="+10% profit в 21 день",
@@ -470,3 +489,12 @@ def _fallback_hypotheses(
         )
     )
     return tuple(hypotheses)
+
+
+def _preferred_messaging_channel(signals: GrowthSignalV1) -> Channel:
+    supported = set(GROWTH_MESSAGING_CHANNELS)
+    for raw_channel in tuple(signals.top_channels or ()):
+        candidate = str(raw_channel or "").strip().lower()
+        if candidate in supported:
+            return candidate  # type: ignore[return-value]
+    return "telegram"

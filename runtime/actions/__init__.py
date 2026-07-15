@@ -10,7 +10,6 @@ from core.actions.names import (
     ACTION_APPLY_OFFER_PATCH_V1,
     ACTION_ENQUEUE_EVOLUTION_JOB_V1,
     ACTION_EXECUTE_PLAN_V1,
-    ACTION_GROWTH_PROPOSAL_APPLY_V1,
     ACTION_GROWTH_PROPOSE_V1,
     ACTION_PRICING_SELECT_V1,
     ACTION_REWARD_OBSERVE_V1,
@@ -18,9 +17,14 @@ from core.actions.names import (
 )
 
 CANON_RUNTIME_ACTION_NAMES_PUBLIC_API = True
+# Import compatibility only: old callers reach the registered canonical action
+# instead of reviving the historical, non-executable ghost action name.
+ACTION_GROWTH_PROPOSAL_APPLY_V1 = ACTION_GROWTH_PROPOSE_V1
+CANON_LEGACY_GROWTH_ACTION_ALIAS = True
 __all__ = [
     'CANON_RUNTIME_ACTIONS_NAMESPACE',
     'CANON_RUNTIME_ACTION_NAMES_PUBLIC_API',
+    'CANON_LEGACY_GROWTH_ACTION_ALIAS',
     'ACTION_ADS_APPLY_EXECUTE_V1',
     'ACTION_ADS_AUTOPILOT_TICK_V1',
     'ACTION_AI_CEO_PLAN_V1',

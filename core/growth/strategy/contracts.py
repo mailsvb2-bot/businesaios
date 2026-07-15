@@ -4,6 +4,23 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 FunnelStage = Literal["acquisition", "activation", "retention", "referral", "revenue"]
+GROWTH_MESSAGING_CHANNELS = (
+    "telegram",
+    "whatsapp",
+    "sms",
+    "email",
+    "messenger",
+    "instagram",
+    "web_chat",
+    "api",
+    "line",
+    "wechat",
+    "kakaotalk",
+    "viber",
+    "slack",
+    "discord",
+    "push",
+)
 Channel = Literal[
     "organic",
     "seo",
@@ -14,6 +31,17 @@ Channel = Literal[
     "sms",
     "push",
     "telegram",
+    "whatsapp",
+    "messenger",
+    "instagram",
+    "web_chat",
+    "api",
+    "line",
+    "wechat",
+    "kakaotalk",
+    "viber",
+    "slack",
+    "discord",
     "meta_ads",
     "google_ads",
     "tiktok_ads",
