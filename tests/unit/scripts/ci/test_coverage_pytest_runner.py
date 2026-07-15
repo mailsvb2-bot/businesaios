@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from types import ModuleType
 
@@ -28,18 +29,27 @@ def test_coverage_runner_saves_parallel_data_before_return(monkeypatch) -> None:
     pytest_module = ModuleType("pytest")
 
     def _pytest_main(argv: list[str]) -> int:
-        events.append(("pytest", argv))
+        events.append(
+            (
+                "pytest",
+                argv,
+                os.environ.get("PYTEST_DISABLE_PLUGIN_AUTOLOAD"),
+                os.environ.get("PYTHONNOUSERSITE"),
+            )
+        )
         return 0
 
     pytest_module.main = _pytest_main
     monkeypatch.setitem(sys.modules, "coverage", coverage_module)
     monkeypatch.setitem(sys.modules, "pytest", pytest_module)
+    monkeypatch.setenv("PYTEST_DISABLE_PLUGIN_AUTOLOAD", "0")
+    monkeypatch.delenv("PYTHONNOUSERSITE", raising=False)
 
     assert run(["-q", "tests/example.py"]) == 0
     assert events == [
         ("init", True, ["."], True),
         "start",
-        ("pytest", ["-q", "tests/example.py"]),
+        ("pytest", ["-q", "tests/example.py"], "1", "1"),
         "stop",
         "save",
     ]
