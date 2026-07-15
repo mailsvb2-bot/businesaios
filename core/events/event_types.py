@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """Canonical event type vocabulary (pure).
 
 This is the single source of truth for event type names and normalization.
 Storage implementations may import this module, but core code must not depend
 on platform_layer paths.
 """
+
+from __future__ import annotations
 
 from core.actions.names import ACTION_AI_CEO_PLAN_V1
 
