@@ -5,6 +5,13 @@ import sys
 import traceback
 from collections.abc import Sequence
 
+_COVERAGE_OMIT = (
+    "*/.venv*/*",
+    "*/venv/*",
+    "*/site-packages/*",
+    "*/dist-packages/*",
+)
+
 
 def run(argv: Sequence[str]) -> int:
     """Run pytest under coverage and persist data before hard process exit.
@@ -25,7 +32,17 @@ def run(argv: Sequence[str]) -> int:
     import pytest
     from coverage import Coverage
 
-    coverage = Coverage(branch=True, source=["."], data_suffix=True)
+    # Server validation creates its virtualenv inside the detached worktree.
+    # ``source=['.']`` would otherwise classify that environment as repository
+    # source and trace every installed dependency, turning a small headless smoke
+    # into a multi-minute shard. Coverage must measure project code, never the
+    # interpreter environment that happens to live below the checkout root.
+    coverage = Coverage(
+        branch=True,
+        source=["."],
+        omit=list(_COVERAGE_OMIT),
+        data_suffix=True,
+    )
     exit_code = 1
     coverage.start()
     try:
