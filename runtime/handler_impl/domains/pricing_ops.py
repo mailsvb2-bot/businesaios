@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_int, required_str
+from runtime.handlers.delivery_contract import delivery_kwargs
 
 
 def _optional_plan_id(payload: dict) -> int | None:
@@ -94,4 +95,5 @@ def handle_select_tariff(payload, effects, env):
         expected_price=(int(expected_price) if expected_price is not None else None),
         notify_text=optional_str(payload, "notify_text"),
         notify_reply_markup=optional_dict(payload, "notify_reply_markup"),
+        **delivery_kwargs(payload),
     )

@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_str
+from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.tenancy import normalize_tenant_id
 
 
@@ -44,6 +45,7 @@ def handle_admin_set_role(payload, effects, env):
         notify_text=optional_str(payload, "notify_text"),
         notify_reply_markup=optional_dict(payload, "notify_reply_markup"),
         callback_query_id=optional_str(payload, "callback_query_id"),
+        **delivery_kwargs(payload),
     )
 
 
@@ -60,6 +62,7 @@ def handle_admin_set_perm(payload, effects, env):
         notify_text=optional_str(payload, "notify_text"),
         notify_reply_markup=optional_dict(payload, "notify_reply_markup"),
         callback_query_id=optional_str(payload, "callback_query_id"),
+        **delivery_kwargs(payload),
     )
 
 
@@ -76,6 +79,7 @@ def handle_set_marketing_copy(payload, effects, env):
         notify_text=optional_str(payload, "notify_text"),
         notify_reply_markup=optional_dict(payload, "notify_reply_markup"),
         callback_query_id=optional_str(payload, "callback_query_id"),
+        **delivery_kwargs(payload),
     )
 
 
@@ -107,6 +111,7 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
             user_id=admin_id or "system",
             text="Некорректный запрос: не указан бизнес, администратор или пользователь.",
             reply_markup=None,
+            **delivery_kwargs(body),
         )
         return _card_outcome(delivery=delivery, ok=False, reason="invalid_request")
 
@@ -195,6 +200,7 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
                 "target_user_id": target,
                 "error": exc.__class__.__name__,
             },
+            **delivery_kwargs(body),
         )
         return _card_outcome(delivery=delivery, ok=False, reason="read_model_failure")
 
@@ -212,5 +218,6 @@ def handle_admin_user_card(payload, effects, env, *, event_store):
             "target_user_id": target,
             "status": "ok",
         },
+        **delivery_kwargs(body),
     )
     return _card_outcome(delivery=delivery, ok=True, card=card)

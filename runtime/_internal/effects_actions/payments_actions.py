@@ -41,6 +41,8 @@ class PaymentsEffectsMixin:
         expected_price: int | None = None,
         notify_text: str | None = None,
         notify_reply_markup: dict[str, Any] | None = None,
+        channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any:
         return select_tariff_effect(
             self,
@@ -58,6 +60,8 @@ class PaymentsEffectsMixin:
             expected_price=expected_price,
             notify_text=notify_text,
             notify_reply_markup=notify_reply_markup,
+            channel=str(channel),
+            channel_policy=channel_policy,
         )
 
     def capture_payment(
@@ -130,6 +134,8 @@ class PaymentsEffectsMixin:
         notify_reply_markup: dict | None = None,
         track_event_type: str | None = None,
         track_payload: dict | None = None,
+        channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return grant_access_effect(
             self,
@@ -144,6 +150,8 @@ class PaymentsEffectsMixin:
             notify_reply_markup=notify_reply_markup,
             track_event_type=track_event_type,
             track_payload=track_payload,
+            channel=str(channel),
+            channel_policy=channel_policy,
         )
 
     def _yookassa_create_payment(

@@ -46,6 +46,8 @@ class EffectsCommsPort(Protocol):
         tenant_id: str,
         user_id: str,
         city: str,
+        channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def track_event(

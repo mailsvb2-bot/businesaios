@@ -19,6 +19,7 @@ class EffectsAdminPort(Protocol):
         notify_reply_markup: Optional[Dict[str, Any]] = None,
         callback_query_id: Optional[str] = None,
         channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def log_mood(
@@ -51,6 +52,7 @@ class EffectsAdminPort(Protocol):
         notify_reply_markup: Optional[Dict[str, Any]] = None,
         callback_query_id: Optional[str] = None,
         channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def admin_set_perm(
@@ -67,6 +69,7 @@ class EffectsAdminPort(Protocol):
         notify_reply_markup: Optional[Dict[str, Any]] = None,
         callback_query_id: Optional[str] = None,
         channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def set_marketing_copy(
@@ -83,6 +86,7 @@ class EffectsAdminPort(Protocol):
         notify_reply_markup: Optional[Dict[str, Any]] = None,
         callback_query_id: Optional[str] = None,
         channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def marketing_llm_complete(

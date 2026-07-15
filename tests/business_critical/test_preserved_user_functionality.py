@@ -204,6 +204,8 @@ def test_invalid_gift_does_not_grant_entitlement(
         user_id="user-1",
         track_event_type="gift_redeemed",
         track_payload={"token": "missing"},
+        channel="whatsapp",
+        channel_policy={"fallback_channels": ["sms", "email"]},
     )
 
     assert result["ok"] is False
@@ -212,6 +214,11 @@ def test_invalid_gift_does_not_grant_entitlement(
         event["event_type"] == "entitlement_granted"
         for event in event_log.events
     )
+    notification = effects.calls[-1][1]
+    assert notification["channel"] == "whatsapp"
+    assert notification["channel_policy"] == {
+        "fallback_channels": ["sms", "email"]
+    }
 
 
 @pytest.mark.lock

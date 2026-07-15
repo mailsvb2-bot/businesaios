@@ -116,6 +116,7 @@ def send_optional_notification(
     notify_reply_markup: dict[str, Any] | None,
     callback_query_id: str | None,
     channel: str,
+    channel_policy: dict[str, Any] | None,
     event_log: Any | None = None,
 ) -> Any:
     if not isinstance(notify_text, str) or not notify_text.strip():
@@ -130,6 +131,11 @@ def send_optional_notification(
             reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
             callback_query_id=str(callback_query_id) if callback_query_id else None,
             channel=str(channel),
+            channel_policy=(
+                dict(channel_policy)
+                if isinstance(channel_policy, dict)
+                else None
+            ),
         )
     except Exception as exc:
         if event_log is not None:
@@ -174,6 +180,7 @@ def perform_admin_toggle(
     notify_reply_markup: dict[str, Any] | None,
     callback_query_id: str | None,
     channel: str,
+    channel_policy: dict[str, Any] | None,
     event_log: Any,
 ) -> dict[str, Any]:
     tenant = assert_event_log_tenant(
@@ -212,6 +219,7 @@ def perform_admin_toggle(
         notify_reply_markup=notify_reply_markup,
         callback_query_id=callback_query_id,
         channel=channel,
+        channel_policy=channel_policy,
         event_log=event_log,
     )
     external_ref = f"{event_type}:{tenant}:{decision_id}:{target_user_id}:{field_value}:{int(bool(enabled))}"

@@ -88,6 +88,8 @@ def _gift_failure(
     token: str,
     reason: str,
     text: str,
+    channel: str,
+    channel_policy: dict[str, Any] | None,
 ) -> dict[str, Any]:
     event = effects.event_log.emit(
         event_type="gift_redeem_failed",
@@ -110,6 +112,12 @@ def _gift_failure(
             text=str(text),
             reply_markup=None,
             priority="high",
+            channel=str(channel),
+            channel_policy=(
+                dict(channel_policy)
+                if isinstance(channel_policy, dict)
+                else None
+            ),
         )
     except Exception as exc:
         notification = {"ok": False, "error": exc.__class__.__name__}
@@ -131,6 +139,8 @@ def _validate_and_record_gift(
     tenant_id: str,
     user_id: str,
     track_payload: dict | None,
+    channel: str,
+    channel_policy: dict[str, Any] | None,
 ) -> dict[str, Any]:
     token = str((track_payload or {}).get("token") or "").strip()
     created, redeemed = _gift_events(
@@ -148,6 +158,8 @@ def _validate_and_record_gift(
             token=token,
             reason="not_found",
             text="🎁 Подарок не найден или ссылка неверна.",
+            channel=channel,
+            channel_policy=channel_policy,
         )
 
     try:
@@ -164,6 +176,8 @@ def _validate_and_record_gift(
             token=token,
             reason="expired",
             text="🎁 Срок действия подарка истёк.",
+            channel=channel,
+            channel_policy=channel_policy,
         )
     if redeemed:
         return _gift_failure(
@@ -175,6 +189,8 @@ def _validate_and_record_gift(
             token=token,
             reason="already_redeemed",
             text="🎁 Этот подарок уже активирован.",
+            channel=channel,
+            channel_policy=channel_policy,
         )
 
     event = effects.event_log.emit(
@@ -211,6 +227,8 @@ def grant_access_effect(
     notify_reply_markup: dict | None = None,
     track_event_type: str | None = None,
     track_payload: dict | None = None,
+    channel: str = "telegram",
+    channel_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Grant one tenant-scoped product entitlement and return durable proof."""
 
@@ -234,6 +252,8 @@ def grant_access_effect(
             tenant_id=tenant,
             user_id=user,
             track_payload=track_payload,
+            channel=str(channel),
+            channel_policy=channel_policy,
         )
         if not gift_result.get("ok"):
             return gift_result
@@ -294,6 +314,12 @@ def grant_access_effect(
                     else None
                 ),
                 priority="high",
+                channel=str(channel),
+                channel_policy=(
+                    dict(channel_policy)
+                    if isinstance(channel_policy, dict)
+                    else None
+                ),
             )
         except Exception as exc:
             notification = {"ok": False, "error": exc.__class__.__name__}

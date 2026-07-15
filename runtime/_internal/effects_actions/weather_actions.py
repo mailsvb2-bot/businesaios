@@ -32,6 +32,8 @@ class WeatherEffectsMixin:
         tenant_id: str,
         user_id: str,
         city: str,
+        channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any:
         assert_called_from_executor()
         tenant = str(tenant_id or "").strip()
@@ -52,7 +54,12 @@ class WeatherEffectsMixin:
             user_id=user,
             text=txt,
             reply_markup=None,
-            channel="telegram",
+            channel=str(channel),
+            channel_policy=(
+                dict(channel_policy)
+                if isinstance(channel_policy, dict)
+                else None
+            ),
             priority="normal",
         )
         self.event_log.emit(

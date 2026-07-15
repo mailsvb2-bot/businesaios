@@ -5,6 +5,7 @@ from typing import Any
 
 from execution.verification.evidence_types import evidence_status_is_positive
 from runtime.handler_impl.core.payloads import optional_dict, optional_str, require_mapping, required_int, required_str
+from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.tenancy import normalize_tenant_id
 
 
@@ -113,6 +114,7 @@ def handle_create_payment_and_send_link(payload, effects, env):
         text=message,
         priority="high",
         critical=True,
+        **delivery_kwargs(body),
     )
     delivery_ok = bool(delivery_result.get("ok")) if isinstance(delivery_result, dict) else bool(delivery_result)
     delivery_evidence = _trusted_effect_proof(delivery_result)
@@ -177,6 +179,7 @@ def handle_grant_access(payload, effects, env):
         notify_reply_markup=optional_dict(body, "notify_reply_markup"),
         track_event_type=optional_str(body, "track_event_type"),
         track_payload=track_payload,
+        **delivery_kwargs(body),
     )
 
 

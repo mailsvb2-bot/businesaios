@@ -23,6 +23,8 @@ class EffectsRevenuePort(Protocol):
         expected_price: int | None = None,
         notify_text: str | None = None,
         notify_reply_markup: Optional[Dict[str, Any]] = None,
+        channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def capture_payment(
@@ -70,6 +72,8 @@ class EffectsRevenuePort(Protocol):
         notify_reply_markup: Optional[Dict[str, Any]] = None,
         track_event_type: str | None = None,
         track_payload: Optional[Dict[str, Any]] = None,
+        channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def deploy_policy(

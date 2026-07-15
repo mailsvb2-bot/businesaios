@@ -116,6 +116,7 @@ class AdminStateEffectsMixin:
         notify_reply_markup: dict[str, Any] | None = None,
         callback_query_id: str | None = None,
         channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any:
         assert_called_from_executor()
         return perform_admin_toggle(
@@ -132,6 +133,7 @@ class AdminStateEffectsMixin:
             notify_reply_markup=notify_reply_markup,
             callback_query_id=callback_query_id,
             channel=channel,
+            channel_policy=channel_policy,
             event_log=self.event_log,
         )
 
@@ -149,6 +151,7 @@ class AdminStateEffectsMixin:
         notify_reply_markup: dict[str, Any] | None = None,
         callback_query_id: str | None = None,
         channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any:
         assert_called_from_executor()
         return perform_admin_toggle(
@@ -165,6 +168,7 @@ class AdminStateEffectsMixin:
             notify_reply_markup=notify_reply_markup,
             callback_query_id=callback_query_id,
             channel=channel,
+            channel_policy=channel_policy,
             event_log=self.event_log,
         )
 

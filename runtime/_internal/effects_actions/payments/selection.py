@@ -87,6 +87,8 @@ def select_tariff_effect(
     expected_price: int | None = None,
     notify_text: str | None = None,
     notify_reply_markup: dict[str, Any] | None = None,
+    channel: str = "telegram",
+    channel_policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     assert_called_from_executor()
     tenant = assert_event_log_tenant(
@@ -140,7 +142,12 @@ def select_tariff_effect(
                 user_id=user,
                 text=str(notify_text)[:3500],
                 reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
-                channel="telegram",
+                channel=str(channel),
+                channel_policy=(
+                    dict(channel_policy)
+                    if isinstance(channel_policy, dict)
+                    else None
+                ),
             )
         except Exception as exc:
             notification = {"ok": False, "error": exc.__class__.__name__}

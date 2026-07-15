@@ -154,11 +154,16 @@ def test_user_delivery_contracts_remain_multimessenger() -> None:
     catalog = build_catalog()
 
     for action in (
+        "admin_set_perm@v1",
+        "admin_set_role@v1",
+        "admin_user_card@v1",
         "ads_apply_execute@v1",
         "ads_autopilot_tick@v1",
         "ads_rl_suggest@v1",
         "ads_rl_train_tick@v1",
         "ai_ceo_plan@v1",
+        "create_payment_and_send_link@v1",
+        "grant_access@v1",
         "growth_propose@v1",
         "growth_strategy_accept@v1",
         "growth_strategy_backlog@v1",
@@ -169,6 +174,10 @@ def test_user_delivery_contracts_remain_multimessenger() -> None:
         "profit_sprint_onboarding_start@v1",
         "profit_sprint_onboarding_text@v1",
         "reward_observe@v1",
+        "select_tariff@v1",
+        "send_weather@v1",
+        "set_marketing_copy@v1",
+        "set_user_setting@v1",
     ):
         schema = catalog[action].schema
         assert {"channel", "channel_policy"}.issubset(schema.optional), action

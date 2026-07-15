@@ -50,6 +50,7 @@ class MarketingEffectsMixin:
         notify_reply_markup: dict[str, Any] | None = None,
         callback_query_id: str | None = None,
         channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any:
         assert_called_from_executor()
         tenant = assert_event_log_tenant(
@@ -102,6 +103,11 @@ class MarketingEffectsMixin:
                     reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
                     callback_query_id=str(callback_query_id) if callback_query_id else None,
                     channel=str(channel),
+                    channel_policy=(
+                        dict(channel_policy)
+                        if isinstance(channel_policy, dict)
+                        else None
+                    ),
                     priority="normal",
                     critical=False,
                 )

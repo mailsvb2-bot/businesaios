@@ -7,6 +7,7 @@ from runtime.handler_impl.core.payloads import (
     require_mapping,
     required_str,
 )
+from runtime.handlers.delivery_contract import delivery_kwargs
 
 
 def handle_answer_callback(payload, effects, env):
@@ -49,6 +50,7 @@ def handle_send_weather(payload, effects, env):
         tenant_id=required_str(payload, "tenant_id"),
         user_id=required_str(payload, "user_id"),
         city=required_str(payload, "city"),
+        **delivery_kwargs(payload),
     )
 
 
@@ -64,6 +66,7 @@ def handle_set_user_setting(payload, effects, env):
         notify_text=optional_str(payload, "notify_text"),
         notify_reply_markup=optional_dict(payload, "notify_reply_markup"),
         callback_query_id=optional_str(payload, "callback_query_id"),
+        **delivery_kwargs(payload),
     )
 
 
