@@ -12,8 +12,15 @@ def test_coverage_runner_saves_parallel_data_before_return(monkeypatch) -> None:
     events: list[object] = []
 
     class _FakeCoverage:
-        def __init__(self, *, branch: bool, source: list[str], data_suffix: bool) -> None:
-            events.append(("init", branch, source, data_suffix))
+        def __init__(
+            self,
+            *,
+            branch: bool,
+            source: list[str],
+            omit: list[str],
+            data_suffix: bool,
+        ) -> None:
+            events.append(("init", branch, source, omit, data_suffix))
 
         def start(self) -> None:
             events.append("start")
@@ -47,7 +54,18 @@ def test_coverage_runner_saves_parallel_data_before_return(monkeypatch) -> None:
 
     assert run(["-q", "tests/example.py"]) == 0
     assert events == [
-        ("init", True, ["."], True),
+        (
+            "init",
+            True,
+            ["."],
+            [
+                "*/.venv*/*",
+                "*/venv/*",
+                "*/site-packages/*",
+                "*/dist-packages/*",
+            ],
+            True,
+        ),
         "start",
         ("pytest", ["-q", "tests/example.py"], "1", "1"),
         "stop",
