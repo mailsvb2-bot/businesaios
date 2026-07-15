@@ -4,12 +4,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from core.pricing.rl.selection_service import PricingSelectionService
 from runtime.governance import PolicyUpdateGateError
 from runtime.handler_impl.domains.admin_ops import handle_admin_user_card
 from runtime.handlers import ads_rl_suggest as ads_rl_suggest_module
 from runtime.handlers.ai_ceo_plan import handle_ai_ceo_plan
 from runtime.handlers.pricing_select import handle_pricing_select
-from runtime.pricing import PricingSelectionService
 
 
 class FakeEffects:
