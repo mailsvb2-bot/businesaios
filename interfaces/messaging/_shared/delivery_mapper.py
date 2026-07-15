@@ -31,7 +31,7 @@ def map_delivery_result(*, msg: OutboundMessage, raw: dict) -> DeliveryResult:
         ok=bool(delivered or accepted),
         channel=msg.channel,
         mode=str(payload.get("mode") or "unknown"),
-        external_id=external_id if external_receipt else "",
+        external_id=external_id if delivered or accepted else "",
         detail={
             "provider": payload.get("provider"),
             "reason": reason,
