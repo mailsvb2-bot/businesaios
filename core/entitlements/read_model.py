@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any, Protocol
 
+from core.events.read_model_support import best_effort_latest_event
 from core.read_model.cache import global_cache, watermark_for
 
 
@@ -50,25 +51,48 @@ def compute_entitlements(
     def _compute() -> dict[str, Any]:
         full_access = False
         granted_products: set[str] = set()
+        events: list[dict[str, Any]] = []
+
+        # Administrative aggregate reads retain compatibility with stores that
+        # expose only the canonical latest-event API. Product authorization does
+        # not use this fallback because a single latest event cannot prove that
+        # an earlier grant belongs to the requested product.
+        if product is None:
+            for event_type in event_types:
+                latest = best_effort_latest_event(
+                    event_store=event_store,
+                    where="core/entitlements/read_model.compute_entitlements",
+                    tenant_id=tenant,
+                    user_id=uid,
+                    event_types=(event_type,),
+                    legacy_event_type=event_type,
+                )
+                if latest is not None:
+                    events.append(latest)
+
         for event_type in event_types:
-            for event in event_store.iter_events(
-                tenant_id=tenant,
-                start_ms=0,
-                end_ms=None,
-                event_type=event_type,
-                user_id=uid,
-            ):
-                payload = event.get("payload") or {}
-                if not isinstance(payload, dict):
-                    continue
-                event_product = str(payload.get("product_id") or "").strip()
-                if product is not None and event_product != product:
-                    continue
-                if not bool(payload.get("full_access", True)):
-                    continue
-                full_access = True
-                if event_product:
-                    granted_products.add(event_product)
+            events.extend(
+                event_store.iter_events(
+                    tenant_id=tenant,
+                    start_ms=0,
+                    end_ms=None,
+                    event_type=event_type,
+                    user_id=uid,
+                )
+            )
+
+        for event in events:
+            payload = event.get("payload") or {}
+            if not isinstance(payload, dict):
+                continue
+            event_product = str(payload.get("product_id") or "").strip()
+            if product is not None and event_product != product:
+                continue
+            if not bool(payload.get("full_access", True)):
+                continue
+            full_access = True
+            if event_product:
+                granted_products.add(event_product)
 
         if product is not None:
             return {
