@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from runtime.growth import GrowthStrategyService
+from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.ports.effects import EffectsPort
 
 CANON_THIN_HANDLER = True
@@ -41,6 +42,7 @@ def handle_growth_strategy_backlog(payload: dict[str, Any], effects: EffectsPort
         critical=False,
         track_event_type=ACTION_NAME,
         track_payload={"tenant_id": tenant_id},
+        **delivery_kwargs(body),
     )
 
 

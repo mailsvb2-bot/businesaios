@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from runtime.ads import AdsApplyState, AdsPlan, plan_digest
+from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.idempotency import make_idempotency_key
 from runtime.ports.effects import EffectsPort
 from runtime.tenancy import normalize_tenant_id
@@ -78,6 +79,7 @@ def handle_onboarding_start(payload: dict[str, Any], effects: EffectsPort, env: 
             "product_id": product_id,
             "step": "start",
         },
+        **delivery_kwargs(body),
     )
 
 
@@ -101,6 +103,7 @@ def handle_onboarding_text(payload: dict[str, Any], effects: EffectsPort, env: A
             "step": _input_value(body, "step", "field", "question") or "text",
             "value": accepted_text,
         },
+        **delivery_kwargs(body),
     )
 
 
@@ -124,4 +127,5 @@ def handle_onboarding_lead_source(payload: dict[str, Any], effects: EffectsPort,
             "step": "lead_source",
             "lead_source": lead_source,
         },
+        **delivery_kwargs(body),
     )

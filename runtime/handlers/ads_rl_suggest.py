@@ -6,6 +6,7 @@ from typing import Any
 
 from runtime.ads import RLSuggester, bind_runtime_state, policy_store
 from runtime.governance import PolicyUpdateGate, PolicyUpdateGateError, ProfitMetricsService
+from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.ports.effects import EffectsPort
 from runtime.tenancy import as_tenant_id
 
@@ -87,6 +88,7 @@ def handle_ads_rl_suggest(payload: dict[str, Any], effects: EffectsPort, env: An
                 "reason": "cooldown",
                 "error": str(exc),
             },
+            **delivery_kwargs(body),
         )
         return _outcome(
             delivery=delivery,
@@ -146,6 +148,7 @@ def handle_ads_rl_suggest(payload: dict[str, Any], effects: EffectsPort, env: An
                 "tenant_id": str(tenant_id),
                 "reason": suggestion.reason,
             },
+            **delivery_kwargs(body),
         )
         return _outcome(
             delivery=delivery,
@@ -167,6 +170,7 @@ def handle_ads_rl_suggest(payload: dict[str, Any], effects: EffectsPort, env: An
                 "tenant_id": str(tenant_id),
                 "reason": "empty_action",
             },
+            **delivery_kwargs(body),
         )
         return _outcome(
             delivery=delivery,
@@ -194,6 +198,7 @@ def handle_ads_rl_suggest(payload: dict[str, Any], effects: EffectsPort, env: An
             "policy_version": suggestion.policy_version,
             "action": action,
         },
+        **delivery_kwargs(body),
     )
     return _outcome(
         delivery=delivery,

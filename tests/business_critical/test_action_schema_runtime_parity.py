@@ -150,14 +150,25 @@ def test_product_scoped_admin_views_and_rejections_are_schema_valid() -> None:
 
 
 @pytest.mark.lock
-def test_growth_reward_and_ads_training_contracts_remain_multimessenger() -> None:
+def test_user_delivery_contracts_remain_multimessenger() -> None:
     catalog = build_catalog()
 
     for action in (
+        "ads_apply_execute@v1",
+        "ads_autopilot_tick@v1",
+        "ads_rl_suggest@v1",
         "ads_rl_train_tick@v1",
-        "reward_observe@v1",
+        "ai_ceo_plan@v1",
         "growth_propose@v1",
+        "growth_strategy_accept@v1",
+        "growth_strategy_backlog@v1",
         "growth_strategy_generate@v1",
+        "growth_strategy_reject@v1",
+        "pricing_select@v1",
+        "profit_sprint_onboarding_lead_source@v1",
+        "profit_sprint_onboarding_start@v1",
+        "profit_sprint_onboarding_text@v1",
+        "reward_observe@v1",
     ):
         schema = catalog[action].schema
         assert {"channel", "channel_policy"}.issubset(schema.optional), action

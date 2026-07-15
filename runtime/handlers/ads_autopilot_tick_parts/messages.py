@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from runtime.handlers.delivery_contract import delivery_kwargs
+
 
 def send_autopilot_message(
     *,
@@ -29,4 +31,5 @@ def send_autopilot_message(
         text=str(text),
         track_event_type=str(track_event_type),
         track_payload=event_payload,
+        **delivery_kwargs(payload),
     )

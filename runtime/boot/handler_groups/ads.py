@@ -3,6 +3,7 @@ from __future__ import annotations
 from runtime.actions import ACTION_ADS_APPLY_EXECUTE_V1
 from runtime.handlers import ActionHandlerRegistry
 from runtime.handlers.ads_apply_evidence import attach_ads_apply_outcome
+from runtime.handlers.delivery_contract import delivery_kwargs
 
 CANON_BOOT_WIRING_ONLY = True
 
@@ -36,11 +37,13 @@ def register_ads_handlers(*, handlers: ActionHandlerRegistry, event_store, ads_r
             notification = effects.send_message(
                 decision_id=env.decision.decision_id,
                 correlation_id=env.decision.correlation_id,
+                tenant_id=str((payload or {}).get("tenant_id") or "").strip(),
                 user_id=str((payload or {}).get("user_id") or "unknown"),
                 text="Ads runtime не настроен. Проверь конфиг connectors/OAuth.",
                 reply_markup={"inline_keyboard": [[{"text": "⬅️ Назад", "callback_data": "ads:apply:menu"}]]},
                 callback_query_id=(payload or {}).get("callback_query_id"),
                 critical=False,
+                **delivery_kwargs(payload or {}),
             )
             return attach_ads_apply_outcome(
                 notification=notification,

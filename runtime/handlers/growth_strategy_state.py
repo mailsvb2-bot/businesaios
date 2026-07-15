@@ -5,6 +5,7 @@ from typing import Any
 
 from execution.verification.evidence_types import evidence_status_is_positive
 from runtime.growth import GrowthStrategyService
+from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.ports.effects import EffectsPort
 
 CANON_THIN_HANDLER = True
@@ -110,6 +111,7 @@ def _handle(payload: dict[str, Any], effects: EffectsPort, env: Any, *, event_st
             "hypothesis_id": hypothesis_id,
             "state_event_id": event_id,
         },
+        **delivery_kwargs(body),
     )
     notification_evidence = _delivery_evidence(notification)
     notification_ok = bool(notification.get("ok")) if isinstance(notification, Mapping) else bool(notification)

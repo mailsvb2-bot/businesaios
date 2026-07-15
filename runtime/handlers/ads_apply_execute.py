@@ -13,6 +13,7 @@ from typing import Any
 from runtime.ads import AdsApplyEngine, bind_runtime_state, maturity_gate
 from runtime.governance import ActuationRegistry
 from runtime.handlers.ads_apply_evidence import attach_ads_apply_outcome
+from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.handlers.ads_apply_helpers import (
     build_apply_request,
     emit_apply_audit,
@@ -40,6 +41,7 @@ def _blocked_notification(
     correlation_id: str,
     tenant_id: str,
     user_id: str,
+    payload: dict[str, Any],
     text: str,
     **kwargs: Any,
 ) -> dict[str, Any]:
@@ -49,6 +51,7 @@ def _blocked_notification(
         tenant_id=tenant_id,
         user_id=user_id,
         text=text,
+        **delivery_kwargs(payload),
         **kwargs,
     )
     return attach_ads_apply_outcome(
@@ -93,6 +96,7 @@ def handle_ads_apply_execute(
             correlation_id=fallback_correlation_id,
             tenant_id=tenant_id,
             user_id=user_id,
+            payload=body,
             text=safe_route_blocked_text("Ads Apply"),
             callback_query_id=body.get("callback_query_id"),
             track_event_type="ads_apply_execute_blocked@v1",
@@ -112,6 +116,7 @@ def handle_ads_apply_execute(
             correlation_id=route.correlation_id,
             tenant_id=tenant_id,
             user_id=user_id,
+            payload=body,
             text="❌ Нужен Idempotency-Key для Ads Apply (защита от повторов). Повтори действие из UI.",
         )
     request, gate_state, request_tenant_id, user_id = build_apply_request(body)
@@ -190,6 +195,7 @@ def handle_ads_apply_execute(
             "tenant_id": tenant_id,
             "status": result.status,
         },
+        **delivery_kwargs(body),
     )
     return attach_ads_apply_outcome(
         notification=notification,

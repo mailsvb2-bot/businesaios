@@ -7,6 +7,7 @@ from runtime.actions import ACTION_AI_CEO_PLAN_V1
 from runtime.ai_ceo import render_plan_text
 from runtime.decisioning import DecisionRouteViolation
 from runtime.handlers.ai_ceo_plan_flow import extract_ai_ceo_plan_request
+from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.handlers.route_failure_support import (
     best_effort_route_ids as _best_effort_route_ids,
 )
@@ -63,6 +64,7 @@ def handle_ai_ceo_plan(payload: dict[str, Any], effects: EffectsPort, env: Any, 
                 reason="route_violation",
                 exc=exc,
             ),
+            **delivery_kwargs(body),
         )
         return _failed_delivery(delivery=delivery, reason="route_violation")
 
@@ -91,6 +93,7 @@ def handle_ai_ceo_plan(payload: dict[str, Any], effects: EffectsPort, env: Any, 
                 "status": "ok",
                 "tenant_id": request.tenant_id,
             },
+            **delivery_kwargs(body),
         )
         evidence = _delivery_evidence(delivery)
         delivery_ok = bool(delivery.get("ok")) if isinstance(delivery, Mapping) else bool(delivery)
@@ -114,6 +117,7 @@ def handle_ai_ceo_plan(payload: dict[str, Any], effects: EffectsPort, env: Any, 
                 reason="planner_error",
                 exc=exc,
             ),
+            **delivery_kwargs(body),
         )
         return _failed_delivery(delivery=delivery, reason="planner_error")
 

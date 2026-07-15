@@ -5,6 +5,7 @@ from typing import Any
 
 from runtime.actions import ACTION_PRICING_SELECT_V1
 from runtime.decisioning import DecisionRouteViolation, extract_strict_route_from_envelope
+from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.handlers.route_failure_support import best_effort_route_ids, blocked_error_payload, safe_route_blocked_text
 from runtime.ports.effects import EffectsPort
 from runtime.pricing import PricingRouteViolation, PricingSelectionContext
@@ -41,6 +42,7 @@ def _blocked_message(
         text=text,
         track_event_type="pricing_select_blocked@v1",
         track_payload=blocked_error_payload(reason=reason, exc=exc),
+        **delivery_kwargs(payload),
     )
     return {
         "ok": False,
@@ -116,6 +118,7 @@ def handle_pricing_select(payload: dict[str, Any], effects: EffectsPort, env: An
                 "offer_id": str(selected_offer.get("offer_id") or ""),
                 "selected": True,
             },
+            **delivery_kwargs(body),
         )
         evidence = _delivery_evidence(delivery)
         delivery_ok = bool(delivery.get("ok")) if isinstance(delivery, Mapping) else bool(delivery)

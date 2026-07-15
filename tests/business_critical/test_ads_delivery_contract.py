@@ -51,6 +51,8 @@ def test_autopilot_message_uses_tenant_user_and_signed_route_without_legacy_chat
             "user_id": "owner-1",
             "decision_id": "spoofed-decision",
             "correlation_id": "spoofed-correlation",
+            "channel": "instagram",
+            "channel_policy": {"fallback_channels": ["messenger", "email"]},
         },
         decision_id="signed-decision-ads",
         correlation_id="signed-correlation-ads",
@@ -66,6 +68,10 @@ def test_autopilot_message_uses_tenant_user_and_signed_route_without_legacy_chat
     assert call["tenant_id"] == "business-a"
     assert call["user_id"] == "owner-1"
     assert "chat_id" not in call
+    assert call["channel"] == "instagram"
+    assert call["channel_policy"] == {
+        "fallback_channels": ["messenger", "email"]
+    }
     assert call["track_payload"] == {
         "status": "ok",
         "tenant_id": "business-a",
