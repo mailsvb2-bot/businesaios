@@ -5,7 +5,12 @@ import sys
 from types import ModuleType
 
 from scripts.ci.coverage_pytest_runner import run
-from scripts.ci.step_code_coverage import CoverageShard, _coverage_run_command
+from scripts.ci.step_code_coverage import (
+    COVERAGE_SHARDS,
+    HEADLESS_COVERAGE_TIMEOUT_SECONDS,
+    CoverageShard,
+    _coverage_run_command,
+)
 
 
 def test_coverage_runner_saves_parallel_data_before_return(monkeypatch) -> None:
@@ -76,7 +81,7 @@ def test_coverage_runner_saves_parallel_data_before_return(monkeypatch) -> None:
 def test_coverage_shard_uses_deterministic_runner_module() -> None:
     shard = CoverageShard(
         name="headless",
-        timeout=240,
+        timeout=HEADLESS_COVERAGE_TIMEOUT_SECONDS,
         targets=("tests/integration/headless/test_cli_run_smoke.py",),
     )
 
@@ -85,3 +90,15 @@ def test_coverage_shard_uses_deterministic_runner_module() -> None:
     assert command[:3] == [sys.executable, "-m", "scripts.ci.coverage_pytest_runner"]
     assert "tests/integration/headless/test_cli_run_smoke.py" in command
     assert command[-2:] == ["-m", "not slow and not gate"]
+
+
+def test_headless_coverage_shards_use_coverage_aware_budget() -> None:
+    headless_shards = tuple(
+        shard for shard in COVERAGE_SHARDS if shard.name.startswith("integration-headless-")
+    )
+
+    assert len(headless_shards) == 3
+    assert HEADLESS_COVERAGE_TIMEOUT_SECONDS == 600
+    assert {shard.timeout for shard in headless_shards} == {
+        HEADLESS_COVERAGE_TIMEOUT_SECONDS
+    }
