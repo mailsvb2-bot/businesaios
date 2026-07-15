@@ -24,7 +24,7 @@ from runtime.execution.evidence_trust import (
     result_has_trusted_external_evidence,
     sanitize_feedback_payload,
 )
-from runtime.execution.outcome_persistence_lock import finalize_failed_outcome, persist_verified_outcome
+from runtime.execution.outcome_persistence_lock import persist_verified_outcome
 
 CANON_RUNTIME_EXECUTION_CONTRACT_LOCK_OWNER = True
 CANON_RUNTIME_EXECUTION_CONTRACT_NO_DECISION_LOGIC = True
@@ -255,14 +255,7 @@ def verify_execution_contract(*, executor: Any, env: Any, output: Mapping[str, A
         },
     )
     if not verified:
-        failure_reason = str(verification.get("code") or verification.get("status") or "verification_failed")
-        finalize_failed_outcome(
-            executor=executor,
-            env=env,
-            reason=failure_reason,
-            output=normalized_output,
-        )
-        raise ExecutionContractLockError(failure_reason)
+        raise ExecutionContractLockError(str(verification.get("code") or verification.get("status") or "verification_failed"))
     return VerificationStageResult(
         verified=verified,
         verification=verification,
