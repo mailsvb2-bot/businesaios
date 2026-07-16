@@ -50,8 +50,12 @@ def test_repository_wide_scan_covers_new_product_roots_and_prunes_builds(
 
     findings = scan(root)
 
-    assert [item.path for item in findings] == ["new_product_root/service.py"]
-    assert [item.code for item in findings] == ["possible_decision_core_bypass"]
+    assert [item.path for item in findings] == [
+        "new_product_root/service.py"
+    ]
+    assert [item.code for item in findings] == [
+        "possible_decision_core_bypass"
+    ]
 
 
 def test_nested_self_decision_call_is_blocked(tmp_path: Path) -> None:
@@ -65,7 +69,9 @@ def test_nested_self_decision_call_is_blocked(tmp_path: Path) -> None:
         ),
     )
 
-    assert [item.code for item in findings] == ["possible_decision_core_bypass"]
+    assert [item.code for item in findings] == [
+        "possible_decision_core_bypass"
+    ]
     assert "self.shadow_brain.decide" in findings[0].detail
 
 
@@ -79,7 +85,9 @@ def test_chained_registry_decision_call_is_blocked(tmp_path: Path) -> None:
         ),
     )
 
-    assert [item.code for item in findings] == ["possible_decision_core_bypass"]
+    assert [item.code for item in findings] == [
+        "possible_decision_core_bypass"
+    ]
     assert "registry.get().issue" in findings[0].detail
 
 
@@ -94,7 +102,9 @@ def test_direct_decision_function_call_is_blocked(tmp_path: Path) -> None:
         ),
     )
 
-    assert [item.code for item in findings] == ["possible_decision_core_bypass"]
+    assert [item.code for item in findings] == [
+        "possible_decision_core_bypass"
+    ]
 
 
 def test_contextual_local_optimizer_does_not_become_false_second_brain(
@@ -144,7 +154,9 @@ def test_direct_generic_optimize_call_remains_non_authoritative(
     assert findings == []
 
 
-def test_contextual_shadow_planner_optimizer_is_blocked(tmp_path: Path) -> None:
+def test_contextual_shadow_planner_optimizer_is_blocked(
+    tmp_path: Path,
+) -> None:
     findings = _scan_source(
         tmp_path=tmp_path,
         relative="application/feature/planner.py",
@@ -155,7 +167,9 @@ def test_contextual_shadow_planner_optimizer_is_blocked(tmp_path: Path) -> None:
         ),
     )
 
-    assert [item.code for item in findings] == ["possible_decision_core_bypass"]
+    assert [item.code for item in findings] == [
+        "possible_decision_core_bypass"
+    ]
 
 
 def test_exact_canonical_decision_owner_paths_remain_allowed(
