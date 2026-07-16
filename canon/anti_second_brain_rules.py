@@ -38,6 +38,7 @@ DECISION_AUTHORITY_RECEIVER_TOKENS = (
 CANONICAL_DECISION_OWNER_PREFIXES = (
     "core/ai/",
     "application/decision_runtime/",
+    "application/headless/decision_gateway.py",
     "demand_decision/canonical_decision_bridge.py",
     "runtime/decision_gateway.py",
     "runtime/decision_path_lock.py",
