@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import ast
 
-from tools.decision_authority_indirect_scanner import _scan_ast
+from tools.decision_authority_indirect_scanner import Finding, _scan_ast
 
 
-def _findings(source: str):
+def _findings(source: str) -> list[Finding]:
     relative = "application/feature/service.py"
     return _scan_ast(
         rel=relative,
@@ -79,6 +79,28 @@ def test_comprehension_outer_iter_uses_outer_alias() -> None:
         "        item\n"
         "        for item in helper(decision_core, 'decide')\n"
         "    ]\n"
+    )
+
+    assert findings
+
+
+def test_late_module_alias_is_visible_to_function_body() -> None:
+    findings = _findings(
+        "def blocked(decision_core):\n"
+        "    return helper(decision_core, 'decide')\n"
+        "from builtins import getattr as helper\n"
+    )
+
+    assert findings
+
+
+def test_late_outer_alias_is_visible_to_nested_function() -> None:
+    findings = _findings(
+        "def outer(decision_core):\n"
+        "    def blocked():\n"
+        "        return helper(decision_core, 'decide')\n"
+        "    helper = getattr\n"
+        "    return blocked()\n"
     )
 
     assert findings
