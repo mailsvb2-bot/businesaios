@@ -4,9 +4,12 @@ import ast
 from pathlib import Path
 
 from canon.anti_second_brain_rules import (
+    CANONICAL_DECISION_CORE_PATH,
     CANONICAL_DECISION_OWNER_PREFIXES,
+    CONTEXTUAL_DECISION_AUTHORITY_METHODS,
     DECISION_AUTHORITY_METHODS,
     FORBIDDEN_DECISION_METHODS,
+    HARD_DECISION_AUTHORITY_METHODS,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -68,9 +71,12 @@ def test_historical_forbidden_method_contract_is_preserved() -> None:
 def test_canonical_authority_vocabulary_contains_legacy_contract() -> None:
     assert FORBIDDEN_DECISION_METHODS <= DECISION_AUTHORITY_METHODS
     assert {"decide", "issue", "optimize"} <= DECISION_AUTHORITY_METHODS
+    assert "decide" in HARD_DECISION_AUTHORITY_METHODS
+    assert {"issue", "optimize"} <= CONTEXTUAL_DECISION_AUTHORITY_METHODS
 
 
-def test_only_exact_gateway_paths_expand_the_canonical_owner_surface() -> None:
+def test_only_file_exact_production_paths_own_decision_authority() -> None:
+    assert CANONICAL_DECISION_CORE_PATH in CANONICAL_DECISION_OWNER_PREFIXES
     assert (
         "application/headless/decision_gateway.py"
         in CANONICAL_DECISION_OWNER_PREFIXES
@@ -79,6 +85,8 @@ def test_only_exact_gateway_paths_expand_the_canonical_owner_surface() -> None:
         "demand_decision/canonical_decision_bridge.py"
         in CANONICAL_DECISION_OWNER_PREFIXES
     )
+    assert "core/ai/" not in CANONICAL_DECISION_OWNER_PREFIXES
+    assert "application/decision_runtime/" not in CANONICAL_DECISION_OWNER_PREFIXES
     assert "application/headless/" not in CANONICAL_DECISION_OWNER_PREFIXES
     assert "demand_decision/" not in CANONICAL_DECISION_OWNER_PREFIXES
 
