@@ -4,6 +4,7 @@ import ast
 from pathlib import Path
 from typing import Any
 
+from canon.anti_second_brain_rules import HARD_DECISION_AUTHORITY_METHODS
 from scripts.ci.integrity import auditor
 from scripts.ci.integrity.decision_authority_alias_exemptions import (
     is_bounded_non_runtime_regression_fixture,
@@ -35,16 +36,26 @@ def _definition_finding(
     node: ast.AST,
     name: str,
     kind: str,
+    reason: str | None = None,
 ) -> auditor.Finding:
+    message = reason or (
+        f"{kind} `{name}` exposes a competing decision-authority surface "
+        "outside canonical DecisionCore."
+    )
     return auditor.finding(
         "P0_DECISION_AUTHORITY_DEFINITION",
         "P0",
         "Competing executable decision authority definition",
         path,
         getattr(node, "lineno", 1),
-        f"{kind} `{name}` exposes a competing decision-authority surface outside canonical DecisionCore.",
-        "Delete the authority. Keep decision issuance exclusively in core.ai.decision_core.DecisionCore.",
+        message,
+        "Delete the authority. Keep decision issuance exclusively in "
+        "core.ai.decision_core.DecisionCore.",
     )
+
+
+def _concrete_hard_authority_methods(node: ast.ClassDef) -> set[str]:
+    return class_method_names(node) & HARD_DECISION_AUTHORITY_METHODS
 
 
 def _alias_findings_for_path(
@@ -85,6 +96,24 @@ def _alias_findings_for_path(
                 continue
             if is_pure_authority_interface(node):
                 continue
+
+            hard_methods = _concrete_hard_authority_methods(node)
+            if hard_methods:
+                methods = ", ".join(sorted(hard_methods))
+                findings.append(
+                    _definition_finding(
+                        path=path,
+                        node=node,
+                        name=node.name,
+                        kind="Class",
+                        reason=(
+                            f"Class `{node.name}` defines concrete sovereign "
+                            f"method(s) `{methods}` outside canonical DecisionCore."
+                        ),
+                    )
+                )
+                continue
+
             authority_methods = class_method_names(node) & AUTHORITY_METHODS
             if is_authority_type_definition_name(
                 node.name,
@@ -109,9 +138,12 @@ def _alias_findings_for_path(
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             if is_registry_reference_accessor(node, parents=parents):
                 continue
-            if is_authority_function_definition_name(
-                node.name,
-                executable_names,
+            if (
+                node.name in HARD_DECISION_AUTHORITY_METHODS
+                or is_authority_function_definition_name(
+                    node.name,
+                    executable_names,
+                )
             ):
                 findings.append(
                     _definition_finding(
@@ -141,8 +173,10 @@ def _alias_findings_for_path(
                         "Executable decision authority import alias",
                         path,
                         getattr(node, "lineno", 1),
-                        f"Import alias `{alias.name} as {alias.asname}` creates a competing decision-authority surface.",
-                        "Import the canonical DecisionCore under its canonical name and keep runtime/services as non-authoritative callers.",
+                        f"Import alias `{alias.name} as {alias.asname}` creates "
+                        "a competing decision-authority surface.",
+                        "Import the canonical DecisionCore under its canonical "
+                        "name and keep runtime/services as non-authoritative callers.",
                     )
                 )
             continue
@@ -179,8 +213,10 @@ def _alias_findings_for_path(
                     "Executable decision authority assignment alias",
                     path,
                     getattr(node, "lineno", 1),
-                    f"Assignment to `{target.id}` can expose a second executable decision authority.",
-                    "Delete the alias. Route all decision issuance through core.ai.decision_core.DecisionCore.",
+                    f"Assignment to `{target.id}` can expose a second executable "
+                    "decision authority.",
+                    "Delete the alias. Route all decision issuance through "
+                    "core.ai.decision_core.DecisionCore.",
                 )
             )
 
