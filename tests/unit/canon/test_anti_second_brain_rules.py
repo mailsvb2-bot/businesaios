@@ -11,6 +11,9 @@ from canon.anti_second_brain_rules import (
     FORBIDDEN_DECISION_METHODS,
     HARD_DECISION_AUTHORITY_METHODS,
 )
+from scripts.ci.integrity.decision_authority_alias_rules import (
+    AUTHORITY_METHODS as CI_AUTHORITY_METHODS,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -73,6 +76,7 @@ def test_canonical_authority_vocabulary_contains_legacy_contract() -> None:
     assert {"decide", "issue", "optimize"} <= DECISION_AUTHORITY_METHODS
     assert "decide" in HARD_DECISION_AUTHORITY_METHODS
     assert {"issue", "optimize"} <= CONTEXTUAL_DECISION_AUTHORITY_METHODS
+    assert CI_AUTHORITY_METHODS is DECISION_AUTHORITY_METHODS
 
 
 def test_only_file_exact_production_paths_own_decision_authority() -> None:
