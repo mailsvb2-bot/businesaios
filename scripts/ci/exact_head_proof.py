@@ -24,7 +24,8 @@ from typing import Sequence
 from scripts.ci.plan_registry import allowed_gates
 
 CANON_EXACT_HEAD_PROOF = True
-EXACT_HEAD_PROOF_SCHEMA_VERSION = 1
+EXACT_HEAD_PROOF_SCHEMA_VERSION = 2
+DEFAULT_TIMEOUT_SECONDS = 3 * 60 * 60
 HOSTED_EQUIVALENT_GATES = (
     "business-critical",
     "fast",
@@ -43,10 +44,12 @@ class CommandResult:
     command: tuple[str, ...]
     returncode: int
     duration_ms: int
+    timed_out: bool = False
+    smoke_root: str = ""
 
     @property
     def success(self) -> bool:
-        return self.returncode == 0
+        return self.returncode == 0 and not self.timed_out
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,8 @@ class ProofReport:
     python_executable: str
     python_version: str
     platform: str
+    timeout_seconds: int
+    smoke_parent: str
     started_at: str
     finished_at: str
     commands: tuple[CommandResult, ...]
@@ -91,14 +96,24 @@ def resolve_head_sha(repo: Path) -> str:
 
 
 def require_clean_worktree(repo: Path) -> None:
-    status = _git_text(repo, "status", "--porcelain=v1", "--untracked-files=all")
+    status = _git_text(
+        repo,
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+    )
     if status:
         sample = " | ".join(status.splitlines()[:12])
         raise ExactHeadProofError(f"worktree is not clean: {sample}")
 
 
 def resolve_target_base_sha(repo: Path, target_base: str) -> str:
-    value = _git_text(repo, "rev-parse", "--verify", f"{target_base}^{{commit}}")
+    value = _git_text(
+        repo,
+        "rev-parse",
+        "--verify",
+        f"{target_base}^{{commit}}",
+    )
     if len(value) != 40:
         raise ExactHeadProofError(
             f"target base does not resolve to a commit: {target_base}"
@@ -112,20 +127,31 @@ def _run_command(
     command: Sequence[str],
     repo: Path,
     env: dict[str, str],
+    timeout_seconds: int,
+    smoke_root: str = "",
 ) -> CommandResult:
     started = time.monotonic_ns()
-    completed = subprocess.run(
-        list(command),
-        cwd=repo,
-        env=env,
-        check=False,
-    )
+    timed_out = False
+    try:
+        completed = subprocess.run(
+            list(command),
+            cwd=repo,
+            env=env,
+            check=False,
+            timeout=timeout_seconds,
+        )
+        returncode = int(completed.returncode)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        returncode = 124
     duration_ms = int((time.monotonic_ns() - started) / 1_000_000)
     return CommandResult(
         name=name,
         command=tuple(command),
-        returncode=int(completed.returncode),
+        returncode=returncode,
         duration_ms=duration_ms,
+        timed_out=timed_out,
+        smoke_root=smoke_root,
     )
 
 
@@ -141,6 +167,19 @@ def _write_report(path: Path, report: ProofReport) -> None:
     os.replace(temporary, path)
 
 
+def _gate_smoke_root(
+    *,
+    smoke_parent: Path,
+    index: int,
+    gate: str,
+) -> Path:
+    safe_gate = "".join(
+        character if character.isalnum() else "-"
+        for character in gate.casefold()
+    ).strip("-")
+    return smoke_parent / f"{index:02d}-{safe_gate}"
+
+
 def run_exact_head_proof(
     *,
     repo: Path,
@@ -149,11 +188,16 @@ def run_exact_head_proof(
     target_base: str = "origin/main",
     report_path: Path | None = None,
     fail_fast: bool = False,
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
 ) -> ProofReport:
     root = repo.resolve()
     expected = str(expected_sha or "").strip().lower()
     if len(expected) != 40:
-        raise ExactHeadProofError("--expected-sha must be a full 40-character SHA")
+        raise ExactHeadProofError(
+            "--expected-sha must be a full 40-character SHA"
+        )
+    if int(timeout_seconds) <= 0:
+        raise ExactHeadProofError("--timeout-seconds must be positive")
 
     unknown = tuple(gate for gate in gates if gate not in allowed_gates())
     if unknown:
@@ -172,21 +216,28 @@ def run_exact_head_proof(
     base_env = dict(os.environ)
     base_env["TARGETED_CI_BASE"] = target_base
 
-    smoke_root = Path(
+    smoke_parent = Path(
         tempfile.mkdtemp(prefix=f"businesaios-proof-{head_sha[:12]}-")
     )
-    base_env["BAIOS_BOOT_SMOKE_ROOT"] = str(smoke_root)
 
     lock_result = _run_command(
         name="requirements-lock",
         command=(sys.executable, "scripts/ci/check_requirements_lock.py"),
         repo=root,
         env=base_env,
+        timeout_seconds=timeout_seconds,
     )
     commands.append(lock_result)
 
     if lock_result.success or not fail_fast:
-        for gate in gates:
+        for index, gate in enumerate(gates, start=1):
+            smoke_root = _gate_smoke_root(
+                smoke_parent=smoke_parent,
+                index=index,
+                gate=gate,
+            )
+            gate_env = dict(base_env)
+            gate_env["BAIOS_BOOT_SMOKE_ROOT"] = str(smoke_root)
             result = _run_command(
                 name=gate,
                 command=(
@@ -197,7 +248,9 @@ def run_exact_head_proof(
                     gate,
                 ),
                 repo=root,
-                env=base_env,
+                env=gate_env,
+                timeout_seconds=timeout_seconds,
+                smoke_root=str(smoke_root),
             )
             commands.append(result)
             if fail_fast and not result.success:
@@ -215,6 +268,8 @@ def run_exact_head_proof(
         python_executable=sys.executable,
         python_version=platform.python_version(),
         platform=platform.platform(),
+        timeout_seconds=int(timeout_seconds),
+        smoke_parent=str(smoke_parent),
         started_at=started_at,
         finished_at=_utc_now(),
         commands=tuple(commands),
@@ -241,7 +296,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repeat to override the hosted-equivalent gate set.",
     )
     parser.add_argument("--target-base", default="origin/main")
-    parser.add_argument("--report", default="artifacts/ci/exact_head_proof.json")
+    parser.add_argument(
+        "--report",
+        default="artifacts/ci/exact_head_proof.json",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=DEFAULT_TIMEOUT_SECONDS,
+    )
     parser.add_argument("--fail-fast", action="store_true")
     return parser
 
@@ -256,15 +319,20 @@ def main() -> int:
             target_base=args.target_base,
             report_path=Path(args.report),
             fail_fast=bool(args.fail_fast),
+            timeout_seconds=int(args.timeout_seconds),
         )
     except ExactHeadProofError as exc:
-        print(f"[exact-head-proof] failed before gates: {exc}", file=sys.stderr)
+        print(
+            f"[exact-head-proof] failed before gates: {exc}",
+            file=sys.stderr,
+        )
         return 2
 
     for result in report.commands:
         print(
             f"[exact-head-proof] step={result.name} "
-            f"success={result.success} duration_ms={result.duration_ms}"
+            f"success={result.success} timed_out={result.timed_out} "
+            f"duration_ms={result.duration_ms}"
         )
     print(f"[exact-head-proof] head={report.head_sha}")
     print(f"[exact-head-proof] success={report.success}")
