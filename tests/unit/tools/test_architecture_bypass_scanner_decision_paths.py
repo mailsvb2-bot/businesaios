@@ -149,6 +149,66 @@ def test_dynamic_decision_lookup_is_blocked(tmp_path: Path) -> None:
     ]
 
 
+def test_bare_decision_name_reference_is_blocked(tmp_path: Path) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/feature/name_reference.py",
+        source=(
+            "from hidden import decide\n"
+            "choose = decide\n"
+        ),
+    )
+
+    assert [item.code for item in findings] == [
+        "decision_authority_name_reference_outside_owner"
+    ]
+
+
+def test_dunder_decision_lookup_is_blocked(tmp_path: Path) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/feature/dunder_lookup.py",
+        source=(
+            "def bind(decision_core):\n"
+            "    return decision_core.__getattribute__('decide')\n"
+        ),
+    )
+
+    assert [item.code for item in findings] == [
+        "dynamic_decision_authority_lookup_outside_owner"
+    ]
+
+
+def test_dynamic_decision_mutation_is_blocked(tmp_path: Path) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/feature/mutation.py",
+        source=(
+            "def replace(decision_core, replacement):\n"
+            "    setattr(decision_core, 'decide', replacement)\n"
+        ),
+    )
+
+    assert [item.code for item in findings] == [
+        "dynamic_decision_authority_mutation_outside_owner"
+    ]
+
+
+def test_decision_dict_lookup_is_blocked(tmp_path: Path) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/feature/dict_lookup.py",
+        source=(
+            "def bind(decision_core):\n"
+            "    return vars(decision_core)['decide']\n"
+        ),
+    )
+
+    assert [item.code for item in findings] == [
+        "subscript_decision_authority_lookup_outside_owner"
+    ]
+
+
 def test_generic_issue_method_remains_non_authoritative(tmp_path: Path) -> None:
     findings = _scan_source(
         tmp_path=tmp_path,
