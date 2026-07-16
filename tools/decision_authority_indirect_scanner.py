@@ -1,9 +1,8 @@
-"""Fail-closed scan for indirect or hidden decision-authority execution paths.
+"""Single-owner scan for hidden decision-authority execution paths.
 
-The generic architecture scanner covers raw effects and obvious calls. This
-module owns the stricter DecisionCore boundary: exact production owner files,
-repository-wide source discovery, reflection aliases, stored method references,
-dynamic lookup/mutation, and mapping-based access to authority methods.
+The scanner enforces exact production owner files, repository-wide source
+coverage, lexical alias resolution, reflection paths, stored method references,
+dynamic lookup or mutation, and mapping-based authority access.
 """
 
 from __future__ import annotations
@@ -23,6 +22,7 @@ from canon.anti_second_brain_rules import (
 )
 
 CANON_DECISION_AUTHORITY_INDIRECT_SCAN = True
+CANON_LEXICAL_AUTHORITY_ALIAS_RESOLUTION = True
 
 GLOBAL_EXCLUDED_DIRS = {
     ".git",
@@ -109,9 +109,8 @@ def _iter_python_files(root: Path) -> Iterable[Path]:
             and not (at_root and name in ROOT_EXCLUDED_DIRS)
         )
         for filename in sorted(filenames):
-            if not filename.endswith(".py"):
-                continue
-            yield base / filename
+            if filename.endswith(".py"):
+                yield base / filename
 
 
 def _parent_map(tree: ast.AST) -> dict[ast.AST, ast.AST]:
@@ -142,23 +141,6 @@ def _static_string(node: ast.AST) -> str | None:
     return None
 
 
-def _import_aliases(tree: ast.AST) -> dict[str, str]:
-    aliases: dict[str, str] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                local_name = alias.asname or alias.name.split(".", 1)[0]
-                aliases[local_name] = alias.name
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            for alias in node.names:
-                if alias.name == "*":
-                    continue
-                aliases[alias.asname or alias.name] = (
-                    f"{node.module}.{alias.name}"
-                )
-    return aliases
-
-
 def _qualified_name(node: ast.AST, aliases: dict[str, str]) -> str:
     if isinstance(node, ast.Name):
         return aliases.get(node.id, node.id)
@@ -166,29 +148,6 @@ def _qualified_name(node: ast.AST, aliases: dict[str, str]) -> str:
         base = _qualified_name(node.value, aliases)
         return f"{base}.{node.attr}" if base else node.attr
     return ""
-
-
-def _assignment_aliases(
-    tree: ast.AST,
-    imported: dict[str, str],
-) -> dict[str, str]:
-    aliases = dict(imported)
-    changed = True
-    while changed:
-        changed = False
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Assign):
-                continue
-            if len(node.targets) != 1:
-                continue
-            target = node.targets[0]
-            if not isinstance(target, ast.Name):
-                continue
-            source = _qualified_name(node.value, aliases)
-            if source and target.id not in aliases:
-                aliases[target.id] = source
-                changed = True
-    return aliases
 
 
 def _expression_path(node: ast.AST, aliases: dict[str, str]) -> str:
@@ -232,7 +191,9 @@ def _call_name(
 
 def _normalized_receiver(owner: str | None) -> str:
     return "".join(
-        ch for ch in str(owner or "").casefold() if ch.isalnum()
+        character
+        for character in str(owner or "").casefold()
+        if character.isalnum()
     )
 
 
@@ -260,6 +221,315 @@ def _is_direct_call_function(
 ) -> bool:
     parent = parents.get(node)
     return isinstance(parent, ast.Call) and parent.func is node
+
+
+def _bound_names_in_target(target: ast.AST) -> set[str]:
+    return {
+        child.id
+        for child in ast.walk(target)
+        if isinstance(child, ast.Name)
+        and isinstance(child.ctx, (ast.Store, ast.Del))
+    }
+
+
+def _scope_local_names(
+    scope: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.ClassDef,
+) -> set[str]:
+    names: set[str] = set()
+    if isinstance(scope, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+        arguments = scope.args
+        names.update(argument.arg for argument in arguments.posonlyargs)
+        names.update(argument.arg for argument in arguments.args)
+        names.update(argument.arg for argument in arguments.kwonlyargs)
+        if arguments.vararg is not None:
+            names.add(arguments.vararg.arg)
+        if arguments.kwarg is not None:
+            names.add(arguments.kwarg.arg)
+
+    body = scope.body if not isinstance(scope, ast.Lambda) else ()
+    global_names: set[str] = set()
+    nonlocal_names: set[str] = set()
+
+    def walk_statement(node: ast.AST) -> None:
+        if isinstance(
+            node,
+            (
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+                ast.ClassDef,
+                ast.Lambda,
+                ast.ListComp,
+                ast.SetComp,
+                ast.DictComp,
+                ast.GeneratorExp,
+            ),
+        ) and node is not scope:
+            if isinstance(
+                node,
+                (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef),
+            ):
+                names.add(node.name)
+            return
+        if isinstance(node, ast.Global):
+            global_names.update(node.names)
+            return
+        if isinstance(node, ast.Nonlocal):
+            nonlocal_names.update(node.names)
+            return
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.asname or alias.name.split(".", 1)[0])
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                if alias.name != "*":
+                    names.add(alias.asname or alias.name)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                names.update(_bound_names_in_target(target))
+        elif isinstance(node, ast.AnnAssign):
+            names.update(_bound_names_in_target(node.target))
+        elif isinstance(node, ast.NamedExpr):
+            names.update(_bound_names_in_target(node.target))
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            names.update(_bound_names_in_target(node.target))
+        elif isinstance(node, (ast.With, ast.AsyncWith)):
+            for item in node.items:
+                if item.optional_vars is not None:
+                    names.update(_bound_names_in_target(item.optional_vars))
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            names.add(node.name)
+
+        for child in ast.iter_child_nodes(node):
+            walk_statement(child)
+
+    for statement in body:
+        walk_statement(statement)
+    names.difference_update(global_names)
+    names.difference_update(nonlocal_names)
+    return names
+
+
+def _comprehension_local_names(
+    generators: list[ast.comprehension],
+) -> set[str]:
+    names: set[str] = set()
+    for generator in generators:
+        names.update(_bound_names_in_target(generator.target))
+    return names
+
+
+class _AliasContextCollector(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.contexts: dict[ast.AST, dict[str, str]] = {}
+        self._scopes: list[tuple[str, dict[str, str]]] = [
+            ("module", {})
+        ]
+
+    @property
+    def aliases(self) -> dict[str, str]:
+        return self._scopes[-1][1]
+
+    def _record(self, node: ast.AST) -> None:
+        self.contexts[node] = dict(self.aliases)
+
+    def _visit_annotations(
+        self,
+        arguments: ast.arguments,
+        returns: ast.expr | None,
+    ) -> None:
+        for argument in (
+            *arguments.posonlyargs,
+            *arguments.args,
+            *arguments.kwonlyargs,
+        ):
+            if argument.annotation is not None:
+                self.visit(argument.annotation)
+        if arguments.vararg and arguments.vararg.annotation is not None:
+            self.visit(arguments.vararg.annotation)
+        if arguments.kwarg and arguments.kwarg.annotation is not None:
+            self.visit(arguments.kwarg.annotation)
+        if returns is not None:
+            self.visit(returns)
+
+    def _body_base_aliases(self) -> dict[str, str]:
+        if self._scopes[-1][0] != "class":
+            return dict(self.aliases)
+        for kind, aliases in reversed(self._scopes[:-1]):
+            if kind != "class":
+                return dict(aliases)
+        return {}
+
+    def _visit_function(
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+    ) -> None:
+        self._record(node)
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        for default in node.args.defaults:
+            self.visit(default)
+        for default in node.args.kw_defaults:
+            if default is not None:
+                self.visit(default)
+        self._visit_annotations(node.args, node.returns)
+
+        inherited = self._body_base_aliases()
+        for local_name in _scope_local_names(node):
+            inherited.pop(local_name, None)
+        self._scopes.append(("function", inherited))
+        for statement in node.body:
+            self.visit(statement)
+        self._scopes.pop()
+        self.aliases.pop(node.name, None)
+
+    def visit_Module(self, node: ast.Module) -> None:
+        self._record(node)
+        for statement in node.body:
+            self.visit(statement)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self._visit_function(node)
+
+    def visit_Lambda(self, node: ast.Lambda) -> None:
+        self._record(node)
+        inherited = self._body_base_aliases()
+        for local_name in _scope_local_names(node):
+            inherited.pop(local_name, None)
+        self._scopes.append(("function", inherited))
+        self.visit(node.body)
+        self._scopes.pop()
+
+    def _visit_comprehension(
+        self,
+        node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp,
+        value_nodes: tuple[ast.AST, ...],
+    ) -> None:
+        self._record(node)
+        if not node.generators:
+            for value_node in value_nodes:
+                self.visit(value_node)
+            return
+
+        first, *remaining = node.generators
+        self.visit(first.iter)
+        inherited = self._body_base_aliases()
+        for local_name in _comprehension_local_names(node.generators):
+            inherited.pop(local_name, None)
+
+        self._scopes.append(("function", inherited))
+        self.visit(first.target)
+        for condition in first.ifs:
+            self.visit(condition)
+        for generator in remaining:
+            self.visit(generator.iter)
+            self.visit(generator.target)
+            for condition in generator.ifs:
+                self.visit(condition)
+        for value_node in value_nodes:
+            self.visit(value_node)
+        self._scopes.pop()
+
+    def visit_ListComp(self, node: ast.ListComp) -> None:
+        self._visit_comprehension(node, (node.elt,))
+
+    def visit_SetComp(self, node: ast.SetComp) -> None:
+        self._visit_comprehension(node, (node.elt,))
+
+    def visit_DictComp(self, node: ast.DictComp) -> None:
+        self._visit_comprehension(node, (node.key, node.value))
+
+    def visit_GeneratorExp(self, node: ast.GeneratorExp) -> None:
+        self._visit_comprehension(node, (node.elt,))
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self._record(node)
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        for base in node.bases:
+            self.visit(base)
+        for keyword in node.keywords:
+            self.visit(keyword.value)
+
+        inherited = dict(self.aliases)
+        for local_name in _scope_local_names(node):
+            inherited.pop(local_name, None)
+        self._scopes.append(("class", inherited))
+        for statement in node.body:
+            self.visit(statement)
+        self._scopes.pop()
+        self.aliases.pop(node.name, None)
+
+    def visit_Import(self, node: ast.Import) -> None:
+        self._record(node)
+        for alias in node.names:
+            local_name = alias.asname or alias.name.split(".", 1)[0]
+            self.aliases[local_name] = alias.name
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        self._record(node)
+        if not node.module:
+            return
+        for alias in node.names:
+            if alias.name == "*":
+                continue
+            self.aliases[alias.asname or alias.name] = (
+                f"{node.module}.{alias.name}"
+            )
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        self._record(node)
+        self.visit(node.value)
+        for target in node.targets:
+            self.visit(target)
+        source = _qualified_name(node.value, self.aliases)
+        for target in node.targets:
+            for name in _bound_names_in_target(target):
+                if source and isinstance(target, ast.Name):
+                    self.aliases[name] = source
+                else:
+                    self.aliases.pop(name, None)
+
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        self._record(node)
+        if node.annotation is not None:
+            self.visit(node.annotation)
+        if node.value is not None:
+            self.visit(node.value)
+        self.visit(node.target)
+        source = (
+            _qualified_name(node.value, self.aliases)
+            if node.value is not None
+            else ""
+        )
+        for name in _bound_names_in_target(node.target):
+            if source and isinstance(node.target, ast.Name):
+                self.aliases[name] = source
+            else:
+                self.aliases.pop(name, None)
+
+    def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
+        self._record(node)
+        self.visit(node.value)
+        self.visit(node.target)
+        source = _qualified_name(node.value, self.aliases)
+        for name in _bound_names_in_target(node.target):
+            if source and isinstance(node.target, ast.Name):
+                self.aliases[name] = source
+            else:
+                self.aliases.pop(name, None)
+
+    def generic_visit(self, node: ast.AST) -> None:
+        self._record(node)
+        super().generic_visit(node)
+
+
+def _alias_contexts(tree: ast.AST) -> dict[ast.AST, dict[str, str]]:
+    collector = _AliasContextCollector()
+    collector.visit(tree)
+    return collector.contexts
 
 
 def _reflection_lookup(
@@ -383,10 +653,11 @@ def _scan_ast(
 
     findings: list[Finding] = []
     parents = _parent_map(tree)
-    aliases = _assignment_aliases(tree, _import_aliases(tree))
+    aliases_by_node = _alias_contexts(tree)
 
     for node in ast.walk(tree):
         line = int(getattr(node, "lineno", 0) or 0)
+        aliases = aliases_by_node.get(node, {})
 
         if isinstance(node, ast.ImportFrom):
             module_owner = str(node.module or "")
@@ -497,7 +768,12 @@ def _scan_ast(
     }
     return sorted(
         unique.values(),
-        key=lambda item: (item.path, item.line, item.code, item.detail),
+        key=lambda item: (
+            item.path,
+            item.line,
+            item.code,
+            item.detail,
+        ),
     )
 
 
@@ -525,7 +801,12 @@ def scan(root: Path | None = None) -> tuple[Finding, ...]:
     return tuple(
         sorted(
             unique.values(),
-            key=lambda item: (item.path, item.line, item.code, item.detail),
+            key=lambda item: (
+                item.path,
+                item.line,
+                item.code,
+                item.detail,
+            ),
         )
     )
 
@@ -535,7 +816,10 @@ def main() -> int:
     if not findings:
         print("decision authority indirect scan passed")
         return 0
-    print(f"decision authority indirect scan failed: findings={len(findings)}")
+    print(
+        "decision authority indirect scan failed: "
+        f"findings={len(findings)}"
+    )
     for finding in findings[:80]:
         print(finding.format())
     if len(findings) > 80:
