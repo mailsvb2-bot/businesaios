@@ -82,6 +82,37 @@ def test_contextual_local_optimizer_does_not_become_false_second_brain(
     assert findings == []
 
 
+def test_contextual_external_optimizer_remains_non_authoritative(
+    tmp_path: Path,
+) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/ads/tuner.py",
+        source=(
+            "def tune(optimizer, state):\n"
+            "    return optimizer.optimize(state)\n"
+        ),
+    )
+
+    assert findings == []
+
+
+def test_direct_generic_optimize_call_remains_non_authoritative(
+    tmp_path: Path,
+) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/ads/tuner.py",
+        source=(
+            "from math_tools import optimize\n"
+            "def tune(state):\n"
+            "    return optimize(state)\n"
+        ),
+    )
+
+    assert findings == []
+
+
 def test_contextual_shadow_planner_optimizer_is_blocked(tmp_path: Path) -> None:
     findings = _scan_source(
         tmp_path=tmp_path,
