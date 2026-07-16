@@ -4,7 +4,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from bootstrap.world_model_forbidden_paths import scan_repo_for_forbidden_world_model_paths
+from bootstrap.world_model_forbidden_paths import (
+    scan_repo_for_forbidden_world_model_paths,
+)
 from scripts.ci.integrity import auditor
 from scripts.ci.integrity.decision_authority_alias_scan import (
     check_decision_authority_aliases,
@@ -32,7 +34,9 @@ def _decision_authority_alias_guard() -> tuple[bool, str]:
     return False, f"decision authority alias scan failed: {sample}"
 
 
-def _world_model_source_guard(repo_root: Path | None = None) -> tuple[bool, str]:
+def _world_model_source_guard(
+    repo_root: Path | None = None,
+) -> tuple[bool, str]:
     root = (repo_root or _repository_root()).resolve()
     findings = scan_repo_for_forbidden_world_model_paths(repo_root=root)
     if not findings:
@@ -65,7 +69,9 @@ def run() -> tuple[bool, str]:
         text=True,
         check=False,
     )
-    output = ((completed.stdout or "") + (completed.stderr or "")).strip()
+    output = (
+        (completed.stdout or "") + (completed.stderr or "")
+    ).strip()
     if completed.returncode == 0:
         suffix = output or "architecture bypass scanner passed"
         return True, f"{alias_message}; {source_message}; {suffix}"
