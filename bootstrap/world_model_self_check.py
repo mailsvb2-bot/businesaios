@@ -1,8 +1,8 @@
 """Runtime integrity checks for the canonical world model.
 
-Repository source-policy scanning belongs to CI and operator diagnostics. Runtime
-boot validates the constructed world-model object without walking the checkout.
-Callers must opt in explicitly when they need a diagnostic source scan.
+Repository source-policy scanning belongs to CI and operator diagnostics.
+Runtime boot validates the constructed world-model object without walking the
+checkout. Callers opt in explicitly when they need a diagnostic source scan.
 """
 
 from __future__ import annotations
@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from bootstrap.world_model_boot_check import verify_boot_world_model_integrity
-from bootstrap.world_model_forbidden_paths import scan_repo_for_forbidden_world_model_paths
+from bootstrap.world_model_forbidden_paths import (
+    scan_repo_for_forbidden_world_model_paths,
+)
 from runtime.boot.env import env_bool
 
 CANON_BOOT_WIRING_ONLY = True
