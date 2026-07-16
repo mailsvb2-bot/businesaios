@@ -191,3 +191,20 @@ def test_exact_canonical_decision_owner_paths_remain_allowed(
             ),
         )
         assert findings == [], relative
+
+
+def test_near_miss_gateway_filename_is_not_an_owner(
+    tmp_path: Path,
+) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="runtime/decision_gateway.py_backup.py",
+        source=(
+            "def run(decision_core, state):\n"
+            "    return decision_core.decide(state)\n"
+        ),
+    )
+
+    assert [item.code for item in findings] == [
+        "possible_decision_core_bypass"
+    ]
