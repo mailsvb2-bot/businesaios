@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import bootstrap.boot_phases as boot_phases
 import bootstrap.world_model_forbidden_paths as scanner
 from bootstrap.world_model_forbidden_paths import scan_repo_for_forbidden_world_model_paths
 
@@ -49,3 +50,12 @@ def test_scan_prunes_generated_trees_but_keeps_canonical_test_contracts(
     assert "tests/test_world_model_contract_runtime.py" in visited
     assert "target/debug/build/generated.py" not in visited
     assert "tests/test_unrelated_runtime.py" not in visited
+
+
+def test_boot_world_model_scan_uses_the_checkout_root() -> None:
+    module_path = Path(boot_phases.__file__).resolve()
+    expected_root = module_path.parents[1]
+
+    assert boot_phases._repository_root() == expected_root
+    assert expected_root / "bootstrap" / "boot_phases.py" == module_path
+    assert expected_root != module_path.parents[2]
