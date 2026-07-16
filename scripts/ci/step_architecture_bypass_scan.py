@@ -11,6 +11,9 @@ from scripts.ci.integrity import auditor
 from scripts.ci.integrity.decision_authority_alias_scan import (
     check_decision_authority_aliases,
 )
+from tools.decision_authority_indirect_scanner import (
+    scan as scan_indirect_decision_authority,
+)
 
 
 def _repository_root() -> Path:
@@ -32,6 +35,20 @@ def _decision_authority_alias_guard() -> tuple[bool, str]:
     if len(findings) > 8:
         sample += f" | {len(findings) - 8} more"
     return False, f"decision authority alias scan failed: {sample}"
+
+
+def _indirect_decision_authority_guard(
+    repo_root: Path | None = None,
+) -> tuple[bool, str]:
+    root = (repo_root or _repository_root()).resolve()
+    findings = scan_indirect_decision_authority(root)
+    if not findings:
+        return True, "indirect decision authority scan passed"
+
+    sample = " | ".join(item.format() for item in findings[:8])
+    if len(findings) > 8:
+        sample += f" | {len(findings) - 8} more"
+    return False, f"indirect decision authority scan failed: {sample}"
 
 
 def _world_model_source_guard(
@@ -56,6 +73,10 @@ def run() -> tuple[bool, str]:
     if not alias_ok:
         return False, alias_message
 
+    indirect_ok, indirect_message = _indirect_decision_authority_guard()
+    if not indirect_ok:
+        return False, indirect_message
+
     source_ok, source_message = _world_model_source_guard()
     if not source_ok:
         return False, source_message
@@ -74,6 +95,9 @@ def run() -> tuple[bool, str]:
     ).strip()
     if completed.returncode == 0:
         suffix = output or "architecture bypass scanner passed"
-        return True, f"{alias_message}; {source_message}; {suffix}"
+        return True, (
+            f"{alias_message}; {indirect_message}; "
+            f"{source_message}; {suffix}"
+        )
     message = output or "architecture bypass scanner failed"
     return False, message[:12000]
