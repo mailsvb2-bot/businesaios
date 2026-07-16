@@ -12,16 +12,33 @@ from scripts.ci import exact_head_proof as proof
 def _repo(tmp_path: Path) -> tuple[Path, str]:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     subprocess.run(
-        ["git", "-C", str(tmp_path), "config", "user.email", "ci@example.test"],
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "config",
+            "user.email",
+            "ci@example.test",
+        ],
         check=True,
     )
     subprocess.run(
-        ["git", "-C", str(tmp_path), "config", "user.name", "CI"],
+        [
+            "git",
+            "-C",
+            str(tmp_path),
+            "config",
+            "user.name",
+            "CI",
+        ],
         check=True,
     )
     tracked = tmp_path / "tracked.txt"
     tracked.write_text("ok\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(tmp_path), "add", "tracked.txt"], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", "tracked.txt"],
+        check=True,
+    )
     subprocess.run(
         ["git", "-C", str(tmp_path), "commit", "-qm", "initial"],
         check=True,
@@ -43,6 +60,7 @@ def _success_command(**kwargs) -> proof.CommandResult:
         command=tuple(kwargs["command"]),
         returncode=0,
         duration_ms=1,
+        smoke_root=str(kwargs.get("smoke_root") or ""),
     )
 
 
@@ -60,19 +78,59 @@ def test_exact_head_proof_writes_machine_readable_evidence(
         gates=("fast", "full"),
         target_base="main",
         report_path=report_path,
+        timeout_seconds=60,
     )
 
     assert report.success is True
+    assert report.timeout_seconds == 60
     assert [item.name for item in report.commands] == [
         "requirements-lock",
         "fast",
         "full",
     ]
     payload = json.loads(report_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 2
     assert payload["head_sha"] == sha
     assert payload["expected_sha"] == sha
     assert payload["target_base_sha"] == sha
+    assert payload["timeout_seconds"] == 60
     assert payload["success"] is True
+
+
+def test_each_gate_receives_an_isolated_smoke_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, sha = _repo(tmp_path)
+    observed: dict[str, str] = {}
+
+    def run(**kwargs) -> proof.CommandResult:
+        name = str(kwargs["name"])
+        observed[name] = str(
+            kwargs["env"].get("BAIOS_BOOT_SMOKE_ROOT") or ""
+        )
+        return _success_command(**kwargs)
+
+    monkeypatch.setattr(proof, "_run_command", run)
+    report = proof.run_exact_head_proof(
+        repo=repo,
+        expected_sha=sha,
+        gates=("business-critical", "fast", "full"),
+        target_base="main",
+        report_path=repo / "proof.json",
+    )
+
+    gate_roots = {
+        observed["business-critical"],
+        observed["fast"],
+        observed["full"],
+    }
+    assert observed["requirements-lock"] == ""
+    assert len(gate_roots) == 3
+    assert all(
+        Path(value).parent == Path(report.smoke_parent)
+        for value in gate_roots
+    )
 
 
 def test_exact_head_proof_rejects_dirty_worktree(tmp_path: Path) -> None:
@@ -100,6 +158,52 @@ def test_exact_head_proof_rejects_sha_mismatch(tmp_path: Path) -> None:
         )
 
 
+def test_exact_head_proof_rejects_nonpositive_timeout(
+    tmp_path: Path,
+) -> None:
+    repo, sha = _repo(tmp_path)
+
+    with pytest.raises(proof.ExactHeadProofError, match="must be positive"):
+        proof.run_exact_head_proof(
+            repo=repo,
+            expected_sha=sha,
+            gates=("fast",),
+            target_base="main",
+            timeout_seconds=0,
+        )
+
+
+def test_timeout_is_recorded_as_failed_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, sha = _repo(tmp_path)
+
+    def run(**kwargs) -> proof.CommandResult:
+        name = str(kwargs["name"])
+        return proof.CommandResult(
+            name=name,
+            command=tuple(kwargs["command"]),
+            returncode=124 if name == "fast" else 0,
+            duration_ms=1,
+            timed_out=name == "fast",
+            smoke_root=str(kwargs.get("smoke_root") or ""),
+        )
+
+    monkeypatch.setattr(proof, "_run_command", run)
+    report = proof.run_exact_head_proof(
+        repo=repo,
+        expected_sha=sha,
+        gates=("fast",),
+        target_base="main",
+        report_path=repo / "proof.json",
+    )
+
+    assert report.success is False
+    assert report.commands[-1].timed_out is True
+    assert report.commands[-1].returncode == 124
+
+
 def test_fail_fast_stops_after_first_failed_gate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -113,6 +217,7 @@ def test_fail_fast_stops_after_first_failed_gate(
             command=tuple(kwargs["command"]),
             returncode=1 if name == "fast" else 0,
             duration_ms=1,
+            smoke_root=str(kwargs.get("smoke_root") or ""),
         )
 
     monkeypatch.setattr(proof, "_run_command", run)
