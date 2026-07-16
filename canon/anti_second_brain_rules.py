@@ -54,4 +54,12 @@ FORBIDDEN_DECISION_CLASS_NAMES = frozenset(
         "StrategyBrain",
     }
 )
-FORBIDDEN_DECISION_METHODS = set(DECISION_AUTHORITY_METHODS)
+
+# Compatibility contract: retain the historical public set exactly. New static
+# guards consume DECISION_AUTHORITY_METHODS without changing existing callers.
+FORBIDDEN_DECISION_METHODS = {
+    "decide_strategy",
+    "emit_final_action",
+    "issue_strategy",
+    "select_final_action",
+}
