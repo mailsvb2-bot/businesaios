@@ -22,7 +22,13 @@ def test_canonical_authority_vocabulary_contains_legacy_contract() -> None:
 
 
 def test_only_exact_gateway_paths_expand_the_canonical_owner_surface() -> None:
-    assert "application/headless/decision_gateway.py" in CANONICAL_DECISION_OWNER_PREFIXES
-    assert "demand_decision/canonical_decision_bridge.py" in CANONICAL_DECISION_OWNER_PREFIXES
+    assert (
+        "application/headless/decision_gateway.py"
+        in CANONICAL_DECISION_OWNER_PREFIXES
+    )
+    assert (
+        "demand_decision/canonical_decision_bridge.py"
+        in CANONICAL_DECISION_OWNER_PREFIXES
+    )
     assert "application/headless/" not in CANONICAL_DECISION_OWNER_PREFIXES
     assert "demand_decision/" not in CANONICAL_DECISION_OWNER_PREFIXES
