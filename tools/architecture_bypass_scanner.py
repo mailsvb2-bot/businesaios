@@ -173,14 +173,16 @@ def _expression_path(node: ast.AST) -> str:
         return f"{base}.{node.attr}" if base else node.attr
     if isinstance(node, ast.Call):
         base = _expression_path(node.func)
-        literal = ""
+        argument = ""
         if node.args:
             first = node.args[0]
             if isinstance(first, ast.Constant) and isinstance(first.value, str):
-                literal = repr(first.value)
+                argument = repr(first.value)
+            else:
+                argument = _expression_path(first)
         if base:
-            return f"{base}({literal})"
-        return f"({literal})"
+            return f"{base}({argument})"
+        return f"({argument})"
     if isinstance(node, ast.Subscript):
         base = _expression_path(node.value)
         return f"{base}[]" if base else "[]"
@@ -245,11 +247,41 @@ def _constant_string(node: ast.AST) -> str | None:
 
 def _dynamic_authority_lookup(node: ast.Call) -> tuple[str, str] | None:
     owner, name = _call_name(node.func)
-    if owner is not None or name != "getattr" or len(node.args) < 2:
+    if owner is None and name == "getattr" and len(node.args) >= 2:
+        target = _expression_path(node.args[0])
+        method = _constant_string(node.args[1])
+    elif name == "__getattribute__" and node.args:
+        target = str(owner or "")
+        method = _constant_string(node.args[0])
+    elif owner in {"operator", "operator.attrgetter", "operator.methodcaller"}:
+        target = owner
+        method = _constant_string(node.args[0]) if node.args else None
+        if method not in HARD_DECISION_AUTHORITY_METHODS:
+            return None
+    else:
         return None
-    method = _constant_string(node.args[1])
-    target = _expression_path(node.args[0])
     if not method or not _is_possible_decision_bypass(target, method):
+        return None
+    return target, method
+
+
+def _dynamic_authority_mutation(node: ast.Call) -> tuple[str, str] | None:
+    owner, name = _call_name(node.func)
+    if owner is not None or name not in {"setattr", "delattr"} or len(node.args) < 2:
+        return None
+    target = _expression_path(node.args[0])
+    method = _constant_string(node.args[1])
+    if not method or not _is_possible_decision_bypass(target, method):
+        return None
+    return target, method
+
+
+def _subscript_authority_lookup(node: ast.Subscript) -> tuple[str, str] | None:
+    method = _constant_string(node.slice)
+    target = _expression_path(node.value)
+    if not method or not _receiver_looks_like_decision_authority(target):
+        return None
+    if not _is_possible_decision_bypass(target, method):
         return None
     return target, method
 
@@ -318,6 +350,24 @@ def _scan_ast(
                         )
                     )
 
+        if isinstance(node, ast.Name) and not approved_decision_owner:
+            if (
+                isinstance(node.ctx, ast.Load)
+                and node.id in HARD_DECISION_AUTHORITY_METHODS
+                and not _is_direct_call_function(node, parents)
+            ):
+                findings.append(
+                    Finding(
+                        code="decision_authority_name_reference_outside_owner",
+                        path=rel,
+                        line=int(getattr(node, "lineno", 0) or 0),
+                        detail=(
+                            f"{node.id} referenced outside "
+                            "DecisionCore/gateway owner path"
+                        ),
+                    )
+                )
+
         if isinstance(node, ast.Attribute) and not approved_decision_owner:
             owner = _expression_path(node.value)
             if (
@@ -331,6 +381,22 @@ def _scan_ast(
                         line=int(getattr(node, "lineno", 0) or 0),
                         detail=(
                             f"{owner}.{node.attr} referenced outside "
+                            "DecisionCore/gateway owner path"
+                        ),
+                    )
+                )
+
+        if isinstance(node, ast.Subscript) and not approved_decision_owner:
+            subscript_lookup = _subscript_authority_lookup(node)
+            if subscript_lookup is not None:
+                target_owner, target_method = subscript_lookup
+                findings.append(
+                    Finding(
+                        code="subscript_decision_authority_lookup_outside_owner",
+                        path=rel,
+                        line=int(getattr(node, "lineno", 0) or 0),
+                        detail=(
+                            f"{target_owner}[{target_method!r}] outside "
                             "DecisionCore/gateway owner path"
                         ),
                     )
@@ -381,7 +447,21 @@ def _scan_ast(
                     path=rel,
                     line=line,
                     detail=(
-                        f"getattr({target_owner}, {target_method!r}) outside "
+                        f"dynamic lookup of {target_owner}.{target_method} outside "
+                        "DecisionCore/gateway owner path"
+                    ),
+                )
+            )
+        dynamic_mutation = _dynamic_authority_mutation(node)
+        if dynamic_mutation is not None and not approved_decision_owner:
+            target_owner, target_method = dynamic_mutation
+            findings.append(
+                Finding(
+                    code="dynamic_decision_authority_mutation_outside_owner",
+                    path=rel,
+                    line=line,
+                    detail=(
+                        f"dynamic mutation of {target_owner}.{target_method} outside "
                         "DecisionCore/gateway owner path"
                     ),
                 )
