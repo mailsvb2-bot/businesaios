@@ -3,17 +3,19 @@ from __future__ import annotations
 CANON_ANTI_SECOND_BRAIN_RULES = True
 CANONICAL_DECISION_CORE_PATH = "core/ai/decision_core.py"
 
+# Names that unambiguously express final decision authority even without a
+# receiver. Generic lifecycle verbs such as issue/optimize are contextual so
+# certificate, token, numerical, and compiler services keep working.
 HARD_DECISION_AUTHORITY_METHODS = frozenset(
     {
         "decide",
         "decide_strategy",
         "emit_final_action",
-        "issue",
         "issue_strategy",
         "select_final_action",
     }
 )
-CONTEXTUAL_DECISION_AUTHORITY_METHODS = frozenset({"optimize"})
+CONTEXTUAL_DECISION_AUTHORITY_METHODS = frozenset({"issue", "optimize"})
 DECISION_AUTHORITY_METHODS = (
     HARD_DECISION_AUTHORITY_METHODS | CONTEXTUAL_DECISION_AUTHORITY_METHODS
 )
@@ -33,15 +35,16 @@ DECISION_AUTHORITY_RECEIVER_TOKENS = (
     "decision",
     "decisioncore",
     "planner",
+    "sovereign",
 )
 
-CANONICAL_DECISION_OWNER_DIR_PREFIXES = (
-    "core/ai/",
-    "application/decision_runtime/",
-    "tests/",
-)
+# Tests may model negative examples. Production authority is file-exact: adding
+# a new module under core/ai or application/decision_runtime never grants it
+# permission to issue decisions.
+CANONICAL_DECISION_OWNER_DIR_PREFIXES = ("tests/",)
 CANONICAL_DECISION_OWNER_FILES = frozenset(
     {
+        CANONICAL_DECISION_CORE_PATH,
         "application/headless/decision_gateway.py",
         "demand_decision/canonical_decision_bridge.py",
         "runtime/decision_gateway.py",
