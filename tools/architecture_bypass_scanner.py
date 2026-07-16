@@ -20,6 +20,7 @@ from canon.anti_second_brain_rules import (
     DECISION_AUTHORITY_METHODS,
     DECISION_AUTHORITY_RECEIVER_TOKENS,
     HARD_DECISION_AUTHORITY_METHODS,
+    is_canonical_decision_owner_path,
 )
 
 CANON_ARCHITECTURE_BYPASS_SCANNER = True
@@ -174,7 +175,7 @@ def _is_approved_raw_effect(rel: str) -> bool:
 
 
 def _is_approved_decision_owner(rel: str) -> bool:
-    return rel.startswith(APPROVED_DECISION_OWNER_PREFIXES)
+    return is_canonical_decision_owner_path(rel)
 
 
 def _expression_path(node: ast.AST) -> str:
