@@ -46,7 +46,9 @@ def _true_markers(tree: ast.Module) -> set[str]:
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
-        if not isinstance(node.value, ast.Constant) or node.value.value is not True:
+        if not isinstance(node.value, ast.Constant):
+            continue
+        if node.value.value is not True:
             continue
         for target in node.targets:
             if isinstance(target, ast.Name):
