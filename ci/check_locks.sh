@@ -30,6 +30,8 @@ PYTEST_ARGS=(
   --strict-markers
   --strict-config
   --tb=short
+  -p
+  pytest_asyncio.plugin
   -m "not slow"
   "${PYTEST_TARGETS[@]}"
 )
