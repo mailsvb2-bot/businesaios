@@ -309,6 +309,110 @@ def _scope_local_names(
     return names
 
 
+def _apply_alias_target(
+    *,
+    target: ast.AST,
+    source: str,
+    aliases: dict[str, str],
+) -> None:
+    for name in _bound_names_in_target(target):
+        if source and isinstance(target, ast.Name):
+            aliases[name] = source
+        else:
+            aliases.pop(name, None)
+
+
+def _scope_final_aliases(
+    body: Iterable[ast.stmt],
+    base_aliases: dict[str, str],
+) -> dict[str, str]:
+    aliases = dict(base_aliases)
+
+    def process(node: ast.AST) -> None:
+        if isinstance(
+            node,
+            (
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+                ast.ClassDef,
+                ast.Lambda,
+                ast.ListComp,
+                ast.SetComp,
+                ast.DictComp,
+                ast.GeneratorExp,
+            ),
+        ):
+            if isinstance(
+                node,
+                (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef),
+            ):
+                aliases.pop(node.name, None)
+            return
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                local_name = alias.asname or alias.name.split(".", 1)[0]
+                aliases[local_name] = alias.name
+            return
+        if isinstance(node, ast.ImportFrom):
+            if not node.module:
+                return
+            for alias in node.names:
+                if alias.name != "*":
+                    aliases[alias.asname or alias.name] = (
+                        f"{node.module}.{alias.name}"
+                    )
+            return
+        if isinstance(node, ast.Assign):
+            source = _qualified_name(node.value, aliases)
+            for target in node.targets:
+                _apply_alias_target(
+                    target=target,
+                    source=source,
+                    aliases=aliases,
+                )
+        elif isinstance(node, ast.AnnAssign):
+            source = (
+                _qualified_name(node.value, aliases)
+                if node.value is not None
+                else ""
+            )
+            _apply_alias_target(
+                target=node.target,
+                source=source,
+                aliases=aliases,
+            )
+        elif isinstance(node, ast.NamedExpr):
+            source = _qualified_name(node.value, aliases)
+            _apply_alias_target(
+                target=node.target,
+                source=source,
+                aliases=aliases,
+            )
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            _apply_alias_target(
+                target=node.target,
+                source="",
+                aliases=aliases,
+            )
+        elif isinstance(node, (ast.With, ast.AsyncWith)):
+            for item in node.items:
+                if item.optional_vars is not None:
+                    _apply_alias_target(
+                        target=item.optional_vars,
+                        source="",
+                        aliases=aliases,
+                    )
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            aliases.pop(node.name, None)
+
+        for child in ast.iter_child_nodes(node):
+            process(child)
+
+    for statement in body:
+        process(statement)
+    return aliases
+
+
 def _comprehension_local_names(
     generators: list[ast.comprehension],
 ) -> set[str]:
@@ -321,13 +425,17 @@ def _comprehension_local_names(
 class _AliasContextCollector(ast.NodeVisitor):
     def __init__(self) -> None:
         self.contexts: dict[ast.AST, dict[str, str]] = {}
-        self._scopes: list[tuple[str, dict[str, str]]] = [
-            ("module", {})
-        ]
+        self._scopes: list[
+            tuple[str, dict[str, str], dict[str, str]]
+        ] = [("module", {}, {})]
 
     @property
     def aliases(self) -> dict[str, str]:
         return self._scopes[-1][1]
+
+    @property
+    def closure_aliases(self) -> dict[str, str]:
+        return self._scopes[-1][2]
 
     def _record(self, node: ast.AST) -> None:
         self.contexts[node] = dict(self.aliases)
@@ -353,10 +461,10 @@ class _AliasContextCollector(ast.NodeVisitor):
 
     def _body_base_aliases(self) -> dict[str, str]:
         if self._scopes[-1][0] != "class":
-            return dict(self.aliases)
-        for kind, aliases in reversed(self._scopes[:-1]):
+            return dict(self.closure_aliases)
+        for kind, _current, closure in reversed(self._scopes[:-1]):
             if kind != "class":
-                return dict(aliases)
+                return dict(closure)
         return {}
 
     def _visit_function(
@@ -376,13 +484,16 @@ class _AliasContextCollector(ast.NodeVisitor):
         inherited = self._body_base_aliases()
         for local_name in _scope_local_names(node):
             inherited.pop(local_name, None)
-        self._scopes.append(("function", inherited))
+        closure = _scope_final_aliases(node.body, inherited)
+        self._scopes.append(("function", inherited, closure))
         for statement in node.body:
             self.visit(statement)
         self._scopes.pop()
         self.aliases.pop(node.name, None)
 
     def visit_Module(self, node: ast.Module) -> None:
+        closure = _scope_final_aliases(node.body, {})
+        self._scopes[-1] = ("module", {}, closure)
         self._record(node)
         for statement in node.body:
             self.visit(statement)
@@ -398,7 +509,7 @@ class _AliasContextCollector(ast.NodeVisitor):
         inherited = self._body_base_aliases()
         for local_name in _scope_local_names(node):
             inherited.pop(local_name, None)
-        self._scopes.append(("function", inherited))
+        self._scopes.append(("function", inherited, dict(inherited)))
         self.visit(node.body)
         self._scopes.pop()
 
@@ -415,11 +526,11 @@ class _AliasContextCollector(ast.NodeVisitor):
 
         first, *remaining = node.generators
         self.visit(first.iter)
-        inherited = self._body_base_aliases()
+        inherited = dict(self.aliases)
         for local_name in _comprehension_local_names(node.generators):
             inherited.pop(local_name, None)
 
-        self._scopes.append(("function", inherited))
+        self._scopes.append(("function", inherited, dict(inherited)))
         self.visit(first.target)
         for condition in first.ifs:
             self.visit(condition)
@@ -456,7 +567,7 @@ class _AliasContextCollector(ast.NodeVisitor):
         inherited = dict(self.aliases)
         for local_name in _scope_local_names(node):
             inherited.pop(local_name, None)
-        self._scopes.append(("class", inherited))
+        self._scopes.append(("class", inherited, dict(inherited)))
         for statement in node.body:
             self.visit(statement)
         self._scopes.pop()
@@ -486,11 +597,11 @@ class _AliasContextCollector(ast.NodeVisitor):
             self.visit(target)
         source = _qualified_name(node.value, self.aliases)
         for target in node.targets:
-            for name in _bound_names_in_target(target):
-                if source and isinstance(target, ast.Name):
-                    self.aliases[name] = source
-                else:
-                    self.aliases.pop(name, None)
+            _apply_alias_target(
+                target=target,
+                source=source,
+                aliases=self.aliases,
+            )
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         self._record(node)
@@ -504,22 +615,22 @@ class _AliasContextCollector(ast.NodeVisitor):
             if node.value is not None
             else ""
         )
-        for name in _bound_names_in_target(node.target):
-            if source and isinstance(node.target, ast.Name):
-                self.aliases[name] = source
-            else:
-                self.aliases.pop(name, None)
+        _apply_alias_target(
+            target=node.target,
+            source=source,
+            aliases=self.aliases,
+        )
 
     def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
         self._record(node)
         self.visit(node.value)
         self.visit(node.target)
         source = _qualified_name(node.value, self.aliases)
-        for name in _bound_names_in_target(node.target):
-            if source and isinstance(node.target, ast.Name):
-                self.aliases[name] = source
-            else:
-                self.aliases.pop(name, None)
+        _apply_alias_target(
+            target=node.target,
+            source=source,
+            aliases=self.aliases,
+        )
 
     def generic_visit(self, node: ast.AST) -> None:
         self._record(node)
