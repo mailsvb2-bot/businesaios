@@ -3,6 +3,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
 import tools.architecture_bypass_scanner as scanner
 from tools.decision_authority_indirect_scanner import Finding as DecisionFinding
 
@@ -11,11 +13,11 @@ ROOT = Path(__file__).resolve().parents[3]
 
 def test_generic_scanner_delegates_decision_authority_semantics(
     tmp_path: Path,
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
 
-    def delegated(*, rel: str, tree: ast.AST):
+    def delegated(*, rel: str, tree: ast.AST) -> list[DecisionFinding]:
         assert isinstance(tree, ast.AST)
         calls.append(rel)
         return [
