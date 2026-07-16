@@ -1,8 +1,9 @@
 """Canonical repository-wide architecture bypass scanner.
 
-The scanner checks Python source while pruning generated, cache, dependency,
-report, and mutable-state trees. Source discovery is repository-wide so a new
-product package cannot fall outside the canonical checks by accident.
+This module owns repository discovery and generic raw-effect checks. Decision
+authority semantics have one owner in
+``tools.decision_authority_indirect_scanner`` and are delegated here so legacy
+scanner callers keep the same public surface without a second rule engine.
 """
 
 from __future__ import annotations
@@ -16,17 +17,18 @@ from pathlib import Path
 
 from canon.anti_second_brain_rules import (
     CANONICAL_DECISION_OWNER_PREFIXES,
-    CONTEXTUAL_DECISION_AUTHORITY_METHODS,
     DECISION_AUTHORITY_METHODS,
-    DECISION_AUTHORITY_RECEIVER_TOKENS,
-    HARD_DECISION_AUTHORITY_METHODS,
     is_canonical_decision_owner_path,
+)
+from tools.decision_authority_indirect_scanner import (
+    _scan_ast as _scan_decision_authority_ast,
 )
 
 CANON_ARCHITECTURE_BYPASS_SCANNER = True
 CANON_SCAN_ALL_SOURCE_ROOTS = True
+CANON_DELEGATES_DECISION_AUTHORITY_SCAN = True
 
-EXCLUDED_DIRS = {
+GLOBAL_EXCLUDED_DIRS = {
     ".git",
     ".hg",
     ".mypy_cache",
@@ -38,17 +40,21 @@ EXCLUDED_DIRS = {
     ".tox",
     ".venv",
     "__pycache__",
+    "node_modules",
+    "target",
+    "venv",
+}
+ROOT_EXCLUDED_DIRS = {
     "artifacts",
     "build",
     "data",
     "dist",
     "htmlcov",
-    "node_modules",
     "release_dist",
     "reports",
-    "target",
-    "venv",
 }
+# Compatibility export. Discovery applies ROOT_EXCLUDED_DIRS only at repo root.
+EXCLUDED_DIRS = GLOBAL_EXCLUDED_DIRS | ROOT_EXCLUDED_DIRS
 SCAN_ROOTS: tuple[str, ...] = ()
 TEST_OR_SCRIPT_PREFIXES = ("tests/", "scripts/")
 APPROVED_RAW_EFFECT_PREFIXES = (
@@ -111,6 +117,30 @@ RAW_SIDE_EFFECT_CALLS = {
 }
 DECISION_BYPASS_CALLS = DECISION_AUTHORITY_METHODS
 APPROVED_DECISION_OWNER_PREFIXES = CANONICAL_DECISION_OWNER_PREFIXES
+_DECISION_FINDING_CODE_MAP = {
+    "decision_authority_alias_import": (
+        "decision_authority_alias_import_outside_owner"
+    ),
+    "decision_authority_name_reference": (
+        "decision_authority_name_reference_outside_owner"
+    ),
+    "decision_authority_method_reference": (
+        "decision_authority_reference_outside_owner"
+    ),
+    "decision_authority_mapping_lookup": (
+        "subscript_decision_authority_lookup_outside_owner"
+    ),
+    "decision_authority_mapping_mutation": (
+        "dynamic_decision_authority_mutation_outside_owner"
+    ),
+    "decision_authority_call": "possible_decision_core_bypass",
+    "decision_authority_dynamic_lookup": (
+        "dynamic_decision_authority_lookup_outside_owner"
+    ),
+    "decision_authority_dynamic_mutation": (
+        "dynamic_decision_authority_mutation_outside_owner"
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -125,6 +155,8 @@ class Finding:
 
 
 def _is_excluded(path: Path) -> bool:
+    """Compatibility helper for callers testing the exported exclusion set."""
+
     return any(part in EXCLUDED_DIRS for part in path.parts)
 
 
@@ -135,16 +167,16 @@ def _iter_python_files(root: Path) -> Iterable[Path]:
         followlinks=False,
     ):
         base = Path(directory)
+        at_root = not base.relative_to(root).parts
         dirnames[:] = sorted(
-            name for name in dirnames if name not in EXCLUDED_DIRS
+            name
+            for name in dirnames
+            if name not in GLOBAL_EXCLUDED_DIRS
+            and not (at_root and name in ROOT_EXCLUDED_DIRS)
         )
         for filename in sorted(filenames):
-            if not filename.endswith(".py"):
-                continue
-            path = base / filename
-            relative = path.relative_to(root)
-            if not _is_excluded(relative):
-                yield path
+            if filename.endswith(".py"):
+                yield base / filename
 
 
 def _rel(root: Path, path: Path) -> str:
@@ -176,13 +208,14 @@ def _expression_path(node: ast.AST) -> str:
         argument = ""
         if node.args:
             first = node.args[0]
-            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+            if isinstance(first, ast.Constant) and isinstance(
+                first.value,
+                str,
+            ):
                 argument = repr(first.value)
             else:
                 argument = _expression_path(first)
-        if base:
-            return f"{base}({argument})"
-        return f"({argument})"
+        return f"{base}({argument})" if base else f"({argument})"
     if isinstance(node, ast.Subscript):
         base = _expression_path(node.value)
         return f"{base}[]" if base else "[]"
@@ -202,88 +235,6 @@ def _root_owner(owner: str | None) -> str | None:
     if not owner:
         return None
     return owner.split(".", 1)[0].removesuffix("()").removesuffix("[]")
-
-
-def _normalized_receiver(owner: str | None) -> str:
-    return "".join(ch for ch in str(owner or "").casefold() if ch.isalnum())
-
-
-def _receiver_looks_like_decision_authority(owner: str | None) -> bool:
-    normalized = _normalized_receiver(owner)
-    return any(token in normalized for token in DECISION_AUTHORITY_RECEIVER_TOKENS)
-
-
-def _is_possible_decision_bypass(owner: str | None, name: str | None) -> bool:
-    if name not in DECISION_BYPASS_CALLS:
-        return False
-    if name in HARD_DECISION_AUTHORITY_METHODS:
-        return True
-    if name in CONTEXTUAL_DECISION_AUTHORITY_METHODS:
-        return _receiver_looks_like_decision_authority(owner)
-    return False
-
-
-def _parent_map(tree: ast.AST) -> dict[ast.AST, ast.AST]:
-    return {
-        child: parent
-        for parent in ast.walk(tree)
-        for child in ast.iter_child_nodes(parent)
-    }
-
-
-def _is_direct_call_function(
-    node: ast.AST,
-    parents: dict[ast.AST, ast.AST],
-) -> bool:
-    parent = parents.get(node)
-    return isinstance(parent, ast.Call) and parent.func is node
-
-
-def _constant_string(node: ast.AST) -> str | None:
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
-    return None
-
-
-def _dynamic_authority_lookup(node: ast.Call) -> tuple[str, str] | None:
-    owner, name = _call_name(node.func)
-    if owner is None and name == "getattr" and len(node.args) >= 2:
-        target = _expression_path(node.args[0])
-        method = _constant_string(node.args[1])
-    elif name == "__getattribute__" and node.args:
-        target = str(owner or "")
-        method = _constant_string(node.args[0])
-    elif owner in {"operator", "operator.attrgetter", "operator.methodcaller"}:
-        target = owner
-        method = _constant_string(node.args[0]) if node.args else None
-        if method not in HARD_DECISION_AUTHORITY_METHODS:
-            return None
-    else:
-        return None
-    if not method or not _is_possible_decision_bypass(target, method):
-        return None
-    return target, method
-
-
-def _dynamic_authority_mutation(node: ast.Call) -> tuple[str, str] | None:
-    owner, name = _call_name(node.func)
-    if owner is not None or name not in {"setattr", "delattr"} or len(node.args) < 2:
-        return None
-    target = _expression_path(node.args[0])
-    method = _constant_string(node.args[1])
-    if not method or not _is_possible_decision_bypass(target, method):
-        return None
-    return target, method
-
-
-def _subscript_authority_lookup(node: ast.Subscript) -> tuple[str, str] | None:
-    method = _constant_string(node.slice)
-    target = _expression_path(node.value)
-    if not method or not _receiver_looks_like_decision_authority(target):
-        return None
-    if not _is_possible_decision_bypass(target, method):
-        return None
-    return target, method
 
 
 def _scan_text(
@@ -320,6 +271,22 @@ def _scan_text(
     return findings
 
 
+def _delegated_decision_findings(
+    *,
+    rel: str,
+    tree: ast.AST,
+) -> list[Finding]:
+    return [
+        Finding(
+            code=_DECISION_FINDING_CODE_MAP.get(item.code, item.code),
+            path=item.path,
+            line=item.line,
+            detail=item.detail,
+        )
+        for item in _scan_decision_authority_ast(rel=rel, tree=tree)
+    ]
+
+
 def _scan_ast(
     *,
     root: Path,
@@ -329,79 +296,7 @@ def _scan_ast(
 ) -> list[Finding]:
     del root, path
     findings: list[Finding] = []
-    parents = _parent_map(tree)
-    approved_decision_owner = _is_approved_decision_owner(rel)
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and not approved_decision_owner:
-            module_owner = str(node.module or "")
-            for alias in node.names:
-                if alias.asname is None:
-                    continue
-                if _is_possible_decision_bypass(module_owner, alias.name):
-                    findings.append(
-                        Finding(
-                            code="decision_authority_alias_import_outside_owner",
-                            path=rel,
-                            line=int(getattr(node, "lineno", 0) or 0),
-                            detail=(
-                                f"{module_owner}.{alias.name} imported as "
-                                f"{alias.asname}"
-                            ),
-                        )
-                    )
-
-        if isinstance(node, ast.Name) and not approved_decision_owner:
-            if (
-                isinstance(node.ctx, ast.Load)
-                and node.id in HARD_DECISION_AUTHORITY_METHODS
-                and not _is_direct_call_function(node, parents)
-            ):
-                findings.append(
-                    Finding(
-                        code="decision_authority_name_reference_outside_owner",
-                        path=rel,
-                        line=int(getattr(node, "lineno", 0) or 0),
-                        detail=(
-                            f"{node.id} referenced outside "
-                            "DecisionCore/gateway owner path"
-                        ),
-                    )
-                )
-
-        if isinstance(node, ast.Attribute) and not approved_decision_owner:
-            owner = _expression_path(node.value)
-            if (
-                _is_possible_decision_bypass(owner, node.attr)
-                and not _is_direct_call_function(node, parents)
-            ):
-                findings.append(
-                    Finding(
-                        code="decision_authority_reference_outside_owner",
-                        path=rel,
-                        line=int(getattr(node, "lineno", 0) or 0),
-                        detail=(
-                            f"{owner}.{node.attr} referenced outside "
-                            "DecisionCore/gateway owner path"
-                        ),
-                    )
-                )
-
-        if isinstance(node, ast.Subscript) and not approved_decision_owner:
-            subscript_lookup = _subscript_authority_lookup(node)
-            if subscript_lookup is not None:
-                target_owner, target_method = subscript_lookup
-                findings.append(
-                    Finding(
-                        code="subscript_decision_authority_lookup_outside_owner",
-                        path=rel,
-                        line=int(getattr(node, "lineno", 0) or 0),
-                        detail=(
-                            f"{target_owner}[{target_method!r}] outside "
-                            "DecisionCore/gateway owner path"
-                        ),
-                    )
-                )
-
         if not isinstance(node, ast.Call):
             continue
         owner, name = _call_name(node.func)
@@ -435,47 +330,8 @@ def _scan_ast(
                     code="dynamic_import_outside_owner",
                     path=rel,
                     line=line,
-                    detail="__import__() outside approved loader/registry surface",
-                )
-            )
-        dynamic_lookup = _dynamic_authority_lookup(node)
-        if dynamic_lookup is not None and not approved_decision_owner:
-            target_owner, target_method = dynamic_lookup
-            findings.append(
-                Finding(
-                    code="dynamic_decision_authority_lookup_outside_owner",
-                    path=rel,
-                    line=line,
                     detail=(
-                        f"dynamic lookup of {target_owner}.{target_method} outside "
-                        "DecisionCore/gateway owner path"
-                    ),
-                )
-            )
-        dynamic_mutation = _dynamic_authority_mutation(node)
-        if dynamic_mutation is not None and not approved_decision_owner:
-            target_owner, target_method = dynamic_mutation
-            findings.append(
-                Finding(
-                    code="dynamic_decision_authority_mutation_outside_owner",
-                    path=rel,
-                    line=line,
-                    detail=(
-                        f"dynamic mutation of {target_owner}.{target_method} outside "
-                        "DecisionCore/gateway owner path"
-                    ),
-                )
-            )
-        decision_bypass = _is_possible_decision_bypass(owner, name)
-        if decision_bypass and not approved_decision_owner:
-            target = f"{owner}.{name}" if owner else str(name)
-            findings.append(
-                Finding(
-                    code="possible_decision_core_bypass",
-                    path=rel,
-                    line=line,
-                    detail=(
-                        f"{target}() outside DecisionCore/gateway owner path"
+                        "__import__() outside approved loader/registry surface"
                     ),
                 )
             )
@@ -493,6 +349,10 @@ def _scan_ast(
                     detail="exit() outside approved CI owner surface",
                 )
             )
+
+    findings.extend(
+        _delegated_decision_findings(rel=rel, tree=tree)
+    )
     return findings
 
 
@@ -513,7 +373,9 @@ def scan(root: Path | None = None) -> tuple[Finding, ...]:
                 )
             )
             continue
-        findings.extend(_scan_text(root=repo, path=path, rel=rel, text=text))
+        findings.extend(
+            _scan_text(root=repo, path=path, rel=rel, text=text)
+        )
         try:
             tree = ast.parse(text, filename=rel)
         except SyntaxError as exc:
@@ -526,7 +388,14 @@ def scan(root: Path | None = None) -> tuple[Finding, ...]:
                 )
             )
             continue
-        findings.extend(_scan_ast(root=repo, path=path, rel=rel, tree=tree))
+        findings.extend(
+            _scan_ast(
+                root=repo,
+                path=path,
+                rel=rel,
+                tree=tree,
+            )
+        )
     unique = {
         (item.code, item.path, item.line, item.detail): item
         for item in findings
@@ -534,7 +403,12 @@ def scan(root: Path | None = None) -> tuple[Finding, ...]:
     return tuple(
         sorted(
             unique.values(),
-            key=lambda item: (item.path, item.line, item.code, item.detail),
+            key=lambda item: (
+                item.path,
+                item.line,
+                item.code,
+                item.detail,
+            ),
         )
     )
 
