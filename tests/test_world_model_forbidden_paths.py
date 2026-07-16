@@ -5,6 +5,7 @@ from pathlib import Path
 import bootstrap.boot_phases as boot_phases
 import bootstrap.world_model_forbidden_paths as scanner
 from bootstrap.world_model_forbidden_paths import scan_repo_for_forbidden_world_model_paths
+from scripts.ci.step_architecture_bypass_scan import _world_model_source_guard
 
 
 def test_scan_repo_for_forbidden_world_model_paths(tmp_path: Path):
@@ -59,3 +60,20 @@ def test_boot_world_model_scan_uses_the_checkout_root() -> None:
     assert boot_phases._repository_root() == expected_root
     assert expected_root / "bootstrap" / "boot_phases.py" == module_path
     assert expected_root != module_path.parents[2]
+
+
+def test_canonical_ci_guard_retains_fail_closed_source_enforcement(
+    tmp_path: Path,
+) -> None:
+    bad = tmp_path / "bad.py"
+    bad.write_text(
+        "from core.economics.ltv_world_model import WorldModel\n"
+        "x = WorldModel(LTVModel())\n",
+        encoding="utf-8",
+    )
+
+    ok, message = _world_model_source_guard(tmp_path)
+
+    assert ok is False
+    assert "world model source-path scan failed" in message
+    assert "WorldModel(LTVModel())" in message
