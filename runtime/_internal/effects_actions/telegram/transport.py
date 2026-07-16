@@ -8,7 +8,11 @@ from runtime._internal.router_support import execute_effect_action_sync
 
 def telegram_send_chat_action(effects: Any, *, chat_id: str, action: str = "typing") -> None:
     try:
-        execute_effect_action_sync(effects, EffectActionType.TELEGRAM_SEND_CHAT_ACTION, {"chat_id": str(chat_id), "action": str(action or "typing")})
+        execute_effect_action_sync(
+            effects,
+            EffectActionType.TELEGRAM_SEND_CHAT_ACTION,
+            {"chat_id": str(chat_id), "action": str(action or "typing")},
+        )
     except Exception:
         return
 
@@ -34,7 +38,6 @@ def telegram_send_message_transport(
         },
     )
     return bool(out.get("ok", False)), dict(out)
-
 
 def telegram_send_audio_transport(
     effects: Any,

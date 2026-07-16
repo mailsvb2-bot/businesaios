@@ -11,6 +11,7 @@ class EffectsAdminPort(Protocol):
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         user_id: str,
         key: str,
         value: Any = None,
@@ -18,6 +19,7 @@ class EffectsAdminPort(Protocol):
         notify_reply_markup: Optional[Dict[str, Any]] = None,
         callback_query_id: Optional[str] = None,
         channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def log_mood(
@@ -25,12 +27,15 @@ class EffectsAdminPort(Protocol):
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         user_id: str,
         score: int,
         note: str | None = None,
         notify_text: Optional[str] = None,
         notify_reply_markup: Optional[Dict[str, Any]] = None,
         callback_query_id: Optional[str] = None,
+        channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def admin_set_role(
@@ -38,10 +43,16 @@ class EffectsAdminPort(Protocol):
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         admin_id: str,
         target_user_id: str,
         role: str,
         enabled: bool,
+        notify_text: Optional[str] = None,
+        notify_reply_markup: Optional[Dict[str, Any]] = None,
+        callback_query_id: Optional[str] = None,
+        channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def admin_set_perm(
@@ -49,10 +60,16 @@ class EffectsAdminPort(Protocol):
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         admin_id: str,
         target_user_id: str,
         perm: str,
         enabled: bool,
+        notify_text: Optional[str] = None,
+        notify_reply_markup: Optional[Dict[str, Any]] = None,
+        callback_query_id: Optional[str] = None,
+        channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def set_marketing_copy(
@@ -60,10 +77,16 @@ class EffectsAdminPort(Protocol):
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         admin_id: str,
         step_key: str,
         variant_a: str,
         variant_b: str,
+        notify_text: Optional[str] = None,
+        notify_reply_markup: Optional[Dict[str, Any]] = None,
+        callback_query_id: Optional[str] = None,
+        channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def marketing_llm_complete(
@@ -83,11 +106,14 @@ class EffectsAdminPort(Protocol):
         decision_id: str,
         correlation_id: str,
         admin_id: str,
-        plan_id: int,
+        tenant_id: str,
+        product_id: str,
         new_price: int,
         pricing_version: str,
-        request_id: str | None = None,
-        requested_by: str | None = None,
+        request_id: str,
+        environment: str | None = None,
+        offer_id: str | None = None,
+        plan_id: int | None = None,
         reason: str | None = None,
     ) -> Any: ...
 
@@ -97,9 +123,13 @@ class EffectsAdminPort(Protocol):
         decision_id: str,
         correlation_id: str,
         admin_id: str,
-        plan_id: int,
+        tenant_id: str,
+        product_id: str,
         new_price: int,
         request_id: str,
+        environment: str | None = None,
+        offer_id: str | None = None,
+        plan_id: int | None = None,
         suggested_pricing_version: str | None = None,
         reason: str | None = None,
     ) -> Any: ...
@@ -110,6 +140,8 @@ class EffectsAdminPort(Protocol):
         decision_id: str,
         correlation_id: str,
         admin_id: str,
+        tenant_id: str,
         request_id: str,
+        product_id: str | None = None,
         reason: str | None = None,
     ) -> Any: ...

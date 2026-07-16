@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical event type vocabulary (pure).
 
 This is the single source of truth for event type names and normalization.
@@ -7,6 +5,9 @@ Storage implementations may import this module, but core code must not depend
 on platform_layer paths.
 """
 
+from __future__ import annotations
+
+from core.actions.names import ACTION_AI_CEO_PLAN_V1
 
 UI_CLICK = "ui_click"
 PAYWALL_OPENED = "paywall_opened"
@@ -24,10 +25,86 @@ AUDIO_PROGRESS = "audio_progress"
 AUDIO_STOPPED = "audio_stopped"
 AUDIO_COMPLETED = "audio_completed"
 ENTITLEMENT_GRANTED = "entitlement_granted"
+GIFT_TOKEN_CREATED = "gift_token_created"
+GIFT_REDEEMED = "gift_redeemed"
+GIFT_REDEEM_FAILED = "gift_redeem_failed"
 MESSAGE_SENT = "message_sent"
 MESSAGE_FAILED = "message_failed"
+MESSAGING_EFFECT_WARNING = "messaging_effect_warning"
+USER_SETTING_SET = "user_setting_set"
+TARIFF_SELECTED = "tariff_selected"
+PRODUCT_SELECTED = "product_selected@v1"
+MARKETING_COPY_SET = "marketing_copy_set"
+VARIANT_SHOWN = "variant_shown"
+VARIANT_CHOSEN = "variant_chosen"
+ADMIN_ROLE_SET = "admin_role_set"
+ADMIN_PERM_SET = "admin_perm_set"
+ADMIN_NOTIFICATION_SENT = "admin_notification_sent"
+ADMIN_NOTIFICATION_FAILED = "admin_notification_failed"
+ADMIN_USER_CARD = "admin_user_card@v1"
+ADMIN_USER_CARD_FAILED = "admin_user_card_failed@v1"
+ADMIN_PRICING_CHANGE_REQUESTED = "admin_pricing_change_requested"
+ADMIN_PRICING_CHANGE_REJECTED = "admin_pricing_change_rejected"
+ADMIN_PRICING_CHANGE_APPLIED = "admin_pricing_change_applied"
+PRICING_SELECT = "pricing_select@v1"
+PRICING_SELECT_BLOCKED = "pricing_select_blocked@v1"
+REWARD_OBSERVE = "reward_observe@v1"
+REWARD_OBSERVE_BLOCKED = "reward_observe_blocked@v1"
+GROWTH_PROPOSE = "growth_propose@v1"
+GROWTH_PROPOSE_BLOCKED = "growth_propose_blocked@v1"
+POLICY_DEPLOYED = "policy_deployed"
+POLICY_ROLLED_BACK = "policy_rolled_back"
+EVOLUTION_JOB_ENQUEUED = "evolution_job_enqueued"
+OFFER_PATCH_APPLIED = "offer_patch_applied@v1"
+OFFER_PATCH_ROLLED_BACK = "offer_patch_rolled_back@v1"
+AUTOPILOT_STARTED = "autopilot_started"
+AUTOPILOT_RUN_STARTED = "autopilot_run_started"
+AUTOPILOT_DECISION = "autopilot_decision"
+PROFIT_SPRINT_ONBOARDING_START = "profit_sprint_onboarding_start@v1"
+PROFIT_SPRINT_ONBOARDING_TEXT = "profit_sprint_onboarding_text@v1"
+PROFIT_SPRINT_ONBOARDING_LEAD_SOURCE = "profit_sprint_onboarding_lead_source@v1"
+WEATHER_SENT = "weather_sent"
+AI_CEO_PLAN = ACTION_AI_CEO_PLAN_V1
+AI_CEO_PLAN_BLOCKED = "ai_ceo_plan_blocked@v1"
+AI_CEO_PLAN_ERROR = "ai_ceo_plan_error@v1"
+ADS_RL_SUGGESTION = "ads_rl_suggestion@v1"
+ADS_RL_SUGGEST_BLOCKED = "ads_rl_suggest_blocked@v1"
+ADS_RL_SUGGEST_SKIPPED = "ads_rl_suggest_skipped@v1"
+ADS_RL_SUGGEST_OK = "ads_rl_suggest_ok@v1"
+ADS_RL_TRAIN_SKIPPED = "ads_rl_train_skipped@v1"
+ADS_RL_TRAIN_REPORT = "ads_rl_train_report@v1"
+ADS_RL_TRAIN_OK = "ads_rl_train_ok@v1"
+ADS_RL_TRAIN_COMPLETED = "ads_rl_train_completed@v1"
+ADS_AUTOPILOT_TICK_BLOCKED = "ads_autopilot_tick_blocked@v1"
+ADS_AUTOPILOT_ERROR = "ads_autopilot_error@v1"
+ADS_AUTOPILOT_TICK = "ads_autopilot_tick@v1"
+ADS_APPLY_EXECUTE_BLOCKED = "ads_apply_execute_blocked@v1"
+ADS_APPLY_EXECUTED = "ads_apply_executed@v1"
+ADS_APPLY_AUDIT_EMIT_FAILED = "ads_apply_audit_emit_failed@v1"
+ADS_APPLY_MATURITY_MARK_FAILED = "ads_apply_maturity_mark_failed@v1"
+ADS_APPLY_DECISION_EXECUTED_EMIT_FAILED = "ads_apply_decision_executed_emit_failed@v1"
+GROWTH_STRATEGY_GENERATE = "growth_strategy_generate@v1"
+GROWTH_STRATEGY_BACKLOG = "growth_strategy_backlog@v1"
+GROWTH_STRATEGY_ACCEPT = "growth_strategy_accept@v1"
+GROWTH_STRATEGY_REJECT = "growth_strategy_reject@v1"
+GROWTH_STRATEGY_SNAPSHOT = "growth_strategy_snapshot@v1"
+GROWTH_STRATEGY_PLAN_MANIFEST = "growth_strategy_plan_manifest@v1"
+GROWTH_STRATEGY_GENERATED = "growth_strategy_generated@v1"
+GROWTH_HYPOTHESIS_CREATED = "growth_hypothesis_created@v1"
+GROWTH_HYPOTHESIS_SCORED = "growth_hypothesis_scored@v1"
+GROWTH_HYPOTHESIS_STATE = "growth_hypothesis_state@v1"
+GROWTH_EXPERIMENT_CREATED = "growth_experiment_created@v1"
 
-# AI / governance
+PAYMENT_CREATE_ATTEMPTED = "payment_create_attempted"
+PAYMENT_CREATED = "payment_created"
+PAYMENT_CREATE_FAILED = "payment_create_failed"
+PAYMENT_CHECKED = "payment_checked"
+PAYMENT_CAPTURED = "payment_captured"
+PAYMENT_SUCCEEDED = "payment_succeeded"
+PAYMENT_FAILED = "payment_failed"
+PAYMENTS_RECONCILED = "payments_reconciled"
+PAYMENTS_RECONCILE_FAILED = "payments_reconcile_failed"
+
 DECISION_ISSUED = "decision_issued"
 DECISION_EXECUTED = "decision_executed"
 DECISION_BLOCKED = "decision_blocked"
@@ -36,7 +113,6 @@ DATA_EXPORT = "data_export"
 DATA_DELETE = "data_delete"
 RATE_LIMITED = "rate_limited"
 
-# Product Management
 PM_ARTIFACT_CREATED = "pm_artifact_created"
 PM_FEEDBACK_TRIAGED = "pm_feedback_triaged"
 PM_BACKLOG_PRIORITIZED = "pm_backlog_prioritized"
@@ -59,7 +135,6 @@ FINANCE_SCENARIO_SELECTED = "finance.scenario_selected"
 FINANCE_ALLOCATION_RECOMMENDED = "finance.allocation_recommended"
 FINANCE_JOB_STARTED = "finance.job_started"
 FINANCE_JOB_COMPLETED = "finance.job_completed"
-
 
 RETENTION_EVENT_TYPES: set[str] = {
     PAYWALL_OPENED,
@@ -96,8 +171,84 @@ KNOWN_EVENT_TYPES: set[str] = {
     AUDIO_STOPPED,
     AUDIO_COMPLETED,
     ENTITLEMENT_GRANTED,
+    GIFT_TOKEN_CREATED,
+    GIFT_REDEEMED,
+    GIFT_REDEEM_FAILED,
     MESSAGE_SENT,
     MESSAGE_FAILED,
+    MESSAGING_EFFECT_WARNING,
+    USER_SETTING_SET,
+    TARIFF_SELECTED,
+    PRODUCT_SELECTED,
+    MARKETING_COPY_SET,
+    VARIANT_SHOWN,
+    VARIANT_CHOSEN,
+    ADMIN_ROLE_SET,
+    ADMIN_PERM_SET,
+    ADMIN_NOTIFICATION_SENT,
+    ADMIN_NOTIFICATION_FAILED,
+    ADMIN_USER_CARD,
+    ADMIN_USER_CARD_FAILED,
+    ADMIN_PRICING_CHANGE_REQUESTED,
+    ADMIN_PRICING_CHANGE_REJECTED,
+    ADMIN_PRICING_CHANGE_APPLIED,
+    PRICING_SELECT,
+    PRICING_SELECT_BLOCKED,
+    REWARD_OBSERVE,
+    REWARD_OBSERVE_BLOCKED,
+    GROWTH_PROPOSE,
+    GROWTH_PROPOSE_BLOCKED,
+    POLICY_DEPLOYED,
+    POLICY_ROLLED_BACK,
+    EVOLUTION_JOB_ENQUEUED,
+    OFFER_PATCH_APPLIED,
+    OFFER_PATCH_ROLLED_BACK,
+    AUTOPILOT_STARTED,
+    AUTOPILOT_RUN_STARTED,
+    AUTOPILOT_DECISION,
+    PROFIT_SPRINT_ONBOARDING_START,
+    PROFIT_SPRINT_ONBOARDING_TEXT,
+    PROFIT_SPRINT_ONBOARDING_LEAD_SOURCE,
+    WEATHER_SENT,
+    AI_CEO_PLAN,
+    AI_CEO_PLAN_BLOCKED,
+    AI_CEO_PLAN_ERROR,
+    ADS_RL_SUGGESTION,
+    ADS_RL_SUGGEST_BLOCKED,
+    ADS_RL_SUGGEST_SKIPPED,
+    ADS_RL_SUGGEST_OK,
+    ADS_RL_TRAIN_SKIPPED,
+    ADS_RL_TRAIN_REPORT,
+    ADS_RL_TRAIN_OK,
+    ADS_RL_TRAIN_COMPLETED,
+    ADS_AUTOPILOT_TICK_BLOCKED,
+    ADS_AUTOPILOT_ERROR,
+    ADS_AUTOPILOT_TICK,
+    ADS_APPLY_EXECUTE_BLOCKED,
+    ADS_APPLY_EXECUTED,
+    ADS_APPLY_AUDIT_EMIT_FAILED,
+    ADS_APPLY_MATURITY_MARK_FAILED,
+    ADS_APPLY_DECISION_EXECUTED_EMIT_FAILED,
+    GROWTH_STRATEGY_GENERATE,
+    GROWTH_STRATEGY_BACKLOG,
+    GROWTH_STRATEGY_ACCEPT,
+    GROWTH_STRATEGY_REJECT,
+    GROWTH_STRATEGY_SNAPSHOT,
+    GROWTH_STRATEGY_PLAN_MANIFEST,
+    GROWTH_STRATEGY_GENERATED,
+    GROWTH_HYPOTHESIS_CREATED,
+    GROWTH_HYPOTHESIS_SCORED,
+    GROWTH_HYPOTHESIS_STATE,
+    GROWTH_EXPERIMENT_CREATED,
+    PAYMENT_CREATE_ATTEMPTED,
+    PAYMENT_CREATED,
+    PAYMENT_CREATE_FAILED,
+    PAYMENT_CHECKED,
+    PAYMENT_CAPTURED,
+    PAYMENT_SUCCEEDED,
+    PAYMENT_FAILED,
+    PAYMENTS_RECONCILED,
+    PAYMENTS_RECONCILE_FAILED,
     DECISION_ISSUED,
     DECISION_EXECUTED,
     DECISION_BLOCKED,
@@ -126,15 +277,14 @@ KNOWN_EVENT_TYPES: set[str] = {
     FINANCE_ALLOCATION_RECOMMENDED,
     FINANCE_JOB_STARTED,
     FINANCE_JOB_COMPLETED,
-
 }
-
 
 ALIASES: dict[str, str] = {
     "paywall_open": PAYWALL_OPENED,
     "paywall_close": PAYWALL_CLOSED,
     "offer_click_primary": OFFER_CLICKED,
     "offer_click_secondary": OFFER_CLICKED,
+    "access_granted": ENTITLEMENT_GRANTED,
 }
 
 

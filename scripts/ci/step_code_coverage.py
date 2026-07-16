@@ -10,6 +10,7 @@ from scripts.ci.subprocess_io import PYTEST_REQUIRED_PLUGINS, run_command
 MIN_TOTAL_COVERAGE = 60.0
 TARGET_TOTAL_COVERAGE = 70.0
 PYTEST_COVERAGE_MARK = "not slow and not gate"
+HEADLESS_COVERAGE_TIMEOUT_SECONDS = 600
 
 COVERAGE_TARGETS = (
     "tests/unit",
@@ -70,17 +71,17 @@ COVERAGE_SHARDS = (
     ),
     CoverageShard(
         name="integration-headless-cli-run",
-        timeout=240,
+        timeout=HEADLESS_COVERAGE_TIMEOUT_SECONDS,
         targets=("tests/integration/headless/test_cli_run_smoke.py",),
     ),
     CoverageShard(
         name="integration-headless-cli-scenario",
-        timeout=240,
+        timeout=HEADLESS_COVERAGE_TIMEOUT_SECONDS,
         targets=("tests/integration/headless/test_cli_scenario_smoke.py",),
     ),
     CoverageShard(
         name="integration-headless-sdk-execute",
-        timeout=240,
+        timeout=HEADLESS_COVERAGE_TIMEOUT_SECONDS,
         targets=("tests/integration/headless/test_sdk_execute_smoke.py",),
     ),
     CoverageShard(
@@ -137,13 +138,7 @@ def _coverage_warnings(percent: float) -> list[str]:
 
 def _coverage_run_command(shard: CoverageShard) -> list[str]:
     return [
-        *_python_command("-m", "coverage"),
-        "run",
-        "--parallel-mode",
-        "--branch",
-        "--source=.",
-        "-m",
-        "pytest",
+        *_python_command("-m", "scripts.ci.coverage_pytest_runner"),
         *_pytest_plugin_args(),
         "-q",
         *shard.targets,
@@ -188,22 +183,28 @@ def run() -> tuple[bool, str]:
             timeout=shard.timeout,
         )
         if run_cov.returncode != 0:
+            timed_out = run_cov.returncode == 124
+            violation = "coverage_pytest_timeout" if timed_out else "coverage_pytest_failed"
             payload = {
                 "artifact": "code_coverage",
                 "status": "blocked",
                 "coverage_kind": "coverage.py",
-                "violations": ["coverage_pytest_failed"],
+                "violations": [violation],
                 "warnings": [],
                 "targets": list(COVERAGE_TARGETS),
                 "shards": [item.name for item in COVERAGE_SHARDS],
                 "completed_shards": completed_shards,
                 "failed_shard": shard.name,
                 "failed_shard_targets": list(shard.targets),
+                "failed_shard_timeout_seconds": shard.timeout,
+                "failed_shard_returncode": run_cov.returncode,
                 "claims_code_coverage": True,
                 "claims_production_ready": False,
             }
             _write_summary(payload)
-            return False, f"coverage pytest run failed in shard={shard.name}"
+            if timed_out:
+                return False, f"coverage pytest timed out in shard={shard.name} timeout_seconds={shard.timeout}"
+            return False, f"coverage pytest run failed in shard={shard.name} returncode={run_cov.returncode}"
 
         completed_shards.append(shard.name)
 

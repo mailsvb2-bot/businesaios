@@ -22,10 +22,16 @@ def _worker_owner(payload: Any) -> str:
 def build_runtime_safety_context(*, action: str, payload: Any) -> SafetyActionContext:
     data = _payload_dict(payload)
     tenant_id = str(data.get("tenant_id") or "unknown")
+    actor_id = data.get("actor_id")
+    target_user_id = data.get("user_id")
     return SafetyActionContext(
         action=str(action),
         tenant_id=tenant_id,
-        user_id=str(data.get("user_id")) if data.get("user_id") is not None else None,
+        user_id=(
+            str(actor_id)
+            if actor_id is not None
+            else (str(target_user_id) if target_user_id is not None else None)
+        ),
         payload=data,
         metadata={
             "action_id": canonical_action_id(action=str(action), tenant_id=tenant_id, payload=data),

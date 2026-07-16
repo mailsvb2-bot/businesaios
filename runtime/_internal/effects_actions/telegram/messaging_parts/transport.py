@@ -36,7 +36,7 @@ def _mark_accepted(state: Any, *, delivery_key: str, msg, meta: Mapping[str, Any
     if state is None or not hasattr(state, "mark_accepted"):
         return
     payload_digest = meta.get("payload_digest") or getattr(msg, "payload_digest", None)
-    receipt_meta = {**_stable_metadata(msg), **dict(meta or {}), "delivery_phase": "accepted_for_delivery"}
+    receipt_meta = {**dict(meta or {}), **_stable_metadata(msg), "delivery_phase": "accepted_for_delivery"}
     try:
         state.mark_accepted(
             str(delivery_key),
@@ -52,7 +52,7 @@ def _mark_delivered(state: Any, *, delivery_key: str, msg, meta: Mapping[str, An
         return
     external_id = meta.get("external_id")
     payload_digest = meta.get("payload_digest") or getattr(msg, "payload_digest", None)
-    receipt_meta = {**_stable_metadata(msg), **dict(meta or {}), "delivery_phase": "finalized"}
+    receipt_meta = {**dict(meta or {}), **_stable_metadata(msg), "delivery_phase": "finalized"}
     try:
         state.mark_delivered(
             str(delivery_key),
@@ -125,16 +125,51 @@ def telegram_delivery(self, *, msg) -> tuple[bool, dict]:
     return bool(ok), out
 
 
-def multichannel_delivery(*, msg) -> tuple[bool, dict]:
+def multichannel_delivery(self=None, *, msg) -> tuple[bool, dict]:
+    delivery_key = msg.delivery_key
+    existing = _receipt(getattr(self, "delivery_state", None), delivery_key=delivery_key)
+    if existing is not None:
+        phase = str(
+            existing.get("delivery_phase")
+            or existing.get("metadata", {}).get("delivery_phase")
+            or "finalized"
+        )
+        return True, {
+            "channel": msg.channel,
+            "dedup": True,
+            "delivery_key": delivery_key,
+            "receipt": existing,
+            "payload_digest": getattr(msg, "payload_digest", None),
+            "delivery_phase": phase,
+            "delivery_finalized": phase == "finalized",
+        }
     result = get_multichannel_effects_bridge().send(msg)
     if not isinstance(result, DeliveryResult):
         raise RuntimeError("INVALID_DELIVERY_RESULT")
     meta = dict(result.detail or {})
+    meta["channel"] = result.channel
     meta["external_id"] = result.external_id
     meta["mode"] = result.mode
     meta["payload_digest"] = getattr(msg, "payload_digest", None)
-    meta["delivery_key"] = msg.delivery_key
-    meta["delivery_finalized"] = bool(result.ok) and str(result.mode or "") not in {"queued", "accepted"}
+    meta["delivery_key"] = delivery_key
+    mode = str(result.mode or "").strip().casefold()
+    finalized = bool(result.ok) and mode not in {"queued", "accepted"}
+    meta["delivery_finalized"] = finalized
+    if bool(result.ok) and not finalized:
+        meta["delivery_phase"] = "accepted_for_delivery"
+        _mark_accepted(
+            getattr(self, "delivery_state", None),
+            delivery_key=delivery_key,
+            msg=msg,
+            meta=meta,
+        )
+    elif finalized:
+        _mark_delivered(
+            getattr(self, "delivery_state", None),
+            delivery_key=delivery_key,
+            msg=msg,
+            meta=meta,
+        )
     return bool(result.ok), meta
 
 
@@ -149,5 +184,5 @@ def build_single_sender(self):
                 correlation_id=selected_msg.correlation_id,
             )
             return telegram_delivery(self, msg=selected_msg)
-        return multichannel_delivery(msg=selected_msg)
+        return multichannel_delivery(self, msg=selected_msg)
     return _send_one

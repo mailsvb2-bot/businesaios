@@ -17,7 +17,11 @@ def test_coverage_gate_uses_current_interpreter_for_python_commands() -> None:
         )
     )
 
-    assert command[:3] == [sys.executable, "-m", "coverage"]
+    assert command[:3] == [
+        sys.executable,
+        "-m",
+        "scripts.ci.coverage_pytest_runner",
+    ]
 
 
 def test_coverage_gate_does_not_hardcode_bare_python_command() -> None:

@@ -35,10 +35,19 @@ class OfferCatalogRegistry:
     """Offer catalog registry.
 
     Supports lazy factories to avoid heavy import-time work and prevent cycles.
+    Tenant/product/env YAML factories keep source fingerprints so a governed
+    catalog update becomes visible to the live registry without a process restart.
     """
 
     _by_id: dict[str, OfferCatalog | CatalogFactory]
     _cache: dict[str, OfferCatalog] = field(default_factory=dict)
+    _yaml_source_by_id: dict[str, Path] = field(default_factory=dict)
+    _yaml_fingerprint_by_id: dict[str, tuple[int, int]] = field(default_factory=dict)
+
+    @staticmethod
+    def _yaml_fingerprint(path: Path) -> tuple[int, int]:
+        stat = path.stat()
+        return int(stat.st_mtime_ns), int(stat.st_size)
 
     def register(self, catalog: OfferCatalog) -> None:
         self._by_id[str(catalog.id)] = catalog
@@ -49,21 +58,40 @@ class OfferCatalogRegistry:
         if not cid:
             raise ValueError("catalog_id is required")
         self._by_id[cid] = factory
-        # Do not populate cache.
+        self._cache.pop(cid, None)
+
+    def register_yaml_factory(self, catalog_id: str, *, path: Path, factory: CatalogFactory) -> None:
+        cid = str(catalog_id or "").strip()
+        source = path.expanduser().resolve()
+        self.register_factory(cid, factory)
+        self._yaml_source_by_id[cid] = source
+        self._yaml_fingerprint_by_id[cid] = self._yaml_fingerprint(source)
+
+    def _invalidate_changed_yaml_source(self, catalog_id: str) -> None:
+        cid = str(catalog_id)
+        source = self._yaml_source_by_id.get(cid)
+        if source is None:
+            return
+        fingerprint = self._yaml_fingerprint(source)
+        if self._yaml_fingerprint_by_id.get(cid) == fingerprint:
+            return
+        self._cache.pop(cid, None)
+        self._yaml_fingerprint_by_id[cid] = fingerprint
 
     def get(self, catalog_id: str) -> OfferCatalog:
         cid = normalize_catalog_id(catalog_id)
+        self._invalidate_changed_yaml_source(cid)
         if cid in self._cache:
             return self._cache[cid]
         if cid not in self._by_id:
             raise KeyError(f"unknown offer catalog: {cid}")
-        v = self._by_id[cid]
-        if callable(v):
-            cat = v()
+        value = self._by_id[cid]
+        if callable(value):
+            catalog = value()
         else:
-            cat = v
-        self._cache[cid] = cat
-        return cat
+            catalog = value
+        self._cache[cid] = catalog
+        return catalog
 
 
 def default_offer_catalog_registry() -> OfferCatalogRegistry:
@@ -91,16 +119,16 @@ def default_offer_catalog_registry() -> OfferCatalogRegistry:
         for cid, spec in (legacy_loader.load_all() or {}).items():
             try:
                 reg._by_id.setdefault(str(cid), YamlOfferCatalogV1.from_spec(spec))
-            except Exception as e:
-                log.warning("failed to load legacy offer catalog %s: %r", cid, e)
-    except Exception as e:
+            except Exception as exc:
+                log.warning("failed to load legacy offer catalog %s: %r", cid, exc)
+    except Exception as exc:
         # Never break boot if offers are missing (unless strict).
         if strict_mode:
             raise
         try:
-            log.warning("offer_catalog_registry: failed to load built-in YAML catalogs: %r", e)
+            log.warning("offer_catalog_registry: failed to load built-in YAML catalogs: %r", exc)
         except Exception:
-            swallow(__name__, 'core/offers/catalog_registry.py')
+            swallow(__name__, "core/offers/catalog_registry.py")
 
     # Product-scoped YAML catalogs (tenant/product/env) loaded lazily.
     # Layout:
@@ -110,45 +138,52 @@ def default_offer_catalog_registry() -> OfferCatalogRegistry:
     try:
         data_dir = env_path("OFFER_CATALOGS_DATA_DIR", str(repo_root / "data" / "offer_catalogs")).resolve()
         if data_dir.exists() and data_dir.is_dir():
-            for tenant_dir in sorted([p for p in data_dir.iterdir() if p.is_dir()]):
+            for tenant_dir in sorted([path for path in data_dir.iterdir() if path.is_dir()]):
                 tenant = tenant_dir.name
-                for product_dir in sorted([p for p in tenant_dir.iterdir() if p.is_dir()]):
+                for product_dir in sorted([path for path in tenant_dir.iterdir() if path.is_dir()]):
                     product = product_dir.name
-                    for y in sorted(product_dir.glob("*.y*ml")):
-                        env = y.stem
+                    for yaml_path in sorted(product_dir.glob("*.y*ml")):
+                        environment = yaml_path.stem
                         tenant_key = str(tenant or "").strip()
                         if not tenant_key:
                             continue
                         if tenant_key.lower() == "default":
-                            cid = f"default:{product}:{env}"
+                            cid = f"default:{product}:{environment}"
                         else:
-                            cid = catalog_registry_key(tenant_id=tenant_key, product_id=product, environment=env)
+                            cid = catalog_registry_key(
+                                tenant_id=tenant_key,
+                                product_id=product,
+                                environment=environment,
+                            )
                         if cid in reg._by_id:
                             continue
 
                         def _mk_factory(path: Path, catalog_id: str):
                             def _factory() -> OfferCatalog:
-                                raw = load_yaml(path.read_text(encoding="utf-8"))
+                                raw = load_yaml(path, allow_empty=False, cache=False)
                                 if not isinstance(raw, dict):
                                     raise ValueError("BAD_OFFER_CATALOG")
-                                raw2 = dict(raw)
-                                raw2.setdefault("catalog_id", catalog_id)
+                                spec = dict(raw)
+                                spec.setdefault("catalog_id", catalog_id)
 
-                                # Strict mode: validate schema early (CI).
                                 if env_bool("OFFER_CATALOGS_STRICT", False) or env_bool("CI", False):
-                                    validate_yaml_offer_catalog_spec(raw2)
+                                    validate_yaml_offer_catalog_spec(spec)
 
-                                return YamlOfferCatalogV1.from_spec(raw2)
+                                return YamlOfferCatalogV1.from_spec(spec)
 
                             return _factory
 
-                        reg.register_factory(cid, _mk_factory(y, cid))
-    except Exception as e:
+                        reg.register_yaml_factory(
+                            cid,
+                            path=yaml_path,
+                            factory=_mk_factory(yaml_path, cid),
+                        )
+    except Exception as exc:
         if strict_mode:
             raise
         try:
-            log.warning("offer_catalog_registry: failed to scan data_dir catalogs: %r", e)
+            log.warning("offer_catalog_registry: failed to scan data_dir catalogs: %r", exc)
         except Exception:
-            swallow(__name__, 'core/offers/catalog_registry.py')
+            swallow(__name__, "core/offers/catalog_registry.py")
 
     return reg

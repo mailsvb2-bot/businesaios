@@ -1,9 +1,35 @@
 from __future__ import annotations
 
-from scripts.ci.integrity.auditor import run_audit, write_reports
+from scripts.ci.integrity.auditor import (
+    IntegrityReport,
+    iter_python_files,
+    load_spec,
+    run_audit,
+    score,
+    summarize,
+    write_reports,
+)
+from scripts.ci.integrity.decision_authority_alias_scan import check_decision_authority_aliases
 
 
-def _blocking_excerpt(report) -> str:
+def _run_canonical_integrity_report() -> IntegrityReport:
+    report = run_audit()
+    spec = load_spec()
+    alias_findings = check_decision_authority_aliases(iter_python_files(), spec)
+    if not alias_findings:
+        return report
+
+    findings = [*report.findings, *alias_findings]
+    fail_on = set(spec["thresholds"]["fail_on_severity"])
+    return IntegrityReport(
+        ok=not any(item.severity in fail_on for item in findings),
+        scorecard=score(findings, spec),
+        findings=findings,
+        summary=summarize(findings),
+    )
+
+
+def _blocking_excerpt(report: IntegrityReport) -> str:
     blockers = [item for item in report.findings if item.severity == "P0"]
     if not blockers:
         return "blocking=none"
@@ -14,7 +40,7 @@ def _blocking_excerpt(report) -> str:
 
 
 def run() -> tuple[bool, str]:
-    report = run_audit()
+    report = _run_canonical_integrity_report()
     write_reports(report)
     excerpt = _blocking_excerpt(report)
     if report.ok:

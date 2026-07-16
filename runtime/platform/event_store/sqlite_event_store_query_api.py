@@ -19,7 +19,9 @@ class SqliteEventStoreQueryApi:
         start_ms: int = 0,
         end_ms=None,
         event_type=None,
+        event_types=None,
         user_id=None,
+        limit: int | None = None,
     ) -> Iterable[dict[str, Any]]:
         assert self._db is not None
         return _rq.iter_events(
@@ -28,7 +30,9 @@ class SqliteEventStoreQueryApi:
             start_ms=start_ms,
             end_ms=end_ms,
             event_type=event_type,
+            event_types=event_types,
             user_id=user_id,
+            limit=limit,
         )
 
     def latest_event(

@@ -43,6 +43,19 @@ HOST_PORT="${BAIOS_STAGING_PORT:-18000}"
 CONTAINER_PORT="${BAIOS_CONTAINER_PORT:-8000}"
 TIMEOUT_SECONDS="${BAIOS_STAGING_TIMEOUT_SECONDS:-120}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-artifacts/ci}"
+CONTROL_PLANE_API_KEY_PEPPER="${API_CONTROL_PLANE_API_KEY_PEPPER:-}"
+if [[ -z "$CONTROL_PLANE_API_KEY_PEPPER" ]]; then
+  CONTROL_PLANE_API_KEY_PEPPER="$("$PYTHON_BIN" -c 'import secrets; print(secrets.token_urlsafe(48))')"
+fi
+if [[ -z "$CONTROL_PLANE_API_KEY_PEPPER" ]]; then
+  echo "Could not create a non-empty control-plane API-key pepper for staging proof." >&2
+  exit 2
+fi
+CONTROL_PLANE_API_KEY_STORE_PATH="${BAIOS_STAGING_API_KEY_STORE_PATH:-/app/data/api/api_keys.json}"
+if [[ "$CONTROL_PLANE_API_KEY_STORE_PATH" != /* ]]; then
+  echo "BAIOS_STAGING_API_KEY_STORE_PATH must be an absolute container path." >&2
+  exit 2
+fi
 GIT_COMMIT_SHA="${GIT_COMMIT_SHA:-$(git rev-parse --verify HEAD 2>/dev/null || true)}"
 if [[ -z "$GIT_COMMIT_SHA" ]]; then
   echo "GIT_COMMIT_SHA could not be resolved; staging proof must be tied to an exact commit." >&2
@@ -103,6 +116,10 @@ docker run -d \
   -e API_PORT="$CONTAINER_PORT" \
   -e ENV=production \
   -e APP_ENV=production \
+  -e API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS=0 \
+  -e API_CONTROL_PLANE_API_KEY_PEPPER="$CONTROL_PLANE_API_KEY_PEPPER" \
+  -e BUSINESAIOS_API_KEY_STORE_BACKEND=file \
+  -e BUSINESAIOS_API_KEY_STORE_PATH="$CONTROL_PLANE_API_KEY_STORE_PATH" \
   -e DATABASE_URL="$DATABASE_URL" \
   -e POSTGRES_RUNTIME_ENABLED=1 \
   -e POSTGRES_EVENT_STORE_ENABLED=1 \

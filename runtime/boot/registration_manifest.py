@@ -16,7 +16,18 @@ from runtime.boot.actions_registry import all_actions
 CANON_BOOT_WIRING_ONLY = True
 CANON_RUNTIME_REGISTRATION_MANIFEST = True
 
-def register_runtime_actions(*, handlers: Any, handler_factory: Callable[[str], Any] | None = None) -> tuple[str, ...]:
+
+def registered_action_names() -> tuple[str, ...]:
+    """Return the canonical runtime action names without registering anything."""
+
+    return tuple(sorted(all_actions() | {ACTION_AI_CEO_PLAN_V1}))
+
+
+def register_runtime_actions(
+    *,
+    handlers: Any,
+    handler_factory: Callable[[str], Any] | None = None,
+) -> tuple[str, ...]:
     """Register known runtime actions through the canonical action registry.
 
     ``handler_factory`` is required to produce concrete handlers; without it the
@@ -24,7 +35,7 @@ def register_runtime_actions(*, handlers: Any, handler_factory: Callable[[str], 
     the module from becoming a second catalog or hidden execution brain.
     """
 
-    actions = tuple(sorted(all_actions() | {ACTION_AI_CEO_PLAN_V1}))
+    actions = registered_action_names()
     if handler_factory is None:
         return actions
     for action in actions:
@@ -36,4 +47,5 @@ __all__ = [
     "CANON_BOOT_WIRING_ONLY",
     "CANON_RUNTIME_REGISTRATION_MANIFEST",
     "register_runtime_actions",
+    "registered_action_names",
 ]

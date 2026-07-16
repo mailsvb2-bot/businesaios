@@ -23,11 +23,15 @@ class ProjectSnapshotCase:
     expected_trace: dict[str, Any]
 
 class _RejectingDecisionCore:
+    CANON_NON_RUNTIME_REGRESSION_FIXTURE = True
+
     def evaluate(self, *_args: Any, **_kwargs: Any) -> tuple[SimpleNamespace, dict[str, Any]]:
         return SimpleNamespace(candidate=None, trace=SimpleNamespace(decision_id="snapshot-reject")), {}
     decide = evaluate
 
 class _SelectingDecisionCore:
+    CANON_NON_RUNTIME_REGRESSION_FIXTURE = True
+
     def __init__(self, *, selected_business_id: str, delivery_channel: str) -> None:
         self._selected_business_id = selected_business_id
         self._delivery_channel = delivery_channel

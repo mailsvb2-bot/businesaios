@@ -7,9 +7,28 @@ cd "$ROOT"
 export PYTHONDONTWRITEBYTECODE=1
 export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
 
-echo "[verify] python: $(python --version 2>/dev/null || true)"
+PYTHON_BIN="${PYTHON_BIN:-python}"
+OUTER_BOOT_SMOKE_ROOT="${BAIOS_BOOT_SMOKE_ROOT:-/tmp/businesaios-boot-smoke}"
+VERIFY_BOOT_SMOKE_ROOT="${OUTER_BOOT_SMOKE_ROOT%/}-verify-${BASHPID}"
+export BAIOS_BOOT_SMOKE_ROOT="$VERIFY_BOOT_SMOKE_ROOT"
+
+cleanup_verify_boot_smoke() {
+  "$PYTHON_BIN" - "$VERIFY_BOOT_SMOKE_ROOT" <<'PY'
+from pathlib import Path
+import shutil
+import sys
+
+root = Path(sys.argv[1])
+if root.name and "verify-" in root.name:
+    shutil.rmtree(root, ignore_errors=True)
+PY
+}
+trap cleanup_verify_boot_smoke EXIT
+
+echo "[verify] python: $($PYTHON_BIN --version 2>/dev/null || true)"
+echo "[verify] isolated boot root: $BAIOS_BOOT_SMOKE_ROOT"
 echo "[verify] running bounded fast release gate"
-python -m scripts.ci.cli --gate fast --no-report --no-junit --no-coverage
+"$PYTHON_BIN" -m scripts.ci.cli --gate fast --no-report --no-junit --no-coverage
 
 echo "[verify] scan for artifacts"
 bad=0

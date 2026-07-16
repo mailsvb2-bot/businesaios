@@ -115,6 +115,7 @@ def test_gate_decision_action_respects_verified_simulation_and_approvals() -> No
     runtime = build_safety_control_runtime()
     payload = {
         "tenant_id": "t1",
+        "actor_id": "u1",
         "user_id": "u1",
         "expected_reward": 1.0,
         "expected_margin": 0.5,

@@ -12,12 +12,24 @@ IMPORTANT:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from core.ai._policy_registry_store import PolicyRegistryStore
 from core.policies.registry import PolicyRegistry as _MetaPolicyRegistry
+from core.policies.registry import PolicyRegistrySnapshot
 from core.policies.types import PolicyRef
 from core.security.call_origin import assert_called_from_bootstrap, assert_called_from_runtime_executor
 
 CANON_CORE_AI_POLICY_REGISTRY_LOCAL_STORE = True
+
+
+@dataclass(frozen=True)
+class PolicyRuntimeStateSnapshot:
+    lifecycle: PolicyRegistrySnapshot
+    previous_policy_id: str | None
+    candidate_policy_id: str | None
+    rollout_pct: int
+
 
 class PolicyRegistry:
     def __init__(self):
@@ -79,6 +91,24 @@ class PolicyRegistry:
     def rollout_config(self) -> tuple[str | None, int]:
         return self._candidate, int(self._rollout_pct)
 
+    def snapshot_runtime_state(self) -> PolicyRuntimeStateSnapshot:
+        assert_called_from_runtime_executor()
+        return PolicyRuntimeStateSnapshot(
+            lifecycle=self._meta.snapshot(),
+            previous_policy_id=self._previous,
+            candidate_policy_id=self._candidate,
+            rollout_pct=int(self._rollout_pct),
+        )
+
+    def restore_runtime_state(self, snapshot: PolicyRuntimeStateSnapshot) -> None:
+        assert_called_from_runtime_executor()
+        if not isinstance(snapshot, PolicyRuntimeStateSnapshot):
+            raise TypeError("snapshot must be PolicyRuntimeStateSnapshot")
+        self._meta.restore(snapshot.lifecycle)
+        self._previous = snapshot.previous_policy_id
+        self._candidate = snapshot.candidate_policy_id
+        self._rollout_pct = int(snapshot.rollout_pct)
+
     # --- SIDE-EFFECT API (must be called only by runtime/_effects_impl through executor) ---
 
     def set_rollout(self, *, candidate_policy_id: str, rollout_pct: int) -> None:
@@ -115,3 +145,6 @@ class PolicyRegistry:
 
     def canary_ref(self) -> PolicyRef | None:
         return self._meta.canary()
+
+
+__all__ = ["PolicyRegistry", "PolicyRuntimeStateSnapshot"]

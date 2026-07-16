@@ -2,7 +2,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from runtime.ads import DECISION_EXECUTED, AdsApplyRequest, AdsApplyState, AdsCommand, AdsPlan, IdempotencyKey
+from core.events.event_types import is_known
+from runtime.ads import (
+    DECISION_EXECUTED,
+    AdsApplyRequest,
+    AdsApplyState,
+    AdsCommand,
+    AdsPlan,
+    IdempotencyKey,
+)
 from runtime.tenancy import as_tenant_id
 
 
@@ -60,23 +68,45 @@ def summary_text(*, status: str, detail: dict[str, Any]) -> str:
     return f"Ads Apply: {status}"
 
 
-def emit_apply_audit(*, effects: Any, payload: dict[str, Any], user_id: str, audit_event: dict[str, Any]) -> None:
+def emit_apply_audit(
+    *,
+    effects: Any,
+    payload: dict[str, Any],
+    user_id: str,
+    audit_event: dict[str, Any],
+) -> None:
+    raw_event_type = str(audit_event.get("event_type") or "ads_apply_audit@v1")
+    event_type = raw_event_type if is_known(raw_event_type) else "ads_apply_executed@v1"
+    event_payload = dict(audit_event.get("payload") or {})
+    event_payload.setdefault("tenant_id", str(payload.get("tenant_id") or ""))
+    if event_type != raw_event_type:
+        event_payload["engine_audit_event_type"] = raw_event_type
+        event_payload["event_type_normalized"] = True
     effects.track_event(
         decision_id=str(payload.get("decision_id") or ""),
         correlation_id=str(payload.get("correlation_id") or ""),
         user_id=user_id,
-        event_type=str(audit_event.get("event_type") or "ads_apply_audit@v1"),
-        payload=dict(audit_event.get("payload") or {}),
+        event_type=event_type,
+        payload=event_payload,
         source=str(audit_event.get("source") or "ads"),
     )
 
 
-def emit_apply_success_governance(*, effects: Any, payload: dict[str, Any], user_id: str) -> None:
+def emit_apply_success_governance(
+    *,
+    effects: Any,
+    payload: dict[str, Any],
+    user_id: str,
+) -> None:
     effects.track_event(
         decision_id=str(payload.get("decision_id") or ""),
         correlation_id=str(payload.get("correlation_id") or ""),
         user_id=user_id,
         event_type=DECISION_EXECUTED,
-        payload={"domain": "ads.apply", "status": "applied"},
+        payload={
+            "tenant_id": str(payload.get("tenant_id") or ""),
+            "domain": "ads.apply",
+            "status": "applied",
+        },
         source="governance",
     )

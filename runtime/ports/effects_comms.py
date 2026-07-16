@@ -29,6 +29,7 @@ class EffectsCommsPort(Protocol):
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         user_id: str,
         path: str,
         kind: str = "voice",
@@ -42,8 +43,11 @@ class EffectsCommsPort(Protocol):
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         user_id: str,
         city: str,
+        channel: str = "telegram",
+        channel_policy: Optional[Dict[str, Any]] = None,
     ) -> Any: ...
 
     def track_event(

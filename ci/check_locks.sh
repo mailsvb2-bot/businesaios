@@ -9,6 +9,8 @@ set -euo pipefail
 export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
 export PYTHONDONTWRITEBYTECODE=1
 
+PYTHON_BIN="${PYTHON_BIN:-python}"
+
 PYTEST_TARGETS=(
   tests/p0/test_startup_hooks_lightweight.py
   tests/p0/test_ci_gate_plan_is_bounded.py
@@ -28,9 +30,11 @@ PYTEST_ARGS=(
   --strict-markers
   --strict-config
   --tb=short
+  -p
+  pytest_asyncio.plugin
   -m "not slow"
   "${PYTEST_TARGETS[@]}"
 )
 
-echo "[locks] running bounded P0 lock suite"
-python -m pytest "${PYTEST_ARGS[@]}"
+echo "[locks] running bounded P0 lock suite with $PYTHON_BIN"
+"$PYTHON_BIN" -m pytest "${PYTEST_ARGS[@]}"

@@ -87,6 +87,14 @@ def _direct_second_brain_surface_lock() -> tuple[bool, str]:
     return True, "second-brain surface lock passed"
 
 
+def _direct_multimessenger_runtime_lock() -> tuple[bool, str]:
+    from scripts.ci.multimessenger_contract import (
+        verify_multimessenger_runtime_contract,
+    )
+
+    return verify_multimessenger_runtime_contract()
+
+
 def _direct_runtime_decision_execution_service_name_lock() -> tuple[bool, str]:
     root = repo_root()
     service_names = (root / "runtime" / "service_names.py").read_text(encoding="utf-8")
@@ -305,6 +313,7 @@ def run() -> tuple[bool, str]:
         _direct_repo_hygiene_lock,
         _direct_cicd_contract_lock,
         _direct_second_brain_surface_lock,
+        _direct_multimessenger_runtime_lock,
         _direct_runtime_decision_execution_service_name_lock,
         _direct_container_release_lock_install_path,
         _direct_ai_ceo_lock,

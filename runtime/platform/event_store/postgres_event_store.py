@@ -67,6 +67,24 @@ def _event_payload_from_kwargs(
     return payload
 
 
+def _normalized_event_types(
+    *,
+    event_type: str | None,
+    event_types: Iterable[str] | None,
+) -> tuple[str, ...]:
+    normalized = tuple(
+        dict.fromkeys(
+            str(item).strip()
+            for item in (event_types or ())
+            if str(item).strip()
+        )
+    )
+    if normalized:
+        return normalized
+    singular = str(event_type or "").strip()
+    return (singular,) if singular else ()
+
+
 def _where_clause(
     *,
     tenant_id: str | None,
@@ -74,6 +92,7 @@ def _where_clause(
     end_ms: int | None,
     user_id: str | None,
     event_type: str | None,
+    event_types: Iterable[str] | None = None,
 ) -> tuple[str, tuple[Any, ...]]:
     clauses: list[str] = []
     params: list[Any] = []
@@ -89,9 +108,19 @@ def _where_clause(
     if user_id is not None:
         clauses.append("user_id = %s")
         params.append(str(user_id))
-    if event_type is not None:
+
+    types = _normalized_event_types(
+        event_type=event_type,
+        event_types=event_types,
+    )
+    if len(types) == 1:
         clauses.append("event_type = %s")
-        params.append(str(event_type))
+        params.append(types[0])
+    elif types:
+        placeholders = ",".join("%s" for _ in types)
+        clauses.append(f"event_type IN ({placeholders})")
+        params.extend(types)
+
     return (" WHERE " + " AND ".join(clauses) if clauses else "", tuple(params))
 
 
@@ -199,6 +228,8 @@ class PostgresEventStore:
         end_ms: int | None = None,
         user_id: str | None = None,
         event_type: str | None = None,
+        event_types: Iterable[str] | None = None,
+        limit: int | None = None,
     ) -> Iterable[dict[str, Any]]:
         where, params = _where_clause(
             tenant_id=tenant_id,
@@ -206,15 +237,21 @@ class PostgresEventStore:
             end_ms=end_ms,
             user_id=user_id,
             event_type=event_type,
+            event_types=event_types,
         )
+        limit_sql = ""
+        query_params = list(params)
+        if limit is not None:
+            limit_sql = " LIMIT %s"
+            query_params.append(max(1, int(limit)))
         rows = self._db.fetchall(
             f"""
             SELECT event_id, tenant_id, user_id, source, event_type, timestamp_ms,
                    decision_id, correlation_id, payload_json
             FROM events{where}
-            ORDER BY timestamp_ms ASC, event_id ASC;
+            ORDER BY timestamp_ms ASC, event_id ASC{limit_sql};
             """,
-            params,
+            tuple(query_params),
         )
         for row in rows:
             yield _row_to_event(tuple(row))
@@ -243,6 +280,7 @@ class PostgresEventStore:
         *,
         tenant_id: str | None = None,
         event_type: str | None = None,
+        event_types: Iterable[str] | None = None,
         user_id: str | None = None,
         start_ms: int | None = None,
         end_ms: int | None = None,
@@ -254,6 +292,7 @@ class PostgresEventStore:
             end_ms=end_ms,
             user_id=user_id,
             event_type=event_type,
+            event_types=event_types,
         )
         bounded_limit = max(1, int(limit))
         rows = self._db.fetchall(
@@ -274,12 +313,14 @@ class PostgresEventStore:
         tenant_id: str | None = None,
         user_id: str | None = None,
         event_type: str | None = None,
+        event_types: Iterable[str] | None = None,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         return self.query_events(
             tenant_id=tenant_id,
             user_id=user_id,
             event_type=event_type,
+            event_types=event_types,
             limit=limit,
         )
 
@@ -289,11 +330,13 @@ class PostgresEventStore:
         tenant_id: str | None = None,
         user_id: str | None = None,
         event_type: str | None = None,
+        event_types: Iterable[str] | None = None,
     ) -> dict[str, Any] | None:
         events = self.latest_events(
             tenant_id=tenant_id,
             user_id=user_id,
             event_type=event_type,
+            event_types=event_types,
             limit=1,
         )
         return events[0] if events else None

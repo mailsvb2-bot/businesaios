@@ -24,8 +24,8 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("autopilot_run_started@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
     ("autopilot_started@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
     ("pricing_select@v1", "runtime.handlers.pricing_select:handle_pricing_select", True, "general", 60, 30),
-    ("reward_observe@v1", "runtime.handlers.reward_observe:handle_reward_observe", True, "general", 120, 60),
-    ("growth_propose@v1", "runtime.handlers.growth_propose:handle_growth_propose", True, "general", 60, 30),
+    ("reward_observe@v1", "runtime.handlers.reward_observe:handle_reward_observe", True, "ads", 120, 60),
+    ("growth_propose@v1", "runtime.handlers.growth_propose:handle_growth_propose", True, "llm", 30, 15),
     ("answer_callback@v1", "runtime.handlers_ops:handle_answer_callback", True, "general", 120, 60),
     ("apply_pricing_change@v1", "runtime.handlers_ops:handle_apply_pricing_change", True, "general", 120, 60),
     ("behavior_graph_build@v1", "runtime.handlers.behavior_graph:handle_behavior_graph_build", True, "general", 30, 30),
@@ -64,9 +64,9 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("growth_strategy_accept@v1", "runtime.handlers.growth_strategy_state:handle_growth_strategy_accept", True, "general", 120, 60),
     ("growth_strategy_reject@v1", "runtime.handlers.growth_strategy_state:handle_growth_strategy_reject", True, "general", 120, 60),
     ("execute_plan@v1", "runtime.handlers:ActionHandlerRegistry.handle", True, "general", 120, 60),
-    ("enqueue_evolution_job@v1", "runtime.effects.registry:build_effects_registry", True, "general", 60, 30),
-    ("apply_offer_patch@v1", "runtime.effects.registry:build_effects_registry", True, "general", 60, 30),
-    ("suggest_offer_patch@v1", "runtime.effects.registry:build_effects_registry", True, "general", 60, 30),
+    ("enqueue_evolution_job@v1", "runtime.handlers.platform_effects:handle_enqueue_evolution_job", True, "general", 60, 30),
+    ("apply_offer_patch@v1", "runtime.handlers.platform_effects:handle_apply_offer_patch", True, "general", 60, 30),
+    ("suggest_offer_patch@v1", "runtime.handlers.platform_effects:handle_suggest_offer_patch", True, "general", 60, 30),
 )
 INLINE_ALLOWLIST_NAMES: tuple[str, ...] = (
     "emit_event@v1",
@@ -82,17 +82,88 @@ INLINE_ALLOWLIST_NAMES: tuple[str, ...] = (
     "growth_strategy_accept@v1",
     "growth_strategy_reject@v1",
     "execute_plan@v1",
-    "enqueue_evolution_job@v1",
-    "apply_offer_patch@v1",
-    "suggest_offer_patch@v1",
 )
 
 BUILTIN_HANDLER_ACTIONS: frozenset[str] = frozenset({"execute_plan@v1"})
-EFFECT_ONLY_ACTIONS: frozenset[str] = frozenset({
-    "enqueue_evolution_job@v1",
-    "apply_offer_patch@v1",
-    "suggest_offer_patch@v1",
-})
+EFFECT_ONLY_ACTIONS: frozenset[str] = frozenset()
+
+EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
+    {
+        "admin_set_perm@v1",
+        "admin_set_role@v1",
+        "admin_user_card@v1",
+        "ads_autopilot_tick@v1",
+        "ads_rl_suggest@v1",
+        "ads_rl_train_tick@v1",
+        "ai_ceo_plan@v1",
+        "apply_pricing_change@v1",
+        "capture_payment@v1",
+        "create_payment_and_send_link@v1",
+        "deploy_policy@v1",
+        "enqueue_evolution_job@v1",
+        "grant_access@v1",
+        "log_mood@v1",
+        "growth_strategy_accept@v1",
+        "growth_strategy_backlog@v1",
+        "growth_strategy_generate@v1",
+        "growth_strategy_reject@v1",
+        "growth_propose@v1",
+        "one_click_value@v1",
+        "pricing_select@v1",
+        "reward_observe@v1",
+        "profit_sprint_onboarding_lead_source@v1",
+        "profit_sprint_onboarding_start@v1",
+        "profit_sprint_onboarding_text@v1",
+        "reject_pricing_change@v1",
+        "request_pricing_change@v1",
+        "rollback_policy@v1",
+        "select_tariff@v1",
+        "send_audio@v1",
+        "send_marketing_offer@v1",
+        "send_message@v1",
+        "send_weather@v1",
+        "set_marketing_copy@v1",
+        "set_user_setting@v1",
+    }
+)
+CONDITIONAL_EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
+    {
+        "ads_apply_execute@v1",
+        "apply_offer_patch@v1",
+        "suggest_offer_patch@v1",
+    }
+)
+BEST_EFFORT_EXTERNAL_ACTIONS: frozenset[str] = frozenset({"answer_callback@v1"})
+ADVISORY_ACTIONS: frozenset[str] = frozenset(
+    {
+        "ads_rl_report@v1",
+        "behavior_graph_neighbors@v1",
+        "behavior_graph_node@v1",
+        "behavior_graph_path@v1",
+        "poll_telegram_updates@v1",
+        "telegram_self_check@v1",
+    }
+)
+
+
+def execution_category_for_action(action: str) -> str:
+    name = str(action)
+    if name in EXTERNAL_EFFECT_ACTIONS or name in CONDITIONAL_EXTERNAL_EFFECT_ACTIONS:
+        return "external_effect"
+    if name in BEST_EFFORT_EXTERNAL_ACTIONS:
+        return "external_best_effort"
+    if name in ADVISORY_ACTIONS:
+        return "advisory"
+    return "internal_bookkeeping"
+
+
+def external_confirmation_mode_for_action(action: str) -> str:
+    name = str(action)
+    if name in EXTERNAL_EFFECT_ACTIONS:
+        return "required"
+    if name in CONDITIONAL_EXTERNAL_EFFECT_ACTIONS:
+        return "conditional"
+    return "not_required"
 
 
 def build_specs_registry(*, rows: Iterable[Sequence[str | int | bool]], spec_factory, registry_type):
@@ -119,11 +190,17 @@ def handler_actions_from(all_actions: Iterable[str]) -> set[str]:
 
 
 __all__ = [
+    "ADVISORY_ACTIONS",
+    "BEST_EFFORT_EXTERNAL_ACTIONS",
     "BUILTIN_HANDLER_ACTIONS",
+    "CONDITIONAL_EXTERNAL_EFFECT_ACTIONS",
     "EFFECT_ONLY_ACTIONS",
+    "EXTERNAL_EFFECT_ACTIONS",
     "INLINE_ALLOWLIST_NAMES",
     "SPEC_ROWS",
     "build_inline_allowlist",
     "build_specs_registry",
+    "execution_category_for_action",
+    "external_confirmation_mode_for_action",
     "handler_actions_from",
 ]

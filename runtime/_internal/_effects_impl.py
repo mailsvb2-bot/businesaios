@@ -331,7 +331,20 @@ def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, 
 
 
 @dataclass
-class Effects(UserStateEffectsMixin, TrackingEffectsMixin, AdminStateEffectsMixin, MarketingEffectsMixin, EvolutionEffectsMixin, TelegramEffectsMixin, WeatherEffectsMixin, PaymentsEffectsMixin, LLMEffectsMixin, OfferPatchEffectsMixin, PolicyEffectsMixin, EffectsPort):
+class Effects(
+    UserStateEffectsMixin,
+    TrackingEffectsMixin,
+    AdminStateEffectsMixin,
+    MarketingEffectsMixin,
+    EvolutionEffectsMixin,
+    TelegramEffectsMixin,
+    WeatherEffectsMixin,
+    PaymentsEffectsMixin,
+    LLMEffectsMixin,
+    OfferPatchEffectsMixin,
+    PolicyEffectsMixin,
+    EffectsPort,
+):
     event_log: Any
     policy_registry: Any
     delivery_state: DeliveryState | None = None
@@ -353,6 +366,7 @@ class Effects(UserStateEffectsMixin, TrackingEffectsMixin, AdminStateEffectsMixi
     _last_audio_sent_at: dict[str, float] | None = None
     _audio_lock: Any | None = None
     _min_audio_interval_s: float = 0.7
+
     def __post_init__(self):
         if self.http_transport is None:
             self.http_transport = build_http_transport()
@@ -364,6 +378,7 @@ class Effects(UserStateEffectsMixin, TrackingEffectsMixin, AdminStateEffectsMixi
             if getattr(self.effect_router, "outbound_queue", None) is None:
                 self.effect_router.outbound_queue = self.telegram_outbound_queue
         initialize_effects_runtime_state(self)
+
     def _throttled_emit_err(self, key: str, *, event_type: str, payload: dict[str, Any]) -> None:
         throttled_emit_error(
             event_log=self.event_log,

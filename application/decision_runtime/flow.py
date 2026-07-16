@@ -6,12 +6,24 @@ from application.decision_runtime.envelope_builder import bind_product_metadata,
 from application.decision_state.world_model_metadata import attach_world_model_metadata
 
 
-def build_payload(*, state, out, pinned_world_model_meta: dict, product_id: str, domain: str, product_version: str):
+def build_payload(
+    *,
+    state,
+    out,
+    pinned_world_model_meta: dict,
+    tenant_id: str | None,
+    product_id: str | None,
+    domain: str | None,
+    product_version: str | None,
+    actor_id: str | None = None,
+):
     tagged = bind_product_metadata(
         payload=dict(out.payload) if isinstance(out.payload, dict) else {},
+        tenant_id=tenant_id,
         product_id=product_id,
         domain=domain,
         product_version=product_version,
+        actor_id=actor_id,
     )
     payload = attach_world_model_metadata(envelope_payload=tagged.payload, state=state)
     meta_block = dict(payload.get("meta") or {})

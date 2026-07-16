@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from runtime._internal.effect_types import EffectActionType
+from runtime._internal.effects_actions.telegram.delivery_evidence import build_delivery_evidence
 from runtime._internal.effects_actions.telegram.messaging_parts import (
     build_outbound_message,
     build_single_sender,
@@ -66,4 +68,21 @@ def send_message_effect(
         track_event_type=msg.track_event_type,
         track_payload=msg.track_payload,
     )
-    return {"ok": bool(ok), "meta": meta}
+    evidence_action_type = (
+        str(EffectActionType.TELEGRAM_SEND_MESSAGE)
+        if msg.channel == "telegram"
+        else "messaging.send_message"
+    )
+    return {
+        "ok": bool(ok),
+        "meta": meta,
+        "evidence": build_delivery_evidence(
+            ok=bool(ok),
+            meta=meta,
+            action_type=evidence_action_type,
+        ),
+    }
+
+
+__all__ = ["send_message_effect"]
+

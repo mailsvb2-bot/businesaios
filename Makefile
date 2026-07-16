@@ -1,15 +1,15 @@
 .PHONY: test test-clean ci-guard regen-manifest runtime-release release perf-top manifest ci-locks locks gen docs canon-audit canon-audit-full
 
 ci-guard:
-	./ci/check_prod_strict.sh
-	@if [ -f prod.env ]; then ./ci/check_prod_strict.sh prod.env; fi
-	@if [ -f .env.prod ]; then ./ci/check_prod_strict.sh .env.prod; fi
+	bash ./ci/check_prod_strict.sh
+	@if [ -f prod.env ]; then bash ./ci/check_prod_strict.sh prod.env; fi
+	@if [ -f .env.prod ]; then bash ./ci/check_prod_strict.sh .env.prod; fi
 
 ci-locks:
-	./ci/check_locks.sh
+	bash ./ci/check_locks.sh
 
 locks:
-	./ci/check_locks.sh
+	bash ./ci/check_locks.sh
 
 gen:
 	python scripts/gen_runtime_actions_docs.py

@@ -11,6 +11,7 @@ class DecisionSchema:
     required: set[str]
     optional: set[str]
     field_types: dict[str, type[Any] | tuple[type[Any], ...]]
+    allow_additional: bool = False
 
     def validate(self, payload: dict):
         if payload is None:
@@ -27,6 +28,10 @@ class DecisionSchema:
             "world_model_meta",
             "tenant_id",
             "business_id",
+            "actor_id",
+            "product_id",
+            "domain",
+            "product_version",
             "user_id",
             "autonomy_tier",
             "approval_policy",
@@ -46,10 +51,9 @@ class DecisionSchema:
             "capability_diagnostics",
             RuntimeServiceName.ACTION_BUDGET,
         }
-        if not keys.issubset(self.required | self.optional | reserved_optional):
+        if not self.allow_additional and not keys.issubset(self.required | self.optional | reserved_optional):
             raise ValueError("UNKNOWN_PAYLOAD_KEYS")
 
-        # Type validation
         for k, t in self.field_types.items():
             if k not in payload:
                 continue
@@ -63,7 +67,8 @@ class SchemaRegistry:
 
     Invariants:
     - Unknown actions are forbidden.
-    - Extra keys are forbidden.
+    - Extra keys are forbidden unless a schema explicitly opts into additional
+      properties for a compatibility action.
     - Versioned schemas are mandatory.
 
     NOTE: registry is injectable; do not use a global singleton.
@@ -77,8 +82,6 @@ class SchemaRegistry:
         version = int(version)
         versions = self._schemas.setdefault(action, {})
         if version in versions:
-            # Disallow silent schema drift (governance requirement).
-            # Allow re-register only if bit-identical.
             if versions[version] != schema:
                 raise RuntimeError("SCHEMA_VERSION_ALREADY_REGISTERED")
             return
@@ -91,7 +94,6 @@ class SchemaRegistry:
 
         versions = self._schemas[action]
         if version is None:
-            # default to max version
             version = max(versions.keys())
         version = int(version)
 

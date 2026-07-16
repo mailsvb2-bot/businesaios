@@ -29,6 +29,8 @@ class PaymentsEffectsMixin:
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
+        product_id: str,
         user_id: str,
         tariff: str,
         days: int,
@@ -39,11 +41,15 @@ class PaymentsEffectsMixin:
         expected_price: int | None = None,
         notify_text: str | None = None,
         notify_reply_markup: dict[str, Any] | None = None,
+        channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any:
         return select_tariff_effect(
             self,
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
+            tenant_id=str(tenant_id),
+            product_id=str(product_id),
             user_id=str(user_id),
             tariff=str(tariff),
             days=int(days),
@@ -54,6 +60,8 @@ class PaymentsEffectsMixin:
             expected_price=expected_price,
             notify_text=notify_text,
             notify_reply_markup=notify_reply_markup,
+            channel=str(channel),
+            channel_policy=channel_policy,
         )
 
     def capture_payment(
@@ -78,11 +86,19 @@ class PaymentsEffectsMixin:
             metadata=metadata,
         )
 
-    def reconcile_payments(self, *, decision_id: str, correlation_id: str, window_min: int = 30) -> Any:
+    def reconcile_payments(
+        self,
+        *,
+        decision_id: str,
+        correlation_id: str,
+        tenant_id: str,
+        window_min: int = 30,
+    ) -> Any:
         return reconcile_payments_effect(
             self,
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
+            tenant_id=str(tenant_id),
             window_min=int(window_min),
         )
 
@@ -91,15 +107,17 @@ class PaymentsEffectsMixin:
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         external_payment_id: str,
         notification_id: str | None = None,
         event: str | None = None,
         user_id_hint: str | None = None,
-    ) -> bool:
+    ) -> Any:
         return reconcile_payment_effect(
             self,
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
+            tenant_id=str(tenant_id),
             external_payment_id=str(external_payment_id),
             notification_id=notification_id,
             event=event,
@@ -112,28 +130,32 @@ class PaymentsEffectsMixin:
         decision_id: str,
         correlation_id: str,
         user_id: str,
-        tenant_id: str | None = None,
-        product_id: str | None = None,
+        tenant_id: str,
+        product_id: str,
         grant_key: str | None = None,
         full_access: bool = True,
         notify_text: str | None = None,
         notify_reply_markup: dict | None = None,
         track_event_type: str | None = None,
         track_payload: dict | None = None,
-    ) -> bool:
+        channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         return grant_access_effect(
             self,
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
             user_id=str(user_id),
-            tenant_id=tenant_id,
-            product_id=product_id,
+            tenant_id=str(tenant_id),
+            product_id=str(product_id),
             grant_key=grant_key,
             full_access=bool(full_access),
             notify_text=notify_text,
             notify_reply_markup=notify_reply_markup,
             track_event_type=track_event_type,
             track_payload=track_payload,
+            channel=str(channel),
+            channel_policy=channel_policy,
         )
 
     def _yookassa_create_payment(
@@ -155,7 +177,24 @@ class PaymentsEffectsMixin:
         )
 
     def _yookassa_get_payment_status(self, *, external_payment_id: str) -> str:
-        return yookassa_get_payment_status(effects=self, external_payment_id=str(external_payment_id))
+        return yookassa_get_payment_status(
+            effects=self,
+            external_payment_id=str(external_payment_id),
+        )
 
-    def start_yookassa_webhook_server_in_thread(self, *, host: str, port: int, path: str, event_store: Any, payment_outbox: Any) -> Any:
-        return start_webhook_server(host=host, port=port, path=path, event_store=event_store, payment_outbox=payment_outbox)
+    def start_yookassa_webhook_server_in_thread(
+        self,
+        *,
+        host: str,
+        port: int,
+        path: str,
+        event_store: Any,
+        payment_outbox: Any,
+    ) -> Any:
+        return start_webhook_server(
+            host=host,
+            port=port,
+            path=path,
+            event_store=event_store,
+            payment_outbox=payment_outbox,
+        )

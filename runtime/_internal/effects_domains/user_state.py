@@ -2,15 +2,54 @@ from __future__ import annotations
 
 from typing import Any
 
+from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
-class UserStateEffectsMixin:
-    """User state effects (event-sourced).
+def _ledger_evidence(*, decision_id: str, tenant_id: str, user_id: str, key: str, value: Any) -> dict[str, Any]:
+    ref = f"user-setting:{tenant_id}:{decision_id}:{user_id}:{key}"
+    return {
+        "source": "ledger",
+        "verified": True,
+        "status": "verified",
+        "code": "user_setting_recorded",
+        "external_refs": [ref],
+        "confidence": 1.0,
+        "payload": {
+            "tenant_id": str(tenant_id),
+            "user_id": str(user_id),
+            "key": str(key),
+            "value": value,
+        },
+    }
 
-    Pure persistence as events, plus optional UX acknowledgement via send_message.
-    """
+
+def _mood_evidence(
+    *,
+    decision_id: str,
+    tenant_id: str,
+    user_id: str,
+    score: int,
+) -> dict[str, Any]:
+    ref = f"mood:{tenant_id}:{decision_id}:{user_id}"
+    return {
+        "source": "ledger",
+        "verified": True,
+        "status": "verified",
+        "code": "mood_recorded",
+        "external_refs": [ref],
+        "confidence": 1.0,
+        "payload": {
+            "tenant_id": str(tenant_id),
+            "user_id": str(user_id),
+            "score": int(score),
+        },
+    }
+
+
+class UserStateEffectsMixin:
+    """Tenant-bound user state effects persisted through the canonical event log."""
 
     event_log: Any
 
@@ -19,6 +58,7 @@ class UserStateEffectsMixin:
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         user_id: str,
         key: str,
         value: Any = None,
@@ -26,43 +66,82 @@ class UserStateEffectsMixin:
         notify_reply_markup: dict[str, Any] | None = None,
         callback_query_id: str | None = None,
         channel: str = "telegram",
+        channel_policy: dict[str, Any] | None = None,
     ) -> Any:
         assert_called_from_executor()
+        tenant = assert_event_log_tenant(
+            self.event_log,
+            tenant_id=str(tenant_id),
+            operation="set_user_setting",
+        )
 
-        # UX: stop the spinner for inline buttons.
         if channel == "telegram" and isinstance(callback_query_id, str) and callback_query_id.strip():
             try:
-                self._telegram_answer_callback(callback_query_id.strip())  # type: ignore[attr-defined]
+                self._telegram_answer_callback(  # type: ignore[attr-defined]
+                    callback_query_id.strip(),
+                    user_id=str(user_id),
+                    decision_id=str(decision_id),
+                    correlation_id=str(correlation_id),
+                )
             except Exception:
-                swallow(__name__, 'runtime/_internal/effects_domains/user_state.py')
+                swallow(__name__, "user_setting.answer_callback")
 
+        payload = {
+            "tenant_id": tenant,
+            "key": str(key),
+            "value": value,
+        }
         self.event_log.emit(
             event_type="user_setting_set",
             source="user_state",
             user_id=str(user_id),
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
-            payload={"key": str(key), "value": value},
+            payload=payload,
+        )
+        evidence = _ledger_evidence(
+            decision_id=str(decision_id),
+            tenant_id=tenant,
+            user_id=str(user_id),
+            key=str(key),
+            value=value,
         )
 
+        notification: Any = None
         if isinstance(notify_text, str) and notify_text.strip():
-            return self.send_message(  # type: ignore[attr-defined]
-                decision_id=str(decision_id),
-                correlation_id=str(correlation_id),
-                user_id=str(user_id),
-                text=str(notify_text)[:3500],
-                reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
-                callback_query_id=str(callback_query_id) if callback_query_id else None,
-                channel=str(channel),
-            )
+            try:
+                notification = self.send_message(  # type: ignore[attr-defined]
+                    decision_id=str(decision_id),
+                    correlation_id=str(correlation_id),
+                    tenant_id=tenant,
+                    user_id=str(user_id),
+                    text=str(notify_text)[:3500],
+                    reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
+                    callback_query_id=str(callback_query_id) if callback_query_id else None,
+                    channel=str(channel),
+                    channel_policy=(
+                        dict(channel_policy)
+                        if isinstance(channel_policy, dict)
+                        else None
+                    ),
+                )
+            except Exception as exc:
+                notification = {"ok": False, "error": exc.__class__.__name__}
 
-        return {"ok": True}
+        return {
+            "ok": True,
+            "status": "verified",
+            "setting": payload,
+            "notification": notification,
+            "router_evidence": evidence,
+        }
 
     def log_mood(
         self,
         *,
         decision_id: str,
         correlation_id: str,
+        tenant_id: str,
         user_id: str,
         score: int,
         note: str | None = None,
@@ -70,40 +149,88 @@ class UserStateEffectsMixin:
         notify_reply_markup: dict[str, Any] | None = None,
         callback_query_id: str | None = None,
         channel: str = "telegram",
-    ) -> Any:
+        channel_policy: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         assert_called_from_executor()
+        tenant = assert_event_log_tenant(
+            self.event_log,
+            tenant_id=str(tenant_id),
+            operation="log_mood",
+        )
 
-        # UX: stop the spinner for inline buttons.
-        if channel == "telegram" and isinstance(callback_query_id, str) and callback_query_id.strip():
+        if (
+            channel == "telegram"
+            and isinstance(callback_query_id, str)
+            and callback_query_id.strip()
+        ):
             try:
-                self._telegram_answer_callback(callback_query_id.strip())  # type: ignore[attr-defined]
+                self._telegram_answer_callback(  # type: ignore[attr-defined]
+                    callback_query_id.strip(),
+                    user_id=str(user_id),
+                    decision_id=str(decision_id),
+                    correlation_id=str(correlation_id),
+                )
             except Exception:
-                swallow(__name__, 'runtime/_internal/effects_domains/user_state.py')
+                swallow(__name__, "mood.answer_callback")
 
         try:
-            score_i = int(score)
-        except Exception:
-            score_i = 0
-        score_i = max(0, min(10, score_i))
-
+            score_value = int(score)
+        except (TypeError, ValueError):
+            score_value = 0
+        score_value = max(0, min(10, score_value))
+        payload = {
+            "tenant_id": tenant,
+            "score": score_value,
+            "note": str(note)[:2000] if note else "",
+        }
         self.event_log.emit(
             event_type="mood_logged",
             source="user_state",
             user_id=str(user_id),
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
-            payload={"score": int(score_i), "note": (str(note)[:2000] if note else "")},
+            payload=payload,
+        )
+        evidence = _mood_evidence(
+            decision_id=str(decision_id),
+            tenant_id=tenant,
+            user_id=str(user_id),
+            score=score_value,
         )
 
+        notification: Any = None
         if isinstance(notify_text, str) and notify_text.strip():
-            return self.send_message(  # type: ignore[attr-defined]
-                decision_id=str(decision_id),
-                correlation_id=str(correlation_id),
-                user_id=str(user_id),
-                text=str(notify_text)[:3500],
-                reply_markup=notify_reply_markup if isinstance(notify_reply_markup, dict) else None,
-                callback_query_id=str(callback_query_id) if callback_query_id else None,
-                channel=str(channel),
-            )
+            try:
+                notification = self.send_message(  # type: ignore[attr-defined]
+                    decision_id=str(decision_id),
+                    correlation_id=str(correlation_id),
+                    tenant_id=tenant,
+                    user_id=str(user_id),
+                    text=str(notify_text)[:3500],
+                    reply_markup=(
+                        notify_reply_markup
+                        if isinstance(notify_reply_markup, dict)
+                        else None
+                    ),
+                    callback_query_id=(
+                        str(callback_query_id)
+                        if callback_query_id
+                        else None
+                    ),
+                    channel=str(channel),
+                    channel_policy=(
+                        dict(channel_policy)
+                        if isinstance(channel_policy, dict)
+                        else None
+                    ),
+                )
+            except Exception as exc:
+                notification = {"ok": False, "error": exc.__class__.__name__}
 
-        return {"ok": True}
+        return {
+            "ok": True,
+            "status": "verified",
+            "mood": payload,
+            "notification": notification,
+            "router_evidence": evidence,
+        }

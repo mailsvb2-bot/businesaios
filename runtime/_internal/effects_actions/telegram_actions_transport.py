@@ -31,7 +31,6 @@ def send_message_transport_effect(
         critical=bool(critical),
     )
 
-
 def send_audio_transport_effect(
     effects: Any,
     *,

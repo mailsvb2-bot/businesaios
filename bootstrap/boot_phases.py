@@ -1,31 +1,33 @@
-from __future__ import annotations
-CANON_BOOT_PHASES_FINAL_OWNER = True
-
-CANON_BOOT_WIRING_ONLY = True
-
 """Phase functions for system boot (P00–P70).
 
-Each function implements exactly one boot phase and returns
-only what it produces. Side-effects are limited to the phase contract.
-Extracted from system_builder.py.
+Each function implements exactly one boot phase and returns only what it
+produces. Side effects are limited to the phase contract. Extracted from
+system_builder.py.
 """
+
+from __future__ import annotations
 
 from contextlib import ExitStack
 from pathlib import Path
-from typing import Any
 
-from runtime.boot import Keyring, require_signing_secret_is_safe
-
-from runtime.events import EventLog
-from runtime.platform.config.env_flags import env_path, env_str
-from runtime.boot.boot_context import BootConfigError
 from bootstrap.boot_helpers import _env, _mask
 from bootstrap.boot_observability import emit_boot_diagnostic_lines
+from runtime.boot import Keyring, require_signing_secret_is_safe
+from runtime.boot.boot_context import BootConfigError
+from runtime.events import EventLog
+from runtime.platform.config.env_flags import env_path, env_str
+
+CANON_BOOT_PHASES_FINAL_OWNER = True
+CANON_BOOT_WIRING_ONLY = True
+
+
+def _repository_root() -> Path:
+    return Path(__file__).resolve().parents[1]
 
 
 def boot_phase_00_build_registries():
-    from runtime.actions import build_schema_registry
     from learning.registry import build_model_registry
+    from runtime.actions import build_schema_registry
 
     schemas = build_schema_registry()
     model_registry_ctx = build_model_registry()
@@ -43,11 +45,11 @@ def boot_phase_10_resolve_storage_and_paths():
     from runtime.wiring import resolve_storage_config
 
     storage = resolve_storage_config()
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = _repository_root()
     tenant_id = current_tenant_id()
 
     configured_root = env_path("DATA_DIR", "")
-    if str(configured_root) not in {'.', ''}:
+    if str(configured_root) not in {".", ""}:
         base_root = configured_root.resolve()
     else:
         base_root = (repo_root / "runtime" / "data").resolve()
@@ -66,17 +68,27 @@ def boot_phase_15_validate_prod_strict(env: str, run_mode: str, base: str) -> No
         return
 
     if not env_str("DATA_DIR").strip():
-        raise BootConfigError("ENV=prod requires explicit DATA_DIR (absolute path recommended).")
+        raise BootConfigError(
+            "ENV=prod requires explicit DATA_DIR (absolute path recommended)."
+        )
 
     if run_mode == "demo":
-        raise BootConfigError("ENV=prod forbids RUN_MODE=demo. Use RUN_MODE=telegram.")
+        raise BootConfigError(
+            "ENV=prod forbids RUN_MODE=demo. Use RUN_MODE=telegram."
+        )
 
     token_env = "TELEGRAM" + "_BOT" + "_TOKEN"
     if run_mode == "telegram" and not (_env(token_env) or ""):
-        raise BootConfigError("ENV=prod and RUN_MODE=telegram requires the Telegram token env var to be set.")
+        raise BootConfigError(
+            "ENV=prod and RUN_MODE=telegram requires the Telegram token env var to be set."
+        )
 
 
-def boot_phase_18_print_startup_diagnostics(env: str, run_mode: str, base: str) -> None:
+def boot_phase_18_print_startup_diagnostics(
+    env: str,
+    run_mode: str,
+    base: str,
+) -> None:
     token_env = "TELEGRAM" + "_BOT" + "_TOKEN"
     lines = [
         "[boot] config:",
@@ -86,22 +98,26 @@ def boot_phase_18_print_startup_diagnostics(env: str, run_mode: str, base: str) 
         f"[boot]   {token_env}={_mask(_env(token_env))}",
     ]
 
-    product_cfg = (_env("PRODUCT_CONFIG") or "").strip() or "organization_platform.yaml"
-    active_pid = (_env("BOOT_ACTIVE_POLICY_ID") or "").strip() or "telegram_policy@v3"
+    product_cfg = (
+        (_env("PRODUCT_CONFIG") or "").strip() or "organization_platform.yaml"
+    )
+    active_pid = (
+        (_env("BOOT_ACTIVE_POLICY_ID") or "").strip() or "telegram_policy@v3"
+    )
     lines.append(f"[boot]   PRODUCT_CONFIG={product_cfg}")
     lines.append(f"[boot]   BOOT_ACTIVE_POLICY_ID={active_pid}")
 
     try:
         from runtime.platform.config.registry import CONFIG
 
-        p = Path(__file__).resolve().parents[2] / "products" / product_cfg
-        if p.exists():
-            raw = CONFIG.yaml_from_path(p) or {}
-            dom = str(raw.get("domain") or "").strip()
-            pid = str(raw.get("product_id") or "").strip()
-            if dom or pid:
-                lines.append(f"[boot]   PRODUCT_ID={pid or 'unknown'}")
-                lines.append(f"[boot]   PRODUCT_DOMAIN={dom or 'unknown'}")
+        path = _repository_root() / "products" / product_cfg
+        if path.exists():
+            raw = CONFIG.yaml_from_path(path) or {}
+            domain = str(raw.get("domain") or "").strip()
+            product_id = str(raw.get("product_id") or "").strip()
+            if domain or product_id:
+                lines.append(f"[boot]   PRODUCT_ID={product_id or 'unknown'}")
+                lines.append(f"[boot]   PRODUCT_DOMAIN={domain or 'unknown'}")
     except Exception as exc:
         lines.append(f"[boot]   PRODUCT_CONFIG_READ_ERROR={exc}")
 
@@ -123,15 +139,23 @@ def boot_phase_30_durable_stores(stack: ExitStack, *, base: str, storage):
 
 def boot_phase_40_load_settings_and_flags():
     import logging
+
     from runtime.platform.config.registry import CONFIG
 
     settings = CONFIG.settings()
     return settings, CONFIG.feature_flags(), logging
 
 
-def boot_phase_50_telegram_outbound_queue(settings, event_log: EventLog, logging_mod):
-    """Optional telegram outbound queue. Must be initialized BEFORE retention wiring."""
-    from runtime.boot.phase_outbound import build_telegram_outbound_queue, configure_sla_budget
+def boot_phase_50_telegram_outbound_queue(
+    settings,
+    event_log: EventLog,
+    logging_mod,
+):
+    """Build the optional Telegram outbound queue before retention wiring."""
+    from runtime.boot.phase_outbound import (
+        build_telegram_outbound_queue,
+        configure_sla_budget,
+    )
 
     telegram_outbound_queue = build_telegram_outbound_queue(
         settings=settings,
@@ -143,7 +167,13 @@ def boot_phase_50_telegram_outbound_queue(settings, event_log: EventLog, logging
 
 
 def boot_phase_60_retention_adapter(
-    *, FeatureFlags, event_store, tenant_id: str, telegram_outbound_queue, base: str, stack: ExitStack
+    *,
+    FeatureFlags,
+    event_store,
+    tenant_id: str,
+    telegram_outbound_queue,
+    base: str,
+    stack: ExitStack,
 ):
     from runtime.boot.phase_retention import build_retention_adapter
 

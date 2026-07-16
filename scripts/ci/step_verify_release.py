@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 
 from scripts.ci.makefile_tools import has_make_target
 from scripts.ci.paths import repo_root
+from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state
 from scripts.ci.subprocess_io import run_command, run_python
 
 CANON_VERIFY_RELEASE_ARTIFACT_AGGREGATION = True
@@ -83,14 +85,28 @@ def _aggregate_required_proof_artifacts() -> tuple[bool, str]:
     return True, "verify release proof artifacts ready: artifacts/ci/verify_release.json"
 
 
+def _canonical_python_env() -> dict[str, str]:
+    return {"PYTHON_BIN": sys.executable}
+
+
 def _run_optional_make_target(name: str) -> tuple[bool, str]:
     if not has_make_target(name):
         return True, f"make target absent; skipped by contract: {name}"
 
-    outcome = run_command(["make", name])
+    outcome = run_command(["make", name], env=_canonical_python_env())
     if outcome.returncode != 0:
         return False, f"make target failed: {name}"
     return True, f"make target passed: {name}"
+
+
+def _cleanup_runtime_state_before_ci_locks() -> tuple[bool, str]:
+    try:
+        removed = cleanup_ci_runtime_state()
+    except OSError as exc:
+        return False, f"pre-ci-lock runtime cleanup failed: {type(exc).__name__}"
+    if removed:
+        return True, f"pre-ci-lock runtime cleanup removed {len(removed)} mutable runtime artifact(s)"
+    return True, "pre-ci-lock runtime cleanup found no mutable DB artifacts"
 
 
 def _run_optional_project_release_script() -> tuple[bool, str]:
@@ -98,7 +114,10 @@ def _run_optional_project_release_script() -> tuple[bool, str]:
 
     verify_release = root / "scripts" / "verify_release.sh"
     if verify_release.exists():
-        outcome = run_command(["bash", str(verify_release)])
+        outcome = run_command(
+            ["bash", str(verify_release)],
+            env=_canonical_python_env(),
+        )
         if outcome.returncode != 0:
             return False, "verify_release.sh failed"
         return True, "verify_release.sh passed"
@@ -111,7 +130,10 @@ def _run_optional_project_release_script() -> tuple[bool, str]:
         return True, "package_release.py passed"
 
     if has_make_target("regen-manifest"):
-        outcome = run_command(["make", "regen-manifest"])
+        outcome = run_command(
+            ["make", "regen-manifest"],
+            env=_canonical_python_env(),
+        )
         if outcome.returncode != 0:
             return False, "make regen-manifest failed"
         return True, "make regen-manifest passed"
@@ -125,6 +147,11 @@ def run() -> tuple[bool, str]:
     ok_guard, msg_guard = _run_optional_make_target("ci-guard")
     parts.append(msg_guard)
     if not ok_guard:
+        return False, "; ".join(parts)
+
+    ok_cleanup, msg_cleanup = _cleanup_runtime_state_before_ci_locks()
+    parts.append(msg_cleanup)
+    if not ok_cleanup:
         return False, "; ".join(parts)
 
     ok_locks, msg_locks = _run_optional_make_target("ci-locks")

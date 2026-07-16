@@ -64,7 +64,8 @@ def _legacy_high_impact_gate(*, action: str, tenant_id: str, user_id: str, event
 
 def gate_decision_action(*, action: str, payload: dict[str, Any], tenant_id: str, user_id: str, event_log: Any) -> tuple[bool, str, dict[str, Any]]:
     data = dict(payload or {})
-    data.setdefault("tenant_id", str(tenant_id))
+    data["tenant_id"] = str(tenant_id)
+    data["actor_id"] = str(user_id)
     data.setdefault("user_id", str(user_id))
 
     control_decisions = evaluate_runtime_action_controls(action=action, payload=data)

@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from runtime._internal.effect_payloads import normalize_effect_payload, payload_contract_fields
+from runtime._internal.effect_payloads import EffectPayloadError, normalize_effect_payload, payload_contract_fields
 from runtime._internal.effect_router import EffectRouter
 from runtime._internal.effect_types import EffectActionType
 from runtime._internal.http_transport import DisabledNetworkTransport
@@ -22,8 +22,17 @@ def test_effect_payload_contract_registry_matches_router_support() -> None:
     assert set(payload_contract_fields()) == set(router.supported_action_enums())
 
 
-def test_normalize_effect_payload_applies_canonical_defaults() -> None:
-    normalized = normalize_effect_payload(EffectActionType.WEATHER_OPEN_METEO_CURRENT, {})
+def test_normalize_effect_payload_requires_weather_city_and_applies_generic_defaults() -> None:
+    with pytest.raises(
+        EffectPayloadError,
+        match=r"effect_payload_invalid:weather.open_meteo.current:missing_city",
+    ):
+        normalize_effect_payload(EffectActionType.WEATHER_OPEN_METEO_CURRENT, {})
+
+    normalized = normalize_effect_payload(
+        EffectActionType.WEATHER_OPEN_METEO_CURRENT,
+        {"city": " Amsterdam "},
+    )
     assert normalized == {"city": "Amsterdam"}
 
     normalized = normalize_effect_payload(

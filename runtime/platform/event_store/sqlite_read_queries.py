@@ -18,6 +18,24 @@ EVENT_COLUMNS = (
 )
 
 
+def _normalized_event_types(
+    *,
+    event_type: str | None,
+    event_types: Sequence[str] | None,
+) -> tuple[str, ...]:
+    normalized = tuple(
+        dict.fromkeys(
+            str(item).strip()
+            for item in (event_types or ())
+            if str(item).strip()
+        )
+    )
+    if normalized:
+        return normalized
+    singular = str(event_type or "").strip()
+    return (singular,) if singular else ()
+
+
 def _iter_rows(
     db: sqlite3.Connection,
     *,
@@ -25,22 +43,28 @@ def _iter_rows(
     start_ms: int = 0,
     end_ms: int | None = None,
     event_type: str | None = None,
+    event_types: Sequence[str] | None = None,
     user_id: str | None = None,
     order_by: str = "timestamp_ms ASC, rowid ASC",
     limit: int | None = None,
 ) -> Sequence[sqlite3.Row | tuple]:
     sql = [f"SELECT {EVENT_COLUMNS} FROM events WHERE tenant_id=? AND timestamp_ms>=? AND timestamp_ms<?"]
     params: list[object] = [str(tenant_id), int(start_ms), _exclusive_end_ms(end_ms)]
-    if event_type is not None:
+    types = _normalized_event_types(event_type=event_type, event_types=event_types)
+    if len(types) == 1:
         sql.append("AND event_type=?")
-        params.append(str(event_type))
+        params.append(types[0])
+    elif types:
+        placeholders = ",".join("?" for _ in types)
+        sql.append(f"AND event_type IN ({placeholders})")
+        params.extend(types)
     if user_id is not None:
         sql.append("AND user_id=?")
         params.append(str(user_id))
     sql.append(f"ORDER BY {order_by}")
     if limit is not None:
         sql.append("LIMIT ?")
-        params.append(int(limit))
+        params.append(max(1, int(limit)))
     query = " ".join(sql)
     return db.execute(query, tuple(params)).fetchall()
 
@@ -52,7 +76,9 @@ def iter_events(
     start_ms: int = 0,
     end_ms: int | None = None,
     event_type: str | None = None,
+    event_types: Sequence[str] | None = None,
     user_id: str | None = None,
+    limit: int | None = None,
 ) -> Iterable[dict[str, Any]]:
     rows = _iter_rows(
         db,
@@ -60,7 +86,9 @@ def iter_events(
         start_ms=start_ms,
         end_ms=end_ms,
         event_type=event_type,
+        event_types=event_types,
         user_id=user_id,
+        limit=limit,
     )
     for row in rows:
         yield _row_to_event(row)
@@ -106,28 +134,15 @@ def latest_events(
     event_types: Sequence[str] | None = None,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
-    if event_types:
-        placeholders = ",".join("?" for _ in event_types)
-        sql = (
-            f"SELECT {EVENT_COLUMNS} FROM events WHERE tenant_id=? "
-            f"AND event_type IN ({placeholders})"
-        )
-        params: list[object] = [str(tenant_id), *[str(item) for item in event_types]]
-        if user_id is not None:
-            sql += " AND user_id=?"
-            params.append(str(user_id))
-        sql += " ORDER BY timestamp_ms DESC, rowid DESC LIMIT ?"
-        params.append(int(limit))
-        rows = db.execute(sql, tuple(params)).fetchall()
-    else:
-        rows = _iter_rows(
-            db,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            event_type=event_type,
-            order_by="timestamp_ms DESC, rowid DESC",
-            limit=limit,
-        )
+    rows = _iter_rows(
+        db,
+        tenant_id=tenant_id,
+        user_id=user_id,
+        event_type=event_type,
+        event_types=event_types,
+        order_by="timestamp_ms DESC, rowid DESC",
+        limit=limit,
+    )
     return [_row_to_event(row) for row in rows]
 
 

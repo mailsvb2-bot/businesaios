@@ -6,6 +6,7 @@ from typing import Any
 from application.headless.execution_gateway import execute_headless_envelope
 from execution.runtime_keys import ACTION_BUDGET_KEY
 from kernel.decision_crypto import envelope_has_required_signature_fields, signed_envelope_from_decision
+from runtime.execution.execution_contract_lock import ExecutionContractLockError
 from runtime.execution.executor_result import ExecutionResult
 
 CANON_AUTONOMY_EXECUTION_STEP = True
@@ -116,7 +117,26 @@ class AutonomyExecutionStep:
             original_envelope=envelope,
             executable_action=executable_action,
         )
-        result = execute_headless_envelope(executor=self._contract._executor, envelope=envelope)
+        try:
+            result = execute_headless_envelope(executor=self._contract._executor, envelope=envelope)
+        except ExecutionContractLockError as exc:
+            error_code = str(exc or "verification_failed")
+            result = ExecutionResult(
+                ok=False,
+                output={
+                    "attempted": True,
+                    "executed": False,
+                    "verified": False,
+                    "verification_failed": True,
+                    "verification_status": "failed",
+                    "operator_required": True,
+                    "status": "unverified",
+                    "error_code": error_code,
+                },
+                error=f"execution_contract:{error_code}",
+                decision_id=envelope.decision.decision_id,
+                correlation_id=envelope.decision.correlation_id,
+            )
         if isinstance(result.output, dict):
             details = dict(safety_verdict.details or {})
             result.output.setdefault("autonomy_safety", safety_verdict.to_dict())

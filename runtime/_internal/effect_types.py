@@ -18,6 +18,8 @@ class EffectActionType(StrEnum):
     WEBSITE_PUBLISH_PAGE = "website.publish_page"
     WEATHER_OPEN_METEO_CURRENT = "weather.open_meteo.current"
     LLM_MARKETING_COMPLETE = "llm.marketing_complete"
+
+
 EFFECT_ACTION_ALIASES: dict[str, EffectActionType] = {
     "telegram_send_message": EffectActionType.TELEGRAM_SEND_MESSAGE,
     "telegram_send_audio": EffectActionType.TELEGRAM_SEND_AUDIO,
@@ -37,9 +39,13 @@ EFFECT_ACTION_ALIASES: dict[str, EffectActionType] = {
     "telegram_poll_updates": EffectActionType.TELEGRAM_POLL_UPDATES,
 }
 _EFFECT_ACTION_BY_VALUE: dict[str, EffectActionType] = {str(item): item for item in EffectActionType}
+
+
 def normalize_effect_action_type(action_type: Any) -> str:
     resolved = resolve_effect_action_type(action_type)
     return str(resolved) if resolved is not None else ""
+
+
 def resolve_effect_action_type(action_type: Any) -> EffectActionType | None:
     if isinstance(action_type, EffectActionType):
         return action_type
@@ -50,11 +56,15 @@ def resolve_effect_action_type(action_type: Any) -> EffectActionType | None:
     if direct is not None:
         return direct
     return EFFECT_ACTION_ALIASES.get(key)
+
+
 def require_effect_action_type(action_type: Any) -> EffectActionType:
     resolved = resolve_effect_action_type(action_type)
     if resolved is None:
         key = str(action_type or "").strip()
         raise RuntimeError(f"unsupported_effect_action:{key.lower().replace('@', '.')}")
     return resolved
+
+
 def canonical_effect_action_types() -> tuple[str, ...]:
     return tuple(sorted(str(item) for item in EffectActionType))

@@ -156,7 +156,7 @@ def normalize_effect_payload(action_type: str | EffectActionType, payload: Any) 
             "caption": _optional_text(data, "caption"),
             "priority": data.get("priority", "normal"),
             "critical": _bool(data, "critical", default=True),
-            "timeout_s": _int(data, "timeout_s", default=30, minimum=1, maximum=300),
+            "timeout_s": _int(data, "timeout_s", default=60, minimum=1, maximum=300),
         }
     if key is EffectActionType.TELEGRAM_ANSWER_CALLBACK:
         return {
@@ -200,8 +200,7 @@ def normalize_effect_payload(action_type: str | EffectActionType, payload: Any) 
     }:
         return _generic_endpoint_contract(key, data)
     if key is EffectActionType.WEATHER_OPEN_METEO_CURRENT:
-        city = _optional_text(data, "city") or "Amsterdam"
-        return {"city": city}
+        return {"city": _require_text(key, data, "city")}
     if key is EffectActionType.LLM_MARKETING_COMPLETE:
         return {
             "provider": _require_text(key, data, "provider"),

@@ -23,6 +23,8 @@ _CHANNELS = (
     _spec("email", "messaging", "EMAIL", "smtp", "smtp"),
     _spec("instagram", "messaging", "INSTAGRAM", "webhook", "provider_webhook"),
     _spec("messenger", "messaging", "MESSENGER", "webhook", "provider_webhook"),
+    _spec("slack", "collaboration", "SLACK", "webhook", "provider_webhook"),
+    _spec("discord", "collaboration", "DISCORD", "webhook", "provider_webhook"),
     _spec("web_chat", "web", "WEB_CHAT", "configured_noop", "internal_widget"),
     _spec("api", "web", "API_GATEWAY", "configured_noop", "internal_api"),
     _spec("line", "regional", "LINE", "webhook", "provider_webhook"),
@@ -43,4 +45,5 @@ def get_channel_spec(channel: str) -> ChannelSpec:
 
 
 __all__ = ["CHANNEL_SPECS", "ChannelSpec", "get_channel_spec", "map_inbound_to_world_state", "normalize_channel"]
+
 

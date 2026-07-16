@@ -57,4 +57,3 @@ __all__ = [
     "handle_set_marketing_copy",
     "handle_set_user_setting",
 ]
-

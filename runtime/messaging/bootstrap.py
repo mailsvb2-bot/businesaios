@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from interfaces.messaging.discord import Adapter as DiscordAdapter
 from interfaces.messaging.email import Adapter as EmailAdapter
 from interfaces.messaging.instagram import Adapter as InstagramAdapter
 from interfaces.messaging.messenger import Adapter as MessengerAdapter
+from interfaces.messaging.slack import Adapter as SlackAdapter
 from interfaces.messaging.sms import Adapter as SMSAdapter
 from interfaces.messaging.whatsapp import Adapter as WhatsAppAdapter
 from interfaces.regional.kakaotalk import Adapter as KakaoTalkAdapter
@@ -22,6 +24,8 @@ def build_multichannel_dispatcher() -> MultiChannelDispatcher:
             "email": EmailAdapter(),
             "instagram": InstagramAdapter(),
             "messenger": MessengerAdapter(),
+            "slack": SlackAdapter(),
+            "discord": DiscordAdapter(),
             "web_chat": WebChatAdapter(),
             "api": APIGatewayAdapter(),
             "line": LineAdapter(),
@@ -30,3 +34,4 @@ def build_multichannel_dispatcher() -> MultiChannelDispatcher:
             "viber": ViberAdapter(),
         }
     )
+

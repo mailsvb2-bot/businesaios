@@ -180,15 +180,12 @@ def finalize_failed_outcome(*, executor: Any, env: Any, reason: str, output: Map
     decision_id, tenant_id = _decision_identity(env)
     if not decision_id:
         raise OutcomePersistenceLockError("missing_decision_id")
-    payload = _safe_dict(output)
     move_to_dead_letter(
         getattr(executor, "_outbox", None),
         decision_id=decision_id,
         tenant_id=tenant_id,
         owner_id="runtime-executor",
-        reason=str(reason),
-        backend_name="runtime_executor",
-        metadata={"reason": str(reason), "output": payload, "action": str(getattr(decision, "action", "") or "")},
+        error=str(reason),
     )
     _checkpoint(
         executor=executor,
