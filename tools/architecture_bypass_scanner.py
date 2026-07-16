@@ -1,13 +1,14 @@
-"""Canonical repo-wide architecture bypass scanner.
+"""Canonical repository-wide architecture bypass scanner.
 
-The scanner fails only on high-confidence patterns that create raw side effects,
-hidden execution paths, or decision-authority bypasses outside approved owner
-surfaces. It is deterministic and intentionally independent from runtime state.
+The scanner checks Python source while pruning generated, cache, dependency,
+report, and mutable-state trees. Source discovery is repository-wide so a new
+product package cannot fall outside the canonical checks by accident.
 """
 
 from __future__ import annotations
 
 import ast
+import os
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -22,12 +23,18 @@ from canon.anti_second_brain_rules import (
 )
 
 CANON_ARCHITECTURE_BYPASS_SCANNER = True
+CANON_SCAN_ALL_SOURCE_ROOTS = True
 
 EXCLUDED_DIRS = {
     ".git",
+    ".hg",
     ".mypy_cache",
+    ".nox",
     ".pytest_cache",
     ".ruff_cache",
+    ".runtime",
+    ".svn",
+    ".tox",
     ".venv",
     "__pycache__",
     "artifacts",
@@ -37,23 +44,12 @@ EXCLUDED_DIRS = {
     "htmlcov",
     "node_modules",
     "release_dist",
+    "reports",
     "target",
+    "venv",
 }
 
-SCAN_ROOTS = (
-    "adapters",
-    "application",
-    "bootstrap",
-    "core",
-    "entrypoints",
-    "governance",
-    "learning",
-    "observability",
-    "runtime",
-    "scripts",
-    "storage",
-    "tools",
-)
+SCAN_ROOTS: tuple[str, ...] = ()
 
 TEST_OR_SCRIPT_PREFIXES = (
     "tests/",
@@ -145,13 +141,19 @@ def _is_excluded(path: Path) -> bool:
 
 
 def _iter_python_files(root: Path) -> Iterable[Path]:
-    for prefix in SCAN_ROOTS:
-        base = root / prefix
-        if not base.exists():
-            continue
-        for path in base.rglob("*.py"):
-            rel = path.relative_to(root)
-            if not _is_excluded(rel):
+    for directory, dirnames, filenames in os.walk(
+        root,
+        topdown=True,
+        followlinks=False,
+    ):
+        base = Path(directory)
+        dirnames[:] = sorted(name for name in dirnames if name not in EXCLUDED_DIRS)
+        for filename in sorted(filenames):
+            if not filename.endswith(".py"):
+                continue
+            path = base / filename
+            relative = path.relative_to(root)
+            if not _is_excluded(relative):
                 yield path
 
 
