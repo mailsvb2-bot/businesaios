@@ -5,7 +5,9 @@ from pathlib import Path
 import pytest
 
 import bootstrap.world_model_self_check as self_check
-from bootstrap.canonical_decision_world_model import CanonicalDecisionWorldModel
+from bootstrap.canonical_decision_world_model import (
+    CanonicalDecisionWorldModel,
+)
 
 
 class DummyStore:
@@ -14,7 +16,10 @@ class DummyStore:
 
 
 def _world_model() -> CanonicalDecisionWorldModel:
-    return CanonicalDecisionWorldModel(store=DummyStore(), kind="hybrid@v1")
+    return CanonicalDecisionWorldModel(
+        store=DummyStore(),
+        kind="hybrid@v1",
+    )
 
 
 def test_runtime_self_check_does_not_walk_checkout_by_default(
@@ -22,7 +27,9 @@ def test_runtime_self_check_does_not_walk_checkout_by_default(
     monkeypatch,
 ) -> None:
     def fail_if_scanned(*, repo_root):
-        raise AssertionError(f"runtime boot must not scan repository source: {repo_root}")
+        raise AssertionError(
+            f"runtime boot must not scan repository source: {repo_root}"
+        )
 
     monkeypatch.setattr(
         self_check,
