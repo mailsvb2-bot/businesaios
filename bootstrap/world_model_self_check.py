@@ -1,8 +1,8 @@
 """Runtime integrity checks for the canonical world model.
 
 Repository source-policy scanning belongs to CI and operator diagnostics. Runtime
-boot validates the constructed world-model object without walking the checkout by
-default; an explicit environment flag can enable the source scan for diagnostics.
+boot validates the constructed world-model object without walking the checkout.
+Callers must opt in explicitly when they need a diagnostic source scan.
 """
 
 from __future__ import annotations
@@ -26,24 +26,19 @@ def run_world_model_self_check(
     *,
     world_model: Any,
     repo_root: str | Path,
-    scan_source: bool | None = None,
+    scan_source: bool = False,
 ) -> dict[str, Any]:
     integrity = verify_boot_world_model_integrity(world_model=world_model)
-    source_scan_enabled = (
-        is_world_model_source_scan_on_boot_enabled()
-        if scan_source is None
-        else bool(scan_source)
-    )
     findings = (
         scan_repo_for_forbidden_world_model_paths(repo_root=repo_root)
-        if source_scan_enabled
+        if scan_source
         else []
     )
 
     result = {
         "integrity": integrity,
         "forbidden_paths": findings,
-        "source_scan_enabled": source_scan_enabled,
+        "source_scan_enabled": scan_source,
         "ok": bool(integrity.get("ok")) and not findings,
     }
 
@@ -53,10 +48,6 @@ def run_world_model_self_check(
         )
 
     return result
-
-
-def is_world_model_source_scan_on_boot_enabled() -> bool:
-    return env_bool("WORLD_MODEL_SOURCE_SCAN_ON_BOOT", False)
 
 
 def is_world_model_self_check_strict() -> bool:
