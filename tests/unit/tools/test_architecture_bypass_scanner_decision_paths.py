@@ -88,7 +88,7 @@ def test_chained_registry_decision_call_is_blocked(tmp_path: Path) -> None:
     assert [item.code for item in findings] == [
         "possible_decision_core_bypass"
     ]
-    assert "registry.get().issue" in findings[0].detail
+    assert "registry.get('decision').issue" in findings[0].detail
 
 
 def test_direct_decision_function_call_is_blocked(tmp_path: Path) -> None:
@@ -99,6 +99,76 @@ def test_direct_decision_function_call_is_blocked(tmp_path: Path) -> None:
             "from hidden import decide\n"
             "def run(state):\n"
             "    return decide(state)\n"
+        ),
+    )
+
+    assert [item.code for item in findings] == [
+        "possible_decision_core_bypass"
+    ]
+
+
+def test_aliased_decision_import_is_blocked(tmp_path: Path) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/feature/alias.py",
+        source="from hidden import decide as choose\n",
+    )
+
+    assert [item.code for item in findings] == [
+        "decision_authority_alias_import_outside_owner"
+    ]
+
+
+def test_decision_method_reference_is_blocked(tmp_path: Path) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/feature/reference.py",
+        source=(
+            "def bind(decision_core):\n"
+            "    return decision_core.decide\n"
+        ),
+    )
+
+    assert [item.code for item in findings] == [
+        "decision_authority_reference_outside_owner"
+    ]
+
+
+def test_dynamic_decision_lookup_is_blocked(tmp_path: Path) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/feature/dynamic.py",
+        source=(
+            "def bind(decision_core):\n"
+            "    return getattr(decision_core, 'decide')\n"
+        ),
+    )
+
+    assert [item.code for item in findings] == [
+        "dynamic_decision_authority_lookup_outside_owner"
+    ]
+
+
+def test_generic_issue_method_remains_non_authoritative(tmp_path: Path) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/certificates/service.py",
+        source=(
+            "def create(certificate_service, payload):\n"
+            "    return certificate_service.issue(payload)\n"
+        ),
+    )
+
+    assert findings == []
+
+
+def test_decision_issue_method_is_blocked(tmp_path: Path) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/feature/issue.py",
+        source=(
+            "def run(decision_service, state):\n"
+            "    return decision_service.issue(state)\n"
         ),
     )
 
@@ -176,7 +246,7 @@ def test_exact_canonical_decision_owner_paths_remain_allowed(
     tmp_path: Path,
 ) -> None:
     for relative in (
-        "application/decision_runtime/runner.py",
+        "core/ai/decision_core.py",
         "application/headless/decision_gateway.py",
         "demand_decision/canonical_decision_bridge.py",
         "runtime/decision_gateway.py",
@@ -191,6 +261,38 @@ def test_exact_canonical_decision_owner_paths_remain_allowed(
             ),
         )
         assert findings == [], relative
+
+
+def test_new_core_ai_module_is_not_a_decision_owner(tmp_path: Path) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="core/ai/shadow_runtime.py",
+        source=(
+            "def run(decision_core, state):\n"
+            "    return decision_core.decide(state)\n"
+        ),
+    )
+
+    assert [item.code for item in findings] == [
+        "possible_decision_core_bypass"
+    ]
+
+
+def test_new_decision_runtime_module_is_not_a_decision_owner(
+    tmp_path: Path,
+) -> None:
+    findings = _scan_source(
+        tmp_path=tmp_path,
+        relative="application/decision_runtime/shadow_runtime.py",
+        source=(
+            "def run(decision_core, state):\n"
+            "    return decision_core.decide(state)\n"
+        ),
+    )
+
+    assert [item.code for item in findings] == [
+        "possible_decision_core_bypass"
+    ]
 
 
 def test_near_miss_gateway_filename_is_not_an_owner(
