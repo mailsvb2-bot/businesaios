@@ -14,7 +14,9 @@ HARD_DECISION_AUTHORITY_METHODS = frozenset(
     }
 )
 CONTEXTUAL_DECISION_AUTHORITY_METHODS = frozenset({"optimize"})
-DECISION_AUTHORITY_METHODS = HARD_DECISION_AUTHORITY_METHODS | CONTEXTUAL_DECISION_AUTHORITY_METHODS
+DECISION_AUTHORITY_METHODS = (
+    HARD_DECISION_AUTHORITY_METHODS | CONTEXTUAL_DECISION_AUTHORITY_METHODS
+)
 
 DECISION_AUTHORITY_TYPE_TOKENS = (
     "decisioncore",
@@ -36,6 +38,7 @@ DECISION_AUTHORITY_RECEIVER_TOKENS = (
 CANONICAL_DECISION_OWNER_PREFIXES = (
     "core/ai/",
     "application/decision_runtime/",
+    "demand_decision/canonical_decision_bridge.py",
     "runtime/decision_gateway.py",
     "runtime/decision_path_lock.py",
     "tests/",
