@@ -23,6 +23,10 @@ from bootstrap.boot_helpers import _env, _mask
 from bootstrap.boot_observability import emit_boot_diagnostic_lines
 
 
+def _repository_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
 def boot_phase_00_build_registries():
     from runtime.actions import build_schema_registry
     from learning.registry import build_model_registry
@@ -43,7 +47,7 @@ def boot_phase_10_resolve_storage_and_paths():
     from runtime.wiring import resolve_storage_config
 
     storage = resolve_storage_config()
-    repo_root = Path(__file__).resolve().parents[2]
+    repo_root = _repository_root()
     tenant_id = current_tenant_id()
 
     configured_root = env_path("DATA_DIR", "")
@@ -94,7 +98,7 @@ def boot_phase_18_print_startup_diagnostics(env: str, run_mode: str, base: str) 
     try:
         from runtime.platform.config.registry import CONFIG
 
-        p = Path(__file__).resolve().parents[2] / "products" / product_cfg
+        p = _repository_root() / "products" / product_cfg
         if p.exists():
             raw = CONFIG.yaml_from_path(p) or {}
             dom = str(raw.get("domain") or "").strip()
