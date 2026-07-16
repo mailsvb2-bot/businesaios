@@ -63,8 +63,10 @@ def _append_violation(report: dict[str, object], *items: str) -> None:
 
 def run() -> tuple[bool, str]:
     root = repo_root()
+    evidence_required = _evidence_required()
+    production_profile_required = _production_profile_required()
     proof_env = dict(os.environ)
-    if _production_profile_required():
+    if production_profile_required:
         proof_env.setdefault("ENV", "production")
         proof_env.setdefault("APP_ENV", "production")
         proof_env.setdefault("APP_PROFILE", "api")
@@ -81,7 +83,7 @@ def run() -> tuple[bool, str]:
     report["artifact"] = "production_boot_contract"
     report["proof_kind"] = "contract_aggregation_not_process_boot"
     report["claims_real_runtime_boot"] = False
-    report["proof_required"] = _evidence_required()
+    report["proof_required"] = evidence_required
     legacy_env_keys = _legacy_env_keys_present(proof_env)
     report["legacy_env_keys_present"] = legacy_env_keys
     postgres_report = _read_artifact(root, "postgres_contract.json")
@@ -98,16 +100,19 @@ def run() -> tuple[bool, str]:
     if legacy_env_keys:
         _append_violation(report, "legacy_production_env_drift:" + ",".join(legacy_env_keys))
 
-    if _production_profile_required() and report.get("production_profile") is not True:
+    if production_profile_required and report.get("production_profile") is not True:
         _append_violation(report, "production_profile_required")
 
-    if real_boot_evidence.get("status") == "ready":
+    # A ready artifact is evidence only for an explicitly requested proof run.
+    # Advisory/non-proof invocations must not inherit a claim from a stale artifact
+    # left by an earlier staging execution in the same worktree.
+    if evidence_required and real_boot_evidence.get("status") == "ready":
         report["claims_real_runtime_boot"] = True
         report["real_runtime_boot_evidence_source"] = REAL_BOOT_EVIDENCE_NAME
-    elif _evidence_required():
+    elif evidence_required:
         _append_violation(report, "real_runtime_boot_evidence_required")
 
-    if report.get("production_profile") is True or _production_profile_required():
+    if report.get("production_profile") is True or production_profile_required:
         extra_violations: list[str] = []
         if postgres_report.get("status") != "ready":
             extra_violations.append("postgres_contract_not_ready")
@@ -117,13 +122,13 @@ def run() -> tuple[bool, str]:
             extra_violations.append("postgres_live_not_ready")
         if container_runtime.get("status") != "ready":
             extra_violations.append("container_runtime_not_ready")
-        if _evidence_required() and real_boot_evidence.get("status") != "ready":
+        if evidence_required and real_boot_evidence.get("status") != "ready":
             extra_violations.append("real_runtime_boot_evidence_not_ready")
         if extra_violations:
             _append_violation(report, *extra_violations)
 
     _write_artifact(report)
-    if report["status"] == "blocked" or (_production_profile_required() and report.get("status") != "contract_satisfied"):
+    if report["status"] == "blocked" or (production_profile_required and report.get("status") != "contract_satisfied"):
         return False, "production boot contract blocked: " + ",".join(report.get("violations") or [])
     return True, (
         "production boot contract artifact written: artifacts/ci/production_boot.json "
