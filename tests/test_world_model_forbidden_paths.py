@@ -4,8 +4,12 @@ from pathlib import Path
 
 import bootstrap.boot_phases as boot_phases
 import bootstrap.world_model_forbidden_paths as scanner
-from bootstrap.world_model_forbidden_paths import scan_repo_for_forbidden_world_model_paths
-from scripts.ci.step_architecture_bypass_scan import _world_model_source_guard
+from bootstrap.world_model_forbidden_paths import (
+    scan_repo_for_forbidden_world_model_paths,
+)
+from scripts.ci.step_architecture_bypass_scan import (
+    _world_model_source_guard,
+)
 
 
 def test_scan_repo_for_forbidden_world_model_paths(tmp_path: Path):
@@ -44,7 +48,9 @@ def test_scan_prunes_generated_trees_but_keeps_canonical_test_contracts(
 
     monkeypatch.setattr(scanner, "_scan_ast", fake_scan_ast)
 
-    findings = scanner.scan_repo_for_forbidden_world_model_paths(repo_root=tmp_path)
+    findings = scanner.scan_repo_for_forbidden_world_model_paths(
+        repo_root=tmp_path
+    )
 
     assert findings == []
     assert "runtime/source.py" in visited
