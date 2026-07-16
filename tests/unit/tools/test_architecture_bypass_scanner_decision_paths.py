@@ -6,7 +6,9 @@ from pathlib import Path
 from canon.anti_second_brain_rules import DECISION_AUTHORITY_METHODS
 from tools.architecture_bypass_scanner import (
     DECISION_BYPASS_CALLS,
+    SCAN_ROOTS,
     _scan_ast,
+    scan,
 )
 
 
@@ -21,6 +23,35 @@ def _scan_source(*, tmp_path: Path, relative: str, source: str):
 
 def test_decision_bypass_vocabulary_is_bound_to_canon() -> None:
     assert DECISION_BYPASS_CALLS is DECISION_AUTHORITY_METHODS
+
+
+def test_source_discovery_is_not_bound_to_a_root_allowlist() -> None:
+    assert SCAN_ROOTS == ()
+
+
+def test_repository_wide_scan_covers_new_product_roots_and_prunes_builds(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "repo"
+    source = root / "new_product_root" / "service.py"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text(
+        "def run(shadow_brain, state):\n"
+        "    return shadow_brain.decide(state)\n",
+        encoding="utf-8",
+    )
+    generated = root / "target" / "generated.py"
+    generated.parent.mkdir(parents=True, exist_ok=True)
+    generated.write_text(
+        "def run(shadow_brain, state):\n"
+        "    return shadow_brain.decide(state)\n",
+        encoding="utf-8",
+    )
+
+    findings = scan(root)
+
+    assert [item.path for item in findings] == ["new_product_root/service.py"]
+    assert [item.code for item in findings] == ["possible_decision_core_bypass"]
 
 
 def test_nested_self_decision_call_is_blocked(tmp_path: Path) -> None:
