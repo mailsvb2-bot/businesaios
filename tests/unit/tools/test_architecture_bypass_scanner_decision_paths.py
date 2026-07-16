@@ -158,14 +158,22 @@ def test_contextual_shadow_planner_optimizer_is_blocked(tmp_path: Path) -> None:
     assert [item.code for item in findings] == ["possible_decision_core_bypass"]
 
 
-def test_canonical_decision_owner_path_remains_allowed(tmp_path: Path) -> None:
-    findings = _scan_source(
-        tmp_path=tmp_path,
-        relative="application/decision_runtime/runner.py",
-        source=(
-            "def run(decision_core, state):\n"
-            "    return decision_core.decide(state)\n"
-        ),
-    )
-
-    assert findings == []
+def test_exact_canonical_decision_owner_paths_remain_allowed(
+    tmp_path: Path,
+) -> None:
+    for relative in (
+        "application/decision_runtime/runner.py",
+        "application/headless/decision_gateway.py",
+        "demand_decision/canonical_decision_bridge.py",
+        "runtime/decision_gateway.py",
+        "runtime/decision_path_lock.py",
+    ):
+        findings = _scan_source(
+            tmp_path=tmp_path,
+            relative=relative,
+            source=(
+                "def run(decision_core, state):\n"
+                "    return decision_core.decide(state)\n"
+            ),
+        )
+        assert findings == [], relative
