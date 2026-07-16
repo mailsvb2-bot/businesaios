@@ -136,6 +136,8 @@ def _alias_findings_for_path(
             continue
 
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            if isinstance(parents.get(node), ast.ClassDef):
+                continue
             if is_registry_reference_accessor(node, parents=parents):
                 continue
             if (
