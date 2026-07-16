@@ -215,15 +215,9 @@ def _is_possible_decision_bypass(owner: str | None, name: str | None) -> bool:
         return False
     if name in HARD_DECISION_AUTHORITY_METHODS:
         return True
-    if name not in CONTEXTUAL_DECISION_AUTHORITY_METHODS:
-        return False
-    if owner is None:
-        return True
-    if owner in {"self", "super()"}:
-        return False
-    if owner.startswith(("self.", "super().")):
+    if name in CONTEXTUAL_DECISION_AUTHORITY_METHODS:
         return _receiver_looks_like_decision_authority(owner)
-    return True
+    return False
 
 
 def _scan_text(*, root: Path, path: Path, rel: str, text: str) -> list[Finding]:
