@@ -7,6 +7,7 @@ from pathlib import Path
 
 from scripts.ci.makefile_tools import has_make_target
 from scripts.ci.paths import repo_root
+from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state
 from scripts.ci.subprocess_io import run_command, run_python
 
 CANON_VERIFY_RELEASE_ARTIFACT_AGGREGATION = True
@@ -98,6 +99,16 @@ def _run_optional_make_target(name: str) -> tuple[bool, str]:
     return True, f"make target passed: {name}"
 
 
+def _cleanup_runtime_state_before_ci_locks() -> tuple[bool, str]:
+    try:
+        removed = cleanup_ci_runtime_state()
+    except OSError as exc:
+        return False, f"pre-ci-lock runtime cleanup failed: {type(exc).__name__}"
+    if removed:
+        return True, f"pre-ci-lock runtime cleanup removed {len(removed)} mutable runtime artifact(s)"
+    return True, "pre-ci-lock runtime cleanup found no mutable DB artifacts"
+
+
 def _run_optional_project_release_script() -> tuple[bool, str]:
     root = repo_root()
 
@@ -136,6 +147,11 @@ def run() -> tuple[bool, str]:
     ok_guard, msg_guard = _run_optional_make_target("ci-guard")
     parts.append(msg_guard)
     if not ok_guard:
+        return False, "; ".join(parts)
+
+    ok_cleanup, msg_cleanup = _cleanup_runtime_state_before_ci_locks()
+    parts.append(msg_cleanup)
+    if not ok_cleanup:
         return False, "; ".join(parts)
 
     ok_locks, msg_locks = _run_optional_make_target("ci-locks")
