@@ -24,7 +24,6 @@ def test_runtime_self_check_does_not_walk_checkout_by_default(
     def fail_if_scanned(*, repo_root):
         raise AssertionError(f"runtime boot must not scan repository source: {repo_root}")
 
-    monkeypatch.delenv("WORLD_MODEL_SOURCE_SCAN_ON_BOOT", raising=False)
     monkeypatch.setattr(
         self_check,
         "scan_repo_for_forbidden_world_model_paths",
@@ -51,11 +50,11 @@ def test_explicit_runtime_source_scan_remains_fail_closed(
         "x = WorldModel(LTVModel())\n",
         encoding="utf-8",
     )
-    monkeypatch.setenv("WORLD_MODEL_SOURCE_SCAN_ON_BOOT", "1")
     monkeypatch.setenv("STRICT_WORLD_MODEL_SELF_CHECK", "1")
 
     with pytest.raises(self_check.WorldModelSelfCheckError):
         self_check.run_world_model_self_check(
             world_model=_world_model(),
             repo_root=tmp_path,
+            scan_source=True,
         )
