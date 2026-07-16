@@ -7,9 +7,11 @@ cd "$ROOT"
 export PYTHONDONTWRITEBYTECODE=1
 export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
 
-echo "[verify] python: $(python --version 2>/dev/null || true)"
+PYTHON_BIN="${PYTHON_BIN:-python}"
+
+echo "[verify] python: $($PYTHON_BIN --version 2>/dev/null || true)"
 echo "[verify] running bounded fast release gate"
-python -m scripts.ci.cli --gate fast --no-report --no-junit --no-coverage
+"$PYTHON_BIN" -m scripts.ci.cli --gate fast --no-report --no-junit --no-coverage
 
 echo "[verify] scan for artifacts"
 bad=0
