@@ -35,15 +35,32 @@ DECISION_AUTHORITY_RECEIVER_TOKENS = (
     "planner",
 )
 
-CANONICAL_DECISION_OWNER_PREFIXES = (
+CANONICAL_DECISION_OWNER_DIR_PREFIXES = (
     "core/ai/",
     "application/decision_runtime/",
-    "application/headless/decision_gateway.py",
-    "demand_decision/canonical_decision_bridge.py",
-    "runtime/decision_gateway.py",
-    "runtime/decision_path_lock.py",
     "tests/",
 )
+CANONICAL_DECISION_OWNER_FILES = frozenset(
+    {
+        "application/headless/decision_gateway.py",
+        "demand_decision/canonical_decision_bridge.py",
+        "runtime/decision_gateway.py",
+        "runtime/decision_path_lock.py",
+    }
+)
+CANONICAL_DECISION_OWNER_PREFIXES = (
+    *CANONICAL_DECISION_OWNER_DIR_PREFIXES,
+    *tuple(sorted(CANONICAL_DECISION_OWNER_FILES)),
+)
+
+
+def is_canonical_decision_owner_path(path: str) -> bool:
+    normalized = str(path).replace("\\", "/").removeprefix("./")
+    return (
+        normalized in CANONICAL_DECISION_OWNER_FILES
+        or normalized.startswith(CANONICAL_DECISION_OWNER_DIR_PREFIXES)
+    )
+
 
 FORBIDDEN_DECISION_CLASS_NAMES = frozenset(
     {
