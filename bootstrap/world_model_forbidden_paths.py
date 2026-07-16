@@ -1,14 +1,13 @@
 from __future__ import annotations
-CANON_BOOT_WIRING_ONLY = True
-CANON_BOOT_CLUSTER_FINAL_OWNER = True
-
 
 import ast
 import os
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+
+CANON_BOOT_WIRING_ONLY = True
+CANON_BOOT_CLUSTER_FINAL_OWNER = True
 
 
 @dataclass(frozen=True)
@@ -41,10 +40,9 @@ DEFAULT_EXCLUDED_BASENAMES = {
     "ltv_world_model.py",
 }
 
-# Runtime self-checks must inspect canonical source, never generated dependency,
-# build, report, cache, or mutable-state trees. Traversing Rust target output in
-# particular can contain hundreds of thousands of entries and turn a bounded
-# boot check into a multi-minute filesystem walk.
+# Runtime self-checks inspect canonical source, never dependency, build, report,
+# cache, or mutable-state trees. Rust target output can contain hundreds of
+# thousands of entries and must not turn boot into an unbounded filesystem walk.
 DEFAULT_EXCLUDED_DIRNAMES = {
     ".git",
     ".hg",
@@ -57,18 +55,21 @@ DEFAULT_EXCLUDED_DIRNAMES = {
     ".tox",
     ".venv",
     "__pycache__",
-    "_audit",
     "artifacts",
     "build",
-    "data",
     "dist",
     "htmlcov",
     "node_modules",
-    "reports",
-    "runtime_state",
     "target",
     "tests",
     "venv",
+}
+
+DEFAULT_EXCLUDED_ROOT_DIRNAMES = {
+    "_audit",
+    "data",
+    "reports",
+    "runtime_state",
 }
 
 _ALLOWED_TEST_BASENAMES = (
@@ -106,8 +107,8 @@ def _candidate_source_text(path: Path) -> str | None:
         return None
 
 
-def _scan_ast(path: Path, rel: str) -> List[dict]:
-    findings: List[dict] = []
+def _scan_ast(path: Path, rel: str) -> list[dict]:
+    findings: list[dict] = []
     text = _candidate_source_text(path)
     if text is None:
         return findings
@@ -124,8 +125,14 @@ def _scan_ast(path: Path, rel: str) -> List[dict]:
                         findings.append(
                             {
                                 "path": str(path),
-                                "pattern": "from core.economics.ltv_world_model import WorldModel",
-                                "reason": "direct import of legacy WorldModel into boot/runtime paths is forbidden",
+                                "pattern": (
+                                    "from core.economics.ltv_world_model "
+                                    "import WorldModel"
+                                ),
+                                "reason": (
+                                    "direct import of legacy WorldModel into "
+                                    "boot/runtime paths is forbidden"
+                                ),
                             }
                         )
         elif isinstance(node, ast.Call):
@@ -136,7 +143,10 @@ def _scan_ast(path: Path, rel: str) -> List[dict]:
                         {
                             "path": str(path),
                             "pattern": "WorldModel(LTVModel())",
-                            "reason": "direct legacy world model wiring bypasses canonical builder",
+                            "reason": (
+                                "direct legacy world model wiring bypasses "
+                                "canonical builder"
+                            ),
                         }
                     )
             if _keyword_value_is_worldmodel(node, "world_model"):
@@ -151,11 +161,20 @@ def _scan_ast(path: Path, rel: str) -> List[dict]:
 
 
 def _iter_scannable_paths(repo_root: Path, suffixes: tuple[str, ...]) -> Iterable[Path]:
-    for directory, dirnames, filenames in os.walk(repo_root, topdown=True, followlinks=False):
-        dirnames[:] = sorted(
-            name for name in dirnames if name not in DEFAULT_EXCLUDED_DIRNAMES
-        )
+    for directory, dirnames, filenames in os.walk(
+        repo_root,
+        topdown=True,
+        followlinks=False,
+    ):
         base = Path(directory)
+        relative_dir = base.relative_to(repo_root)
+        at_repo_root = not relative_dir.parts
+        dirnames[:] = sorted(
+            name
+            for name in dirnames
+            if name not in DEFAULT_EXCLUDED_DIRNAMES
+            and not (at_repo_root and name in DEFAULT_EXCLUDED_ROOT_DIRNAMES)
+        )
         for filename in sorted(filenames):
             path = base / filename
             if path.suffix not in suffixes:
@@ -175,9 +194,9 @@ def scan_repo_for_forbidden_world_model_paths(
     *,
     repo_root: str | Path,
     include_suffixes: Iterable[str] = (".py",),
-) -> List[dict]:
+) -> list[dict]:
     root = Path(repo_root)
-    findings: List[dict] = []
+    findings: list[dict] = []
     suffixes = tuple(include_suffixes)
 
     for path in _iter_scannable_paths(root, suffixes):
