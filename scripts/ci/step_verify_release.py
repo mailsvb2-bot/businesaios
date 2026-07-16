@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -83,11 +84,15 @@ def _aggregate_required_proof_artifacts() -> tuple[bool, str]:
     return True, "verify release proof artifacts ready: artifacts/ci/verify_release.json"
 
 
+def _canonical_python_env() -> dict[str, str]:
+    return {"PYTHON_BIN": sys.executable}
+
+
 def _run_optional_make_target(name: str) -> tuple[bool, str]:
     if not has_make_target(name):
         return True, f"make target absent; skipped by contract: {name}"
 
-    outcome = run_command(["make", name])
+    outcome = run_command(["make", name], env=_canonical_python_env())
     if outcome.returncode != 0:
         return False, f"make target failed: {name}"
     return True, f"make target passed: {name}"
@@ -98,7 +103,10 @@ def _run_optional_project_release_script() -> tuple[bool, str]:
 
     verify_release = root / "scripts" / "verify_release.sh"
     if verify_release.exists():
-        outcome = run_command(["bash", str(verify_release)])
+        outcome = run_command(
+            ["bash", str(verify_release)],
+            env=_canonical_python_env(),
+        )
         if outcome.returncode != 0:
             return False, "verify_release.sh failed"
         return True, "verify_release.sh passed"
@@ -111,7 +119,10 @@ def _run_optional_project_release_script() -> tuple[bool, str]:
         return True, "package_release.py passed"
 
     if has_make_target("regen-manifest"):
-        outcome = run_command(["make", "regen-manifest"])
+        outcome = run_command(
+            ["make", "regen-manifest"],
+            env=_canonical_python_env(),
+        )
         if outcome.returncode != 0:
             return False, "make regen-manifest failed"
         return True, "make regen-manifest passed"
