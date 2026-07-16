@@ -147,7 +147,9 @@ def _iter_python_files(root: Path) -> Iterable[Path]:
         followlinks=False,
     ):
         base = Path(directory)
-        dirnames[:] = sorted(name for name in dirnames if name not in EXCLUDED_DIRS)
+        dirnames[:] = sorted(
+            name for name in dirnames if name not in EXCLUDED_DIRS
+        )
         for filename in sorted(filenames):
             if not filename.endswith(".py"):
                 continue
@@ -166,7 +168,9 @@ def _is_test_or_script(rel: str) -> bool:
 
 
 def _is_approved_raw_effect(rel: str) -> bool:
-    return rel.startswith(APPROVED_RAW_EFFECT_PREFIXES) or _is_test_or_script(rel)
+    return rel.startswith(
+        APPROVED_RAW_EFFECT_PREFIXES
+    ) or _is_test_or_script(rel)
 
 
 def _is_approved_decision_owner(rel: str) -> bool:
@@ -204,15 +208,22 @@ def _root_owner(owner: str | None) -> str | None:
 
 
 def _normalized_receiver(owner: str | None) -> str:
-    return "".join(ch for ch in str(owner or "").casefold() if ch.isalnum())
+    return "".join(
+        ch for ch in str(owner or "").casefold() if ch.isalnum()
+    )
 
 
 def _receiver_looks_like_decision_authority(owner: str | None) -> bool:
     normalized = _normalized_receiver(owner)
-    return any(token in normalized for token in DECISION_AUTHORITY_RECEIVER_TOKENS)
+    return any(
+        token in normalized for token in DECISION_AUTHORITY_RECEIVER_TOKENS
+    )
 
 
-def _is_possible_decision_bypass(owner: str | None, name: str | None) -> bool:
+def _is_possible_decision_bypass(
+    owner: str | None,
+    name: str | None,
+) -> bool:
     if name not in DECISION_BYPASS_CALLS:
         return False
     if name in HARD_DECISION_AUTHORITY_METHODS:
@@ -222,7 +233,13 @@ def _is_possible_decision_bypass(owner: str | None, name: str | None) -> bool:
     return False
 
 
-def _scan_text(*, root: Path, path: Path, rel: str, text: str) -> list[Finding]:
+def _scan_text(
+    *,
+    root: Path,
+    path: Path,
+    rel: str,
+    text: str,
+) -> list[Finding]:
     del root, path
     findings: list[Finding] = []
     if _is_test_or_script(rel):
@@ -250,7 +267,13 @@ def _scan_text(*, root: Path, path: Path, rel: str, text: str) -> list[Finding]:
     return findings
 
 
-def _scan_ast(*, root: Path, path: Path, rel: str, tree: ast.AST) -> list[Finding]:
+def _scan_ast(
+    *,
+    root: Path,
+    path: Path,
+    rel: str,
+    tree: ast.AST,
+) -> list[Finding]:
     del root, path
     findings: list[Finding] = []
     for node in ast.walk(tree):
@@ -290,14 +313,17 @@ def _scan_ast(*, root: Path, path: Path, rel: str, tree: ast.AST) -> list[Findin
                     detail="__import__() outside approved loader/registry surface",
                 )
             )
-        if _is_possible_decision_bypass(owner, name) and not _is_approved_decision_owner(rel):
+        decision_bypass = _is_possible_decision_bypass(owner, name)
+        if decision_bypass and not _is_approved_decision_owner(rel):
             target = f"{owner}.{name}" if owner else str(name)
             findings.append(
                 Finding(
                     code="possible_decision_core_bypass",
                     path=rel,
                     line=line,
-                    detail=f"{target}() outside DecisionCore/gateway owner path",
+                    detail=(
+                        f"{target}() outside DecisionCore/gateway owner path"
+                    ),
                 )
             )
         if (
@@ -334,7 +360,9 @@ def scan(root: Path | None = None) -> tuple[Finding, ...]:
                 )
             )
             continue
-        findings.extend(_scan_text(root=repo, path=path, rel=rel, text=text))
+        findings.extend(
+            _scan_text(root=repo, path=path, rel=rel, text=text)
+        )
         try:
             tree = ast.parse(text, filename=rel)
         except SyntaxError as exc:
@@ -347,8 +375,12 @@ def scan(root: Path | None = None) -> tuple[Finding, ...]:
                 )
             )
             continue
-        findings.extend(_scan_ast(root=repo, path=path, rel=rel, tree=tree))
-    return tuple(sorted(findings, key=lambda item: (item.path, item.line, item.code)))
+        findings.extend(
+            _scan_ast(root=repo, path=path, rel=rel, tree=tree)
+        )
+    return tuple(
+        sorted(findings, key=lambda item: (item.path, item.line, item.code))
+    )
 
 
 def main() -> int:
