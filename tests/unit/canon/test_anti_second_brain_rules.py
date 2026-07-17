@@ -85,9 +85,11 @@ def test_only_file_exact_production_paths_own_decision_authority() -> None:
         "application/headless/decision_gateway.py"
         in CANONICAL_DECISION_OWNER_PREFIXES
     )
+    assert "runtime/decision_gateway.py" in CANONICAL_DECISION_OWNER_PREFIXES
+    assert "runtime/decision_path_lock.py" in CANONICAL_DECISION_OWNER_PREFIXES
     assert (
         "demand_decision/canonical_decision_bridge.py"
-        in CANONICAL_DECISION_OWNER_PREFIXES
+        not in CANONICAL_DECISION_OWNER_PREFIXES
     )
     assert "core/ai/" not in CANONICAL_DECISION_OWNER_PREFIXES
     assert "application/decision_runtime/" not in CANONICAL_DECISION_OWNER_PREFIXES
@@ -104,6 +106,7 @@ def test_exact_gateway_exceptions_retain_single_path_markers() -> None:
         "runtime/decision_gateway.py": {
             "CANON_RUNTIME_DECISION_GATEWAY_SINGLE_PATH",
             "CANON_RUNTIME_DECISION_GATEWAY_NO_RAW_DECISION_LOGIC",
+            "CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON",
         },
         "runtime/decision_path_lock.py": {
             "CANON_DECISION_PATH_LOCK_SINGLE_OWNER",
@@ -113,6 +116,28 @@ def test_exact_gateway_exceptions_retain_single_path_markers() -> None:
 
     for relative, required in expected.items():
         assert required <= _true_markers(_tree(relative)), relative
+
+
+def test_demand_bridge_routes_structured_issue_through_gateway() -> None:
+    tree = _tree("demand_decision/canonical_decision_bridge.py")
+    bridge = _class(tree, "CanonicalDemandDecisionBridge")
+    issue_decision = _function(bridge.body, "_issue_decision")
+
+    assert len(issue_decision.body) == 1
+    statement = issue_decision.body[0]
+    assert isinstance(statement, ast.Return)
+    assert isinstance(statement.value, ast.Call)
+    assert isinstance(statement.value.func, ast.Name)
+    assert statement.value.func.id == "issue_structured_decision"
+
+    forbidden_calls = [
+        node
+        for node in ast.walk(issue_decision)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"issue", "decide", "optimize"}
+    ]
+    assert forbidden_calls == []
 
 
 def test_demand_bridge_decide_alias_is_forward_only() -> None:
