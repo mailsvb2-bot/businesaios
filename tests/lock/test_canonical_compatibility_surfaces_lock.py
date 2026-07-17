@@ -12,6 +12,7 @@ from application.planning.long_horizon_planner import (
 from application.planning.strategy_memory import (
     StrategyMemoryService as CanonicalStrategyMemoryService,
 )
+from core.ai import reset_decision_core_singleton, set_decision_core_singleton
 from core.strategic_horizon import constants, engine
 from execution.long_horizon_planner import LongHorizonPlanner
 from execution.strategy_memory import StrategyMemoryService
@@ -22,11 +23,22 @@ from runtime._internal.effects_domains import (
 )
 from runtime.decision_gateway import (
     DecisionGatewayContractError,
+    RuntimeDecisionRouteGateway,
     issue_structured_decision,
     optimize_runtime_decision,
+    validate_runtime_decision_issuer,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture(autouse=True)
+def _isolated_decision_core_singleton():
+    reset_decision_core_singleton()
+    try:
+        yield
+    finally:
+        reset_decision_core_singleton()
 
 
 def test_planning_compatibility_surfaces_are_identity_aliases() -> None:
@@ -78,17 +90,62 @@ def test_platform_control_center_tests_have_unique_basenames() -> None:
     )
 
 
-def test_optimize_gateway_enforces_exact_method() -> None:
+def test_gateway_rejects_an_unregistered_decision_issuer() -> None:
+    class Issuer:
+        def issue(self, state):
+            return state
+
+    registered = Issuer()
+    set_decision_core_singleton(registered)
+    validate_runtime_decision_issuer(registered)
+
+    with pytest.raises(
+        DecisionGatewayContractError,
+        match="noncanonical_decision_issuer",
+    ):
+        validate_runtime_decision_issuer(Issuer())
+
+
+def test_route_gateway_rejects_an_arbitrary_callable() -> None:
+    gateway = RuntimeDecisionRouteGateway(
+        decision_input_service=SimpleNamespace(),
+        enrichment_service=SimpleNamespace(),
+        observability=SimpleNamespace(),
+    )
+    packet = SimpleNamespace(
+        recommendation_packet=SimpleNamespace(
+            world_state=SimpleNamespace(generated_at_ms=0)
+        )
+    )
+
+    with pytest.raises(
+        DecisionGatewayContractError,
+        match="noncanonical_decision_callable",
+    ):
+        gateway.route(
+            packet=packet,
+            canonical_context={},
+            decision_core_callable=lambda state: state,
+        )
+
+
+def test_optimize_gateway_enforces_singleton_identity_and_exact_method() -> None:
     marker = object()
 
     class Optimizer:
+        def issue(self, state):
+            return state
+
         def optimize(self, state):
             assert state == "state"
             return marker
 
+    optimizer = Optimizer()
+    set_decision_core_singleton(optimizer)
+
     assert (
         optimize_runtime_decision(
-            issuer=Optimizer(),
+            issuer=optimizer,
             state="state",
         )
         is marker
@@ -99,23 +156,35 @@ def test_optimize_gateway_enforces_exact_method() -> None:
         match="noncanonical",
     ):
         optimize_runtime_decision(
-            issuer=Optimizer(),
+            issuer=optimizer,
             state="state",
             method_name="decide",
         )
 
+    with pytest.raises(
+        DecisionGatewayContractError,
+        match="noncanonical_decision_issuer",
+    ):
+        optimize_runtime_decision(
+            issuer=Optimizer(),
+            state="state",
+        )
 
-def test_structured_gateway_preserves_argument_contract() -> None:
+
+def test_structured_gateway_preserves_arguments_only_for_the_singleton() -> None:
     captured = SimpleNamespace(args=None)
 
     class Issuer:
-        def issue(self, space, constraints, request):
-            captured.args = (space, constraints, request)
+        def issue(self, *args):
+            captured.args = args
             return "result"
+
+    issuer = Issuer()
+    set_decision_core_singleton(issuer)
 
     assert (
         issue_structured_decision(
-            issuer=Issuer(),
+            issuer=issuer,
             decision_space="space",
             constraints="constraints",
             request="request",
@@ -123,3 +192,14 @@ def test_structured_gateway_preserves_argument_contract() -> None:
         == "result"
     )
     assert captured.args == ("space", "constraints", "request")
+
+    with pytest.raises(
+        DecisionGatewayContractError,
+        match="noncanonical_decision_issuer",
+    ):
+        issue_structured_decision(
+            issuer=Issuer(),
+            decision_space="space",
+            constraints="constraints",
+            request="request",
+        )
