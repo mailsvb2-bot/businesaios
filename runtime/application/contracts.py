@@ -32,11 +32,6 @@ class RuntimeDecisionExecutionPort(Protocol):
     def execute(self, envelope: object) -> object: ...
 
 
-# Historical exported name. It now denotes the execution-only protocol and does
-# not grant issue/decide authority.
-RuntimeDecisionCorePort = RuntimeDecisionExecutionPort
-
-
 @dataclass(frozen=True)
 class ReadOnlyRuntimeRegistry:
     _registry: RuntimeRegistry
@@ -98,11 +93,6 @@ class RuntimeTypedAccess:
         return self.registry.get(
             RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE
         )
-
-    def decision_core(self) -> object:
-        """Historical lookup alias for the execution service only."""
-
-        return self.decision_execution()
 
 
 @dataclass(frozen=True)
@@ -190,7 +180,6 @@ __all__ = [
     "ObservabilityPort",
     "ReadOnlyRuntimeRegistry",
     "RuntimeCapabilityAccess",
-    "RuntimeDecisionCorePort",
     "RuntimeDecisionExecutionPort",
     "RuntimeServiceExports",
     "RuntimeTypedAccess",
