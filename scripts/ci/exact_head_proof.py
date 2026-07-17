@@ -180,6 +180,20 @@ def _gate_smoke_root(
     return smoke_parent / f"{index:02d}-{safe_gate}"
 
 
+def _proof_base_env(*, target_base: str) -> dict[str, str]:
+    """Return a clean proof environment shared by non-gate commands.
+
+    A hosted workflow may already define ``BAIOS_BOOT_SMOKE_ROOT`` for its own
+    outer gate. Exact-head proof creates a separate root per nested gate, so the
+    inherited value must never leak into dependency-lock or another gate.
+    """
+
+    env = dict(os.environ)
+    env.pop("BAIOS_BOOT_SMOKE_ROOT", None)
+    env["TARGETED_CI_BASE"] = target_base
+    return env
+
+
 def run_exact_head_proof(
     *,
     repo: Path,
@@ -213,8 +227,7 @@ def run_exact_head_proof(
     target_base_sha = resolve_target_base_sha(root, target_base)
     started_at = _utc_now()
     commands: list[CommandResult] = []
-    base_env = dict(os.environ)
-    base_env["TARGETED_CI_BASE"] = target_base
+    base_env = _proof_base_env(target_base=target_base)
 
     smoke_parent = Path(
         tempfile.mkdtemp(prefix=f"businesaios-proof-{head_sha[:12]}-")
