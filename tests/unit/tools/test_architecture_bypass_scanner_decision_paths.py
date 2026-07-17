@@ -307,8 +307,6 @@ def test_exact_canonical_decision_owner_paths_remain_allowed(
 ) -> None:
     for relative in (
         "core/ai/decision_core.py",
-        "application/headless/decision_gateway.py",
-        "demand_decision/canonical_decision_bridge.py",
         "runtime/decision_gateway.py",
         "runtime/decision_path_lock.py",
     ):
@@ -321,6 +319,26 @@ def test_exact_canonical_decision_owner_paths_remain_allowed(
             ),
         )
         assert findings == [], relative
+
+
+def test_compatibility_gateways_must_delegate_instead_of_deciding(
+    tmp_path: Path,
+) -> None:
+    for relative in (
+        "application/headless/decision_gateway.py",
+        "demand_decision/canonical_decision_bridge.py",
+    ):
+        findings = _scan_source(
+            tmp_path=tmp_path,
+            relative=relative,
+            source=(
+                "def run(decision_core, state):\n"
+                "    return decision_core.decide(state)\n"
+            ),
+        )
+        assert [item.code for item in findings] == [
+            "possible_decision_core_bypass"
+        ], relative
 
 
 def test_new_core_ai_module_is_not_a_decision_owner(tmp_path: Path) -> None:
