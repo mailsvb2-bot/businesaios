@@ -61,8 +61,8 @@ def require_decision_core_singleton(core: Any | None = None) -> Any:
     return registered
 
 
-def reset_decision_core_singleton() -> None:
-    """Testing/process-teardown hook; production boot never swaps the owner."""
+def _reset_decision_core_singleton_for_tests() -> None:
+    """Private isolation hook; repository locks forbid production callers."""
 
     global _DECISION_CORE_SINGLETON
     _DECISION_CORE_SINGLETON = None
@@ -78,5 +78,4 @@ __all__ = [
     "set_decision_core_singleton",
     "get_decision_core_singleton",
     "require_decision_core_singleton",
-    "reset_decision_core_singleton",
 ]
