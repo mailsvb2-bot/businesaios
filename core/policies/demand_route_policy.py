@@ -22,12 +22,18 @@ from shared.numbers import coerce_float
 CANON_DEMAND_ROUTE_POLICY = True
 
 
+def _candidate_business_id(raw: dict[str, Any]) -> str:
+    payload = raw.get("payload")
+    payload_map = dict(payload) if isinstance(payload, dict) else {}
+    return str(raw.get("business_id") or payload_map.get("business_id") or "").strip()
+
+
 def _candidate_from_mapping(
     raw: dict[str, Any],
     *,
     request_id: str,
 ) -> DecisionCandidate:
-    business_id = str(raw.get("business_id") or "").strip()
+    business_id = _candidate_business_id(raw)
     return DecisionCandidate(
         action_type="route_lead",
         channel=str(raw.get("channel") or "").strip(),
@@ -67,6 +73,9 @@ class DemandRoutePolicyV1:
     def propose(self, state: WorldStateV1) -> ProposedAction:
         route = _route_input(state)
         request_id = str(route.get("request_id") or "").strip()
+        if not request_id:
+            raise ValueError("demand route requires request_id")
+
         raw_constraints = route.get("constraints")
         constraints = DecisionConstraints(
             **(
@@ -87,8 +96,19 @@ class DemandRoutePolicyV1:
                     {"candidate_id": "", "reason": "candidate_not_object"}
                 )
                 continue
+            raw_candidate = dict(item)
+            if not _candidate_business_id(raw_candidate):
+                rejected.append(
+                    {
+                        "candidate_id": str(
+                            raw_candidate.get("candidate_id") or ""
+                        ).strip(),
+                        "reason": "business_id_required",
+                    }
+                )
+                continue
             candidate = _candidate_from_mapping(
-                dict(item),
+                raw_candidate,
                 request_id=request_id,
             )
             validation_issues = candidate.validate()
@@ -126,7 +146,6 @@ class DemandRoutePolicyV1:
             "runner_up_business_ids": [],
             "rejections": rejected,
         }
-
         if selected is None:
             payload["manual_review_reason"] = str(
                 route.get("manual_review_reason")
