@@ -77,6 +77,14 @@ APPROVED_DYNAMIC_IMPORT_FILES = {
 }
 SAFE_STDLIB_DYNAMIC_IMPORTS = frozenset({"datetime", "sqlite3"})
 APPROVED_SYSTEM_EXIT_FILES = {"scripts/ci/cli.py"}
+APPROVED_NON_AUTHORITY_DECISION_REFERENCES = frozenset(
+    {
+        (
+            "runtime/execution/governance_runtime.py",
+            "workflow.decide",
+        ),
+    }
+)
 TEXT_DENY_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "unsafe_shell_true",
@@ -285,6 +293,19 @@ def _looks_like_http_request_call(
     )
 
 
+def _is_approved_non_authority_decision_finding(
+    *,
+    rel: str,
+    detail: str,
+) -> bool:
+    for approved_rel, approved_expression in (
+        APPROVED_NON_AUTHORITY_DECISION_REFERENCES
+    ):
+        if rel == approved_rel and detail.startswith(approved_expression):
+            return True
+    return False
+
+
 def _scan_text(
     *,
     root: Path,
@@ -330,6 +351,10 @@ def _delegated_decision_findings(
             detail=item.detail,
         )
         for item in _scan_decision_authority_ast(rel=rel, tree=tree)
+        if not _is_approved_non_authority_decision_finding(
+            rel=rel,
+            detail=item.detail,
+        )
     ]
 
 
