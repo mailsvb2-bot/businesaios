@@ -10,8 +10,8 @@ from application.headless.decision_gateway import (
     resolve_headless_decision_callable,
 )
 from core.ai import (
+    _reset_decision_core_singleton_for_tests,
     get_decision_core_singleton,
-    reset_decision_core_singleton,
     set_decision_core_singleton,
 )
 from runtime.decision_gateway import (
@@ -26,11 +26,11 @@ from runtime.decision_path_lock import (
 
 @pytest.fixture(autouse=True)
 def _isolated_singleton():
-    reset_decision_core_singleton()
+    _reset_decision_core_singleton_for_tests()
     try:
         yield
     finally:
-        reset_decision_core_singleton()
+        _reset_decision_core_singleton_for_tests()
 
 
 def _envelope(decision_id: str = "decision-1") -> SimpleNamespace:
