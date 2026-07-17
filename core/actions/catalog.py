@@ -46,6 +46,7 @@ def _demand_route_entry() -> CatalogEntry:
         version=1,
         schema=DecisionSchema(
             required={
+                "idempotency_key",
                 "request_id",
                 "requires_manual_review",
                 "candidate_count",
@@ -62,6 +63,7 @@ def _demand_route_entry() -> CatalogEntry:
                 "manual_review_reason",
             },
             field_types={
+                "idempotency_key": str,
                 "request_id": str,
                 "requires_manual_review": bool,
                 "candidate_count": int,
