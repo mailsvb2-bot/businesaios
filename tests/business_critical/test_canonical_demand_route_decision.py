@@ -103,24 +103,29 @@ def test_policy_selects_the_best_valid_candidate_inside_decision_core() -> None:
 
 
 def test_policy_rejects_unsafe_candidates_and_fails_to_manual_review() -> None:
-    output = DemandRoutePolicyV1().propose(
-        _state(
-            _candidate(
-                "low-confidence",
-                score=0.9,
-                confidence=0.0,
-            ),
-            _candidate(
-                "high-risk",
-                score=1.0,
-                risk_score=1.0,
-            ),
-        )
+    state = _state(
+        _candidate(
+            "low-confidence",
+            score=0.9,
+            confidence=0.0,
+        ),
+        _candidate(
+            "high-risk",
+            score=1.0,
+            risk_score=1.0,
+        ),
     )
+    state.meta["demand_route"]["manual_review_reason"] = (
+        "decision_core_rejected_all_candidates"
+    )
+    output = DemandRoutePolicyV1().propose(state)
 
     assert output.action == ACTION_ROUTE_LEAD_V1
     assert output.payload["requires_manual_review"] is True
-    assert output.payload["manual_review_reason"] == "no_safe_candidates"
+    assert (
+        output.payload["manual_review_reason"]
+        == "decision_core_rejected_all_candidates"
+    )
     assert output.payload["candidate_count"] == 2
     assert output.payload["eligible_candidate_count"] == 0
     assert {
