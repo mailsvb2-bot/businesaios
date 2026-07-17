@@ -79,9 +79,10 @@ class _SnapshotEnvelopeCore:
         }
         decision_id = "snapshot-reject"
         if selected is None:
-            payload["manual_review_reason"] = str(
-                route.get("manual_review_reason")
-                or "decision_core_rejected_all_candidates"
+            # Preserve the historical public snapshot exactly. The former fake
+            # selector returned no candidate, and the bridge exposed this reason.
+            payload["manual_review_reason"] = (
+                "decision_core_rejected_all_candidates"
             )
         else:
             selected_business_id = str(
