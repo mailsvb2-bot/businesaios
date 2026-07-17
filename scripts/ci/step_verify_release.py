@@ -21,6 +21,7 @@ _REQUIRED_PROOF_ARTIFACTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("staging_runtime_proof.json", ("ready",)),
     ("production_boot.json", ("contract_satisfied",)),
 )
+_COMMAND_FAILURE_ARTIFACT = "verify_release_command_failure.json"
 
 
 def _artifact_path(name: str) -> Path:
@@ -59,6 +60,10 @@ def _write_verify_artifact(payload: dict[str, object]) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def _clear_command_failure_artifact() -> None:
+    _artifact_path(_COMMAND_FAILURE_ARTIFACT).unlink(missing_ok=True)
+
+
 def _diagnostic_tail(value: str, *, limit: int = 12_000) -> str:
     normalized = "\n".join(line.rstrip() for line in value.splitlines()).strip()
     if len(normalized) <= limit:
@@ -72,7 +77,7 @@ def _write_command_failure_artifact(
     command: Sequence[str],
     outcome: CommandOutcome,
 ) -> Path:
-    path = _artifact_path("verify_release_command_failure.json")
+    path = _artifact_path(_COMMAND_FAILURE_ARTIFACT)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "artifact": "verify_release_command_failure",
@@ -214,6 +219,7 @@ def _run_optional_project_release_script() -> tuple[bool, str]:
 
 
 def run() -> tuple[bool, str]:
+    _clear_command_failure_artifact()
     parts: list[str] = []
 
     ok_guard, msg_guard = _run_optional_make_target("ci-guard")

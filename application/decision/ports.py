@@ -1,8 +1,8 @@
 """Canonical protocols for the decision application surface.
 
 Recommendation services have no execution authority. The only execution port
-accepted here is compatible with ``RuntimeExecutor.execute(envelope)`` and
-therefore cannot expose a combined ``decide_and_execute`` shortcut.
+accepted here is compatible with ``RuntimeExecutor.execute(envelope)``;
+decision issuance and execution remain separate capabilities.
 """
 
 from __future__ import annotations

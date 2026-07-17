@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   pull_request:
 
 permissions:
@@ -14,6 +16,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PYTHON_BASE_IMAGE_SOURCE: python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
+  PYTHON_BASE_IMAGE_LOCAL: businesaios/python-runtime-base:3.12-slim
+
 jobs:
   release-proof:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -21,7 +27,7 @@ jobs:
     timeout-minutes: 180
     services:
       postgres:
-        image: postgres:16
+        image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -90,18 +96,19 @@ jobs:
       - name: Install cargo-audit for deep supply-chain proof
         run: |
           set -Eeuo pipefail
+          mkdir -p artifacts/ci
           cd /tmp
           cargo install cargo-audit --locked
-          cargo audit --version
+          cargo audit --version | tee "$GITHUB_WORKSPACE/artifacts/ci/cargo_audit_version.txt"
 
       - name: Prepare vetted local Python base image
         run: |
           set -Eeuo pipefail
           mkdir -p artifacts/ci
-          docker pull python:3.12-slim
-          docker tag python:3.12-slim businesaios/python-runtime-base:3.12-slim
-          docker image inspect python:3.12-slim > artifacts/ci/python_base_image_inspect.json
-          docker image inspect businesaios/python-runtime-base:3.12-slim >/dev/null
+          docker pull "$PYTHON_BASE_IMAGE_SOURCE"
+          docker tag "$PYTHON_BASE_IMAGE_SOURCE" "$PYTHON_BASE_IMAGE_LOCAL"
+          docker image inspect "$PYTHON_BASE_IMAGE_SOURCE" > artifacts/ci/python_base_image_inspect.json
+          docker image inspect "$PYTHON_BASE_IMAGE_LOCAL" >/dev/null
 
       - name: Run real ephemeral staging proof
         env:
@@ -109,6 +116,7 @@ jobs:
           GIT_COMMIT_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           BAIOS_STAGING_PROOF_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
           BAIOS_STAGING_TIMEOUT_SECONDS: "240"
+          BAIOS_PYTHON_BASE_IMAGE: ${{ env.PYTHON_BASE_IMAGE_LOCAL }}
         run: |
           set -Eeuo pipefail
           bash scripts/staging/run_staging_runtime_proof.sh

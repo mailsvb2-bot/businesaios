@@ -41,7 +41,7 @@ REQUIRED = [
     ".github/workflows/ci-doctor.yml",
     ".github/workflows/ci-fast.yml",
     ".github/workflows/ci-full.yml",
-    ".github/workflows/release.yml",
+    ".github/workflows/deep-release-validation.yml",
     ".github/workflows/docker-image.yml",
     "docs/CI_CD_CANON_V7_PROJECT.md",
     "pytest.ini",

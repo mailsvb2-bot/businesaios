@@ -32,5 +32,15 @@ def test_deep_release_workflow_uses_canonical_gates_and_real_probes() -> None:
     assert "run_staging_runtime_proof.sh" in text
     assert "--gate staging-runtime" in text
     assert "--gate release" in text
-    assert "docker pull python:3.12-slim" in text
+    assert "python:3.12-slim@sha256:" in text
+    assert "postgres:16@sha256:" in text
     assert "POSTGRES_BACKUP_EVIDENCE_OK=1" not in text
+
+
+def test_deep_release_workflow_is_the_single_tag_release_owner() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "tags:" in text
+    assert "- 'v*'" in text
+    assert not (ROOT / ".github/workflows/release.yml").exists()
+    assert not (ROOT / ".github/workflows/release-gates.yml").exists()

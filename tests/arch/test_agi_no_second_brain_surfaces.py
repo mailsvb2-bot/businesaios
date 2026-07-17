@@ -52,14 +52,16 @@ def test_recommendation_service_cannot_restore_decision_authority() -> None:
     assert "ExecutableAction" not in contract
 
 
-def test_application_dispatcher_cannot_decide_and_execute() -> None:
-    dispatcher = Path(
-        "application/decision/action_dispatcher.py"
-    ).read_text(encoding="utf-8")
-    ports = Path("application/decision/ports.py").read_text(
-        encoding="utf-8"
+def test_application_dispatcher_remains_execution_only() -> None:
+    dispatcher_methods = _class_methods(
+        "application/decision/action_dispatcher.py",
+        "ActionDispatcher",
+    )
+    port_methods = _class_methods(
+        "application/decision/ports.py",
+        "DecisionExecutionPortProtocol",
     )
 
-    assert "decide_and_execute" not in dispatcher
-    assert "decide_and_execute" not in ports
-    assert "execute(envelope)" in ports
+    assert dispatcher_methods == {"dispatch"}
+    assert port_methods == {"execute"}
+    assert "decide_and_execute" not in dispatcher_methods | port_methods
