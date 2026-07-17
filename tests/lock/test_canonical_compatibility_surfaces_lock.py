@@ -12,7 +12,10 @@ from application.planning.long_horizon_planner import (
 from application.planning.strategy_memory import (
     StrategyMemoryService as CanonicalStrategyMemoryService,
 )
-from core.ai import reset_decision_core_singleton, set_decision_core_singleton
+from core.ai import (
+    _reset_decision_core_singleton_for_tests,
+    set_decision_core_singleton,
+)
 from core.strategic_horizon import constants, engine
 from execution.long_horizon_planner import LongHorizonPlanner
 from execution.strategy_memory import StrategyMemoryService
@@ -34,11 +37,11 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture(autouse=True)
 def _isolated_decision_core_singleton():
-    reset_decision_core_singleton()
+    _reset_decision_core_singleton_for_tests()
     try:
         yield
     finally:
-        reset_decision_core_singleton()
+        _reset_decision_core_singleton_for_tests()
 
 
 def test_planning_compatibility_surfaces_are_identity_aliases() -> None:
