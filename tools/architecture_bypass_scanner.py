@@ -75,6 +75,7 @@ APPROVED_DYNAMIC_IMPORT_FILES = {
     "application/decision_state/__init__.py",
     "observability/__init__.py",
 }
+SAFE_STDLIB_DYNAMIC_IMPORTS = frozenset({"datetime", "sqlite3"})
 APPROVED_SYSTEM_EXIT_FILES = {"scripts/ci/cli.py"}
 TEXT_DENY_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
@@ -250,6 +251,18 @@ def _false_keyword(call: ast.Call, name: str) -> bool:
     return False
 
 
+def _static_dynamic_import_module(call: ast.Call) -> str | None:
+    if not call.args:
+        return None
+    first = call.args[0]
+    if not isinstance(first, ast.Constant) or not isinstance(
+        first.value,
+        str,
+    ):
+        return None
+    return first.value.strip()
+
+
 def _looks_like_http_request_call(
     *,
     owner: str | None,
@@ -386,6 +399,8 @@ def _scan_ast(
             and name == "__import__"
             and rel not in APPROVED_DYNAMIC_IMPORT_FILES
             and not _is_test_or_script(rel)
+            and _static_dynamic_import_module(node)
+            not in SAFE_STDLIB_DYNAMIC_IMPORTS
         ):
             findings.append(
                 Finding(
