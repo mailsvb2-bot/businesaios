@@ -26,7 +26,7 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("autopilot_run_started@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
     ("autopilot_started@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
     ("pricing_select@v1", "runtime.handlers.pricing_select:handle_pricing_select", True, "general", 60, 30),
-    (ACTION_ROUTE_LEAD_V1, "runtime.handlers.demand_route:handle_route_lead", False, "none", 999999, 999999),
+    (ACTION_ROUTE_LEAD_V1, "runtime.handlers.demand_route:handle_route_lead", True, "general", 120, 60),
     ("reward_observe@v1", "runtime.handlers.reward_observe:handle_reward_observe", True, "ads", 120, 60),
     ("growth_propose@v1", "runtime.handlers.growth_propose:handle_growth_propose", True, "llm", 30, 15),
     ("answer_callback@v1", "runtime.handlers_ops:handle_answer_callback", True, "general", 120, 60),
