@@ -1,21 +1,31 @@
-"""Canonical core-owned protocol names for the decision application surface.
+"""Canonical protocols for the decision application surface.
 
-The runtime package keeps a physical compatibility file for regression gates,
-while the actual import identity stays anchored here to avoid split-brain API
-ownership between core and runtime.
+Recommendation services have no execution authority. The only execution port
+accepted here is compatible with ``RuntimeExecutor.execute(envelope)`` and
+therefore cannot expose a combined ``decide_and_execute`` shortcut.
 """
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol, runtime_checkable
 
-DecisionExecutionPortProtocol = type("DecisionExecutionPortProtocol", (Protocol,), {})
-ObservabilityPortProtocol = type("ObservabilityPortProtocol", (Protocol,), {})
+
+@runtime_checkable
+class DecisionExecutionPortProtocol(Protocol):
+    def execute(self, envelope: object) -> Any: ...
+
+
+@runtime_checkable
+class ObservabilityPortProtocol(Protocol):
+    def audit_events(self) -> tuple[str, ...]: ...
+
 
 CANON_CORE_DECISION_APPLICATION_PORTS = True
+CANON_DECISION_EXECUTION_PORT_ENVELOPE_ONLY = True
 
 __all__ = [
     "CANON_CORE_DECISION_APPLICATION_PORTS",
+    "CANON_DECISION_EXECUTION_PORT_ENVELOPE_ONLY",
     "DecisionExecutionPortProtocol",
     "ObservabilityPortProtocol",
 ]
