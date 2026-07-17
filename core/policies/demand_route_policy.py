@@ -12,6 +12,7 @@ from typing import Any
 
 from core.actions.names import ACTION_ROUTE_LEAD_V1
 from core.constraints.decision import DecisionConstraints
+from core.policies.telegram.helpers import ProposedAction
 from core.policy.decision_validator import DecisionValidator
 from core.scorers.selector import DecisionSelector
 from kernel.decision_candidate import DecisionCandidate
@@ -63,7 +64,7 @@ def _route_input(state: WorldStateV1) -> dict[str, Any]:
 class DemandRoutePolicyV1:
     id: str = "demand_route@v1"
 
-    def propose(self, state: WorldStateV1):
+    def propose(self, state: WorldStateV1) -> ProposedAction:
         route = _route_input(state)
         request_id = str(route.get("request_id") or "").strip()
         raw_constraints = route.get("constraints")
@@ -150,11 +151,10 @@ class DemandRoutePolicyV1:
                 }
             )
 
-        return type(
-            "DemandRoutePolicyOutput",
-            (),
-            {"action": ACTION_ROUTE_LEAD_V1, "payload": payload},
-        )()
+        return ProposedAction(
+            action=ACTION_ROUTE_LEAD_V1,
+            payload=payload,
+        )
 
 
 __all__ = [
