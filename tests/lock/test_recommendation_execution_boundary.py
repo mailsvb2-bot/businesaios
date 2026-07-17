@@ -149,6 +149,8 @@ def test_application_execution_accepts_only_signed_envelopes() -> None:
 
 @pytest.mark.lock
 def test_dispatcher_source_contains_no_decide_and_execute_shortcut() -> None:
+    assert "decide_and_execute" not in ActionDispatcher.__dict__
+
     path = ROOT / "application/decision/action_dispatcher.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 
