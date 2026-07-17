@@ -10,6 +10,7 @@ from core.ai import (
 )
 from marketplace.demand_pipeline import process_demand
 from marketplace.request_quote_flow import RequestQuoteFlow
+from runtime.decision_gateway import DecisionGatewayContractError
 
 
 @pytest.fixture(autouse=True)
@@ -37,12 +38,11 @@ class _DecideOnlyCore:
 
 def test_process_demand_requires_optimize_only() -> None:
     set_decision_core_singleton(_DecideOnlyCore())
-    try:
+    with pytest.raises(
+        DecisionGatewayContractError,
+        match="canonical_decision_core_optimize_required",
+    ):
         process_demand({"goal": "match"})
-    except TypeError as exc:
-        assert str(exc) == "canonical_decision_core_optimize_required"
-    else:
-        raise AssertionError("process_demand must reject non-optimize entrypoints")
 
 
 def test_request_quote_flow_uses_canonical_demand_pipeline() -> None:
