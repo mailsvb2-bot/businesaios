@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import builtins
 import os
 import shutil
 import sys
@@ -31,7 +30,10 @@ _RELEASE_INTEGRITY_TESTS = {
 
 
 def _safe_path_part(value: str) -> str:
-    clean = "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "-" for ch in value.strip())
+    clean = "".join(
+        ch if ch.isalnum() or ch in {"-", "_", "."} else "-"
+        for ch in value.strip()
+    )
     return clean or "unknown"
 
 
@@ -48,30 +50,17 @@ def _github_actions_path_suffix() -> str:
 def _pytest_bin_dir() -> Path:
     explicit = os.getenv("BUSINESAIOS_PYTEST_BIN_DIR")
     if os.environ.get("GITHUB_ACTIONS") == "true":
-        base = Path(explicit or os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
+        base = Path(
+            explicit
+            or os.environ.get("RUNNER_TEMP")
+            or tempfile.gettempdir()
+        )
         return base / _github_actions_path_suffix()
 
     if explicit:
         return Path(explicit)
 
     return Path(tempfile.gettempdir()) / "businesaios_pytest_bin"
-
-
-class _CompatDecisionService:
-    """Test-only compatibility stub for historical bare `_DecisionService()` fixtures.
-
-    Production code must not mutate builtins or depend on this name.
-    The shim lives only in pytest bootstrapping to keep tests explicit while the
-    runtime stays free from hidden global wiring.
-    """
-
-    def issue(self, *args, **kwargs):
-        return None
-
-
-def _install_test_builtins() -> None:
-    if not hasattr(builtins, "_DecisionService"):
-        builtins._DecisionService = _CompatDecisionService
 
 
 def _install_hermetic_python_wrappers() -> None:
@@ -104,7 +93,10 @@ def _install_hermetic_python_wrappers() -> None:
         os.environ["PATH"] = prefix + os.pathsep + current_path
 
 
-def _unlink_matching_files(base: Path, patterns: tuple[str, ...]) -> None:
+def _unlink_matching_files(
+    base: Path,
+    patterns: tuple[str, ...],
+) -> None:
     if not base.exists():
         return
     for pattern in patterns:
@@ -129,8 +121,14 @@ def _remove_runtime_artifacts() -> None:
         if transient.is_dir():
             shutil.rmtree(transient, ignore_errors=True)
 
-    _unlink_matching_files(ROOT / "runtime" / "data" / "demo", ("*.db", "*.db-shm", "*.db-wal"))
-    _unlink_matching_files(ROOT / "runtime" / "data" / "security", ("*.jsonl",))
+    _unlink_matching_files(
+        ROOT / "runtime" / "data" / "demo",
+        ("*.db", "*.db-shm", "*.db-wal"),
+    )
+    _unlink_matching_files(
+        ROOT / "runtime" / "data" / "security",
+        ("*.jsonl",),
+    )
     _unlink_matching_files(ROOT / "security", ("*.jsonl",))
     _unlink_matching_files(ROOT, ("wave*_*.txt",))
 
@@ -146,7 +144,6 @@ def _remove_runtime_artifacts() -> None:
 
 
 def pytest_sessionstart(session) -> None:  # type: ignore[no-untyped-def]
-    _install_test_builtins()
     _install_hermetic_python_wrappers()
     _remove_runtime_artifacts()
 
@@ -156,7 +153,10 @@ def pytest_collection_finish(session) -> None:  # type: ignore[no-untyped-def]
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # type: ignore[no-untyped-def]
-    if os.environ.get("BUSINESAIOS_SESSION_FINISH_CLEANUP", "").strip() == "1":
+    if os.environ.get(
+        "BUSINESAIOS_SESSION_FINISH_CLEANUP",
+        "",
+    ).strip() == "1":
         _remove_runtime_artifacts()
 
 
@@ -170,7 +170,10 @@ def _item_requests_runtime_artifact_cleanup(item) -> bool:  # type: ignore[no-un
         rel = path.relative_to(ROOT).as_posix()
     except ValueError:
         rel = path.as_posix()
-    return rel in _RELEASE_INTEGRITY_TESTS or item.get_closest_marker("runtime_artifacts") is not None
+    return (
+        rel in _RELEASE_INTEGRITY_TESTS
+        or item.get_closest_marker("runtime_artifacts") is not None
+    )
 
 
 def pytest_runtest_setup(item) -> None:  # type: ignore[no-untyped-def]
