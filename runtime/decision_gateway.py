@@ -34,6 +34,7 @@ CANON_RUNTIME_DECISION_GATEWAY_COMPAT_ALIAS = True
 CANON_RUNTIME_DECISION_GATEWAY_NAME_RESERVED_FOR_ROUTE_OWNER = True
 CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON = True
 CANON_RUNTIME_DECISION_GATEWAY_REJECTS_SYNTHETIC_ENVELOPES = True
+CANON_RUNTIME_DECISION_GATEWAY_NO_STRUCTURED_ALT_ISSUER = True
 
 
 class DecisionGatewayContractError(RuntimeError):
@@ -226,22 +227,6 @@ def optimize_runtime_decision(
             "canonical_decision_core_optimize_required"
         )
     return optimize(state)
-
-
-def issue_structured_decision(
-    *,
-    issuer: Any,
-    decision_space: Any,
-    constraints: Any,
-    request: Any,
-) -> Any:
-    """Preserve the structured ABI without accepting an alternate issuer."""
-
-    canonical = _registered_decision_core(issuer)
-    issue = getattr(canonical, "issue", None)
-    if not callable(issue):
-        raise DecisionGatewayContractError("issuer_issue_missing")
-    return issue(decision_space, constraints, request)
 
 
 def execute_runtime_decision(
