@@ -77,10 +77,11 @@ class DemandRoutePolicyV1:
         )
         constraints.validate()
 
+        raw_candidates = tuple(route.get("candidates") or ())
         candidates: list[DecisionCandidate] = []
         rejected: list[dict[str, str]] = []
         validator = DecisionValidator()
-        for item in route.get("candidates") or ():
+        for item in raw_candidates:
             if not isinstance(item, dict):
                 rejected.append(
                     {"candidate_id": "", "reason": "candidate_not_object"}
@@ -115,7 +116,9 @@ class DemandRoutePolicyV1:
         payload: dict[str, Any] = {
             "request_id": request_id,
             "requires_manual_review": selected is None,
-            "candidate_count": len(candidates),
+            # Historical public trace counted all prepared, non-blocked inputs.
+            "candidate_count": len(raw_candidates),
+            "eligible_candidate_count": len(candidates),
             "blocked_candidate_count": int(
                 route.get("blocked_candidate_count") or 0
             ),
