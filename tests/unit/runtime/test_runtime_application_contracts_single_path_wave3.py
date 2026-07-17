@@ -1,15 +1,21 @@
 from __future__ import annotations
 
-from runtime.application import ReadOnlyRuntimeRegistry, build_runtime_application_service
+from types import SimpleNamespace
+
+from runtime.application import (
+    ReadOnlyRuntimeRegistry,
+    build_runtime_application_service,
+)
+from runtime.service_names import RuntimeServiceName
 
 
-class _DecisionCore:
+class _DecisionExecutionOwner:
     def __init__(self) -> None:
         self.calls: list[object] = []
 
-    def decide_and_execute(self, action: object) -> dict:
-        self.calls.append(action)
-        return {"status": "executed", "action": action}
+    def execute(self, envelope: object) -> dict:
+        self.calls.append(envelope)
+        return {"status": "executed", "envelope": envelope}
 
 
 class _AuditLog:
@@ -24,9 +30,12 @@ class _Observability:
 
 class _Registry:
     def __init__(self) -> None:
+        self.execution_owner = _DecisionExecutionOwner()
         self._services = {
-            "decision_core": _DecisionCore(),
-            "observability": _Observability(),
+            RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE: (
+                self.execution_owner
+            ),
+            RuntimeServiceName.OBSERVABILITY: _Observability(),
         }
 
     def get(self, name: str):
@@ -39,6 +48,7 @@ class _Registry:
         return name
 
     def dependencies_of(self, name: str):
+        del name
         return ()
 
     def list_service_names(self):
@@ -48,9 +58,25 @@ class _Registry:
         return dict(self._services)
 
 
-def test_build_runtime_application_service_routes_through_runtime_ports() -> None:
-    registry = ReadOnlyRuntimeRegistry(_Registry())
-    service = build_runtime_application_service(registry)
-    result = service.execute_action({"kind": "ping"})
+def _envelope():
+    return SimpleNamespace(
+        decision=SimpleNamespace(
+            decision_id="decision-1",
+            correlation_id="correlation-1",
+            action="ping@v1",
+        )
+    )
+
+
+def test_build_runtime_application_service_routes_envelope_through_runtime_ports() -> None:
+    registry = _Registry()
+    service = build_runtime_application_service(
+        ReadOnlyRuntimeRegistry(registry)
+    )
+    envelope = _envelope()
+
+    result = service.execute_action(envelope)
+
     assert result["status"] == "executed"
+    assert registry.execution_owner.calls == [envelope]
     assert service.startup_audit_events() == ("booted", "ready")
