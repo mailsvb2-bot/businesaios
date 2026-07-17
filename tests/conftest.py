@@ -16,8 +16,6 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.ai import _reset_decision_core_singleton_for_tests
-
 # Tests may run on a server whose shell exports APP_ENV=prod. Keep production
 # sqlite fallback fail-closed for real runtime processes, but mark pytest as an
 # explicit test-local process so unit storage tests can exercise sqlite contracts.
@@ -36,6 +34,8 @@ _RELEASE_INTEGRITY_TESTS = {
 @pytest.fixture(autouse=True)
 def _isolate_decision_core_singleton():
     """Keep pytest cases isolated without weakening same-test singleton law."""
+
+    from core.ai import _reset_decision_core_singleton_for_tests
 
     _reset_decision_core_singleton_for_tests()
     try:
