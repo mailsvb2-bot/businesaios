@@ -4,6 +4,13 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   targeted-domain-ci:
     runs-on: ubuntu-latest
@@ -15,6 +22,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -30,3 +38,11 @@ jobs:
         env:
           TARGETED_CI_BASE: origin/main
         run: python -m scripts.ci.cli --gate targeted-domain
+      - name: Upload targeted-domain artifacts
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: targeted-domain-${{ matrix.python-version }}-artifacts
+          path: artifacts/ci
+          if-no-files-found: warn
