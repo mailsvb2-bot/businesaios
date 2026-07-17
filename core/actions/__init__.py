@@ -1,9 +1,10 @@
-"""Canonical action owner surface.
+"""Canonical action owner surface with cycle-safe lazy exports.
 
-The package root is the supported owner surface for action catalog
-construction. Historical ``core.actions.catalog`` imports remain valid, but
-internal code should import from ``core.actions`` so catalog implementation
-files stop behaving like a second public surface.
+The package root is the supported owner surface for action catalog construction.
+All submodule exports are resolved lazily so low-level boot catalog modules can
+import ``core.actions.names`` without recursively initializing the runtime action
+registry. Historical imports remain compatible and no duplicate action data is
+stored here.
 """
 
 from __future__ import annotations
@@ -11,51 +12,89 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
-from core.actions.allowed_actions import ALLOWED_ACTIONS
-from core.actions.catalog_entry import CatalogEntry
-from core.actions.catalog_groups import build_catalog_groups
-from core.actions.names import (
-    ACTION_ADS_APPLY_EXECUTE_V1,
-    ACTION_AI_CEO_PLAN_V1,
-    ACTION_EXECUTE_PLAN_V1,
-    ACTION_ROUTE_LEAD_V1,
-)
-from core.actions.proof_registry import ACTION_PROOF_EVENT
-from core.actions.schema_registry import ActionSchemaRegistry, build_default_registry
-
 CANON_CORE_ACTIONS_OWNER = True
-_OWNER_MODULE = 'core.actions.catalog'
-_OWNER_EXPORTS = ['build_catalog', 'build_schema_registry']
+
+_EXPORT_MAP: dict[str, tuple[str, str]] = {
+    "ACTION_ADS_APPLY_EXECUTE_V1": (
+        "core.actions.names",
+        "ACTION_ADS_APPLY_EXECUTE_V1",
+    ),
+    "ACTION_AI_CEO_PLAN_V1": (
+        "core.actions.names",
+        "ACTION_AI_CEO_PLAN_V1",
+    ),
+    "ACTION_EXECUTE_PLAN_V1": (
+        "core.actions.names",
+        "ACTION_EXECUTE_PLAN_V1",
+    ),
+    "ACTION_ROUTE_LEAD_V1": (
+        "core.actions.names",
+        "ACTION_ROUTE_LEAD_V1",
+    ),
+    "ACTION_PROOF_EVENT": (
+        "core.actions.proof_registry",
+        "ACTION_PROOF_EVENT",
+    ),
+    "ALLOWED_ACTIONS": (
+        "core.actions.allowed_actions",
+        "ALLOWED_ACTIONS",
+    ),
+    "ActionSchemaRegistry": (
+        "core.actions.schema_registry",
+        "ActionSchemaRegistry",
+    ),
+    "CatalogEntry": (
+        "core.actions.catalog_entry",
+        "CatalogEntry",
+    ),
+    "build_catalog": (
+        "core.actions.catalog",
+        "build_catalog",
+    ),
+    "build_catalog_groups": (
+        "core.actions.catalog_groups",
+        "build_catalog_groups",
+    ),
+    "build_default_registry": (
+        "core.actions.schema_registry",
+        "build_default_registry",
+    ),
+    "build_schema_registry": (
+        "core.actions.catalog",
+        "build_schema_registry",
+    ),
+}
 
 
-def _owner() -> Any:
-    return import_module(_OWNER_MODULE)
+def _resolve_export(name: str) -> Any:
+    module_name, attribute_name = _EXPORT_MAP[name]
+    value = getattr(import_module(module_name), attribute_name)
+    globals()[name] = value
+    return value
 
 
 def __getattr__(name: str) -> Any:
-    if name == 'CANON_CORE_ACTIONS_OWNER':
-        return CANON_CORE_ACTIONS_OWNER
-    if name in _OWNER_EXPORTS:
-        return getattr(_owner(), name)
+    if name in _EXPORT_MAP:
+        return _resolve_export(name)
     raise AttributeError(name)
 
 
 def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(__all__) | set(_OWNER_EXPORTS))
+    return sorted(set(globals()) | set(__all__))
 
 
 __all__ = [
-    'ACTION_ADS_APPLY_EXECUTE_V1',
-    'ACTION_AI_CEO_PLAN_V1',
-    'ACTION_EXECUTE_PLAN_V1',
-    'ACTION_ROUTE_LEAD_V1',
-    'ACTION_PROOF_EVENT',
-    'ALLOWED_ACTIONS',
-    'ActionSchemaRegistry',
-    'CANON_CORE_ACTIONS_OWNER',
-    'CatalogEntry',
-    'build_catalog',
-    'build_catalog_groups',
-    'build_default_registry',
-    'build_schema_registry',
+    "ACTION_ADS_APPLY_EXECUTE_V1",
+    "ACTION_AI_CEO_PLAN_V1",
+    "ACTION_EXECUTE_PLAN_V1",
+    "ACTION_ROUTE_LEAD_V1",
+    "ACTION_PROOF_EVENT",
+    "ALLOWED_ACTIONS",
+    "ActionSchemaRegistry",
+    "CANON_CORE_ACTIONS_OWNER",
+    "CatalogEntry",
+    "build_catalog",
+    "build_catalog_groups",
+    "build_default_registry",
+    "build_schema_registry",
 ]
