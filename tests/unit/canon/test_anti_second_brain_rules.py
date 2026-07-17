@@ -101,6 +101,7 @@ def test_exact_runtime_owners_retain_single_path_markers() -> None:
             "CANON_RUNTIME_DECISION_GATEWAY_NO_RAW_DECISION_LOGIC",
             "CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON",
             "CANON_RUNTIME_DECISION_GATEWAY_REJECTS_SYNTHETIC_ENVELOPES",
+            "CANON_RUNTIME_DECISION_GATEWAY_NO_STRUCTURED_ALT_ISSUER",
         },
         "runtime/decision_path_lock.py": {
             "CANON_DECISION_PATH_LOCK_SINGLE_OWNER",
@@ -144,17 +145,23 @@ def test_headless_gateway_is_a_pure_runtime_delegate() -> None:
     assert len(delegated_calls) == 1
 
 
-def test_demand_bridge_routes_structured_issue_through_gateway() -> None:
-    tree = _tree("demand_decision/canonical_decision_bridge.py")
+def test_demand_bridge_issues_only_a_canonical_world_state() -> None:
+    relative = "demand_decision/canonical_decision_bridge.py"
+    tree = _tree(relative)
+    assert {
+        "CANON_DEMAND_BRIDGE_ADAPTS_SIGNED_ROUTE_DECISION"
+    } <= _true_markers(tree)
     bridge = _class(tree, "CanonicalDemandDecisionBridge")
-    issue_decision = _function(bridge.body, "_issue_decision")
+    issue_decision = _function(bridge.body, "_issue_route_decision")
 
-    assert len(issue_decision.body) == 1
-    statement = issue_decision.body[0]
-    assert isinstance(statement, ast.Return)
-    assert isinstance(statement.value, ast.Call)
-    assert isinstance(statement.value.func, ast.Name)
-    assert statement.value.func.id == "issue_structured_decision"
+    delegated_calls = [
+        node
+        for node in ast.walk(issue_decision)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "issue_runtime_decision"
+    ]
+    assert len(delegated_calls) == 1
 
     forbidden_calls = [
         node
@@ -191,3 +198,31 @@ def test_demand_bridge_decide_alias_is_forward_only() -> None:
     assert isinstance(statement.value.func.value, ast.Name)
     assert statement.value.func.value.id == "self"
     assert statement.value.func.attr == "issue"
+
+
+def test_recommendation_pipeline_never_issues_a_sovereign_decision() -> None:
+    relative = "orchestration/decision_pipeline.py"
+    tree = _tree(relative)
+    assert {
+        "CANON_DECISION_PIPELINE_RECOMMENDATION_ONLY",
+        "CANON_DECISION_PIPELINE_NO_SOVEREIGN_ISSUANCE",
+    } <= _true_markers(tree)
+    pipeline = _class(tree, "DecisionPipeline")
+    run = _function(pipeline.body, "run")
+
+    authority_calls = [
+        node
+        for node in ast.walk(run)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"issue", "decide", "optimize"}
+    ]
+    assert authority_calls == []
+    selection_calls = [
+        node
+        for node in ast.walk(run)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "select_action"
+    ]
+    assert len(selection_calls) == 1
