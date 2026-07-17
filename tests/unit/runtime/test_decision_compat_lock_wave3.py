@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from runtime.application._ports_impl import DecisionExecutionPort
@@ -11,13 +13,13 @@ from runtime.application.decision_transition_lock import (
 )
 
 
-class _CompatOwner:
+class _ExecutionOwner:
     def __init__(self) -> None:
-        self.actions: list[object] = []
+        self.envelopes: list[object] = []
 
-    def decide_and_execute(self, action: object) -> dict[str, object]:
-        self.actions.append(action)
-        return {'ok': True, 'action': action}
+    def execute(self, envelope: object) -> dict[str, object]:
+        self.envelopes.append(envelope)
+        return {"ok": True, "envelope": envelope}
 
 
 class _BadAdapter:
@@ -25,20 +27,52 @@ class _BadAdapter:
         return state
 
 
-class _MissingCompatOwner:
+class _CombinedOwner:
+    def decide_and_execute(self, action: object) -> object:
+        return action
+
+
+class _MissingExecutionOwner:
     pass
 
 
-def test_execute_locked_transition_action_uses_compat_owner() -> None:
-    owner = _CompatOwner()
-    result = execute_locked_transition_action(owner=owner, action={'kind': 'demo'})
-    assert result['ok'] is True
-    assert owner.actions == [{'kind': 'demo'}]
+def _envelope(*, action: str = "demo@v1"):
+    return SimpleNamespace(
+        decision=SimpleNamespace(
+            decision_id="decision-1",
+            correlation_id="correlation-1",
+            action=action,
+        )
+    )
 
 
-def test_resolve_transition_execute_callable_fails_closed_without_compat_method() -> None:
+def test_execute_locked_transition_action_uses_execution_owner() -> None:
+    owner = _ExecutionOwner()
+    envelope = _envelope()
+
+    result = execute_locked_transition_action(
+        owner=owner,
+        action=envelope,
+    )
+
+    assert result["ok"] is True
+    assert owner.envelopes == [envelope]
+
+
+def test_execute_locked_transition_action_rejects_raw_action() -> None:
+    with pytest.raises(
+        DecisionTransitionLockError,
+        match="canonical_decision_envelope_required",
+    ):
+        execute_locked_transition_action(
+            owner=_ExecutionOwner(),
+            action={"kind": "demo"},
+        )
+
+
+def test_resolve_transition_execute_callable_fails_closed_without_execute() -> None:
     with pytest.raises(DecisionTransitionLockError):
-        resolve_transition_execute_callable(_MissingCompatOwner())
+        resolve_transition_execute_callable(_MissingExecutionOwner())
 
 
 def test_validate_no_raw_decision_helpers_rejects_adapter_with_issue_method() -> None:
@@ -46,9 +80,20 @@ def test_validate_no_raw_decision_helpers_rejects_adapter_with_issue_method() ->
         validate_no_raw_decision_helpers(_BadAdapter())
 
 
-def test_runtime_application_port_delegates_via_compat_lock() -> None:
-    owner = _CompatOwner()
+def test_combined_decision_execution_owner_is_rejected() -> None:
+    with pytest.raises(
+        DecisionTransitionLockError,
+        match="decide_and_execute",
+    ):
+        validate_no_raw_decision_helpers(_CombinedOwner())
+
+
+def test_runtime_application_port_delegates_envelope_via_lock() -> None:
+    owner = _ExecutionOwner()
     port = DecisionExecutionPort(decision_core=owner)
-    result = port.execute_action({'kind': 'x'})
-    assert result['ok'] is True
-    assert owner.actions == [{'kind': 'x'}]
+    envelope = _envelope(action="x@v1")
+
+    result = port.execute_action(envelope)
+
+    assert result["ok"] is True
+    assert owner.envelopes == [envelope]
