@@ -17,6 +17,7 @@ from core.strategic_horizon import constants, engine
 from execution.long_horizon_planner import LongHorizonPlanner
 from execution.strategy_memory import StrategyMemoryService
 from runtime import admin_state_support
+from runtime import decision_gateway as canonical_decision_gateway
 from runtime._internal.effects_domains import admin_pricing_effects
 from runtime._internal.effects_domains import (
     admin_state_support as canonical_admin_state_support,
@@ -24,7 +25,6 @@ from runtime._internal.effects_domains import (
 from runtime.decision_gateway import (
     DecisionGatewayContractError,
     RuntimeDecisionRouteGateway,
-    issue_structured_decision,
     optimize_runtime_decision,
     validate_runtime_decision_issuer,
 )
@@ -171,35 +171,12 @@ def test_optimize_gateway_enforces_singleton_identity_and_exact_method() -> None
         )
 
 
-def test_structured_gateway_preserves_arguments_only_for_the_singleton() -> None:
-    captured = SimpleNamespace(args=None)
-
-    class Issuer:
-        def issue(self, *args):
-            captured.args = args
-            return "result"
-
-    issuer = Issuer()
-    set_decision_core_singleton(issuer)
-
-    assert (
-        issue_structured_decision(
-            issuer=issuer,
-            decision_space="space",
-            constraints="constraints",
-            request="request",
-        )
-        == "result"
+def test_runtime_gateway_exposes_no_structured_alternate_issuer() -> None:
+    assert not hasattr(
+        canonical_decision_gateway,
+        "issue_structured_decision",
     )
-    assert captured.args == ("space", "constraints", "request")
-
-    with pytest.raises(
-        DecisionGatewayContractError,
-        match="noncanonical_decision_issuer",
-    ):
-        issue_structured_decision(
-            issuer=Issuer(),
-            decision_space="space",
-            constraints="constraints",
-            request="request",
-        )
+    assert (
+        canonical_decision_gateway.CANON_RUNTIME_DECISION_GATEWAY_NO_STRUCTURED_ALT_ISSUER
+        is True
+    )
