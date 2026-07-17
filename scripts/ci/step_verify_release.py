@@ -146,7 +146,7 @@ def _run_optional_make_target(name: str) -> tuple[bool, str]:
     if not has_make_target(name):
         return True, f"make target absent; skipped by contract: {name}"
     command = ["make", name]
-    outcome = run_command(command, env=_canonical_python_env())
+    outcome = run_command(["make", name], env=_canonical_python_env())
     if outcome.returncode != 0:
         return False, _command_failure_message(
             label=f"make target {name}",
