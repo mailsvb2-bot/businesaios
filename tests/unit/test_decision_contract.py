@@ -6,6 +6,7 @@ from application.decision.decision_contract import (
     start_trace,
 )
 from core.constraints.decision import DecisionConstraints
+from core.decision import decision_contract as compat_contract
 from core.decision.decision_contract import canonical_request as compat_canonical_request
 from kernel.decision_request import DecisionRequest
 
@@ -55,3 +56,8 @@ def test_trace_is_recommendation_only_and_builds_no_executable_action() -> None:
 
 def test_legacy_decision_contract_path_is_thin_wrapper() -> None:
     assert compat_canonical_request is canonical_request
+    assert compat_contract.CANONICAL_OWNER_MODULE == (
+        "application.decision.decision_contract"
+    )
+    assert "build_executable_action_payload" not in compat_contract.__dict__
+    assert "build_executable_action_payload" not in compat_contract.__all__
