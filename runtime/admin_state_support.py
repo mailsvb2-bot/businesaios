@@ -7,7 +7,7 @@ from runtime._internal.effects_domains.admin_pricing_effects import (
 )
 from runtime.lazy_namespace import build_owner_namespace
 
-__getattr__, __dir__, _OWNER_EXPORTS = build_owner_namespace(
+_owner_getattr, _owner_dir, _OWNER_EXPORTS = build_owner_namespace(
     __name__,
     "runtime._internal.effects_domains.admin_state_support",
     exports=(
@@ -28,3 +28,11 @@ __all__ = [
     "emit_pricing_change_event",
     "emit_pricing_reset",
 ]
+
+
+def __getattr__(name: str):
+    return _owner_getattr(name)
+
+
+def __dir__() -> list[str]:
+    return sorted(set(_owner_dir()) | set(__all__))
