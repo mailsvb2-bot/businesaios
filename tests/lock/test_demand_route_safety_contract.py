@@ -16,6 +16,8 @@ def test_demand_route_has_one_closed_execution_and_safety_contract() -> None:
     safety_spec = build_default_action_catalog().resolve(ACTION_ROUTE_LEAD_V1)
 
     assert schema.allow_additional is False
+    assert "idempotency_key" in schema.required
+    assert schema.field_types["idempotency_key"] is str
     assert runtime_spec.requires_idempotency_key is True
     assert runtime_spec.execution_category == "advisory"
     assert runtime_spec.external_confirmation_mode == "not_required"
