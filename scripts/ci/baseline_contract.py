@@ -31,6 +31,8 @@ BASELINE_REQUIREMENTS: tuple[BaselineRequirement, ...] = (
     BaselineRequirement("BAIOS-BASE-009", "user scenario acceptance gate remains declared", "acceptance", "tests/baseline/test_baseline_contract_scenarios.py::test_baseline_user_scenario_acceptance_gate_is_declared", ("acceptance",)),
     BaselineRequirement("BAIOS-BASE-010", "DecisionCore identity cannot be replaced after registration", "decision-core", "tests/lock/test_decision_singleton_execution_path_lock.py::test_locked_path_accepts_only_the_registered_issuer_identity", ("fast", "full", "release", "pre-release")),
     BaselineRequirement("BAIOS-BASE-011", "signed demand routing preserves the public RoutingDecision contract", "demand-routing", "tests/business_critical/test_canonical_demand_route_decision.py::test_bridge_preserves_public_routing_decision_from_signed_envelope", ("fast", "full", "release", "pre-release")),
+    BaselineRequirement("BAIOS-BASE-012", "recommendations cannot issue or execute actions", "decision-boundary", "tests/lock/test_recommendation_execution_boundary.py::test_recommendation_service_has_no_decision_issuance_aliases", ("fast", "full", "release", "pre-release")),
+    BaselineRequirement("BAIOS-BASE-013", "application execution accepts only signed envelopes", "execution-boundary", "tests/lock/test_recommendation_execution_boundary.py::test_application_execution_accepts_only_signed_envelopes", ("fast", "full", "release", "pre-release")),
 )
 
 
