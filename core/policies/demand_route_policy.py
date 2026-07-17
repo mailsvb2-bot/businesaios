@@ -114,6 +114,7 @@ class DemandRoutePolicyV1:
 
         selected = DecisionSelector().select(candidates)
         payload: dict[str, Any] = {
+            "idempotency_key": f"demand-route:{request_id}",
             "request_id": request_id,
             "requires_manual_review": selected is None,
             # Historical public trace counted all prepared, non-blocked inputs.
