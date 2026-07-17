@@ -228,9 +228,16 @@ class CanonicalDemandDecisionBridge:
                 )
             )
 
-        manual_review_reason = str(
-            trace.get("manual_review_reason") or "no_safe_candidates"
-        )
+        explicit_manual_reason = str(
+            trace.get("manual_review_reason") or ""
+        ).strip()
+        if explicit_manual_reason:
+            manual_review_reason = explicit_manual_reason
+        elif candidates:
+            manual_review_reason = "decision_core_rejected_all_candidates"
+        else:
+            manual_review_reason = "no_safe_candidates"
+
         state = self._world_state(
             request=request,
             request_id=request_id,
