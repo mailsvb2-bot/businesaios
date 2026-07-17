@@ -81,41 +81,67 @@ def test_canonical_authority_vocabulary_contains_legacy_contract() -> None:
 
 def test_only_file_exact_production_paths_own_decision_authority() -> None:
     assert CANONICAL_DECISION_CORE_PATH in CANONICAL_DECISION_OWNER_PREFIXES
-    assert (
-        "application/headless/decision_gateway.py"
-        in CANONICAL_DECISION_OWNER_PREFIXES
-    )
     assert "runtime/decision_gateway.py" in CANONICAL_DECISION_OWNER_PREFIXES
     assert "runtime/decision_path_lock.py" in CANONICAL_DECISION_OWNER_PREFIXES
-    assert (
-        "demand_decision/canonical_decision_bridge.py"
-        not in CANONICAL_DECISION_OWNER_PREFIXES
-    )
+    for delegated_path in (
+        "application/headless/decision_gateway.py",
+        "demand_decision/canonical_decision_bridge.py",
+    ):
+        assert delegated_path not in CANONICAL_DECISION_OWNER_PREFIXES
     assert "core/ai/" not in CANONICAL_DECISION_OWNER_PREFIXES
     assert "application/decision_runtime/" not in CANONICAL_DECISION_OWNER_PREFIXES
     assert "application/headless/" not in CANONICAL_DECISION_OWNER_PREFIXES
     assert "demand_decision/" not in CANONICAL_DECISION_OWNER_PREFIXES
 
 
-def test_exact_gateway_exceptions_retain_single_path_markers() -> None:
+def test_exact_runtime_owners_retain_single_path_markers() -> None:
     expected = {
-        "application/headless/decision_gateway.py": {
-            "CANON_HEADLESS_DECISION_GATEWAY_SINGLE_PATH",
-            "CANON_HEADLESS_DECISION_GATEWAY_NO_RAW_DECISION_LOGIC",
-        },
         "runtime/decision_gateway.py": {
             "CANON_RUNTIME_DECISION_GATEWAY_SINGLE_PATH",
             "CANON_RUNTIME_DECISION_GATEWAY_NO_RAW_DECISION_LOGIC",
             "CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON",
+            "CANON_RUNTIME_DECISION_GATEWAY_REJECTS_SYNTHETIC_ENVELOPES",
         },
         "runtime/decision_path_lock.py": {
             "CANON_DECISION_PATH_LOCK_SINGLE_OWNER",
             "CANON_DECISION_PATH_LOCK_NO_DECISION_LOGIC",
+            "CANON_DECISION_PATH_LOCK_BINDS_REGISTERED_SINGLETON",
         },
     }
 
     for relative, required in expected.items():
         assert required <= _true_markers(_tree(relative)), relative
+
+
+def test_headless_gateway_is_a_pure_runtime_delegate() -> None:
+    relative = "application/headless/decision_gateway.py"
+    tree = _tree(relative)
+    markers = _true_markers(tree)
+    assert {
+        "CANON_HEADLESS_DECISION_GATEWAY_SINGLE_PATH",
+        "CANON_HEADLESS_DECISION_GATEWAY_NO_RAW_DECISION_LOGIC",
+        "CANON_HEADLESS_DECISION_GATEWAY_DELEGATES_TO_RUNTIME",
+    } <= markers
+    assert "CANON_HEADLESS_DECISION_GATEWAY_ISSUE_OWNER" not in markers
+
+    ingress = _class(tree, "HeadlessDecisionIngress")
+    issue = _function(ingress.body, "issue")
+    direct_authority_calls = [
+        node
+        for node in ast.walk(issue)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in {"issue", "decide", "optimize"}
+    ]
+    assert direct_authority_calls == []
+    delegated_calls = [
+        node
+        for node in ast.walk(issue)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "issue_runtime_decision"
+    ]
+    assert len(delegated_calls) == 1
 
 
 def test_demand_bridge_routes_structured_issue_through_gateway() -> None:
