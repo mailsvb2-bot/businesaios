@@ -4,6 +4,7 @@ import pytest
 
 from core.actions.catalog import build_catalog
 from core.actions.names import ACTION_ROUTE_LEAD_V1
+from core.actions.proof_registry import ACTION_PROOF_EVENT
 from core.safety.controls.action_catalog import build_default_action_catalog
 from runtime.boot.actions_registry import SPECS
 
@@ -18,6 +19,7 @@ def test_demand_route_has_one_closed_execution_and_safety_contract() -> None:
     assert runtime_spec.requires_idempotency_key is True
     assert runtime_spec.execution_category == "advisory"
     assert runtime_spec.external_confirmation_mode == "not_required"
+    assert ACTION_PROOF_EVENT[ACTION_ROUTE_LEAD_V1] == "decision_executed"
 
     assert safety_spec is not None
     assert safety_spec.action_prefix == ACTION_ROUTE_LEAD_V1
