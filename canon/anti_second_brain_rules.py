@@ -46,7 +46,6 @@ CANONICAL_DECISION_OWNER_FILES = frozenset(
     {
         CANONICAL_DECISION_CORE_PATH,
         "application/headless/decision_gateway.py",
-        "demand_decision/canonical_decision_bridge.py",
         "runtime/decision_gateway.py",
         "runtime/decision_path_lock.py",
     }
