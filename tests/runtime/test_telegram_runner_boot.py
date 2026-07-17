@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from core.ai import set_decision_core_singleton
+
 
 def test_run_telegram_starts_runner(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "000:TEST")
@@ -22,21 +24,23 @@ def test_run_telegram_starts_runner(monkeypatch):
     from runtime.boot.telegram_runner import run_telegram
 
     class _Core:
-        pass
+        def issue(self, *_args, **_kwargs):
+            raise AssertionError("issue should not be called by bootstrap")
 
     class _Exec:
-        pass
+        def execute(self, *_args, **_kwargs):
+            raise AssertionError("execute should not be called by bootstrap")
 
     core = _Core()
-    executor = _Exec()
+    set_decision_core_singleton(core)
 
-    core.decide = lambda *_a, **_kw: (_ for _ in ()).throw(
-        AssertionError("decide should not be called by bootstrap")
+    run_telegram(
+        core=core,
+        executor=_Exec(),
+        event_log=None,
+        event_store=None,
+        payment_outbox=None,
+        learning_job=None,
     )
-    executor.execute = lambda *_a, **_kw: (_ for _ in ()).throw(
-        AssertionError("execute should not be called by bootstrap")
-    )
-
-    run_telegram(core=core, executor=executor, event_log=None, event_store=None, payment_outbox=None, learning_job=None)
 
     assert called["run_forever"] == 1
