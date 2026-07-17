@@ -172,7 +172,10 @@ def _run_optional_project_release_script() -> tuple[bool, str]:
     verify_release = root / "scripts" / "verify_release.sh"
     if verify_release.exists():
         command = ["bash", str(verify_release)]
-        outcome = run_command(command, env=_canonical_python_env())
+        outcome = run_command(
+            command,
+            env=_canonical_python_env(),
+        )
         if outcome.returncode != 0:
             return False, _command_failure_message(
                 label="verify_release.sh",
@@ -195,7 +198,10 @@ def _run_optional_project_release_script() -> tuple[bool, str]:
 
     if has_make_target("regen-manifest"):
         command = ["make", "regen-manifest"]
-        outcome = run_command(command, env=_canonical_python_env())
+        outcome = run_command(
+            command,
+            env=_canonical_python_env(),
+        )
         if outcome.returncode != 0:
             return False, _command_failure_message(
                 label="make regen-manifest",
