@@ -6,20 +6,24 @@ import pytest
 
 from core.actions.catalog import build_catalog
 from core.actions.names import ACTION_ROUTE_LEAD_V1
-from core.ai import reset_decision_core_singleton, set_decision_core_singleton
+from core.ai import (
+    _reset_decision_core_singleton_for_tests,
+    set_decision_core_singleton,
+)
 from core.policies.demand_route_policy import DemandRoutePolicyV1
 from demand_decision.canonical_decision_bridge import CanonicalDemandDecisionBridge
 from kernel.world_state import WorldStateV1
+from runtime.boot.actions_registry import SPECS
 from runtime.handlers.demand_route import handle_route_lead
 
 
 @pytest.fixture(autouse=True)
 def _isolated_singleton():
-    reset_decision_core_singleton()
+    _reset_decision_core_singleton_for_tests()
     try:
         yield
     finally:
-        reset_decision_core_singleton()
+        _reset_decision_core_singleton_for_tests()
 
 
 def _candidate(
@@ -124,11 +128,19 @@ def test_policy_rejects_unsafe_candidates_and_fails_to_manual_review() -> None:
     }
 
 
-def test_route_action_has_a_closed_schema_and_advisory_handler() -> None:
+def test_route_action_has_closed_execute_once_advisory_contract() -> None:
     schema = build_catalog()[ACTION_ROUTE_LEAD_V1].schema
     assert schema.allow_additional is False
     assert "request_id" in schema.required
     assert "selected_business_id" in schema.optional
+
+    spec = SPECS[ACTION_ROUTE_LEAD_V1]
+    assert spec.requires_idempotency_key is True
+    assert spec.execution_category == "advisory"
+    assert spec.external_confirmation_mode == "not_required"
+    assert spec.limits.kind == "general"
+    assert spec.limits.per_tenant_per_min == 120
+    assert spec.limits.per_user_per_min == 60
 
     env = SimpleNamespace(
         decision=SimpleNamespace(
