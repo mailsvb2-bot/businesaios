@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import asdict
+from typing import Any
+
 from config.execution_contract import (
     CANONICAL_DECISION_PATH,
     CANONICAL_OPTIMIZATION_TARGET,
@@ -10,13 +13,45 @@ from config.risk_evaluation_policy import (
 )
 from config.routing_limits import MAX_RUNNER_UPS
 from contracts.matching.routing_decision import RoutingDecision
+from core.actions.names import ACTION_ROUTE_LEAD_V1
 from core.constraints.decision import DecisionConstraints
-from kernel.decision_candidate import DecisionCandidate
-from kernel.decision_request import DecisionRequest
-from kernel.decision_space import DecisionSpace
 from demand_decision.decision_package_validator import DecisionPackageValidator
-from runtime.decision_gateway import issue_structured_decision
+from kernel.decision_candidate import DecisionCandidate
+from kernel.world_state import WorldStateV1
+from runtime.decision_gateway import issue_runtime_decision
 from shared.numbers import coerce_float
+
+CANON_DEMAND_BRIDGE_ADAPTS_SIGNED_ROUTE_DECISION = True
+
+
+def _request_timestamp_ms(request: Any) -> int:
+    value = getattr(request, "requested_at", None)
+    timestamp = getattr(value, "timestamp", None)
+    if callable(timestamp):
+        try:
+            return int(float(timestamp()) * 1000)
+        except (TypeError, ValueError, OverflowError):
+            return 0
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _serialize_candidate(candidate: DecisionCandidate) -> dict[str, Any]:
+    return {
+        "action_type": candidate.action_type,
+        "channel": candidate.channel,
+        "score": float(candidate.score),
+        "expected_value": float(candidate.expected_value),
+        "confidence": float(candidate.confidence),
+        "reasons": list(candidate.reasons),
+        "payload": dict(candidate.payload),
+        "candidate_id": candidate.candidate_id,
+        "business_id": str(
+            candidate.payload.get("business_id") or ""
+        ).strip(),
+    }
 
 
 class CanonicalDemandDecisionBridge:
@@ -35,7 +70,8 @@ class CanonicalDemandDecisionBridge:
         if not business_id:
             raise ValueError("routing candidate requires business_id")
         raw_channel = str(
-            preferred_channels.get(business_id) or DEFAULT_DELIVERY_CHANNEL
+            preferred_channels.get(business_id)
+            or DEFAULT_DELIVERY_CHANNEL
         ).strip()
         channel = raw_channel or DEFAULT_DELIVERY_CHANNEL
         trace = dict(getattr(routing_candidate, "trace", {}) or {})
@@ -52,7 +88,10 @@ class CanonicalDemandDecisionBridge:
         )
         match_score = max(
             policy.minimum_score,
-            coerce_float(trace.get("match_score", adjusted), adjusted),
+            coerce_float(
+                trace.get("match_score", adjusted),
+                adjusted,
+            ),
         )
         risk_score = coerce_float(
             trace.get("risk_score", 0.0),
@@ -65,7 +104,7 @@ class CanonicalDemandDecisionBridge:
             min(
                 policy.maximum_score,
                 policy.base_confidence
-                + (adjusted * policy.adjusted_confidence_weight),
+                + adjusted * policy.adjusted_confidence_weight,
             ),
         )
         return DecisionCandidate(
@@ -81,22 +120,61 @@ class CanonicalDemandDecisionBridge:
                 "match_score": match_score,
                 "adjusted_score": adjusted,
                 "risk_score": risk_score,
-                "routing_trace": trace,
+            },
+            candidate_id=f"demand-route:{business_id}",
+        )
+
+    def _world_state(
+        self,
+        *,
+        request: Any,
+        request_id: str,
+        candidates: list[DecisionCandidate],
+        blocked_count: int,
+        manual_review_reason: str,
+    ) -> WorldStateV1:
+        customer_id = str(
+            getattr(request, "customer_id", "") or request_id
+        ).strip()
+        tenant_id = str(
+            getattr(request, "tenant_id", "") or "demand_network"
+        ).strip()
+        return WorldStateV1(
+            schema_version=1,
+            user={"customer_id": customer_id},
+            session={
+                "request_id": request_id,
+                "intent": "demand_route",
+            },
+            product={
+                "product_id": "demand_network",
+                "domain": "demand_routing",
+                "product_version": "v1",
+                "tenant_id": tenant_id,
+            },
+            economy={},
+            timestamp_ms=_request_timestamp_ms(request),
+            tenant_id=tenant_id,
+            user_id=customer_id,
+            meta={
+                "purpose": "demand_route",
+                "demand_route": {
+                    "request_id": request_id,
+                    "candidates": [
+                        _serialize_candidate(candidate)
+                        for candidate in candidates
+                    ],
+                    "constraints": asdict(DecisionConstraints()),
+                    "blocked_candidate_count": int(blocked_count),
+                    "manual_review_reason": manual_review_reason,
+                },
             },
         )
 
-    def _issue_decision(
-        self,
-        *,
-        decision_space: DecisionSpace,
-        constraints: DecisionConstraints,
-        request: DecisionRequest,
-    ):
-        return issue_structured_decision(
+    def _issue_route_decision(self, *, state: WorldStateV1):
+        return issue_runtime_decision(
             issuer=self._decision_core,
-            decision_space=decision_space,
-            constraints=constraints,
-            request=request,
+            state=state,
         )
 
     def evaluate(self, *, request, routing_preparation) -> RoutingDecision:
@@ -118,6 +196,7 @@ class CanonicalDemandDecisionBridge:
             raise ValueError(
                 "routing preparation request_id must match request"
             )
+
         ranked = tuple(package.get("ranked_candidates") or ())
         trace = dict(package.get("trace") or {})
         preferred_channels = {
@@ -148,85 +227,71 @@ class CanonicalDemandDecisionBridge:
                     preferred_channels,
                 )
             )
-        if not candidates:
-            decision_trace = dict(trace)
-            decision_trace["decision_path"] = CANONICAL_DECISION_PATH
-            decision_trace["optimization_target"] = (
-                CANONICAL_OPTIMIZATION_TARGET
-            )
-            decision_trace["request_id"] = request_id
-            decision_trace["selected_from_candidates"] = 0
-            decision_trace["blocked_candidate_count"] = blocked_count
-            decision_trace["manual_review_reason"] = str(
-                trace.get("manual_review_reason") or "no_safe_candidates"
-            )
-            return RoutingDecision(
-                request_id=request_id,
-                selected_business_id=None,
-                runner_up_business_ids=(),
-                trace=decision_trace,
-                requires_manual_review=True,
-            )
-        constraints = DecisionConstraints()
-        decision_space = DecisionSpace(candidates=tuple(candidates))
-        decision_request = DecisionRequest(
-            business_id="demand_network",
-            objective=constraints.objective_name,
-            input_bundle_id=request_id,
+
+        manual_review_reason = str(
+            trace.get("manual_review_reason") or "no_safe_candidates"
+        )
+        state = self._world_state(
+            request=request,
             request_id=request_id,
-            metadata={
-                "origin": "demand_os",
-                "candidate_count": len(candidates),
-                "customer_id": str(
-                    getattr(request, "customer_id", "") or ""
-                ),
-            },
+            candidates=candidates,
+            blocked_count=blocked_count,
+            manual_review_reason=manual_review_reason,
         )
-        result, _audit = self._issue_decision(
-            decision_space=decision_space,
-            constraints=constraints,
-            request=decision_request,
-        )
-        selected_business_id = None
-        runner_ups: tuple[str, ...] = ()
-        if result.candidate is not None:
-            selected_business_id = (
-                str(result.candidate.payload.get("business_id") or "")
-                .strip()
-                or None
-            )
-            runner_ups = tuple(
-                str(candidate.payload.get("business_id") or "").strip()
-                for candidate in candidates
-                if str(candidate.payload.get("business_id") or "").strip()
-                and str(candidate.payload.get("business_id") or "").strip()
-                != selected_business_id
-            )[:MAX_RUNNER_UPS]
+        envelope = self._issue_route_decision(state=state)
+        decision = getattr(envelope, "decision", None)
+        if decision is None:
+            raise RuntimeError("demand_route_envelope_missing_decision")
+        if str(getattr(decision, "action", "")) != ACTION_ROUTE_LEAD_V1:
+            raise RuntimeError("demand_route_unexpected_action")
+        payload = dict(getattr(decision, "payload", {}) or {})
+
+        selected_business_id = str(
+            payload.get("selected_business_id") or ""
+        ).strip() or None
+        runner_ups = tuple(
+            str(item).strip()
+            for item in payload.get("runner_up_business_ids") or ()
+            if str(item).strip()
+        )[:MAX_RUNNER_UPS]
+
         decision_trace = dict(trace)
         decision_trace["decision_path"] = CANONICAL_DECISION_PATH
         decision_trace["optimization_target"] = str(
             trace.get("optimization_target")
             or CANONICAL_OPTIMIZATION_TARGET
         )
-        decision_trace["decision_id"] = result.trace.decision_id
+        decision_trace["decision_id"] = str(
+            getattr(decision, "decision_id", "") or ""
+        )
         decision_trace["request_id"] = request_id
-        decision_trace["selected_from_candidates"] = len(candidates)
-        decision_trace["blocked_candidate_count"] = blocked_count
+        decision_trace["selected_from_candidates"] = int(
+            payload.get("candidate_count") or 0
+        )
+        decision_trace["blocked_candidate_count"] = int(
+            payload.get("blocked_candidate_count") or blocked_count
+        )
         if selected_business_id is None:
             decision_trace["manual_review_reason"] = str(
-                trace.get("manual_review_reason")
-                or "decision_core_rejected_all_candidates"
+                payload.get("manual_review_reason")
+                or manual_review_reason
             )
         else:
             decision_trace["delivery_channel"] = str(
-                result.candidate.channel
+                payload.get("delivery_channel")
                 or preferred_channels.get(selected_business_id)
                 or DEFAULT_DELIVERY_CHANNEL
             )
+
         return RoutingDecision(
             request_id=request_id,
             selected_business_id=selected_business_id,
             runner_up_business_ids=runner_ups,
             trace=decision_trace,
-            requires_manual_review=selected_business_id is None,
+            requires_manual_review=bool(
+                payload.get(
+                    "requires_manual_review",
+                    selected_business_id is None,
+                )
+            ),
         )
