@@ -5,9 +5,14 @@ from pathlib import Path
 from tools.architecture_bypass_scanner import scan
 
 
-def _findings(tmp_path: Path, source: str) -> tuple:
+def _findings(
+    tmp_path: Path,
+    source: str,
+    *,
+    relative: str = "application/sample.py",
+) -> tuple:
     root = tmp_path / "repo"
-    path = root / "application" / "sample.py"
+    path = root / relative
     path.parent.mkdir(parents=True)
     path.write_text(source, encoding="utf-8")
     return scan(root)
@@ -91,4 +96,33 @@ def test_project_late_import_remains_blocked(tmp_path: Path) -> None:
 
     assert [finding.code for finding in findings] == [
         "dynamic_import_outside_owner"
+    ]
+
+
+def test_approval_workflow_compatibility_alias_is_not_decision_core(
+    tmp_path: Path,
+) -> None:
+    findings = _findings(
+        tmp_path,
+        "def resolve(workflow, approval_decision):\n"
+        "    resolver = workflow.decide\n"
+        "    return resolver(approval_decision)\n",
+        relative="runtime/execution/governance_runtime.py",
+    )
+
+    assert findings == ()
+
+
+def test_same_decide_reference_outside_governance_remains_blocked(
+    tmp_path: Path,
+) -> None:
+    findings = _findings(
+        tmp_path,
+        "def bind(workflow):\n"
+        "    return workflow.decide\n",
+        relative="application/feature.py",
+    )
+
+    assert [finding.code for finding in findings] == [
+        "decision_authority_reference_outside_owner"
     ]
