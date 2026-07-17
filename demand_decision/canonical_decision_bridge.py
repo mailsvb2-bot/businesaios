@@ -54,6 +54,97 @@ def _serialize_candidate(candidate: DecisionCandidate) -> dict[str, Any]:
     }
 
 
+def routing_decision_from_signed_envelope(
+    *,
+    request_id: str,
+    envelope: Any,
+    trace: dict[str, Any] | None = None,
+    preferred_channels: dict[str, str] | None = None,
+    blocked_count: int = 0,
+    manual_review_reason: str = "",
+) -> RoutingDecision:
+    """Adapt one canonical signed route envelope to the public routing contract.
+
+    This function performs no ranking or selection. It only validates the signed
+    decision identity and projects its payload into the historical public
+    ``RoutingDecision`` surface.
+    """
+
+    canonical_request_id = str(request_id or "").strip()
+    if not canonical_request_id:
+        raise ValueError("request requires request_id")
+
+    decision = getattr(envelope, "decision", None)
+    if decision is None:
+        raise RuntimeError("demand_route_envelope_missing_decision")
+    if str(getattr(decision, "action", "")) != ACTION_ROUTE_LEAD_V1:
+        raise RuntimeError("demand_route_unexpected_action")
+
+    decision_id = str(getattr(decision, "decision_id", "") or "").strip()
+    if not decision_id:
+        raise RuntimeError("demand_route_envelope_missing_decision_id")
+
+    payload = dict(getattr(decision, "payload", {}) or {})
+    payload_request_id = str(payload.get("request_id") or "").strip()
+    if payload_request_id and payload_request_id != canonical_request_id:
+        raise RuntimeError("demand_route_request_id_mismatch")
+
+    selected_business_id = str(
+        payload.get("selected_business_id") or ""
+    ).strip() or None
+    runner_ups = tuple(
+        str(item).strip()
+        for item in payload.get("runner_up_business_ids") or ()
+        if str(item).strip()
+    )[:MAX_RUNNER_UPS]
+
+    decision_trace = dict(trace or {})
+    decision_trace["decision_path"] = CANONICAL_DECISION_PATH
+    decision_trace["optimization_target"] = str(
+        decision_trace.get("optimization_target")
+        or CANONICAL_OPTIMIZATION_TARGET
+    )
+    decision_trace["decision_id"] = decision_id
+    decision_trace["request_id"] = canonical_request_id
+    decision_trace["selected_from_candidates"] = int(
+        payload.get("candidate_count") or 0
+    )
+    decision_trace["blocked_candidate_count"] = int(
+        payload.get("blocked_candidate_count") or blocked_count
+    )
+
+    if selected_business_id is None:
+        decision_trace["manual_review_reason"] = str(
+            payload.get("manual_review_reason")
+            or manual_review_reason
+            or "decision_core_rejected_all_candidates"
+        )
+    else:
+        channel_map = {
+            str(key).strip(): str(value).strip()
+            for key, value in dict(preferred_channels or {}).items()
+            if str(key).strip() and str(value).strip()
+        }
+        decision_trace["delivery_channel"] = str(
+            payload.get("delivery_channel")
+            or channel_map.get(selected_business_id)
+            or DEFAULT_DELIVERY_CHANNEL
+        )
+
+    return RoutingDecision(
+        request_id=canonical_request_id,
+        selected_business_id=selected_business_id,
+        runner_up_business_ids=runner_ups,
+        trace=decision_trace,
+        requires_manual_review=bool(
+            payload.get(
+                "requires_manual_review",
+                selected_business_id is None,
+            )
+        ),
+    )
+
+
 class CanonicalDemandDecisionBridge:
     def __init__(self, *, decision_core: object) -> None:
         self._decision_core = decision_core
@@ -246,59 +337,18 @@ class CanonicalDemandDecisionBridge:
             manual_review_reason=manual_review_reason,
         )
         envelope = self._issue_route_decision(state=state)
-        decision = getattr(envelope, "decision", None)
-        if decision is None:
-            raise RuntimeError("demand_route_envelope_missing_decision")
-        if str(getattr(decision, "action", "")) != ACTION_ROUTE_LEAD_V1:
-            raise RuntimeError("demand_route_unexpected_action")
-        payload = dict(getattr(decision, "payload", {}) or {})
-
-        selected_business_id = str(
-            payload.get("selected_business_id") or ""
-        ).strip() or None
-        runner_ups = tuple(
-            str(item).strip()
-            for item in payload.get("runner_up_business_ids") or ()
-            if str(item).strip()
-        )[:MAX_RUNNER_UPS]
-
-        decision_trace = dict(trace)
-        decision_trace["decision_path"] = CANONICAL_DECISION_PATH
-        decision_trace["optimization_target"] = str(
-            trace.get("optimization_target")
-            or CANONICAL_OPTIMIZATION_TARGET
-        )
-        decision_trace["decision_id"] = str(
-            getattr(decision, "decision_id", "") or ""
-        )
-        decision_trace["request_id"] = request_id
-        decision_trace["selected_from_candidates"] = int(
-            payload.get("candidate_count") or 0
-        )
-        decision_trace["blocked_candidate_count"] = int(
-            payload.get("blocked_candidate_count") or blocked_count
-        )
-        if selected_business_id is None:
-            decision_trace["manual_review_reason"] = str(
-                payload.get("manual_review_reason")
-                or manual_review_reason
-            )
-        else:
-            decision_trace["delivery_channel"] = str(
-                payload.get("delivery_channel")
-                or preferred_channels.get(selected_business_id)
-                or DEFAULT_DELIVERY_CHANNEL
-            )
-
-        return RoutingDecision(
+        return routing_decision_from_signed_envelope(
             request_id=request_id,
-            selected_business_id=selected_business_id,
-            runner_up_business_ids=runner_ups,
-            trace=decision_trace,
-            requires_manual_review=bool(
-                payload.get(
-                    "requires_manual_review",
-                    selected_business_id is None,
-                )
-            ),
+            envelope=envelope,
+            trace=trace,
+            preferred_channels=preferred_channels,
+            blocked_count=blocked_count,
+            manual_review_reason=manual_review_reason,
         )
+
+
+__all__ = [
+    "CANON_DEMAND_BRIDGE_ADAPTS_SIGNED_ROUTE_DECISION",
+    "CanonicalDemandDecisionBridge",
+    "routing_decision_from_signed_envelope",
+]
