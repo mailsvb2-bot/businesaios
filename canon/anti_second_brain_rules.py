@@ -40,12 +40,12 @@ DECISION_AUTHORITY_RECEIVER_TOKENS = (
 
 # Tests may model negative examples. Production authority is file-exact: adding
 # a new module under core/ai or application/decision_runtime never grants it
-# permission to issue decisions.
+# permission to issue decisions. Compatibility gateways must delegate to one of
+# these owners rather than acquiring an exception of their own.
 CANONICAL_DECISION_OWNER_DIR_PREFIXES = ("tests/",)
 CANONICAL_DECISION_OWNER_FILES = frozenset(
     {
         CANONICAL_DECISION_CORE_PATH,
-        "application/headless/decision_gateway.py",
         "runtime/decision_gateway.py",
         "runtime/decision_path_lock.py",
     }
