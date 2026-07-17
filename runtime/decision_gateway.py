@@ -15,7 +15,9 @@ from bootstrap.decision_core_contract import RuntimeDecisionCorePort as Decision
 
 if TYPE_CHECKING:  # pragma: no cover
     from runtime.decision_input.decision_input_service import DecisionInputService
-    from runtime.decision_input.runtime_state_enrichment import RuntimeStateEnrichmentService
+    from runtime.decision_input.runtime_state_enrichment import (
+        RuntimeStateEnrichmentService,
+    )
     from runtime.integration.decision_input_packet import DecisionInputPacket
     from runtime.runtime_observability import RuntimeObservability
 else:
@@ -65,11 +67,21 @@ class RuntimeDecisionRouteGateway:
             metric_name="enrichment_key_count",
             metric_value=float(len(enrichment)),
         )
-        packet_id = str(getattr(packet, "packet_id", "") or "decision_packet")
+        packet_id = str(
+            getattr(packet, "packet_id", "") or "decision_packet"
+        )
+        generated_at_ms = int(
+            getattr(
+                packet.recommendation_packet.world_state,
+                "generated_at_ms",
+                0,
+            )
+            or 0
+        )
         self.observability.record_decision_trace(
             trace_name="decision_gateway",
             stage="contract_enriched",
-            generated_at_ms=int(getattr(packet.recommendation_packet.world_state, "generated_at_ms", 0) or 0),
+            generated_at_ms=generated_at_ms,
             packet_id=packet_id,
             enrichment_key_count=len(enrichment),
             context_key_count=len(next_context),
@@ -109,7 +121,9 @@ class RuntimeDecisionIssueGateway:
         *,
         decision_input_packet: DecisionInputPacket | None = None,
     ) -> Any:
-        from runtime.decision_input.runtime_state_enrichment import enrich_state_with_decision_input_packet
+        from runtime.decision_input.runtime_state_enrichment import (
+            enrich_state_with_decision_input_packet,
+        )
         from runtime.decision_path_lock import issue_locked_decision
 
         enriched_state = enrich_state_with_decision_input_packet(
@@ -165,7 +179,65 @@ def issue_runtime_decision(
     decision_input_packet: DecisionInputPacket | None = None,
 ) -> Any:
     """Thin compatibility wrapper over RuntimeDecisionIssueGateway.issue."""
-    return RuntimeDecisionIssueGateway(issuer=issuer).issue(state, decision_input_packet=decision_input_packet)
+
+    return RuntimeDecisionIssueGateway(issuer=issuer).issue(
+        state,
+        decision_input_packet=decision_input_packet,
+    )
+
+
+def build_runtime_decision_callable(
+    *,
+    issuer: DecisionIssuer,
+    decision_input_packet: DecisionInputPacket | None = None,
+) -> Callable[[Any], Any]:
+    """Bind an issuer to the canonical issue gateway for runner wiring."""
+
+    validate_runtime_decision_issuer(issuer)
+
+    def _issue(state: Any) -> Any:
+        return issue_runtime_decision(
+            issuer=issuer,
+            state=state,
+            decision_input_packet=decision_input_packet,
+        )
+
+    return _issue
+
+
+def optimize_runtime_decision(
+    *,
+    issuer: Any,
+    state: Any,
+    method_name: str = "optimize",
+) -> Any:
+    """Invoke the one approved optimize surface inside the gateway owner."""
+
+    if str(method_name) != "optimize":
+        raise DecisionGatewayContractError(
+            "noncanonical_decision_optimize_method"
+        )
+    optimize = getattr(issuer, "optimize", None)
+    if not callable(optimize):
+        raise DecisionGatewayContractError(
+            "canonical_decision_core_optimize_required"
+        )
+    return optimize(state)
+
+
+def issue_structured_decision(
+    *,
+    issuer: Any,
+    decision_space: Any,
+    constraints: Any,
+    request: Any,
+) -> Any:
+    """Route the legacy structured issue signature through one owner."""
+
+    issue = getattr(issuer, "issue", None)
+    if not callable(issue):
+        raise DecisionGatewayContractError("issuer_issue_missing")
+    return issue(decision_space, constraints, request)
 
 
 def execute_runtime_decision(
@@ -176,7 +248,11 @@ def execute_runtime_decision(
     decision_input_packet: DecisionInputPacket | None = None,
 ) -> Any:
     """Canonical runtime helper for issue -> execute on one path."""
-    from runtime.execution.execution_path_lock import execute_locked_decision, lock_execution_envelope
+
+    from runtime.execution.execution_path_lock import (
+        execute_locked_decision,
+        lock_execution_envelope,
+    )
 
     envelope = issue_runtime_decision(
         issuer=issuer,
@@ -185,7 +261,10 @@ def execute_runtime_decision(
     )
     try:
         locked_execution = lock_execution_envelope(envelope=envelope)
-        return execute_locked_decision(executor=executor, locked_path=locked_execution)
+        return execute_locked_decision(
+            executor=executor,
+            locked_path=locked_execution,
+        )
     except Exception as exc:
         if isinstance(exc, DecisionGatewayContractError):
             raise
@@ -209,5 +288,8 @@ def route_and_issue_runtime_decision(
     return route_gateway.route(
         packet=packet,
         canonical_context=canonical_context,
-        decision_core_callable=lambda state: issue_runtime_decision(issuer=issuer, state=state, decision_input_packet=packet),
+        decision_core_callable=build_runtime_decision_callable(
+            issuer=issuer,
+            decision_input_packet=packet,
+        ),
     )
