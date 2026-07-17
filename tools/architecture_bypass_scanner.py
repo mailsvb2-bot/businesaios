@@ -53,7 +53,6 @@ ROOT_EXCLUDED_DIRS = {
     "release_dist",
     "reports",
 }
-# Compatibility export. Discovery applies ROOT_EXCLUDED_DIRS only at repo root.
 EXCLUDED_DIRS = GLOBAL_EXCLUDED_DIRS | ROOT_EXCLUDED_DIRS
 SCAN_ROOTS: tuple[str, ...] = ()
 TEST_OR_SCRIPT_PREFIXES = ("tests/", "scripts/")
@@ -79,10 +78,6 @@ APPROVED_DYNAMIC_IMPORT_FILES = {
 APPROVED_SYSTEM_EXIT_FILES = {"scripts/ci/cli.py"}
 TEXT_DENY_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
-        "unsafe_requests_verify_false",
-        re.compile(r"\bverify\s*=\s*False\b"),
-    ),
-    (
         "unsafe_shell_true",
         re.compile(r"\bshell\s*=\s*True\b"),
     ),
@@ -93,10 +88,6 @@ TEXT_DENY_RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "raw_subprocess_popen",
         re.compile(r"\bsubprocess\.Popen\s*\("),
-    ),
-    (
-        "raw_eval_exec",
-        re.compile(r"(?<![\w.])(eval|exec)\s*\("),
     ),
 )
 RAW_SIDE_EFFECT_CALLS = {
@@ -114,6 +105,17 @@ RAW_SIDE_EFFECT_CALLS = {
     ("subprocess", "call"),
     ("subprocess", "check_call"),
     ("subprocess", "check_output"),
+}
+HTTP_REQUEST_METHODS = {
+    "request",
+    "get",
+    "post",
+    "put",
+    "patch",
+    "delete",
+    "head",
+    "options",
+    "stream",
 }
 DECISION_BYPASS_CALLS = DECISION_AUTHORITY_METHODS
 APPROVED_DECISION_OWNER_PREFIXES = CANONICAL_DECISION_OWNER_PREFIXES
@@ -237,6 +239,39 @@ def _root_owner(owner: str | None) -> str | None:
     return owner.split(".", 1)[0].removesuffix("()").removesuffix("[]")
 
 
+def _false_keyword(call: ast.Call, name: str) -> bool:
+    for keyword in call.keywords:
+        if keyword.arg != name:
+            continue
+        return (
+            isinstance(keyword.value, ast.Constant)
+            and keyword.value.value is False
+        )
+    return False
+
+
+def _looks_like_http_request_call(
+    *,
+    owner: str | None,
+    name: str | None,
+) -> bool:
+    if name not in HTTP_REQUEST_METHODS or not owner:
+        return False
+    root = _root_owner(owner)
+    if root in {"requests", "httpx"}:
+        return True
+    tail = owner.rsplit(".", 1)[-1].lower()
+    return any(
+        token in tail
+        for token in (
+            "session",
+            "client",
+            "http",
+            "transport",
+        )
+    )
+
+
 def _scan_text(
     *,
     root: Path,
@@ -250,8 +285,6 @@ def _scan_text(
         return findings
     lines = text.splitlines()
     for code, pattern in TEXT_DENY_RULES:
-        if code == "raw_eval_exec" and rel in APPROVED_DYNAMIC_IMPORT_FILES:
-            continue
         if code in {
             "raw_os_system",
             "raw_subprocess_popen",
@@ -320,6 +353,35 @@ def _scan_ast(
                 )
             )
         if (
+            _false_keyword(node, "verify")
+            and _looks_like_http_request_call(owner=owner, name=name)
+            and not _is_test_or_script(rel)
+        ):
+            findings.append(
+                Finding(
+                    code="unsafe_requests_verify_false",
+                    path=rel,
+                    line=line,
+                    detail=(
+                        f"{owner}.{name}() disables TLS certificate verification"
+                    ),
+                )
+            )
+        if (
+            owner is None
+            and name in {"eval", "exec"}
+            and rel not in APPROVED_DYNAMIC_IMPORT_FILES
+            and not _is_test_or_script(rel)
+        ):
+            findings.append(
+                Finding(
+                    code="raw_eval_exec",
+                    path=rel,
+                    line=line,
+                    detail=f"built-in {name}() execution is forbidden",
+                )
+            )
+        if (
             owner is None
             and name == "__import__"
             and rel not in APPROVED_DYNAMIC_IMPORT_FILES
@@ -374,7 +436,12 @@ def scan(root: Path | None = None) -> tuple[Finding, ...]:
             )
             continue
         findings.extend(
-            _scan_text(root=repo, path=path, rel=rel, text=text)
+            _scan_text(
+                root=repo,
+                path=path,
+                rel=rel,
+                text=text,
+            )
         )
         try:
             tree = ast.parse(text, filename=rel)
@@ -418,7 +485,9 @@ def main() -> int:
     if not findings:
         print("architecture bypass scanner passed")
         return 0
-    print(f"architecture bypass scanner failed: findings={len(findings)}")
+    print(
+        f"architecture bypass scanner failed: findings={len(findings)}"
+    )
     for finding in findings[:80]:
         print(finding.format())
     if len(findings) > 80:
