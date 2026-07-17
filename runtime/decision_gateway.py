@@ -32,10 +32,31 @@ CANON_RUNTIME_DECISION_GATEWAY_OWNS_EXECUTION_SEQUENCE = True
 CANON_RUNTIME_DECISION_ROUTE_GATEWAY_OWNER = True
 CANON_RUNTIME_DECISION_GATEWAY_COMPAT_ALIAS = True
 CANON_RUNTIME_DECISION_GATEWAY_NAME_RESERVED_FOR_ROUTE_OWNER = True
+CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON = True
 
 
 class DecisionGatewayContractError(RuntimeError):
     pass
+
+
+def _registered_decision_core() -> Any:
+    from core.ai import get_decision_core_singleton
+
+    try:
+        return get_decision_core_singleton()
+    except RuntimeError as exc:
+        raise DecisionGatewayContractError(
+            "canonical_decision_core_not_initialized"
+        ) from exc
+
+
+def validate_runtime_decision_issuer(issuer: DecisionIssuer) -> None:
+    canonical = _registered_decision_core()
+    if issuer is not canonical:
+        raise DecisionGatewayContractError("noncanonical_decision_issuer")
+    issue = getattr(issuer, "issue", None)
+    if not callable(issue):
+        raise DecisionGatewayContractError("issuer_issue_missing")
 
 
 @dataclass
@@ -54,8 +75,10 @@ class RuntimeDecisionRouteGateway:
         from canon.decision_gateway_rules import assert_decision_gateway_api
 
         assert_decision_gateway_api(("route",))
-        if not callable(decision_core_callable):
-            raise DecisionGatewayContractError("decision_core_not_callable")
+        if not isinstance(decision_core_callable, _CanonicalDecisionCallable):
+            raise DecisionGatewayContractError(
+                "noncanonical_decision_callable"
+            )
         contract = self.decision_input_service.read_packet(packet)
         enrichment = self.enrichment_service.build(contract)
         if not isinstance(enrichment, Mapping):
@@ -126,6 +149,7 @@ class RuntimeDecisionIssueGateway:
         )
         from runtime.decision_path_lock import issue_locked_decision
 
+        validate_runtime_decision_issuer(self.issuer)
         enriched_state = enrich_state_with_decision_input_packet(
             state=state,
             decision_input_packet=decision_input_packet,
@@ -150,6 +174,19 @@ class RuntimeDecisionIssueGateway:
             if isinstance(exc, DecisionGatewayContractError):
                 raise
             raise DecisionGatewayContractError(str(exc)) from exc
+
+
+@dataclass(slots=True, frozen=True)
+class _CanonicalDecisionCallable:
+    issuer: DecisionIssuer
+    decision_input_packet: DecisionInputPacket | None = None
+
+    def __call__(self, state: Any) -> Any:
+        return issue_runtime_decision(
+            issuer=self.issuer,
+            state=state,
+            decision_input_packet=self.decision_input_packet,
+        )
 
 
 # Transitional ABI only.
@@ -191,18 +228,12 @@ def build_runtime_decision_callable(
     issuer: DecisionIssuer,
     decision_input_packet: DecisionInputPacket | None = None,
 ) -> Callable[[Any], Any]:
-    """Bind an issuer to the canonical issue gateway for runner wiring."""
+    """Bind the registered issuer to the canonical issue gateway."""
 
-    validate_runtime_decision_issuer(issuer)
-
-    def _issue(state: Any) -> Any:
-        return issue_runtime_decision(
-            issuer=issuer,
-            state=state,
-            decision_input_packet=decision_input_packet,
-        )
-
-    return _issue
+    return _CanonicalDecisionCallable(
+        issuer=issuer,
+        decision_input_packet=decision_input_packet,
+    )
 
 
 def optimize_runtime_decision(
@@ -213,6 +244,7 @@ def optimize_runtime_decision(
 ) -> Any:
     """Invoke the one approved optimize surface inside the gateway owner."""
 
+    validate_runtime_decision_issuer(issuer)
     if str(method_name) != "optimize":
         raise DecisionGatewayContractError(
             "noncanonical_decision_optimize_method"
@@ -232,8 +264,9 @@ def issue_structured_decision(
     constraints: Any,
     request: Any,
 ) -> Any:
-    """Route the legacy structured issue signature through one owner."""
+    """Preserve the structured ABI without accepting an alternate issuer."""
 
+    validate_runtime_decision_issuer(issuer)
     issue = getattr(issuer, "issue", None)
     if not callable(issue):
         raise DecisionGatewayContractError("issuer_issue_missing")
@@ -269,12 +302,6 @@ def execute_runtime_decision(
         if isinstance(exc, DecisionGatewayContractError):
             raise
         raise DecisionGatewayContractError(str(exc)) from exc
-
-
-def validate_runtime_decision_issuer(issuer: DecisionIssuer) -> None:
-    issue = getattr(issuer, "issue", None)
-    if not callable(issue):
-        raise DecisionGatewayContractError("issuer_issue_missing")
 
 
 def route_and_issue_runtime_decision(
