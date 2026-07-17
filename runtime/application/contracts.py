@@ -1,16 +1,15 @@
 """Canonical runtime application contract surface.
 
 This module is the single owner for lightweight runtime-owned application
-contracts derived from the runtime registry and decision-core access boundary.
-Historical modules under ``runtime.application.*`` as well as legacy root-level
-access helpers remain transition ABI only. This file is the single owner for
-runtime application access/contracts surface and must not absorb business logic.
+contracts derived from the runtime registry. Runtime application code receives
+an already-issued DecisionEnvelope and can only delegate it to the registered
+execution service; it never resolves or invokes the sovereign DecisionCore.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
 
 from application.decision.decision_service import DecisionApplicationService
 from runtime.access_policies import validate_capability_access
@@ -25,11 +24,17 @@ from runtime.service_names import RuntimeServiceName
 
 CANON_RUNTIME_APPLICATION_CONTRACTS = True
 CANON_SINGLE_OWNER = True
+CANON_RUNTIME_APPLICATION_SINGLE_DECISION_PATH = True
+CANON_RUNTIME_APPLICATION_EXECUTION_ONLY = True
 
-class RuntimeDecisionCorePort(Protocol):
-    decide: Any
 
-    def issue(self, state: Any) -> Any: ...
+class RuntimeDecisionExecutionPort(Protocol):
+    def execute(self, envelope: object) -> object: ...
+
+
+# Historical exported name. It now denotes the execution-only protocol and does
+# not grant issue/decide authority.
+RuntimeDecisionCorePort = RuntimeDecisionExecutionPort
 
 
 @dataclass(frozen=True)
@@ -89,8 +94,15 @@ class RuntimeTypedAccess:
     def action_executor(self) -> object:
         return self.registry.get(RuntimeServiceName.ACTION_EXECUTOR)
 
+    def decision_execution(self) -> object:
+        return self.registry.get(
+            RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE
+        )
+
     def decision_core(self) -> object:
-        return self.registry.get(RuntimeServiceName.DECISION_CORE)
+        """Historical lookup alias for the execution service only."""
+
+        return self.decision_execution()
 
 
 @dataclass(frozen=True)
@@ -105,20 +117,28 @@ class RuntimeCapabilityAccess:
         )
         return self.registry.get(service_name)
 
-CANON_RUNTIME_APPLICATION_SINGLE_DECISION_PATH = True
-
-
-
 
 def build_runtime_service_exports_from_raw(
     *,
     decision_core: object,
     observability: object | None = None,
 ) -> RuntimeServiceExports:
+    """Compatibility builder around an execution-only owner.
+
+    The ``decision_core`` keyword is retained for callers compiled against the
+    historical API. Passing a sovereign issuer fails closed because the port
+    rejects issue/decide/optimize surfaces and requires ``execute(envelope)``.
+    """
+
     return RuntimeServiceExports(
-        decision_execution=build_decision_execution_port(decision_core=decision_core),
-        observability=build_nullable_observability_port(observability=observability),
+        decision_execution=build_decision_execution_port(
+            decision_core=decision_core
+        ),
+        observability=build_nullable_observability_port(
+            observability=observability
+        ),
     )
+
 
 def build_runtime_application_service_from_exports(
     exports: RuntimeServiceExports,
@@ -154,25 +174,29 @@ def build_runtime_service_exports(
     registry: ReadOnlyRuntimeRegistry,
 ) -> RuntimeServiceExports:
     return build_runtime_service_exports_from_raw(
-        decision_core=registry.get(RuntimeServiceName.DECISION_CORE),
+        decision_core=registry.get(
+            RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE
+        ),
         observability=registry.get(RuntimeServiceName.OBSERVABILITY),
     )
 
 
 __all__ = [
-    'CANON_RUNTIME_APPLICATION_CONTRACTS',
-    'CANON_SINGLE_OWNER',
-    'CANON_RUNTIME_APPLICATION_SINGLE_DECISION_PATH',
-    'DecisionExecutionPort',
-    'ObservabilityPort',
-    'ReadOnlyRuntimeRegistry',
-    'RuntimeCapabilityAccess',
-    'RuntimeDecisionCorePort',
-    'RuntimeServiceExports',
-    'RuntimeTypedAccess',
-    'build_runtime_application_service',
-    'build_runtime_service_exports_from_raw',
-    'build_runtime_application_service_from_exports',
-    'build_runtime_application_service_from_raw',
-    'build_runtime_service_exports',
+    "CANON_RUNTIME_APPLICATION_CONTRACTS",
+    "CANON_RUNTIME_APPLICATION_EXECUTION_ONLY",
+    "CANON_RUNTIME_APPLICATION_SINGLE_DECISION_PATH",
+    "CANON_SINGLE_OWNER",
+    "DecisionExecutionPort",
+    "ObservabilityPort",
+    "ReadOnlyRuntimeRegistry",
+    "RuntimeCapabilityAccess",
+    "RuntimeDecisionCorePort",
+    "RuntimeDecisionExecutionPort",
+    "RuntimeServiceExports",
+    "RuntimeTypedAccess",
+    "build_runtime_application_service",
+    "build_runtime_application_service_from_exports",
+    "build_runtime_application_service_from_raw",
+    "build_runtime_service_exports",
+    "build_runtime_service_exports_from_raw",
 ]
