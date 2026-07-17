@@ -11,7 +11,10 @@ from config.execution_contract import (
     CANONICAL_OPTIMIZATION_TARGET,
 )
 from core.actions.names import ACTION_ROUTE_LEAD_V1
-from core.ai import reset_decision_core_singleton, set_decision_core_singleton
+from core.ai import (
+    _reset_decision_core_singleton_for_tests,
+    set_decision_core_singleton,
+)
 from demand_decision.canonical_decision_bridge import CanonicalDemandDecisionBridge
 
 from .canonical_observation import canonicalize_mapping
@@ -239,7 +242,7 @@ def _run_demand_bridge_case(payload: Mapping[str, Any]) -> dict[str, Any]:
         "trace": trace,
     }
 
-    reset_decision_core_singleton()
+    _reset_decision_core_singleton_for_tests()
     core = _build_snapshot_core(payload)
     set_decision_core_singleton(core)
     try:
@@ -249,7 +252,7 @@ def _run_demand_bridge_case(payload: Mapping[str, Any]) -> dict[str, Any]:
             routing_preparation=routing_preparation,
         )
     finally:
-        reset_decision_core_singleton()
+        _reset_decision_core_singleton_for_tests()
 
     return canonicalize_mapping(
         {
