@@ -2,17 +2,36 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pytest
+
 from application.headless.feedback import SimpleHeadlessFeedbackReader
 from application.headless.goal_mapper import HeadlessGoalStateMapper
 from application.headless.stop_policy import HeadlessStopPolicy
+from core.ai import (
+    _reset_decision_core_singleton_for_tests,
+    set_decision_core_singleton,
+)
 from core.ai.decision import Decision, DecisionEnvelope
-from execution.headless_contract import GoalExecutionRequest, HeadlessExecutionContract
+from execution.headless_contract import (
+    GoalExecutionRequest,
+    HeadlessExecutionContract,
+)
 from runtime.execution.executor_result import ExecutionResult
+
+
+@pytest.fixture(autouse=True)
+def _isolated_decision_core_singleton():
+    _reset_decision_core_singleton_for_tests()
+    try:
+        yield
+    finally:
+        _reset_decision_core_singleton_for_tests()
 
 
 @dataclass
 class StubDecisionCore:
-    def optimize(self, state):
+    def issue(self, state):
+        del state
         return DecisionEnvelope(
             decision=Decision(
                 decision_id="dec-semantics",
@@ -21,7 +40,12 @@ class StubDecisionCore:
                 expires_at_ms=2,
                 policy_id="policy-semantics",
                 action="create_listing",
-                payload={"feedback_seed": {"terminal": True, "goal_reached": True}},
+                payload={
+                    "feedback_seed": {
+                        "terminal": True,
+                        "goal_reached": True,
+                    }
+                },
                 snapshot_id="snap-1",
                 state_hash="hash-1",
                 correlation_id="corr-semantics",
@@ -63,7 +87,9 @@ class VerifiedExecutor:
                     "verified": True,
                     "status": "executed",
                     "external_ref": "listing-verified",
-                    "evidence": {"external_refs": ["listing-verified"]},
+                    "evidence": {
+                        "external_refs": ["listing-verified"]
+                    },
                 },
             },
             error=None,
@@ -73,8 +99,10 @@ class VerifiedExecutor:
 
 
 def _make_contract(executor):
+    core = StubDecisionCore()
+    set_decision_core_singleton(core)
     return HeadlessExecutionContract(
-        decision_core=StubDecisionCore(),
+        decision_core=core,
         executor=executor,
         state_mapper=HeadlessGoalStateMapper(),
         feedback_reader=SimpleHeadlessFeedbackReader.default(),
@@ -84,7 +112,12 @@ def _make_contract(executor):
 
 def test_headless_step_exposes_attempted_executed_verified_semantics() -> None:
     report = _make_contract(VerifiedExecutor()).execute_autopilot(
-        GoalExecutionRequest(goal="publish listing", business_id="biz-1", tenant_id="tenant-1", max_steps=1)
+        GoalExecutionRequest(
+            goal="publish listing",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            max_steps=1,
+        )
     )
     step = report.steps[0]
     assert step.attempted is True
@@ -99,7 +132,12 @@ def test_headless_step_exposes_attempted_executed_verified_semantics() -> None:
 
 def test_headless_does_not_treat_plain_acceptance_as_verified_success() -> None:
     report = _make_contract(AcceptedOnlyExecutor()).execute_autopilot(
-        GoalExecutionRequest(goal="publish listing", business_id="biz-1", tenant_id="tenant-1", max_steps=1)
+        GoalExecutionRequest(
+            goal="publish listing",
+            business_id="biz-1",
+            tenant_id="tenant-1",
+            max_steps=1,
+        )
     )
     step = report.steps[0]
     assert step.attempted is True

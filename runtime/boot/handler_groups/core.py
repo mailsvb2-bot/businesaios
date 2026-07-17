@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from core.actions.names import ACTION_ROUTE_LEAD_V1
 from runtime.handlers import ActionHandlerRegistry
 
 CANON_BOOT_WIRING_ONLY = True
@@ -17,7 +18,11 @@ def _catalog_action_for_handler(handler_ref: str) -> str:
 
 def _track_marker_event(*, payload, effects, env, event_type: str):
     body = dict(payload or {})
-    event_payload = dict(body.get("payload") or {}) if isinstance(body.get("payload"), dict) else {}
+    event_payload = (
+        dict(body.get("payload") or {})
+        if isinstance(body.get("payload"), dict)
+        else {}
+    )
     tenant_id = str(body.get("tenant_id") or "").strip()
     product_id = str(body.get("product_id") or "").strip()
     if tenant_id:
@@ -37,6 +42,7 @@ def _track_marker_event(*, payload, effects, env, event_type: str):
 def register_core_handlers(*, handlers: ActionHandlerRegistry, ctx) -> None:
     from runtime.boot.handler_groups.shared import get_ctx_value
     from runtime.handlers.ai_ceo_plan import handle_ai_ceo_plan
+    from runtime.handlers.demand_route import handle_route_lead
     from runtime.handlers.pricing_select import handle_pricing_select
 
     handlers.register(
@@ -75,12 +81,16 @@ def register_core_handlers(*, handlers: ActionHandlerRegistry, ctx) -> None:
             event_type="autopilot_decision",
         ),
     )
+    handlers.register(ACTION_ROUTE_LEAD_V1, handle_route_lead)
     handlers.register(
         "pricing_select@v1",
         lambda payload, effects, env: handle_pricing_select(
             payload,
             effects,
             env,
-            selection_service=get_ctx_value(ctx, "pricing_selection_service"),
+            selection_service=get_ctx_value(
+                ctx,
+                "pricing_selection_service",
+            ),
         ),
     )

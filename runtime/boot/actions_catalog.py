@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
+from core.actions.names import ACTION_ROUTE_LEAD_V1
+
 CANON_BOOT_WIRING_ONLY = True
 SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("admin_set_perm@v1", "runtime.handlers_ops:handle_admin_set_perm", True, "admin", 60, 60),
@@ -24,6 +26,7 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("autopilot_run_started@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
     ("autopilot_started@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
     ("pricing_select@v1", "runtime.handlers.pricing_select:handle_pricing_select", True, "general", 60, 30),
+    (ACTION_ROUTE_LEAD_V1, "runtime.handlers.demand_route:handle_route_lead", True, "general", 120, 60),
     ("reward_observe@v1", "runtime.handlers.reward_observe:handle_reward_observe", True, "ads", 120, 60),
     ("growth_propose@v1", "runtime.handlers.growth_propose:handle_growth_propose", True, "llm", 30, 15),
     ("answer_callback@v1", "runtime.handlers_ops:handle_answer_callback", True, "general", 120, 60),
@@ -141,6 +144,7 @@ ADVISORY_ACTIONS: frozenset[str] = frozenset(
         "behavior_graph_node@v1",
         "behavior_graph_path@v1",
         "poll_telegram_updates@v1",
+        ACTION_ROUTE_LEAD_V1,
         "telegram_self_check@v1",
     }
 )
@@ -186,7 +190,11 @@ def build_inline_allowlist(*, names: Iterable[str]) -> set[str]:
 
 
 def handler_actions_from(all_actions: Iterable[str]) -> set[str]:
-    return {str(name) for name in all_actions if str(name) not in EFFECT_ONLY_ACTIONS}
+    return {
+        str(name)
+        for name in all_actions
+        if str(name) not in EFFECT_ONLY_ACTIONS
+    }
 
 
 __all__ = [

@@ -6,11 +6,9 @@ from typing import Any
 
 from scripts.ci.integrity import auditor
 from scripts.ci.integrity.decision_authority_alias_exemptions import (
-    is_bounded_non_runtime_regression_fixture,
     is_canonical_singleton_storage_assignment,
     is_fail_closed_runtime_decision_core_tripwire,
     is_registry_reference_accessor,
-    module_exports,
 )
 from scripts.ci.integrity.decision_authority_alias_rules import (
     AUTHORITY_METHODS,
@@ -67,7 +65,6 @@ def _alias_findings_for_path(
     executable_names = auditor._executable_decision_authority_names(spec)
     parents = parent_map(tree)
     plain_data_types = plain_frozen_data_type_names(tree)
-    exported_names = module_exports(tree)
     findings: list[auditor.Finding] = []
 
     for node in ast.walk(tree):
@@ -75,12 +72,6 @@ def _alias_findings_for_path(
             if is_fail_closed_runtime_decision_core_tripwire(
                 relative=relative,
                 node=node,
-            ):
-                continue
-            if is_bounded_non_runtime_regression_fixture(
-                relative=relative,
-                node=node,
-                exported_names=exported_names,
             ):
                 continue
             if is_pure_authority_interface(node):
@@ -197,4 +188,7 @@ def check_decision_authority_aliases(
     return findings
 
 
-__all__ = ["CANON_SECOND_BRAIN_ALIAS_SCAN", "check_decision_authority_aliases"]
+__all__ = [
+    "CANON_SECOND_BRAIN_ALIAS_SCAN",
+    "check_decision_authority_aliases",
+]

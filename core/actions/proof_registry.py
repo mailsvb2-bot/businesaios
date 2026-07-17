@@ -9,6 +9,8 @@ Keep in sync with runtime.boot.handlers_wiring and effects that emit proof event
 Actions not listed here are re-dispatched on recovery (handlers must be idempotent).
 """
 
+from core.actions.names import ACTION_ROUTE_LEAD_V1
+
 ACTION_PROOF_EVENT = {
     "send_message@v1": "message_sent",
     "send_audio@v1": "audio_sent",
@@ -30,7 +32,8 @@ ACTION_PROOF_EVENT = {
     "reject_pricing_change@v1": "pricing_change_rejected",
     "admin_set_role@v1": "admin_role_set",
     "admin_set_perm@v1": "admin_perm_set",
-    # local-only actions can still emit canonical proofs
+    # local-only and advisory actions can use the universal execution proof
     "noop@v1": "decision_executed",
     "poll_telegram_updates@v1": "decision_executed",
+    ACTION_ROUTE_LEAD_V1: "decision_executed",
 }

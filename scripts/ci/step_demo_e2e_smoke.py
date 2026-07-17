@@ -7,12 +7,24 @@ from pathlib import Path
 from scripts.ci.paths import repo_root
 from scripts.ci.subprocess_io import run_command
 
-_RUNTIME_STATE_PATTERNS = ("*.sqlite3", "*.sqlite", "*.db")
+_RUNTIME_STATE_PATTERNS = (
+    "*.sqlite3",
+    "*.sqlite",
+    "*.db",
+    "*.sqlite3-wal",
+    "*.sqlite3-shm",
+    "*.sqlite3-journal",
+    "*.sqlite-wal",
+    "*.sqlite-shm",
+    "*.sqlite-journal",
+    "*.db-wal",
+    "*.db-shm",
+    "*.db-journal",
+)
 _RUNTIME_STATE_ROOTS = (
     ".runtime",
-    "data/runtime",
-    "data/config",
-    "data/tenancy",
+    "data",
+    "runtime/data",
 )
 _CI_DEMO_STATE_ROOT = Path("/tmp/businesaios-ci-demo-state")
 _CI_DEMO_TENANCY_DIR = _CI_DEMO_STATE_ROOT / "tenancy"
@@ -20,11 +32,12 @@ _CI_DEMO_DATA_DIR = _CI_DEMO_STATE_ROOT / "data"
 
 
 def cleanup_ci_runtime_state() -> list[str]:
-    """Remove mutable runtime DB state created by CI smoke/tests.
+    """Remove mutable runtime database state created by CI smoke/tests.
 
-    Full CI intentionally runs demo/unit/integration flows that may exercise
-    sqlite-backed dev adapters. The gate must prove those flows but must not
-    leave repository-local DB artifacts after completion.
+    Full/release CI exercises sqlite-backed development adapters across both
+    top-level ``data`` and legacy ``runtime/data`` surfaces. Clean every ignored
+    database form, including WAL/SHM/journal sidecars, before repository-hygiene
+    locks inspect the final worktree.
     """
     root = repo_root()
     removed: list[str] = []

@@ -21,16 +21,39 @@ from orchestration.opportunity_pipeline import OpportunityPipeline
 from shared.registry import ActionRunnerRegistry
 
 
-def test_closed_loop_growth_flow_runs_end_to_end():
+def test_closed_loop_growth_flow_preserves_recommendation_without_shadow_execution():
     registry = ActionRunnerRegistry()
-    registry.register('notify_owner', NotifyOwnerRunner())
-    dispatcher = ActionDispatcher(ActionValidator(), ActionRunner(registry), ActionResultStore(), ActionAuditLog(), ActionIdempotency())
-    decision_core = DecisionService(DecisionSelector(), DecisionValidator(), DecisionPublisher(DecisionAuditLog(), EventBus()), DecisionHistory())
+    registry.register("notify_owner", NotifyOwnerRunner())
+    dispatcher = ActionDispatcher(
+        ActionValidator(),
+        ActionRunner(registry),
+        ActionResultStore(),
+        ActionAuditLog(),
+        ActionIdempotency(),
+    )
+    recommendation_service = DecisionService(
+        DecisionSelector(),
+        DecisionValidator(),
+        DecisionPublisher(DecisionAuditLog(), EventBus()),
+        DecisionHistory(),
+    )
+
     result = ClosedLoopGrowthFlow().run(
-        signals=[{'channel': 'internal', 'score': 0.8, 'expected_value': 10.0, 'action_type': 'notify_owner'}],
+        signals=[
+            {
+                "channel": "internal",
+                "score": 0.8,
+                "expected_value": 10.0,
+                "action_type": "notify_owner",
+            }
+        ],
         opportunity_pipeline=OpportunityPipeline(GrowthEngine()),
-        decision_pipeline=DecisionPipeline(decision_core),
+        decision_pipeline=DecisionPipeline(recommendation_service),
         execution_pipeline=ExecutionPipeline(dispatcher),
         feedback_pipeline=FeedbackPipeline(),
     )
-    assert result['execution_result']['status'] == 'accepted'
+
+    assert result["decision_result"].recommended is True
+    assert result["decision_result"].executable_action is None
+    assert result["execution_result"].status == "skipped"
+    assert result["execution_result"].message == "no_executable_action"

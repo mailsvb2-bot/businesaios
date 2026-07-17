@@ -1,0 +1,141 @@
+name: Deep Release Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_BASE_IMAGE_SOURCE: python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
+  PYTHON_BASE_IMAGE_LOCAL: businesaios/python-runtime-base:3.12-slim
+
+jobs:
+  release-proof:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    services:
+      postgres:
+        image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: businesaios
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d businesaios"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Install release dependencies and PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install --require-hashes -r requirements.release.lock.txt
+
+      - name: Resolve host gateway and verify PostgreSQL
+        run: |
+          set -Eeuo pipefail
+          GATEWAY="$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')"
+          test -n "$GATEWAY"
+          DATABASE_URL="postgresql://postgres:postgres@${GATEWAY}:5432/businesaios"
+          echo "DATABASE_URL=$DATABASE_URL" >> "$GITHUB_ENV"
+          echo "POSTGRES_DSN=$DATABASE_URL" >> "$GITHUB_ENV"
+          echo "POSTGRES_RUNTIME_ENABLED=1" >> "$GITHUB_ENV"
+          echo "POSTGRES_EVENT_STORE_ENABLED=1" >> "$GITHUB_ENV"
+          echo "POSTGRES_APPLY_MIGRATIONS=1" >> "$GITHUB_ENV"
+          echo "RUN_MIGRATIONS_BEFORE_START=1" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 30); do
+            if pg_isready -d "$DATABASE_URL"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Apply migrations and create real backup evidence
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/ci
+          .venv/bin/python -m scripts.ci.cli --gate postgres-migrations
+          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges > artifacts/ci/postgres_backup_evidence.sql
+          test -s artifacts/ci/postgres_backup_evidence.sql
+          echo "POSTGRES_BACKUP_EVIDENCE_PATH=$PWD/artifacts/ci/postgres_backup_evidence.sql" >> "$GITHUB_ENV"
+
+      - name: Install cargo-audit for deep supply-chain proof
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/ci
+          cd /tmp
+          cargo install cargo-audit --locked
+          cargo audit --version | tee "$GITHUB_WORKSPACE/artifacts/ci/cargo_audit_version.txt"
+
+      - name: Prepare vetted local Python base image
+        run: |
+          set -Eeuo pipefail
+          mkdir -p artifacts/ci
+          docker pull "$PYTHON_BASE_IMAGE_SOURCE"
+          docker tag "$PYTHON_BASE_IMAGE_SOURCE" "$PYTHON_BASE_IMAGE_LOCAL"
+          docker image inspect "$PYTHON_BASE_IMAGE_SOURCE" > artifacts/ci/python_base_image_inspect.json
+          docker image inspect "$PYTHON_BASE_IMAGE_LOCAL" >/dev/null
+
+      - name: Run real ephemeral staging proof
+        env:
+          PYTHON_BIN: ${{ github.workspace }}/.venv/bin/python
+          GIT_COMMIT_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          BAIOS_STAGING_PROOF_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
+          BAIOS_STAGING_TIMEOUT_SECONDS: "240"
+          BAIOS_PYTHON_BASE_IMAGE: ${{ env.PYTHON_BASE_IMAGE_LOCAL }}
+        run: |
+          set -Eeuo pipefail
+          bash scripts/staging/run_staging_runtime_proof.sh
+          .venv/bin/python -m scripts.ci.cli --gate staging-runtime
+
+      - name: Run canonical release gate
+        env:
+          BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK: "1"
+          GIT_COMMIT_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: .venv/bin/python -m scripts.ci.cli --gate release
+
+      - name: Upload deep release evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: deep-release-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/ci
+            release/manifest.json
+            dist
+            build
+          if-no-files-found: warn

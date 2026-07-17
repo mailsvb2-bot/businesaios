@@ -9,6 +9,7 @@ from __future__ import annotations
 ACTION_ADS_APPLY_EXECUTE_V1 = "ads_apply_" + "execute@v1"
 ACTION_EXECUTE_PLAN_V1 = "execute_plan@v1"
 ACTION_AI_CEO_PLAN_V1 = "ai_ceo_plan" + "@v1"
+ACTION_ROUTE_LEAD_V1 = "route_lead@v1"
 
 ACTION_ENQUEUE_EVOLUTION_JOB_V1 = "enqueue_evolution_job@v1"
 ACTION_APPLY_OFFER_PATCH_V1 = "apply_offer_patch@v1"

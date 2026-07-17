@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """Compatibility shim. Final owner: bootstrap.runtime_integration."""
 
-from core.application.decision_service import DecisionApplicationService
 from runtime.application import (  # compatibility audit marker: package-root owner
     ReadOnlyRuntimeRegistry,
     build_runtime_application_service,
@@ -23,6 +22,7 @@ CANON_RUNTIME_INTEGRATION_NO_LEGACY_BOOT_REUSE = True
 CANON_RUNTIME_INTEGRATION_PROTOCOL_TYPED = True
 CANON_RUNTIME_INTEGRATION_DIRECT_OWNER_BOOTSTRAP = True
 CANON_RUNTIME_INTEGRATION_COMPAT_SUBCLASS = True
+CANON_RUNTIME_INTEGRATION_ENVELOPE_ONLY = True
 
 
 # Compatibility audit markers retained for existing architecture locks:
@@ -30,7 +30,9 @@ CANON_RUNTIME_INTEGRATION_COMPAT_SUBCLASS = True
 #     exports: object
 
 def bootstrap_runtime():
-    from bootstrap.runtime_integration import bootstrap_runtime as owner_bootstrap_runtime
+    from bootstrap.runtime_integration import (
+        bootstrap_runtime as owner_bootstrap_runtime,
+    )
 
     return owner_bootstrap_runtime()
 
@@ -42,14 +44,13 @@ class RuntimeIntegration(OwnerRuntimeIntegration):
         built_runtime = bootstrap_runtime().artifacts.built_runtime
         registry = getattr(built_runtime, "registry", None)
         if registry is not None:
-            application_service = build_runtime_application_service(ReadOnlyRuntimeRegistry(registry))
+            application_service = build_runtime_application_service(
+                ReadOnlyRuntimeRegistry(registry)
+            )
         else:
-            exports = built_runtime.exports
-            if hasattr(exports.decision_execution, "decide_and_execute") and hasattr(exports.observability, "audit_events"):
-                application_service = DecisionApplicationService(
-                    decision_execution_port=exports.decision_execution,
-                    observability_port=exports.observability,
+            application_service = (
+                build_runtime_application_service_from_exports(
+                    built_runtime.exports
                 )
-            else:
-                application_service = build_runtime_application_service_from_exports(exports)
+            )
         return built_runtime, application_service

@@ -3,17 +3,15 @@ from __future__ import annotations
 import ast
 import re
 
-AUTHORITY_METHODS = frozenset({"decide", "issue", "optimize"})
-
-_AUTHORITY_TOKENS = (
-    "decisioncore",
-    "decisionengine",
-    "plannerengine",
-    "secondbrain",
-    "shadowbrain",
-    "alternatebrain",
-    "localbrain",
+from canon.anti_second_brain_rules import (
+    DECISION_AUTHORITY_METHODS,
+    DECISION_AUTHORITY_TYPE_TOKENS,
 )
+
+# The CI alias auditor consumes the same canonical vocabulary as the runtime
+# architecture scanner. A private copy here would be a policy fork.
+AUTHORITY_METHODS = DECISION_AUTHORITY_METHODS
+_AUTHORITY_TOKENS = DECISION_AUTHORITY_TYPE_TOKENS
 _INTERFACE_SUFFIXES = ("Port", "Protocol", "Contract", "Spec", "Ref")
 _SUSPICIOUS_AUTHORITY_PREFIXES = (
     "alternate",

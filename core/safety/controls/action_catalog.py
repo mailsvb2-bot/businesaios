@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from core.actions.names import ACTION_ROUTE_LEAD_V1
+
 
 @dataclass(frozen=True)
 class ActionSafetySpec:
@@ -31,6 +33,17 @@ class ActionSafetyCatalog:
 
 def build_default_action_catalog() -> ActionSafetyCatalog:
     specs = {
+        ACTION_ROUTE_LEAD_V1: ActionSafetySpec(
+            action_prefix=ACTION_ROUTE_LEAD_V1,
+            blast_financial_amount=0.0,
+            blast_users_affected=0,
+            blast_records_affected=0,
+            blast_services_touched=0,
+            default_estimated_cost=0.0,
+            approval_required=False,
+            simulation_required=False,
+            high_impact=False,
+        ),
         "capture_payment": ActionSafetySpec(
             action_prefix="capture_payment",
             blast_financial_amount=100.0,

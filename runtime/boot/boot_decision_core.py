@@ -5,9 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from bootstrap.world_model_boot_check import build_and_verify_default_world_model
+from core.ai import set_decision_core_singleton
 from core.ai.decision_core import DecisionCore
 
 CANON_BOOT_WIRING_ONLY = True
+CANON_BOOT_REGISTERS_DECISION_CORE_SINGLETON = True
+
 
 def build_world_model(*, event_log: Any) -> object:
     return build_and_verify_default_world_model(event_log=event_log)
@@ -23,7 +26,8 @@ def build_decision_core(
     decision_archive: Any,
     issuer_id: str,
 ):
-    """Keep DecisionCore construction local to the canonical boot path."""
+    """Construct and register the only process-wide DecisionCore."""
+
     world_model = build_world_model(event_log=event_log)
     core = DecisionCore(
         selector=policy_selector,
@@ -35,7 +39,13 @@ def build_decision_core(
         world_model=world_model,
         issuer_id=issuer_id,
     )
+    set_decision_core_singleton(core)
     return world_model, core
 
 
-__all__ = ["CANON_BOOT_WIRING_ONLY", "build_world_model", "build_decision_core"]
+__all__ = [
+    "CANON_BOOT_WIRING_ONLY",
+    "CANON_BOOT_REGISTERS_DECISION_CORE_SINGLETON",
+    "build_world_model",
+    "build_decision_core",
+]

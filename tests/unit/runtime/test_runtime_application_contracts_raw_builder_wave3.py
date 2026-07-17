@@ -1,13 +1,15 @@
+from types import SimpleNamespace
+
 from runtime.application import build_runtime_application_service_from_raw
 
 
-class _DecisionCore:
+class _DecisionExecutionOwner:
     def __init__(self) -> None:
-        self.actions = []
+        self.envelopes = []
 
-    def decide_and_execute(self, action):
-        self.actions.append(action)
-        return {"ok": True, "action": action}
+    def execute(self, envelope):
+        self.envelopes.append(envelope)
+        return {"ok": True, "envelope": envelope}
 
 
 class _AuditLog:
@@ -20,15 +22,26 @@ class _Observability:
         self.audit_log = _AuditLog()
 
 
-def test_build_runtime_application_service_from_raw_executes_and_reads_audit_events() -> None:
-    core = _DecisionCore()
-    service = build_runtime_application_service_from_raw(
-        decision_core=core,
-        observability=_Observability(),
+def _envelope():
+    return SimpleNamespace(
+        decision=SimpleNamespace(
+            decision_id="decision-1",
+            correlation_id="correlation-1",
+            action="demo@v1",
+        )
     )
 
-    result = service.execute_action({"action": "demo"})
+
+def test_build_runtime_application_service_from_raw_executes_envelope_and_reads_audit_events() -> None:
+    owner = _DecisionExecutionOwner()
+    service = build_runtime_application_service_from_raw(
+        decision_core=owner,
+        observability=_Observability(),
+    )
+    envelope = _envelope()
+
+    result = service.execute_action(envelope)
 
     assert result["ok"] is True
-    assert core.actions == [{"action": "demo"}]
+    assert owner.envelopes == [envelope]
     assert service.startup_audit_events() == ("startup",)

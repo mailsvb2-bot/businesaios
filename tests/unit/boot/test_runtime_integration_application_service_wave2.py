@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from boot.runtime_integration import RuntimeIntegration
 
 
@@ -7,9 +9,9 @@ class _DecisionExecutionPort:
     def __init__(self) -> None:
         self.calls: list[object] = []
 
-    def decide_and_execute(self, action: object) -> dict:
-        self.calls.append(action)
-        return {"status": "executed", "action": action}
+    def execute(self, envelope: object) -> dict:
+        self.calls.append(envelope)
+        return {"status": "executed", "envelope": envelope}
 
 
 class _ObservabilityPort:
@@ -38,14 +40,31 @@ class _BootstrapResult:
         self.artifacts = _Artifacts()
 
 
-def test_runtime_integration_builds_application_service_from_runtime_exports(monkeypatch) -> None:
-    monkeypatch.setattr("boot.runtime_integration.bootstrap_runtime", lambda: _BootstrapResult())
+def _envelope():
+    return SimpleNamespace(
+        decision=SimpleNamespace(
+            decision_id="decision-1",
+            correlation_id="correlation-1",
+            action="noop@v1",
+        )
+    )
+
+
+def test_runtime_integration_builds_application_service_from_runtime_exports(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "boot.runtime_integration.bootstrap_runtime",
+        lambda: _BootstrapResult(),
+    )
 
     built_runtime, application_service = RuntimeIntegration().build()
+    envelope = _envelope()
+    result = application_service.execute_action(envelope)
 
-    action = object()
-    result = application_service.execute_action(action)
-
-    assert built_runtime.exports.decision_execution.calls == [action]
-    assert result == {"status": "executed", "action": action}
-    assert application_service.startup_audit_events() == ("booted", "ready")
+    assert built_runtime.exports.decision_execution.calls == [envelope]
+    assert result == {"status": "executed", "envelope": envelope}
+    assert application_service.startup_audit_events() == (
+        "booted",
+        "ready",
+    )

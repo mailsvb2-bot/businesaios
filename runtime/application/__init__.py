@@ -30,7 +30,10 @@ from application.decision.action_result_presenter import (
 )
 from application.decision.action_validator import ActionValidator
 from application.decision.decision_service import DecisionApplicationService
-from application.decision.ports import DecisionExecutionPortProtocol, ObservabilityPortProtocol
+from application.decision.ports import (
+    DecisionExecutionPortProtocol,
+    ObservabilityPortProtocol,
+)
 from core.decision.ai_decision_trace import (
     CANON_AI_DECISION_TRACE,
     TraceBuilder,
@@ -45,7 +48,7 @@ from runtime.application.contracts import (
     ObservabilityPort,
     ReadOnlyRuntimeRegistry,
     RuntimeCapabilityAccess,
-    RuntimeDecisionCorePort,
+    RuntimeDecisionExecutionPort,
     RuntimeServiceExports,
     build_runtime_application_service,
     build_runtime_application_service_from_exports,
@@ -89,9 +92,7 @@ def _install_compat_aliases() -> None:
 
 
 # Historical marker for arch tests: _install_compat_aliases()
-
 _install_compat_aliases()
-
 
 _PUBLIC_ATTRS = {
     "AIDecisionTrace": AIDecisionTrace,
@@ -118,7 +119,7 @@ _PUBLIC_ATTRS = {
     "RuntimeCapabilityAccess": RuntimeCapabilityAccess,
     "RuntimeCrmContracts": RuntimeCrmContracts,
     "RuntimeCrmService": RuntimeCrmService,
-    "RuntimeDecisionCorePort": RuntimeDecisionCorePort,
+    "RuntimeDecisionExecutionPort": RuntimeDecisionExecutionPort,
     "RuntimeDecisionTrace": RuntimeDecisionTrace,
     "RuntimeServiceExports": RuntimeServiceExports,
     "TraceBuilder": TraceBuilder,
@@ -142,11 +143,17 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(_PUBLIC_ATTRS) | set(_LAZY_CONTRACT_ATTRS) | set(_ALIAS_MAP))
+    return sorted(
+        set(globals())
+        | set(_PUBLIC_ATTRS)
+        | set(_LAZY_CONTRACT_ATTRS)
+        | set(_ALIAS_MAP)
+    )
 
 
-__all__ = sorted(set(_PUBLIC_ATTRS) | set(_LAZY_CONTRACT_ATTRS) | set(_ALIAS_MAP))
-
+__all__ = sorted(
+    set(_PUBLIC_ATTRS) | set(_LAZY_CONTRACT_ATTRS) | set(_ALIAS_MAP)
+)
 
 # Compatibility marker: "public_api": "runtime.application.public_api"
 # Historical owner-builder contract equivalent: install_public_api=True
