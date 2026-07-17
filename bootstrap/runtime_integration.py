@@ -14,6 +14,7 @@ CANON_RUNTIME_INTEGRATION_FINAL_OWNER = True
 CANON_RUNTIME_INTEGRATION_PROTOCOL_TYPED = True
 CANON_RUNTIME_INTEGRATION_NO_RUNTIME_ASSEMBLY = True
 CANON_RUNTIME_INTEGRATION_EXPORTS_DIRECT_COMPAT = True
+CANON_RUNTIME_INTEGRATION_ENVELOPE_ONLY = True
 
 
 def _bootstrap_runtime_owner():
@@ -38,7 +39,9 @@ class SupportsBuiltRuntime(Protocol):
 
 
 class RuntimeIntegration:
-    def build(self) -> tuple[SupportsBuiltRuntime, DecisionApplicationService]:
+    def build(
+        self,
+    ) -> tuple[SupportsBuiltRuntime, DecisionApplicationService]:
         built_runtime = bootstrap_runtime().artifacts.built_runtime
         registry = getattr(built_runtime, "registry", None)
         if registry is not None:
@@ -46,12 +49,9 @@ class RuntimeIntegration:
                 ReadOnlyRuntimeRegistry(registry)
             )
         else:
-            exports = built_runtime.exports
-            if hasattr(exports.decision_execution, "decide_and_execute") and hasattr(exports.observability, "audit_events"):
-                application_service = DecisionApplicationService(
-                    decision_execution_port=exports.decision_execution,
-                    observability_port=exports.observability,
+            application_service = (
+                build_runtime_application_service_from_exports(
+                    built_runtime.exports
                 )
-            else:
-                application_service = build_runtime_application_service_from_exports(exports)
+            )
         return built_runtime, application_service
