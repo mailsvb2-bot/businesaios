@@ -18,6 +18,7 @@ from core.actions.names import (
     ACTION_ADS_APPLY_EXECUTE_V1,
     ACTION_AI_CEO_PLAN_V1,
     ACTION_EXECUTE_PLAN_V1,
+    ACTION_ROUTE_LEAD_V1,
 )
 from core.actions.proof_registry import ACTION_PROOF_EVENT
 from core.actions.schema_registry import ActionSchemaRegistry, build_default_registry
@@ -25,6 +26,7 @@ from core.actions.schema_registry import ActionSchemaRegistry, build_default_reg
 CANON_CORE_ACTIONS_OWNER = True
 _OWNER_MODULE = 'core.actions.catalog'
 _OWNER_EXPORTS = ['build_catalog', 'build_schema_registry']
+
 
 def _owner() -> Any:
     return import_module(_OWNER_MODULE)
@@ -46,6 +48,7 @@ __all__ = [
     'ACTION_ADS_APPLY_EXECUTE_V1',
     'ACTION_AI_CEO_PLAN_V1',
     'ACTION_EXECUTE_PLAN_V1',
+    'ACTION_ROUTE_LEAD_V1',
     'ACTION_PROOF_EVENT',
     'ALLOWED_ACTIONS',
     'ActionSchemaRegistry',
