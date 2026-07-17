@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import hashlib
 import math
 import re
-from typing import Any
 from collections.abc import Iterable, Mapping
-
+from dataclasses import dataclass
+from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 CANON_MARKET_INTELLIGENCE_DATA_QUALITY = True
 
-_SPAM_RE = re.compile(r'(.)\1{5,}')
-_WHITESPACE_RE = re.compile(r'\s+')
+_SPAM_RE = re.compile(r"(.)\1{5,}")
+_WHITESPACE_RE = re.compile(r"\s+")
 
 
 def _safe_dict(value: object) -> dict[str, Any]:
@@ -19,31 +19,45 @@ def _safe_dict(value: object) -> dict[str, Any]:
 
 
 def _fingerprint(row: Mapping[str, Any]) -> str:
-    basis = '|'.join(str(row.get(key) or '').strip() for key in ('record_id', 'external_id', 'id', 'url', 'title', 'provider', 'source_family'))
-    if not basis.strip('|'):
+    basis = "|".join(
+        str(row.get(key) or "").strip()
+        for key in (
+            "record_id",
+            "external_id",
+            "id",
+            "url",
+            "title",
+            "provider",
+            "source_family",
+        )
+    )
+    if not basis.strip("|"):
         basis = repr(sorted(dict(row).items()))
-    return hashlib.sha256(basis.encode('utf-8', errors='replace')).hexdigest()
+    return hashlib.sha256(
+        basis.encode("utf-8", errors="replace")
+    ).hexdigest()
 
 
 def _clean_text(value: object) -> str:
-    return _WHITESPACE_RE.sub(' ', str(value or '').strip())
-
-
-def _url_parse_tools() -> tuple[Any, Any]:
-    # Late-bound to avoid raw SDK/transport imports in execution modules.
-    module = __import__('urllib.parse', fromlist=['urlsplit', 'urlunsplit'])
-    return getattr(module, 'urlsplit'), getattr(module, 'urlunsplit')
+    return _WHITESPACE_RE.sub(" ", str(value or "").strip())
 
 
 def _normalize_url(value: object) -> str:
     text = _clean_text(value)
     if not text:
-        return ''
-    urlsplit, urlunsplit = _url_parse_tools()
+        return ""
     parts = urlsplit(text)
-    if parts.scheme.lower() not in {'http', 'https'} or not parts.netloc:
+    if parts.scheme.lower() not in {"http", "https"} or not parts.netloc:
         return text
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path or '', parts.query, ''))
+    return urlunsplit(
+        (
+            parts.scheme.lower(),
+            parts.netloc.lower(),
+            parts.path or "",
+            parts.query,
+            "",
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -56,16 +70,19 @@ class DataQualityReport:
 
     def as_dict(self) -> dict[str, int]:
         return {
-            'total_rows': self.total_rows,
-            'kept_rows': self.kept_rows,
-            'dropped_duplicates': self.dropped_duplicates,
-            'dropped_noise': self.dropped_noise,
-            'anomaly_rows': self.anomaly_rows,
+            "total_rows": self.total_rows,
+            "kept_rows": self.kept_rows,
+            "dropped_duplicates": self.dropped_duplicates,
+            "dropped_noise": self.dropped_noise,
+            "anomaly_rows": self.anomaly_rows,
         }
 
 
 class DataQualityGuard:
-    def process(self, rows: Iterable[Mapping[str, Any]]) -> tuple[tuple[dict[str, Any], ...], DataQualityReport]:
+    def process(
+        self,
+        rows: Iterable[Mapping[str, Any]],
+    ) -> tuple[tuple[dict[str, Any], ...], DataQualityReport]:
         seen: set[str] = set()
         kept: list[dict[str, Any]] = []
         duplicate_count = 0
@@ -84,60 +101,104 @@ class DataQualityGuard:
                 continue
             seen.add(fp)
             if self._is_anomaly(candidate):
-                candidate['quality_flag'] = 'anomaly'
+                candidate["quality_flag"] = "anomaly"
                 anomaly_count += 1
             kept.append(candidate)
-        report = DataQualityReport(total_rows=total, kept_rows=len(kept), dropped_duplicates=duplicate_count, dropped_noise=noise_count, anomaly_rows=anomaly_count)
+        report = DataQualityReport(
+            total_rows=total,
+            kept_rows=len(kept),
+            dropped_duplicates=duplicate_count,
+            dropped_noise=noise_count,
+            anomaly_rows=anomaly_count,
+        )
         return tuple(kept), report
 
     def _normalize(self, row: Mapping[str, Any]) -> dict[str, Any]:
-        normalized = {str(key): value for key, value in dict(row).items()}
-        for key in ('title', 'name', 'headline', 'description', 'copy', 'provider', 'source_family', 'record_id', 'external_id', 'id'):
+        normalized = {
+            str(key): value
+            for key, value in dict(row).items()
+        }
+        for key in (
+            "title",
+            "name",
+            "headline",
+            "description",
+            "copy",
+            "provider",
+            "source_family",
+            "record_id",
+            "external_id",
+            "id",
+        ):
             if key in normalized:
                 normalized[key] = _clean_text(normalized[key])
-        if 'url' in normalized:
-            normalized['url'] = _normalize_url(normalized['url'])
-        if 'rating' in normalized:
+        if "url" in normalized:
+            normalized["url"] = _normalize_url(normalized["url"])
+        if "rating" in normalized:
             try:
-                normalized['rating'] = max(0.0, min(float(normalized['rating']), 5.0))
+                normalized["rating"] = max(
+                    0.0,
+                    min(float(normalized["rating"]), 5.0),
+                )
             except (TypeError, ValueError):
                 pass
-        for key in ('price', 'engagement', 'impressions'):
+        for key in ("price", "engagement", "impressions"):
             if key in normalized:
                 try:
-                    normalized[key] = max(0.0, float(normalized[key]))
+                    normalized[key] = max(
+                        0.0,
+                        float(normalized[key]),
+                    )
                 except (TypeError, ValueError):
                     pass
-        if 'review_count' in normalized:
+        if "review_count" in normalized:
             try:
-                normalized['review_count'] = max(0, int(float(normalized['review_count'])))
+                normalized["review_count"] = max(
+                    0,
+                    int(float(normalized["review_count"])),
+                )
             except (TypeError, ValueError):
                 pass
         return normalized
 
     def _is_noise(self, row: Mapping[str, Any]) -> bool:
-        text = ' '.join(_clean_text(row.get(key) or '') for key in ('title', 'name', 'headline', 'description', 'copy')).strip()
-        if not text:
-            return True
-        if len(text) < 4:
+        text = " ".join(
+            _clean_text(row.get(key) or "")
+            for key in (
+                "title",
+                "name",
+                "headline",
+                "description",
+                "copy",
+            )
+        ).strip()
+        if not text or len(text) < 4:
             return True
         lowered = text.lower()
-        if lowered in {'n/a', 'null', 'undefined'}:
+        if lowered in {"n/a", "null", "undefined"}:
             return True
-        if 'http://' not in lowered and 'https://' not in lowered and lowered.count('buy now') >= 3:
+        if (
+            "http://" not in lowered
+            and "https://" not in lowered
+            and lowered.count("buy now") >= 3
+        ):
             return True
         if _SPAM_RE.search(lowered):
             return True
         tokens = lowered.split()
         if tokens and len(set(tokens)) == 1 and len(tokens[0]) <= 8:
             return True
-        if sum(ch.isdigit() for ch in lowered) > len(lowered) * 0.7:
-            return True
-        return False
+        return sum(ch.isdigit() for ch in lowered) > len(lowered) * 0.7
 
     def _is_anomaly(self, row: Mapping[str, Any]) -> bool:
-        numeric_values = []
-        for key in ('price', 'rating', 'review_count', 'engagement', 'impressions'):
+        numeric_values: list[float] = []
+        for key in (
+            "price",
+            "rating",
+            "review_count",
+            "engagement",
+            "impressions",
+        ):
             value = row.get(key)
             if value is None:
                 continue
@@ -152,4 +213,8 @@ class DataQualityGuard:
         return any(abs(value) > 1_000_000 for value in numeric_values)
 
 
-__all__ = ['CANON_MARKET_INTELLIGENCE_DATA_QUALITY', 'DataQualityGuard', 'DataQualityReport']
+__all__ = [
+    "CANON_MARKET_INTELLIGENCE_DATA_QUALITY",
+    "DataQualityGuard",
+    "DataQualityReport",
+]
