@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from runtime._internal.effects_domains.admin_pricing_effects import (
     build_pricing_change_payload as build_pricing_change_payload,
     emit_pricing_change_event as emit_pricing_change_event,
@@ -30,7 +32,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     return _owner_getattr(name)
 
 
