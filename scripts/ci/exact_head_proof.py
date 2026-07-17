@@ -16,10 +16,10 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Sequence
 
 from scripts.ci.plan_registry import allowed_gates
 
