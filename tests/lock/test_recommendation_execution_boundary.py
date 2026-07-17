@@ -162,6 +162,46 @@ def test_dispatcher_source_contains_no_decide_and_execute_shortcut() -> None:
 
 
 @pytest.mark.lock
+def test_production_tree_contains_no_combined_decision_execution_shortcut() -> None:
+    offenders: list[str] = []
+    for path in ROOT.rglob("*.py"):
+        relative = path.relative_to(ROOT).as_posix()
+        if relative.startswith("tests/"):
+            continue
+        tree = ast.parse(
+            path.read_text(encoding="utf-8"),
+            filename=relative,
+        )
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                if node.name in {
+                    "decide_and_execute",
+                    "build_executable_action",
+                    "build_executable_action_payload",
+                }:
+                    offenders.append(f"{relative}:{node.lineno}:{node.name}")
+            elif isinstance(node, ast.Attribute):
+                if node.attr == "decide_and_execute":
+                    offenders.append(
+                        f"{relative}:{node.lineno}:decide_and_execute"
+                    )
+            elif isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name in {
+                        "build_executable_action",
+                        "build_executable_action_payload",
+                    }:
+                        offenders.append(
+                            f"{relative}:{node.lineno}:{alias.name}"
+                        )
+
+    assert offenders == [], (
+        "combined decision/execution authority remains: "
+        + ", ".join(sorted(offenders))
+    )
+
+
+@pytest.mark.lock
 def test_recommendation_source_builds_no_executable_action() -> None:
     paths = (
         ROOT / "application/decision/decision_service.py",
