@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from core.ai import (
+    _reset_decision_core_singleton_for_tests,
     get_decision_core_singleton,
-    reset_decision_core_singleton,
     set_decision_core_singleton,
 )
 from runtime.boot import boot_decision_core
@@ -12,11 +12,11 @@ from runtime.boot import boot_decision_core
 
 @pytest.fixture(autouse=True)
 def _isolated_singleton():
-    reset_decision_core_singleton()
+    _reset_decision_core_singleton_for_tests()
     try:
         yield
     finally:
-        reset_decision_core_singleton()
+        _reset_decision_core_singleton_for_tests()
 
 
 def test_boot_registers_the_exact_core_before_returning(monkeypatch) -> None:
