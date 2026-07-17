@@ -94,6 +94,8 @@ def test_policy_selects_the_best_valid_candidate_inside_decision_core() -> None:
     assert output.payload["selected_business_id"] == "business-b"
     assert output.payload["delivery_channel"] == "whatsapp"
     assert output.payload["requires_manual_review"] is False
+    assert output.payload["candidate_count"] == 3
+    assert output.payload["eligible_candidate_count"] == 3
     assert output.payload["runner_up_business_ids"] == [
         "business-a",
         "business-c",
@@ -119,7 +121,8 @@ def test_policy_rejects_unsafe_candidates_and_fails_to_manual_review() -> None:
     assert output.action == ACTION_ROUTE_LEAD_V1
     assert output.payload["requires_manual_review"] is True
     assert output.payload["manual_review_reason"] == "no_safe_candidates"
-    assert output.payload["candidate_count"] == 0
+    assert output.payload["candidate_count"] == 2
+    assert output.payload["eligible_candidate_count"] == 0
     assert {
         item["candidate_id"] for item in output.payload["rejections"]
     } == {
@@ -132,6 +135,7 @@ def test_route_action_has_closed_execute_once_advisory_contract() -> None:
     schema = build_catalog()[ACTION_ROUTE_LEAD_V1].schema
     assert schema.allow_additional is False
     assert "request_id" in schema.required
+    assert "eligible_candidate_count" in schema.required
     assert "selected_business_id" in schema.optional
 
     spec = SPECS[ACTION_ROUTE_LEAD_V1]
@@ -153,6 +157,7 @@ def test_route_action_has_closed_execute_once_advisory_contract() -> None:
         "request_id": "request-1",
         "requires_manual_review": False,
         "candidate_count": 1,
+        "eligible_candidate_count": 1,
         "blocked_candidate_count": 0,
         "runner_up_business_ids": [],
         "rejections": [],
@@ -227,5 +232,6 @@ def test_bridge_preserves_public_routing_decision_from_signed_envelope() -> None
     assert decision.selected_business_id == "business-b"
     assert decision.runner_up_business_ids == ("business-a",)
     assert decision.requires_manual_review is False
+    assert decision.trace["selected_from_candidates"] == 2
     assert decision.trace["decision_id"] == "signed-demand-decision"
     assert decision.trace["delivery_channel"] == "whatsapp"
