@@ -15,6 +15,7 @@ from security.secret_contract import (
     SecretRef,
     SecretSource,
     SecretState,
+    utc_now,
 )
 
 
@@ -61,7 +62,6 @@ def _parse_datetime(value: object) -> datetime | None:
 
 def deserialize_secret_record(payload: dict[str, object]) -> SecretRecord:
     ref_payload = dict(payload.get("ref") or {})
-    now = datetime.now().astimezone()
     return SecretRecord(
         ref=SecretRef(
             tenant_id=str(ref_payload.get("tenant_id") or ""),
@@ -84,8 +84,8 @@ def deserialize_secret_record(payload: dict[str, object]) -> SecretRecord:
         source=SecretSource(
             str(payload.get("source") or SecretSource.UNKNOWN.value)
         ),
-        created_at=_parse_datetime(payload.get("created_at")) or now,
-        updated_at=_parse_datetime(payload.get("updated_at")) or now,
+        created_at=_parse_datetime(payload.get("created_at")) or utc_now(),
+        updated_at=_parse_datetime(payload.get("updated_at")) or utc_now(),
         rotated_at=_parse_datetime(payload.get("rotated_at")),
         deleted_at=_parse_datetime(payload.get("deleted_at")),
         expires_at=_parse_datetime(payload.get("expires_at")),
@@ -140,7 +140,7 @@ class InMemorySecretVaultMixin:
             ref=record.ref,
             encryption_key_id=key.key_id,
         )
-        now = datetime.now().astimezone()
+        now = utc_now()
         existing = self._records.get(record.ref.key())
         prior_nonce = (
             None
@@ -189,7 +189,7 @@ class InMemorySecretVaultMixin:
 
     def deactivate(self, ref: SecretRef) -> SecretRecord:
         current = self.get_record(ref)
-        updated = current.disable(now=datetime.now().astimezone())
+        updated = current.disable(now=utc_now())
         self._records[ref.key()] = updated
         return updated
 
