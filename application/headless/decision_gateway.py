@@ -72,9 +72,15 @@ def build_headless_decision_ingress(
 
 
 def issue_headless_decision(*, decision_core: Any, state: Any) -> Any:
-    return build_headless_decision_ingress(
-        decision_core=decision_core
-    ).issue(state)
+    """Delegate the historical headless helper to the sole runtime issuer."""
+
+    try:
+        return issue_runtime_decision(
+            issuer=decision_core,
+            state=state,
+        )
+    except DecisionGatewayContractError as exc:
+        raise _translate_contract_error(exc) from exc
 
 
 __all__ = [
