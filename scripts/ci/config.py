@@ -103,6 +103,7 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             ".github/workflows/ci-fast.yml",
             ".github/workflows/ci-full.yml",
             ".github/workflows/ci.yml",
+            ".github/workflows/deep-release-validation.yml",
             ".github/workflows/docker-image.yml",
             ".github/workflows/full-ci.yml",
             ".github/workflows/release-gates.yml",
