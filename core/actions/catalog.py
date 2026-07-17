@@ -7,6 +7,7 @@ schema details only; it cannot advertise a second set of actions.
 from __future__ import annotations
 
 from core.actions.allowed_actions import ALLOWED_ACTIONS
+from core.actions.names import ACTION_ROUTE_LEAD_V1
 from core.ai.schema_registry import DecisionSchema, SchemaRegistry
 
 from .catalog_entry import CatalogEntry
@@ -39,6 +40,43 @@ def _marker_event_entry(action: str) -> CatalogEntry:
     )
 
 
+def _demand_route_entry() -> CatalogEntry:
+    return CatalogEntry(
+        action=ACTION_ROUTE_LEAD_V1,
+        version=1,
+        schema=DecisionSchema(
+            required={
+                "request_id",
+                "requires_manual_review",
+                "candidate_count",
+                "blocked_candidate_count",
+                "runner_up_business_ids",
+                "rejections",
+            },
+            optional={
+                "selected_business_id",
+                "delivery_channel",
+                "selected_candidate_id",
+                "selection_score",
+                "manual_review_reason",
+            },
+            field_types={
+                "request_id": str,
+                "requires_manual_review": bool,
+                "candidate_count": int,
+                "blocked_candidate_count": int,
+                "runner_up_business_ids": list,
+                "rejections": list,
+                "selected_business_id": str,
+                "delivery_channel": str,
+                "selected_candidate_id": str,
+                "selection_score": float,
+                "manual_review_reason": str,
+            },
+        ),
+    )
+
+
 def _runtime_contract_entries() -> dict[str, CatalogEntry]:
     """Explicit contracts for advisory and marker actions.
 
@@ -66,6 +104,7 @@ def _runtime_contract_entries() -> dict[str, CatalogEntry]:
         "autopilot_started@v1": _marker_event_entry(
             "autopilot_started@v1"
         ),
+        ACTION_ROUTE_LEAD_V1: _demand_route_entry(),
         "telegram_self_check@v1": CatalogEntry(
             action="telegram_self_check@v1",
             version=1,
