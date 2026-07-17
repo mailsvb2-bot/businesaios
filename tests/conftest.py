@@ -7,12 +7,16 @@ import tempfile
 import textwrap
 from pathlib import Path
 
+import pytest
+
 sys.dont_write_bytecode = True
 os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+from core.ai import _reset_decision_core_singleton_for_tests
 
 # Tests may run on a server whose shell exports APP_ENV=prod. Keep production
 # sqlite fallback fail-closed for real runtime processes, but mark pytest as an
@@ -27,6 +31,17 @@ _RELEASE_INTEGRITY_TESTS = {
     "tests/lock/test_super_locks_no_zip_sqlite.py",
     "tests/test_canon_package_v21.py",
 }
+
+
+@pytest.fixture(autouse=True)
+def _isolate_decision_core_singleton():
+    """Keep pytest cases isolated without weakening same-test singleton law."""
+
+    _reset_decision_core_singleton_for_tests()
+    try:
+        yield
+    finally:
+        _reset_decision_core_singleton_for_tests()
 
 
 def _safe_path_part(value: str) -> str:
