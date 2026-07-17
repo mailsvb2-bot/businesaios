@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import logging
 
-from config.decision_safety_policy import DEFAULT_POLICY_SELECTOR_POLICY, PolicySelectorPolicy
+from config.decision_safety_policy import (
+    DEFAULT_POLICY_SELECTOR_POLICY,
+    PolicySelectorPolicy,
+)
 from core.observability.errors import log_exception_throttled
 from core.policies.canary import CanaryPolicyResolver
 from core.policies.types import RolloutConfig
@@ -18,6 +21,7 @@ log = logging.getLogger(__name__)
 
 _V1 = "@" + "v1"
 _PURPOSE_POLICY = {
+    "demand_route": "demand_route" + _V1,
     "ingress_poll": "telegram_ingress" + _V1,
     "payments_reconcile": "payments_reconcile" + _V1,
     "payments_webhook_reconcile": "payments_webhook_reconcile" + _V1,
@@ -27,7 +31,13 @@ _POLICY_DEPLOYMENT_ID = "policy_deployment" + _V1
 
 
 class PolicySelector:
-    def __init__(self, registry, safe_mode_policy_id: str | None = None, rollout_config: RolloutConfig | None = None, policy: PolicySelectorPolicy | None = None):
+    def __init__(
+        self,
+        registry,
+        safe_mode_policy_id: str | None = None,
+        rollout_config: RolloutConfig | None = None,
+        policy: PolicySelectorPolicy | None = None,
+    ):
         self._registry = registry
         self._safe = safe_mode_policy_id
         self._policy = policy or DEFAULT_POLICY_SELECTOR_POLICY
@@ -53,14 +63,20 @@ class PolicySelector:
     def resolve_policy(self, state):
         proposal = getattr(state, "deployment_proposal", None)
         if proposal:
-            return self._get_optional(_POLICY_DEPLOYMENT_ID, miss_key="deployment") or self._registry.active()
+            return self._get_optional(
+                _POLICY_DEPLOYMENT_ID,
+                miss_key="deployment",
+            ) or self._registry.active()
 
         meta = getattr(state, "meta", None) or {}
         if isinstance(meta, dict):
             purpose = str(meta.get("purpose") or "").strip()
             policy_id = _PURPOSE_POLICY.get(purpose)
             if policy_id:
-                selected = self._get_optional(policy_id, miss_key=purpose)
+                selected = self._get_optional(
+                    policy_id,
+                    miss_key=purpose,
+                )
                 if selected is not None:
                     return selected
 
@@ -98,7 +114,17 @@ class PolicySelector:
 
     def _normalize_rollout_pct(self, pct: object) -> int:
         try:
-            return max(self._policy.rollout_pct_floor, min(self._policy.rollout_pct_ceiling, int(pct or self._policy.rollout_pct_floor)))
+            return max(
+                self._policy.rollout_pct_floor,
+                min(
+                    self._policy.rollout_pct_ceiling,
+                    int(pct or self._policy.rollout_pct_floor),
+                ),
+            )
         except (TypeError, ValueError):
-            log_exception_throttled(log, key="policy_selector:bad_rollout_pct", msg="policy_selector: bad rollout pct")
+            log_exception_throttled(
+                log,
+                key="policy_selector:bad_rollout_pct",
+                msg="policy_selector: bad rollout pct",
+            )
             return self._policy.rollout_pct_floor
