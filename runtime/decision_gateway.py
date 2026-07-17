@@ -1,7 +1,7 @@
 """Canonical runtime decision gateways.
 
 This module keeps runtime orchestration code on a single canonical path:
-packet -> contract -> safe enrichment -> decision issuer -> locked executor.
+packet -> contract -> safe enrichment -> registered issuer -> locked executor.
 Historical helper APIs remain available as transitional ABI only.
 """
 
@@ -33,28 +33,30 @@ CANON_RUNTIME_DECISION_ROUTE_GATEWAY_OWNER = True
 CANON_RUNTIME_DECISION_GATEWAY_COMPAT_ALIAS = True
 CANON_RUNTIME_DECISION_GATEWAY_NAME_RESERVED_FOR_ROUTE_OWNER = True
 CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON = True
+CANON_RUNTIME_DECISION_GATEWAY_REJECTS_SYNTHETIC_ENVELOPES = True
 
 
 class DecisionGatewayContractError(RuntimeError):
     pass
 
 
-def _registered_decision_core() -> Any:
-    from core.ai import get_decision_core_singleton
+def _registered_decision_core(issuer: Any | None = None) -> Any:
+    from core.ai import require_decision_core_singleton
 
     try:
-        return get_decision_core_singleton()
+        return require_decision_core_singleton(issuer)
     except RuntimeError as exc:
-        raise DecisionGatewayContractError(
-            "canonical_decision_core_not_initialized"
-        ) from exc
+        error = str(exc)
+        if error == "DECISIONCORE_NOT_INITIALIZED":
+            code = "canonical_decision_core_not_initialized"
+        else:
+            code = "noncanonical_decision_issuer"
+        raise DecisionGatewayContractError(code) from exc
 
 
 def validate_runtime_decision_issuer(issuer: DecisionIssuer) -> None:
-    canonical = _registered_decision_core()
-    if issuer is not canonical:
-        raise DecisionGatewayContractError("noncanonical_decision_issuer")
-    issue = getattr(issuer, "issue", None)
+    canonical = _registered_decision_core(issuer)
+    issue = getattr(canonical, "issue", None)
     if not callable(issue):
         raise DecisionGatewayContractError("issuer_issue_missing")
 
@@ -112,28 +114,6 @@ class RuntimeDecisionRouteGateway:
         return decision_core_callable(next_context)
 
 
-@dataclass(frozen=True)
-class _LegacyDecision:
-    decision_id: str
-    correlation_id: str
-
-
-@dataclass(frozen=True)
-class _LegacyDecisionEnvelope:
-    decision: _LegacyDecision
-    raw_envelope: Any
-
-
-def _legacy_envelope_for(raw: Any) -> _LegacyDecisionEnvelope:
-    return _LegacyDecisionEnvelope(
-        decision=_LegacyDecision(
-            decision_id="legacy-runtime-decision-gateway",
-            correlation_id="legacy-runtime-decision-gateway",
-        ),
-        raw_envelope=raw,
-    )
-
-
 @dataclass(slots=True, frozen=True)
 class RuntimeDecisionIssueGateway:
     issuer: DecisionIssuer
@@ -149,27 +129,17 @@ class RuntimeDecisionIssueGateway:
         )
         from runtime.decision_path_lock import issue_locked_decision
 
-        validate_runtime_decision_issuer(self.issuer)
+        canonical = _registered_decision_core(self.issuer)
         enriched_state = enrich_state_with_decision_input_packet(
             state=state,
             decision_input_packet=decision_input_packet,
         )
-        raw_holder: dict[str, Any] = {}
-
-        class _LockedCompatibilityIssuer:
-            def issue(_, locked_state: Any) -> Any:
-                raw = self.issuer.issue(locked_state)
-                if getattr(raw, "decision", None) is not None:
-                    return raw
-                raw_holder["raw"] = raw
-                return _legacy_envelope_for(raw)
-
         try:
             locked = issue_locked_decision(
-                decision_core=_LockedCompatibilityIssuer(),
+                decision_core=canonical,
                 state=enriched_state,
             )
-            return raw_holder.get("raw", locked.envelope)
+            return locked.envelope
         except Exception as exc:
             if isinstance(exc, DecisionGatewayContractError):
                 raise
@@ -215,7 +185,7 @@ def issue_runtime_decision(
     state: Any,
     decision_input_packet: DecisionInputPacket | None = None,
 ) -> Any:
-    """Thin compatibility wrapper over RuntimeDecisionIssueGateway.issue."""
+    """Issue one canonical envelope through the locked decision path."""
 
     return RuntimeDecisionIssueGateway(issuer=issuer).issue(
         state,
@@ -230,6 +200,7 @@ def build_runtime_decision_callable(
 ) -> Callable[[Any], Any]:
     """Bind the registered issuer to the canonical issue gateway."""
 
+    validate_runtime_decision_issuer(issuer)
     return _CanonicalDecisionCallable(
         issuer=issuer,
         decision_input_packet=decision_input_packet,
@@ -242,14 +213,14 @@ def optimize_runtime_decision(
     state: Any,
     method_name: str = "optimize",
 ) -> Any:
-    """Invoke the one approved optimize surface inside the gateway owner."""
+    """Invoke the one approved optimize alias on the registered issuer."""
 
-    validate_runtime_decision_issuer(issuer)
+    canonical = _registered_decision_core(issuer)
     if str(method_name) != "optimize":
         raise DecisionGatewayContractError(
             "noncanonical_decision_optimize_method"
         )
-    optimize = getattr(issuer, "optimize", None)
+    optimize = getattr(canonical, "optimize", None)
     if not callable(optimize):
         raise DecisionGatewayContractError(
             "canonical_decision_core_optimize_required"
@@ -266,8 +237,8 @@ def issue_structured_decision(
 ) -> Any:
     """Preserve the structured ABI without accepting an alternate issuer."""
 
-    validate_runtime_decision_issuer(issuer)
-    issue = getattr(issuer, "issue", None)
+    canonical = _registered_decision_core(issuer)
+    issue = getattr(canonical, "issue", None)
     if not callable(issue):
         raise DecisionGatewayContractError("issuer_issue_missing")
     return issue(decision_space, constraints, request)
