@@ -49,6 +49,8 @@ class RefundRequest:
             raise ValueError('provider_name is required')
         if self.requested_at.tzinfo is None:
             raise ValueError('requested_at must be timezone-aware')
+        if self.idempotency_key is not None and not str(self.idempotency_key).strip():
+            raise ValueError('idempotency_key cannot be blank')
 
 
 @dataclass(frozen=True)
@@ -89,20 +91,25 @@ class InMemoryRefundStore:
     def save(self, result: RefundResult, *, idempotency_key: str | None = None) -> RefundResult:
         result.validate()
         invoice_key = (str(result.tenant_id), str(result.invoice_id))
-        if idempotency_key is not None:
-            key = (invoice_key[0], invoice_key[1], str(idempotency_key).strip())
+        idem = None if idempotency_key is None else (str(idempotency_key).strip() or None)
+        if idem:
+            key = (invoice_key[0], invoice_key[1], idem)
             existing = self._by_idempotency.get(key)
             if existing is not None:
                 if existing != result:
                     raise ValueError('idempotency_key collision for different refund result')
                 return existing
         current = list(self._by_invoice.get(invoice_key, ()))
-        if any(item.refund_id == result.refund_id and item != result for item in current):
-            raise ValueError('refund_id collision for different refund result')
+        for item in current:
+            if item.refund_id != result.refund_id:
+                continue
+            if item != result:
+                raise ValueError('refund_id collision for different refund result')
+            return item
         current.append(result)
         self._by_invoice[invoice_key] = tuple(current)
-        if idempotency_key is not None:
-            self._by_idempotency[(invoice_key[0], invoice_key[1], str(idempotency_key).strip())] = result
+        if idem:
+            self._by_idempotency[(invoice_key[0], invoice_key[1], idem)] = result
         return result
 
     def get_by_idempotency(self, *, tenant_id: str, invoice_id: str, idempotency_key: str) -> RefundResult | None:
@@ -162,8 +169,6 @@ class RefundOrchestrator:
         requested.validate()
         if provider_affinity is not None and str(requested.provider_name).strip().lower() != str(provider_affinity).strip().lower():
             raise ValueError('refund provider must match invoice provider affinity')
-        if str(invoice.currency).strip().upper() != str(requested.currency).strip().upper():
-            raise ValueError('refund currency must match invoice currency')
         existing = self._refund_store.get_by_idempotency(tenant_id=requested.tenant_id, invoice_id=requested.invoice_id, idempotency_key=requested.idempotency_key or '')
         if existing is None and requested.amount_minor > int(invoice.paid_minor):
             raise ValueError('refund amount cannot exceed paid_minor')
@@ -182,12 +187,7 @@ class RefundOrchestrator:
                 )
                 return invoice, existing, replay_refund_record, stored_posting
             replayed_paid_minor = max(0, int(invoice.paid_minor) - int(existing.amount_minor))
-            if replayed_paid_minor == 0:
-                replayed_status = invoice.status.ISSUED
-            elif replayed_paid_minor >= int(invoice.total_minor):
-                replayed_status = invoice.status.PAID
-            else:
-                replayed_status = invoice.status.PARTIALLY_PAID
+            replayed_status = invoice.status.ISSUED if replayed_paid_minor == 0 else invoice.status.PARTIALLY_PAID
             updated_invoice = CommercialInvoiceEnvelope(
                 tenant_id=invoice.tenant_id,
                 invoice_id=invoice.invoice_id,
@@ -261,12 +261,7 @@ class RefundOrchestrator:
         )
         posting = self._ledger_store.append(self._build_posting(result=stored_result))
         new_paid_minor = max(0, int(invoice.paid_minor) - int(requested.amount_minor))
-        if new_paid_minor == 0:
-            new_status = invoice.status.ISSUED
-        elif new_paid_minor >= int(invoice.total_minor):
-            new_status = invoice.status.PAID
-        else:
-            new_status = invoice.status.PARTIALLY_PAID
+        new_status = invoice.status.ISSUED if new_paid_minor == 0 else invoice.status.PARTIALLY_PAID
         updated_invoice = CommercialInvoiceEnvelope(
             tenant_id=invoice.tenant_id,
             invoice_id=invoice.invoice_id,
@@ -321,7 +316,6 @@ class RefundOrchestrator:
             ),
             metadata={'owner': 'billing.refund_orchestrator', 'invoice_id': result.invoice_id, 'external_reference': result.external_reference},
         )
-
 
     @staticmethod
     def _extract_provider_affinity(*, invoice: CommercialInvoiceEnvelope, metadata: Mapping[str, object] | None = None) -> str | None:

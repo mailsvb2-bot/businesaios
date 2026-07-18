@@ -63,7 +63,7 @@ class PlatformSqliteDisputeStore:
         tid = require_tenant_id(case.tenant_id)
         iid = str(case.invoice_id).strip()
         cid = str(case.case_id).strip()
-        idem = None if idempotency_key is None else str(idempotency_key).strip()
+        idem = None if idempotency_key is None else (str(idempotency_key).strip() or None)
         payload_json = json.dumps(self._encode(case), sort_keys=True)
         try:
             with self._connect() as conn:

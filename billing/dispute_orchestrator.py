@@ -49,6 +49,8 @@ class DisputeCase:
             raise ValueError('non-open dispute case requires resolution')
         if normalized_status == 'open' and self.resolved_at is not None:
             raise ValueError('open dispute case cannot have resolved_at')
+        if self.idempotency_key is not None and not str(self.idempotency_key).strip():
+            raise ValueError('idempotency_key cannot be blank')
         evidence_fingerprint = str(dict(self.metadata).get('evidence_fingerprint') or '').strip()
         if not evidence_fingerprint:
             raise ValueError('evidence_fingerprint is required')
@@ -72,13 +74,14 @@ class InMemoryDisputeStore:
         tid = require_tenant_id(case.tenant_id)
         cid = str(case.case_id).strip()
         iid = str(case.invoice_id).strip()
-        idem = None if idempotency_key is None else str(idempotency_key).strip()
+        idem = None if idempotency_key is None else (str(idempotency_key).strip() or None)
         if idem:
             existing = self._by_idempotency.get((tid, iid, idem))
             if existing is not None:
-                if existing != case:
+                if existing == case:
+                    return existing
+                if existing.case_id != case.case_id or existing.invoice_id != case.invoice_id:
                     raise ValueError('dispute idempotency collision')
-                return existing
         existing_case = self._by_case.get((tid, cid))
         if existing_case is not None and existing_case != case:
             if existing_case.invoice_id != case.invoice_id:
@@ -130,7 +133,7 @@ class DisputeOrchestrator:
     ) -> DisputeCase:
         tid = require_tenant_id(tenant_id)
         iid = str(invoice_id).strip()
-        idem = None if idempotency_key is None else str(idempotency_key).strip()
+        idem = None if idempotency_key is None else (str(idempotency_key).strip() or None)
         if not iid:
             raise ValueError('invoice_id is required')
         evidence_fingerprint = self._payload_fingerprint(payload)

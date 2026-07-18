@@ -65,8 +65,12 @@ class InMemoryChargebackStore:
                     raise ValueError('chargeback idempotency collision')
                 return existing
         current = list(self._cases.get(key, ()))
-        if any(item.case_id == case.case_id and item != case for item in current):
-            raise ValueError('chargeback case collision')
+        for item in current:
+            if item.case_id != case.case_id:
+                continue
+            if item != case:
+                raise ValueError('chargeback case collision')
+            return item
         current.append(case)
         self._cases[key] = tuple(current)
         if idem:
