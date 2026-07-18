@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-import pytest
-
 from core.retention.feature_extractors import activity, audio, mood
 from core.retention.feature_extractors.shared import (
     day_key_from_ms,
