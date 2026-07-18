@@ -8,6 +8,8 @@ from typing import Any, Mapping
 import json
 sqlite3 = importlib.import_module("sqlite3")
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from core.tenancy.normalization import require_tenant_id
 from reliability.outbox_backend import (
@@ -210,7 +212,10 @@ class SQLiteOutboxBackend(OutboxBackend, OutboxBackendInspector):
             query += " AND topic = ?"
             params.append(str(topic))
         query += " ORDER BY delivered_at ASC, message_id ASC LIMIT ?"
-        params.append(max(1, int(limit)))
+        max_items = max(0, int(limit))
+        if max_items == 0:
+            return ()
+        params.append(max_items)
 
         with self._lock, self._connect() as conn:
             rows = conn.execute(query, tuple(params)).fetchall()
@@ -249,14 +254,18 @@ class SQLiteOutboxBackend(OutboxBackend, OutboxBackendInspector):
             )
             conn.commit()
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(str(self._db_path), isolation_level=None)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=FULL")
         conn.execute("PRAGMA foreign_keys=ON")
         conn.execute("PRAGMA busy_timeout=5000")
-        return conn
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     @staticmethod
     def _assert_semantic_match_or_raise(
