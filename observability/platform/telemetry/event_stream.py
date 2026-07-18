@@ -67,6 +67,9 @@ class InMemoryEventStore:
         tenant = str(tenant_id)
         normalized_user = None if user_id is None else str(user_id)
         accepted_types = self._normalized_event_types(event_type=event_type, event_types=event_types)
+        max_items = max(0, int(limit))
+        if max_items == 0:
+            return []
         out: list[Dict[str, Any]] = []
         for ev in reversed(self._events):
             if ev.get("tenant_id") != tenant:
@@ -76,7 +79,7 @@ class InMemoryEventStore:
             if accepted_types is not None and ev.get("event_type") not in accepted_types:
                 continue
             out.append(dict(ev))
-            if len(out) >= max(0, int(limit)):
+            if len(out) >= max_items:
                 break
         return out
 
@@ -114,6 +117,8 @@ class InMemoryEventStore:
         normalized_user = None if user_id is None else str(user_id)
         accepted_types = self._normalized_event_types(event_type=event_type, event_types=event_types)
         max_items = None if limit is None else max(0, int(limit))
+        if max_items == 0:
+            return []
         out: list[Dict[str, Any]] = []
         for ev in self._events:
             if ev.get("tenant_id") != tenant:
