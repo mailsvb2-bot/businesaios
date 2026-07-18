@@ -200,7 +200,7 @@ async def tokens_put_compat(
     }
     canonical_payload = {
         "tenant_id": str(tenant_id),
-        "platform": str(platform.value),
+        "platform": platform,
         "account_id": str(account_id),
         "token": {
             "access_token": str(access_token),
@@ -239,9 +239,14 @@ async def tokens_get_access_token_compat(
 ) -> str:
     if tokens is None:
         raise AdsConnectorError("connector token store is not configured")
-    payload = {
+    legacy_payload = {
         "tenant_id": str(tenant_id),
         "platform": str(platform.value),
+        "account_id": str(account_id),
+    }
+    canonical_payload = {
+        "tenant_id": str(tenant_id),
+        "platform": platform,
         "account_id": str(account_id),
     }
     positional = (str(tenant_id), str(platform.value), str(account_id))
@@ -249,8 +254,12 @@ async def tokens_get_access_token_compat(
         method = getattr(tokens, method_name, None)
         if not callable(method):
             continue
+        candidates = []
+        if method_name == "get":
+            candidates.append(((), canonical_payload))
+        candidates.extend((((), legacy_payload), (positional, {})))
         try:
-            value = await _call_async_compat(method, [((), payload), (positional, {})])
+            value = await _call_async_compat(method, candidates)
         except _NoCompatibleCall:
             continue
         if isinstance(value, Mapping):
