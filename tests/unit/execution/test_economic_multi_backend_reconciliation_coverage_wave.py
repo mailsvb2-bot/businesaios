@@ -1,6 +1,5 @@
 from __future__ import annotations
 from types import SimpleNamespace
-import pytest
 from execution.economic_lineage_lock import EconomicLineageLockBuilder
 from execution.economic_multi_backend_reconciliation import EconomicMultiBackendReconciliation, EconomicMultiBackendReconciliationBuilder
 from execution import economic_multi_backend_reconciliation_support as support
