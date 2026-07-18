@@ -37,7 +37,7 @@ def apply_event_operator(
 
     params = resolve_operator_params(ctx)
 
-    dI, dT, dV, dP, dA = impulse_for_event(event)
+    dI, dT, dV, dP, dA = impulse_for_event(event=event).as_tuple()
 
     scale = 1.0
     try:
