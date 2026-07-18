@@ -27,11 +27,28 @@ def _normalized_mapping(payload: Any) -> dict[str, Any]:
 
 def _stable_jsonable(value: Any) -> Any:
     if isinstance(value, Mapping):
-        return {str(k): _stable_jsonable(v) for k, v in sorted(value.items(), key=lambda item: str(item[0]))}
+        normalized: dict[str, Any] = {}
+        for key, item in sorted(value.items(), key=lambda pair: str(pair[0])):
+            normalized_key = str(key)
+            if normalized_key in normalized:
+                raise AdsConnectorError(
+                    f"connector payload contains duplicate normalized key: {normalized_key!r}"
+                )
+            normalized[normalized_key] = _stable_jsonable(item)
+        return normalized
     if isinstance(value, list | tuple):
         return [_stable_jsonable(v) for v in value]
     if isinstance(value, set):
-        return sorted(_stable_jsonable(v) for v in value)
+        normalized_items = [_stable_jsonable(v) for v in value]
+        return sorted(
+            normalized_items,
+            key=lambda item: json.dumps(
+                item,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
     return value
 
 
@@ -39,6 +56,66 @@ async def _maybe_await(value: Any) -> Any:
     if inspect.isawaitable(value):
         return await value
     return value
+
+
+class _NoCompatibleCall(TypeError):
+    pass
+
+
+def _call_mismatch(exc: TypeError) -> bool:
+    traceback = exc.__traceback__
+    return traceback is not None and traceback.tb_next is None
+
+
+def _select_compatible_call(
+    method: Any,
+    candidates: Sequence[tuple[tuple[Any, ...], dict[str, Any]]],
+) -> tuple[tuple[Any, ...], dict[str, Any]] | None:
+    try:
+        signature = inspect.signature(method)
+    except (TypeError, ValueError):
+        return None
+    for args, kwargs in candidates:
+        try:
+            signature.bind(*args, **kwargs)
+        except TypeError:
+            continue
+        return args, kwargs
+    raise _NoCompatibleCall
+
+
+def _call_sync_compat(
+    method: Any,
+    candidates: Sequence[tuple[tuple[Any, ...], dict[str, Any]]],
+) -> Any:
+    selected = _select_compatible_call(method, candidates)
+    if selected is not None:
+        args, kwargs = selected
+        return method(*args, **kwargs)
+    for args, kwargs in candidates:
+        try:
+            return method(*args, **kwargs)
+        except TypeError as exc:
+            if not _call_mismatch(exc):
+                raise
+    raise _NoCompatibleCall
+
+
+async def _call_async_compat(
+    method: Any,
+    candidates: Sequence[tuple[tuple[Any, ...], dict[str, Any]]],
+) -> Any:
+    selected = _select_compatible_call(method, candidates)
+    if selected is not None:
+        args, kwargs = selected
+        return await _maybe_await(method(*args, **kwargs))
+    for args, kwargs in candidates:
+        try:
+            return await _maybe_await(method(*args, **kwargs))
+        except TypeError as exc:
+            if not _call_mismatch(exc):
+                raise
+    raise _NoCompatibleCall
 
 
 def vault_get_secret(vault: Any | None, *, tenant_id: str | None, key: str) -> str | None:
@@ -49,12 +126,17 @@ def vault_get_secret(vault: Any | None, *, tenant_id: str | None, key: str) -> s
         return None
     if tenant_id:
         try:
-            value = _normalize_secret_value(getter(str(tenant_id), key))
-            if value is not None:
-                return value
-        except TypeError:
-            pass
-    return _normalize_secret_value(getter(key))
+            value = _normalize_secret_value(
+                _call_sync_compat(getter, [((str(tenant_id), key), {})])
+            )
+        except _NoCompatibleCall:
+            value = None
+        if value is not None:
+            return value
+    try:
+        return _normalize_secret_value(_call_sync_compat(getter, [((key,), {})]))
+    except _NoCompatibleCall:
+        return None
 
 
 def _first_present(raw: Mapping[str, Any], keys: Iterable[str]) -> Any:
@@ -109,26 +191,42 @@ async def tokens_put_compat(
 ) -> None:
     if tokens is None:
         raise AdsConnectorError(f"{connector_name}: token store is not configured")
-    payload = {
+    legacy_payload = {
         "tenant_id": str(tenant_id),
         "platform": str(platform.value),
         "account_id": str(account_id),
         "access_token": str(access_token),
         "scope": str(scope),
     }
+    canonical_payload = {
+        "tenant_id": str(tenant_id),
+        "platform": platform,
+        "account_id": str(account_id),
+        "token": {
+            "access_token": str(access_token),
+            "scope": str(scope),
+        },
+    }
+    legacy_positional = (
+        str(tenant_id),
+        str(platform.value),
+        str(account_id),
+        str(access_token),
+        str(scope),
+    )
     for method_name in ("put_token", "put", "save", "set", "store"):
         method = getattr(tokens, method_name, None)
         if not callable(method):
             continue
+        candidates = []
+        if method_name == "put":
+            candidates.append(((), canonical_payload))
+        candidates.extend((((), legacy_payload), (legacy_positional, {})))
         try:
-            await _maybe_await(method(**payload))
+            await _call_async_compat(method, candidates)
             return
-        except TypeError:
-            try:
-                await _maybe_await(method(str(tenant_id), str(platform.value), str(account_id), str(access_token), str(scope)))
-                return
-            except TypeError:
-                continue
+        except _NoCompatibleCall:
+            continue
     raise AdsConnectorError(f"{connector_name}: token store must expose put_token/put/save/set/store")
 
 
@@ -141,22 +239,29 @@ async def tokens_get_access_token_compat(
 ) -> str:
     if tokens is None:
         raise AdsConnectorError("connector token store is not configured")
-    payload = {
+    legacy_payload = {
         "tenant_id": str(tenant_id),
         "platform": str(platform.value),
         "account_id": str(account_id),
     }
+    canonical_payload = {
+        "tenant_id": str(tenant_id),
+        "platform": platform,
+        "account_id": str(account_id),
+    }
+    positional = (str(tenant_id), str(platform.value), str(account_id))
     for method_name in ("get_access_token", "access_token", "get_token", "get", "load"):
         method = getattr(tokens, method_name, None)
         if not callable(method):
             continue
+        candidates = []
+        if method_name == "get":
+            candidates.append(((), canonical_payload))
+        candidates.extend((((), legacy_payload), (positional, {})))
         try:
-            value = await _maybe_await(method(**payload))
-        except TypeError:
-            try:
-                value = await _maybe_await(method(str(tenant_id), str(platform.value), str(account_id)))
-            except TypeError:
-                continue
+            value = await _call_async_compat(method, candidates)
+        except _NoCompatibleCall:
+            continue
         if isinstance(value, Mapping):
             value = value.get("access_token") or value.get("token")
         token = _normalize_secret_value(value)
@@ -175,17 +280,23 @@ async def http_post_compat(
 ) -> dict[str, Any]:
     post = getattr(http, "post", None)
     if callable(post):
-        return _normalized_mapping(await post(url, headers=headers, data=data))
+        return _normalized_mapping(
+            await _maybe_await(post(url, headers=headers, data=data))
+        )
     request_fn = getattr(http, "request", None)
     if not callable(request_fn):
         raise AdsConnectorError("connector http client must implement post() or request()")
-    return _normalized_mapping(await request_fn(
-        "POST",
-        url,
-        headers=headers,
-        data=data,
-        platform=str(platform.value),
-    ))
+    return _normalized_mapping(
+        await _maybe_await(
+            request_fn(
+                "POST",
+                url,
+                headers=headers,
+                data=data,
+                platform=str(platform.value),
+            )
+        )
+    )
 
 
 async def http_get_compat(
@@ -198,17 +309,23 @@ async def http_get_compat(
 ) -> dict[str, Any]:
     get = getattr(http, "get", None)
     if callable(get):
-        return _normalized_mapping(await get(url, headers=headers, params=params))
+        return _normalized_mapping(
+            await _maybe_await(get(url, headers=headers, params=params))
+        )
     request_fn = getattr(http, "request", None)
     if not callable(request_fn):
         raise AdsConnectorError("connector http client must implement get() or request()")
-    return _normalized_mapping(await request_fn(
-        "GET",
-        url,
-        headers=headers,
-        params=params,
-        platform=str(platform.value),
-    ))
+    return _normalized_mapping(
+        await _maybe_await(
+            request_fn(
+                "GET",
+                url,
+                headers=headers,
+                params=params,
+                platform=str(platform.value),
+            )
+        )
+    )
 
 
 def resolve_url_with_default(
@@ -280,12 +397,12 @@ def normalize_rows(payload: Any, *, key: str) -> list[dict[str, Any]]:
 
 
 def summarize_rows(rows: list[dict[str, Any]]) -> tuple[float, int, float, int]:
-    spend = sum(as_float(row.get("spend"), 0.0) for row in rows)
-    impressions = sum(as_int(row.get("impressions"), 0) for row in rows)
-    clicks = sum(as_int(row.get("clicks"), 0) for row in rows)
-    conversions = sum(as_int(row.get("conversions"), 0) for row in rows)
-    ctr = safe_ratio(clicks, impressions)
-    return spend, impressions, ctr, conversions or int(safe_ratio(clicks, 10))
+    spend = sum(as_float(row.get("spend"), default=0.0) for row in rows)
+    impressions = sum(as_int(row.get("impressions"), default=0) for row in rows)
+    clicks = sum(as_int(row.get("clicks"), default=0) for row in rows)
+    conversions = sum(as_int(row.get("conversions"), default=0) for row in rows)
+    ctr = safe_ratio(clicks, impressions) or 0.0
+    return spend, impressions, ctr, conversions
 
 
 __all__ = [
