@@ -1,3 +1,5 @@
+"""Coverage contract for runtime recovery fail-closed behavior."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
