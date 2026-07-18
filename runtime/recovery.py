@@ -86,7 +86,9 @@ def _normalize_item(item: Any) -> dict[str, Any]:
 def _iter_recoverable_items(*, outbox: Any, limit: int) -> Iterable[dict[str, Any]]:
     if outbox is None:
         return ()
-    max_items = max(1, int(limit))
+    max_items = max(0, int(limit))
+    if max_items == 0:
+        return ()
     if hasattr(outbox, "list_claimable_all"):
         try:
             return tuple(_normalize_item(item) for item in outbox.list_claimable_all(limit=max_items))
@@ -114,7 +116,7 @@ def _item_tenant_id(item: dict[str, Any]) -> str:
     return tenant_id or "default"
 
 def _decision_id_from_item(item: dict[str, Any]) -> str:
-    return str(item.get("decision_id") or item.get("id") or item.get("message_id") or "")
+    return str(item.get("decision_id") or item.get("id") or item.get("message_id") or "").strip()
 
 def _env_tenant_id(*, env: Any, item: dict[str, Any]) -> str:
     decision = getattr(env, "decision", None)
