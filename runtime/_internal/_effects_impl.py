@@ -264,6 +264,16 @@ def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, 
     normalized_path = str(path or "/").strip() or "/"
     auth_mode = str(os.environ.get("YOOKASSA_WEBHOOK_AUTH_MODE", "")).strip().casefold()
     expected_token = str(os.environ.get("YOOKASSA_WEBHOOK_TOKEN", "")).strip()
+    if auth_mode not in {"", "none", "token"}:
+        raise RuntimeError("unsupported_yookassa_webhook_auth_mode")
+    if auth_mode == "token" and not expected_token:
+        raise RuntimeError("missing_yookassa_webhook_token")
+    enqueue_once = getattr(payment_outbox, "enqueue_once", None)
+    if not callable(enqueue_once):
+        raise RuntimeError("durable_payment_outbox_not_configured")
+
+    def _persist_payment(payload: dict[str, Any], *, dedupe_key: str) -> None:
+        enqueue_once(dedupe_key=dedupe_key, payload=payload)
 
     def _emit_event(payload: dict[str, Any]) -> None:
         if event_store is None:
@@ -277,17 +287,7 @@ def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, 
         event_name = str(raw.get("event") or "yookassa.webhook")
         object_id = str(obj.get("id") or raw.get("id") or "unknown")
         payload = {"type": "yookassa_webhook", "payload": raw}
-        enqueue_once = getattr(payment_outbox, "enqueue_once", None)
-        if callable(enqueue_once):
-            enqueue_once(dedupe_key=f"{event_name}:{object_id}", payload=payload)
-            return
-        enqueue = getattr(payment_outbox, "enqueue", None)
-        if callable(enqueue):
-            enqueue(payload)
-            return
-        items = getattr(payment_outbox, "items", None)
-        if isinstance(items, list):
-            items.append({"dedupe_key": f"{event_name}:{object_id}", "payload": payload})
+        _persist_payment(payload, dedupe_key=f"{event_name}:{object_id}")
 
     class _Handler(BaseHTTPRequestHandler):
         def log_message(self, *_args: Any) -> None:  # pragma: no cover - quiet smoke server
@@ -320,8 +320,12 @@ def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, 
             if not isinstance(payload, dict):
                 self._send_json(400, {"ok": False, "code": "invalid_payload"})
                 return
-            _enqueue(payload)
-            _emit_event({"type": "yookassa_webhook_received", "payload": payload})
+            try:
+                _enqueue(payload)
+                _emit_event({"type": "yookassa_webhook_received", "payload": payload})
+            except Exception as exc:
+                self._send_json(500, {"ok": False, "code": "webhook_persistence_failed", "error": type(exc).__name__})
+                return
             self._send_json(200, {"ok": True})
 
     server = ThreadingHTTPServer((str(host), int(port)), _Handler)
