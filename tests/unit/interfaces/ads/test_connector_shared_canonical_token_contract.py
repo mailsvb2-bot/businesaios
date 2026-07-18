@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 
+from interfaces.ads.base import AdsPlatform
 from interfaces.ads.connector_shared import (
     tokens_get_access_token_compat,
     tokens_put_compat,
 )
-from interfaces.ads.base import AdsPlatform
 
 
 def _run(coro):
