@@ -157,6 +157,8 @@ class JsonlEventStore:
         tenant = str(tenant_id)
         normalized_user = None if user_id is None else str(user_id)
         max_items = None if limit is None else max(0, int(limit))
+        if max_items == 0:
+            return []
         out: list[dict[str, Any]] = []
         for row in self._read_all():
             if row.get('tenant_id') != tenant:

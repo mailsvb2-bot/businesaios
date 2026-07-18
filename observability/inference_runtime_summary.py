@@ -291,6 +291,12 @@ class InferenceRuntimeSummaryService:
             for item in self.provider_health_monitor.snapshots()
         )
         escalation_events = self.escalation_audit_log.list_events()
+        if required_tenant_id is not None:
+            escalation_events = tuple(
+                item
+                for item in escalation_events
+                if _safe_text(getattr(item, 'tenant_id', '')) == required_tenant_id
+            )
         burn_rate_usd_per_hour, total_estimated_cost_usd = self._burn_summary(tenant_id=required_tenant_id)
         provider_mix = self._provider_mix(tenant_id=required_tenant_id)
         return {
