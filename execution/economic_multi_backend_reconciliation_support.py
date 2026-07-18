@@ -162,10 +162,12 @@ def build_reconciliation_fields(*, feedback_rows, roi_rows, snapshot_rows, trace
         node_sets.append((node_id, extracted))
         manifest = _safe_dict(payload.get('export_manifest'))
         metadata = _safe_dict(payload.get('metadata'))
-        lineage_verdict = EconomicLineageLockBuilder().validate(manifest=manifest, expected_scope=local_scope)
-        if not lineage_verdict.valid:
-            lineage_invalid_node_ids.append(node_id)
-            corrupted_nodes.append(node_id)
+        lineage_declared = bool(manifest.get('lineage_lock') or manifest.get('scope_lineage'))
+        if lineage_declared:
+            lineage_verdict = EconomicLineageLockBuilder().validate(manifest=manifest, expected_scope=local_scope)
+            if not lineage_verdict.valid:
+                lineage_invalid_node_ids.append(node_id)
+                corrupted_nodes.append(node_id)
         if _text(metadata.get('import_validation_status')) == 'invalid' or _text(manifest.get('manifest_digest')) == 'corrupt' or bool(metadata.get('corrupted')):
             corrupted_nodes.append(node_id)
         node_scope = _scope_signature(payload)
