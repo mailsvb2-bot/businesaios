@@ -70,7 +70,7 @@ class PlatformSqliteCollectionResultStore:
         result.validate()
         tenant_id = require_tenant_id(result.tenant_id)
         invoice_id = str(result.invoice_id).strip()
-        idem = None if idempotency_key is None else str(idempotency_key).strip()
+        idem = None if idempotency_key is None else (str(idempotency_key).strip() or None)
         if idem:
             existing = self.get_by_idempotency(tenant_id=tenant_id, invoice_id=invoice_id, idempotency_key=idem)
             if existing is not None:

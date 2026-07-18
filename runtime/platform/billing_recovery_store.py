@@ -62,7 +62,7 @@ class PlatformSqliteRefundStore:
         tenant_id = require_tenant_id(result.tenant_id)
         invoice_id = str(result.invoice_id).strip()
         refund_id = str(result.refund_id).strip()
-        idem = None if idempotency_key is None else str(idempotency_key).strip()
+        idem = None if idempotency_key is None else (str(idempotency_key).strip() or None)
         if idem:
             existing = self.get_by_idempotency(tenant_id=tenant_id, invoice_id=invoice_id, idempotency_key=idem)
             if existing is not None:
@@ -182,7 +182,7 @@ class PlatformSqliteChargebackStore:
         tenant_id = require_tenant_id(case.tenant_id)
         invoice_id = str(case.invoice_id).strip()
         case_id = str(case.case_id).strip()
-        idem = None if idempotency_key is None else str(idempotency_key).strip()
+        idem = None if idempotency_key is None else (str(idempotency_key).strip() or None)
         if idem:
             existing = self.get_by_idempotency(tenant_id=tenant_id, invoice_id=invoice_id, idempotency_key=idem)
             if existing is not None:
@@ -198,7 +198,7 @@ class PlatformSqliteChargebackStore:
             'reason': case.reason,
             'opened_at': case.opened_at.isoformat(),
             'case_id': case.case_id,
-            'idempotency_key': idem,
+            'idempotency_key': case.idempotency_key,
             'metadata': dict(case.metadata),
         }
         try:

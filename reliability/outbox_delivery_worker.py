@@ -38,7 +38,7 @@ def _transport_name_from_message(message: OutboxMessage, *, fallback: str) -> st
         if str(value or "").strip():
             return str(value).strip()
     topic = str(message.topic or "").strip()
-    return topic or str(fallback or "outbox")
+    return topic or (str(fallback or "outbox").strip() or "outbox")
 
 
 @dataclass(frozen=True)
@@ -95,7 +95,9 @@ class OutboxDeliveryWorker:
         self._backend = backend
         self._dead_letter_policy = dead_letter_policy or DeadLetterPolicy()
         self._worker_id = str(worker_id).strip() or "outbox-delivery-worker"
-        self._transport_name = str(transport_name or getattr(backend, "backend_name", "outbox")).strip() or "outbox"
+        requested_transport = str(transport_name or "").strip()
+        backend_transport = str(getattr(backend, "backend_name", "outbox") or "").strip()
+        self._transport_name = requested_transport or backend_transport or "outbox"
         self._claim_ttl_seconds = max(1, int(claim_ttl_seconds))
         self._batch_limit = max(1, int(batch_limit))
         self._max_consecutive_failures = max(1, int(max_consecutive_failures))
@@ -180,8 +182,8 @@ class OutboxDeliveryWorker:
                 transport_name=descriptor.transport_name,
             )
 
-        max_items = self._batch_limit if limit is None else max(1, int(limit))
-        claimable = self._store.list_claimable(tenant_id=tenant_id, limit=max_items, now=self._now_factory())
+        max_items = self._batch_limit if limit is None else max(0, int(limit))
+        claimable = () if max_items == 0 else self._store.list_claimable(tenant_id=tenant_id, limit=max_items, now=self._now_factory())
 
         reports: list[OutboxDeliveryAttemptReport] = []
         delivered = 0
@@ -257,7 +259,7 @@ class OutboxDeliveryWorker:
         all_reports: list[OutboxDeliveryAttemptReport] = []
         delivered = retried = dead_lettered = skipped = 0
 
-        for _ in range(max(1, int(max_batches))):
+        for _ in range(max(0, int(max_batches))):
             report = self.run_once(tenant_id=tenant_id, limit=self._batch_limit)
             if report.processed == 0:
                 break
