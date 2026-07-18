@@ -5,6 +5,8 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from threading import RLock
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Mapping
 
 from core.tenancy.normalization import require_tenant_id
@@ -211,14 +213,22 @@ class SQLiteTenantRuntimeLeaseStore(TenantRuntimeLeaseStore):
         )
         return next_token
 
-    def _connect(self, *, write: bool = False) -> SQLiteConnection:
+    @contextmanager
+    def _connect(self, *, write: bool = False) -> Iterator[SQLiteConnection]:
         conn = connect_sqlite(self._path, timeout=30.0, isolation_level=None)
         conn.row_factory = SQLITE_ROW_FACTORY
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute("PRAGMA busy_timeout=30000")
         conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-        return conn
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
 
     def schema_version(self) -> int:
