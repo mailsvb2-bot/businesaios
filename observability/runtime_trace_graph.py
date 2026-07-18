@@ -246,6 +246,11 @@ class RuntimeTraceGraphBuilder:
         execution_sorted = tuple(sorted(execution_events, key=lambda item: (int(item.sequence_no), item.emitted_at.isoformat(), str(item.event_type))))
         decision_sorted = tuple(sorted(decision_events, key=lambda item: (item.emitted_at.isoformat(), str(item.decision_id))))
         effect_sorted = tuple(sorted(effect_events, key=lambda item: (item.emitted_at.isoformat(), str(item.effect_id), str(item.disposition.value))))
+        for item in (*execution_sorted, *decision_sorted, *effect_sorted):
+            if str(item.tenant_id) != str(tenant_id):
+                raise ValueError("trace event tenant_id does not match requested tenant")
+            if str(item.trace_id) != str(trace_id):
+                raise ValueError("trace event trace_id does not match requested trace")
         nodes: list[TraceGraphNode] = []
         edges: list[TraceGraphEdge] = []
         warnings: list[str] = []
