@@ -20,6 +20,7 @@ from entrypoints.api.queue_ops_route_support import (
     build_operator_summary,
     build_timeline_rows,
     normalize_hook_code,
+    normalize_limit,
     normalize_optional,
     normalize_queue_name,
     normalize_source,
@@ -59,9 +60,13 @@ class QueueOpsRouteHandlers:
     def __post_init__(self) -> None:
         evaluator = QueueSLOEvaluator(store=self.store, observability=self.observability)
         alert_router = QueueAlertRouter(evaluator=evaluator, observability=self.observability, sink=self.alert_sink)
-        rollup_store = self.rollup_store or SqliteQueueMetricsRollupStore()
-        audit_store = self.remediation_audit_store or SqliteQueueRemediationAuditStore()
-        route_history_store = self.remediation_route_history_store or SqliteQueueRemediationRouteHistoryStore()
+        rollup_store = self.rollup_store if self.rollup_store is not None else SqliteQueueMetricsRollupStore()
+        audit_store = self.remediation_audit_store if self.remediation_audit_store is not None else SqliteQueueRemediationAuditStore()
+        route_history_store = (
+            self.remediation_route_history_store
+            if self.remediation_route_history_store is not None
+            else SqliteQueueRemediationRouteHistoryStore()
+        )
         monitor = QueueHealthMonitor(evaluator=evaluator, alert_router=alert_router, rollup_store=rollup_store)
         remediation = QueueRemediationCoordinator(health_monitor=monitor, audit_sink=audit_store)
         analytics = QueueRemediationAnalyticsService(audit_store=audit_store, route_history_store=route_history_store)
@@ -123,7 +128,7 @@ class QueueOpsRouteHandlers:
                 'max_pending_jobs': rollup_summary.max_pending_jobs,
                 'max_active_claims': rollup_summary.max_active_claims,
                 'max_dead_letter_jobs': rollup_summary.max_dead_letter_jobs,
-                'last_observed_at': rollup_summary.last_observed_at.isoformat(),
+                'last_observed_at': None if rollup_summary.last_observed_at is None else rollup_summary.last_observed_at.isoformat(),
             },
             remediation_plan={
                 'generated_at': plan.generated_at.isoformat(),
@@ -136,7 +141,7 @@ class QueueOpsRouteHandlers:
                         'operator_required': hook.operator_required,
                         'category': hook.category,
                         'runbook_hint': hook.runbook_hint,
-                        'metadata': dict(hook.metadata),
+                        'metadata': sanitize_metadata(getattr(hook, 'metadata', None)),
                     }
                     for hook in plan.hooks
                 ),
@@ -178,7 +183,8 @@ class QueueOpsRouteHandlers:
         normalized_queue_name = normalize_queue_name(queue_name)
         normalized_actor_id = normalize_optional(actor_id)
         normalized_request_id = normalize_optional(request_id)
-        analytics = self.remediation_analytics.summarize(tenant_id=normalized_tenant_id, queue_name=normalized_queue_name, limit=max(1, int(limit)))
+        normalized_limit = normalize_limit(limit, default=200)
+        analytics = self.remediation_analytics.summarize(tenant_id=normalized_tenant_id, queue_name=normalized_queue_name, limit=normalized_limit)
         self._record_route_event(
             tenant_id=normalized_tenant_id,
             queue_name=normalized_queue_name,
@@ -253,7 +259,15 @@ class QueueOpsRouteHandlers:
         source: str = 'control_plane',
         now: datetime | None = None,
     ) -> dict[str, Any]:
-        query = QueueOpsAuditQuery(tenant_id=normalize_tenant_id(tenant_id), queue_name=normalize_queue_name(queue_name), limit=max(1, int(limit)), action=normalize_optional(action), status=normalize_optional(status), source=normalize_optional(source_filter), timeline_limit=max(1, int(timeline_limit)))
+        query = QueueOpsAuditQuery(
+            tenant_id=normalize_tenant_id(tenant_id),
+            queue_name=normalize_queue_name(queue_name),
+            limit=normalize_limit(limit, default=50),
+            action=normalize_optional(action),
+            status=normalize_optional(status),
+            source=normalize_optional(source_filter),
+            timeline_limit=normalize_limit(timeline_limit, default=25, upper=200),
+        )
         normalized_actor_id = normalize_optional(actor_id)
         normalized_request_id = normalize_optional(request_id)
         plans = self.remediation_audit_store.list_plan_entries(tenant_id=query.tenant_id, queue_name=query.queue_name, limit=query.limit) if self.remediation_audit_store is not None else ()
@@ -287,7 +301,7 @@ class QueueOpsRouteHandlers:
                     'reason': entry.reason,
                     'executed_at': entry.executed_at.isoformat(),
                     'category': entry.category,
-                    'metadata': sanitize_metadata(dict(entry.metadata)),
+                    'metadata': sanitize_metadata(getattr(entry, 'metadata', None)),
                 }
                 for entry in executions
             ),
@@ -298,7 +312,7 @@ class QueueOpsRouteHandlers:
                     'actor_id': entry.actor_id,
                     'request_id': entry.request_id,
                     'status': entry.status,
-                    'metadata': sanitize_metadata(dict(entry.metadata)),
+                    'metadata': sanitize_metadata(getattr(entry, 'metadata', None)),
                     'recorded_at': entry.recorded_at.isoformat(),
                 }
                 for entry in route_history
@@ -306,12 +320,11 @@ class QueueOpsRouteHandlers:
             timeline=build_timeline_rows(plans=plans, executions=executions, route_history=route_history, limit=query.timeline_limit),
         ).as_dict()
 
-
-
     def _build_audit_preview(self, *, tenant_id: str, queue_name: str, limit: int = 10) -> dict[str, Any]:
-        plans = self.remediation_audit_store.list_plan_entries(tenant_id=tenant_id, queue_name=queue_name, limit=limit) if self.remediation_audit_store is not None else ()
-        executions = self.remediation_audit_store.list_execution_entries(tenant_id=tenant_id, queue_name=queue_name, limit=limit) if self.remediation_audit_store is not None else ()
-        route_history = self.remediation_route_history_store.list_entries(tenant_id=tenant_id, queue_name=queue_name, limit=limit) if self.remediation_route_history_store is not None else ()
+        normalized_limit = normalize_limit(limit, default=10)
+        plans = self.remediation_audit_store.list_plan_entries(tenant_id=tenant_id, queue_name=queue_name, limit=normalized_limit) if self.remediation_audit_store is not None else ()
+        executions = self.remediation_audit_store.list_execution_entries(tenant_id=tenant_id, queue_name=queue_name, limit=normalized_limit) if self.remediation_audit_store is not None else ()
+        route_history = self.remediation_route_history_store.list_entries(tenant_id=tenant_id, queue_name=queue_name, limit=normalized_limit) if self.remediation_route_history_store is not None else ()
         latest_execution = executions[0] if executions else None
         latest_route = route_history[0] if route_history else None
         latest_plan = plans[0] if plans else None
@@ -331,25 +344,22 @@ class QueueOpsRouteHandlers:
             'latest_route_status': None if latest_route is None else latest_route.status,
         }
 
-
-
-
     def _build_approval_preview(self, *, plan: Any) -> dict[str, Any]:
         hooks = tuple(getattr(plan, 'hooks', ()) or ())
         approval_required = tuple(hook for hook in hooks if bool(getattr(hook, 'operator_required', True)))
         return {
             'approval_required_count': len(approval_required),
             'approval_required_hook_codes': tuple(str(getattr(hook, 'code', '') or '').strip() for hook in approval_required if str(getattr(hook, 'code', '') or '').strip()),
+            'approval_required_hooks': tuple(str(getattr(hook, 'code', '') or '').strip() for hook in approval_required if str(getattr(hook, 'code', '') or '').strip()),
             'review_categories': tuple(sorted({str(getattr(hook, 'category', '') or '').strip() for hook in approval_required if str(getattr(hook, 'category', '') or '').strip()})),
         }
 
     def _build_timeline_preview(self, *, tenant_id: str, queue_name: str, limit: int = 12) -> tuple[dict[str, Any], ...]:
-        plans = self.remediation_audit_store.list_plan_entries(tenant_id=tenant_id, queue_name=queue_name, limit=limit) if self.remediation_audit_store is not None else ()
-        executions = self.remediation_audit_store.list_execution_entries(tenant_id=tenant_id, queue_name=queue_name, limit=limit) if self.remediation_audit_store is not None else ()
-        route_history = self.remediation_route_history_store.list_entries(tenant_id=tenant_id, queue_name=queue_name, limit=limit) if self.remediation_route_history_store is not None else ()
-        return build_timeline_rows(plans=plans, executions=executions, route_history=route_history, limit=limit)
-
-
+        normalized_limit = normalize_limit(limit, default=12, upper=200)
+        plans = self.remediation_audit_store.list_plan_entries(tenant_id=tenant_id, queue_name=queue_name, limit=normalized_limit) if self.remediation_audit_store is not None else ()
+        executions = self.remediation_audit_store.list_execution_entries(tenant_id=tenant_id, queue_name=queue_name, limit=normalized_limit) if self.remediation_audit_store is not None else ()
+        route_history = self.remediation_route_history_store.list_entries(tenant_id=tenant_id, queue_name=queue_name, limit=normalized_limit) if self.remediation_route_history_store is not None else ()
+        return build_timeline_rows(plans=plans, executions=executions, route_history=route_history, limit=normalized_limit)
 
     def _build_data_freshness(self, *, monitor_report: Any, rollup_summary: Any, now: datetime) -> dict[str, Any]:
         return build_data_freshness(monitor_report=monitor_report, rollup_summary=rollup_summary, now=now)
@@ -401,10 +411,6 @@ class QueueOpsRouteHandlers:
             'fresh_window_age_seconds': None if not hasattr(latest, 'window_start_at') else max(0, int((now - latest.window_start_at).total_seconds())),
         }
 
-
-
-
-
     def _record_route_event(
         self,
         *,
@@ -428,22 +434,26 @@ class QueueOpsRouteHandlers:
             actor_id=normalize_optional(actor_id),
             request_id=normalize_optional(request_id),
             status=normalize_queue_name(status),
-            metadata=sanitize_metadata(dict(metadata or {})),
+            metadata=sanitize_metadata(metadata),
             recorded_at=now,
         )
 
     def _recent_alerts(self, *, tenant_id: str, queue_name: str, limit: int) -> tuple[QueueAlert, ...]:
         sink = self.alert_sink
-        if hasattr(sink, 'snapshot'):
-            alerts = tuple(getattr(sink, 'snapshot')())
-            filtered = tuple(
-                item for item in alerts
-                if str(item.tenant_id).strip() == str(tenant_id).strip() and str(item.queue_name).strip() == str(queue_name).strip()
-            )
-            ordered = tuple(sorted(filtered, key=lambda item: (item.created_at, str(item.code)), reverse=True))
-            return ordered[:max(0, int(limit))]
-        return ()
-
+        snapshot = getattr(sink, 'snapshot', None)
+        if not callable(snapshot):
+            return ()
+        alerts = tuple(snapshot() or ())
+        filtered = tuple(
+            item
+            for item in alerts
+            if isinstance(item, QueueAlert)
+            and str(item.tenant_id).strip() == str(tenant_id).strip()
+            and str(item.queue_name).strip() == str(queue_name).strip()
+        )
+        ordered = tuple(sorted(filtered, key=lambda item: (item.created_at, str(item.code)), reverse=True))
+        normalized_limit = normalize_limit(limit, default=20, upper=200)
+        return ordered[:normalized_limit]
 
 
 __all__ = [
