@@ -3,11 +3,16 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 from core.tenancy.normalization import require_tenant_id
-from tenancy.tenant_migration_lock_backend import TenantMigrationLockBackend, TenantMigrationLockRecord
+from tenancy.tenant_migration_lock_backend import (
+    TenantMigrationLockBackend,
+    TenantMigrationLockRecord,
+    ensure_aware,
+    utc_now,
+)
 
 
 CANON_TENANT_MIGRATION_LOCK_POSTGRES = True
@@ -65,10 +70,10 @@ class PostgresTenantMigrationLockBackend(TenantMigrationLockBackend):
             raise ValueError("operation_id and owner_id are required")
         if ttl <= 0:
             raise ValueError("ttl_seconds must be > 0")
-        moment = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        moment = ensure_aware(now or utc_now())
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=moment)
+            self._reap_expired_locked(cur, now=moment, tenant_id=tid)
             cur.execute(
                 f"SELECT tenant_id, operation_id, owner_id, fencing_token, acquired_at, expires_at FROM {self._config.table_name} WHERE tenant_id = %s FOR UPDATE",
                 (tid,),
@@ -104,10 +109,10 @@ class PostgresTenantMigrationLockBackend(TenantMigrationLockBackend):
             raise ValueError("operation_id and owner_id are required")
         if ttl <= 0:
             raise ValueError("ttl_seconds must be > 0")
-        moment = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        moment = ensure_aware(now or utc_now())
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=moment)
+            self._reap_expired_locked(cur, now=moment, tenant_id=tid)
             cur.execute(
                 f"SELECT operation_id, owner_id, fencing_token, acquired_at, expires_at FROM {self._config.table_name} WHERE tenant_id = %s FOR UPDATE",
                 (tid,),
@@ -117,7 +122,7 @@ class PostgresTenantMigrationLockBackend(TenantMigrationLockBackend):
                 raise KeyError(f"missing tenant migration lock: {tid}")
             if str(row[0]) != oid or str(row[1]) != owner:
                 raise PermissionError(f"tenant migration lock mismatch: tenant={tid}")
-            current_expires_at = row[4].astimezone(timezone.utc)
+            current_expires_at = ensure_aware(row[4])
             if current_expires_at <= moment:
                 raise KeyError(f"expired tenant migration lock: {tid}")
             expires_at = moment + timedelta(seconds=ttl)
@@ -135,7 +140,7 @@ class PostgresTenantMigrationLockBackend(TenantMigrationLockBackend):
             raise ValueError("operation_id and owner_id are required")
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=datetime.now(timezone.utc))
+            self._reap_expired_locked(cur, now=utc_now(), tenant_id=tid)
             cur.execute(f"SELECT operation_id, owner_id FROM {self._config.table_name} WHERE tenant_id = %s FOR UPDATE", (tid,))
             row = cur.fetchone()
             if row is None:
@@ -149,10 +154,10 @@ class PostgresTenantMigrationLockBackend(TenantMigrationLockBackend):
 
     def get(self, *, tenant_id: str) -> TenantMigrationLockRecord | None:
         tid = require_tenant_id(tenant_id)
-        moment = datetime.now(timezone.utc)
+        moment = utc_now()
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=moment)
+            self._reap_expired_locked(cur, now=moment, tenant_id=tid)
             cur.execute(
                 f"SELECT tenant_id, operation_id, owner_id, fencing_token, acquired_at, expires_at FROM {self._config.table_name} WHERE tenant_id = %s",
                 (tid,),
@@ -179,8 +184,25 @@ class PostgresTenantMigrationLockBackend(TenantMigrationLockBackend):
     def _tenant_lock(cur: Any, *, tenant_id: str) -> None:
         cur.execute("SELECT pg_advisory_xact_lock(%s)", (_advisory_lock_key(namespace="tenant-migration-lock", tenant_id=tenant_id),))
 
-    def _reap_expired_locked(self, cur: Any, *, now: datetime) -> None:
-        cur.execute(f"DELETE FROM {self._config.table_name} WHERE expires_at <= %s", (now,))
+    def _reap_expired_locked(
+        self,
+        cur: Any,
+        *,
+        now: datetime,
+        tenant_id: str | None = None,
+    ) -> None:
+        moment = ensure_aware(now)
+        if tenant_id is None:
+            cur.execute(
+                f"DELETE FROM {self._config.table_name} WHERE expires_at <= %s",
+                (moment,),
+            )
+            return
+        tid = require_tenant_id(tenant_id)
+        cur.execute(
+            f"DELETE FROM {self._config.table_name} WHERE tenant_id = %s AND expires_at <= %s",
+            (tid, moment),
+        )
 
     def _connect(self):
         return self._psycopg.connect(self._config.dsn)
