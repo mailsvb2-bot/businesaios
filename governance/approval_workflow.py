@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from governance.approval_audit import build_approval_decision_audit, build_approval_requested_audit
 from governance.approval_contract import (
@@ -16,7 +16,6 @@ from governance.approval_contract import (
 from governance.control_plane_audit_log import GovernanceAuditEvent, GovernanceAuditLogContract, NullGovernanceAuditLog
 from governance.rbac_contract import RoleId
 from governance.role_catalog import RoleCatalog
-
 
 CANON_GOVERNANCE_APPROVAL_WORKFLOW = True
 
@@ -126,7 +125,11 @@ class ApprovalWorkflow:
         saved = self._store.save(updated)
         self._emit_audit(build_approval_decision_audit(record=saved, decision=decision))
         return saved
-    decide = evaluate
+
+    # ``resolve`` is the canonical approval-lifecycle name. ``decide`` remains
+    # an identity alias for backward compatibility; it owns no separate logic.
+    resolve = evaluate
+    decide = resolve
 
     def _emit_audit(self, payload: dict[str, object]) -> None:
         tenant_id = str(payload.get("tenant_id") or "")
@@ -134,7 +137,7 @@ class ApprovalWorkflow:
             GovernanceAuditEvent(
                 event_type=str(payload.get("event_type") or "governance_event"),
                 tenant_id=tenant_id,
-                emitted_at=datetime.now(timezone.utc),
+                emitted_at=datetime.now(UTC),
                 payload=payload,
             )
         )
