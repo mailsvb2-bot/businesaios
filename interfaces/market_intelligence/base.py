@@ -15,6 +15,11 @@ from interfaces.common.connector_capabilities import ConnectorCapabilities
 from interfaces.common.connector_health import ConnectorHealth
 from interfaces.common.connector_maturity import ConnectorMaturity
 from interfaces.common.connector_result import ConnectorResult
+from interfaces.common.connector_support import (
+    build_invalid_payload_result,
+    normalize_operation,
+    normalize_payload,
+)
 
 CANON_MARKET_INTELLIGENCE_BASE = True
 
@@ -58,8 +63,8 @@ class ProviderClientProtocol(Protocol):
         ...
 
 
-def _safe_dict(value: Mapping[str, Any] | None) -> dict[str, Any]:
-    return dict(value or {})
+def _safe_dict(value: object) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else {}
 
 
 def _safe_list(value: object) -> list[dict[str, Any]]:
@@ -73,6 +78,32 @@ def _safe_list(value: object) -> list[dict[str, Any]]:
 def _safe_text(value: object | None) -> str | None:
     text = str(value or '').strip()
     return text or None
+
+
+def _bounded_limit(value: object, *, default: int = 25) -> int:
+    if value is None or str(value).strip() == '':
+        return int(default)
+    if isinstance(value, bool):
+        raise ValueError('limit must be an integer')
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError('limit must be an integer') from exc
+    if not parsed.is_integer():
+        raise ValueError('limit must be an integer')
+    return max(1, min(int(parsed), 250))
+
+
+def _normalize_tags(value: object, *, defaults: tuple[str, ...]) -> tuple[str, ...]:
+    if value is None:
+        return defaults
+    if isinstance(value, str):
+        text = value.strip()
+        return (text,) if text else defaults
+    if not isinstance(value, (list, tuple, set, frozenset)):
+        raise ValueError('record tags must be a string or sequence')
+    normalized = tuple(str(item).strip() for item in value if str(item).strip())
+    return normalized or defaults
 
 
 @dataclass
@@ -89,6 +120,17 @@ class MarketIntelConnectorBase(BaseConnector):
     session: AuthSession = field(default_factory=AuthSession)
 
     def __post_init__(self) -> None:
+        self.connector_name = str(self.connector_name or '').strip() or 'market_intelligence'
+        self.connector_id = str(self.connector_id or '').strip()
+        self.provider_key = str(self.provider_key or '').strip()
+        self.source_family = str(self.source_family or '').strip()
+        self.version = str(self.version or '').strip() or 'v1'
+        if not self.connector_id:
+            raise ValueError('connector_id is required')
+        if not self.provider_key:
+            raise ValueError('provider_key is required')
+        if self.source_family not in _OPERATION_MAP:
+            raise ValueError(f'unsupported source_family: {self.source_family}')
         if self.provider_client is None:
             from interfaces.market_intelligence.provider_factory import build_default_provider_client
 
@@ -109,12 +151,51 @@ class MarketIntelConnectorBase(BaseConnector):
         idempotency_key: str | None = None,
         dry_run: bool = False,
     ) -> ConnectorResult:
-        if dry_run:
-            normalized_payload = _safe_dict(payload)
+        if not dry_run:
+            return super().execute(operation, payload, idempotency_key=idempotency_key, dry_run=False)
+        if hasattr(self, 'decide'):
+            raise RuntimeError('connectors must never expose decide()')
+        op = normalize_operation(operation)
+        if not op:
+            return ConnectorResult(ok=False, code='invalid_operation', message='operation is required')
+        normalized_payload = normalize_payload(payload)
+        if normalized_payload is None:
+            return build_invalid_payload_result(connector_name=self.connector_name, operation=op)
+        if not self.rate_limit_guard.allow(f'{self.connector_name}:{op}'):
+            return ConnectorResult(ok=False, code='rate_limited', message='connector rate limit reached')
+        if not self.supports_dry_run():
+            return self._enrich_result(
+                ConnectorResult(ok=False, code='dry_run_not_supported', message=f'{self.connector_name}.{op} does not support dry_run'),
+                operation=op,
+                dry_run=True,
+                idempotency_key=idempotency_key,
+            )
+        if idempotency_key and not self.supports_idempotency():
+            return self._enrich_result(
+                ConnectorResult(ok=False, code='idempotency_not_supported', message=f'{self.connector_name}.{op} does not support idempotency'),
+                operation=op,
+                dry_run=True,
+                idempotency_key=idempotency_key,
+            )
+        if op not in set(self._operation_names()):
+            return self._enrich_result(
+                ConnectorResult(ok=False, code='unsupported_operation', message=f'unsupported operation: {op}'),
+                operation=op,
+                dry_run=True,
+                idempotency_key=idempotency_key,
+            )
+        try:
             target = self._build_target(normalized_payload)
-            envelope = self._build_dry_run_envelope(operation=str(operation).strip(), target=target, payload=normalized_payload)
-            return self._to_result(ok=True, code='dry_run', message='dry-run preview generated', envelope=envelope, dry_run=True)
-        return super().execute(operation, payload, idempotency_key=idempotency_key, dry_run=dry_run)
+        except ValueError as exc:
+            return self._enrich_result(
+                ConnectorResult(ok=False, code='invalid_payload', message=str(exc)),
+                operation=op,
+                dry_run=True,
+                idempotency_key=idempotency_key,
+            )
+        envelope = self._build_dry_run_envelope(operation=op, target=target, payload=normalized_payload)
+        result = self._to_result(ok=True, code='dry_run', message='dry-run preview generated', envelope=envelope, dry_run=True)
+        return self._enrich_result(result, operation=op, dry_run=True, idempotency_key=idempotency_key)
 
     def connector_maturity(self) -> ConnectorMaturity:
         return ConnectorMaturity.CAPABILITY_SHELL if self.provider_client is None else ConnectorMaturity.REAL
@@ -134,13 +215,20 @@ class MarketIntelConnectorBase(BaseConnector):
                 'source_family': self.source_family,
                 'version': self.version,
                 'maturity': self.connector_maturity().value,
-                'operation_names': list(_OPERATION_MAP[self.source_family]),
+                'operation_names': list(self._operation_names()),
             },
         )
 
     def health(self) -> ConnectorHealth:
-        healthy = bool(self.provider_client is not None) or bool(self.support_dry_run)
-        reason = 'provider_configured' if self.provider_client is not None else 'dry_run_only'
+        if self.provider_client is not None:
+            healthy = True
+            reason = 'provider_configured'
+        elif self.support_dry_run:
+            healthy = True
+            reason = 'dry_run_only'
+        else:
+            healthy = False
+            reason = 'not_configured'
         return ConnectorHealth(
             connector_name=self.connector_name,
             healthy=healthy,
@@ -151,7 +239,7 @@ class MarketIntelConnectorBase(BaseConnector):
                 'source_family': self.source_family,
                 'version': self.version,
                 'mode': self.mode,
-                'operations': list(_OPERATION_MAP[self.source_family]),
+                'operations': list(self._operation_names()),
             },
         )
 
@@ -164,10 +252,13 @@ class MarketIntelConnectorBase(BaseConnector):
         dry_run: bool = False,
     ) -> ConnectorResult:
         del idempotency_key, dry_run
-        if operation not in set(_OPERATION_MAP[self.source_family]):
+        if operation not in set(self._operation_names()):
             return ConnectorResult(ok=False, code='unsupported_operation', message=f'unsupported operation: {operation}')
         normalized_payload = _safe_dict(payload)
-        target = self._build_target(normalized_payload)
+        try:
+            target = self._build_target(normalized_payload)
+        except ValueError as exc:
+            return ConnectorResult(ok=False, code='invalid_payload', message=str(exc))
         if self.provider_client is None:
             return ConnectorResult(
                 ok=False,
@@ -190,9 +281,28 @@ class MarketIntelConnectorBase(BaseConnector):
             )
         except TimeoutError as exc:
             return ConnectorResult(ok=False, code='temporary_unavailable', message=str(exc) or 'provider timeout')
-        except Exception as exc:  # fail-closed by default
+        except Exception as exc:
             return ConnectorResult(ok=False, code='provider_error', message=str(exc) or exc.__class__.__name__)
-        envelope = self._build_envelope_from_provider(operation=operation, target=target, payload=normalized_payload, raw=raw)
+        if not isinstance(raw, Mapping):
+            return ConnectorResult(ok=False, code='provider_contract_error', message='provider result must be a mapping')
+        normalized_raw = dict(raw)
+        provider_status = str(normalized_raw.get('status') or '').strip().lower()
+        if normalized_raw.get('ok') is False or normalized_raw.get('executed') is False or provider_status in {'error', 'failed', 'rejected'}:
+            return ConnectorResult(
+                ok=False,
+                code=str(normalized_raw.get('code') or 'provider_error').strip() or 'provider_error',
+                message=str(normalized_raw.get('message') or 'provider returned a failed result').strip(),
+                payload={'provider_status': provider_status},
+            )
+        raw_records = normalized_raw.get('records')
+        if raw_records is not None and not isinstance(raw_records, (list, tuple)):
+            return ConnectorResult(ok=False, code='provider_contract_error', message='provider records must be a list or tuple')
+        if isinstance(raw_records, (list, tuple)) and any(not isinstance(item, Mapping) for item in raw_records):
+            return ConnectorResult(ok=False, code='provider_contract_error', message='provider records must contain mappings')
+        try:
+            envelope = self._build_envelope_from_provider(operation=operation, target=target, payload=normalized_payload, raw=normalized_raw)
+        except (TypeError, ValueError) as exc:
+            return ConnectorResult(ok=False, code='provider_contract_error', message=str(exc))
         return self._to_result(ok=True, code='synced', message='market intelligence synchronized', envelope=envelope, dry_run=False)
 
     def _verify_configured(
@@ -220,18 +330,30 @@ class MarketIntelConnectorBase(BaseConnector):
             return ConnectorResult(ok=False, code='verification_family_mismatch', message='source family mismatch')
         if str(normalized_result.get('operation') or '').strip() != str(operation).strip():
             return ConnectorResult(ok=False, code='verification_operation_mismatch', message='operation mismatch')
-        records = _safe_list(normalized_result.get('records'))
-        if records and not any(str(item.get('external_id') or '').strip() for item in records):
+        raw_records = normalized_result.get('records')
+        if not isinstance(raw_records, (list, tuple)):
+            return ConnectorResult(ok=False, code='verification_records_invalid', message='records must be a list or tuple')
+        if any(not isinstance(item, Mapping) for item in raw_records):
+            return ConnectorResult(ok=False, code='verification_records_invalid', message='records must contain mappings')
+        records = _safe_list(raw_records)
+        if records and any(not str(item.get('external_id') or '').strip() for item in records):
             return ConnectorResult(ok=False, code='verification_record_identity_missing', message='records missing external_id')
         requested_query = _safe_text(normalized_payload.get('query'))
         requested_subject = _safe_text(normalized_payload.get('subject_url') or normalized_payload.get('url'))
-        envelope_target = normalized_result.get('target') if isinstance(normalized_result.get('target'), Mapping) else {}
+        requested_tenant = _safe_text(normalized_payload.get('tenant_id') or normalized_payload.get('tenant'))
+        envelope_target_raw = normalized_result.get('target')
+        if (requested_query or requested_subject or requested_tenant) and not isinstance(envelope_target_raw, Mapping):
+            return ConnectorResult(ok=False, code='verification_target_missing', message='target evidence is required')
+        envelope_target = envelope_target_raw if isinstance(envelope_target_raw, Mapping) else {}
         target_query = _safe_text(envelope_target.get('query'))
         target_subject = _safe_text(envelope_target.get('subject_url'))
-        if requested_query and target_query and requested_query != target_query:
+        target_tenant = _safe_text(envelope_target.get('tenant_id'))
+        if requested_query and requested_query != target_query:
             return ConnectorResult(ok=False, code='verification_query_mismatch', message='query mismatch')
-        if requested_subject and target_subject and requested_subject != target_subject:
+        if requested_subject and requested_subject != target_subject:
             return ConnectorResult(ok=False, code='verification_subject_mismatch', message='subject_url mismatch')
+        if requested_tenant and requested_tenant != target_tenant:
+            return ConnectorResult(ok=False, code='verification_tenant_mismatch', message='tenant_id mismatch')
         return ConnectorResult(
             ok=True,
             code='verified',
@@ -240,6 +362,9 @@ class MarketIntelConnectorBase(BaseConnector):
         )
 
     def _build_target(self, payload: Mapping[str, Any]) -> MarketIntelligenceTarget:
+        metadata = payload.get('metadata')
+        if metadata is not None and not isinstance(metadata, Mapping):
+            raise ValueError('metadata must be a mapping')
         return MarketIntelligenceTarget(
             source_family=self.source_family,
             provider=self.provider_key,
@@ -249,8 +374,8 @@ class MarketIntelConnectorBase(BaseConnector):
             account_ref=_safe_text(payload.get('account_ref') or payload.get('handle')),
             region=_safe_text(payload.get('region')),
             locale=_safe_text(payload.get('locale')),
-            limit=int(payload.get('limit') or 25),
-            metadata=_safe_dict(payload.get('metadata')),
+            limit=_bounded_limit(payload.get('limit')),
+            metadata=_safe_dict(metadata),
         )
 
     def _build_dry_run_envelope(
@@ -306,7 +431,7 @@ class MarketIntelConnectorBase(BaseConnector):
                     currency=_safe_text(item.get('currency')),
                     evidence=_safe_dict(item.get('evidence')),
                     metadata={**_safe_dict(item.get('metadata')), 'source_payload': dict(item)},
-                    tags=tuple(item.get('tags') or (self.source_family, self.provider_key)),
+                    tags=_normalize_tags(item.get('tags'), defaults=(self.source_family, self.provider_key)),
                 )
             )
         if not records:
@@ -347,6 +472,9 @@ class MarketIntelConnectorBase(BaseConnector):
         payload['connector_id'] = self.connector_id
         payload['capability_family'] = 'market_intelligence'
         return ConnectorResult(ok=bool(ok), code=str(code), message=str(message), payload=payload)
+
+    def _operation_names(self) -> tuple[str, ...]:
+        return tuple(_OPERATION_MAP[self.source_family])
 
 
 __all__ = ['CANON_MARKET_INTELLIGENCE_BASE', 'MarketIntelConnectorBase', 'ProviderClientProtocol']

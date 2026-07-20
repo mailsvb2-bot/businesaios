@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Callable
-from collections.abc import Mapping
 
 from interfaces.market_intelligence.adspy import AdspyConnector
 from interfaces.market_intelligence.ahrefs import AhrefsConnector
@@ -52,7 +51,6 @@ from interfaces.market_intelligence.wildberries import WildberriesConnector
 from interfaces.market_intelligence.woocommerce_store import WoocommerceStoreConnector
 from interfaces.market_intelligence.x_network import XNetworkConnector
 from interfaces.market_intelligence.yelp import YelpConnector
-
 
 CANON_MARKET_INTELLIGENCE_CONNECTOR_RESOLVER = True
 
