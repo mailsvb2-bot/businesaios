@@ -14,6 +14,9 @@ from runtime.platform.app_paths import runtime_data_dir
 
 CANON_PLATFORM_MARKET_INTELLIGENCE_STATE_STORE = True
 
+_TERMINAL_RUN_STATUSES = frozenset({"dry_run", "failed", "succeeded"})
+_RESTARTABLE_RUN_STATUSES = frozenset({"dry_run", "failed"})
+
 
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
@@ -21,6 +24,25 @@ def _utc_now() -> str:
 
 def _safe_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def _json_mapping(value: str, *, field: str) -> dict[str, Any]:
+    decoded = json.loads(value or "{}")
+    if not isinstance(decoded, Mapping):
+        raise ValueError(f"{field} must contain a JSON object")
+    return dict(decoded)
+
+
+def _non_negative_int(value: object, *, field: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{field} must be a non-negative integer")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be a non-negative integer") from exc
+    if parsed < 0:
+        raise ValueError(f"{field} must be a non-negative integer")
+    return parsed
 
 
 def _default_state_path() -> Path:
@@ -52,10 +74,10 @@ class SqliteMarketIntelligenceStateStore:
         with self._lock:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row
-            conn.execute('PRAGMA journal_mode=WAL')
-            conn.execute('PRAGMA synchronous=FULL')
-            conn.execute('PRAGMA foreign_keys=ON')
-            conn.execute('PRAGMA busy_timeout=5000')
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=FULL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute("PRAGMA busy_timeout=5000")
             try:
                 yield conn
             finally:
@@ -130,44 +152,81 @@ class SqliteMarketIntelligenceStateStore:
                     PRIMARY KEY (tenant_id, provider, source_family, scope_key)
                 );
 
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_mi_replay_key ON mi_run_journal (tenant_id, provider, source_family, scope_key, replay_key);
-                CREATE INDEX IF NOT EXISTS idx_mi_run_journal_scope ON mi_run_journal (tenant_id, provider, source_family, scope_key, started_at);
-                CREATE INDEX IF NOT EXISTS idx_mi_dead_letter_scope ON mi_dead_letter (tenant_id, provider, source_family, scope_key, created_at);
-                CREATE INDEX IF NOT EXISTS idx_mi_quarantine_scope ON mi_quarantine (tenant_id, provider, source_family, scope_key, quarantined_at);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_mi_replay_key
+                ON mi_run_journal (tenant_id, provider, source_family, scope_key, replay_key);
+                CREATE INDEX IF NOT EXISTS idx_mi_run_journal_scope
+                ON mi_run_journal (tenant_id, provider, source_family, scope_key, started_at);
+                CREATE INDEX IF NOT EXISTS idx_mi_dead_letter_scope
+                ON mi_dead_letter (tenant_id, provider, source_family, scope_key, created_at);
+                CREATE INDEX IF NOT EXISTS idx_mi_quarantine_scope
+                ON mi_quarantine (tenant_id, provider, source_family, scope_key, quarantined_at);
                 """
             )
-            if conn.execute('SELECT COUNT(*) FROM mi_schema_version').fetchone()[0] == 0:
-                conn.execute('INSERT INTO mi_schema_version(version, applied_at) VALUES(?, ?)', (1, _utc_now()))
+            if conn.execute("SELECT COUNT(*) FROM mi_schema_version").fetchone()[0] == 0:
+                conn.execute(
+                    "INSERT INTO mi_schema_version(version, applied_at) VALUES(?, ?)",
+                    (1, _utc_now()),
+                )
             conn.commit()
 
-    def load_checkpoint(self, *, tenant_id: str, provider: str, source_family: str, scope_key: str) -> SyncCheckpoint:
+    def load_checkpoint(
+        self,
+        *,
+        tenant_id: str,
+        provider: str,
+        source_family: str,
+        scope_key: str,
+    ) -> SyncCheckpoint:
         with self._connect() as conn:
             row = conn.execute(
-                'SELECT tenant_id, provider, source_family, scope_key, cursor, last_seen_at, checksum, schema_version, metadata_json FROM mi_checkpoint WHERE tenant_id=? AND provider=? AND source_family=? AND scope_key=?',
+                """
+                SELECT tenant_id, provider, source_family, scope_key, cursor,
+                       last_seen_at, checksum, schema_version, metadata_json
+                FROM mi_checkpoint
+                WHERE tenant_id=? AND provider=? AND source_family=? AND scope_key=?
+                """,
                 (tenant_id, provider, source_family, scope_key),
             ).fetchone()
         if row is None:
-            return SyncCheckpoint(tenant_id, provider, source_family, scope_key, None, None, None, 1, {})
+            return SyncCheckpoint(
+                tenant_id,
+                provider,
+                source_family,
+                scope_key,
+                None,
+                None,
+                None,
+                1,
+                {},
+            )
         return SyncCheckpoint(
-            tenant_id=row['tenant_id'],
-            provider=row['provider'],
-            source_family=row['source_family'],
-            scope_key=row['scope_key'],
-            cursor=row['cursor'],
-            last_seen_at=row['last_seen_at'],
-            checksum=row['checksum'],
-            schema_version=int(row['schema_version']),
-            metadata=json.loads(row['metadata_json'] or '{}'),
+            tenant_id=row["tenant_id"],
+            provider=row["provider"],
+            source_family=row["source_family"],
+            scope_key=row["scope_key"],
+            cursor=row["cursor"],
+            last_seen_at=row["last_seen_at"],
+            checksum=row["checksum"],
+            schema_version=int(row["schema_version"]),
+            metadata=_json_mapping(row["metadata_json"], field="checkpoint metadata"),
         )
 
     def save_checkpoint(self, checkpoint: SyncCheckpoint) -> SyncCheckpoint:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO mi_checkpoint(tenant_id, provider, source_family, scope_key, cursor, last_seen_at, checksum, schema_version, metadata_json, updated_at)
+                INSERT INTO mi_checkpoint(
+                    tenant_id, provider, source_family, scope_key, cursor,
+                    last_seen_at, checksum, schema_version, metadata_json, updated_at
+                )
                 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(tenant_id, provider, source_family, scope_key)
-                DO UPDATE SET cursor=excluded.cursor, last_seen_at=excluded.last_seen_at, checksum=excluded.checksum, schema_version=excluded.schema_version, metadata_json=excluded.metadata_json, updated_at=excluded.updated_at
+                DO UPDATE SET cursor=excluded.cursor,
+                              last_seen_at=excluded.last_seen_at,
+                              checksum=excluded.checksum,
+                              schema_version=excluded.schema_version,
+                              metadata_json=excluded.metadata_json,
+                              updated_at=excluded.updated_at
                 """,
                 (
                     checkpoint.tenant_id,
@@ -185,81 +244,289 @@ class SqliteMarketIntelligenceStateStore:
             conn.commit()
         return checkpoint
 
-    def begin_run(self, *, run_id: str, tenant_id: str, provider: str, source_family: str, scope_key: str, operation: str, replay_key: str | None, checkpoint_before: SyncCheckpoint, metadata: Mapping[str, Any] | None = None) -> None:
+    def begin_run(
+        self,
+        *,
+        run_id: str,
+        tenant_id: str,
+        provider: str,
+        source_family: str,
+        scope_key: str,
+        operation: str,
+        replay_key: str | None,
+        checkpoint_before: SyncCheckpoint,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        identity = (tenant_id, provider, source_family, scope_key, operation, replay_key)
+        checkpoint_json = _safe_json(checkpoint_before.__dict__)
+        metadata_json = _safe_json(dict(metadata or {}))
         with self._connect() as conn:
-            conn.execute(
+            existing = conn.execute(
                 """
-                INSERT INTO mi_run_journal(run_id, tenant_id, provider, source_family, scope_key, operation, status, started_at, checkpoint_before_json, checkpoint_after_json, replay_key, metadata_json)
-                VALUES(?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?)
+                SELECT tenant_id, provider, source_family, scope_key, operation,
+                       replay_key, status
+                FROM mi_run_journal WHERE run_id=?
                 """,
-                (run_id, tenant_id, provider, source_family, scope_key, operation, _utc_now(), _safe_json(checkpoint_before.__dict__), _safe_json({}), replay_key, _safe_json(dict(metadata or {}))),
-            )
+                (run_id,),
+            ).fetchone()
+            if existing is None:
+                conn.execute(
+                    """
+                    INSERT INTO mi_run_journal(
+                        run_id, tenant_id, provider, source_family, scope_key,
+                        operation, status, started_at, checkpoint_before_json,
+                        checkpoint_after_json, replay_key, metadata_json
+                    )
+                    VALUES(?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        run_id,
+                        tenant_id,
+                        provider,
+                        source_family,
+                        scope_key,
+                        operation,
+                        _utc_now(),
+                        checkpoint_json,
+                        _safe_json({}),
+                        replay_key,
+                        metadata_json,
+                    ),
+                )
+            else:
+                existing_identity = tuple(existing[key] for key in (
+                    "tenant_id",
+                    "provider",
+                    "source_family",
+                    "scope_key",
+                    "operation",
+                    "replay_key",
+                ))
+                if existing_identity != identity:
+                    raise ValueError(f"run_id collision across identities: {run_id}")
+                status = str(existing["status"])
+                if status not in _RESTARTABLE_RUN_STATUSES:
+                    raise ValueError(f"run cannot be restarted from status {status}: {run_id}")
+                conn.execute(
+                    """
+                    UPDATE mi_run_journal
+                    SET status='running', started_at=?, finished_at=NULL,
+                        checkpoint_before_json=?, checkpoint_after_json=?,
+                        error_code=NULL, error_message=NULL, records_count=0,
+                        pages_fetched=0, poisoned=0, quarantined=0,
+                        metadata_json=?
+                    WHERE run_id=?
+                    """,
+                    (_utc_now(), checkpoint_json, _safe_json({}), metadata_json, run_id),
+                )
             conn.commit()
 
-    def finish_run(self, *, run_id: str, status: str, checkpoint_after: SyncCheckpoint, records_count: int, pages_fetched: int, error_code: str | None = None, error_message: str | None = None, poisoned: bool = False, quarantined: bool = False) -> None:
+    def finish_run(
+        self,
+        *,
+        run_id: str,
+        status: str,
+        checkpoint_after: SyncCheckpoint,
+        records_count: int,
+        pages_fetched: int,
+        error_code: str | None = None,
+        error_message: str | None = None,
+        poisoned: bool = False,
+        quarantined: bool = False,
+    ) -> None:
+        if status not in _TERMINAL_RUN_STATUSES:
+            raise ValueError(f"unsupported terminal run status: {status}")
+        normalized_records = _non_negative_int(records_count, field="records_count")
+        normalized_pages = _non_negative_int(pages_fetched, field="pages_fetched")
         with self._connect() as conn:
-            conn.execute(
+            cursor = conn.execute(
                 """
                 UPDATE mi_run_journal
-                SET status=?, finished_at=?, checkpoint_after_json=?, records_count=?, pages_fetched=?, error_code=?, error_message=?, poisoned=?, quarantined=?
-                WHERE run_id=?
+                SET status=?, finished_at=?, checkpoint_after_json=?,
+                    records_count=?, pages_fetched=?, error_code=?,
+                    error_message=?, poisoned=?, quarantined=?
+                WHERE run_id=? AND status='running'
                 """,
-                (status, _utc_now(), _safe_json(checkpoint_after.__dict__), int(records_count), int(pages_fetched), error_code, error_message, 1 if poisoned else 0, 1 if quarantined else 0, run_id),
+                (
+                    status,
+                    _utc_now(),
+                    _safe_json(checkpoint_after.__dict__),
+                    normalized_records,
+                    normalized_pages,
+                    error_code,
+                    error_message,
+                    1 if poisoned else 0,
+                    1 if quarantined else 0,
+                    run_id,
+                ),
             )
+            if cursor.rowcount != 1:
+                raise ValueError(f"running market-intelligence run not found: {run_id}")
             conn.commit()
 
-    def has_successful_replay(self, *, tenant_id: str, provider: str, source_family: str, scope_key: str, replay_key: str) -> bool:
+    def has_successful_replay(
+        self,
+        *,
+        tenant_id: str,
+        provider: str,
+        source_family: str,
+        scope_key: str,
+        replay_key: str,
+    ) -> bool:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT 1 FROM mi_run_journal WHERE tenant_id=? AND provider=? AND source_family=? AND scope_key=? AND replay_key=? AND status='succeeded' LIMIT 1",
+                """
+                SELECT 1 FROM mi_run_journal
+                WHERE tenant_id=? AND provider=? AND source_family=?
+                  AND scope_key=? AND replay_key=? AND status='succeeded'
+                LIMIT 1
+                """,
                 (tenant_id, provider, source_family, scope_key, replay_key),
             ).fetchone()
         return row is not None
 
-    def reconcile_incomplete_runs(self, *, tenant_id: str | None = None) -> tuple[dict[str, Any], ...]:
+    def reconcile_incomplete_runs(
+        self,
+        *,
+        tenant_id: str | None = None,
+    ) -> tuple[dict[str, Any], ...]:
         sql = "SELECT * FROM mi_run_journal WHERE status='running'"
         args: list[Any] = []
-        if tenant_id:
-            sql += ' AND tenant_id=?'
+        if tenant_id is not None:
+            sql += " AND tenant_id=?"
             args.append(tenant_id)
-        sql += ' ORDER BY started_at ASC'
+        sql += " ORDER BY started_at ASC"
         with self._connect() as conn:
             rows = conn.execute(sql, args).fetchall()
         return tuple(dict(row) for row in rows)
 
-    def quarantine_scope(self, *, tenant_id: str, provider: str, source_family: str, scope_key: str, reason_code: str, details: Mapping[str, Any] | None = None) -> None:
+    def quarantine_scope(
+        self,
+        *,
+        tenant_id: str,
+        provider: str,
+        source_family: str,
+        scope_key: str,
+        reason_code: str,
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO mi_quarantine(tenant_id, provider, source_family, scope_key, reason_code, details_json, quarantined_at, released_at)
+                INSERT INTO mi_quarantine(
+                    tenant_id, provider, source_family, scope_key, reason_code,
+                    details_json, quarantined_at, released_at
+                )
                 VALUES(?, ?, ?, ?, ?, ?, ?, NULL)
                 ON CONFLICT(tenant_id, provider, source_family, scope_key)
-                DO UPDATE SET reason_code=excluded.reason_code, details_json=excluded.details_json, quarantined_at=excluded.quarantined_at, released_at=NULL
+                DO UPDATE SET reason_code=excluded.reason_code,
+                              details_json=excluded.details_json,
+                              quarantined_at=excluded.quarantined_at,
+                              released_at=NULL
                 """,
-                (tenant_id, provider, source_family, scope_key, reason_code, _safe_json(dict(details or {})), _utc_now()),
+                (
+                    tenant_id,
+                    provider,
+                    source_family,
+                    scope_key,
+                    reason_code,
+                    _safe_json(dict(details or {})),
+                    _utc_now(),
+                ),
             )
             conn.commit()
 
-    def release_quarantine(self, *, tenant_id: str, provider: str, source_family: str, scope_key: str) -> None:
+    def release_quarantine(
+        self,
+        *,
+        tenant_id: str,
+        provider: str,
+        source_family: str,
+        scope_key: str,
+    ) -> None:
         with self._connect() as conn:
             conn.execute(
-                'UPDATE mi_quarantine SET released_at=? WHERE tenant_id=? AND provider=? AND source_family=? AND scope_key=? AND released_at IS NULL',
+                """
+                UPDATE mi_quarantine SET released_at=?
+                WHERE tenant_id=? AND provider=? AND source_family=?
+                  AND scope_key=? AND released_at IS NULL
+                """,
                 (_utc_now(), tenant_id, provider, source_family, scope_key),
             )
             conn.commit()
 
-    def is_quarantined(self, *, tenant_id: str, provider: str, source_family: str, scope_key: str) -> bool:
+    def is_quarantined(
+        self,
+        *,
+        tenant_id: str,
+        provider: str,
+        source_family: str,
+        scope_key: str,
+    ) -> bool:
         with self._connect() as conn:
             row = conn.execute(
-                'SELECT 1 FROM mi_quarantine WHERE tenant_id=? AND provider=? AND source_family=? AND scope_key=? AND released_at IS NULL',
+                """
+                SELECT 1 FROM mi_quarantine
+                WHERE tenant_id=? AND provider=? AND source_family=?
+                  AND scope_key=? AND released_at IS NULL
+                """,
                 (tenant_id, provider, source_family, scope_key),
             ).fetchone()
         return row is not None
 
-    def dead_letter(self, *, event_id: str, run_id: str, tenant_id: str, provider: str, source_family: str, scope_key: str, reason_code: str, payload: Mapping[str, Any]) -> None:
+    def dead_letter(
+        self,
+        *,
+        event_id: str,
+        run_id: str,
+        tenant_id: str,
+        provider: str,
+        source_family: str,
+        scope_key: str,
+        reason_code: str,
+        payload: Mapping[str, Any],
+    ) -> None:
+        payload_json = _safe_json(dict(payload))
+        identity = (
+            run_id,
+            tenant_id,
+            provider,
+            source_family,
+            scope_key,
+            reason_code,
+            payload_json,
+        )
         with self._connect() as conn:
-            conn.execute(
-                'INSERT OR REPLACE INTO mi_dead_letter(event_id, run_id, tenant_id, provider, source_family, scope_key, reason_code, payload_json, created_at) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                (event_id, run_id, tenant_id, provider, source_family, scope_key, reason_code, _safe_json(dict(payload)), _utc_now()),
+            cursor = conn.execute(
+                """
+                INSERT OR IGNORE INTO mi_dead_letter(
+                    event_id, run_id, tenant_id, provider, source_family,
+                    scope_key, reason_code, payload_json, created_at
+                )
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event_id,
+                    run_id,
+                    tenant_id,
+                    provider,
+                    source_family,
+                    scope_key,
+                    reason_code,
+                    payload_json,
+                    _utc_now(),
+                ),
             )
+            if cursor.rowcount == 0:
+                existing = conn.execute(
+                    """
+                    SELECT run_id, tenant_id, provider, source_family,
+                           scope_key, reason_code, payload_json
+                    FROM mi_dead_letter WHERE event_id=?
+                    """,
+                    (event_id,),
+                ).fetchone()
+                existing_identity = tuple(existing) if existing is not None else None
+                if existing_identity != identity:
+                    raise ValueError(f"dead-letter event_id collision: {event_id}")
             conn.commit()
