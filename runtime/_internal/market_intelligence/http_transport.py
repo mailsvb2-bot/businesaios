@@ -92,7 +92,7 @@ class CanonicalHttpTransport:
         self._rate_limit: dict[str, RateLimitState] = {}
 
     def execute(self, provider: str, req: HttpRequest) -> HttpResponse:
-        provider_key = str(provider or 'unknown')
+        provider_key = str(provider or 'unknown').strip() or 'unknown'
         self._validate_request(req)
         attempt = 0
         while True:
@@ -148,8 +148,6 @@ class CanonicalHttpTransport:
         response_headers = dict(result.headers or {})
         if result.error_kind:
             code = str(result.error_kind)
-            if code == 'http_error':
-                code = 'http_error'
             raise HttpTransportError(code, result.error_message or code, status_code=result.status, payload={'headers': response_headers, 'body_preview': str(result.text or '')[:200]})
         status = int(result.status or 599)
         text = str(result.text or '')
@@ -168,7 +166,11 @@ class CanonicalHttpTransport:
         return HttpResponse(status_code=status, headers=response_headers, text=text, json_payload=json_payload)
 
     def _read_retry_after_seconds(self, headers: Mapping[str, Any]) -> float | None:
-        value = str(dict(headers or {}).get('Retry-After') or '').strip()
+        value = ''
+        for key, raw_value in dict(headers or {}).items():
+            if str(key).strip().lower() == 'retry-after':
+                value = str(raw_value or '').strip()
+                break
         if not value:
             return None
         try:
