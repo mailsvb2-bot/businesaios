@@ -175,26 +175,33 @@ class MarketIntelligenceProviderClient:
             checkpoint_before=checkpoint_before,
             metadata={'request_fingerprint': request_fingerprint},
         )
-        plan = self.runtime_factory.build_plan(provider=provider, operation=operation, payload=payload)
-        requested_total_limit = self._bounded_int(payload.get('limit'), default=100, upper=_MAX_TOTAL_LIMIT)
-        requested_page_limit = self._bounded_int(payload.get('page_limit') or payload.get('page_size'), default=50, upper=_MAX_PAGE_LIMIT)
-        if dry_run:
-            return {
-                'ok': True,
-                'executed': True,
-                'code': 'dry_run',
-                'provider': plan.provider,
-                'source_family': plan.source_family,
-                'operation': operation,
-                'records': [],
-                'cursor': checkpoint_before.cursor,
-                'run_id': run_id,
-                'tenant_id': tenant_id,
-                'manifest': dict(plan.manifest),
-                'replay_key': preflight.replay_key,
-                'resume_cursor': preflight.resume_cursor,
-            }
         try:
+            plan = self.runtime_factory.build_plan(provider=provider, operation=operation, payload=payload)
+            requested_total_limit = self._bounded_int(payload.get('limit'), default=100, upper=_MAX_TOTAL_LIMIT)
+            requested_page_limit = self._bounded_int(payload.get('page_limit') or payload.get('page_size'), default=50, upper=_MAX_PAGE_LIMIT)
+            if dry_run:
+                self.state_store.finish_run(
+                    run_id=run_id,
+                    status='dry_run',
+                    checkpoint_after=checkpoint_before,
+                    records_count=0,
+                    pages_fetched=0,
+                )
+                return {
+                    'ok': True,
+                    'executed': True,
+                    'code': 'dry_run',
+                    'provider': plan.provider,
+                    'source_family': plan.source_family,
+                    'operation': operation,
+                    'records': [],
+                    'cursor': checkpoint_before.cursor,
+                    'run_id': run_id,
+                    'tenant_id': tenant_id,
+                    'manifest': dict(plan.manifest),
+                    'replay_key': preflight.replay_key,
+                    'resume_cursor': preflight.resume_cursor,
+                }
             summary = PaginationWindow(max_pages=plan.max_pages, max_items=requested_total_limit).collect_summary(
                 lambda cursor: self._fetch_page_runtime(plan=plan, payload=payload, cursor=cursor, page_limit=requested_page_limit)
             )
@@ -251,7 +258,9 @@ class MarketIntelligenceProviderClient:
                 poisoned=poisoned,
                 quarantined=quarantined,
             )
-            raise
+            if mapped is exc:
+                raise
+            raise mapped from exc
 
     def _fetch_page(self, *, plan: ProviderRequestPlan, payload: Mapping[str, Any], cursor: PageCursor | None, requested_page_limit: int) -> PageResult:
         params = dict(plan.params)
@@ -330,8 +339,8 @@ class MarketIntelligenceProviderClient:
         return joined or 'global'
 
     def _request_fingerprint(self, payload: Mapping[str, Any]) -> str:
-        safe = {str(k): payload[k] for k in sorted(payload.keys()) if str(k) not in {'idempotency_key', 'risk'}}
-        return hashlib.sha256(repr(sorted(safe.items())).encode('utf-8')).hexdigest()
+        safe = {str(key): value for key, value in payload.items() if str(key) not in {'idempotency_key', 'risk'}}
+        return hashlib.sha256(repr(sorted(safe.items(), key=lambda item: item[0])).encode('utf-8')).hexdigest()
 
     def _last_record_token(self, rows: tuple[dict[str, Any], ...]) -> str | None:
         if not rows:
