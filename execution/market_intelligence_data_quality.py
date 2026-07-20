@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import re
 from collections.abc import Iterable, Mapping
@@ -19,7 +20,7 @@ def _safe_dict(value: object) -> dict[str, Any]:
 
 
 def _fingerprint(row: Mapping[str, Any]) -> str:
-    basis = "|".join(
+    identity = tuple(
         str(row.get(key) or "").strip()
         for key in (
             "record_id",
@@ -31,11 +32,11 @@ def _fingerprint(row: Mapping[str, Any]) -> str:
             "source_family",
         )
     )
-    if not basis.strip("|"):
+    if any(identity):
+        basis = json.dumps(identity, ensure_ascii=False, separators=(",", ":"))
+    else:
         basis = repr(sorted(dict(row).items()))
-    return hashlib.sha256(
-        basis.encode("utf-8", errors="replace")
-    ).hexdigest()
+    return hashlib.sha256(basis.encode("utf-8", errors="replace")).hexdigest()
 
 
 def _clean_text(value: object) -> str:
@@ -58,6 +59,27 @@ def _normalize_url(value: object) -> str:
             "",
         )
     )
+
+
+def _normalized_float(value: object, *, upper: float | None = None) -> object:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return value
+    if not math.isfinite(parsed):
+        return parsed
+    normalized = max(0.0, parsed)
+    return min(normalized, upper) if upper is not None else normalized
+
+
+def _normalized_int(value: object) -> object:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return value
+    if not math.isfinite(parsed):
+        return parsed
+    return max(0, int(parsed))
 
 
 @dataclass(frozen=True)
@@ -114,10 +136,7 @@ class DataQualityGuard:
         return tuple(kept), report
 
     def _normalize(self, row: Mapping[str, Any]) -> dict[str, Any]:
-        normalized = {
-            str(key): value
-            for key, value in dict(row).items()
-        }
+        normalized = {str(key): value for key, value in dict(row).items()}
         for key in (
             "title",
             "name",
@@ -135,30 +154,12 @@ class DataQualityGuard:
         if "url" in normalized:
             normalized["url"] = _normalize_url(normalized["url"])
         if "rating" in normalized:
-            try:
-                normalized["rating"] = max(
-                    0.0,
-                    min(float(normalized["rating"]), 5.0),
-                )
-            except (TypeError, ValueError):
-                pass
+            normalized["rating"] = _normalized_float(normalized["rating"], upper=5.0)
         for key in ("price", "engagement", "impressions"):
             if key in normalized:
-                try:
-                    normalized[key] = max(
-                        0.0,
-                        float(normalized[key]),
-                    )
-                except (TypeError, ValueError):
-                    pass
+                normalized[key] = _normalized_float(normalized[key])
         if "review_count" in normalized:
-            try:
-                normalized["review_count"] = max(
-                    0,
-                    int(float(normalized["review_count"])),
-                )
-            except (TypeError, ValueError):
-                pass
+            normalized["review_count"] = _normalized_int(normalized["review_count"])
         return normalized
 
     def _is_noise(self, row: Mapping[str, Any]) -> bool:
