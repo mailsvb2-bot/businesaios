@@ -1,68 +1,107 @@
 from __future__ import annotations
 
 from calendar import monthrange
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from enum import Enum
-from typing import Mapping
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
+from typing import Any
 
 from core.tenancy.normalization import require_tenant_id
 
-
 CANON_BILLING_COMMERCIAL_CYCLE_CONTRACT = True
+
+_SUPPORTED_CYCLE_INTERVALS = frozenset({"weekly", "monthly", "yearly"})
 
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
+
+
+def require_aware_datetime(name: str, value: datetime) -> datetime:
+    if not isinstance(value, datetime):
+        raise ValueError(f"{name} must be a datetime")
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{name} must be timezone-aware")
+    return value
+
+
+def require_commercial_int(name: str, value: Any, *, minimum: int | None = None) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{name} must be an integer")
+    if minimum is not None and value < minimum:
+        comparator = ">=" if minimum == 0 else ">"
+        boundary = minimum if minimum == 0 else minimum - 1
+        raise ValueError(f"{name} must be {comparator} {boundary}")
+    return value
+
+
+def _require_bool(name: str, value: Any) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} must be a boolean")
+    return value
+
+
+def _require_mapping(name: str, value: Any) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{name} must be a mapping")
+    return value
 
 
 def _replace_year_safe(value: datetime, year: int) -> datetime:
+    require_aware_datetime("value", value)
+    require_commercial_int("year", year, minimum=1)
     day = min(value.day, monthrange(year, value.month)[1])
     return value.replace(year=year, day=day)
 
 
 def _add_calendar_months(value: datetime, months: int) -> datetime:
-    if value.tzinfo is None:
-        raise ValueError('value must be timezone-aware')
-    total_month = (value.year * 12 + (value.month - 1)) + int(months)
+    require_aware_datetime("value", value)
+    require_commercial_int("months", months)
+    total_month = (value.year * 12 + (value.month - 1)) + months
     year = total_month // 12
     month = total_month % 12 + 1
+    if year < 1 or year > 9999:
+        raise ValueError("calendar month result is out of range")
     day = min(value.day, monthrange(year, month)[1])
     return value.replace(year=year, month=month, day=day)
 
 
-class SubscriptionLifecycleStatus(str, Enum):
-    TRIALING = 'trialing'
-    ACTIVE = 'active'
-    PAST_DUE = 'past_due'
-    GRACE = 'grace'
-    SUSPENDED = 'suspended'
-    CANCELED = 'canceled'
+class SubscriptionLifecycleStatus(StrEnum):
+    TRIALING = "trialing"
+    ACTIVE = "active"
+    PAST_DUE = "past_due"
+    GRACE = "grace"
+    SUSPENDED = "suspended"
+    CANCELED = "canceled"
 
 
-class InvoiceLifecycleStatus(str, Enum):
-    DRAFT = 'draft'
-    ISSUED = 'issued'
-    PARTIALLY_PAID = 'partially_paid'
-    PAID = 'paid'
-    VOID = 'void'
-    CREDITED = 'credited'
-    UNCOLLECTIBLE = 'uncollectible'
+class InvoiceLifecycleStatus(StrEnum):
+    DRAFT = "draft"
+    ISSUED = "issued"
+    PARTIALLY_PAID = "partially_paid"
+    PAID = "paid"
+    VOID = "void"
+    CREDITED = "credited"
+    UNCOLLECTIBLE = "uncollectible"
 
 
 @dataclass(frozen=True)
 class BillingCycleWindow:
     start_at: datetime
     end_at: datetime
-    anchor: str = 'monthly'
+    anchor: str = "monthly"
 
     def validate(self) -> None:
-        if self.start_at.tzinfo is None or self.end_at.tzinfo is None:
-            raise ValueError('cycle timestamps must be timezone-aware')
+        require_aware_datetime("start_at", self.start_at)
+        require_aware_datetime("end_at", self.end_at)
         if self.end_at <= self.start_at:
-            raise ValueError('end_at must be > start_at')
-        if not str(self.anchor or '').strip():
-            raise ValueError('anchor is required')
+            raise ValueError("end_at must be > start_at")
+        normalized_anchor = str(self.anchor or "").strip().lower()
+        if normalized_anchor not in _SUPPORTED_CYCLE_INTERVALS:
+            raise ValueError("anchor must be weekly, monthly, or yearly")
+        if self.anchor != normalized_anchor:
+            raise ValueError("anchor must use canonical lowercase form")
 
     @property
     def duration_seconds(self) -> float:
@@ -71,8 +110,7 @@ class BillingCycleWindow:
 
     def contains(self, when: datetime) -> bool:
         self.validate()
-        if when.tzinfo is None:
-            raise ValueError('when must be timezone-aware')
+        require_aware_datetime("when", when)
         return self.start_at <= when < self.end_at
 
 
@@ -90,30 +128,33 @@ class SubscriptionCommercialEnvelope:
 
     def validate(self) -> None:
         require_tenant_id(self.tenant_id)
-        if not str(self.subscription_id or '').strip():
-            raise ValueError('subscription_id is required')
-        if not str(self.plan_id or '').strip():
-            raise ValueError('plan_id is required')
+        if not str(self.subscription_id or "").strip():
+            raise ValueError("subscription_id is required")
+        if not str(self.plan_id or "").strip():
+            raise ValueError("plan_id is required")
+        if not isinstance(self.status, SubscriptionLifecycleStatus):
+            raise ValueError("status must be SubscriptionLifecycleStatus")
+        if not isinstance(self.cycle, BillingCycleWindow):
+            raise ValueError("cycle must be BillingCycleWindow")
         self.cycle.validate()
+        _require_mapping("metadata", self.metadata)
         for value, name in (
-            (self.grace_until, 'grace_until'),
-            (self.trial_ends_at, 'trial_ends_at'),
-            (self.canceled_at, 'canceled_at'),
+            (self.grace_until, "grace_until"),
+            (self.trial_ends_at, "trial_ends_at"),
+            (self.canceled_at, "canceled_at"),
         ):
-            if value is not None and value.tzinfo is None:
-                raise ValueError(f'{name} must be timezone-aware')
-        if self.trial_ends_at is not None and self.trial_ends_at < self.cycle.start_at:
-            raise ValueError('trial_ends_at must be >= cycle.start_at')
-        if self.grace_until is not None and self.grace_until < self.cycle.start_at:
-            raise ValueError('grace_until must be >= cycle.start_at')
+            if value is not None:
+                require_aware_datetime(name, value)
+                if value < self.cycle.start_at:
+                    raise ValueError(f"{name} must be >= cycle.start_at")
         if self.status is SubscriptionLifecycleStatus.TRIALING and self.trial_ends_at is None:
-            raise ValueError('trialing subscription requires trial_ends_at')
+            raise ValueError("trialing subscription requires trial_ends_at")
         if self.status is SubscriptionLifecycleStatus.GRACE and self.grace_until is None:
-            raise ValueError('grace subscription requires grace_until')
+            raise ValueError("grace subscription requires grace_until")
         if self.status is SubscriptionLifecycleStatus.CANCELED and self.canceled_at is None:
-            raise ValueError('canceled subscription requires canceled_at')
+            raise ValueError("canceled subscription requires canceled_at")
         if self.status is not SubscriptionLifecycleStatus.CANCELED and self.canceled_at is not None:
-            raise ValueError('canceled_at is only allowed for canceled subscription')
+            raise ValueError("canceled_at is only allowed for canceled subscription")
 
 
 @dataclass(frozen=True)
@@ -130,20 +171,18 @@ class CommercialCollectionAttempt:
 
     def validate(self) -> None:
         require_tenant_id(self.tenant_id)
-        if not str(self.invoice_id or '').strip():
-            raise ValueError('invoice_id is required')
-        if int(self.amount_minor) < 0:
-            raise ValueError('amount_minor must be >= 0')
-        if not str(self.currency or '').strip():
-            raise ValueError('currency is required')
-        if not str(self.provider_name or '').strip():
-            raise ValueError('provider_name is required')
-        if not str(self.idempotency_key or '').strip():
-            raise ValueError('idempotency_key is required')
-        if int(self.attempt_no) <= 0:
-            raise ValueError('attempt_no must be > 0')
-        if self.scheduled_at.tzinfo is None:
-            raise ValueError('scheduled_at must be timezone-aware')
+        if not str(self.invoice_id or "").strip():
+            raise ValueError("invoice_id is required")
+        require_commercial_int("amount_minor", self.amount_minor, minimum=0)
+        if not str(self.currency or "").strip():
+            raise ValueError("currency is required")
+        if not str(self.provider_name or "").strip():
+            raise ValueError("provider_name is required")
+        if not str(self.idempotency_key or "").strip():
+            raise ValueError("idempotency_key is required")
+        require_commercial_int("attempt_no", self.attempt_no, minimum=1)
+        require_aware_datetime("scheduled_at", self.scheduled_at)
+        _require_mapping("metadata", self.metadata)
 
 
 @dataclass(frozen=True)
@@ -160,20 +199,29 @@ class CommercialCollectionResult:
 
     def validate(self) -> None:
         require_tenant_id(self.tenant_id)
-        if not str(self.invoice_id or '').strip():
-            raise ValueError('invoice_id is required')
-        if not str(self.provider_name or '').strip():
-            raise ValueError('provider_name is required')
-        if self.processed_at.tzinfo is None:
-            raise ValueError('processed_at must be timezone-aware')
+        if not str(self.invoice_id or "").strip():
+            raise ValueError("invoice_id is required")
+        if not str(self.provider_name or "").strip():
+            raise ValueError("provider_name is required")
+        _require_bool("successful", self.successful)
+        _require_bool("retryable", self.retryable)
+        require_aware_datetime("processed_at", self.processed_at)
+        metadata = _require_mapping("metadata", self.metadata)
+        if self.successful and self.retryable:
+            raise ValueError("successful result cannot be retryable")
         if self.successful and self.failure_reason is not None and str(self.failure_reason).strip():
-            raise ValueError('successful result cannot include failure_reason')
-        if self.successful and not str(self.external_reference or '').strip() and not bool(dict(self.metadata).get('noop')):
-            raise ValueError('external_reference is required for successful result')
-        if not self.successful and not str(self.failure_reason or '').strip():
-            raise ValueError('failure_reason is required for unsuccessful result')
-        if not self.successful and self.external_reference is not None and str(self.external_reference).strip() and not bool(dict(self.metadata).get('provider_reference_on_failure')):
-            raise ValueError('external_reference on failure requires provider_reference_on_failure metadata flag')
+            raise ValueError("successful result cannot include failure_reason")
+        if self.successful and not str(self.external_reference or "").strip() and not bool(metadata.get("noop")):
+            raise ValueError("external_reference is required for successful result")
+        if not self.successful and not str(self.failure_reason or "").strip():
+            raise ValueError("failure_reason is required for unsuccessful result")
+        if (
+            not self.successful
+            and self.external_reference is not None
+            and str(self.external_reference).strip()
+            and not bool(metadata.get("provider_reference_on_failure"))
+        ):
+            raise ValueError("external_reference on failure requires provider_reference_on_failure metadata flag")
 
 
 @dataclass(frozen=True)
@@ -188,16 +236,15 @@ class DunningAction:
 
     def validate(self) -> None:
         require_tenant_id(self.tenant_id)
-        if not str(self.invoice_id or '').strip():
-            raise ValueError('invoice_id is required')
-        if int(self.attempt_no) <= 0:
-            raise ValueError('attempt_no must be > 0')
-        if self.execute_at.tzinfo is None:
-            raise ValueError('execute_at must be timezone-aware')
-        if not str(self.channel or '').strip():
-            raise ValueError('channel is required')
-        if not str(self.template_key or '').strip():
-            raise ValueError('template_key is required')
+        if not str(self.invoice_id or "").strip():
+            raise ValueError("invoice_id is required")
+        require_commercial_int("attempt_no", self.attempt_no, minimum=1)
+        require_aware_datetime("execute_at", self.execute_at)
+        if not str(self.channel or "").strip():
+            raise ValueError("channel is required")
+        if not str(self.template_key or "").strip():
+            raise ValueError("template_key is required")
+        _require_mapping("metadata", self.metadata)
 
 
 @dataclass(frozen=True)
@@ -212,14 +259,15 @@ class SpendGuardVerdict:
 
     def validate(self) -> None:
         require_tenant_id(self.tenant_id)
-        if int(self.projected_minor) < 0:
-            raise ValueError('projected_minor must be >= 0')
-        if self.limit_minor is not None and int(self.limit_minor) < 0:
-            raise ValueError('limit_minor must be >= 0')
-        if self.remaining_minor is not None and int(self.remaining_minor) < 0:
-            raise ValueError('remaining_minor must be >= 0')
-        if not str(self.reason or '').strip():
-            raise ValueError('reason is required')
+        _require_bool("allowed", self.allowed)
+        require_commercial_int("projected_minor", self.projected_minor, minimum=0)
+        if self.limit_minor is not None:
+            require_commercial_int("limit_minor", self.limit_minor, minimum=0)
+        if self.remaining_minor is not None:
+            require_commercial_int("remaining_minor", self.remaining_minor, minimum=0)
+        if not str(self.reason or "").strip():
+            raise ValueError("reason is required")
+        _require_mapping("metadata", self.metadata)
 
 
 @dataclass(frozen=True)
@@ -234,22 +282,28 @@ class ReconciliationDrift:
 
     def validate(self) -> None:
         require_tenant_id(self.tenant_id)
-        if not str(self.drift_key or '').strip():
-            raise ValueError('drift_key is required')
-        if not str(self.severity or '').strip():
-            raise ValueError('severity is required')
+        if not str(self.drift_key or "").strip():
+            raise ValueError("drift_key is required")
+        expected = require_commercial_int("expected_minor", self.expected_minor)
+        observed = require_commercial_int("observed_minor", self.observed_minor)
+        delta = require_commercial_int("delta_minor", self.delta_minor)
+        if delta != observed - expected:
+            raise ValueError("delta_minor must equal observed_minor - expected_minor")
+        if not str(self.severity or "").strip():
+            raise ValueError("severity is required")
+        _require_mapping("details", self.details)
 
 
 def next_cycle_window(*, current_start_at: datetime, interval: str) -> BillingCycleWindow:
-    if current_start_at.tzinfo is None:
-        raise ValueError('current_start_at must be timezone-aware')
-    normalized = str(interval or 'monthly').strip().lower()
-    if normalized == 'weekly':
+    require_aware_datetime("current_start_at", current_start_at)
+    normalized = str(interval or "monthly").strip().lower()
+    if normalized not in _SUPPORTED_CYCLE_INTERVALS:
+        raise ValueError("interval must be weekly, monthly, or yearly")
+    if normalized == "weekly":
         end_at = current_start_at + timedelta(days=7)
-    elif normalized == 'yearly':
+    elif normalized == "yearly":
         end_at = _replace_year_safe(current_start_at, current_start_at.year + 1)
     else:
-        normalized = 'monthly'
         end_at = _add_calendar_months(current_start_at, 1)
     window = BillingCycleWindow(start_at=current_start_at, end_at=end_at, anchor=normalized)
     window.validate()
@@ -257,16 +311,18 @@ def next_cycle_window(*, current_start_at: datetime, interval: str) -> BillingCy
 
 
 __all__ = [
-    'BillingCycleWindow',
-    'CANON_BILLING_COMMERCIAL_CYCLE_CONTRACT',
-    'CommercialCollectionAttempt',
-    'CommercialCollectionResult',
-    'DunningAction',
-    'InvoiceLifecycleStatus',
-    'ReconciliationDrift',
-    'SpendGuardVerdict',
-    'SubscriptionCommercialEnvelope',
-    'SubscriptionLifecycleStatus',
-    'next_cycle_window',
-    'utc_now',
+    "BillingCycleWindow",
+    "CANON_BILLING_COMMERCIAL_CYCLE_CONTRACT",
+    "CommercialCollectionAttempt",
+    "CommercialCollectionResult",
+    "DunningAction",
+    "InvoiceLifecycleStatus",
+    "ReconciliationDrift",
+    "SpendGuardVerdict",
+    "SubscriptionCommercialEnvelope",
+    "SubscriptionLifecycleStatus",
+    "next_cycle_window",
+    "require_aware_datetime",
+    "require_commercial_int",
+    "utc_now",
 ]
