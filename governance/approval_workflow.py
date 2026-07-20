@@ -125,7 +125,11 @@ class ApprovalWorkflow:
         saved = self._store.save(updated)
         self._emit_audit(build_approval_decision_audit(record=saved, decision=decision))
         return saved
+
+    # ``resolve`` is the canonical approval-lifecycle name. ``decide`` remains
+    # an identity alias for backward compatibility; it owns no separate logic.
     resolve = evaluate
+    decide = resolve
 
     def _emit_audit(self, payload: dict[str, object]) -> None:
         tenant_id = str(payload.get("tenant_id") or "")
