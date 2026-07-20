@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from collections.abc import Mapping
 from typing import Any
 
 from core.tenancy.normalization import require_tenant_id
@@ -69,7 +70,7 @@ class PostgresTenantAdmissionBackend(TenantAdmissionBackend):
         expires_at = moment + timedelta(seconds=int(request.ttl_seconds))
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=request.tenant_id)
-            self._reap_expired_locked(cur, now=moment)
+            self._reap_expired_locked(cur, now=moment, tenant_id=request.tenant_id)
             cur.execute(
                 f"SELECT owner_id, labels_json, fencing_token, acquired_at, expires_at FROM {self._config.table_name} "
                 "WHERE tenant_id = %s AND run_id = %s FOR UPDATE",
@@ -81,7 +82,7 @@ class PostgresTenantAdmissionBackend(TenantAdmissionBackend):
                 if str(row[0]) != request.owner_id:
                     conn.commit()
                     return TenantAdmissionVerdict(False, "lease_owned_by_another_owner", request.tenant_id, request.run_id, active_runs, max_active, None)
-                if dict(json.loads(row[1] or "{}")) != dict(request.labels):
+                if self._decode_labels(row[1]) != dict(request.labels):
                     conn.commit()
                     return TenantAdmissionVerdict(False, "lease_labels_mismatch", request.tenant_id, request.run_id, active_runs, max_active, None)
                 lease = self._renew_locked(
@@ -130,7 +131,7 @@ class PostgresTenantAdmissionBackend(TenantAdmissionBackend):
         moment = datetime.now(timezone.utc)
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=moment)
+            self._reap_expired_locked(cur, now=moment, tenant_id=tid)
             lease = self._renew_locked(cur, tenant_id=tid, run_id=rid, owner_id=oid, ttl_seconds=ttl_seconds, now=moment)
             conn.commit()
             return lease
@@ -143,7 +144,7 @@ class PostgresTenantAdmissionBackend(TenantAdmissionBackend):
             raise ValueError("run_id and owner_id are required")
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=datetime.now(timezone.utc))
+            self._reap_expired_locked(cur, now=datetime.now(timezone.utc), tenant_id=tid)
             cur.execute(f"SELECT owner_id FROM {self._config.table_name} WHERE tenant_id = %s AND run_id = %s FOR UPDATE", (tid, rid))
             row = cur.fetchone()
             if row is None:
@@ -160,7 +161,7 @@ class PostgresTenantAdmissionBackend(TenantAdmissionBackend):
         moment = datetime.now(timezone.utc)
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=moment)
+            self._reap_expired_locked(cur, now=moment, tenant_id=tid)
             cur.execute(
                 f"SELECT tenant_id, run_id, owner_id, fencing_token, acquired_at, expires_at FROM {self._config.table_name} "
                 "WHERE tenant_id = %s ORDER BY acquired_at, run_id",
@@ -195,7 +196,7 @@ class PostgresTenantAdmissionBackend(TenantAdmissionBackend):
             raise KeyError(f"missing tenant admission lease: tenant={tenant_id} run_id={run_id}")
         if str(row[0]) != owner_id:
             raise PermissionError(f"tenant admission lease owner mismatch: tenant={tenant_id} run_id={run_id}")
-        current_expires_at = row[3].astimezone(timezone.utc)
+        current_expires_at = self._ensure_aware(row[3], field_name="expires_at")
         if current_expires_at <= now:
             raise KeyError(f"expired tenant admission lease: tenant={tenant_id} run_id={run_id}")
         expires_at = now + timedelta(seconds=ttl)
@@ -226,8 +227,42 @@ class PostgresTenantAdmissionBackend(TenantAdmissionBackend):
     def _tenant_lock(cur: Any, *, tenant_id: str) -> None:
         cur.execute("SELECT pg_advisory_xact_lock(%s)", (_advisory_lock_key(namespace="tenant-admission", tenant_id=tenant_id),))
 
-    def _reap_expired_locked(self, cur: Any, *, now: datetime) -> None:
-        cur.execute(f"DELETE FROM {self._config.table_name} WHERE expires_at <= %s", (now,))
+    def _reap_expired_locked(
+        self,
+        cur: Any,
+        *,
+        now: datetime,
+        tenant_id: str | None = None,
+    ) -> None:
+        moment = self._ensure_aware(now, field_name="now")
+        if tenant_id is None:
+            cur.execute(
+                f"DELETE FROM {self._config.table_name} WHERE expires_at <= %s",
+                (moment,),
+            )
+            return
+        tid = require_tenant_id(tenant_id)
+        cur.execute(
+            f"DELETE FROM {self._config.table_name} WHERE tenant_id = %s AND expires_at <= %s",
+            (tid, moment),
+        )
+
+    @staticmethod
+    def _ensure_aware(value: datetime, *, field_name: str) -> datetime:
+        if not isinstance(value, datetime):
+            raise TypeError(f"{field_name} must be a datetime")
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError(f"{field_name} must be timezone-aware")
+        return value.astimezone(timezone.utc)
+
+    @staticmethod
+    def _decode_labels(value: Any) -> dict[str, Any]:
+        if value in (None, ""):
+            return {}
+        decoded = json.loads(value) if isinstance(value, str) else value
+        if not isinstance(decoded, Mapping):
+            raise ValueError("labels_json must decode to a mapping")
+        return dict(decoded)
 
     def _init_db(self) -> None:
         with self._connect() as conn, conn.cursor() as cur:
