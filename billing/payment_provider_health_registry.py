@@ -1,13 +1,25 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Mapping
+from copy import deepcopy
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
-from typing import Mapping
+from threading import RLock
+from typing import Any
 
-from billing.commercial_cycle_contract import utc_now
-
+from billing.commercial_cycle_contract import (
+    require_aware_datetime,
+    require_commercial_int,
+    utc_now,
+)
 
 CANON_BILLING_PAYMENT_PROVIDER_HEALTH_REGISTRY = True
+
+
+def _require_mapping(name: str, value: Any) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{name} must be a mapping")
+    return value
 
 
 @dataclass(frozen=True)
@@ -20,74 +32,113 @@ class ProviderHealthStatus:
     metadata: Mapping[str, object] = field(default_factory=dict)
 
     def validate(self) -> None:
-        if not str(self.provider_name or '').strip():
-            raise ValueError('provider_name is required')
-        if self.cooldown_until is not None and self.cooldown_until.tzinfo is None:
-            raise ValueError('cooldown_until must be timezone-aware')
-        if int(self.failure_count) < 0:
-            raise ValueError('failure_count must be >= 0')
-        if self.healthy and self.last_failure_reason is not None and str(self.last_failure_reason).strip() and self.cooldown_until is None:
-            raise ValueError('healthy provider cannot have last_failure_reason without cooldown')
+        if not isinstance(self.provider_name, str) or not self.provider_name.strip():
+            raise ValueError("provider_name is required")
+        if not isinstance(self.healthy, bool):
+            raise ValueError("healthy must be a boolean")
+        if self.cooldown_until is not None:
+            require_aware_datetime("cooldown_until", self.cooldown_until)
+        require_commercial_int("failure_count", self.failure_count, minimum=0)
+        if self.last_failure_reason is not None and (
+            not isinstance(self.last_failure_reason, str) or not self.last_failure_reason.strip()
+        ):
+            raise ValueError("last_failure_reason must be a non-empty string")
+        _require_mapping("metadata", self.metadata)
+        if self.healthy:
+            if self.failure_count != 0:
+                raise ValueError("healthy provider must have failure_count=0")
+            if self.cooldown_until is not None or self.last_failure_reason is not None:
+                raise ValueError("healthy provider cannot carry failure cooldown state")
+        else:
+            if self.failure_count <= 0:
+                raise ValueError("unhealthy provider must have failure_count > 0")
+            if self.cooldown_until is None:
+                raise ValueError("unhealthy provider requires cooldown_until")
+            if self.last_failure_reason is None:
+                raise ValueError("unhealthy provider requires last_failure_reason")
+
+    def normalized_copy(self) -> ProviderHealthStatus:
+        self.validate()
+        return replace(
+            self,
+            provider_name=self.provider_name.strip().lower(),
+            last_failure_reason=(
+                None if self.last_failure_reason is None else self.last_failure_reason.strip()
+            ),
+            metadata=deepcopy(dict(self.metadata)),
+        )
 
 
 class PaymentProviderHealthRegistry:
     def __init__(self) -> None:
+        self._lock = RLock()
         self._statuses: dict[str, ProviderHealthStatus] = {}
 
-    def _normalize_key(self, provider_name: str) -> str:
-        key = str(provider_name or '').strip().lower()
-        if not key:
-            raise ValueError('provider_name is required')
-        return key
+    @staticmethod
+    def _normalize_key(provider_name: str) -> str:
+        if not isinstance(provider_name, str) or not provider_name.strip():
+            raise ValueError("provider_name is required")
+        return provider_name.strip().lower()
 
     def get(self, provider_name: str) -> ProviderHealthStatus:
         key = self._normalize_key(provider_name)
-        status = self._statuses.get(key)
-        if status is None:
-            return ProviderHealthStatus(provider_name=key)
-        status.validate()
-        return status
+        with self._lock:
+            status = self._statuses.get(key)
+            if status is None:
+                return ProviderHealthStatus(provider_name=key)
+            return status.normalized_copy()
 
     def mark_success(self, provider_name: str) -> ProviderHealthStatus:
         key = self._normalize_key(provider_name)
-        status = ProviderHealthStatus(provider_name=key, healthy=True, failure_count=0, metadata={'owner': 'billing.payment_provider_health_registry'})
-        self._statuses[key] = status
-        return status
-
-    def mark_failure(self, provider_name: str, *, reason: str, cooldown_seconds: int = 60, now: datetime | None = None) -> ProviderHealthStatus:
-        key = self._normalize_key(provider_name)
-        if not str(reason or '').strip():
-            raise ValueError('reason is required')
-        cooldown = int(cooldown_seconds)
-        if cooldown < 0:
-            raise ValueError('cooldown_seconds must be >= 0')
-        observed_at = now or utc_now()
-        if observed_at.tzinfo is None:
-            raise ValueError('now must be timezone-aware')
-        prior = self._statuses.get(key)
-        failure_count = 1 if prior is None else int(prior.failure_count) + 1
-        cooldown_until = observed_at + timedelta(seconds=cooldown)
         status = ProviderHealthStatus(
             provider_name=key,
-            healthy=False,
-            cooldown_until=cooldown_until,
-            failure_count=failure_count,
-            last_failure_reason=str(reason).strip(),
-            metadata={'owner': 'billing.payment_provider_health_registry'},
+            healthy=True,
+            failure_count=0,
+            metadata={"owner": "billing.payment_provider_health_registry"},
         )
-        self._statuses[key] = status
-        return status
+        status.validate()
+        with self._lock:
+            self._statuses[key] = status
+        return status.normalized_copy()
+
+    def mark_failure(
+        self,
+        provider_name: str,
+        *,
+        reason: str,
+        cooldown_seconds: int = 60,
+        now: datetime | None = None,
+    ) -> ProviderHealthStatus:
+        key = self._normalize_key(provider_name)
+        if not isinstance(reason, str) or not reason.strip():
+            raise ValueError("reason is required")
+        cooldown = require_commercial_int("cooldown_seconds", cooldown_seconds, minimum=0)
+        observed_at = utc_now() if now is None else require_aware_datetime("now", now)
+        with self._lock:
+            prior = self._statuses.get(key)
+            failure_count = 1 if prior is None else prior.failure_count + 1
+            status = ProviderHealthStatus(
+                provider_name=key,
+                healthy=False,
+                cooldown_until=observed_at + timedelta(seconds=cooldown),
+                failure_count=failure_count,
+                last_failure_reason=reason.strip(),
+                metadata={"owner": "billing.payment_provider_health_registry"},
+            )
+            status.validate()
+            self._statuses[key] = status
+        return status.normalized_copy()
 
     def is_available(self, provider_name: str, *, now: datetime | None = None) -> bool:
         status = self.get(provider_name)
-        observed_at = now or utc_now()
-        if observed_at.tzinfo is None:
-            raise ValueError('now must be timezone-aware')
+        observed_at = utc_now() if now is None else require_aware_datetime("now", now)
         if status.cooldown_until is None:
-            return bool(status.healthy)
-        if observed_at < status.cooldown_until:
-            return False
-        return True
+            return status.healthy
+        return observed_at >= status.cooldown_until
 
 
-__all__ = ['CANON_BILLING_PAYMENT_PROVIDER_HEALTH_REGISTRY', 'PaymentProviderHealthRegistry', 'ProviderHealthStatus']
+__all__ = [
+    "CANON_BILLING_PAYMENT_PROVIDER_HEALTH_REGISTRY",
+    "PaymentProviderHealthRegistry",
+    "ProviderHealthStatus",
+]
