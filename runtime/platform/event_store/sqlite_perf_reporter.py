@@ -83,8 +83,21 @@ def load_interactions(
     correlation key remains isolated by tenant. Supplying a tenant id scopes
     both decision and latency reads fail-closed to that tenant.
     """
-    tenant_scope = str(tenant_id or "").strip() or None
-    since = None if since_ms is None else int(since_ms)
+    if tenant_id is None:
+        tenant_scope = None
+    else:
+        tenant_scope = str(tenant_id).strip()
+        if not tenant_scope:
+            raise ValueError("tenant_id must not be blank when supplied")
+
+    if since_ms is None:
+        since = None
+    else:
+        if isinstance(since_ms, bool):
+            raise ValueError("since_ms must be a non-negative integer")
+        since = int(since_ms)
+        if since < 0:
+            raise ValueError("since_ms must be a non-negative integer")
     tenant_ck_to_snapshot: dict[tuple[str, str], str] = {}
 
     with open_ro(events_db) as db:
@@ -96,7 +109,11 @@ def load_interactions(
         if tenant_scope is not None:
             clauses.append("tenant_id=?")
             params.append(tenant_scope)
-        q = "SELECT tenant_id, payload_json FROM events WHERE " + " AND ".join(clauses)
+        q = (
+            "SELECT tenant_id, payload_json FROM events WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY timestamp_ms DESC, rowid DESC"
+        )
         for raw_tenant, payload_json in db.execute(q, tuple(params)).fetchall():
             try:
                 payload = json.loads(payload_json) if payload_json else {}
@@ -112,11 +129,26 @@ def load_interactions(
 
     tenant_ck_to_label: dict[tuple[str, str], str] = {}
     with open_ro(snapshots_db) as sdb:
+        snapshot_columns = {
+            str(row[1]).strip().lower()
+            for row in sdb.execute("PRAGMA table_info(snapshots)").fetchall()
+            if row and len(row) > 1
+        }
+        tenant_aware_snapshots = "tenant_id" in snapshot_columns
         for tenant_ck, sid in list(tenant_ck_to_snapshot.items()):
-            row = sdb.execute(
-                "SELECT canonical_bytes FROM snapshots WHERE snapshot_id=?",
-                (sid,),
-            ).fetchone()
+            tid, _ = tenant_ck
+            if tenant_aware_snapshots:
+                row = sdb.execute(
+                    "SELECT canonical_bytes FROM snapshots WHERE snapshot_id=? AND tenant_id=?",
+                    (sid, tid),
+                ).fetchone()
+            elif tid == "legacy":
+                row = sdb.execute(
+                    "SELECT canonical_bytes FROM snapshots WHERE snapshot_id=?",
+                    (sid,),
+                ).fetchone()
+            else:
+                row = None
             if not row or row[0] is None:
                 continue
             tenant_ck_to_label[tenant_ck] = guess_label_from_snapshot_bytes(row[0])
@@ -164,6 +196,7 @@ def load_interactions(
                 tenant_id=tid,
             )
         )
+    interactions.sort(key=lambda item: (item.tenant_id, item.correlation_key))
     return interactions
 
 
