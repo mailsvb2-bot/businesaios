@@ -40,6 +40,7 @@ class Interaction:
     correlation_key: str
     label: str
     totals: dict[str, int]
+    tenant_id: str = "legacy"
 
 
 def guess_label_from_snapshot_bytes(snapshot_bytes: bytes) -> str:
@@ -69,16 +70,34 @@ def guess_label_from_snapshot_bytes(snapshot_bytes: bytes) -> str:
     return "unknown"
 
 
-def load_interactions(*, events_db: str, snapshots_db: str, since_ms: int | None = None) -> list[Interaction]:
-    ck_to_snapshot: dict[str, str] = {}
+def load_interactions(
+    *,
+    events_db: str,
+    snapshots_db: str,
+    since_ms: int | None = None,
+    tenant_id: str | None = None,
+) -> list[Interaction]:
+    """Load latency interactions without crossing tenant boundaries.
+
+    ``tenant_id=None`` preserves the historical all-tenant report, but each
+    correlation key remains isolated by tenant. Supplying a tenant id scopes
+    both decision and latency reads fail-closed to that tenant.
+    """
+    tenant_scope = str(tenant_id or "").strip() or None
+    since = None if since_ms is None else int(since_ms)
+    tenant_ck_to_snapshot: dict[tuple[str, str], str] = {}
 
     with open_ro(events_db) as db:
-        q = "SELECT payload_json FROM events WHERE event_type='decision_issued'"
-        params: tuple[Any, ...] = ()
-        if since_ms is not None:
-            q = "SELECT payload_json FROM events WHERE event_type='decision_issued' AND timestamp_ms>=?"
-            params = (int(since_ms),)
-        for (payload_json,) in db.execute(q, params).fetchall():
+        clauses = ["event_type='decision_issued'"]
+        params: list[Any] = []
+        if since is not None:
+            clauses.append("timestamp_ms>=?")
+            params.append(since)
+        if tenant_scope is not None:
+            clauses.append("tenant_id=?")
+            params.append(tenant_scope)
+        q = "SELECT tenant_id, payload_json FROM events WHERE " + " AND ".join(clauses)
+        for raw_tenant, payload_json in db.execute(q, tuple(params)).fetchall():
             try:
                 payload = json.loads(payload_json) if payload_json else {}
             except Exception:
@@ -87,25 +106,33 @@ def load_interactions(*, events_db: str, snapshots_db: str, since_ms: int | None
                 continue
             ck = payload.get("correlation_key")
             sid = payload.get("snapshot_id")
+            tid = str(raw_tenant or "legacy").strip() or "legacy"
             if isinstance(ck, str) and ck.strip() and isinstance(sid, str) and sid.strip():
-                ck_to_snapshot.setdefault(ck.strip(), sid.strip())
+                tenant_ck_to_snapshot.setdefault((tid, ck.strip()), sid.strip())
 
-    ck_to_label: dict[str, str] = {}
+    tenant_ck_to_label: dict[tuple[str, str], str] = {}
     with open_ro(snapshots_db) as sdb:
-        for ck, sid in list(ck_to_snapshot.items()):
-            row = sdb.execute("SELECT canonical_bytes FROM snapshots WHERE snapshot_id=?", (sid,)).fetchone()
+        for tenant_ck, sid in list(tenant_ck_to_snapshot.items()):
+            row = sdb.execute(
+                "SELECT canonical_bytes FROM snapshots WHERE snapshot_id=?",
+                (sid,),
+            ).fetchone()
             if not row or row[0] is None:
                 continue
-            ck_to_label[ck] = guess_label_from_snapshot_bytes(row[0])
+            tenant_ck_to_label[tenant_ck] = guess_label_from_snapshot_bytes(row[0])
 
-    per_ck: dict[str, dict[str, list[int]]] = {}
+    per_tenant_ck: dict[tuple[str, str], dict[str, list[int]]] = {}
     with open_ro(events_db) as db:
-        q = "SELECT payload_json FROM events WHERE event_type='latency_span'"
-        params = ()
-        if since_ms is not None:
-            q = "SELECT payload_json FROM events WHERE event_type='latency_span' AND timestamp_ms>=?"
-            params = (int(since_ms),)
-        for (payload_json,) in db.execute(q, params).fetchall():
+        clauses = ["event_type='latency_span'"]
+        params = []
+        if since is not None:
+            clauses.append("timestamp_ms>=?")
+            params.append(since)
+        if tenant_scope is not None:
+            clauses.append("tenant_id=?")
+            params.append(tenant_scope)
+        q = "SELECT tenant_id, payload_json FROM events WHERE " + " AND ".join(clauses)
+        for raw_tenant, payload_json in db.execute(q, tuple(params)).fetchall():
             try:
                 payload = json.loads(payload_json) if payload_json else {}
             except Exception:
@@ -115,20 +142,28 @@ def load_interactions(*, events_db: str, snapshots_db: str, since_ms: int | None
             stage = payload.get("stage")
             dur = payload.get("duration_ms")
             ck = payload.get("correlation_key")
-            if not (isinstance(stage, str) and isinstance(dur, int) and isinstance(ck, str) and ck.strip()):
+            if isinstance(dur, bool) or not isinstance(dur, int) or dur < 0:
+                continue
+            if not (isinstance(stage, str) and isinstance(ck, str) and ck.strip()):
                 continue
             if stage not in STAGES:
                 continue
-            per_ck.setdefault(ck, {}).setdefault(stage, []).append(int(dur))
+            tid = str(raw_tenant or "legacy").strip() or "legacy"
+            key = (tid, ck.strip())
+            per_tenant_ck.setdefault(key, {}).setdefault(stage, []).append(dur)
 
     interactions: list[Interaction] = []
-    for ck, stages in per_ck.items():
-        label = ck_to_label.get(ck, "unknown")
-        totals: dict[str, int] = {}
-        for st in STAGES:
-            vals = stages.get(st) or []
-            totals[st] = int(sum(vals)) if vals else 0
-        interactions.append(Interaction(correlation_key=ck, label=label, totals=totals))
+    for (tid, ck), stages in per_tenant_ck.items():
+        label = tenant_ck_to_label.get((tid, ck), "unknown")
+        totals = {st: int(sum(stages.get(st) or [])) for st in STAGES}
+        interactions.append(
+            Interaction(
+                correlation_key=ck,
+                label=label,
+                totals=totals,
+                tenant_id=tid,
+            )
+        )
     return interactions
 
 
