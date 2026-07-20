@@ -20,7 +20,7 @@ def test_governance_support_is_identity_facade_not_second_runtime() -> None:
     )
 
 
-def test_approval_workflow_resolves_human_approval_without_decisioncore_alias() -> None:
+def test_approval_workflow_keeps_legacy_alias_on_single_resolution_path() -> None:
     workflow = ApprovalWorkflow(store=InMemoryApprovalStore())
     workflow.submit(
         ApprovalRequest(
@@ -34,6 +34,9 @@ def test_approval_workflow_resolves_human_approval_without_decisioncore_alias() 
         )
     )
 
+    assert workflow.decide.__func__ is workflow.resolve.__func__
+    assert workflow.resolve.__func__ is workflow.evaluate.__func__
+
     record = workflow.resolve(
         ApprovalDecision(
             approval_id="approval-wave14",
@@ -46,4 +49,3 @@ def test_approval_workflow_resolves_human_approval_without_decisioncore_alias() 
     )
 
     assert record.status is ApprovalStatus.APPROVED
-    assert not hasattr(workflow, "decide")
