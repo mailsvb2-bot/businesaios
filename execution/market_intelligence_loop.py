@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import time
-from typing import Any, Callable
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
+from typing import Any
 
 from execution.market_intelligence_business_memory_bridge import MarketIntelligenceBusinessMemoryBridge
 from execution.market_intelligence_circuit_breaker import MarketIntelligenceCircuitBreaker
@@ -13,11 +13,17 @@ from execution.market_intelligence_dedup import MarketIntelligenceDeduplicator
 from execution.market_intelligence_economic_control import MarketIntelligenceEconomicControl
 from execution.market_intelligence_evaluation import MarketIntelligenceEvaluationFramework
 from execution.market_intelligence_governance import MarketIntelligenceGovernance
-from execution.market_intelligence_idempotency import MarketIntelligenceIdempotencyStore, build_market_intelligence_idempotency_key
+from execution.market_intelligence_idempotency import (
+    MarketIntelligenceIdempotencyStore,
+    build_market_intelligence_idempotency_key,
+)
 from execution.market_intelligence_models import MarketIntelligenceIngestionRequest
 from execution.market_intelligence_normalizer import MarketIntelligenceRecordNormalizer
 from execution.market_intelligence_observability import MarketIntelligenceTelemetry
-from execution.market_intelligence_observability_store import MarketIntelligenceRunSummary, PersistentMarketIntelligenceObservabilityStore
+from execution.market_intelligence_observability_store import (
+    MarketIntelligenceRunSummary,
+    PersistentMarketIntelligenceObservabilityStore,
+)
 from execution.market_intelligence_operator_control_plane import MarketIntelligenceOperatorControlPlane
 from execution.market_intelligence_policy import MarketIntelligencePolicy
 from execution.market_intelligence_quota_guard import MarketIntelligenceQuotaGuard
@@ -25,14 +31,15 @@ from execution.market_intelligence_retry_policy import MarketIntelligenceRetryPo
 from execution.market_intelligence_tenancy_scope import MarketIntelligenceTenancyScope
 from execution.market_intelligence_world_state_adapter import MarketIntelligenceWorldStateAdapter
 
-
 CANON_MARKET_INTELLIGENCE_LOOP = True
 
 
 class MarketIntelligenceExecutionError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = str(code or 'provider_error')
+        normalized_code = str(code or '').strip().lower() or 'provider_error'
+        normalized_message = str(message or '').strip() or normalized_code
+        super().__init__(normalized_message)
+        self.code = normalized_code
 
 
 @dataclass
@@ -63,16 +70,16 @@ class MarketIntelligenceLoop:
         idempotency_key = build_market_intelligence_idempotency_key(scoped)
         cached = self.idempotency_store.get(idempotency_key)
         if cached is not None:
+            self.telemetry.emit('market_intelligence_idempotency_hit', provider=scoped.provider, tenant_id=scoped.tenant_id)
             cached_result = dict(cached)
             cached_result['idempotency_hit'] = True
             cached_result['telemetry_snapshot'] = self.telemetry.snapshot()
+            cached_result['observability_snapshot'] = self.observability_store.snapshot()
             cached_result['quota_snapshot'] = self.quota_guard.snapshot()
             cached_result['circuit_breaker_snapshot'] = self.circuit_breaker.snapshot()
             cached_result['operator_snapshot'] = self.operator_control.snapshot()
-            self.telemetry.emit('market_intelligence_idempotency_hit', provider=scoped.provider, tenant_id=scoped.tenant_id)
             return cached_result
 
-        self.quota_guard.consume(scoped)
         self.economic_control.ensure_allowed(tenant_id=scoped.tenant_id, provider=scoped.provider, estimated_cost=0.0)
         self.circuit_breaker.ensure_open(scoped.provider)
 
@@ -85,6 +92,7 @@ class MarketIntelligenceLoop:
         payload = self.compliance.enforce_pre_ingestion(provider=scoped.provider, payload=payload)
         scope_key = self._scope_key(payload)
         self.operator_control.check_source_allowed(tenant_id=scoped.tenant_id, provider=scoped.provider, scope_key=scope_key)
+        self.quota_guard.consume(scoped)
 
         trace_id = f'mi-trace:{idempotency_key[:16]}'
         self.telemetry.start_trace(trace_id=trace_id, run_id=idempotency_key[:16], tenant_id=scoped.tenant_id, provider=scoped.provider, source_family=scoped.source_family, operation=scoped.action_type)
@@ -92,6 +100,7 @@ class MarketIntelligenceLoop:
         started = time.monotonic()
 
         while True:
+            provider_completed = False
             try:
                 raw_result = self.execute_action(scoped.action_type, payload) or {}
                 result = self._normalize_result_payload(raw_result)
@@ -99,6 +108,7 @@ class MarketIntelligenceLoop:
                     raise MarketIntelligenceExecutionError(str(result.get('code') or 'provider_error'), str(result.get('message') or 'provider returned not-ok result'))
                 if result.get('executed') is False:
                     raise MarketIntelligenceExecutionError(str(result.get('code') or 'provider_error'), str(result.get('message') or 'action did not execute'))
+                provider_completed = True
 
                 result.setdefault('provider', scoped.provider)
                 result.setdefault('source_family', scoped.source_family)
@@ -147,7 +157,6 @@ class MarketIntelligenceLoop:
                 result['evaluation'] = self.evaluation.regression_summary(provider_records=normalized_records, fused_entities=[], golden=[])
                 result['evaluation']['provider_quality_score'] = quality_score
 
-                self.idempotency_store.put(idempotency_key, result)
                 self.economic_control.record_usage(tenant_id=scoped.tenant_id, provider=scoped.provider, cost=0.0)
                 self.circuit_breaker.on_success(scoped.provider)
 
@@ -197,9 +206,10 @@ class MarketIntelligenceLoop:
                 result['quota_snapshot'] = self.quota_guard.snapshot()
                 result['circuit_breaker_snapshot'] = self.circuit_breaker.snapshot()
                 result['operator_snapshot'] = self.operator_control.snapshot()
+                self.idempotency_store.put(idempotency_key, result)
                 return result
             except MarketIntelligenceExecutionError as exc:
-                if self.retry_policy.should_retry(code=exc.code, attempt=attempt):
+                if not provider_completed and self.retry_policy.should_retry(code=exc.code, attempt=attempt):
                     self.telemetry.emit('market_intelligence_retry_scheduled', provider=scoped.provider, tenant_id=scoped.tenant_id, attempt=attempt, code=exc.code)
                     time.sleep(self.retry_policy.backoff_seconds(attempt))
                     attempt += 1
@@ -224,7 +234,7 @@ class MarketIntelligenceLoop:
                 raise
             except Exception as exc:
                 wrapped = MarketIntelligenceExecutionError('provider_error', str(exc) or exc.__class__.__name__)
-                if self.retry_policy.should_retry(code=wrapped.code, attempt=attempt):
+                if not provider_completed and self.retry_policy.should_retry(code=wrapped.code, attempt=attempt):
                     self.telemetry.emit('market_intelligence_retry_scheduled', provider=scoped.provider, tenant_id=scoped.tenant_id, attempt=attempt, code=wrapped.code)
                     time.sleep(self.retry_policy.backoff_seconds(attempt))
                     attempt += 1
@@ -250,10 +260,16 @@ class MarketIntelligenceLoop:
 
     @staticmethod
     def _normalize_result_payload(raw_result: Mapping[str, Any]) -> dict[str, Any]:
-        result = dict(raw_result or {})
+        if not isinstance(raw_result, Mapping):
+            raise MarketIntelligenceExecutionError('provider_contract_error', 'provider result must be a mapping')
+        result = dict(raw_result)
         records = result.get('records')
-        if not isinstance(records, list):
+        if records is None:
             result['records'] = []
+        elif isinstance(records, (list, tuple)):
+            result['records'] = list(records)
+        else:
+            raise MarketIntelligenceExecutionError('provider_contract_error', 'provider records must be a list or tuple')
         return result
 
     @staticmethod
