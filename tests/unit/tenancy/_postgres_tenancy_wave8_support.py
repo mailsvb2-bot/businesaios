@@ -159,3 +159,28 @@ def migration_row(
     expires: datetime = NOW + timedelta(minutes=5),
 ):
     return (tenant, operation, owner, token, acquired, expires)
+
+
+__all__ = [
+    "Connection",
+    "Connector",
+    "Cursor",
+    "NOW",
+    "PostgresTenantAdmissionBackendConfig",
+    "PostgresTenantMigrationLockBackendConfig",
+    "PostgresTenantRuntimeLeaseStoreConfig",
+    "Step",
+    "UTC",
+    "admission_backend",
+    "admission_identifier",
+    "admission_lock_key",
+    "admission_request",
+    "migration_backend",
+    "migration_identifier",
+    "migration_lock_key",
+    "migration_row",
+    "runtime_backend",
+    "runtime_identifier",
+    "runtime_lock_key",
+    "runtime_row",
+]
