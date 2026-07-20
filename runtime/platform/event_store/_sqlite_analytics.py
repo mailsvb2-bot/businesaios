@@ -228,12 +228,17 @@ def count_events_payload_like(
     end_ms: int | None = None,
 ) -> int:
     """Best-effort analytics: events where payload_json LIKE %substring%."""
+    tid = _req_tenant(tenant_id)
     end = _excl_end(end_ms)
     q = (
         "SELECT COUNT(1) FROM events "
-        "WHERE timestamp_ms>=? AND timestamp_ms<? AND event_type=? AND payload_json LIKE ?"
+        "WHERE tenant_id=? AND timestamp_ms>=? AND timestamp_ms<? "
+        "AND event_type=? AND payload_json LIKE ?"
     )
-    row = db.execute(q, (int(start_ms), end, str(event_type), f"%{payload_substring}%")).fetchone()
+    row = db.execute(
+        q,
+        (tid, int(start_ms), end, str(event_type), f"%{payload_substring}%"),
+    ).fetchone()
     return int(row[0] or 0)
 
 
@@ -247,11 +252,16 @@ def count_distinct_users_payload_like(
     end_ms: int | None = None,
 ) -> int:
     """Distinct user count where payload_json LIKE %substring%."""
+    tid = _req_tenant(tenant_id)
     end = _excl_end(end_ms)
     q = (
         "SELECT COUNT(DISTINCT user_id) FROM events "
-        "WHERE user_id IS NOT NULL AND user_id!='system' "
-        "AND timestamp_ms>=? AND timestamp_ms<? AND event_type=? AND payload_json LIKE ?"
+        "WHERE tenant_id=? AND user_id IS NOT NULL AND user_id!='system' "
+        "AND timestamp_ms>=? AND timestamp_ms<? "
+        "AND event_type=? AND payload_json LIKE ?"
     )
-    row = db.execute(q, (int(start_ms), end, str(event_type), f"%{payload_substring}%")).fetchone()
+    row = db.execute(
+        q,
+        (tid, int(start_ms), end, str(event_type), f"%{payload_substring}%"),
+    ).fetchone()
     return int(row[0] or 0)
