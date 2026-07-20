@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import os
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -23,11 +23,54 @@ from runtime._internal.market_intelligence.provider_contracts import (
 )
 
 CANON_MARKET_INTELLIGENCE_PROVIDER_RUNTIME = True
+_MAX_PROVIDER_PAGES = 100
+_MAX_TIMEOUT_SECONDS = 120.0
 
 
 def _text(value: object, *, default: str = '') -> str:
     text = str(value or '').strip()
     return text or default
+
+
+def _is_missing_required(value: object) -> bool:
+    if value is None:
+        return True
+    return isinstance(value, str) and not value.strip()
+
+
+def _bounded_positive_int(value: object, *, default: int, upper: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = int(default)
+    return max(1, min(number, int(upper)))
+
+
+def _bounded_positive_float(value: object, *, default: float, upper: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = float(default)
+    if number <= 0:
+        number = float(default)
+    return min(number, float(upper))
+
+
+def _normalize_tags(value: object, *, provider: str, operation: str) -> tuple[str, ...]:
+    if value is None:
+        candidates: Iterable[object] = ()
+    elif isinstance(value, str):
+        candidates = (value,)
+    elif isinstance(value, Iterable) and not isinstance(value, (bytes, bytearray, Mapping)):
+        candidates = value
+    else:
+        raise ProviderRuntimeError(
+            ProviderErrorCode.CONTRACT_VIOLATION.value,
+            'provider record tags must be text or a sequence',
+            provider=provider,
+            details={'operation': operation},
+        )
+    return tuple(sorted({str(item).strip().lower() for item in candidates if str(item).strip()}))
 
 
 class ProviderRuntimeError(RuntimeError):
@@ -98,13 +141,13 @@ class ProviderRuntimeFactory:
                 params=params,
                 headers=headers,
                 body=body,
-                timeout_seconds=float(payload.get('timeout_seconds') or 20.0),
+                timeout_seconds=_bounded_positive_float(payload.get('timeout_seconds'), default=20.0, upper=_MAX_TIMEOUT_SECONDS),
             ),
             item_path=request_contract.item_path,
             next_cursor_path=request_contract.next_cursor_path,
             page_size_param=request_contract.page_size_param,
             cursor_param=request_contract.cursor_param,
-            max_pages=max(1, int(payload.get('max_pages') or 20)),
+            max_pages=_bounded_positive_int(payload.get('max_pages'), default=20, upper=_MAX_PROVIDER_PAGES),
             version=request_contract.version,
             manifest=manifest.as_dict(),
         )
@@ -136,7 +179,7 @@ class ProviderRuntimeFactory:
                     'published_at': _text(row.get('published_at') or row.get('created_at')) or None,
                     'updated_at': _text(row.get('updated_at')) or None,
                     'observed_at': _text(row.get('observed_at') or row.get('updated_at') or row.get('published_at')) or None,
-                    'tags': tuple(sorted({str(x).strip().lower() for x in row.get('tags', ()) if str(x).strip()})),
+                    'tags': _normalize_tags(row.get('tags'), provider=provider, operation=operation),
                     'evidence': {
                         'provider_version': self.registry.manifest(provider).version,
                         'operation': operation,
@@ -206,7 +249,7 @@ class ProviderRuntimeFactory:
             if payload.get(key) is not None:
                 params[key] = payload.get(key)
         for key in required:
-            if payload.get(key) in {None, ''}:
+            if _is_missing_required(payload.get(key)):
                 raise ProviderRuntimeError(
                     ProviderErrorCode.CONTRACT_VIOLATION.value,
                     f'missing required query key: {key}',
@@ -230,7 +273,7 @@ class ProviderRuntimeFactory:
             if payload.get(key) is not None:
                 body[key] = payload.get(key)
         for key in required:
-            if body.get(key) in {None, ''}:
+            if _is_missing_required(body.get(key)):
                 raise ProviderRuntimeError(
                     ProviderErrorCode.CONTRACT_VIOLATION.value,
                     f'missing required body key: {key}',
@@ -241,7 +284,7 @@ class ProviderRuntimeFactory:
 
     def _validate_payload(self, *, payload: Mapping[str, Any], schema: ProviderSchemaContract, request_contract: ProviderRequestContract) -> None:
         for field_name in schema.input_required_fields:
-            if payload.get(field_name) in {None, ''}:
+            if _is_missing_required(payload.get(field_name)):
                 raise ProviderRuntimeError(
                     ProviderErrorCode.CONTRACT_VIOLATION.value,
                     f'missing required input field: {field_name}',
