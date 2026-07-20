@@ -72,7 +72,7 @@ class PostgresTenantRuntimeLeaseStore(TenantRuntimeLeaseStore):
         normalized_labels = {normalize_text(k, field_name="label key"): normalize_text(v, field_name="label value") for k, v in dict(labels or {}).items()}
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=moment)
+            self._reap_expired_locked(cur, now=moment, tenant_id=tid)
             cur.execute(
                 f"SELECT tenant_id, run_id, owner_id, slot_id, fencing_token, acquired_at, heartbeat_at, expires_at, labels_json FROM {self._config.leases_table} WHERE tenant_id = %s AND run_id = %s FOR UPDATE",
                 (tid, rid),
@@ -119,7 +119,7 @@ class PostgresTenantRuntimeLeaseStore(TenantRuntimeLeaseStore):
         moment = ensure_aware(now or utc_now())
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=moment)
+            self._reap_expired_locked(cur, now=moment, tenant_id=tid)
             cur.execute(
                 f"SELECT tenant_id, run_id, owner_id, slot_id, fencing_token, acquired_at, heartbeat_at, expires_at, labels_json FROM {self._config.leases_table} WHERE tenant_id = %s AND run_id = %s FOR UPDATE",
                 (tid, rid),
@@ -142,7 +142,7 @@ class PostgresTenantRuntimeLeaseStore(TenantRuntimeLeaseStore):
         oid = normalize_text(owner_id, field_name="owner_id")
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=utc_now())
+            self._reap_expired_locked(cur, now=utc_now(), tenant_id=tid)
             cur.execute(f"SELECT owner_id FROM {self._config.leases_table} WHERE tenant_id = %s AND run_id = %s FOR UPDATE", (tid, rid))
             row = cur.fetchone()
             if row is None:
@@ -159,7 +159,7 @@ class PostgresTenantRuntimeLeaseStore(TenantRuntimeLeaseStore):
         rid = normalize_text(run_id, field_name="run_id")
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=utc_now())
+            self._reap_expired_locked(cur, now=utc_now(), tenant_id=tid)
             cur.execute(
                 f"SELECT tenant_id, run_id, owner_id, slot_id, fencing_token, acquired_at, heartbeat_at, expires_at, labels_json FROM {self._config.leases_table} WHERE tenant_id = %s AND run_id = %s",
                 (tid, rid),
@@ -173,7 +173,7 @@ class PostgresTenantRuntimeLeaseStore(TenantRuntimeLeaseStore):
         moment = ensure_aware(now or utc_now())
         with self._connect() as conn, conn.cursor() as cur:
             self._tenant_lock(cur, tenant_id=tid)
-            self._reap_expired_locked(cur, now=moment)
+            self._reap_expired_locked(cur, now=moment, tenant_id=tid)
             cur.execute(
                 f"SELECT tenant_id, run_id, owner_id, slot_id, fencing_token, acquired_at, heartbeat_at, expires_at, labels_json FROM {self._config.leases_table} WHERE tenant_id = %s ORDER BY acquired_at, run_id",
                 (tid,),
@@ -203,13 +203,27 @@ class PostgresTenantRuntimeLeaseStore(TenantRuntimeLeaseStore):
             raise RuntimeError("postgres runtime lease renew lost record")
         return self._row_to_record(row)
 
-    def _reap_expired_locked(self, cur: Any, *, now: datetime) -> tuple[TenantRuntimeLeaseRecord, ...]:
+    def _reap_expired_locked(
+        self,
+        cur: Any,
+        *,
+        now: datetime,
+        tenant_id: str | None = None,
+    ) -> tuple[TenantRuntimeLeaseRecord, ...]:
+        moment = ensure_aware(now)
+        if tenant_id is None:
+            where = "expires_at <= %s"
+            params: tuple[Any, ...] = (moment,)
+        else:
+            tid = require_tenant_id(tenant_id)
+            where = "tenant_id = %s AND expires_at <= %s"
+            params = (tid, moment)
         cur.execute(
-            f"SELECT tenant_id, run_id, owner_id, slot_id, fencing_token, acquired_at, heartbeat_at, expires_at, labels_json FROM {self._config.leases_table} WHERE expires_at <= %s",
-            (now,),
+            f"SELECT tenant_id, run_id, owner_id, slot_id, fencing_token, acquired_at, heartbeat_at, expires_at, labels_json FROM {self._config.leases_table} WHERE {where}",
+            params,
         )
         rows = cur.fetchall()
-        cur.execute(f"DELETE FROM {self._config.leases_table} WHERE expires_at <= %s", (now,))
+        cur.execute(f"DELETE FROM {self._config.leases_table} WHERE {where}", params)
         return tuple(self._row_to_record(row) for row in rows)
 
     def _active_count_locked(self, cur: Any, *, tenant_id: str) -> int:
@@ -261,6 +275,8 @@ class PostgresTenantRuntimeLeaseStore(TenantRuntimeLeaseStore):
         labels = row[8] if len(row) > 8 else {}
         if isinstance(labels, str):
             labels = json.loads(labels)
+        if not isinstance(labels, Mapping):
+            raise ValueError("labels_json must decode to a mapping")
         record = TenantRuntimeLeaseRecord(
             tenant_id=row[0],
             run_id=row[1],
