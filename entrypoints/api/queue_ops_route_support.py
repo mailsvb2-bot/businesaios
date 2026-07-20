@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
@@ -9,6 +11,8 @@ from runtime.queue.queue_alerts import QueueAlert
 ROUTE_METADATA_MAX_ITEMS = 12
 ROUTE_METADATA_MAX_STRING = 160
 ROUTE_METADATA_REDACT_KEYS = ('token', 'secret', 'password', 'authorization', 'cookie', 'api_key', 'session', 'bearer')
+ROUTE_LIMIT_MAX = 500
+TIMELINE_LIMIT_MAX = 200
 
 
 def normalize_tenant_id(value: str) -> str:
@@ -39,6 +43,23 @@ def normalize_optional(value: str | None) -> str | None:
         return None
     normalized = str(value).strip()
     return normalized or None
+
+
+def normalize_limit(value: object, *, default: int, upper: int = ROUTE_LIMIT_MAX) -> int:
+    if isinstance(value, bool):
+        raise ValueError('limit must be an integer')
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError('limit must be an integer') from exc
+    if not math.isfinite(parsed) or not parsed.is_integer():
+        raise ValueError('limit must be an integer')
+    normalized_upper = max(1, int(upper))
+    normalized_default = max(1, min(int(default), normalized_upper))
+    parsed_int = int(parsed)
+    if parsed_int <= 0:
+        return normalized_default
+    return min(parsed_int, normalized_upper)
 
 
 def alert_dict(alert: QueueAlert) -> dict[str, str]:
@@ -81,7 +102,7 @@ def build_operator_summary(*, monitor_report: Any, analytics_preview: Any, audit
         'top_unexecuted_hook_code': analytics_preview.top_unexecuted_hook_code,
         'execution_rate': analytics_preview.execution_rate,
         'approval_required_count': int(approval_preview.get('approval_required_count', 0) or 0),
-        'approval_required_hooks': tuple(approval_preview.get('approval_required_hooks', ()) or ()),
+        'approval_required_hooks': tuple(approval_preview.get('approval_required_hook_codes', approval_preview.get('approval_required_hooks', ())) or ()),
         'recent_route_action': audit_preview.get('latest_route_action'),
         'recent_route_status': audit_preview.get('latest_route_status'),
         'audit_execution_count': int(audit_preview.get('execution_count', 0) or 0),
@@ -136,7 +157,7 @@ def build_evidence_timeline(*, monitor_report: Any, recent_alerts: Any, remediat
         row.setdefault('entry_type', str(row.get('kind') or row.get('entry_type') or 'route_event'))
         rows.append(row)
     rows.sort(key=lambda item: (str(item.get('at') or ''), str(item.get('title') or '')), reverse=True)
-    return tuple(rows[: max(1, int(limit))])
+    return tuple(rows[:normalize_limit(limit, default=20, upper=TIMELINE_LIMIT_MAX)])
 
 
 def build_timeline_rows(*, plans: Any, executions: Any, route_history: Any, limit: int) -> tuple[dict[str, Any], ...]:
@@ -144,54 +165,77 @@ def build_timeline_rows(*, plans: Any, executions: Any, route_history: Any, limi
     for entry in tuple(plans or ()):
         rows.append({'entry_type': 'plan', 'at': entry.generated_at.isoformat(), 'title': 'Remediation plan generated', 'hook_count': len(tuple(entry.hooks or ())), 'status': 'planned'})
     for entry in tuple(executions or ()):
-        rows.append({'entry_type': 'execution', 'at': entry.executed_at.isoformat(), 'title': str(entry.hook_code), 'status': 'executed' if bool(entry.executed) else 'review_required', 'reason': str(entry.reason), 'category': str(entry.category), 'metadata': sanitize_metadata(dict(getattr(entry, 'metadata', {}) or {}))})
+        rows.append({'entry_type': 'execution', 'at': entry.executed_at.isoformat(), 'title': str(entry.hook_code), 'status': 'executed' if bool(entry.executed) else 'review_required', 'reason': str(entry.reason), 'category': str(entry.category), 'metadata': sanitize_metadata(getattr(entry, 'metadata', None))})
     for entry in tuple(route_history or ()):
-        rows.append({'entry_type': 'route_event', 'at': entry.recorded_at.isoformat(), 'title': str(entry.action), 'status': str(entry.status), 'source': str(entry.source), 'metadata': sanitize_metadata(dict(getattr(entry, 'metadata', {}) or {}))})
+        rows.append({'entry_type': 'route_event', 'at': entry.recorded_at.isoformat(), 'title': str(entry.action), 'status': str(entry.status), 'source': str(entry.source), 'metadata': sanitize_metadata(getattr(entry, 'metadata', None))})
     rows.sort(key=lambda item: (str(item.get('at') or ''), str(item.get('title') or '')), reverse=True)
-    return tuple(rows[: max(1, int(limit))])
+    return tuple(rows[:normalize_limit(limit, default=25, upper=TIMELINE_LIMIT_MAX)])
+
+
+def _age_seconds(*, now: datetime, observed_at: datetime) -> int:
+    normalized_now = now
+    normalized_observed = observed_at
+    if normalized_now.tzinfo is None and normalized_observed.tzinfo is not None:
+        normalized_now = normalized_now.replace(tzinfo=normalized_observed.tzinfo)
+    elif normalized_now.tzinfo is not None and normalized_observed.tzinfo is None:
+        normalized_observed = normalized_observed.replace(tzinfo=normalized_now.tzinfo)
+    return max(0, int((normalized_now - normalized_observed).total_seconds()))
 
 
 def build_data_freshness(*, monitor_report: Any, rollup_summary: Any, now: datetime) -> dict[str, Any]:
-    sampled_at = getattr(monitor_report, 'sampled_at', None) or now
-    age_seconds = max(0, int((now - sampled_at).total_seconds()))
+    sampled_at = getattr(monitor_report, 'sampled_at', None)
+    if not isinstance(sampled_at, datetime):
+        sampled_at = now
+    age_seconds = _age_seconds(now=now, observed_at=sampled_at)
     rollup_last = None if rollup_summary is None else getattr(rollup_summary, 'last_observed_at', None)
-    rollup_age = None if rollup_last is None else max(0, int((now - rollup_last).total_seconds()))
+    if rollup_last is not None and not isinstance(rollup_last, datetime):
+        rollup_last = None
+    rollup_age = None if rollup_last is None else _age_seconds(now=now, observed_at=rollup_last)
     state = 'fresh'
     reference_age = age_seconds if rollup_age is None else max(age_seconds, rollup_age)
     if reference_age >= 900:
         state = 'stale'
     elif reference_age >= 300:
         state = 'aging'
-    return {'state': state, 'age_seconds': reference_age, 'sampled_at': sampled_at.isoformat(), 'last_rollup_at': None if rollup_last is None else rollup_last.isoformat()}
+    return {
+        'state': state,
+        'age_seconds': reference_age,
+        'sampled_at': sampled_at.isoformat(),
+        'last_rollup_at': None if rollup_last is None else rollup_last.isoformat(),
+    }
 
 
-def sanitize_metadata(value: dict[str, Any]) -> dict[str, Any]:
+def sanitize_metadata(value: Mapping[object, Any] | None) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError('metadata must be a mapping')
     result: dict[str, Any] = {}
-    count = 0
-    for key in sorted(value.keys(), key=lambda item: str(item)):
-        if count >= ROUTE_METADATA_MAX_ITEMS:
+    for index, key in enumerate(sorted(value.keys(), key=lambda item: (str(item), repr(item)))):
+        if index >= ROUTE_METADATA_MAX_ITEMS:
             result['__truncated__'] = True
             break
         raw = value[key]
         name = str(key).strip() or '_'
+        if name in result:
+            raise ValueError(f'metadata key collision: {name}')
         lowered = name.lower()
         if any(token in lowered for token in ROUTE_METADATA_REDACT_KEYS):
             result[name] = '[redacted]'
         else:
             result[name] = sanitize_value(raw)
-        count += 1
     return result
 
 
 def sanitize_value(value: Any) -> Any:
-    if isinstance(value, dict):
-        return sanitize_metadata(dict(value))
+    if isinstance(value, Mapping):
+        return sanitize_metadata(value)
     if isinstance(value, (list, tuple)):
         items = [sanitize_value(item) for item in list(value)[:ROUTE_METADATA_MAX_ITEMS]]
         if len(value) > ROUTE_METADATA_MAX_ITEMS:
             items.append('[truncated]')
         return tuple(items)
-    if isinstance(value, set):
+    if isinstance(value, (set, frozenset)):
         ordered = sorted(list(value), key=lambda item: repr(item))
         items = [sanitize_value(item) for item in ordered[:ROUTE_METADATA_MAX_ITEMS]]
         if len(ordered) > ROUTE_METADATA_MAX_ITEMS:
@@ -202,15 +246,17 @@ def sanitize_value(value: Any) -> Any:
     if isinstance(value, str):
         text = value.strip()
         return text if len(text) <= ROUTE_METADATA_MAX_STRING else text[:ROUTE_METADATA_MAX_STRING - 3] + '...'
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
     if isinstance(value, (int, float, bool)) or value is None:
         return value
     return repr(value)
 
 
 def sanitize_hook_item(item: Any) -> Any:
-    if isinstance(item, dict):
-        normalized = dict(item)
+    if isinstance(item, Mapping):
+        normalized = {str(key): value for key, value in item.items()}
         if 'metadata' in normalized:
-            normalized['metadata'] = sanitize_metadata(dict(normalized.get('metadata') or {}))
+            normalized['metadata'] = sanitize_metadata(normalized.get('metadata'))
         return normalized
-    return item
+    return sanitize_value(item)
