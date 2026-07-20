@@ -18,6 +18,13 @@ EVENT_COLUMNS = (
 )
 
 
+def _literal_like_pattern(value: object) -> str:
+    """Return a LIKE pattern that preserves literal substring semantics."""
+
+    escaped = str(value).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 def _normalized_event_types(
     *,
     event_type: str | None,
@@ -206,16 +213,13 @@ def count_events(
 
 
 def get_counter(db: sqlite3.Connection, *, event_type: str, user_id: str | None = None) -> int:
-    if user_id is None:
-        row = db.execute(
-            "SELECT total_count FROM event_counters WHERE event_type=? AND user_id IS NULL",
-            (str(event_type),),
-        ).fetchone()
-    else:
-        row = db.execute(
-            "SELECT total_count FROM event_counters WHERE event_type=? AND user_id=?",
-            (str(event_type), str(user_id)),
-        ).fetchone()
+    """Read the counter representation written by ``_append_counters``."""
+
+    counter_user_id = "__all__" if user_id is None else str(user_id)
+    row = db.execute(
+        "SELECT cnt FROM event_counters WHERE event_type=? AND user_id=?",
+        (str(event_type), counter_user_id),
+    ).fetchone()
     return int(row[0] or 0) if row else 0
 
 
@@ -277,8 +281,14 @@ def count_events_payload_like(
     end_ms: int | None = None,
 ) -> int:
     row = db.execute(
-        "SELECT COUNT(1) FROM events WHERE tenant_id=? AND event_type=? AND timestamp_ms>=? AND timestamp_ms<? AND payload_json LIKE ?",
-        (str(tenant_id), str(event_type), int(start_ms), _exclusive_end_ms(end_ms), f"%{payload_substring}%"),
+        "SELECT COUNT(1) FROM events WHERE tenant_id=? AND event_type=? AND timestamp_ms>=? AND timestamp_ms<? AND payload_json LIKE ? ESCAPE '\\'",
+        (
+            str(tenant_id),
+            str(event_type),
+            int(start_ms),
+            _exclusive_end_ms(end_ms),
+            _literal_like_pattern(payload_substring),
+        ),
     ).fetchone()
     return int(row[0] or 0) if row else 0
 
@@ -293,7 +303,13 @@ def count_distinct_users_payload_like(
     end_ms: int | None = None,
 ) -> int:
     row = db.execute(
-        "SELECT COUNT(DISTINCT user_id) FROM events WHERE tenant_id=? AND event_type=? AND timestamp_ms>=? AND timestamp_ms<? AND payload_json LIKE ? AND COALESCE(user_id, '') NOT IN ('', 'system')",
-        (str(tenant_id), str(event_type), int(start_ms), _exclusive_end_ms(end_ms), f"%{payload_substring}%"),
+        "SELECT COUNT(DISTINCT user_id) FROM events WHERE tenant_id=? AND event_type=? AND timestamp_ms>=? AND timestamp_ms<? AND payload_json LIKE ? ESCAPE '\\' AND COALESCE(user_id, '') NOT IN ('', 'system')",
+        (
+            str(tenant_id),
+            str(event_type),
+            int(start_ms),
+            _exclusive_end_ms(end_ms),
+            _literal_like_pattern(payload_substring),
+        ),
     ).fetchone()
     return int(row[0] or 0) if row else 0
