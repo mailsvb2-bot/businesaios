@@ -2,34 +2,45 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from pathlib import Path
-from threading import RLock
 from typing import Any
 
-from config.config_audit import ConfigAuditEvent, PersistentConfigAuditLog
-from config.config_versioning import ConfigVersion, ConfigVersioning, utc_now
+from config.config_versioning import ConfigVersion, utc_now
+from config.versioned_config_store import (
+    InMemoryVersionedConfigStore,
+    PersistentVersionedConfigStore,
+    canonical_config_snapshot,
+    canonical_labels,
+    require_text,
+    require_timezone_aware,
+)
 from core.tenancy.normalization import normalize_tenant_id
-from governance.persistence_codec import atomic_write_json, read_json_or_default, to_jsonable
 
 CANON_COMPAT_SHIM = True
-
 CANON_POLICY_CONFIG_STORE = True
 
 _POLICY_NAMESPACE = "policy_config"
 
 
-def _normalized_optional_tenant_id(value: str | None) -> str | None:
+def _normalized_optional_tenant_id(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("tenant_id must be a string or None")
     normalized = normalize_tenant_id(value)
     return normalized or None
 
 
 def _parse_datetime(value: object) -> datetime:
-    text = str(value or "").strip()
-    parsed = datetime.fromisoformat(text) if text else utc_now()
+    if value is None or value == "":
+        return utc_now()
+    if not isinstance(value, str):
+        raise ValueError("updated_at must be an ISO-8601 string")
+    parsed = datetime.fromisoformat(value.strip())
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=utc_now().tzinfo)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed
 
 
@@ -44,51 +55,62 @@ class PolicyConfigSnapshot:
     version: ConfigVersion | None = None
 
     def validate(self) -> None:
-        if not str(self.policy_name or "").strip():
-            raise ValueError("policy_name is required")
-        if not str(self.scope or "").strip():
-            raise ValueError("scope is required")
-        if self.updated_at.tzinfo is None:
-            raise ValueError("updated_at must be timezone-aware")
+        require_text("policy_name", self.policy_name)
+        require_text("scope", self.scope)
+        _normalized_optional_tenant_id(self.tenant_id)
+        require_timezone_aware("updated_at", self.updated_at)
+        canonical_config_snapshot(self.config)
+        canonical_labels(self.labels)
         if self.version is not None:
+            if not isinstance(self.version, ConfigVersion):
+                raise ValueError("version must be a ConfigVersion")
             self.version.validate()
 
     def normalized(self) -> PolicyConfigSnapshot:
         return PolicyConfigSnapshot(
-            policy_name=str(self.policy_name).strip(),
+            policy_name=require_text("policy_name", self.policy_name),
             tenant_id=_normalized_optional_tenant_id(self.tenant_id),
-            scope=str(self.scope or "global").strip() or "global",
-            config=to_jsonable(dict(self.config)),
-            labels={str(k): str(v) for k, v in dict(self.labels).items()},
+            scope=require_text("scope", self.scope),
+            config=canonical_config_snapshot(self.config),
+            labels=canonical_labels(self.labels),
             updated_at=self.updated_at,
             version=self.version,
         )
 
+    def with_version(self, *, version: ConfigVersion, updated_at: datetime) -> PolicyConfigSnapshot:
+        return replace(self.normalized(), version=version, updated_at=updated_at)
+
     def entity_id(self) -> str:
-        tenant_scope = self.tenant_id or "global"
-        return f"{tenant_scope}:{str(self.scope).strip() or 'global'}:{str(self.policy_name).strip()}"
+        normalized = self.normalized()
+        return f"{normalized.tenant_id or 'global'}:{normalized.scope}:{normalized.policy_name}"
 
     def payload_for_versioning(self) -> dict[str, Any]:
+        normalized = self.normalized()
         return {
-            "policy_name": str(self.policy_name).strip(),
-            "tenant_id": _normalized_optional_tenant_id(self.tenant_id),
-            "scope": str(self.scope or "global").strip() or "global",
-            "config": to_jsonable(dict(self.config)),
-            "labels": {str(k): str(v) for k, v in dict(self.labels).items()},
+            "policy_name": normalized.policy_name,
+            "tenant_id": normalized.tenant_id,
+            "scope": normalized.scope,
+            "config": canonical_config_snapshot(normalized.config),
+            "labels": canonical_labels(normalized.labels),
         }
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, object]) -> PolicyConfigSnapshot:
-        item = dict(payload or {})
-        version = None
-        if isinstance(item.get("version"), Mapping):
-            version = ConfigVersion.from_dict(dict(item.get("version") or {}))
+        if not isinstance(payload, Mapping):
+            raise ValueError("policy config payload must be a mapping")
+        item = dict(payload)
+        raw_version = item.get("version")
+        if raw_version is not None and not isinstance(raw_version, Mapping):
+            raise ValueError("version must be a mapping or None")
+        version = None if raw_version is None else ConfigVersion.from_dict(raw_version)
+        raw_config = item.get("config", {})
+        raw_labels = item.get("labels", {})
         snapshot = cls(
-            policy_name=str(item.get("policy_name") or "").strip(),
-            tenant_id=_normalized_optional_tenant_id(item.get("tenant_id") if item.get("tenant_id") is None else str(item.get("tenant_id"))),
-            scope=str(item.get("scope") or "global").strip() or "global",
-            config=dict(item.get("config") or {}),
-            labels={str(k): str(v) for k, v in dict(item.get("labels") or {}).items()},
+            policy_name=item.get("policy_name"),
+            tenant_id=item.get("tenant_id"),
+            scope=item.get("scope", "global"),
+            config=raw_config,
+            labels=raw_labels,
             updated_at=_parse_datetime(item.get("updated_at")),
             version=version,
         ).normalized()
@@ -96,100 +118,56 @@ class PolicyConfigSnapshot:
         return snapshot
 
     def to_dict(self) -> dict[str, object]:
-        self.validate()
+        normalized = self.normalized()
+        normalized.validate()
         return {
-            "policy_name": str(self.policy_name).strip(),
-            "tenant_id": _normalized_optional_tenant_id(self.tenant_id),
-            "scope": str(self.scope or "global").strip() or "global",
-            "config": to_jsonable(dict(self.config)),
-            "labels": {str(k): str(v) for k, v in dict(self.labels).items()},
-            "updated_at": self.updated_at.isoformat(),
-            "version": None if self.version is None else self.version.to_dict(),
+            "policy_name": normalized.policy_name,
+            "tenant_id": normalized.tenant_id,
+            "scope": normalized.scope,
+            "config": canonical_config_snapshot(normalized.config),
+            "labels": canonical_labels(normalized.labels),
+            "updated_at": normalized.updated_at.isoformat(),
+            "version": None if normalized.version is None else normalized.version.to_dict(),
         }
 
 
-class InMemoryPolicyConfigStore:
-    def __init__(self) -> None:
-        self._snapshots: dict[str, PolicyConfigSnapshot] = {}
-        self._history: dict[str, list[PolicyConfigSnapshot]] = {}
-        self._lock = RLock()
-
+class _PolicyConfigStoreApi:
     def get(self, *, policy_name: str, tenant_id: str | None = None, scope: str = "global") -> PolicyConfigSnapshot | None:
-        with self._lock:
-            return self._snapshots.get(self._key(policy_name=policy_name, tenant_id=tenant_id, scope=scope))
+        return self._get_by_key(self._key(policy_name=policy_name, tenant_id=tenant_id, scope=scope))
 
     def require(self, *, policy_name: str, tenant_id: str | None = None, scope: str = "global") -> PolicyConfigSnapshot:
-        snapshot = self.get(policy_name=policy_name, tenant_id=tenant_id, scope=scope)
-        if snapshot is None:
-            raise KeyError(f"missing policy config: {policy_name}")
-        return snapshot
+        return self._require_by_key(
+            self._key(policy_name=policy_name, tenant_id=tenant_id, scope=scope),
+            message=f"missing policy config: {policy_name}",
+        )
 
     def list_all(self) -> tuple[PolicyConfigSnapshot, ...]:
-        with self._lock:
-            return tuple(sorted(self._snapshots.values(), key=lambda item: item.entity_id()))
-
-    def save(
-        self,
-        snapshot: PolicyConfigSnapshot,
-        *,
-        actor: str = "system",
-        reason: str = "",
-        expected_revision: int | None = None,
-    ) -> PolicyConfigSnapshot:
-        normalized = snapshot.normalized()
-        normalized.validate()
-        key = self._key(policy_name=normalized.policy_name, tenant_id=normalized.tenant_id, scope=normalized.scope)
-        with self._lock:
-            previous = self._snapshots.get(key)
-            if previous is not None and expected_revision is not None and int(previous.version.revision if previous.version else 1) != int(expected_revision):
-                raise RuntimeError("policy config optimistic concurrency check failed")
-            next_version = ConfigVersioning.create(
-                namespace=_POLICY_NAMESPACE,
-                entity_id=normalized.entity_id(),
-                payload=normalized.payload_for_versioning(),
-                previous=None if previous is None else previous.version,
-                created_by=actor,
-                change_reason=reason,
-                labels=normalized.labels,
-            )
-            if previous is not None and previous.version is not None and next_version.fingerprint == previous.version.fingerprint:
-                return previous
-            stored = PolicyConfigSnapshot(
-                policy_name=normalized.policy_name,
-                tenant_id=normalized.tenant_id,
-                scope=normalized.scope,
-                config=to_jsonable(dict(normalized.config)),
-                labels={str(k): str(v) for k, v in dict(normalized.labels).items()},
-                updated_at=utc_now(),
-                version=next_version,
-            )
-            stored.validate()
-            self._snapshots[key] = stored
-            self._history.setdefault(key, []).append(stored)
-            return stored
+        return self._list_all()
 
     def history(self, *, policy_name: str, tenant_id: str | None = None, scope: str = "global") -> tuple[PolicyConfigSnapshot, ...]:
-        key = self._key(policy_name=policy_name, tenant_id=tenant_id, scope=scope)
-        with self._lock:
-            return tuple(self._history.get(key, ()))
+        return self._history_by_key(self._key(policy_name=policy_name, tenant_id=tenant_id, scope=scope))
 
     @staticmethod
     def _key(*, policy_name: str, tenant_id: str | None, scope: str) -> str:
-        return f"{_normalized_optional_tenant_id(tenant_id) or 'global'}::{str(scope).strip() or 'global'}::{str(policy_name).strip()}"
+        return f"{_normalized_optional_tenant_id(tenant_id) or 'global'}::{require_text('scope', scope)}::{require_text('policy_name', policy_name)}"
 
-
-class PersistentPolicyConfigStore(InMemoryPolicyConfigStore):
-    def __init__(self, *, path: str | Path | None = None, audit_log_path: str | Path | None = None) -> None:
-        super().__init__()
-        self._path = Path(path) if path is not None else policy_config_store_path()
-        self._audit_log = PersistentConfigAuditLog(
-            Path(audit_log_path) if audit_log_path is not None else policy_config_audit_log_path()
+    @staticmethod
+    def _snapshot_key(snapshot: PolicyConfigSnapshot) -> str:
+        return _PolicyConfigStoreApi._key(
+            policy_name=snapshot.policy_name,
+            tenant_id=snapshot.tenant_id,
+            scope=snapshot.scope,
         )
-        self._load()
 
-    @property
-    def path(self) -> Path:
-        return self._path
+
+class InMemoryPolicyConfigStore(_PolicyConfigStoreApi, InMemoryVersionedConfigStore[PolicyConfigSnapshot]):
+    def __init__(self) -> None:
+        InMemoryVersionedConfigStore.__init__(
+            self,
+            namespace=_POLICY_NAMESPACE,
+            snapshot_type=PolicyConfigSnapshot,
+            key_for_snapshot=self._snapshot_key,
+        )
 
     def save(
         self,
@@ -199,39 +177,45 @@ class PersistentPolicyConfigStore(InMemoryPolicyConfigStore):
         reason: str = "",
         expected_revision: int | None = None,
     ) -> PolicyConfigSnapshot:
-        before = self.get(policy_name=snapshot.policy_name, tenant_id=snapshot.tenant_id, scope=snapshot.scope)
-        stored = super().save(snapshot, actor=actor, reason=reason, expected_revision=expected_revision)
-        if before is stored:
-            return stored
-        self._flush()
-        self._audit_log.append(
-            ConfigAuditEvent(
-                namespace=_POLICY_NAMESPACE,
-                entity_id=stored.entity_id(),
-                tenant_id=stored.tenant_id,
-                action="upsert",
-                actor=actor,
-                version_id=None if stored.version is None else stored.version.version_id,
-                payload={
-                    "policy_name": stored.policy_name,
-                    "scope": stored.scope,
-                    "labels": dict(stored.labels),
-                },
-            )
+        return self._save_snapshot(
+            snapshot,
+            actor=actor,
+            reason=reason,
+            expected_revision=expected_revision,
         )
-        return stored
 
-    def _load(self) -> None:
-        payload = read_json_or_default(self._path, default={"items": []})
-        rows = dict(payload).get("items", []) if isinstance(payload, dict) else []
-        for row in rows:
-            snapshot = PolicyConfigSnapshot.from_dict(dict(row))
-            key = self._key(policy_name=snapshot.policy_name, tenant_id=snapshot.tenant_id, scope=snapshot.scope)
-            self._snapshots[key] = snapshot
-            self._history.setdefault(key, []).append(snapshot)
 
-    def _flush(self) -> None:
-        atomic_write_json(self._path, {"items": [snapshot.to_dict() for snapshot in self.list_all()]})
+class PersistentPolicyConfigStore(_PolicyConfigStoreApi, PersistentVersionedConfigStore[PolicyConfigSnapshot]):
+    def __init__(self, *, path: str | Path | None = None, audit_log_path: str | Path | None = None) -> None:
+        PersistentVersionedConfigStore.__init__(
+            self,
+            namespace=_POLICY_NAMESPACE,
+            snapshot_type=PolicyConfigSnapshot,
+            key_for_snapshot=self._snapshot_key,
+            snapshot_from_dict=PolicyConfigSnapshot.from_dict,
+            audit_payload=lambda snapshot: {
+                "policy_name": snapshot.policy_name,
+                "scope": snapshot.scope,
+                "labels": dict(snapshot.labels),
+            },
+            path=policy_config_store_path() if path is None else path,
+            audit_log_path=policy_config_audit_log_path() if audit_log_path is None else audit_log_path,
+        )
+
+    def save(
+        self,
+        snapshot: PolicyConfigSnapshot,
+        *,
+        actor: str = "system",
+        reason: str = "",
+        expected_revision: int | None = None,
+    ) -> PolicyConfigSnapshot:
+        return self._save_persistent_snapshot(
+            snapshot,
+            actor=actor,
+            reason=reason,
+            expected_revision=expected_revision,
+        )
 
 
 def policy_config_store_path() -> Path:
