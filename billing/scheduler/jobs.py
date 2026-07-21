@@ -394,8 +394,9 @@ class DunningRetryJob:
             executed_attempts: list[int] = []
             for action in due_actions:
                 _renew_lease_if_due(lease_store=self._lease_store, holder=lease_holder, tenant_id=tid, job_name='dunning_retry', run_key=normalized_run_key, lease_ttl=self._lease_ttl, now=observed_at)
-                self._orchestrator.mark_action_executed(tenant_id=tid, invoice_id=iid, attempt_no=action.attempt_no)
-                executed_attempts.append(_require_attempt_number(action.attempt_no))
+                attempt_no = _require_attempt_number(action.attempt_no)
+                self._orchestrator.mark_action_executed(tenant_id=tid, invoice_id=iid, attempt_no=attempt_no)
+                executed_attempts.append(attempt_no)
             self._run_store.save(BillingJobRun(tenant_id=tid, job_name='dunning_retry', run_key=normalized_run_key, started_at=observed_at, finished_at=observed_at, metadata={'owner': 'billing.scheduler.jobs', 'invoice_id': iid, 'executed_attempts': tuple(executed_attempts)}))
             return tuple(executed_attempts)
 
