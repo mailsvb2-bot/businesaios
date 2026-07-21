@@ -1,0 +1,106 @@
+name: One-time branch audit cleanup
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-time-branch-audit-cleanup
+  cancel-in-progress: false
+
+jobs:
+  audit-and-clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+
+      - name: Audit branch contribution and remove redundant refs
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          mapfile -t branches < <(
+            git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin \
+              | grep -v '^HEAD$' \
+              | sort
+          )
+
+          echo "BRANCH_COUNT_BEFORE=${#branches[@]}"
+          printf 'BRANCH_BEFORE=%s\n' "${branches[@]}"
+          {
+            echo "## Branch audit"
+            echo
+            echo "Branches before cleanup: **${#branches[@]}**"
+            printf -- '- `%s`\n' "${branches[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          main_tree="$(git rev-parse 'origin/main^{tree}')"
+          safe=()
+          unsafe=()
+
+          for branch in "${branches[@]}"; do
+            [[ "$branch" == "main" ]] && continue
+            error_file="$(mktemp)"
+            if merged_tree="$(git merge-tree --write-tree origin/main "origin/$branch" 2>"$error_file")"; then
+              if [[ "$merged_tree" == "$main_tree" ]]; then
+                safe+=("$branch")
+                echo "SAFE_REDUNDANT=$branch"
+              else
+                unsafe+=("$branch")
+                echo "UNIQUE_CONTENT=$branch"
+                git diff --stat origin/main..."origin/$branch" || true
+              fi
+            else
+              unsafe+=("$branch")
+              echo "MERGE_CONFLICT_OR_AUDIT_ERROR=$branch"
+              cat "$error_file"
+            fi
+            rm -f "$error_file"
+          done
+
+          if ((${#unsafe[@]} > 0)); then
+            {
+              echo
+              echo "### Preserved branches with unique or conflicting content"
+              printf -- '- `%s`\n' "${unsafe[@]}"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "Refusing deletion because at least one branch needs manual analysis."
+            exit 1
+          fi
+
+          for branch in "${safe[@]}"; do
+            git push origin --delete "$branch"
+          done
+
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+          mapfile -t after < <(
+            git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin \
+              | grep -v '^HEAD$' \
+              | sort
+          )
+
+          echo "BRANCH_COUNT_AFTER=${#after[@]}"
+          printf 'BRANCH_AFTER=%s\n' "${after[@]}"
+          {
+            echo
+            echo "Deleted redundant branches: **${#safe[@]}**"
+            if ((${#safe[@]} > 0)); then
+              printf -- '- `%s`\n' "${safe[@]}"
+            fi
+            echo
+            echo "Branches after cleanup: **${#after[@]}**"
+            printf -- '- `%s`\n' "${after[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if ((${#after[@]} != 1)) || [[ "${after[0]}" != "main" ]]; then
+            echo "Cleanup invariant failed: expected only main."
+            exit 1
+          fi
