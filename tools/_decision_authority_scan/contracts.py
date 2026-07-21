@@ -2,36 +2,19 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-GLOBAL_EXCLUDED_DIRS = {
-    ".git",
-    ".hg",
-    ".mypy_cache",
-    ".nox",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".runtime",
-    ".svn",
-    ".tox",
-    ".venv",
-    "__pycache__",
-    "node_modules",
-    "target",
-    "venv",
-}
-ROOT_EXCLUDED_DIRS = {
-    "artifacts",
-    "build",
-    "data",
-    "dist",
-    "htmlcov",
-    "release_dist",
-    "reports",
-}
+from canon.repository_sources import (
+    DEFAULT_EXCLUDED_DIR_NAMES,
+    DEFAULT_ROOT_EXCLUDED_DIR_NAMES,
+    iter_repository_python_files,
+    validate_repository_root,
+)
+
+GLOBAL_EXCLUDED_DIRS = set(DEFAULT_EXCLUDED_DIR_NAMES)
+ROOT_EXCLUDED_DIRS = set(DEFAULT_ROOT_EXCLUDED_DIR_NAMES)
 
 _REFLECTION_LOOKUP_CALLS = frozenset(
     {
@@ -78,49 +61,12 @@ class Finding:
 
 
 def _validated_repo_root(root: Path | str) -> Path:
-    if isinstance(root, str):
-        root = Path(root)
-    if not isinstance(root, Path):
-        raise ValueError("scan root must be a path")
     try:
-        resolved = root.expanduser().resolve(strict=True)
-    except (OSError, RuntimeError) as exc:
-        raise ValueError("scan root must exist") from exc
-    if not resolved.is_dir():
-        raise ValueError("scan root must be a directory")
-    return resolved
+        return validate_repository_root(root)
+    except ValueError as exc:
+        message = str(exc).replace("repository root", "scan root")
+        raise ValueError(message) from exc
 
 
 def _iter_python_files(root: Path) -> Iterable[Path]:
-    repo = _validated_repo_root(root)
-
-    def fail_walk(error: OSError) -> None:
-        raise RuntimeError(
-            "failed to walk decision-authority scan root"
-        ) from error
-
-    for directory, dirnames, filenames in os.walk(
-        repo,
-        topdown=True,
-        onerror=fail_walk,
-        followlinks=False,
-    ):
-        base = Path(directory)
-        at_root = base == repo
-        dirnames[:] = sorted(
-            name
-            for name in dirnames
-            if not name.startswith(".")
-            and name not in GLOBAL_EXCLUDED_DIRS
-            and not (at_root and name in ROOT_EXCLUDED_DIRS)
-            and not (base / name).is_symlink()
-        )
-        for filename in sorted(filenames):
-            path = base / filename
-            if (
-                not filename.endswith(".py")
-                or path.is_symlink()
-                or not path.is_file()
-            ):
-                continue
-            yield path
+    yield from iter_repository_python_files(root)
