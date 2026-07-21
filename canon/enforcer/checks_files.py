@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from canon.enforcer.rules import ALLOWED_EMPTY_FILES, REPO_ROOT, iter_py_files, relative_path
+from canon.repository_sources import RepositorySourceError, iter_repository_python_files
 
 
 def check_empty_non_init_files(
@@ -43,7 +44,24 @@ def check_duplicate_config_roots(
     *,
     source_files: tuple[Path, ...] | None = None,
 ) -> None:
-    paths = source_files if source_files is not None else tuple(iter_py_files(root))
+    paths = list(source_files if source_files is not None else tuple(iter_py_files(root)))
+    known_paths = set(paths)
+    try:
+        for path in iter_repository_python_files(root, included_prefixes=("config",)):
+            if path not in known_paths:
+                paths.append(path)
+                known_paths.add(path)
+    except RepositorySourceError as exc:
+        report.add(
+            severity="high",
+            kind="repository-source-inventory-error",
+            path="config",
+            line=None,
+            message=str(exc),
+            hint="Restore top-level config source readability before duplicate analysis continues.",
+        )
+
+    paths.sort(key=lambda path: relative_path(root, path))
     config_prefixes = ("config/", "core/config/", "runtime/config/", "runtime/platform/config/")
     seen: dict[str, str] = {}
     for path in paths:
