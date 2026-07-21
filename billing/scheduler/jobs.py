@@ -1,29 +1,48 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 import hashlib
 import json
-from typing import Iterable, Iterator, Mapping, Protocol
+from collections.abc import Iterable, Iterator, Mapping
+from contextlib import contextmanager
+from copy import deepcopy
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta
+from threading import RLock
+from typing import Any, Protocol
 
-from billing.commercial_cycle_contract import utc_now
+from billing.commercial_cycle_contract import ReconciliationDrift, require_aware_datetime, utc_now
 from billing.dunning_orchestrator import DunningOrchestrator
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope, InvoiceLifecycleService
 from billing.reconciliation_service import BillingReconciliationService, ReconciliationReport
-from billing.commercial_cycle_contract import ReconciliationDrift
+from billing.scheduler.lease import (
+    BillingJobLeaseStoreContract,
+    InMemoryBillingJobLeaseStore,
+    SqliteBillingJobLeaseStore,
+    create_job_lease,
+)
 from billing.subscription_lifecycle import SubscriptionCommercialEnvelope, SubscriptionLifecycleService
 from billing.usage_rollup import UsageRollup
-from billing.scheduler.lease import BillingJobLeaseStoreContract, InMemoryBillingJobLeaseStore, SqliteBillingJobLeaseStore, create_job_lease
 from core.tenancy.normalization import require_tenant_id
 from runtime.platform.billing_scheduler_job_store import (
     CANON_PLATFORM_BILLING_SCHEDULER_JOB_STORE,
-    PlatformSqliteBillingJobRunStore,
     SCHEMA_VERSION,
+    PlatformSqliteBillingJobRunStore,
+    canonical_json_snapshot,
 )
 
-
 CANON_BILLING_SCHEDULER_JOBS = True
+
+
+def _require_text(name: str, value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} is required")
+    return value.strip()
+
+
+def _require_tenant_text(value: Any) -> str:
+    if not isinstance(value, str):
+        raise ValueError("tenant_id must be a string")
+    return require_tenant_id(value)
 
 
 @dataclass(frozen=True)
@@ -36,17 +55,27 @@ class BillingJobRun:
     metadata: Mapping[str, object] = field(default_factory=dict)
 
     def validate(self) -> None:
-        require_tenant_id(self.tenant_id)
-        if not str(self.job_name or '').strip():
-            raise ValueError('job_name is required')
-        if not str(self.run_key or '').strip():
-            raise ValueError('run_key is required')
-        if self.started_at.tzinfo is None:
-            raise ValueError('started_at must be timezone-aware')
-        if self.finished_at is not None and self.finished_at.tzinfo is None:
-            raise ValueError('finished_at must be timezone-aware')
-        if self.finished_at is not None and self.finished_at < self.started_at:
-            raise ValueError('finished_at must be >= started_at')
+        _require_tenant_text(self.tenant_id)
+        _require_text("job_name", self.job_name)
+        _require_text("run_key", self.run_key)
+        require_aware_datetime("started_at", self.started_at)
+        if self.finished_at is not None:
+            require_aware_datetime("finished_at", self.finished_at)
+            if self.finished_at < self.started_at:
+                raise ValueError("finished_at must be >= started_at")
+        if not isinstance(self.metadata, Mapping):
+            raise ValueError("metadata must be a mapping")
+        canonical_json_snapshot(self.metadata)
+
+    def normalized_copy(self) -> BillingJobRun:
+        self.validate()
+        return replace(
+            self,
+            tenant_id=_require_tenant_text(self.tenant_id),
+            job_name=_require_text("job_name", self.job_name),
+            run_key=_require_text("run_key", self.run_key),
+            metadata=canonical_json_snapshot(self.metadata),
+        )
 
 
 class BillingJobRunStoreContract(Protocol):
@@ -57,18 +86,30 @@ class BillingJobRunStoreContract(Protocol):
 class InMemoryBillingJobRunStore:
     def __init__(self) -> None:
         self._runs: dict[tuple[str, str, str], BillingJobRun] = {}
+        self._lock = RLock()
 
     def save(self, run: BillingJobRun) -> BillingJobRun:
-        run.validate()
-        key = (run.tenant_id, run.job_name, run.run_key)
-        existing = self._runs.get(key)
-        if existing is not None and existing != run:
-            raise ValueError('billing job run collision')
-        self._runs[key] = run
-        return run
+        if not isinstance(run, BillingJobRun):
+            raise ValueError("run must be a BillingJobRun")
+        normalized = run.normalized_copy()
+        key = (normalized.tenant_id, normalized.job_name, normalized.run_key)
+        with self._lock:
+            existing = self._runs.get(key)
+            if existing is not None and existing != normalized:
+                raise ValueError("billing job run collision")
+            if existing is None:
+                self._runs[key] = deepcopy(normalized)
+            return deepcopy(self._runs[key])
 
     def get(self, *, tenant_id: str, job_name: str, run_key: str) -> BillingJobRun | None:
-        return self._runs.get((require_tenant_id(tenant_id), str(job_name).strip(), str(run_key).strip()))
+        key = (
+            _require_tenant_text(tenant_id),
+            _require_text("job_name", job_name),
+            _require_text("run_key", run_key),
+        )
+        with self._lock:
+            run = self._runs.get(key)
+            return None if run is None else deepcopy(run)
 
 
 class SqliteBillingJobRunStore(PlatformSqliteBillingJobRunStore):
@@ -111,7 +152,7 @@ def _serialize_reconciliation_report(report: ReconciliationReport) -> tuple[dict
 
 
 def _deserialize_reconciliation_report(*, tenant_id: str, payload: object) -> ReconciliationReport | None:
-    if not isinstance(payload, (list, tuple)):
+    if not isinstance(payload, list | tuple):
         return None
     drifts: list[ReconciliationDrift] = []
     for item in payload:
