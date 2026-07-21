@@ -1,4 +1,4 @@
-name: One-time branch inventory
+name: One-time branch cleanup
 
 on:
   push:
@@ -9,12 +9,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: one-time-branch-inventory
+  group: one-time-branch-cleanup
   cancel-in-progress: false
 
 jobs:
-  inventory:
-    if: ${{ !contains(github.event.head_commit.message, '[skip branch-audit]') }}
+  cleanup:
+    if: ${{ !contains(github.event.head_commit.message, '[skip branch-cleanup]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out exact main
@@ -22,99 +22,82 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build exact branch inventory
+      - name: Verify audited inventory and delete every non-main branch
         shell: bash
         run: |
           set -Eeuo pipefail
-          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
-          python - <<'PY'
-          from __future__ import annotations
 
-          import datetime as dt
+          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
+
+          mapfile -t expected < <(
+            python - <<'PY'
           import json
-          import subprocess
           from pathlib import Path
 
-          def run(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-              return subprocess.run(
-                  args,
-                  check=check,
-                  text=True,
-                  stdout=subprocess.PIPE,
-                  stderr=subprocess.PIPE,
-              )
-
-          refs = run(
-              "git",
-              "for-each-ref",
-              "--format=%(refname:strip=3)\t%(objectname)",
-              "refs/remotes/origin",
-          ).stdout.splitlines()
-          branches: list[tuple[str, str]] = []
-          for row in refs:
-              name, sha = row.split("\t", 1)
-              if name != "HEAD":
-                  branches.append((name, sha))
-          branches.sort()
-
-          main_sha = run("git", "rev-parse", "origin/main").stdout.strip()
-          main_tree = run("git", "rev-parse", "origin/main^{tree}").stdout.strip()
-          items: list[dict[str, object]] = []
-          for name, sha in branches:
-              left, right = run(
-                  "git",
-                  "rev-list",
-                  "--left-right",
-                  "--count",
-                  f"origin/main...origin/{name}",
-              ).stdout.strip().split()
-              merge_tree = run(
-                  "git",
-                  "merge-tree",
-                  "--write-tree",
-                  "origin/main",
-                  f"origin/{name}",
-                  check=False,
-              )
-              items.append(
-                  {
-                      "name": name,
-                      "sha": sha,
-                      "ahead_by": int(right),
-                      "behind_by": int(left),
-                      "merge_tree_equals_main": (
-                          merge_tree.returncode == 0
-                          and merge_tree.stdout.strip() == main_tree
-                      ),
-                      "merge_tree_error": (
-                          "" if merge_tree.returncode == 0 else merge_tree.stderr.strip()
-                      ),
-                      "tip_subject": run(
-                          "git", "show", "-s", "--format=%s", f"origin/{name}"
-                      ).stdout.strip(),
-                  }
-              )
-
-          payload = {
-              "generated_at_utc": dt.datetime.now(dt.UTC).isoformat(),
-              "main_sha": main_sha,
-              "branch_count": len(items),
-              "branches": items,
-          }
-          target = Path(".github/branch-audit-result.json")
-          target.write_text(
-              json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-              encoding="utf-8",
-          )
-          print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+          payload = json.loads(Path('.github/branch-audit-result.json').read_text(encoding='utf-8'))
+          for item in sorted(payload['branches'], key=lambda row: row['name']):
+              print(item['name'])
           PY
+          )
+          mapfile -t live < <(
+            git ls-remote --heads origin \
+              | awk '{sub("refs/heads/", "", $2); print $2}' \
+              | sort
+          )
 
-      - name: Publish inventory to main
+          printf '%s\n' "${expected[@]}" > /tmp/expected-branches.txt
+          printf '%s\n' "${live[@]}" > /tmp/live-branches.txt
+          echo "AUDITED_BRANCH_COUNT=${#expected[@]}"
+          echo "LIVE_BRANCH_COUNT=${#live[@]}"
+
+          if ! diff -u /tmp/expected-branches.txt /tmp/live-branches.txt; then
+            echo "Live refs changed after the audited inventory; refusing cleanup."
+            exit 1
+          fi
+          if ((${#live[@]} != 40)); then
+            echo "Expected the audited 40 branches before cleanup."
+            exit 1
+          fi
+
+          deleted=()
+          failed=()
+          for branch in "${live[@]}"; do
+            [[ "$branch" == "main" ]] && continue
+            echo "DELETE_BRANCH=$branch"
+            if git push origin --delete "$branch"; then
+              deleted+=("$branch")
+            else
+              failed+=("$branch")
+            fi
+          done
+
+          echo "DELETED_BRANCH_COUNT=${#deleted[@]}"
+          printf 'DELETED_BRANCH=%s\n' "${deleted[@]}"
+          if ((${#failed[@]} > 0)); then
+            echo "FAILED_BRANCH_COUNT=${#failed[@]}"
+            printf 'FAILED_BRANCH=%s\n' "${failed[@]}"
+            exit 1
+          fi
+
+          mapfile -t after < <(
+            git ls-remote --heads origin \
+              | awk '{sub("refs/heads/", "", $2); print $2}' \
+              | sort
+          )
+          echo "FINAL_BRANCH_COUNT=${#after[@]}"
+          printf 'FINAL_BRANCH=%s\n' "${after[@]}"
+
+          if ((${#after[@]} != 1)) || [[ "${after[0]}" != "main" ]]; then
+            echo "Cleanup invariant failed: expected only main."
+            exit 1
+          fi
+
+      - name: Remove one-time audit artifacts from main
         shell: bash
         run: |
           set -Eeuo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/branch-audit-result.json
-          git commit -m "[skip branch-audit] Record exact branch inventory"
+          git rm .github/workflows/branch-audit-cleanup.yml .github/branch-audit-result.json
+          git commit -m "[skip branch-cleanup] Remove one-time branch audit artifacts"
           git push origin HEAD:main
