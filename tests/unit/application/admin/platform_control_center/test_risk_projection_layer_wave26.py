@@ -43,11 +43,9 @@ def test_contract_helpers_are_exact_and_surface_tokens_are_not_substrings() -> N
     for value in ("x", b"x", bytearray(b"x"), {"x": 1}, None, [1]):
         with pytest.raises(ValueError):
             _mapping_rows("rows", cast(object, value))
-
     def late_invalid():
         yield {"x": 1}
         yield 2
-
     iterator = _iter_mapping_rows("rows", cast(object, late_invalid()))
     assert next(iterator) == {"x": 1}
     with pytest.raises(ValueError):
@@ -120,23 +118,13 @@ def test_root_validation_and_safe_block_scanning(tmp_path: Path, monkeypatch: py
     assert gamma["risk_score"] == 6 and gamma["maturity"] == "needs_work"
 
     real_rglob = Path.rglob
-    monkeypatch.setattr(
-        Path,
-        "rglob",
-        lambda self, pattern: (_ for _ in ()).throw(OSError("scan down"))
-        if self.name == "alpha"
-        else real_rglob(self, pattern),
-    )
+    monkeypatch.setattr(Path, "rglob", lambda self, pattern: (_ for _ in ()).throw(OSError("scan down")) if self.name == "alpha" else real_rglob(self, pattern))
     with pytest.raises(RuntimeError, match="failed to scan block"):
         layer._python_files(root / "alpha")
     monkeypatch.undo()
 
     real_iterdir = Path.iterdir
-    monkeypatch.setattr(
-        Path,
-        "iterdir",
-        lambda self: (_ for _ in ()).throw(OSError("down")) if self == root.resolve() else real_iterdir(self),
-    )
+    monkeypatch.setattr(Path, "iterdir", lambda self: (_ for _ in ()).throw(OSError("down")) if self == root.resolve() else real_iterdir(self))
     with pytest.raises(RuntimeError, match="list repository"):
         tuple(layer._top_level_blocks())
 
@@ -156,7 +144,7 @@ def test_recommendations_are_validated_deduped_ranked_and_bounded(tmp_path: Path
         {"block": "clean", "compat_files": 0, "public_api_files": 0},
     ]
     risks = layer.build_risk_recommendations(block_rows=blocks, python_files=files)
-    assert [(risk.severity, risk.risk_type) for risk in risks] == [
+    assert [(r.severity, r.risk_type) for r in risks] == [
         ("critical", "god_module_pressure"),
         ("major", "legacy_pressure"),
         ("major", "large_module"),
@@ -165,7 +153,7 @@ def test_recommendations_are_validated_deduped_ranked_and_bounded(tmp_path: Path
         ("minor", "public_api_spread"),
     ]
     assert len(risks) == 6
-    assert any(risk.file_path == "public/" and risk.risk_type == "public_api_spread" for risk in risks)
+    assert any(r.file_path == "public/" and r.risk_type == "public_api_spread" for r in risks)
 
     many = [{"path": f"a/{index}.py", "name": "legacy.py", "lines": 0} for index in range(100)]
     assert len(layer.build_risk_recommendations(block_rows=[], python_files=many)) == 40
@@ -178,11 +166,7 @@ def test_recommendations_are_validated_deduped_ranked_and_bounded(tmp_path: Path
     for value in invalid_files:
         with pytest.raises(ValueError):
             layer.build_risk_recommendations(block_rows=[], python_files=value)
-    for value in (
-        [{"block": "", "compat_files": 0, "public_api_files": 0}],
-        [{"block": "a", "compat_files": "8"}],
-        [{"block": "a", "public_api_files": True}],
-    ):
+    for value in ([{"block": "", "compat_files": 0, "public_api_files": 0}], [{"block": "a", "compat_files": "8"}], [{"block": "a", "public_api_files": True}]):
         with pytest.raises(ValueError):
             layer.build_risk_recommendations(block_rows=value, python_files=[])
 
@@ -201,27 +185,9 @@ def test_dependency_scan_is_safe_deterministic_and_ignores_invalid_or_relative_i
     layer = RiskProjectionLayer(root)
     rows = layer.build_dependency_rows()
     assert rows == [
-        {
-            "source_block": "a",
-            "target_block": "b",
-            "import_count": 2,
-            "edge_kind": "cross_block_import",
-            "graph_mode": "representative_scan",
-        },
-        {
-            "source_block": "a",
-            "target_block": "c",
-            "import_count": 1,
-            "edge_kind": "cross_block_import",
-            "graph_mode": "representative_scan",
-        },
-        {
-            "source_block": "b",
-            "target_block": "a",
-            "import_count": 1,
-            "edge_kind": "cross_block_import",
-            "graph_mode": "representative_scan",
-        },
+        {"source_block": "a", "target_block": "b", "import_count": 2, "edge_kind": "cross_block_import", "graph_mode": "representative_scan"},
+        {"source_block": "a", "target_block": "c", "import_count": 1, "edge_kind": "cross_block_import", "graph_mode": "representative_scan"},
+        {"source_block": "b", "target_block": "a", "import_count": 1, "edge_kind": "cross_block_import", "graph_mode": "representative_scan"},
     ]
 
 
@@ -250,40 +216,18 @@ def test_conflict_rows_fail_closed_and_preserve_single_owner_evidence(tmp_path: 
         ([], [{"source_block": "a", "target_block": "a", "import_count": 1}]),
         ([], [{"source_block": "", "target_block": "b", "import_count": 1}]),
         ([], [{"source_block": "a", "target_block": "b", "import_count": 0}]),
-        (
-            [],
-            [
-                {"source_block": "a", "target_block": "b", "import_count": 1},
-                {"source_block": "a", "target_block": "b", "import_count": 2},
-            ],
-        ),
+        ([], [{"source_block": "a", "target_block": "b", "import_count": 1}, {"source_block": "a", "target_block": "b", "import_count": 2}]),
     ]
-    for block_rows, dependency_rows in invalid:
+    for block_rows, dep_rows in invalid:
         with pytest.raises(ValueError):
-            layer.build_conflict_rows(block_rows=block_rows, dependency_rows=dependency_rows)
+            layer.build_conflict_rows(block_rows=block_rows, dependency_rows=dep_rows)
 
 
 def test_visual_map_validates_dedupes_and_caps_rows(tmp_path: Path) -> None:
     layer = RiskProjectionLayer(tmp_path)
-    row = {
-        "source_block": "b",
-        "target_block": "a",
-        "conflict_kind": "legacy_overlap",
-        "score": 2,
-        "summary": "x",
-    }
-    result = layer.build_visual_conflict_map(
-        conflict_rows=[
-            row,
-            row,
-            {"source_block": "c", "target_block": "a", "conflict_kind": "bidirectional_dependency"},
-        ]
-    )
-    assert result["nodes"] == [
-        {"id": "a", "label": "a"},
-        {"id": "b", "label": "b"},
-        {"id": "c", "label": "c"},
-    ]
+    row = {"source_block": "b", "target_block": "a", "conflict_kind": "legacy_overlap", "score": 2, "summary": "x"}
+    result = layer.build_visual_conflict_map(conflict_rows=[row, row, {"source_block": "c", "target_block": "a", "conflict_kind": "bidirectional_dependency"}])
+    assert result["nodes"] == [{"id": "a", "label": "a"}, {"id": "b", "label": "b"}, {"id": "c", "label": "c"}]
     assert len(result["edges"]) == 2
     assert result["edges"][0]["weight"] == 2
     assert result["edges"][1]["weight"] == 1
@@ -294,11 +238,9 @@ def test_visual_map_validates_dedupes_and_caps_rows(tmp_path: Path) -> None:
         for index in range(100)
     ]
     assert len(layer.build_visual_conflict_map(conflict_rows=many)["edges"]) == 80
-
     def bounded_rows():
         yield from many[:80]
         raise AssertionError("row 81 must not be consumed")
-
     assert len(layer.build_visual_conflict_map(conflict_rows=bounded_rows())["edges"]) == 80
     for invalid in (
         [{"source_block": "a", "target_block": "a", "conflict_kind": "x", "score": 1}],
