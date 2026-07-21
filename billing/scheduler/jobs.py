@@ -258,8 +258,7 @@ def _renew_lease_if_due(*, lease_store: BillingJobLeaseStoreContract | None, hol
     if lease is None or lease.expires_at is None:
         return
     renewal_observed_at = now or utc_now()
-    if renewal_observed_at.tzinfo is None:
-        raise ValueError('now must be timezone-aware')
+    require_aware_datetime('now', renewal_observed_at)
     if renewal_observed_at < lease.expires_at - threshold:
         return
     holder['lease'] = lease_store.renew(tenant_id=tenant_id, job_name=job_name, run_key=run_key, fencing_token=lease.fencing_token, acquired_at=renewal_observed_at, lease_ttl=lease_ttl)
@@ -267,8 +266,8 @@ def _renew_lease_if_due(*, lease_store: BillingJobLeaseStoreContract | None, hol
 
 class RenewalJob:
     def __init__(self, *, lifecycle: SubscriptionLifecycleService | None = None, run_store: BillingJobRunStoreContract | None = None, lease_store: BillingJobLeaseStoreContract | None = None, worker_id: str = 'billing-worker', lease_ttl: timedelta = timedelta(minutes=5)) -> None:
-        self._lifecycle = lifecycle or SubscriptionLifecycleService()
-        self._run_store = run_store or InMemoryBillingJobRunStore()
+        self._lifecycle = lifecycle if lifecycle is not None else SubscriptionLifecycleService()
+        self._run_store = run_store if run_store is not None else InMemoryBillingJobRunStore()
         self._lease_store = lease_store
         self._worker_id = str(worker_id).strip() or 'billing-worker'
         if lease_ttl.total_seconds() <= 0:
@@ -315,8 +314,8 @@ class RenewalJob:
 
 class InvoiceIssueJob:
     def __init__(self, *, lifecycle: InvoiceLifecycleService | None = None, run_store: BillingJobRunStoreContract | None = None, lease_store: BillingJobLeaseStoreContract | None = None, worker_id: str = 'billing-worker', lease_ttl: timedelta = timedelta(minutes=5)) -> None:
-        self._lifecycle = lifecycle or InvoiceLifecycleService()
-        self._run_store = run_store or InMemoryBillingJobRunStore()
+        self._lifecycle = lifecycle if lifecycle is not None else InvoiceLifecycleService()
+        self._run_store = run_store if run_store is not None else InMemoryBillingJobRunStore()
         self._lease_store = lease_store
         self._worker_id = str(worker_id).strip() or 'billing-worker'
         if lease_ttl.total_seconds() <= 0:
@@ -366,7 +365,7 @@ class InvoiceIssueJob:
 class DunningRetryJob:
     def __init__(self, *, orchestrator: DunningOrchestrator, run_store: BillingJobRunStoreContract | None = None, lease_store: BillingJobLeaseStoreContract | None = None, worker_id: str = 'billing-worker', lease_ttl: timedelta = timedelta(minutes=5)) -> None:
         self._orchestrator = orchestrator
-        self._run_store = run_store or InMemoryBillingJobRunStore()
+        self._run_store = run_store if run_store is not None else InMemoryBillingJobRunStore()
         self._lease_store = lease_store
         self._worker_id = str(worker_id).strip() or 'billing-worker'
         if lease_ttl.total_seconds() <= 0:
@@ -389,12 +388,16 @@ class DunningRetryJob:
         with _job_lease_context(lease_store=self._lease_store, tenant_id=tid, job_name='dunning_retry', run_key=normalized_run_key, worker_id=self._worker_id, observed_at=observed_at, lease_ttl=self._lease_ttl) as lease_holder:
             existing_run = self._run_store.get(tenant_id=tid, job_name='dunning_retry', run_key=normalized_run_key)
             if existing_run is not None:
-                return _require_attempt_history(dict(existing_run.metadata).get('executed_attempts', ()))
-            due_actions = self._orchestrator.due_actions(tenant_id=tid, invoice_id=iid, now=observed_at)
+                replay_metadata = existing_run.normalized_copy().metadata
+                replay_invoice_id = _require_text('invoice_id', replay_metadata.get('invoice_id'))
+                if replay_invoice_id != iid:
+                    raise ValueError('dunning replay invoice mismatch for existing run_key')
+                return _require_attempt_history(replay_metadata.get('executed_attempts', ()))
+            due_actions = tuple(self._orchestrator.due_actions(tenant_id=tid, invoice_id=iid, now=observed_at))
+            attempt_numbers = _require_attempt_history(tuple(action.attempt_no for action in due_actions))
             executed_attempts: list[int] = []
-            for action in due_actions:
+            for attempt_no in attempt_numbers:
                 _renew_lease_if_due(lease_store=self._lease_store, holder=lease_holder, tenant_id=tid, job_name='dunning_retry', run_key=normalized_run_key, lease_ttl=self._lease_ttl, now=observed_at)
-                attempt_no = _require_attempt_number(action.attempt_no)
                 self._orchestrator.mark_action_executed(tenant_id=tid, invoice_id=iid, attempt_no=attempt_no)
                 executed_attempts.append(attempt_no)
             self._run_store.save(BillingJobRun(tenant_id=tid, job_name='dunning_retry', run_key=normalized_run_key, started_at=observed_at, finished_at=observed_at, metadata={'owner': 'billing.scheduler.jobs', 'invoice_id': iid, 'executed_attempts': tuple(executed_attempts)}))
@@ -404,7 +407,7 @@ class DunningRetryJob:
 class ReconciliationJob:
     def __init__(self, *, service: BillingReconciliationService, run_store: BillingJobRunStoreContract | None = None, lease_store: BillingJobLeaseStoreContract | None = None, worker_id: str = 'billing-worker', lease_ttl: timedelta = timedelta(minutes=5)) -> None:
         self._service = service
-        self._run_store = run_store or InMemoryBillingJobRunStore()
+        self._run_store = run_store if run_store is not None else InMemoryBillingJobRunStore()
         self._lease_store = lease_store
         self._worker_id = str(worker_id).strip() or 'billing-worker'
         if lease_ttl.total_seconds() <= 0:
@@ -442,13 +445,17 @@ class ReconciliationJob:
                 replay_report = _deserialize_reconciliation_report(tenant_id=tid, payload=dict(existing.metadata).get('report_drifts'))
                 if replay_report is not None:
                     return replay_report
-                return self._service.reconcile(
+                report = self._service.reconcile(
                     tenant_id=tid,
                     invoices=invoices_tuple,
                     usage_rollups=usage_tuple,
                     revenue_account=revenue_account,
                     usage_rate_minor_by_meter=usage_rate_minor_by_meter,
                 )
+                if not isinstance(report, ReconciliationReport) or _require_tenant_text(report.tenant_id) != tid:
+                    raise ValueError('reconciliation service returned an invalid tenant report')
+                _serialize_reconciliation_report(report)
+                return report
             report = self._service.reconcile(
                 tenant_id=tid,
                 invoices=invoices_tuple,
@@ -456,7 +463,10 @@ class ReconciliationJob:
                 revenue_account=revenue_account,
                 usage_rate_minor_by_meter=usage_rate_minor_by_meter,
             )
-            self._run_store.save(BillingJobRun(tenant_id=tid, job_name='reconciliation', run_key=normalized_run_key, started_at=observed_at, finished_at=observed_at, metadata={'owner': 'billing.scheduler.jobs', 'drift_count': len(report.drifts), 'input_fingerprint': fingerprint, 'report_drifts': _serialize_reconciliation_report(report)}))
+            if not isinstance(report, ReconciliationReport) or _require_tenant_text(report.tenant_id) != tid:
+                raise ValueError('reconciliation service returned an invalid tenant report')
+            serialized_drifts = _serialize_reconciliation_report(report)
+            self._run_store.save(BillingJobRun(tenant_id=tid, job_name='reconciliation', run_key=normalized_run_key, started_at=observed_at, finished_at=observed_at, metadata={'owner': 'billing.scheduler.jobs', 'drift_count': len(serialized_drifts), 'input_fingerprint': fingerprint, 'report_drifts': serialized_drifts}))
             return report
 
 
