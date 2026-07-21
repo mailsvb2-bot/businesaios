@@ -4,28 +4,18 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from core.ai.world_state import WorldStateV1
+from runtime.messaging.channel_normalizer import normalize_channel
+from runtime.messaging.channel_types import ALL_CHANNELS
 
 CANON_MESSAGING_INGRESS_NORMALIZATION_ONLY = True
 CANON_MESSAGING_SINGLE_WORLD_STATE_ADAPTER = True
 CANON_MESSAGING_CONCRETE_ADAPTERS_TO_INGRESS_EVENT = True
 
-SUPPORTED_MESSAGING_CHANNELS = (
-    "telegram",
-    "whatsapp",
-    "vk",
-    "max",
-    "slack",
-    "discord",
-    "viber",
-    "sms",
-    "email",
-    "webchat",
-)
+INGRESS_ONLY_MESSAGING_CHANNELS = ("vk", "max")
+SUPPORTED_MESSAGING_CHANNELS = tuple(dict.fromkeys((*ALL_CHANNELS, *INGRESS_ONLY_MESSAGING_CHANNELS)))
 
-_CHANNEL_ALIASES = {
-    "tg": "telegram",
+_INGRESS_COMPAT_ALIASES = {
     "telegram_bot": "telegram",
-    "wa": "whatsapp",
     "whats_app": "whatsapp",
     "vkontakte": "vk",
     "vk_bot": "vk",
@@ -52,7 +42,13 @@ class MessagingIngressEvent:
 
 def normalize_messaging_channel(channel: str) -> str:
     value = str(channel or "").strip().lower().replace("-", "_").replace(" ", "_")
-    return _CHANNEL_ALIASES.get(value, value) or "unknown"
+    if not value:
+        return "unknown"
+    candidate = _INGRESS_COMPAT_ALIASES.get(value, value)
+    try:
+        return normalize_channel(candidate)
+    except ValueError:
+        return candidate
 
 
 def split_command(text: str) -> tuple[str, str]:
@@ -119,14 +115,20 @@ def payload_to_messaging_event(
     command, args = split_command(text)
     return MessagingIngressEvent(
         channel=normalized,
-        user_id=_first_text(body, "user_id", "from_id", "sender_id", "author_id", "phone", "email") or f"{normalized}_user",
-        chat_id=_first_text(body, "chat_id", "peer_id", "conversation_id", "channel_id", "thread_id", "to") or "",
+        user_id=(
+            _first_text(body, "user_id", "from_id", "sender_id", "author_id", "phone", "email")
+            or f"{normalized}_user"
+        ),
+        chat_id=(
+            _first_text(body, "chat_id", "peer_id", "conversation_id", "channel_id", "thread_id", "to")
+            or ""
+        ),
         text=text,
         command=command,
         args=args,
         tenant_id=tenant_id,
         timestamp_ms=_first_int(body, "timestamp_ms", "date_ms", "created_at_ms", "ts_ms"),
-        update_id=body.get("update_id") or body.get("event_id") or body.get("message_id") or body.get("id"),
+        update_id=_first_value(body, "update_id", "event_id", "message_id", "id"),
         raw=body,
         product_name=product_name,
         timezone=timezone,
@@ -140,12 +142,13 @@ def telegram_update_to_messaging_event(
     product_name: str = "BusinesAIOS",
     timezone: str = "Europe/Amsterdam",
 ) -> MessagingIngressEvent:
-    message = _telegram_message(update)
-    text = _telegram_text(update, message)
+    body = dict(update or {})
+    message = _telegram_message(body)
+    text = _telegram_text(body, message)
     command, args = split_command(text)
     chat_id = _telegram_chat_id(message)
-    user_id = _telegram_sender_id(update, message) or chat_id or "telegram_user"
-    message_date = int(message.get("date") or 0)
+    user_id = _telegram_sender_id(body, message) or chat_id or "telegram_user"
+    message_date = _first_int(message, "date")
     timestamp_ms = message_date * 1000 if message_date > 0 else 0
     return MessagingIngressEvent(
         channel="telegram",
@@ -156,47 +159,184 @@ def telegram_update_to_messaging_event(
         args=args,
         tenant_id=tenant_id,
         timestamp_ms=timestamp_ms,
-        update_id=update.get("update_id"),
-        raw=dict(update or {}),
+        update_id=body.get("update_id"),
+        raw=body,
         product_name=product_name,
         timezone=timezone,
     )
 
 
-def whatsapp_payload_to_messaging_event(payload: dict[str, Any], *, tenant_id: str, product_name: str = "BusinesAIOS", timezone: str = "Europe/Amsterdam") -> MessagingIngressEvent:
-    return payload_to_messaging_event("whatsapp", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+def _provider_event(
+    channel: str,
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str,
+    timezone: str,
+) -> MessagingIngressEvent:
+    return payload_to_messaging_event(
+        channel,
+        payload,
+        tenant_id=tenant_id,
+        product_name=product_name,
+        timezone=timezone,
+    )
 
 
-def vk_payload_to_messaging_event(payload: dict[str, Any], *, tenant_id: str, product_name: str = "BusinesAIOS", timezone: str = "Europe/Amsterdam") -> MessagingIngressEvent:
-    return payload_to_messaging_event("vk", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+def whatsapp_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event(
+        "whatsapp",
+        payload,
+        tenant_id=tenant_id,
+        product_name=product_name,
+        timezone=timezone,
+    )
 
 
-def max_payload_to_messaging_event(payload: dict[str, Any], *, tenant_id: str, product_name: str = "BusinesAIOS", timezone: str = "Europe/Amsterdam") -> MessagingIngressEvent:
-    return payload_to_messaging_event("max", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+def vk_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("vk", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
 
 
-def slack_payload_to_messaging_event(payload: dict[str, Any], *, tenant_id: str, product_name: str = "BusinesAIOS", timezone: str = "Europe/Amsterdam") -> MessagingIngressEvent:
-    return payload_to_messaging_event("slack", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+def max_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("max", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
 
 
-def discord_payload_to_messaging_event(payload: dict[str, Any], *, tenant_id: str, product_name: str = "BusinesAIOS", timezone: str = "Europe/Amsterdam") -> MessagingIngressEvent:
-    return payload_to_messaging_event("discord", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+def slack_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("slack", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
 
 
-def viber_payload_to_messaging_event(payload: dict[str, Any], *, tenant_id: str, product_name: str = "BusinesAIOS", timezone: str = "Europe/Amsterdam") -> MessagingIngressEvent:
-    return payload_to_messaging_event("viber", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+def discord_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("discord", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
 
 
-def sms_payload_to_messaging_event(payload: dict[str, Any], *, tenant_id: str, product_name: str = "BusinesAIOS", timezone: str = "Europe/Amsterdam") -> MessagingIngressEvent:
-    return payload_to_messaging_event("sms", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+def viber_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("viber", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
 
 
-def email_payload_to_messaging_event(payload: dict[str, Any], *, tenant_id: str, product_name: str = "BusinesAIOS", timezone: str = "Europe/Amsterdam") -> MessagingIngressEvent:
-    return payload_to_messaging_event("email", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+def sms_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("sms", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
 
 
-def webchat_payload_to_messaging_event(payload: dict[str, Any], *, tenant_id: str, product_name: str = "BusinesAIOS", timezone: str = "Europe/Amsterdam") -> MessagingIngressEvent:
-    return payload_to_messaging_event("webchat", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+def email_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("email", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+
+
+def webchat_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("web_chat", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+
+
+def instagram_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("instagram", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+
+
+def messenger_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("messenger", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+
+
+def line_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("line", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+
+
+def wechat_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("wechat", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+
+
+def kakaotalk_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("kakaotalk", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
+
+
+def api_payload_to_messaging_event(
+    payload: dict[str, Any],
+    *,
+    tenant_id: str,
+    product_name: str = "BusinesAIOS",
+    timezone: str = "Europe/Amsterdam",
+) -> MessagingIngressEvent:
+    return _provider_event("api", payload, tenant_id=tenant_id, product_name=product_name, timezone=timezone)
 
 
 def _first_text(payload: dict[str, Any], *keys: str) -> str:
@@ -205,6 +345,13 @@ def _first_text(payload: dict[str, Any], *keys: str) -> str:
         if value is not None:
             return str(value).strip()
     return ""
+
+
+def _first_value(payload: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in payload and payload.get(key) is not None:
+            return payload.get(key)
+    return None
 
 
 def _first_int(payload: dict[str, Any], *keys: str) -> int:
@@ -264,12 +411,18 @@ __all__ = [
     "CANON_MESSAGING_CONCRETE_ADAPTERS_TO_INGRESS_EVENT",
     "CANON_MESSAGING_INGRESS_NORMALIZATION_ONLY",
     "CANON_MESSAGING_SINGLE_WORLD_STATE_ADAPTER",
+    "INGRESS_ONLY_MESSAGING_CHANNELS",
     "MessagingIngressEvent",
     "SUPPORTED_MESSAGING_CHANNELS",
+    "api_payload_to_messaging_event",
     "discord_payload_to_messaging_event",
     "email_payload_to_messaging_event",
+    "instagram_payload_to_messaging_event",
+    "kakaotalk_payload_to_messaging_event",
+    "line_payload_to_messaging_event",
     "max_payload_to_messaging_event",
     "messaging_event_to_world_state",
+    "messenger_payload_to_messaging_event",
     "normalize_messaging_channel",
     "payload_to_messaging_event",
     "slack_payload_to_messaging_event",
@@ -279,5 +432,6 @@ __all__ = [
     "viber_payload_to_messaging_event",
     "vk_payload_to_messaging_event",
     "webchat_payload_to_messaging_event",
+    "wechat_payload_to_messaging_event",
     "whatsapp_payload_to_messaging_event",
 ]
