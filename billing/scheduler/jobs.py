@@ -123,53 +123,89 @@ class SqliteBillingJobRunStore(PlatformSqliteBillingJobRunStore):
 
 
 def _stable_job_fingerprint(payload: object) -> str:
-    encoded = json.dumps(payload, sort_keys=True, separators=(',', ':'), default=str).encode('utf-8')
+    snapshot = canonical_json_snapshot(payload)
+    encoded = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _assert_replay_safe(existing: BillingJobRun, *, expected_fingerprint: str, accepted_fingerprints: tuple[str, ...] = ()) -> None:
-    actual = str(dict(existing.metadata).get('input_fingerprint') or '')
-    allowed = {item for item in (expected_fingerprint, *accepted_fingerprints) if item}
-    if actual and actual not in allowed:
-        result_fingerprint = str(dict(existing.metadata).get('result_fingerprint') or '')
-        if not result_fingerprint or result_fingerprint not in allowed:
-            raise ValueError('billing job replay input mismatch for existing run_key')
+def _require_fingerprint(name: str, value: object) -> str:
+    fingerprint = _require_text(name, value)
+    if len(fingerprint) != 64 or any(char not in "0123456789abcdef" for char in fingerprint):
+        raise ValueError(f"{name} must be a lowercase SHA-256 fingerprint")
+    return fingerprint
+
+
+def _assert_replay_safe(
+    existing: BillingJobRun, *, expected_fingerprint: str, accepted_fingerprints: tuple[str, ...] = ()
+) -> None:
+    expected = _require_fingerprint("expected_fingerprint", expected_fingerprint)
+    accepted = tuple(_require_fingerprint("accepted_fingerprint", item) for item in accepted_fingerprints)
+    metadata = existing.normalized_copy().metadata
+    actual = _require_fingerprint("input_fingerprint", metadata.get("input_fingerprint"))
+    allowed = {expected, *accepted}
+    if actual in allowed:
+        return
+    result = metadata.get("result_fingerprint")
+    if result is None or _require_fingerprint("result_fingerprint", result) not in allowed:
+        raise ValueError("billing job replay input mismatch for existing run_key")
+
+
+def _require_exact_int(name: str, value: object) -> int:
+    if isinstance(value, bool) or type(value) is not int:
+        raise ValueError(f"{name} must be an integer")
+    return value
 
 
 def _serialize_reconciliation_report(report: ReconciliationReport) -> tuple[dict[str, object], ...]:
+    if not isinstance(report, ReconciliationReport):
+        raise ValueError("report must be a ReconciliationReport")
+    tenant_id = _require_tenant_text(report.tenant_id)
     serialized: list[dict[str, object]] = []
     for drift in report.drifts:
-        serialized.append({
-            'tenant_id': drift.tenant_id,
-            'drift_key': drift.drift_key,
-            'expected_minor': int(drift.expected_minor),
-            'observed_minor': int(drift.observed_minor),
-            'delta_minor': int(drift.delta_minor),
-            'severity': str(drift.severity),
-            'details': dict(drift.details),
-        })
+        if not isinstance(drift, ReconciliationDrift):
+            raise ValueError("report drifts must be ReconciliationDrift values")
+        drift.validate()
+        if _require_tenant_text(drift.tenant_id) != tenant_id:
+            raise ValueError("reconciliation drift tenant mismatch")
+        serialized.append(
+            {
+                "tenant_id": tenant_id,
+                "drift_key": _require_text("drift_key", drift.drift_key),
+                "expected_minor": _require_exact_int("expected_minor", drift.expected_minor),
+                "observed_minor": _require_exact_int("observed_minor", drift.observed_minor),
+                "delta_minor": _require_exact_int("delta_minor", drift.delta_minor),
+                "severity": _require_text("severity", drift.severity),
+                "details": canonical_json_snapshot(drift.details),
+            }
+        )
     return tuple(serialized)
 
 
 def _deserialize_reconciliation_report(*, tenant_id: str, payload: object) -> ReconciliationReport | None:
-    if not isinstance(payload, list | tuple):
+    tid = _require_tenant_text(tenant_id)
+    if payload is None:
         return None
+    if not isinstance(payload, list | tuple):
+        raise ValueError("report_drifts must be a list or tuple")
     drifts: list[ReconciliationDrift] = []
     for item in payload:
-        if not isinstance(item, dict):
-            return None
+        if not isinstance(item, Mapping):
+            raise ValueError("report drift must be a mapping")
+        item_tenant_id = _require_tenant_text(item.get("tenant_id"))
+        if item_tenant_id != tid:
+            raise ValueError("reconciliation drift tenant mismatch")
         drift = ReconciliationDrift(
-            tenant_id=str(item.get('tenant_id') or tenant_id),
-            drift_key=str(item.get('drift_key') or ''),
-            expected_minor=int(item.get('expected_minor') or 0),
-            observed_minor=int(item.get('observed_minor') or 0),
-            delta_minor=int(item.get('delta_minor') or 0),
-            severity=str(item.get('severity') or ''),
-            details=dict(item.get('details') or {}),
+            tenant_id=tid,
+            drift_key=_require_text("drift_key", item.get("drift_key")),
+            expected_minor=_require_exact_int("expected_minor", item.get("expected_minor")),
+            observed_minor=_require_exact_int("observed_minor", item.get("observed_minor")),
+            delta_minor=_require_exact_int("delta_minor", item.get("delta_minor")),
+            severity=_require_text("severity", item.get("severity")),
+            details=canonical_json_snapshot(item.get("details", {})),
         )
         drift.validate()
         drifts.append(drift)
-    return ReconciliationReport(tenant_id=tenant_id, drifts=tuple(drifts))
+    return ReconciliationReport(tenant_id=tid, drifts=tuple(drifts))
 
 
 @contextmanager
