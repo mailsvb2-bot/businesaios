@@ -23,7 +23,9 @@ def test_billing_job_run_validation_and_in_memory_store() -> None:
     run.validate()
 
     store = jobs.InMemoryBillingJobRunStore()
-    assert store.save(run) is run
+    saved = store.save(run)
+    assert saved == run
+    assert saved is not run
     assert store.get(tenant_id="tenant", job_name="job", run_key="run") == run
 
     with pytest.raises(ValueError, match="billing job run collision"):
