@@ -37,7 +37,11 @@ CHANNEL_SPECS = {item.key: item for item in _CHANNELS}
 
 
 def get_channel_spec(channel: str) -> ChannelSpec:
-    key = normalize_channel(channel)
+    try:
+        key = normalize_channel(channel)
+    except ValueError as exc:
+        raw = str(channel or "").strip().lower().replace("-", "_")
+        raise KeyError(f"UNKNOWN_CHANNEL:{raw}") from exc
     spec = CHANNEL_SPECS.get(key)
     if spec is None:
         raise KeyError(f"UNKNOWN_CHANNEL:{key}")
@@ -45,5 +49,3 @@ def get_channel_spec(channel: str) -> ChannelSpec:
 
 
 __all__ = ["CHANNEL_SPECS", "ChannelSpec", "get_channel_spec", "map_inbound_to_world_state", "normalize_channel"]
-
-
