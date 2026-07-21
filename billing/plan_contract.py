@@ -1,13 +1,40 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from typing import Mapping, Protocol
+from math import isfinite
+from typing import Any, Protocol
 
+from billing.commercial_cycle_contract import require_aware_datetime
+from core.tenancy.normalization import require_tenant_id
 from tenancy.tenant_contract import TenantPlan, utc_now
 
-
 CANON_BILLING_PLAN_CONTRACT = True
+
+
+def _require_text(name: str, value: Any) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} is required")
+    return value.strip()
+
+
+def _require_number(name: str, value: Any, *, minimum: float = 0.0) -> float:
+    if isinstance(value, bool) or type(value) not in {int, float}:
+        raise ValueError(f"{name} must be a finite number")
+    normalized = float(value)
+    if not isfinite(normalized):
+        raise ValueError(f"{name} must be a finite number")
+    if normalized < minimum:
+        raise ValueError(f"{name} must be >= {minimum:g}")
+    return normalized
+
+
+def _require_mapping(name: str, value: Any) -> Mapping[str, object]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{name} must be a mapping")
+    return value
 
 
 class BillingMeterKey:
@@ -35,22 +62,21 @@ class PlanQuotaLimit:
     metadata: Mapping[str, object] = field(default_factory=dict)
 
     def validate(self) -> None:
-        if not str(self.dimension or "").strip():
-            raise ValueError("dimension is required")
-        if not str(self.window or "").strip():
-            raise ValueError("window is required")
-        if float(self.limit) < 0:
-            raise ValueError("limit must be >= 0")
+        _require_text("dimension", self.dimension)
+        _require_text("window", self.window)
+        _require_number("limit", self.limit)
+        if not isinstance(self.hard_stop, bool):
+            raise ValueError("hard_stop must be a boolean")
+        _require_mapping("metadata", self.metadata)
 
-    def normalized_copy(self) -> "PlanQuotaLimit":
+    def normalized_copy(self) -> PlanQuotaLimit:
         self.validate()
         return replace(
             self,
-            dimension=str(self.dimension).strip(),
-            window=str(self.window).strip().lower(),
-            limit=float(self.limit),
-            hard_stop=bool(self.hard_stop),
-            metadata=dict(self.metadata),
+            dimension=self.dimension.strip(),
+            window=self.window.strip().lower(),
+            limit=_require_number("limit", self.limit),
+            metadata=deepcopy(dict(self.metadata)),
         )
 
 
@@ -64,37 +90,33 @@ class PlanRateCardItem:
     metadata: Mapping[str, object] = field(default_factory=dict)
 
     def validate(self) -> None:
-        if not str(self.meter_key or "").strip():
-            raise ValueError("meter_key is required")
-        if not str(self.currency or "").strip():
-            raise ValueError("currency is required")
-        if not str(self.unit_name or "").strip():
-            raise ValueError("unit_name is required")
-        if float(self.unit_price) < 0:
-            raise ValueError("unit_price must be >= 0")
-        if float(self.included_units) < 0:
-            raise ValueError("included_units must be >= 0")
+        _require_text("meter_key", self.meter_key)
+        _require_text("currency", self.currency)
+        _require_text("unit_name", self.unit_name)
+        _require_number("unit_price", self.unit_price)
+        _require_number("included_units", self.included_units)
+        _require_mapping("metadata", self.metadata)
 
-    def normalized_copy(self) -> "PlanRateCardItem":
+    def normalized_copy(self) -> PlanRateCardItem:
         self.validate()
         return replace(
             self,
-            meter_key=str(self.meter_key).strip(),
-            unit_price=float(self.unit_price),
-            currency=str(self.currency).strip().upper(),
-            unit_name=str(self.unit_name).strip(),
-            included_units=float(self.included_units),
-            metadata=dict(self.metadata),
+            meter_key=self.meter_key.strip(),
+            unit_price=_require_number("unit_price", self.unit_price),
+            currency=self.currency.strip().upper(),
+            unit_name=self.unit_name.strip(),
+            included_units=_require_number("included_units", self.included_units),
+            metadata=deepcopy(dict(self.metadata)),
         )
 
     def billable_units(self, quantity: float) -> float:
-        requested = float(quantity)
-        if requested < 0:
-            raise ValueError("quantity must be >= 0")
-        return max(0.0, requested - float(self.included_units))
+        normalized = self.normalized_copy()
+        requested = _require_number("quantity", quantity)
+        return max(0.0, requested - normalized.included_units)
 
     def charge_for(self, quantity: float) -> float:
-        return round(self.billable_units(quantity) * float(self.unit_price), 6)
+        normalized = self.normalized_copy()
+        return round(normalized.billable_units(quantity) * normalized.unit_price, 6)
 
 
 @dataclass(frozen=True)
@@ -111,44 +133,58 @@ class BillingPlanSpec:
     def validate(self) -> None:
         if not isinstance(self.plan_id, TenantPlan):
             raise ValueError("plan_id must be a TenantPlan")
-        if not str(self.display_name or "").strip():
-            raise ValueError("display_name is required")
-        if not str(self.version or "").strip():
-            raise ValueError("version is required")
-        if self.created_at.tzinfo is None:
-            raise ValueError("created_at must be timezone-aware")
+        _require_text("display_name", self.display_name)
+        _require_text("version", self.version)
+        require_aware_datetime("created_at", self.created_at)
+        if not isinstance(self.quota_limits, tuple):
+            raise ValueError("quota_limits must be a tuple")
+        if not isinstance(self.rate_card, tuple):
+            raise ValueError("rate_card must be a tuple")
+        features = _require_mapping("features", self.features)
+        _require_mapping("metadata", self.metadata)
 
         seen_quota_keys: set[tuple[str, str]] = set()
         seen_meters: set[str] = set()
         for quota in self.quota_limits:
+            if not isinstance(quota, PlanQuotaLimit):
+                raise ValueError("quota_limits must contain PlanQuotaLimit values")
             normalized = quota.normalized_copy()
             quota_key = (normalized.dimension, normalized.window)
             if quota_key in seen_quota_keys:
                 raise ValueError(f"duplicate plan quota: {quota_key}")
             seen_quota_keys.add(quota_key)
         for item in self.rate_card:
+            if not isinstance(item, PlanRateCardItem):
+                raise ValueError("rate_card must contain PlanRateCardItem values")
             normalized_item = item.normalized_copy()
             if normalized_item.meter_key in seen_meters:
                 raise ValueError(f"duplicate rate card meter: {normalized_item.meter_key}")
             seen_meters.add(normalized_item.meter_key)
 
-    def normalized_copy(self) -> "BillingPlanSpec":
+        normalized_feature_names: set[str] = set()
+        for key, enabled in features.items():
+            name = _require_text("feature name", key)
+            if name in normalized_feature_names:
+                raise ValueError(f"duplicate feature name: {name}")
+            normalized_feature_names.add(name)
+            if not isinstance(enabled, bool):
+                raise ValueError("feature flags must be booleans")
+
+    def normalized_copy(self) -> BillingPlanSpec:
         self.validate()
         return replace(
             self,
-            display_name=str(self.display_name).strip(),
-            version=str(self.version).strip(),
+            display_name=self.display_name.strip(),
+            version=self.version.strip(),
             quota_limits=tuple(item.normalized_copy() for item in self.quota_limits),
             rate_card=tuple(item.normalized_copy() for item in self.rate_card),
-            features={str(k): bool(v) for k, v in dict(self.features).items()},
-            metadata=dict(self.metadata),
+            features={key.strip(): value for key, value in self.features.items()},
+            metadata=deepcopy(dict(self.metadata)),
         )
 
     def quota_for(self, dimension: str, *, window: str | None = None) -> PlanQuotaLimit | None:
-        name = str(dimension or "").strip()
-        if not name:
-            raise ValueError("dimension is required")
-        normalized_window = None if window is None else str(window).strip().lower()
+        name = _require_text("dimension", dimension)
+        normalized_window = None if window is None else _require_text("window", window).lower()
         for item in self.quota_limits:
             normalized = item.normalized_copy()
             if normalized.dimension != name:
@@ -158,9 +194,7 @@ class BillingPlanSpec:
         return None
 
     def rate_for(self, meter_key: str) -> PlanRateCardItem | None:
-        key = str(meter_key or "").strip()
-        if not key:
-            raise ValueError("meter_key is required")
+        key = _require_text("meter_key", meter_key)
         for item in self.rate_card:
             normalized = item.normalized_copy()
             if normalized.meter_key == key:
@@ -168,10 +202,13 @@ class BillingPlanSpec:
         return None
 
     def feature_enabled(self, feature_name: str, *, default: bool = False) -> bool:
-        name = str(feature_name or "").strip()
-        if not name:
-            raise ValueError("feature_name is required")
-        return bool(self.features.get(name, default))
+        name = _require_text("feature_name", feature_name)
+        if not isinstance(default, bool):
+            raise ValueError("default must be a boolean")
+        enabled = self.features.get(name, default)
+        if not isinstance(enabled, bool):
+            raise ValueError("feature flags must be booleans")
+        return enabled
 
 
 @dataclass(frozen=True)
@@ -183,24 +220,21 @@ class BillingPlanBinding:
     overrides: Mapping[str, object] = field(default_factory=dict)
 
     def validate(self) -> None:
-        from core.tenancy.normalization import require_tenant_id
-
+        if not isinstance(self.tenant_id, str):
+            raise ValueError("tenant_id must be a string")
         require_tenant_id(self.tenant_id)
         if not isinstance(self.plan_id, TenantPlan):
             raise ValueError("plan_id must be a TenantPlan")
-        if self.bound_at.tzinfo is None:
-            raise ValueError("bound_at must be timezone-aware")
-        if self.effective_from.tzinfo is None:
-            raise ValueError("effective_from must be timezone-aware")
+        require_aware_datetime("bound_at", self.bound_at)
+        require_aware_datetime("effective_from", self.effective_from)
+        _require_mapping("overrides", self.overrides)
 
-    def normalized_copy(self) -> "BillingPlanBinding":
-        from core.tenancy.normalization import require_tenant_id
-
+    def normalized_copy(self) -> BillingPlanBinding:
         self.validate()
         return replace(
             self,
             tenant_id=require_tenant_id(self.tenant_id),
-            overrides=dict(self.overrides),
+            overrides=deepcopy(dict(self.overrides)),
         )
 
 
