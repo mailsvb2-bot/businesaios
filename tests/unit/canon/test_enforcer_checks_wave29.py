@@ -174,7 +174,7 @@ def test_ast_checks_cover_safe_negative_branches(tmp_path: Path, monkeypatch: py
     core = _write(
         tmp_path,
         "core/safe.py",
-        "import math\nfrom pathlib import Path\nmath.sqrt(4)\n",
+        "import math\nfrom pathlib import Path\nmath.sqrt(4)\nplain.post()\n",
     )
     runtime = _write(tmp_path, "runtime/safe.py", "service.observe()\n")
     monkeypatch.setattr(checks_ast, "GOD_MODULE_LINE_THRESHOLD", 999)
