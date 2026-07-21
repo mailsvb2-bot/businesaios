@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from runtime.messaging.inbound_entrypoint import issue_inbound_message_decision
-from runtime.messaging.inbound_strict_owner_guard import assert_inbound_owner
+from runtime.messaging.inbound_owner_lock import assert_inbound_decision_owner
 
 
 class MessagingInboundDecisionGateway:
@@ -18,7 +18,7 @@ class MessagingInboundDecisionGateway:
         DecisionCore directly. ``issue`` remains a compatibility alias below so
         older callers do not create a second decision path.
         """
-        assert_inbound_owner(self._caller)
+        assert_inbound_decision_owner(self._caller)
         return issue_inbound_message_decision(
             decision_core=self._decision_core,
             message=message,
