@@ -2,35 +2,52 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass, field
-from datetime import datetime
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from pathlib import Path
-from threading import RLock
 from typing import Any
 
-from config.config_audit import ConfigAuditEvent, PersistentConfigAuditLog
-from config.config_versioning import ConfigVersion, ConfigVersioning, utc_now
+from config.config_versioning import ConfigVersion, utc_now
 from config.environment_matrix import normalize_environment_name
+from config.versioned_config_store import (
+    InMemoryVersionedConfigStore,
+    PersistentVersionedConfigStore,
+    canonical_config_snapshot,
+    canonical_labels,
+    require_text,
+    require_timezone_aware,
+)
 from core.tenancy.normalization import normalize_tenant_id
-from governance.persistence_codec import atomic_write_json, read_json_or_default, to_jsonable
 
 CANON_COMPAT_SHIM = True
-
 CANON_RUNTIME_CONFIG_STORE = True
 
 _RUNTIME_NAMESPACE = "runtime_config"
 
 
-def _normalized_optional_tenant_id(value: str | None) -> str | None:
+def _normalized_optional_tenant_id(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("tenant_id must be a string or None")
     normalized = normalize_tenant_id(value)
     return normalized or None
 
 
+def _normalized_environment(value: object) -> str:
+    if not isinstance(value, str):
+        raise ValueError("environment must be a string")
+    return require_text("environment", normalize_environment_name(value))
+
+
 def _parse_datetime(value: object) -> datetime:
-    text = str(value or "").strip()
-    parsed = datetime.fromisoformat(text) if text else utc_now()
+    if value is None or value == "":
+        return utc_now()
+    if not isinstance(value, str):
+        raise ValueError("updated_at must be an ISO-8601 string")
+    parsed = datetime.fromisoformat(value.strip())
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=utc_now().tzinfo)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed
 
 
@@ -45,51 +62,60 @@ class RuntimeConfigSnapshot:
     version: ConfigVersion | None = None
 
     def validate(self) -> None:
-        if not str(self.profile_name or "").strip():
-            raise ValueError("profile_name is required")
-        if not normalize_environment_name(self.environment):
-            raise ValueError("environment is required")
-        if self.updated_at.tzinfo is None:
-            raise ValueError("updated_at must be timezone-aware")
+        require_text("profile_name", self.profile_name)
+        _normalized_environment(self.environment)
+        _normalized_optional_tenant_id(self.tenant_id)
+        require_timezone_aware("updated_at", self.updated_at)
+        canonical_config_snapshot(self.runtime_settings)
+        canonical_labels(self.labels)
         if self.version is not None:
+            if not isinstance(self.version, ConfigVersion):
+                raise ValueError("version must be a ConfigVersion")
             self.version.validate()
 
     def normalized(self) -> RuntimeConfigSnapshot:
         return RuntimeConfigSnapshot(
-            profile_name=str(self.profile_name).strip(),
-            environment=normalize_environment_name(self.environment),
+            profile_name=require_text("profile_name", self.profile_name),
+            environment=_normalized_environment(self.environment),
             tenant_id=_normalized_optional_tenant_id(self.tenant_id),
-            runtime_settings=to_jsonable(dict(self.runtime_settings)),
-            labels={str(k): str(v) for k, v in dict(self.labels).items()},
+            runtime_settings=canonical_config_snapshot(self.runtime_settings),
+            labels=canonical_labels(self.labels),
             updated_at=self.updated_at,
             version=self.version,
         )
 
+    def with_version(self, *, version: ConfigVersion, updated_at: datetime) -> RuntimeConfigSnapshot:
+        return replace(self.normalized(), version=version, updated_at=updated_at)
+
     def entity_id(self) -> str:
-        tenant_scope = self.tenant_id or "global"
-        return f"{tenant_scope}:{normalize_environment_name(self.environment)}:{str(self.profile_name).strip()}"
+        normalized = self.normalized()
+        return f"{normalized.tenant_id or 'global'}:{normalized.environment}:{normalized.profile_name}"
 
     def payload_for_versioning(self) -> dict[str, Any]:
+        normalized = self.normalized()
         return {
-            "profile_name": str(self.profile_name).strip(),
-            "environment": normalize_environment_name(self.environment),
-            "tenant_id": _normalized_optional_tenant_id(self.tenant_id),
-            "runtime_settings": to_jsonable(dict(self.runtime_settings)),
-            "labels": {str(k): str(v) for k, v in dict(self.labels).items()},
+            "profile_name": normalized.profile_name,
+            "environment": normalized.environment,
+            "tenant_id": normalized.tenant_id,
+            "runtime_settings": canonical_config_snapshot(normalized.runtime_settings),
+            "labels": canonical_labels(normalized.labels),
         }
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, object]) -> RuntimeConfigSnapshot:
-        item = dict(payload or {})
-        version = None
-        if isinstance(item.get("version"), Mapping):
-            version = ConfigVersion.from_dict(dict(item.get("version") or {}))
+        if not isinstance(payload, Mapping):
+            raise ValueError("runtime config payload must be a mapping")
+        item = dict(payload)
+        raw_version = item.get("version")
+        if raw_version is not None and not isinstance(raw_version, Mapping):
+            raise ValueError("version must be a mapping or None")
+        version = None if raw_version is None else ConfigVersion.from_dict(raw_version)
         snapshot = cls(
-            profile_name=str(item.get("profile_name") or "").strip(),
-            environment=normalize_environment_name(str(item.get("environment") or "")),
-            tenant_id=_normalized_optional_tenant_id(item.get("tenant_id") if item.get("tenant_id") is None else str(item.get("tenant_id"))),
-            runtime_settings=dict(item.get("runtime_settings") or {}),
-            labels={str(k): str(v) for k, v in dict(item.get("labels") or {}).items()},
+            profile_name=item.get("profile_name"),
+            environment=item.get("environment"),
+            tenant_id=item.get("tenant_id"),
+            runtime_settings=item.get("runtime_settings", {}),
+            labels=item.get("labels", {}),
             updated_at=_parse_datetime(item.get("updated_at")),
             version=version,
         ).normalized()
@@ -97,100 +123,60 @@ class RuntimeConfigSnapshot:
         return snapshot
 
     def to_dict(self) -> dict[str, object]:
-        self.validate()
+        normalized = self.normalized()
+        normalized.validate()
         return {
-            "profile_name": str(self.profile_name).strip(),
-            "environment": normalize_environment_name(self.environment),
-            "tenant_id": _normalized_optional_tenant_id(self.tenant_id),
-            "runtime_settings": to_jsonable(dict(self.runtime_settings)),
-            "labels": {str(k): str(v) for k, v in dict(self.labels).items()},
-            "updated_at": self.updated_at.isoformat(),
-            "version": None if self.version is None else self.version.to_dict(),
+            "profile_name": normalized.profile_name,
+            "environment": normalized.environment,
+            "tenant_id": normalized.tenant_id,
+            "runtime_settings": canonical_config_snapshot(normalized.runtime_settings),
+            "labels": canonical_labels(normalized.labels),
+            "updated_at": normalized.updated_at.isoformat(),
+            "version": None if normalized.version is None else normalized.version.to_dict(),
         }
 
 
-class InMemoryRuntimeConfigStore:
-    def __init__(self) -> None:
-        self._snapshots: dict[str, RuntimeConfigSnapshot] = {}
-        self._history: dict[str, list[RuntimeConfigSnapshot]] = {}
-        self._lock = RLock()
-
+class _RuntimeConfigStoreApi:
     def get(self, *, profile_name: str, environment: str, tenant_id: str | None = None) -> RuntimeConfigSnapshot | None:
-        with self._lock:
-            return self._snapshots.get(self._key(profile_name=profile_name, environment=environment, tenant_id=tenant_id))
+        return self._get_by_key(
+            self._key(profile_name=profile_name, environment=environment, tenant_id=tenant_id)
+        )
 
     def require(self, *, profile_name: str, environment: str, tenant_id: str | None = None) -> RuntimeConfigSnapshot:
-        snapshot = self.get(profile_name=profile_name, environment=environment, tenant_id=tenant_id)
-        if snapshot is None:
-            raise KeyError(f"missing runtime config: {profile_name}")
-        return snapshot
+        return self._require_by_key(
+            self._key(profile_name=profile_name, environment=environment, tenant_id=tenant_id),
+            message=f"missing runtime config: {profile_name}",
+        )
 
     def list_all(self) -> tuple[RuntimeConfigSnapshot, ...]:
-        with self._lock:
-            return tuple(sorted(self._snapshots.values(), key=lambda item: item.entity_id()))
-
-    def save(
-        self,
-        snapshot: RuntimeConfigSnapshot,
-        *,
-        actor: str = "system",
-        reason: str = "",
-        expected_revision: int | None = None,
-    ) -> RuntimeConfigSnapshot:
-        normalized = snapshot.normalized()
-        normalized.validate()
-        key = self._key(profile_name=normalized.profile_name, environment=normalized.environment, tenant_id=normalized.tenant_id)
-        with self._lock:
-            previous = self._snapshots.get(key)
-            if previous is not None and expected_revision is not None and int(previous.version.revision if previous.version else 1) != int(expected_revision):
-                raise RuntimeError("runtime config optimistic concurrency check failed")
-            next_version = ConfigVersioning.create(
-                namespace=_RUNTIME_NAMESPACE,
-                entity_id=normalized.entity_id(),
-                payload=normalized.payload_for_versioning(),
-                previous=None if previous is None else previous.version,
-                created_by=actor,
-                change_reason=reason,
-                labels=normalized.labels,
-            )
-            if previous is not None and previous.version is not None and next_version.fingerprint == previous.version.fingerprint:
-                return previous
-            stored = RuntimeConfigSnapshot(
-                profile_name=normalized.profile_name,
-                environment=normalized.environment,
-                tenant_id=normalized.tenant_id,
-                runtime_settings=to_jsonable(dict(normalized.runtime_settings)),
-                labels={str(k): str(v) for k, v in dict(normalized.labels).items()},
-                updated_at=utc_now(),
-                version=next_version,
-            )
-            stored.validate()
-            self._snapshots[key] = stored
-            self._history.setdefault(key, []).append(stored)
-            return stored
+        return self._list_all()
 
     def history(self, *, profile_name: str, environment: str, tenant_id: str | None = None) -> tuple[RuntimeConfigSnapshot, ...]:
-        key = self._key(profile_name=profile_name, environment=environment, tenant_id=tenant_id)
-        with self._lock:
-            return tuple(self._history.get(key, ()))
+        return self._history_by_key(
+            self._key(profile_name=profile_name, environment=environment, tenant_id=tenant_id)
+        )
 
     @staticmethod
     def _key(*, profile_name: str, environment: str, tenant_id: str | None) -> str:
-        return f"{_normalized_optional_tenant_id(tenant_id) or 'global'}::{normalize_environment_name(environment)}::{str(profile_name).strip()}"
+        return f"{_normalized_optional_tenant_id(tenant_id) or 'global'}::{_normalized_environment(environment)}::{require_text('profile_name', profile_name)}"
 
-
-class PersistentRuntimeConfigStore(InMemoryRuntimeConfigStore):
-    def __init__(self, *, path: str | Path | None = None, audit_log_path: str | Path | None = None) -> None:
-        super().__init__()
-        self._path = Path(path) if path is not None else runtime_config_store_path()
-        self._audit_log = PersistentConfigAuditLog(
-            Path(audit_log_path) if audit_log_path is not None else runtime_config_audit_log_path()
+    @staticmethod
+    def _snapshot_key(snapshot: RuntimeConfigSnapshot) -> str:
+        return _RuntimeConfigStoreApi._key(
+            profile_name=snapshot.profile_name,
+            environment=snapshot.environment,
+            tenant_id=snapshot.tenant_id,
         )
-        self._load()
 
-    @property
-    def path(self) -> Path:
-        return self._path
+
+class InMemoryRuntimeConfigStore(_RuntimeConfigStoreApi, InMemoryVersionedConfigStore[RuntimeConfigSnapshot]):
+    def __init__(self) -> None:
+        InMemoryVersionedConfigStore.__init__(
+            self,
+            namespace=_RUNTIME_NAMESPACE,
+            snapshot_type=RuntimeConfigSnapshot,
+            key_for_snapshot=self._snapshot_key,
+        )
 
     def save(
         self,
@@ -200,39 +186,45 @@ class PersistentRuntimeConfigStore(InMemoryRuntimeConfigStore):
         reason: str = "",
         expected_revision: int | None = None,
     ) -> RuntimeConfigSnapshot:
-        before = self.get(profile_name=snapshot.profile_name, environment=snapshot.environment, tenant_id=snapshot.tenant_id)
-        stored = super().save(snapshot, actor=actor, reason=reason, expected_revision=expected_revision)
-        if before is stored:
-            return stored
-        self._flush()
-        self._audit_log.append(
-            ConfigAuditEvent(
-                namespace=_RUNTIME_NAMESPACE,
-                entity_id=stored.entity_id(),
-                tenant_id=stored.tenant_id,
-                action="upsert",
-                actor=actor,
-                version_id=None if stored.version is None else stored.version.version_id,
-                payload={
-                    "profile_name": stored.profile_name,
-                    "environment": stored.environment,
-                    "labels": dict(stored.labels),
-                },
-            )
+        return self._save_snapshot(
+            snapshot,
+            actor=actor,
+            reason=reason,
+            expected_revision=expected_revision,
         )
-        return stored
 
-    def _load(self) -> None:
-        payload = read_json_or_default(self._path, default={"items": []})
-        rows = dict(payload).get("items", []) if isinstance(payload, dict) else []
-        for row in rows:
-            snapshot = RuntimeConfigSnapshot.from_dict(dict(row))
-            key = self._key(profile_name=snapshot.profile_name, environment=snapshot.environment, tenant_id=snapshot.tenant_id)
-            self._snapshots[key] = snapshot
-            self._history.setdefault(key, []).append(snapshot)
 
-    def _flush(self) -> None:
-        atomic_write_json(self._path, {"items": [snapshot.to_dict() for snapshot in self.list_all()]})
+class PersistentRuntimeConfigStore(_RuntimeConfigStoreApi, PersistentVersionedConfigStore[RuntimeConfigSnapshot]):
+    def __init__(self, *, path: str | Path | None = None, audit_log_path: str | Path | None = None) -> None:
+        PersistentVersionedConfigStore.__init__(
+            self,
+            namespace=_RUNTIME_NAMESPACE,
+            snapshot_type=RuntimeConfigSnapshot,
+            key_for_snapshot=self._snapshot_key,
+            snapshot_from_dict=RuntimeConfigSnapshot.from_dict,
+            audit_payload=lambda snapshot: {
+                "profile_name": snapshot.profile_name,
+                "environment": snapshot.environment,
+                "labels": dict(snapshot.labels),
+            },
+            path=runtime_config_store_path() if path is None else path,
+            audit_log_path=runtime_config_audit_log_path() if audit_log_path is None else audit_log_path,
+        )
+
+    def save(
+        self,
+        snapshot: RuntimeConfigSnapshot,
+        *,
+        actor: str = "system",
+        reason: str = "",
+        expected_revision: int | None = None,
+    ) -> RuntimeConfigSnapshot:
+        return self._save_persistent_snapshot(
+            snapshot,
+            actor=actor,
+            reason=reason,
+            expected_revision=expected_revision,
+        )
 
 
 def runtime_config_store_path() -> Path:
