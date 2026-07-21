@@ -16,36 +16,13 @@ from typing import Any
 
 from contracts.behavior_graph import Edge, GraphSnapshot, Neighbor, Node, PathStep
 from observability.platform.observability.silent import swallow
+from runtime.platform.behavior_graph.path_support import finish_shortest_path
 from runtime.platform.outbox.sqlite_pragmas import configure_sqlite, is_prod_env
 
 CANON_BEHAVIOR_GRAPH_SQLITE_OWNER = True
 
 
-def finish_shortest_path(*, prev:
-    dict[str, tuple[str, str, str, float]], src: str, dst: str) -> list[PathStep]:
-    if dst not in prev:
-        return []
-    steps: list[PathStep] = [
-        PathStep(node_id=dst, via_edge_id=prev[dst][1], via_edge_type=prev[dst][2], weight=float(prev[dst][3]))
-    ]
-    cur = dst
-    while cur != src:
-        p = prev[cur]
-        cur = p[0]
-        if cur == src:
-            steps.append(PathStep(node_id=cur, via_edge_id=None, via_edge_type=None, weight=0.0))
-            break
-        pp = prev.get(cur)
-        if pp is None:
-            steps.append(PathStep(node_id=cur, via_edge_id=None, via_edge_type=None, weight=0.0))
-            break
-        steps.append(PathStep(node_id=cur, via_edge_id=pp[1], via_edge_type=pp[2], weight=float(pp[3])))
-    steps.reverse()
-    return steps
-
-
-def rollback_reset(*, db:
-    sqlite3.Connection, tenant_id: str, scope: str) -> None:
+def rollback_reset(*, db: sqlite3.Connection, tenant_id: str, scope: str) -> None:
     cur = db.cursor()
     try:
         cur.execute("DELETE FROM behavior_graph_edges WHERE tenant_id=? AND scope=?", (tenant_id, scope))
@@ -63,8 +40,7 @@ def rollback_reset(*, db:
 class SqliteBehaviorGraphStore:
     """Durable behavior graph store (sqlite)."""
 
-    def __init__(self, path:
-        str):
+    def __init__(self, path: str):
         self._path = str(path)
         self._db: sqlite3.Connection | None = None
 
@@ -123,7 +99,9 @@ class SqliteBehaviorGraphStore:
         )
         self._db.execute("CREATE INDEX IF NOT EXISTS idx_bg_edges_src ON behavior_graph_edges(tenant_id, scope, src)")
         self._db.execute("CREATE INDEX IF NOT EXISTS idx_bg_edges_dst ON behavior_graph_edges(tenant_id, scope, dst)")
-        self._db.execute("CREATE INDEX IF NOT EXISTS idx_bg_edges_type ON behavior_graph_edges(tenant_id, scope, edge_type)")
+        self._db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bg_edges_type ON behavior_graph_edges(tenant_id, scope, edge_type)"
+        )
         self._db.commit()
 
     def upsert_snapshot(
@@ -154,8 +132,8 @@ class SqliteBehaviorGraphStore:
                 "ON CONFLICT(tenant_id, scope) DO UPDATE SET built_at_ms=excluded.built_at_ms, meta_json=excluded.meta_json",
                 (tid, sc, int(built_at_ms), meta_json),
             )
-            cur.execute("DELETE FROM behavior_graph_nodes WHERE tenant_id=? AND scope=?", (tid, sc))
             cur.execute("DELETE FROM behavior_graph_edges WHERE tenant_id=? AND scope=?", (tid, sc))
+            cur.execute("DELETE FROM behavior_graph_nodes WHERE tenant_id=? AND scope=?", (tid, sc))
             cur.executemany(
                 "INSERT INTO behavior_graph_nodes(tenant_id, scope, node_id, node_type, key, title, props_json) VALUES(?,?,?,?,?,?,?)",
                 [
@@ -195,8 +173,7 @@ class SqliteBehaviorGraphStore:
                 swallow(__name__, "sqlite_behavior_graph.rollback")
             raise
 
-    def get_snapshot(self, *, tenant_id:
-        str, scope: str) -> GraphSnapshot | None:
+    def get_snapshot(self, *, tenant_id: str, scope: str) -> GraphSnapshot | None:
         assert self._db is not None
         tid = str(tenant_id).strip()
         sc = str(scope).strip()
@@ -209,19 +186,31 @@ class SqliteBehaviorGraphStore:
         built_at_ms = int(row[0])
         meta = json.loads(row[1]) if row[1] else {}
         nrows = self._db.execute(
-            "SELECT node_id,node_type,key,title,props_json FROM behavior_graph_nodes WHERE tenant_id=? AND scope=?",
+            "SELECT node_id,node_type,key,title,props_json FROM behavior_graph_nodes WHERE tenant_id=? AND scope=? ORDER BY node_id",
             (tid, sc),
         ).fetchall()
         erows = self._db.execute(
-            "SELECT edge_id,edge_type,src,dst,weight,props_json FROM behavior_graph_edges WHERE tenant_id=? AND scope=?",
+            "SELECT edge_id,edge_type,src,dst,weight,props_json FROM behavior_graph_edges WHERE tenant_id=? AND scope=? ORDER BY edge_id",
             (tid, sc),
         ).fetchall()
-        nodes = [Node(node_id=r[0], node_type=r[1], key=r[2], title=r[3], props=(json.loads(r[4]) if r[4] else {})) for r in nrows]
-        edges = [Edge(edge_id=r[0], edge_type=r[1], src=r[2], dst=r[3], weight=float(r[4]), props=(json.loads(r[5]) if r[5] else {})) for r in erows]
+        nodes = [
+            Node(node_id=r[0], node_type=r[1], key=r[2], title=r[3], props=(json.loads(r[4]) if r[4] else {}))
+            for r in nrows
+        ]
+        edges = [
+            Edge(
+                edge_id=r[0],
+                edge_type=r[1],
+                src=r[2],
+                dst=r[3],
+                weight=float(r[4]),
+                props=(json.loads(r[5]) if r[5] else {}),
+            )
+            for r in erows
+        ]
         return GraphSnapshot(tenant_id=tid, scope=sc, built_at_ms=built_at_ms, nodes=nodes, edges=edges, meta=meta)
 
-    def get_node(self, *, tenant_id:
-        str, scope: str, node_id: str) -> Node | None:
+    def get_node(self, *, tenant_id: str, scope: str, node_id: str) -> Node | None:
         assert self._db is not None
         tid = str(tenant_id).strip()
         sc = str(scope).strip()
@@ -232,10 +221,20 @@ class SqliteBehaviorGraphStore:
         ).fetchone()
         if not row:
             return None
-        return Node(node_id=row[0], node_type=row[1], key=row[2], title=row[3], props=(json.loads(row[4]) if row[4] else {}))
+        return Node(
+            node_id=row[0], node_type=row[1], key=row[2], title=row[3], props=(json.loads(row[4]) if row[4] else {})
+        )
 
-    def neighbors(self, *, tenant_id:
-        str, scope: str, node_id: str, direction: str = "out", limit: int = 50, edge_type: str | None = None) -> list[Neighbor]:
+    def neighbors(
+        self,
+        *,
+        tenant_id: str,
+        scope: str,
+        node_id: str,
+        direction: str = "out",
+        limit: int = 50,
+        edge_type: str | None = None,
+    ) -> list[Neighbor]:
         assert self._db is not None
         tid = str(tenant_id).strip()
         sc = str(scope).strip()
@@ -252,17 +251,24 @@ class SqliteBehaviorGraphStore:
         if et:
             base += " AND edge_type=?"
             params.append(et)
-        base += " ORDER BY weight DESC LIMIT ?"
+        base += " ORDER BY weight DESC, edge_id ASC LIMIT ?"
         params.append(lim)
         rows = self._db.execute(base, tuple(params)).fetchall()
         out: list[Neighbor] = []
         for r in rows:
             other = r[3] if d == "out" else r[2]
-            out.append(Neighbor(node_id=str(other), weight=float(r[4]), edge_type=str(r[1]), edge_id=str(r[0]), props=(json.loads(r[5]) if r[5] else {})))
+            out.append(
+                Neighbor(
+                    node_id=str(other),
+                    weight=float(r[4]),
+                    edge_type=str(r[1]),
+                    edge_id=str(r[0]),
+                    props=(json.loads(r[5]) if r[5] else {}),
+                )
+            )
         return out
 
-    def shortest_path(self, *, tenant_id:
-        str, scope: str, src: str, dst: str, max_hops: int = 6) -> list[PathStep]:
+    def shortest_path(self, *, tenant_id: str, scope: str, src: str, dst: str, max_hops: int = 6) -> list[PathStep]:
         assert self._db is not None
         tid = str(tenant_id).strip()
         sc = str(scope).strip()
@@ -279,7 +285,7 @@ class SqliteBehaviorGraphStore:
             if depth >= mh:
                 continue
             rows = self._db.execute(
-                "SELECT edge_id,edge_type,src,dst,weight FROM behavior_graph_edges WHERE tenant_id=? AND scope=? AND src=?",
+                "SELECT edge_id,edge_type,src,dst,weight FROM behavior_graph_edges WHERE tenant_id=? AND scope=? AND src=? ORDER BY edge_id ASC",
                 (tid, sc, cur),
             ).fetchall()
             for r in rows:
@@ -294,8 +300,7 @@ class SqliteBehaviorGraphStore:
                 q.append((nxt, depth + 1))
         return finish_shortest_path(prev=prev, src=s, dst=t)
 
-    def reset(self, *, tenant_id:
-        str, scope: str) -> None:
+    def reset(self, *, tenant_id: str, scope: str) -> None:
         assert self._db is not None
         rollback_reset(db=self._db, tenant_id=str(tenant_id).strip(), scope=str(scope).strip())
 
