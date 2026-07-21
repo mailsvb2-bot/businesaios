@@ -47,18 +47,20 @@ def test_billing_job_run_validation_and_in_memory_store() -> None:
 def test_fingerprint_and_replay_safety_guards() -> None:
     assert jobs._stable_job_fingerprint({"b": 2, "a": 1}) == jobs._stable_job_fingerprint({"a": 1, "b": 2})
 
+    fingerprint = jobs._stable_job_fingerprint({"input": 1})
+    other_fingerprint = jobs._stable_job_fingerprint({"input": 2})
     existing = jobs.BillingJobRun(
         tenant_id="tenant",
         job_name="job",
         run_key="run",
         started_at=NOW,
-        metadata={"input_fingerprint": "abc"},
+        metadata={"input_fingerprint": fingerprint},
     )
 
-    jobs._assert_replay_safe(existing, expected_fingerprint="abc")
+    jobs._assert_replay_safe(existing, expected_fingerprint=fingerprint)
 
     with pytest.raises(ValueError, match="billing job replay input mismatch"):
-        jobs._assert_replay_safe(existing, expected_fingerprint="def")
+        jobs._assert_replay_safe(existing, expected_fingerprint=other_fingerprint)
 
 
 def test_reconciliation_report_serialization_roundtrip() -> None:
@@ -80,8 +82,10 @@ def test_reconciliation_report_serialization_roundtrip() -> None:
     assert restored is not None
     assert restored.drifts[0].delta_minor == -20
 
-    assert jobs._deserialize_reconciliation_report(tenant_id="tenant", payload={"bad": "shape"}) is None
-    assert jobs._deserialize_reconciliation_report(tenant_id="tenant", payload=[object()]) is None
+    with pytest.raises(ValueError, match="report_drifts"):
+        jobs._deserialize_reconciliation_report(tenant_id="tenant", payload={"bad": "shape"})
+    with pytest.raises(ValueError, match="report drift"):
+        jobs._deserialize_reconciliation_report(tenant_id="tenant", payload=[object()])
 
 
 @dataclass
