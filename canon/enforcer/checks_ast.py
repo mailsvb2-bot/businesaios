@@ -19,18 +19,36 @@ from canon.enforcer.rules import (
     REPO_ROOT,
     is_critical_path,
     iter_py_files,
-    path_str,
+    relative_path,
     safe_read_text,
 )
 from canon.enforcer.rules import (
     iter_todo_lines as _iter_todo_lines,
 )
+from canon.repository_sources import RepositorySourceError
 
 
-def check_ast_semantics(report: Any, root: Path = REPO_ROOT) -> None:
-    for path in iter_py_files(root):
-        rel = path_str(path)
-        text = safe_read_text(path)
+def check_ast_semantics(
+    report: Any,
+    root: Path = REPO_ROOT,
+    *,
+    source_files: tuple[Path, ...] | None = None,
+) -> None:
+    paths = source_files if source_files is not None else tuple(iter_py_files(root))
+    for path in paths:
+        rel = relative_path(root, path)
+        try:
+            text = safe_read_text(path)
+        except RepositorySourceError as exc:
+            report.add(
+                severity="critical",
+                kind="unreadable-python-source",
+                path=rel,
+                line=None,
+                message=str(exc),
+                hint="Restore a readable UTF-8 source before canon analysis continues.",
+            )
+            continue
 
         try:
             tree = ast.parse(text, filename=rel)
@@ -85,7 +103,10 @@ def check_ast_semantics(report: Any, root: Path = REPO_ROOT) -> None:
                         kind="fake-ready-integration",
                         path=rel,
                         line=getattr(node, "lineno", None),
-                        message=f"Suspicious integration stub detected in function: {getattr(node, 'name', '<unknown>')}",
+                        message=(
+                            "Suspicious integration stub detected in function: "
+                            f"{getattr(node, 'name', '<unknown>')}"
+                        ),
                         hint="Fail honestly with Unsupported*/NotWired* or implement the real contract.",
                     )
                     break
@@ -141,7 +162,10 @@ def check_ast_semantics(report: Any, root: Path = REPO_ROOT) -> None:
                     fn = full_attr_name(node.func)
                     tail = fn.split(".")[-1].lower() if fn else ""
                     lowered = fn.lower()
-                    if tail in FORBIDDEN_EFFECT_CALL_TAILS_IN_CORE and any(token in lowered for token in ("provider", "connector", "client", "http", "requests", "api")):
+                    effect_owner_tokens = ("provider", "connector", "client", "http", "requests", "api")
+                    if tail in FORBIDDEN_EFFECT_CALL_TAILS_IN_CORE and any(
+                        token in lowered for token in effect_owner_tokens
+                    ):
                         report.add(
                             severity="critical",
                             kind="core-side-effect-call",
@@ -163,7 +187,10 @@ def check_ast_semantics(report: Any, root: Path = REPO_ROOT) -> None:
                         )
 
             if rel.startswith("runtime/"):
-                if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name in FORBIDDEN_DECISION_FUNCTION_NAMES_OUTSIDE_CORE:
+                if (
+                    isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+                    and node.name in FORBIDDEN_DECISION_FUNCTION_NAMES_OUTSIDE_CORE
+                ):
                     report.add(
                         severity="critical",
                         kind="runtime-decision-logic",

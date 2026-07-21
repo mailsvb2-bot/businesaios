@@ -12,7 +12,8 @@ from canon.enforcer.checks_invariants import (
     check_synonym_namespaces,
 )
 from canon.enforcer.reporting import EnforcerReport, Violation
-from canon.enforcer.rules import REPO_ROOT
+from canon.enforcer.rules import REPO_ROOT, iter_py_files
+from canon.repository_sources import RepositorySourceError, validate_repository_root
 
 __all__ = ["EnforcerReport", "Violation", "main", "run_enforcer"]
 
@@ -22,16 +23,43 @@ def _write_text_stdout(text: str) -> None:
 
 
 def run_enforcer(root: str | Path = REPO_ROOT) -> EnforcerReport:
-    root = Path(root)
     report = EnforcerReport(ok=True)
-    check_required_invariants(report, root)
-    check_second_brain_file_hints(report, root)
-    check_synonym_namespaces(report, root)
-    check_empty_non_init_files(report, root)
-    check_duplicate_config_roots(report, root)
-    check_readme_and_contributing(report, root)
-    check_super_canon_world_model_contract(report, root)
-    check_ast_semantics(report, root)
+    try:
+        repository_root = validate_repository_root(root)
+    except ValueError as exc:
+        report.add(
+            severity="critical",
+            kind="invalid-repository-root",
+            path=str(root),
+            line=None,
+            message=str(exc),
+            hint="Provide an existing repository directory.",
+        )
+        report.recompute_ok()
+        return report
+
+    check_required_invariants(report, repository_root)
+    check_readme_and_contributing(report, repository_root)
+    check_super_canon_world_model_contract(report, repository_root)
+
+    try:
+        source_files = tuple(iter_py_files(repository_root))
+    except RepositorySourceError as exc:
+        report.add(
+            severity="critical",
+            kind="repository-source-inventory-error",
+            path=".",
+            line=None,
+            message=str(exc),
+            hint="Restore repository readability before canon analysis continues.",
+        )
+    else:
+        check_second_brain_file_hints(report, repository_root, source_files=source_files)
+        check_synonym_namespaces(report, repository_root, source_files=source_files)
+        check_empty_non_init_files(report, repository_root, source_files=source_files)
+        check_duplicate_config_roots(report, repository_root, source_files=source_files)
+        check_ast_semantics(report, repository_root, source_files=source_files)
+
     report.recompute_ok()
     return report
 

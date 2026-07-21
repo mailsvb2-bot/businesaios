@@ -7,47 +7,103 @@ from canon.enforcer.rules import (
     REPO_ROOT,
     SYNONYM_NAMESPACE_PAIRS,
     iter_py_files,
-    nontrivial_py_count,
-    path_str,
+    relative_path,
 )
+from canon.repository_sources import RepositorySourceError, read_utf8_source
 
 
 def check_required_invariants(report, root: Path = REPO_ROOT) -> None:
-    required = ["core/ai/decision_core.py", "runtime/executor.py", "runtime/guard.py", "runtime/platform", "interfaces"]
+    required = [
+        "core/ai/decision_core.py",
+        "runtime/executor.py",
+        "runtime/guard.py",
+        "runtime/platform",
+        "interfaces",
+    ]
     for rel in required:
         if not (root / rel).exists():
-            report.add(severity="critical", kind="missing-invariant", path=rel, line=None, message=f"Required canonical path missing: {rel}", hint="Restore canonical architecture before further changes.")
+            report.add(
+                severity="critical",
+                kind="missing-invariant",
+                path=rel,
+                line=None,
+                message=f"Required canonical path missing: {rel}",
+                hint="Restore canonical architecture before further changes.",
+            )
 
 
-def check_second_brain_file_hints(report, root: Path = REPO_ROOT) -> None:
-    for path in iter_py_files(root):
+def check_second_brain_file_hints(
+    report,
+    root: Path = REPO_ROOT,
+    *,
+    source_files: tuple[Path, ...] | None = None,
+) -> None:
+    paths = source_files if source_files is not None else tuple(iter_py_files(root))
+    for path in paths:
         if path.name in FORBIDDEN_SECOND_BRAIN_FILE_HINTS:
-            report.add(severity="high", kind="second-brain-file", path=path_str(path), line=None, message=f"Suspicious second-brain file detected: {path.name}", hint="Merge this role into DecisionCore or convert it into proposal-only logic.")
+            report.add(
+                severity="high",
+                kind="second-brain-file",
+                path=relative_path(root, path),
+                line=None,
+                message=f"Suspicious second-brain file detected: {path.name}",
+                hint="Merge this role into DecisionCore or convert it into proposal-only logic.",
+            )
 
 
-def _namespace_role(path: Path) -> str:
-    marker = path / "CANON_NAMESPACE_ROLE.md"
+def _namespace_role(report, root: Path, relative: str) -> str:
+    marker = root / relative / "CANON_NAMESPACE_ROLE.md"
     if not marker.exists():
         return ""
     try:
-        return marker.read_text(encoding="utf-8", errors="replace").strip()
-    except OSError:
+        return read_utf8_source(marker).strip()
+    except RepositorySourceError as exc:
+        report.add(
+            severity="high",
+            kind="unreadable-namespace-role",
+            path=f"{relative}/CANON_NAMESPACE_ROLE.md",
+            line=None,
+            message=str(exc),
+            hint="Restore a readable UTF-8 namespace role marker.",
+        )
         return ""
 
 
-def check_synonym_namespaces(report, root: Path = REPO_ROOT) -> None:
-    for a, b in SYNONYM_NAMESPACE_PAIRS:
-        pa = root / a
-        pb = root / b
-        if not (pa.exists() and pb.exists()):
+def _namespace_count(source_files: tuple[Path, ...], root: Path, prefix: str) -> int:
+    normalized = prefix.rstrip("/") + "/"
+    return sum(
+        1
+        for path in source_files
+        if path.name != "__init__.py" and relative_path(root, path).startswith(normalized)
+    )
+
+
+def check_synonym_namespaces(
+    report,
+    root: Path = REPO_ROOT,
+    *,
+    source_files: tuple[Path, ...] | None = None,
+) -> None:
+    paths = source_files if source_files is not None else tuple(iter_py_files(root))
+    for left, right in SYNONYM_NAMESPACE_PAIRS:
+        left_path = root / left
+        right_path = root / right
+        if not (left_path.exists() and right_path.exists()):
             continue
-        role_a = _namespace_role(pa)
-        role_b = _namespace_role(pb)
-        if role_a and role_b and role_a != role_b:
+        left_role = _namespace_role(report, root, left)
+        right_role = _namespace_role(report, root, right)
+        if left_role and right_role and left_role != right_role:
             continue
-        count_a = nontrivial_py_count(pa)
-        count_b = nontrivial_py_count(pb)
-        if count_a == 0 or count_b == 0:
+        left_count = _namespace_count(paths, root, left)
+        right_count = _namespace_count(paths, root, right)
+        if left_count == 0 or right_count == 0:
             continue
-        severity = "high" if a == "core/policy" and b == "core/policies" else "medium"
-        report.add(severity=severity, kind="synonym-namespace", path=f"{a} <-> {b}", line=None, message=f"Competing namespace roots detected (left={count_a}, right={count_b}).", hint="Keep one canonical namespace and migrate imports or document explicit ownership.")
+        severity = "high" if left == "core/policy" and right == "core/policies" else "medium"
+        report.add(
+            severity=severity,
+            kind="synonym-namespace",
+            path=f"{left} <-> {right}",
+            line=None,
+            message=f"Competing namespace roots detected (left={left_count}, right={right_count}).",
+            hint="Keep one canonical namespace and migrate imports or document explicit ownership.",
+        )
