@@ -143,9 +143,11 @@ def test_dunning_replay_and_new_actions_reject_coercible_attempt_numbers() -> No
             )
 
     for attempt in (True, 0, -1, "1", 1.0):
-        job = DunningRetryJob(orchestrator=_Orchestrator((attempt,)))
+        orchestrator = _Orchestrator((attempt,))
+        job = DunningRetryJob(orchestrator=orchestrator)
         with pytest.raises(ValueError):
             job.run(tenant_id="tenant-a", invoice_id="invoice-1", now=NOW, run_key="new")
+        assert orchestrator.executed == []
 
     orchestrator = _Orchestrator((1, 2))
     assert DunningRetryJob(orchestrator=orchestrator).run(
