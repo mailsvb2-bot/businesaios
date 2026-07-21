@@ -45,6 +45,26 @@ def _require_tenant_text(value: Any) -> str:
     return require_tenant_id(value)
 
 
+def _resolve_run_key(value: object, *, default: str) -> str:
+    return _require_text("run_key", default if value is None else value)
+
+
+def _require_attempt_number(value: object) -> int:
+    attempt_no = _require_exact_int("attempt_no", value)
+    if attempt_no <= 0:
+        raise ValueError("attempt_no must be > 0")
+    return attempt_no
+
+
+def _require_attempt_history(value: object) -> tuple[int, ...]:
+    if not isinstance(value, list | tuple):
+        raise ValueError("executed_attempts must be a list or tuple")
+    attempts = tuple(_require_attempt_number(item) for item in value)
+    if len(set(attempts)) != len(attempts):
+        raise ValueError("executed_attempts must not contain duplicates")
+    return attempts
+
+
 @dataclass(frozen=True)
 class BillingJobRun:
     tenant_id: str
@@ -263,13 +283,12 @@ class RenewalJob:
         now: datetime | None = None,
         run_key: str | None = None,
     ) -> tuple[SubscriptionCommercialEnvelope, ...]:
-        tid = require_tenant_id(tenant_id)
+        tid = _require_tenant_text(tenant_id)
         observed_at = now or utc_now()
-        if observed_at.tzinfo is None:
-            raise ValueError('now must be timezone-aware')
+        require_aware_datetime('now', observed_at)
         subscriptions_tuple = tuple(subscriptions)
         fingerprint = _stable_job_fingerprint([(sub.subscription_id, sub.status.value, sub.cycle.start_at.isoformat(), sub.cycle.end_at.isoformat(), sub.plan_id, dict(sub.metadata)) for sub in subscriptions_tuple if sub.tenant_id == tid])
-        normalized_run_key = str(run_key or observed_at.date().isoformat()).strip()
+        normalized_run_key = _resolve_run_key(run_key, default=observed_at.date().isoformat())
         with _job_lease_context(lease_store=self._lease_store, tenant_id=tid, job_name='renewal', run_key=normalized_run_key, worker_id=self._worker_id, observed_at=observed_at, lease_ttl=self._lease_ttl) as lease_holder:
             existing_run = self._run_store.get(tenant_id=tid, job_name='renewal', run_key=normalized_run_key)
             replay_mode = existing_run is not None
@@ -313,15 +332,14 @@ class InvoiceIssueJob:
         issued_at: datetime | None = None,
         run_key: str | None = None,
     ) -> tuple[CommercialInvoiceEnvelope, ...]:
-        tid = require_tenant_id(tenant_id)
+        tid = _require_tenant_text(tenant_id)
         observed_at = issued_at or utc_now()
-        if observed_at.tzinfo is None:
-            raise ValueError('issued_at must be timezone-aware')
-        if due_at is not None and due_at.tzinfo is None:
-            raise ValueError('due_at must be timezone-aware')
+        require_aware_datetime('issued_at', observed_at)
+        if due_at is not None:
+            require_aware_datetime('due_at', due_at)
         invoices_tuple = tuple(invoices)
         fingerprint = _stable_job_fingerprint([(inv.invoice_id, inv.status.value, inv.total_minor, inv.paid_minor, dict(inv.metadata)) for inv in invoices_tuple if inv.tenant_id == tid])
-        normalized_run_key = str(run_key or observed_at.isoformat()).strip()
+        normalized_run_key = _resolve_run_key(run_key, default=observed_at.isoformat())
         with _job_lease_context(lease_store=self._lease_store, tenant_id=tid, job_name='invoice_issue', run_key=normalized_run_key, worker_id=self._worker_id, observed_at=observed_at, lease_ttl=self._lease_ttl) as lease_holder:
             existing_run = self._run_store.get(tenant_id=tid, job_name='invoice_issue', run_key=normalized_run_key)
             replay_mode = existing_run is not None
@@ -363,24 +381,21 @@ class DunningRetryJob:
         now: datetime | None = None,
         run_key: str | None = None,
     ) -> tuple[int, ...]:
-        tid = require_tenant_id(tenant_id)
-        iid = str(invoice_id).strip()
-        if not iid:
-            raise ValueError('invoice_id is required')
+        tid = _require_tenant_text(tenant_id)
+        iid = _require_text('invoice_id', invoice_id)
         observed_at = now or utc_now()
-        if observed_at.tzinfo is None:
-            raise ValueError('now must be timezone-aware')
-        normalized_run_key = str(run_key or f"{iid}:{observed_at.isoformat()}").strip()
+        require_aware_datetime('now', observed_at)
+        normalized_run_key = _resolve_run_key(run_key, default=f"{iid}:{observed_at.isoformat()}")
         with _job_lease_context(lease_store=self._lease_store, tenant_id=tid, job_name='dunning_retry', run_key=normalized_run_key, worker_id=self._worker_id, observed_at=observed_at, lease_ttl=self._lease_ttl) as lease_holder:
             existing_run = self._run_store.get(tenant_id=tid, job_name='dunning_retry', run_key=normalized_run_key)
             if existing_run is not None:
-                return tuple(int(item) for item in dict(existing_run.metadata).get('executed_attempts', ()))
+                return _require_attempt_history(dict(existing_run.metadata).get('executed_attempts', ()))
             due_actions = self._orchestrator.due_actions(tenant_id=tid, invoice_id=iid, now=observed_at)
             executed_attempts: list[int] = []
             for action in due_actions:
                 _renew_lease_if_due(lease_store=self._lease_store, holder=lease_holder, tenant_id=tid, job_name='dunning_retry', run_key=normalized_run_key, lease_ttl=self._lease_ttl, now=observed_at)
                 self._orchestrator.mark_action_executed(tenant_id=tid, invoice_id=iid, attempt_no=action.attempt_no)
-                executed_attempts.append(int(action.attempt_no))
+                executed_attempts.append(_require_attempt_number(action.attempt_no))
             self._run_store.save(BillingJobRun(tenant_id=tid, job_name='dunning_retry', run_key=normalized_run_key, started_at=observed_at, finished_at=observed_at, metadata={'owner': 'billing.scheduler.jobs', 'invoice_id': iid, 'executed_attempts': tuple(executed_attempts)}))
             return tuple(executed_attempts)
 
@@ -406,10 +421,9 @@ class ReconciliationJob:
         revenue_account: str = 'billing.accounts.revenue',
         usage_rate_minor_by_meter: Mapping[str, int] | None = None,
     ) -> ReconciliationReport:
-        tid = require_tenant_id(tenant_id)
+        tid = _require_tenant_text(tenant_id)
         observed_at = now or utc_now()
-        if observed_at.tzinfo is None:
-            raise ValueError('now must be timezone-aware')
+        require_aware_datetime('now', observed_at)
         invoices_tuple = tuple(invoices)
         usage_tuple = tuple(usage_rollups)
         fingerprint = _stable_job_fingerprint({
@@ -418,7 +432,7 @@ class ReconciliationJob:
             'revenue_account': revenue_account,
             'usage_rate_minor_by_meter': dict(usage_rate_minor_by_meter or {}),
         })
-        normalized_run_key = str(run_key or observed_at.isoformat()).strip()
+        normalized_run_key = _resolve_run_key(run_key, default=observed_at.isoformat())
         with _job_lease_context(lease_store=self._lease_store, tenant_id=tid, job_name='reconciliation', run_key=normalized_run_key, worker_id=self._worker_id, observed_at=observed_at, lease_ttl=self._lease_ttl) as lease_holder:
             _renew_lease_if_due(lease_store=self._lease_store, holder=lease_holder, tenant_id=tid, job_name='reconciliation', run_key=normalized_run_key, lease_ttl=self._lease_ttl, now=observed_at)
             existing = self._run_store.get(tenant_id=tid, job_name='reconciliation', run_key=normalized_run_key)
