@@ -1,4 +1,4 @@
-name: One-time branch audit cleanup
+name: One-time branch inventory
 
 on:
   push:
@@ -9,11 +9,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: one-time-branch-audit-cleanup
+  group: one-time-branch-inventory
   cancel-in-progress: false
 
 jobs:
-  audit-and-clean:
+  inventory:
+    if: ${{ !contains(github.event.head_commit.message, '[skip branch-audit]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out exact main
@@ -21,86 +22,99 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Audit branch contribution and remove redundant refs
+      - name: Build exact branch inventory
         shell: bash
         run: |
           set -Eeuo pipefail
-
           git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
-          mapfile -t branches < <(
-            git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin \
-              | grep -v '^HEAD$' \
-              | sort
+          python - <<'PY'
+          from __future__ import annotations
+
+          import datetime as dt
+          import json
+          import subprocess
+          from pathlib import Path
+
+          def run(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+              return subprocess.run(
+                  args,
+                  check=check,
+                  text=True,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE,
+              )
+
+          refs = run(
+              "git",
+              "for-each-ref",
+              "--format=%(refname:strip=3)\t%(objectname)",
+              "refs/remotes/origin",
+          ).stdout.splitlines()
+          branches: list[tuple[str, str]] = []
+          for row in refs:
+              name, sha = row.split("\t", 1)
+              if name != "HEAD":
+                  branches.append((name, sha))
+          branches.sort()
+
+          main_sha = run("git", "rev-parse", "origin/main").stdout.strip()
+          main_tree = run("git", "rev-parse", "origin/main^{tree}").stdout.strip()
+          items: list[dict[str, object]] = []
+          for name, sha in branches:
+              left, right = run(
+                  "git",
+                  "rev-list",
+                  "--left-right",
+                  "--count",
+                  f"origin/main...origin/{name}",
+              ).stdout.strip().split()
+              merge_tree = run(
+                  "git",
+                  "merge-tree",
+                  "--write-tree",
+                  "origin/main",
+                  f"origin/{name}",
+                  check=False,
+              )
+              items.append(
+                  {
+                      "name": name,
+                      "sha": sha,
+                      "ahead_by": int(right),
+                      "behind_by": int(left),
+                      "merge_tree_equals_main": (
+                          merge_tree.returncode == 0
+                          and merge_tree.stdout.strip() == main_tree
+                      ),
+                      "merge_tree_error": (
+                          "" if merge_tree.returncode == 0 else merge_tree.stderr.strip()
+                      ),
+                      "tip_subject": run(
+                          "git", "show", "-s", "--format=%s", f"origin/{name}"
+                      ).stdout.strip(),
+                  }
+              )
+
+          payload = {
+              "generated_at_utc": dt.datetime.now(dt.UTC).isoformat(),
+              "main_sha": main_sha,
+              "branch_count": len(items),
+              "branches": items,
+          }
+          target = Path(".github/branch-audit-result.json")
+          target.write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
           )
+          print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
+          PY
 
-          echo "BRANCH_COUNT_BEFORE=${#branches[@]}"
-          printf 'BRANCH_BEFORE=%s\n' "${branches[@]}"
-          {
-            echo "## Branch audit"
-            echo
-            echo "Branches before cleanup: **${#branches[@]}**"
-            printf -- '- `%s`\n' "${branches[@]}"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          main_tree="$(git rev-parse 'origin/main^{tree}')"
-          safe=()
-          unsafe=()
-
-          for branch in "${branches[@]}"; do
-            [[ "$branch" == "main" ]] && continue
-            error_file="$(mktemp)"
-            if merged_tree="$(git merge-tree --write-tree origin/main "origin/$branch" 2>"$error_file")"; then
-              if [[ "$merged_tree" == "$main_tree" ]]; then
-                safe+=("$branch")
-                echo "SAFE_REDUNDANT=$branch"
-              else
-                unsafe+=("$branch")
-                echo "UNIQUE_CONTENT=$branch"
-                git diff --stat origin/main..."origin/$branch" || true
-              fi
-            else
-              unsafe+=("$branch")
-              echo "MERGE_CONFLICT_OR_AUDIT_ERROR=$branch"
-              cat "$error_file"
-            fi
-            rm -f "$error_file"
-          done
-
-          if ((${#unsafe[@]} > 0)); then
-            {
-              echo
-              echo "### Preserved branches with unique or conflicting content"
-              printf -- '- `%s`\n' "${unsafe[@]}"
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "Refusing deletion because at least one branch needs manual analysis."
-            exit 1
-          fi
-
-          for branch in "${safe[@]}"; do
-            git push origin --delete "$branch"
-          done
-
-          git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*'
-          mapfile -t after < <(
-            git for-each-ref --format='%(refname:strip=3)' refs/remotes/origin \
-              | grep -v '^HEAD$' \
-              | sort
-          )
-
-          echo "BRANCH_COUNT_AFTER=${#after[@]}"
-          printf 'BRANCH_AFTER=%s\n' "${after[@]}"
-          {
-            echo
-            echo "Deleted redundant branches: **${#safe[@]}**"
-            if ((${#safe[@]} > 0)); then
-              printf -- '- `%s`\n' "${safe[@]}"
-            fi
-            echo
-            echo "Branches after cleanup: **${#after[@]}**"
-            printf -- '- `%s`\n' "${after[@]}"
-          } >> "$GITHUB_STEP_SUMMARY"
-
-          if ((${#after[@]} != 1)) || [[ "${after[0]}" != "main" ]]; then
-            echo "Cleanup invariant failed: expected only main."
-            exit 1
-          fi
+      - name: Publish inventory to main
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/branch-audit-result.json
+          git commit -m "[skip branch-audit] Record exact branch inventory"
+          git push origin HEAD:main
