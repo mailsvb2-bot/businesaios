@@ -76,12 +76,14 @@ def _normalized_prefixes(prefixes: Iterable[str]) -> tuple[str, ...]:
 def iter_repository_python_files(
     root: Path | str,
     *,
+    included_prefixes: Iterable[str] = (),
     excluded_prefixes: Iterable[str] = (),
     excluded_dir_names: Iterable[str] = DEFAULT_EXCLUDED_DIR_NAMES,
     root_excluded_dir_names: Iterable[str] = DEFAULT_ROOT_EXCLUDED_DIR_NAMES,
 ) -> Iterator[Path]:
     repo = validate_repository_root(root)
-    prefixes = _normalized_prefixes(excluded_prefixes)
+    included = _normalized_prefixes(included_prefixes)
+    excluded = _normalized_prefixes(excluded_prefixes)
     excluded_names = frozenset(excluded_dir_names)
     root_excluded_names = frozenset(root_excluded_dir_names)
 
@@ -109,7 +111,9 @@ def iter_repository_python_files(
             if not filename.endswith(".py") or path.is_symlink() or not path.is_file():
                 continue
             relative = path.relative_to(repo).as_posix()
-            if relative.startswith(prefixes):
+            if included and not relative.startswith(included):
+                continue
+            if relative.startswith(excluded):
                 continue
             yield path
 
