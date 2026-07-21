@@ -1,13 +1,14 @@
-from __future__ import annotations
+"""Compatibility export for the canonical runtime provider configuration."""
 
-from dataclasses import dataclass
+from runtime.messaging.provider_config import (
+    CANON_PROVIDER_TRANSPORT_CONFIG,
+    ProviderConfig,
+)
 
+CANON_PROVIDER_CONFIG_COMPAT_FACADE = True
 
-@dataclass(frozen=True)
-class ProviderConfig:
-    provider: str
-    env_prefix: str
-    mode: str
-    endpoint: str
-    sender: str
-    token_present: bool
+__all__ = [
+    "CANON_PROVIDER_CONFIG_COMPAT_FACADE",
+    "CANON_PROVIDER_TRANSPORT_CONFIG",
+    "ProviderConfig",
+]
