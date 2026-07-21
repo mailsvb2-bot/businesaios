@@ -1,18 +1,15 @@
+"""Compatibility surface for the canonical messaging inbound owner lock.
+
+Decision-owner policy and validation live only in
+``runtime.messaging.inbound_owner_lock``. Historical imports keep the same
+function and exception names without maintaining a second authority table.
+"""
+
 from __future__ import annotations
 
-_ALLOWED_CALLERS = {
-    'runtime.messaging.inbound_entrypoint',
-    'runtime.business_autonomy.provider_webhook_inbound_processor',
-}
+from runtime.messaging.inbound_owner_lock import (
+    InboundOwnerViolation,
+    assert_inbound_decision_owner as assert_inbound_owner,
+)
 
-
-class InboundOwnerViolation(RuntimeError):
-    pass
-
-
-def assert_inbound_owner(caller: str) -> None:
-    normalized = str(caller or '').strip()
-    if normalized not in _ALLOWED_CALLERS:
-        raise InboundOwnerViolation(
-            f'canonical_messaging_inbound_requires_canonical_owner:{normalized}'
-        )
+__all__ = ["InboundOwnerViolation", "assert_inbound_owner"]
