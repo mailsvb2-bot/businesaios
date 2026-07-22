@@ -37,11 +37,48 @@ class InMemorySecretVaultMixin:
     _encryption_key_id_for_record = (
         _canonical.InMemorySecretVault._encryption_key_id_for_record
     )
-    _encrypt = _canonical.InMemorySecretVault._encrypt
-    _decrypt = _canonical.InMemorySecretVault._decrypt
-    _derive_key = _canonical.InMemorySecretVault.__dict__["_derive_key"]
-    _expand_keystream = _canonical.InMemorySecretVault.__dict__["_expand_keystream"]
-    _xor = _canonical.InMemorySecretVault.__dict__["_xor"]
+
+    def _encrypt(
+        self,
+        plaintext: bytes,
+        *,
+        ref: SecretRef,
+        encryption_key_id: str,
+    ) -> bytes:
+        encryptor = getattr(super(), "_encrypt", None)
+        if callable(encryptor):
+            return encryptor(
+                plaintext,
+                ref=ref,
+                encryption_key_id=encryption_key_id,
+            )
+        return _canonical.InMemorySecretVault._encrypt(
+            self,
+            plaintext,
+            ref=ref,
+            encryption_key_id=encryption_key_id,
+        )
+
+    def _decrypt(
+        self,
+        ciphertext: bytes,
+        *,
+        ref: SecretRef,
+        encryption_key_id: str,
+    ) -> bytes:
+        decryptor = getattr(super(), "_decrypt", None)
+        if callable(decryptor):
+            return decryptor(
+                ciphertext,
+                ref=ref,
+                encryption_key_id=encryption_key_id,
+            )
+        return _canonical.InMemorySecretVault._decrypt(
+            self,
+            ciphertext,
+            ref=ref,
+            encryption_key_id=encryption_key_id,
+        )
 
     def _get_or_issue_key(self, ref: SecretRef):
         resolver = getattr(self, "_resolve_encryption_key", None)
