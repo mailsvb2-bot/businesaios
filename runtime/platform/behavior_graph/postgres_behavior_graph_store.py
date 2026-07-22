@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from contracts.behavior_graph import Edge, GraphSnapshot, Neighbor, Node, PathStep
+from runtime.platform.behavior_graph.path_support import finish_shortest_path
 from runtime.platform.postgres_port import PostgresPort
 
 
@@ -15,14 +16,29 @@ class PostgresBehaviorGraphStore:
         self._port: PostgresPort | None = None
 
     def __enter__(self) -> PostgresBehaviorGraphStore:
-        self._port = PostgresPort(self._dsn, application_name="businesaios-behavior-graph").__enter__()
-        self._init_schema()
+        port = PostgresPort(self._dsn, application_name="businesaios-behavior-graph")
+        self._port = port.__enter__()
+        try:
+            self._init_schema()
+            self._port.commit()
+        except Exception as exc:
+            try:
+                port.__exit__(type(exc), exc, exc.__traceback__)
+            except Exception as cleanup_exc:
+                exc.add_note(f"PostgreSQL behavior-graph cleanup also failed: {cleanup_exc}")
+            finally:
+                self._port = None
+            raise
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        assert self._port is not None
-        self._port.__exit__(exc_type, exc, tb)
-        self._port = None
+        port = self._port
+        if port is None:
+            return
+        try:
+            port.__exit__(exc_type, exc, tb)
+        finally:
+            self._port = None
 
     def ping(self) -> bool:
         """Return true when the sealed Postgres behavior-graph store connection is alive."""
@@ -77,7 +93,9 @@ class PostgresBehaviorGraphStore:
         )
         self._port.execute("CREATE INDEX IF NOT EXISTS idx_bg_edges_src ON behavior_graph_edges(tenant_id, scope, src)")
         self._port.execute("CREATE INDEX IF NOT EXISTS idx_bg_edges_dst ON behavior_graph_edges(tenant_id, scope, dst)")
-        self._port.execute("CREATE INDEX IF NOT EXISTS idx_bg_edges_type ON behavior_graph_edges(tenant_id, scope, edge_type)")
+        self._port.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bg_edges_type ON behavior_graph_edges(tenant_id, scope, edge_type)"
+        )
 
     def upsert_snapshot(
         self,
@@ -98,52 +116,53 @@ class PostgresBehaviorGraphStore:
         meta_obj["built_at_ms"] = int(built_at_ms)
         meta_json = json.dumps(meta_obj, ensure_ascii=False)
 
-        # Replace-by-scope for determinism. Keep transaction control inside
-        # the sealed PostgresPort boundary: execute + explicit commit/rollback.
-        try:
+        # Replace-by-scope for determinism. The sealed PostgresPort owns
+        # transaction commit/rollback so every store uses one transport contract.
+        with self._port.transaction():
             self._port.execute(
                 "INSERT INTO behavior_graph_snapshots(tenant_id, scope, built_at_ms, meta_json) VALUES(%s,%s,%s,%s) "
                 "ON CONFLICT(tenant_id, scope) DO UPDATE SET built_at_ms=EXCLUDED.built_at_ms, meta_json=EXCLUDED.meta_json",
                 (tid, sc, int(built_at_ms), meta_json),
             )
-            self._port.execute("DELETE FROM behavior_graph_nodes WHERE tenant_id=%s AND scope=%s", (tid, sc))
-            self._port.execute("DELETE FROM behavior_graph_edges WHERE tenant_id=%s AND scope=%s", (tid, sc))
+            self._port.execute(
+                "DELETE FROM behavior_graph_edges WHERE tenant_id=%s AND scope=%s",
+                (tid, sc),
+            )
+            self._port.execute(
+                "DELETE FROM behavior_graph_nodes WHERE tenant_id=%s AND scope=%s",
+                (tid, sc),
+            )
 
-            for n in nodes:
+            for node in nodes:
                 self._port.execute(
                     "INSERT INTO behavior_graph_nodes(tenant_id, scope, node_id, node_type, key, title, props_json) "
                     "VALUES(%s,%s,%s,%s,%s,%s,%s)",
                     (
                         tid,
                         sc,
-                        n.node_id,
-                        str(n.node_type),
-                        str(n.key),
-                        str(n.title),
-                        json.dumps(n.props or {}, ensure_ascii=False),
+                        node.node_id,
+                        str(node.node_type),
+                        str(node.key),
+                        str(node.title),
+                        json.dumps(node.props or {}, ensure_ascii=False),
                     ),
                 )
 
-            for e in edges:
+            for edge in edges:
                 self._port.execute(
                     "INSERT INTO behavior_graph_edges(tenant_id, scope, edge_id, edge_type, src, dst, weight, props_json) "
                     "VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
                     (
                         tid,
                         sc,
-                        e.edge_id,
-                        str(e.edge_type),
-                        str(e.src),
-                        str(e.dst),
-                        float(e.weight),
-                        json.dumps(e.props or {}, ensure_ascii=False),
+                        edge.edge_id,
+                        str(edge.edge_type),
+                        str(edge.src),
+                        str(edge.dst),
+                        float(edge.weight),
+                        json.dumps(edge.props or {}, ensure_ascii=False),
                     ),
                 )
-
-            self._port.commit()
-        except Exception:
-            self._port.rollback()
-            raise
 
     def get_snapshot(self, *, tenant_id: str, scope: str) -> GraphSnapshot | None:
         assert self._port is not None
@@ -159,15 +178,28 @@ class PostgresBehaviorGraphStore:
         meta = json.loads(row[1]) if row[1] else {}
 
         nrows = self._port.fetchall(
-            "SELECT node_id,node_type,key,title,props_json FROM behavior_graph_nodes WHERE tenant_id=%s AND scope=%s",
+            "SELECT node_id,node_type,key,title,props_json FROM behavior_graph_nodes WHERE tenant_id=%s AND scope=%s ORDER BY node_id",
             (tid, sc),
         )
         erows = self._port.fetchall(
-            "SELECT edge_id,edge_type,src,dst,weight,props_json FROM behavior_graph_edges WHERE tenant_id=%s AND scope=%s",
+            "SELECT edge_id,edge_type,src,dst,weight,props_json FROM behavior_graph_edges WHERE tenant_id=%s AND scope=%s ORDER BY edge_id",
             (tid, sc),
         )
-        nodes = [Node(node_id=r[0], node_type=r[1], key=r[2], title=r[3], props=(json.loads(r[4]) if r[4] else {})) for r in nrows]
-        edges = [Edge(edge_id=r[0], edge_type=r[1], src=r[2], dst=r[3], weight=float(r[4]), props=(json.loads(r[5]) if r[5] else {})) for r in erows]
+        nodes = [
+            Node(node_id=r[0], node_type=r[1], key=r[2], title=r[3], props=(json.loads(r[4]) if r[4] else {}))
+            for r in nrows
+        ]
+        edges = [
+            Edge(
+                edge_id=r[0],
+                edge_type=r[1],
+                src=r[2],
+                dst=r[3],
+                weight=float(r[4]),
+                props=(json.loads(r[5]) if r[5] else {}),
+            )
+            for r in erows
+        ]
         return GraphSnapshot(tenant_id=tid, scope=sc, built_at_ms=built_at_ms, nodes=nodes, edges=edges, meta=meta)
 
     def get_node(self, *, tenant_id: str, scope: str, node_id: str) -> Node | None:
@@ -181,7 +213,9 @@ class PostgresBehaviorGraphStore:
         )
         if not row:
             return None
-        return Node(node_id=row[0], node_type=row[1], key=row[2], title=row[3], props=(json.loads(row[4]) if row[4] else {}))
+        return Node(
+            node_id=row[0], node_type=row[1], key=row[2], title=row[3], props=(json.loads(row[4]) if row[4] else {})
+        )
 
     def neighbors(
         self,
@@ -211,13 +245,21 @@ class PostgresBehaviorGraphStore:
         if et:
             q += " AND edge_type=%s"
             params.append(et)
-        q += " ORDER BY weight DESC LIMIT %s"
+        q += " ORDER BY weight DESC, edge_id ASC LIMIT %s"
         params.append(lim)
         rows = self._port.fetchall(q, tuple(params))
         out: list[Neighbor] = []
         for r in rows:
             other = r[3] if d == "out" else r[2]
-            out.append(Neighbor(node_id=str(other), weight=float(r[4]), edge_type=str(r[1]), edge_id=str(r[0]), props=(json.loads(r[5]) if r[5] else {})))
+            out.append(
+                Neighbor(
+                    node_id=str(other),
+                    weight=float(r[4]),
+                    edge_type=str(r[1]),
+                    edge_id=str(r[0]),
+                    props=(json.loads(r[5]) if r[5] else {}),
+                )
+            )
         return out
 
     def shortest_path(
@@ -250,7 +292,7 @@ class PostgresBehaviorGraphStore:
             if depth >= mh:
                 continue
             rows = self._port.fetchall(
-                "SELECT edge_id,edge_type,src,dst,weight FROM behavior_graph_edges WHERE tenant_id=%s AND scope=%s AND src=%s",
+                "SELECT edge_id,edge_type,src,dst,weight FROM behavior_graph_edges WHERE tenant_id=%s AND scope=%s AND src=%s ORDER BY edge_id ASC",
                 (tid, sc, cur),
             )
             for r in rows:
@@ -262,32 +304,24 @@ class PostgresBehaviorGraphStore:
                 if nxt == t:
                     q.clear()
                     break
-                q.append((nxt, depth +1))
+                q.append((nxt, depth + 1))
 
-        if t not in prev:
-            return []
-
-        steps: list[PathStep] = [PathStep(node_id=t, via_edge_id=prev[t][1], via_edge_type=prev[t][2], weight=float(prev[t][3]))]
-        cur = t
-        while cur != s:
-            p = prev[cur]
-            cur = p[0]
-            if cur == s:
-                steps.append(PathStep(node_id=cur, via_edge_id=None, via_edge_type=None, weight=0.0))
-                break
-            pp = prev.get(cur)
-            if pp is None:
-                steps.append(PathStep(node_id=cur, via_edge_id=None, via_edge_type=None, weight=0.0))
-                break
-            steps.append(PathStep(node_id=cur, via_edge_id=pp[1], via_edge_type=pp[2], weight=float(pp[3])))
-        steps.reverse()
-        return steps
+        return finish_shortest_path(prev=prev, src=s, dst=t)
 
     def reset(self, *, tenant_id: str, scope: str) -> None:
         assert self._port is not None
         tid = str(tenant_id).strip()
         sc = str(scope).strip()
         with self._port.transaction():
-            self._port.execute("DELETE FROM behavior_graph_edges WHERE tenant_id=%s AND scope=%s", (tid, sc))
-            self._port.execute("DELETE FROM behavior_graph_nodes WHERE tenant_id=%s AND scope=%s", (tid, sc))
-            self._port.execute("DELETE FROM behavior_graph_snapshots WHERE tenant_id=%s AND scope=%s", (tid, sc))
+            self._port.execute(
+                "DELETE FROM behavior_graph_edges WHERE tenant_id=%s AND scope=%s",
+                (tid, sc),
+            )
+            self._port.execute(
+                "DELETE FROM behavior_graph_nodes WHERE tenant_id=%s AND scope=%s",
+                (tid, sc),
+            )
+            self._port.execute(
+                "DELETE FROM behavior_graph_snapshots WHERE tenant_id=%s AND scope=%s",
+                (tid, sc),
+            )

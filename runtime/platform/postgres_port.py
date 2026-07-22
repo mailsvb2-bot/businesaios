@@ -9,7 +9,8 @@ This keeps the dependency surface narrow and auditable.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,26 +34,91 @@ class PostgresPort:
                 # PostgreSQL does not accept bind parameters in ``SET name = value``.
                 # ``set_config`` is parameterizable and keeps the driver boundary sealed.
                 try:
-                    cur.execute("SELECT set_config('application_name', %s, false);", (self.application_name,))
+                    cur.execute(
+                        "SELECT set_config('application_name', %s, false);",
+                        (self.application_name,),
+                    )
                 except Exception as exc:
                     if "set_config" not in str(exc):
                         raise
+                    # A failed statement aborts the current PostgreSQL transaction.
+                    # The compatibility path must clear that state before the store is used.
+                    self._conn.rollback()
+                    return self
             self._conn.commit()
-        except Exception:
-            self._conn.rollback()
+        except Exception as exc:
+            try:
+                self._conn.rollback()
+            except Exception as rollback_exc:
+                exc.add_note(f"PostgreSQL rollback also failed: {rollback_exc}")
+            try:
+                self._conn.close()
+            except Exception as close_exc:
+                exc.add_note(f"PostgreSQL close also failed: {close_exc}")
+            finally:
+                self._conn = None
             raise
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
-        if getattr(self, "_conn", None) is None:
+        conn = getattr(self, "_conn", None)
+        if conn is None:
             return
+
+        operation_error: Exception | None = None
         try:
             if exc_type is None:
-                self._conn.commit()
+                try:
+                    conn.commit()
+                except Exception as commit_exc:
+                    operation_error = commit_exc
+                    try:
+                        conn.rollback()
+                    except Exception as rollback_exc:
+                        commit_exc.add_note(f"PostgreSQL rollback also failed: {rollback_exc}")
             else:
-                self._conn.rollback()
+                try:
+                    conn.rollback()
+                except Exception as rollback_exc:
+                    if exc is not None:
+                        exc.add_note(f"PostgreSQL rollback also failed: {rollback_exc}")
+                    else:
+                        operation_error = rollback_exc
         finally:
-            self._conn.close()
+            try:
+                conn.close()
+            except Exception as close_exc:
+                primary = exc if exc is not None else operation_error
+                if primary is not None:
+                    primary.add_note(f"PostgreSQL close also failed: {close_exc}")
+                else:
+                    operation_error = close_exc
+            finally:
+                self._conn = None
+
+        if operation_error is not None:
+            raise operation_error
+
+    @contextmanager
+    def transaction(self) -> Iterator[PostgresPort]:
+        """Own one explicit database transaction inside the sealed driver port."""
+        try:
+            yield self
+        except Exception as exc:
+            try:
+                self.rollback()
+            except Exception as rollback_exc:
+                exc.add_note(f"PostgreSQL rollback also failed: {rollback_exc}")
+            raise
+        else:
+            try:
+                self.commit()
+            except Exception as exc:
+                try:
+                    self.rollback()
+                except Exception as rollback_exc:
+                    exc.add_note(f"PostgreSQL rollback also failed: {rollback_exc}")
+                raise
 
     def execute(self, sql: str, params: Sequence[Any] | Mapping[str, Any] | None = None) -> None:
         with self._conn.cursor() as cur:
