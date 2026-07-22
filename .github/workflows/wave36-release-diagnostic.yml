@@ -27,8 +27,8 @@ jobs:
         run: |
           set -Eeuo pipefail
           python -m venv .venv
-          .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install --require-hashes -r requirements.release.lock.txt
+          .venv/bin/python -m pip install --upgrade pip >/dev/null
+          .venv/bin/python -m pip install --require-hashes -r requirements.release.lock.txt >/dev/null
 
       - name: Reproduce exact unit coverage shard
         run: |
@@ -40,6 +40,31 @@ jobs:
             -m 'not slow and not gate' \
             > unit-coverage-shard.log 2>&1
           STATUS=$?
-          echo "=== WAVE36_UNIT_COVERAGE_EXIT=$STATUS ==="
-          tail -n 220 unit-coverage-shard.log
+          printf '%s\n' "$STATUS" > unit-coverage-status.txt
           exit 0
+
+      - name: Upload bounded unit shard evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wave36-unit-shard-evidence
+          path: |
+            unit-coverage-shard.log
+            unit-coverage-status.txt
+          if-no-files-found: error
+
+  print-unit-coverage-tail:
+    needs: reproduce-unit-coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Download bounded unit shard evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: wave36-unit-shard-evidence
+          path: diagnostic
+
+      - name: Print exact failure tail
+        run: |
+          set -Eeuo pipefail
+          echo "=== WAVE36_UNIT_COVERAGE_EXIT=$(cat diagnostic/unit-coverage-status.txt) ==="
+          tail -n 220 diagnostic/unit-coverage-shard.log
