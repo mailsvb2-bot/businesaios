@@ -20,16 +20,14 @@ class SingletonLockError(RuntimeError):
 
 
 class SingletonLock:
-    _PROCESS_LOCK = RLock()
-    _PROCESS_HELD_PATHS: dict[str, int] = {}
-
     """Process-level singleton lock.
 
     Prevents multiple executors in the same deployment from executing decisions
     concurrently without an external coordinator.
 
-    The lock file contains: `pid,created_ts`.
-    If the lock exists but is stale (pid not running OR very old), it is replaced.
+    The lock file contains: `pid,created_ts`. A lock is replaced only when its
+    recorded process is no longer running. A live process is never displaced
+    merely because the file is old.
 
     Env overrides:
       - DISABLE_SINGLETON_LOCK=1  -> disable the lock entirely (debug only)
@@ -40,13 +38,16 @@ class SingletonLock:
         an extra safety net to prevent accidental double-run in dev.
     """
 
-    _STALE_TTL_SECONDS = 6 * 60 * 60  # 6 hours
+    _PROCESS_LOCK = RLock()
+    _PROCESS_PID = os.getpid()
+    _PROCESS_HELD_PATHS: dict[str, int] = {}
+    _STALE_TTL_SECONDS = 6 * 60 * 60  # compatibility constant; live owners are never stolen
 
     def __init__(self, path: str | None = None):
-        # Canonical tenant-scoped lock path (unless explicitly provided).
         if path is None:
             repo_root = Path(__file__).resolve().parents[2]
             from runtime.tenancy import current_tenant_id
+
             tenant_id = current_tenant_id()
             data_dir = env_str("DATA_DIR", "") or None
             if data_dir and str(data_dir).strip():
@@ -57,15 +58,11 @@ class SingletonLock:
         else:
             self._path = Path(path)
 
-        self._fd: int | None = None
+        self._held_count = 0
+        self._held_pid: int | None = None
 
     def _pid_is_running(self, pid: int) -> bool:
-        """Best-effort pid check without extra deps (psutil).
-
-        - On Windows: OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)
-        - Elsewhere: os.kill(pid, 0)
-        """
-
+        """Best-effort pid check without extra deps (psutil)."""
         try:
             pid = int(pid)
         except Exception:
@@ -75,12 +72,15 @@ class SingletonLock:
 
         system = platform.system().lower()
         if system.startswith("win") and ctypes is not None:
-            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid)
-            if handle == 0:
+            try:
+                process_query_limited_information = 0x1000
+                handle = ctypes.windll.kernel32.OpenProcess(process_query_limited_information, 0, pid)
+                if handle == 0:
+                    return False
+                ctypes.windll.kernel32.CloseHandle(handle)
+                return True
+            except Exception:
                 return False
-            ctypes.windll.kernel32.CloseHandle(handle)
-            return True
 
         if hasattr(os, "kill"):
             try:
@@ -93,7 +93,6 @@ class SingletonLock:
             except Exception:
                 return False
 
-        # Last resort: if /proc exists, check directory presence.
         try:
             return Path(f"/proc/{pid}").exists()
         except Exception:
@@ -110,83 +109,126 @@ class SingletonLock:
         except Exception:
             return -1, None
 
+    def _create_lockfile(self, *, flags: int, pid: int, now: int) -> None:
+        fd: int | None = None
+        created = False
+        primary_error: BaseException | None = None
+        try:
+            fd = os.open(str(self._path), flags, 0o644)
+            created = True
+            payload = f"{pid},{now}".encode()
+            offset = 0
+            while offset < len(payload):
+                written = os.write(fd, payload[offset:])
+                if written <= 0:
+                    raise OSError("singleton lock write made no progress")
+                offset += int(written)
+            os.fsync(fd)
+        except BaseException as exc:
+            primary_error = exc
+            raise
+        finally:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except BaseException as close_exc:
+                    if primary_error is not None:
+                        primary_error.add_note(f"singleton lock close also failed: {close_exc}")
+                    else:
+                        primary_error = close_exc
+            if primary_error is not None:
+                if created:
+                    try:
+                        self._path.unlink(missing_ok=True)
+                    except BaseException as unlink_exc:
+                        primary_error.add_note(f"singleton lock cleanup also failed: {unlink_exc}")
+                if not isinstance(primary_error, SingletonLockError):
+                    raise SingletonLockError(f"RuntimeExecutor lock could not be created: {self._path}") from primary_error
+                raise primary_error
+
+    @classmethod
+    def _sync_process_registry(cls, pid: int) -> None:
+        if cls._PROCESS_PID == int(pid):
+            return
+        cls._PROCESS_HELD_PATHS.clear()
+        cls._PROCESS_PID = int(pid)
+
+    def _mark_process_held(self, path_key: str, *, pid: int) -> None:
+        self._PROCESS_HELD_PATHS[path_key] = self._PROCESS_HELD_PATHS.get(path_key, 0) + 1
+        if self._held_pid != int(pid):
+            self._held_count = 0
+            self._held_pid = int(pid)
+        self._held_count += 1
+
     def acquire(self) -> None:
         if env_bool("DISABLE_SINGLETON_LOCK", False):
             return
 
         path_key = str(self._path.resolve())
+        pid = os.getpid()
         with self._PROCESS_LOCK:
-            held_count = self._PROCESS_HELD_PATHS.get(path_key, 0)
-            if held_count > 0:
-                self._PROCESS_HELD_PATHS[path_key] = held_count + 1
+            self._sync_process_registry(pid)
+            if self._PROCESS_HELD_PATHS.get(path_key, 0) > 0:
+                self._mark_process_held(path_key, pid=pid)
                 return
 
             self._path.parent.mkdir(parents=True, exist_ok=True)
             flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
-            pid = os.getpid()
             now = int(time.time())
 
             try:
-                self._fd = os.open(str(self._path), flags, 0o644)
-                os.write(self._fd, f"{pid},{now}".encode())
-                self._PROCESS_HELD_PATHS[path_key] = 1
+                self._create_lockfile(flags=flags, pid=pid, now=now)
+                self._mark_process_held(path_key, pid=pid)
                 return
-            except FileExistsError:
-                lock_pid, created_ts = self._parse_lockfile()
+            except SingletonLockError as exc:
+                if not isinstance(exc.__cause__, FileExistsError):
+                    raise
 
-                if lock_pid == pid:
-                    self._PROCESS_HELD_PATHS[path_key] = 1
-                    return
+            lock_pid, _created_ts = self._parse_lockfile()
+            if lock_pid == pid:
+                self._mark_process_held(path_key, pid=pid)
+                return
 
-                stale = False
-                if created_ts is not None:
-                    try:
-                        if (int(time.time()) - int(created_ts)) > self._STALE_TTL_SECONDS:
-                            stale = True
-                    except Exception:
-                        stale = True
-
-                if stale or (not self._pid_is_running(lock_pid)):
-                    try:
-                        self._path.unlink(missing_ok=True)
-                    except Exception as e:
-                        raise SingletonLockError(
-                            f"RuntimeExecutor lock exists but cannot be cleared: {self._path}"
-                        ) from e
-
-                    try:
-                        self._fd = os.open(str(self._path), flags, 0o644)
-                        os.write(self._fd, f"{pid},{now}".encode())
-                        self._PROCESS_HELD_PATHS[path_key] = 1
-                        return
-                    except FileExistsError as e:
-                        raise SingletonLockError(f"RuntimeExecutor already running (lock: {self._path})") from e
-
+            if self._pid_is_running(lock_pid):
                 raise SingletonLockError(f"RuntimeExecutor already running (pid={lock_pid}, lock: {self._path})")
+
+            try:
+                self._path.unlink(missing_ok=True)
+            except Exception as exc:
+                raise SingletonLockError(
+                    f"RuntimeExecutor lock exists but cannot be cleared: {self._path}"
+                ) from exc
+
+            try:
+                self._create_lockfile(flags=flags, pid=pid, now=now)
+            except SingletonLockError as exc:
+                if isinstance(exc.__cause__, FileExistsError):
+                    raise SingletonLockError(f"RuntimeExecutor already running (lock: {self._path})") from exc
+                raise
+            self._mark_process_held(path_key, pid=pid)
 
     def release(self) -> None:
         path_key = str(self._path.resolve())
+        pid = os.getpid()
         with self._PROCESS_LOCK:
+            self._sync_process_registry(pid)
+            if self._held_pid != pid or self._held_count <= 0:
+                self._held_count = 0
+                self._held_pid = None
+                return
+            self._held_count -= 1
+
             held_count = self._PROCESS_HELD_PATHS.get(path_key, 0)
             if held_count > 1:
                 self._PROCESS_HELD_PATHS[path_key] = held_count - 1
                 return
             self._PROCESS_HELD_PATHS.pop(path_key, None)
 
-            if self._fd is not None:
-                try:
-                    os.close(self._fd)
-                finally:
-                    self._fd = None
-                try:
-                    self._path.unlink(missing_ok=True)
-                except Exception:
-                    swallow(__name__, 'runtime/firewall/singleton_lock.py')
-                return
-
+            self._held_pid = None
             lock_pid, _ = self._parse_lockfile()
-            if lock_pid == os.getpid():
-                try:
-                    self._path.unlink(missing_ok=True)
-                except Exception:
-                    swallow(__name__, 'runtime/firewall/singleton_lock.py')
+            if lock_pid != pid:
+                return
+            try:
+                self._path.unlink(missing_ok=True)
+            except Exception:
+                swallow(__name__, "runtime/firewall/singleton_lock.py")
