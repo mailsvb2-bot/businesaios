@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Print bounded original failed-step log
+      - name: Print isolated original pytest failure
         env:
           GH_TOKEN: ${{ github.token }}
           FAILED_RUN_ID: '29905277261'
@@ -25,5 +25,8 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --log-failed \
             > original-release-failed.log
-          echo '=== WAVE36_ORIGINAL_RELEASE_FAILED_TAIL ==='
-          tail -n 260 original-release-failed.log
+          echo '=== WAVE36_ORIGINAL_PYTEST_FAILURE_LINES ==='
+          grep -nE 'FAILURES|FAILED|AssertionError|short test summary|E[[:space:]]+assert|coverage pytest run failed|returncode=1' \
+            original-release-failed.log \
+            | tail -n 160 \
+            || true
