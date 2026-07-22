@@ -2,16 +2,103 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import tempfile
-from collections.abc import Mapping
-from contextlib import suppress
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager, suppress
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
+from functools import wraps
 from pathlib import Path
-from typing import Any
+from threading import RLock, local
+from typing import Any, TypeVar
 from uuid import uuid4
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult
+
+_R = TypeVar("_R")
+_PROCESS_STATE_LOCKS_GUARD = RLock()
+_PROCESS_STATE_LOCKS: dict[str, RLock] = {}
+_STATE_LOCK_DEPTH = local()
+_STATE_LOCK_TIMEOUT_SECONDS = 30.0
+
+
+def _state_lock_path(path: Path) -> Path:
+    state_path = Path(path).resolve()
+    return state_path.with_name(f".{state_path.name}.lock.sqlite3")
+
+
+@contextmanager
+def _state_mutation_lock(path: Path) -> Iterator[None]:
+    key = str(Path(path).resolve())
+    with _PROCESS_STATE_LOCKS_GUARD:
+        process_lock = _PROCESS_STATE_LOCKS.setdefault(key, RLock())
+    with process_lock:
+        depths = getattr(_STATE_LOCK_DEPTH, "depths", None)
+        if depths is None:
+            depths = {}
+            _STATE_LOCK_DEPTH.depths = depths
+        if depths.get(key, 0) > 0:
+            depths[key] += 1
+            try:
+                yield
+            finally:
+                depths[key] -= 1
+            return
+
+        lock_path = _state_lock_path(Path(path))
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        db = sqlite3.connect(
+            lock_path,
+            timeout=_STATE_LOCK_TIMEOUT_SECONDS,
+            isolation_level=None,
+        )
+        depths[key] = 1
+        try:
+            db.execute(f"PRAGMA busy_timeout={int(_STATE_LOCK_TIMEOUT_SECONDS * 1000)}")
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                yield
+            except BaseException:
+                db.rollback()
+                raise
+            else:
+                db.commit()
+        finally:
+            depths.pop(key, None)
+            db.close()
+
+
+def _serialized_state_mutation(method: Callable[..., _R]) -> Callable[..., _R]:
+    @wraps(method)
+    def wrapped(self: "BusinessAutonomyDelayedOutcomeBridge", *args: Any, **kwargs: Any) -> _R:
+        with _state_mutation_lock(self.state_path):
+            return method(self, *args, **kwargs)
+
+    return wrapped
+
+
+def _recent_rows(rows: list[_R], limit: int) -> tuple[_R, ...]:
+    count = max(0, int(limit))
+    if count == 0:
+        return ()
+    return tuple(rows[-count:][::-1])
+
+
+def _json_object_lines(path: Path) -> Iterator[dict[str, Any]]:
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        raw = line.strip()
+        if not raw:
+            continue
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, Mapping):
+            yield dict(payload)
+
 
 _DELAY_BY_HORIZON = {
     "now": timedelta(minutes=15),
@@ -152,6 +239,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
             action_ledger_path=business_autonomy_delayed_outcome_action_ledger_path(),
         )
 
+    @_serialized_state_mutation
     def append_pending(self, *, request: BusinessExecutionRequest, result: BusinessExecutionResult) -> BusinessDelayedOutcomeReference | None:
         verdict = str(result.verdict.value if hasattr(result.verdict, "value") else result.verdict).strip().lower()
         if verdict not in {"accepted", "pending"}:
@@ -178,6 +266,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
         self._write_state(state)
         return reference
 
+    @_serialized_state_mutation
     def mark_resolved(self, *, outcome_id: str, resolution: str, metadata: dict[str, Any] | None = None) -> None:
         state = self._read_state()
         active = _safe_mapping(state.get("active"))
@@ -200,6 +289,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
         state["quarantined"] = quarantined
         self._write_state(state)
 
+    @_serialized_state_mutation
     def sweep_expired(self, *, now: datetime | None = None) -> DelayedOutcomeSweepResult:
         self.recover_incomplete_runs(recovered_by="sweeper")
         state = self._read_state()
@@ -252,6 +342,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
         )
         return DelayedOutcomeSweepResult(active_count=len(active), quarantined_count=quarantined_count)
 
+    @_serialized_state_mutation
     def recover_incomplete_runs(self, *, recovered_by: str) -> tuple[DelayedOutcomeSweepRunRecord, ...]:
         state = self._read_state()
         run_state = _safe_mapping(state.get("run_state"))
@@ -264,6 +355,8 @@ class BusinessAutonomyDelayedOutcomeBridge:
             state = self._read_state()
             run_state = _safe_mapping(state.get("run_state"))
         metadata = {**_safe_mapping(run_state.get("metadata")), "recovered_by": str(recovered_by or "system"), "resumed": bool(resumed)}
+        if transition and not resumed:
+            metadata["pending_transition"] = transition
         checkpoints = list(run_state.get("checkpoints") or [])
         if checkpoints:
             metadata["checkpoints"] = checkpoints
@@ -329,6 +422,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
             by_reason[item.quarantine_reason] = by_reason.get(item.quarantine_reason, 0) + 1
         return {"quarantined_total": len(rows), "by_reason": by_reason}
 
+    @_serialized_state_mutation
     def release_quarantined(self, *, outcome_id: str, released_by: str, note: str = "") -> bool:
         self.recover_incomplete_runs(recovered_by="release")
         state = self._read_state()
@@ -375,6 +469,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
         )
         return True
 
+    @_serialized_state_mutation
     def retry_quarantined(self, *, outcome_id: str, retried_by: str, planning_horizon: str | None = None, note: str = "") -> bool:
         self.recover_incomplete_runs(recovered_by="retry")
         state = self._read_state()
@@ -433,14 +528,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
         if not path.exists():
             return ()
         rows: list[DelayedOutcomeSweepRunRecord] = []
-        for line in path.read_text(encoding="utf-8").splitlines():
-            raw = line.strip()
-            if not raw:
-                continue
-            try:
-                payload = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
+        for payload in _json_object_lines(path):
             rows.append(
                 DelayedOutcomeSweepRunRecord(
                     run_id=str(payload.get("run_id") or ""),
@@ -455,7 +543,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
                     metadata=dict(payload.get("metadata") or {}),
                 )
             )
-        return tuple(rows[-max(0, int(limit)) :][::-1])
+        return _recent_rows(rows, limit)
 
     def list_action_runs(self, *, limit: int = 100) -> tuple[DelayedOutcomeActionRecord, ...]:
         path = self.action_journal_path or business_autonomy_delayed_outcome_action_journal_path()
@@ -469,14 +557,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
         if not path.exists():
             return ()
         rows: list[DelayedOutcomeActionRecord] = []
-        for line in path.read_text(encoding="utf-8").splitlines():
-            raw = line.strip()
-            if not raw:
-                continue
-            try:
-                payload = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
+        for payload in _json_object_lines(path):
             rows.append(
                 DelayedOutcomeActionRecord(
                     action_id=str(payload.get("action_id") or ""),
@@ -489,7 +570,7 @@ class BusinessAutonomyDelayedOutcomeBridge:
                     metadata=dict(payload.get("metadata") or {}),
                 )
             )
-        return tuple(rows[-max(0, int(limit)) :][::-1])
+        return _recent_rows(rows, limit)
 
     def _begin_run(self, *, operation: str, metadata: Mapping[str, Any]) -> str:
         state = self._read_state()
@@ -580,18 +661,10 @@ class BusinessAutonomyDelayedOutcomeBridge:
             return
         _append_jsonl_line(self.quarantine_path, {**payload, "action_type": "quarantine"})
 
-
     def _has_existing_action(self, *, path: Path, outcome_id: str, run_id: str, action: str) -> bool:
         if not path.exists():
             return False
-        for line in path.read_text(encoding="utf-8").splitlines():
-            raw = line.strip()
-            if not raw:
-                continue
-            try:
-                payload = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
+        for payload in _json_object_lines(path):
             if str(payload.get("outcome_id") or "") == str(outcome_id) and str(payload.get("run_id") or payload.get("quarantine_run_id") or "") == str(run_id) and str(payload.get("action") or payload.get("action_type") or "") == str(action):
                 return True
         return False
@@ -620,7 +693,9 @@ class BusinessAutonomyDelayedOutcomeBridge:
         run_id = str(run_state.get("run_id") or transition.get("run_id") or "")
         if operation == "sweep":
             row = _safe_mapping(transition.get("row"))
-            if row and outcome_id and outcome_id not in quarantined:
+            if not row or not outcome_id:
+                return False
+            if outcome_id not in quarantined:
                 normalized = dict(row)
                 normalized["status"] = "quarantined"
                 normalized["quarantined_at_utc"] = str(transition.get("quarantined_at_utc") or current.isoformat())
@@ -634,7 +709,9 @@ class BusinessAutonomyDelayedOutcomeBridge:
                 self._append_quarantine(reason=normalized["quarantine_reason"], row=normalized)
         elif operation in {"release", "retry"}:
             row = _safe_mapping(transition.get("row"))
-            if row and outcome_id and outcome_id not in active:
+            if not row or not outcome_id:
+                return False
+            if outcome_id not in active:
                 active[outcome_id] = dict(row)
                 quarantined.pop(outcome_id, None)
                 state["active"] = active
@@ -654,6 +731,8 @@ class BusinessAutonomyDelayedOutcomeBridge:
                 created_at_utc=current.isoformat(),
                 metadata=meta,
             ))
+        else:
+            return False
         state = self._read_state()
         run_state_mut = _safe_mapping(state.get("run_state"))
         if str(run_state_mut.get("run_id") or "") == run_id:
