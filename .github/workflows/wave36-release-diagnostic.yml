@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Print exact original multiprocessing traceback
+      - name: Print child SQLite exception
         env:
           GH_TOKEN: ${{ github.token }}
           FAILED_RUN_ID: '29905277261'
@@ -25,5 +25,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --log-failed \
             > original-release-failed.log
-          echo '=== WAVE36_ORIGINAL_MULTIPROCESS_TRACEBACK ==='
-          sed -n '286,322p' original-release-failed.log
+          echo '=== WAVE36_CHILD_SQLITE_EXCEPTION ==='
+          sed -n '320,348p' original-release-failed.log
