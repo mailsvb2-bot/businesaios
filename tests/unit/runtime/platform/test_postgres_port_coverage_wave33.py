@@ -212,7 +212,7 @@ def test_enter_and_exit_cleanup_failures_never_mask_primary_error(
         port.__enter__()
     assert port._conn is None
     assert any("rollback also failed" in note for note in raised.value.__notes__)
-    assert any("close also failed" in note for note in raised.value.__notes_)
+    assert any("close also failed" in note for note in raised.value.__notes__)
 
     conn = FakeConnection()
     conn.fail_commit = True
@@ -229,8 +229,8 @@ def test_enter_and_exit_cleanup_failures_never_mask_primary_error(
     port._conn = conn
     with pytest.raises(RuntimeError, match="commit failed") as raised:
         port.__exit__(None, None, None)
-    assert any("rollback also failed" in note for note in raised.value.__notes_)
-    assert any("close also failed" in note for note in raised.value.__notes_)
+    assert any("rollback also failed" in note for note in raised.value.__notes__)
+    assert any("close also failed" in note for note in raised.value.__notes__)
 
     conn = FakeConnection()
     conn.fail_rollback = True
@@ -238,7 +238,7 @@ def test_enter_and_exit_cleanup_failures_never_mask_primary_error(
     body_error = RuntimeError("body failed")
     port._conn = conn
     port.__exit__(RuntimeError, body_error, None)
-    assert any("rollback also failed" in note for note in body_error.__notes_)
+    assert any("rollback also failed" in note for note in body_error.__notes__)
     assert any("close also failed" in note for note in body_error.__notes__)
 
     conn = FakeConnection()
