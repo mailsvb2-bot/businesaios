@@ -6,37 +6,40 @@ on:
       - '.github/workflows/wave36-release-diagnostic.yml'
 
 permissions:
-  actions: read
   contents: read
 
 jobs:
-  summarize:
+  reproduce-unit-coverage:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
-      - name: Download failed Deep Release evidence
-        env:
-          GH_TOKEN: ${{ github.token }}
-          FAILED_RUN_ID: '29905277261'
-          ARTIFACT_NAME: deep-release-3d5d7f2cdefba416bf38595ada92c7fb86e87204
-        run: |
-          set -Eeuo pipefail
-          mkdir -p diagnostic
-          gh run download "$FAILED_RUN_ID" \
-            --repo "$GITHUB_REPOSITORY" \
-            --name "$ARTIFACT_NAME" \
-            --dir diagnostic
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: 3d5d7f2cdefba416bf38595ada92c7fb86e87204
+          persist-credentials: false
 
-      - name: Print bounded failure summary
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Install exact release dependencies
         run: |
           set -Eeuo pipefail
-          SUMMARY="$(find diagnostic -type f -name 'release.failure-summary.txt' -print -quit)"
-          REPORT="$(find diagnostic -type f -name 'release.report.json' -print -quit)"
-          test -n "$SUMMARY"
-          echo '=== WAVE36_RELEASE_FAILURE_SUMMARY ==='
-          sed -n '1,120p' "$SUMMARY"
-          if [ -n "$REPORT" ]; then
-            echo '=== WAVE36_RELEASE_FAILED_STEP_JSON ==='
-            jq -c '{gate, success, failed_steps: [.steps[] | select(.status == "failed")]}' "$REPORT"
-          fi
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install --require-hashes -r requirements.release.lock.txt
+
+      - name: Reproduce exact unit coverage shard
+        run: |
+          set -uo pipefail
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONNOUSERSITE=1 \
+            .venv/bin/python -m scripts.ci.coverage_pytest_runner \
+            -p pytest_asyncio.plugin \
+            -q tests/unit \
+            -m 'not slow and not gate' \
+            > unit-coverage-shard.log 2>&1
+          STATUS=$?
+          echo "=== WAVE36_UNIT_COVERAGE_EXIT=$STATUS ==="
+          tail -n 220 unit-coverage-shard.log
+          exit 0
