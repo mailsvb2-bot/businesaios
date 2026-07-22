@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from threading import RLock
@@ -47,7 +49,7 @@ class SQLiteTenantMigrationLockBackend(TenantMigrationLockBackend):
             raise ValueError("ttl_seconds must be > 0")
         moment = ensure_aware(now or utc_now())
         expires_at = moment + timedelta(seconds=ttl)
-        with self._lock, self._connect(write=True) as conn:
+        with self._lock, self._session(write=True) as conn:
             self._reap_expired_locked(conn, now=moment)
             row = conn.execute(
                 "SELECT tenant_id, operation_id, owner_id, fencing_token, acquired_at, expires_at FROM tenant_migration_locks WHERE tenant_id = ?",
@@ -92,7 +94,7 @@ class SQLiteTenantMigrationLockBackend(TenantMigrationLockBackend):
             raise ValueError("ttl_seconds must be > 0")
         moment = ensure_aware(now or utc_now())
         expires_at = moment + timedelta(seconds=ttl)
-        with self._lock, self._connect(write=True) as conn:
+        with self._lock, self._session(write=True) as conn:
             self._reap_expired_locked(conn, now=moment)
             row = conn.execute(
                 "SELECT tenant_id, operation_id, owner_id, fencing_token, acquired_at, expires_at FROM tenant_migration_locks WHERE tenant_id = ?",
@@ -118,7 +120,7 @@ class SQLiteTenantMigrationLockBackend(TenantMigrationLockBackend):
         owner = str(owner_id or "").strip()
         if not operation or not owner:
             raise ValueError("operation_id and owner_id are required")
-        with self._lock, self._connect(write=True) as conn:
+        with self._lock, self._session(write=True) as conn:
             self._reap_expired_locked(conn, now=utc_now())
             row = conn.execute(
                 "SELECT operation_id, owner_id FROM tenant_migration_locks WHERE tenant_id = ?",
@@ -133,7 +135,7 @@ class SQLiteTenantMigrationLockBackend(TenantMigrationLockBackend):
 
     def get(self, *, tenant_id: str) -> TenantMigrationLockRecord | None:
         tid = require_tenant_id(tenant_id)
-        with self._lock, self._connect(write=True) as conn:
+        with self._lock, self._session(write=True) as conn:
             self._reap_expired_locked(conn, now=utc_now())
             row = conn.execute(
                 "SELECT tenant_id, operation_id, owner_id, fencing_token, acquired_at, expires_at FROM tenant_migration_locks WHERE tenant_id = ?",
@@ -167,26 +169,64 @@ class SQLiteTenantMigrationLockBackend(TenantMigrationLockBackend):
         lock.validate()
         return lock
 
+    @contextmanager
+    def _session(self, *, write: bool = False) -> Iterator[SQLiteConnection]:
+        conn = self._connect(write=write)
+        primary_error: BaseException | None = None
+        try:
+            try:
+                yield conn
+            except BaseException as exc:
+                primary_error = exc
+                try:
+                    conn.rollback()
+                except BaseException as rollback_exc:
+                    exc.add_note(f"sqlite tenant migration lock rollback also failed: {rollback_exc}")
+                raise
+            try:
+                conn.commit()
+            except BaseException as exc:
+                primary_error = exc
+                try:
+                    conn.rollback()
+                except BaseException as rollback_exc:
+                    exc.add_note(f"sqlite tenant migration lock rollback also failed: {rollback_exc}")
+                raise
+        finally:
+            try:
+                conn.close()
+            except BaseException as close_exc:
+                if primary_error is not None:
+                    primary_error.add_note(f"sqlite tenant migration lock close also failed: {close_exc}")
+                else:
+                    raise
+
     def _connect(self, *, write: bool = False) -> SQLiteConnection:
         conn = connect_sqlite(self._path, timeout=30.0, isolation_level=None)
-        conn.row_factory = SQLITE_ROW_FACTORY
-        conn.execute("PRAGMA journal_mode=WAL")
-        conn.execute("PRAGMA synchronous=NORMAL")
-        conn.execute("PRAGMA busy_timeout=30000")
-        conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-        return conn
-
+        try:
+            conn.row_factory = SQLITE_ROW_FACTORY
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA busy_timeout=30000")
+            conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
+            return conn
+        except BaseException as exc:
+            try:
+                conn.close()
+            except BaseException as close_exc:
+                exc.add_note(f"sqlite tenant migration lock close also failed: {close_exc}")
+            raise
 
     def schema_version(self) -> int:
         return 1
 
     def read_backend_clock(self) -> datetime:
-        with self._lock, self._connect() as conn:
+        with self._lock, self._session() as conn:
             row = conn.execute("SELECT strftime('%Y-%m-%dT%H:%M:%f+00:00','now')").fetchone()
         return ensure_aware(datetime.fromisoformat(str(row[0])))
 
     def _init_db(self) -> None:
-        with self._lock, self._connect(write=True) as conn:
+        with self._lock, self._session(write=True) as conn:
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS tenant_migration_locks (tenant_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL, owner_id TEXT NOT NULL, fencing_token INTEGER NOT NULL, acquired_at TEXT NOT NULL, expires_at TEXT NOT NULL)"
             )
