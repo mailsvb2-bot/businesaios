@@ -8,7 +8,6 @@ on:
 permissions:
   actions: read
   contents: read
-  issues: write
 
 jobs:
   summarize:
@@ -29,29 +28,15 @@ jobs:
             --name "$ARTIFACT_NAME" \
             --dir diagnostic
 
-      - name: Publish bounded failure summary
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+      - name: Print bounded failure summary
         run: |
           set -Eeuo pipefail
           SUMMARY="$(find diagnostic -type f -name 'release.failure-summary.txt' -print -quit)"
           REPORT="$(find diagnostic -type f -name 'release.report.json' -print -quit)"
           test -n "$SUMMARY"
-          {
-            echo '### Wave 36 Deep Release diagnostic'
-            echo
-            echo '```text'
-            sed -n '1,120p' "$SUMMARY"
-            echo '```'
-            if [ -n "$REPORT" ]; then
-              echo
-              echo '<details><summary>Failed report step</summary>'
-              echo
-              echo '```json'
-              jq '{gate, success, failed_steps: [.steps[] | select(.status == "failed")]}' "$REPORT"
-              echo '```'
-              echo '</details>'
-            fi
-          } > diagnostic-comment.md
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file diagnostic-comment.md
+          echo '=== WAVE36_RELEASE_FAILURE_SUMMARY ==='
+          sed -n '1,120p' "$SUMMARY"
+          if [ -n "$REPORT" ]; then
+            echo '=== WAVE36_RELEASE_FAILED_STEP_JSON ==='
+            jq -c '{gate, success, failed_steps: [.steps[] | select(.status == "failed")]}' "$REPORT"
+          fi
