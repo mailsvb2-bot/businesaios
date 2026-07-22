@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import time
 from multiprocessing import get_all_start_methods, get_context
 from pathlib import Path
 from types import SimpleNamespace
