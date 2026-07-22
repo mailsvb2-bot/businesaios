@@ -23,6 +23,37 @@ class HookVault(support.InMemorySecretVaultMixin):
         return canonical._key_provider_for_ref(self._key_provider, ref)
 
 
+class LegacyCryptoBase:
+    def _resolve_encryption_key(self, ref: SecretRef):
+        return canonical._key_provider_for_ref(self._key_provider, ref)
+
+    def _encrypt(
+        self,
+        plaintext: bytes,
+        *,
+        ref: SecretRef,
+        encryption_key_id: str,
+    ) -> bytes:
+        del ref, encryption_key_id
+        self.crypto_calls = [*getattr(self, "crypto_calls", []), "encrypt"]
+        return b"legacy:" + plaintext
+
+    def _decrypt(
+        self,
+        ciphertext: bytes,
+        *,
+        ref: SecretRef,
+        encryption_key_id: str,
+    ) -> bytes:
+        del ref, encryption_key_id
+        self.crypto_calls = [*getattr(self, "crypto_calls", []), "decrypt"]
+        return ciphertext.removeprefix(b"legacy:")
+
+
+class MultiBaseVault(support.InMemorySecretVaultMixin, LegacyCryptoBase):
+    pass
+
+
 class FileVault(support.FileSecretVaultMixin):
     pass
 
@@ -40,10 +71,6 @@ def test_support_functions_and_methods_delegate_to_canonical_owner() -> None:
 
     assert support.InMemorySecretVaultMixin.put is canonical.InMemorySecretVault.put
     assert support.InMemorySecretVaultMixin.get is canonical.InMemorySecretVault.get
-    assert (
-        support.InMemorySecretVaultMixin._encrypt
-        is canonical.InMemorySecretVault._encrypt
-    )
     assert support.FileSecretVaultMixin._flush is canonical.FileSecretVault._flush
     assert (
         support.FileSecretVaultMixin._load_records
@@ -78,6 +105,17 @@ def test_legacy_resolve_encryption_key_hook_remains_supported() -> None:
     assert vault.resolve_calls == [ref]
     assert vault.get(ref) == b"secret"
     assert stored.metadata["encryption_key_id"]
+
+
+def test_multi_base_legacy_crypto_hooks_are_not_shadowed() -> None:
+    vault = MultiBaseVault()
+    ref = SecretRef("tenant-a", "multi-base")
+
+    stored = vault.put(_record(ref), plaintext=b"secret")
+
+    assert stored.ciphertext == b"legacy:secret"
+    assert vault.get(ref) == b"secret"
+    assert vault.crypto_calls == ["encrypt", "decrypt"]
 
 
 def test_file_mixin_persists_keys_records_and_deactivation(tmp_path: Path) -> None:
