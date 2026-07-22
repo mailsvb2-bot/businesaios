@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Print isolated original pytest failure
+      - name: Print exact original multiprocessing traceback
         env:
           GH_TOKEN: ${{ github.token }}
           FAILED_RUN_ID: '29905277261'
@@ -25,8 +25,5 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --log-failed \
             > original-release-failed.log
-          echo '=== WAVE36_ORIGINAL_PYTEST_FAILURE_LINES ==='
-          grep -nE 'FAILURES|FAILED|AssertionError|short test summary|E[[:space:]]+assert|coverage pytest run failed|returncode=1' \
-            original-release-failed.log \
-            | tail -n 160 \
-            || true
+          echo '=== WAVE36_ORIGINAL_MULTIPROCESS_TRACEBACK ==='
+          sed -n '286,322p' original-release-failed.log
