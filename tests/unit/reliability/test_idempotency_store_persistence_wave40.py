@@ -174,8 +174,14 @@ def test_windows_file_lock_adapter_branch(tmp_path: Path, monkeypatch):
         LK_UNLCK=2,
         locking=lambda fd, mode, count: calls.append((fd, mode, count)),
     )
+    class OsProxy:
+        name = "nt"
+
+        def __getattr__(self, attr):
+            return getattr(os, attr)
+
     monkeypatch.setitem(sys.modules, "msvcrt", fake)
-    monkeypatch.setattr(module.os, "name", "nt")
+    monkeypatch.setattr(module, "os", OsProxy())
     store._lock_path.write_bytes(b"")
     with store._exclusive_file_lock():
         assert store._lock_path.read_bytes() == b"\0"
