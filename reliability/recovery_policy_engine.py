@@ -127,13 +127,32 @@ class RecoveryPolicyEngine:
                 operator_hint="caller-provided recovery references disagree with durable history",
             )
 
+        if bool(
+            facts.derived_flags.get(
+                "claimable_outbox_while_idempotency_lease_live"
+            )
+        ):
+            return self._decision(
+                facts=facts,
+                action="quarantine",
+                reason="claimable_outbox_while_live_idempotency_lease",
+                operator_required=True,
+                delivery_hint="claimable_outbox",
+                operator_hint=(
+                    "do not steal delivery while the canonical execution "
+                    "lease is still live"
+                ),
+            )
+
         if self._config.quarantine_on_any_anomaly and facts.anomalies:
             return self._decision(
                 facts=facts,
                 action="quarantine",
                 reason="reconciliation_anomaly",
                 operator_required=True,
-                operator_hint="inspect rebuilt run facts and durable store consistency",
+                operator_hint=(
+                    "inspect rebuilt run facts and durable store consistency"
+                ),
             )
 
         if facts.latest_stage == "completed":

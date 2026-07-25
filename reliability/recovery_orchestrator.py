@@ -112,26 +112,33 @@ class RecoveryOrchestrator:
         idempotency_key: IdempotencyKey | None = None,
         outbox_message_id: str | None = None,
     ) -> RecoveryPlan:
-        reconciliation = self._reconciliation.reconcile(
-            tenant_id=tenant_id,
-            run_id=run_id,
-            idempotency_key=idempotency_key,
-            outbox_message_id=outbox_message_id,
-        )
         decision = self._policy_engine.resolve(
             tenant_id=tenant_id,
             run_id=run_id,
             idempotency_key=idempotency_key,
             outbox_message_id=outbox_message_id,
         )
+        rebuilt = decision.rebuilt_facts
+        reconciliation = (
+            rebuilt.reconciliation
+            if rebuilt is not None
+            else self._reconciliation.reconcile(
+                tenant_id=tenant_id,
+                run_id=run_id,
+                idempotency_key=idempotency_key,
+                outbox_message_id=outbox_message_id,
+            )
+        )
 
         delivery_hint = decision.delivery_hint
-        rebuilt = decision.rebuilt_facts
         if delivery_hint == "claimable_outbox" and rebuilt is not None and rebuilt.outbox_message is not None:
             outbox_message = rebuilt.outbox_message
             if outbox_message.state is OutboxState.PENDING:
                 delivery_hint = "pending_delivery_can_be_claimed"
-            elif outbox_message.state is OutboxState.DELIVERING and outbox_message.is_claim_expired():
+            elif (
+                outbox_message.state is OutboxState.DELIVERING
+                and outbox_message.is_claim_expired(now=rebuilt.observed_at)
+            ):
                 delivery_hint = "expired_delivery_claim_can_be_stolen"
         elif delivery_hint == "expired_delivery_claim":
             delivery_hint = "expired_delivery_claim_can_be_stolen"
