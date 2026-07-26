@@ -5,7 +5,6 @@ from types import SimpleNamespace
 import pytest
 
 from application.headless.decision_gateway import (
-    HeadlessDecisionGatewayContractError,
     issue_headless_decision,
     resolve_headless_decision_callable,
 )
@@ -18,10 +17,7 @@ from runtime.decision_gateway import (
     DecisionGatewayContractError,
     issue_runtime_decision,
 )
-from runtime.decision_path_lock import (
-    DecisionPathLockError,
-    issue_locked_decision,
-)
+from runtime.decision_path_lock import issue_locked_decision
 
 
 @pytest.fixture(autouse=True)
@@ -55,31 +51,25 @@ class _Issuer:
         return self.issue(state)
 
 
-def test_locked_path_accepts_only_the_registered_issuer_identity() -> None:
+def test_locked_path_uses_the_explicit_issuer_not_global_identity() -> None:
     registered = _Issuer()
-    alternate = _Issuer()
+    explicit = _Issuer(result=_envelope("explicit"))
     set_decision_core_singleton(registered)
 
     locked = issue_locked_decision(
-        decision_core=registered,
-        state={"state": "ok"},
+        decision_core=explicit,
+        state={"state": "explicit"},
     )
-    assert locked.envelope is registered.result
-    assert registered.states == [{"state": "ok"}]
 
-    with pytest.raises(
-        DecisionPathLockError,
-        match="noncanonical_decision_core",
-    ):
-        issue_locked_decision(
-            decision_core=alternate,
-            state={"state": "blocked"},
-        )
+    assert locked.envelope is explicit.result
+    assert explicit.states == [{"state": "explicit"}]
+    assert registered.states == []
+    assert get_decision_core_singleton() is registered
 
 
 def test_runtime_gateway_rejects_raw_results_instead_of_forging_proof() -> None:
     issuer = _Issuer(result="raw-result")
-    set_decision_core_singleton(issuer)
+    set_decision_core_singleton(_Issuer())
 
     with pytest.raises(
         DecisionGatewayContractError,
@@ -93,7 +83,6 @@ def test_runtime_gateway_rejects_raw_results_instead_of_forging_proof() -> None:
 
 def test_headless_api_preserves_envelope_behavior_via_runtime_gateway() -> None:
     issuer = _Issuer(result=_envelope("headless"))
-    set_decision_core_singleton(issuer)
 
     assert (
         issue_headless_decision(
@@ -110,21 +99,22 @@ def test_headless_api_preserves_envelope_behavior_via_runtime_gateway() -> None:
     ]
 
 
-def test_headless_api_rejects_an_alternate_core() -> None:
+def test_headless_api_does_not_replace_explicit_core_with_global_singleton() -> None:
     registered = _Issuer()
+    explicit = _Issuer(result=_envelope("explicit-headless"))
     set_decision_core_singleton(registered)
 
-    with pytest.raises(
-        HeadlessDecisionGatewayContractError,
-        match="noncanonical_decision_issuer",
-    ):
-        issue_headless_decision(
-            decision_core=_Issuer(),
-            state={"surface": "blocked"},
-        )
+    observed = issue_headless_decision(
+        decision_core=explicit,
+        state={"surface": "explicit"},
+    )
+
+    assert observed is explicit.result
+    assert explicit.states == [{"surface": "explicit"}]
+    assert registered.states == []
 
 
-def test_singleton_registry_returns_the_exact_registered_object() -> None:
+def test_singleton_registry_remains_a_boot_identity_guard() -> None:
     issuer = _Issuer()
     set_decision_core_singleton(issuer)
 
