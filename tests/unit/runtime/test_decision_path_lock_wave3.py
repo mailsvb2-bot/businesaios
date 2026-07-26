@@ -47,7 +47,14 @@ class _IssueOnlyCore:
 
 class _OptimizeOnlyCore:
     def optimize(self, state):
-        return state
+        del state
+        return _Envelope(
+            decision=_Decision(decision_id="d-2", correlation_id="c-2")
+        )
+
+
+class _EmptyCore:
+    pass
 
 
 def test_lock_world_state_rejects_none_and_envelope_like_payload() -> None:
@@ -62,35 +69,43 @@ def test_lock_world_state_rejects_none_and_envelope_like_payload() -> None:
         )
 
 
-def test_resolve_decision_issue_callable_requires_registered_issue_owner() -> None:
+def test_resolve_decision_issue_callable_accepts_explicit_issue_owner() -> None:
     core = _IssueOnlyCore()
-    set_decision_core_singleton(core)
 
     callable_ = resolve_decision_issue_callable(core)
 
     assert callable_(state={"x": 1}).decision.decision_id == "d-1"
 
 
-def test_resolve_decision_issue_callable_rejects_optimize_only_owner() -> None:
+def test_resolve_decision_issue_callable_accepts_explicit_optimize_alias() -> None:
     core = _OptimizeOnlyCore()
-    set_decision_core_singleton(core)
 
-    with pytest.raises(DecisionPathLockError):
-        resolve_decision_issue_callable(core)
+    callable_ = resolve_decision_issue_callable(core)
+
+    assert callable_(state={"x": 2}).decision.decision_id == "d-2"
 
 
-def test_issue_locked_decision_routes_world_state_to_registered_issue() -> None:
-    core = _IssueOnlyCore()
-    set_decision_core_singleton(core)
+def test_resolve_decision_issue_callable_fails_closed_for_invalid_owner() -> None:
+    with pytest.raises(
+        DecisionPathLockError,
+        match="decision_core_must_provide_callable_issue_or_optimize",
+    ):
+        resolve_decision_issue_callable(_EmptyCore())
+
+
+def test_issue_locked_decision_routes_world_state_to_explicit_issuer() -> None:
+    boot_registered = _IssueOnlyCore()
+    explicit = _OptimizeOnlyCore()
+    set_decision_core_singleton(boot_registered)
 
     locked = issue_locked_decision(
-        decision_core=core,
+        decision_core=explicit,
         state={"goal": "grow"},
     )
 
     assert locked.stage == "decision_core"
     assert locked.state == {"goal": "grow"}
-    assert locked.envelope.decision.correlation_id == "c-1"
+    assert locked.envelope.decision.correlation_id == "c-2"
 
 
 def test_lock_decision_for_executor_requires_canonical_envelope_shape() -> None:
