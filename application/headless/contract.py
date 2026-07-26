@@ -14,7 +14,10 @@ from application.capability.capability_router import ExecutionCapabilityRouter
 from application.effects.effect_journal import FileEffectJournal
 from application.evidence.evidence_persistence import EvidencePersistenceService
 from application.headless.closed_loop import HeadlessClosedLoopService
-from application.headless.decision_gateway import validate_headless_decision_core
+from application.headless.decision_gateway import (
+    HeadlessDecisionGatewayContractError,
+    validate_headless_decision_core,
+)
 from application.headless.execution_gateway import validate_headless_executor
 from application.headless.models import CEOParticipation, GoalExecutionReport, GoalExecutionRequest, GoalExecutionStep
 from application.headless.step_builder import HeadlessStepBuilder
@@ -134,8 +137,8 @@ class HeadlessExecutionContract:
     ) -> None:
         try:
             validate_headless_decision_core(decision_core)
-        except Exception as exc:
-            raise ValueError('decision_core must provide callable issue() or optimize()') from exc
+        except HeadlessDecisionGatewayContractError as exc:
+            raise ValueError(str(exc)) from exc
         validate_headless_executor(executor)
         _require_method(state_mapper, 'to_world_state', 'state_mapper')
         self._decision_core = decision_core
