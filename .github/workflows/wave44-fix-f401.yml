@@ -1,0 +1,35 @@
+name: Wave 44 remove unused test import
+
+on:
+  push:
+    branches:
+      - agent/coverage-100-wave44-telegram-delivery-canon
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wave44-f401-fix
+  cancel-in-progress: false
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Remove unused import and publish exact fix
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sed -i '/from types import SimpleNamespace/d' tests/unit/runtime/test_telegram_client_wave44.py
+          rm -f .github/workflows/wave44-fix-f401.yml
+          git add -A -- tests/unit/runtime/test_telegram_client_wave44.py .github/workflows/wave44-fix-f401.yml
+          git config user.name 'BusinesAIOS Coverage Agent'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'Wave 44: remove unused regression import'
+          git push origin HEAD:agent/coverage-100-wave44-telegram-delivery-canon
