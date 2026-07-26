@@ -47,19 +47,27 @@ def _function(
     return matches[0]
 
 
-def _true_markers(tree: ast.Module) -> set[str]:
+def _boolean_markers(tree: ast.Module, value: bool) -> set[str]:
     markers: set[str] = set()
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
         if not isinstance(node.value, ast.Constant):
             continue
-        if node.value.value is not True:
+        if node.value.value is not value:
             continue
         for target in node.targets:
             if isinstance(target, ast.Name):
                 markers.add(target.id)
     return markers
+
+
+def _true_markers(tree: ast.Module) -> set[str]:
+    return _boolean_markers(tree, True)
+
+
+def _false_markers(tree: ast.Module) -> set[str]:
+    return _boolean_markers(tree, False)
 
 
 def test_historical_forbidden_method_contract_is_preserved() -> None:
@@ -95,23 +103,36 @@ def test_only_file_exact_production_paths_own_decision_authority() -> None:
 
 
 def test_exact_runtime_owners_retain_single_path_markers() -> None:
-    expected = {
+    expected_true = {
         "runtime/decision_gateway.py": {
             "CANON_RUNTIME_DECISION_GATEWAY_SINGLE_PATH",
             "CANON_RUNTIME_DECISION_GATEWAY_NO_RAW_DECISION_LOGIC",
-            "CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON",
+            "CANON_RUNTIME_DECISION_GATEWAY_USES_EXPLICIT_ISSUER",
+            "CANON_RUNTIME_DECISION_GATEWAY_NO_HIDDEN_GLOBAL_STATE",
             "CANON_RUNTIME_DECISION_GATEWAY_REJECTS_SYNTHETIC_ENVELOPES",
             "CANON_RUNTIME_DECISION_GATEWAY_NO_STRUCTURED_ALT_ISSUER",
         },
         "runtime/decision_path_lock.py": {
             "CANON_DECISION_PATH_LOCK_SINGLE_OWNER",
             "CANON_DECISION_PATH_LOCK_NO_DECISION_LOGIC",
+            "CANON_DECISION_PATH_LOCK_USES_EXPLICIT_ISSUER",
+            "CANON_DECISION_PATH_LOCK_NO_HIDDEN_GLOBAL_STATE",
+            "CANON_DECISION_PATH_LOCK_COMPAT_OPTIMIZE_ALIAS",
+        },
+    }
+    expected_false = {
+        "runtime/decision_gateway.py": {
+            "CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON",
+        },
+        "runtime/decision_path_lock.py": {
             "CANON_DECISION_PATH_LOCK_BINDS_REGISTERED_SINGLETON",
         },
     }
 
-    for relative, required in expected.items():
-        assert required <= _true_markers(_tree(relative)), relative
+    for relative, required in expected_true.items():
+        tree = _tree(relative)
+        assert required <= _true_markers(tree), relative
+        assert expected_false[relative] <= _false_markers(tree), relative
 
 
 def test_headless_gateway_is_a_pure_runtime_delegate() -> None:
