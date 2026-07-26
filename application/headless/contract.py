@@ -265,34 +265,33 @@ class HeadlessExecutionContract:
             final_feedback=dict(loop_result.final_feedback),
             canonical_run_artifact=run_artifact,
         )
-        if self._evidence_persistence_service is not None:
-            last_step = loop_result.steps[-1] if loop_result.steps else None
-            self._evidence_persistence_service.persist(
-                tenant_id=request.tenant_id,
-                business_id=request.business_id,
-                run_id=loop_result.trace.run_id,
-                goal=request.goal,
-                step_index=int(last_step.step_index if last_step is not None else max(len(loop_result.steps) - 1, 0)),
-                action={
-                    "action_type": str(last_step.action if last_step is not None else ""),
-                    "action_id": str(last_step.action_id if last_step is not None else ""),
-                },
-                execution_result=dict(loop_result.final_feedback),
-                verification_result=dict(loop_result.final_feedback),
-                world_state_before={},
-                world_state_after=None,
-                request_meta=dict(request.meta),
-                request_profile=dict(request.profile),
-                request_constraints=dict(request.constraints),
-                request_signals=list(request.signals),
-                request_channel=request.channel,
-                request_region=request.region,
-                request_product_name=request.product_name,
-                completed=loop_result.completed,
-                stop_reason=loop_result.stop_reason,
-                final_feedback=dict(loop_result.final_feedback),
-                step_count=len(loop_result.steps),
-            )
+        last_step = loop_result.steps[-1] if loop_result.steps else None
+        self._evidence_persistence_service.persist(
+            tenant_id=request.tenant_id,
+            business_id=request.business_id,
+            run_id=loop_result.trace.run_id,
+            goal=request.goal,
+            step_index=int(last_step.step_index if last_step is not None else max(len(loop_result.steps) - 1, 0)),
+            action={
+                "action_type": str(last_step.action if last_step is not None else ""),
+                "action_id": str(last_step.action_id if last_step is not None else ""),
+            },
+            execution_result=dict(loop_result.final_feedback),
+            verification_result=dict(loop_result.final_feedback),
+            world_state_before={},
+            world_state_after=None,
+            request_meta=dict(request.meta),
+            request_profile=dict(request.profile),
+            request_constraints=dict(request.constraints),
+            request_signals=list(request.signals),
+            request_channel=request.channel,
+            request_region=request.region,
+            request_product_name=request.product_name,
+            completed=loop_result.completed,
+            stop_reason=loop_result.stop_reason,
+            final_feedback=dict(loop_result.final_feedback),
+            step_count=len(loop_result.steps),
+        )
         if self._ledger is not None:
             self._ledger.write(
                 LedgerRecord(
