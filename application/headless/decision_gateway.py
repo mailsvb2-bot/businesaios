@@ -25,8 +25,19 @@ class HeadlessDecisionGatewayContractError(RuntimeError):
     pass
 
 
+_MISSING_DECISION_ISSUER_MESSAGE = (
+    "decision_core must provide callable issue() or optimize()"
+)
+
+
 def _translate_contract_error(exc: Exception) -> HeadlessDecisionGatewayContractError:
-    return HeadlessDecisionGatewayContractError(str(exc))
+    code = str(exc)
+    if code in {
+        "decision_core_missing",
+        "decision_core_must_provide_callable_issue_or_optimize",
+    }:
+        code = _MISSING_DECISION_ISSUER_MESSAGE
+    return HeadlessDecisionGatewayContractError(code)
 
 
 @dataclass(slots=True, frozen=True)
@@ -43,7 +54,6 @@ class HeadlessDecisionIngress:
             raise _translate_contract_error(exc) from exc
 
 
-# Transitional ABI only.
 HeadlessDecisionGateway = HeadlessDecisionIngress
 
 

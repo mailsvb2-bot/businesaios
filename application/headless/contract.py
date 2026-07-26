@@ -14,7 +14,10 @@ from application.capability.capability_router import ExecutionCapabilityRouter
 from application.effects.effect_journal import FileEffectJournal
 from application.evidence.evidence_persistence import EvidencePersistenceService
 from application.headless.closed_loop import HeadlessClosedLoopService
-from application.headless.decision_gateway import validate_headless_decision_core
+from application.headless.decision_gateway import (
+    HeadlessDecisionGatewayContractError,
+    validate_headless_decision_core,
+)
 from application.headless.execution_gateway import validate_headless_executor
 from application.headless.models import CEOParticipation, GoalExecutionReport, GoalExecutionRequest, GoalExecutionStep
 from application.headless.step_builder import HeadlessStepBuilder
@@ -134,8 +137,8 @@ class HeadlessExecutionContract:
     ) -> None:
         try:
             validate_headless_decision_core(decision_core)
-        except Exception as exc:
-            raise ValueError('decision_core must provide callable issue() or optimize()') from exc
+        except HeadlessDecisionGatewayContractError as exc:
+            raise ValueError(str(exc)) from exc
         validate_headless_executor(executor)
         _require_method(state_mapper, 'to_world_state', 'state_mapper')
         self._decision_core = decision_core
@@ -262,34 +265,33 @@ class HeadlessExecutionContract:
             final_feedback=dict(loop_result.final_feedback),
             canonical_run_artifact=run_artifact,
         )
-        if self._evidence_persistence_service is not None:
-            last_step = loop_result.steps[-1] if loop_result.steps else None
-            self._evidence_persistence_service.persist(
-                tenant_id=request.tenant_id,
-                business_id=request.business_id,
-                run_id=loop_result.trace.run_id,
-                goal=request.goal,
-                step_index=int(last_step.step_index if last_step is not None else max(len(loop_result.steps) - 1, 0)),
-                action={
-                    "action_type": str(last_step.action if last_step is not None else ""),
-                    "action_id": str(last_step.action_id if last_step is not None else ""),
-                },
-                execution_result=dict(loop_result.final_feedback),
-                verification_result=dict(loop_result.final_feedback),
-                world_state_before={},
-                world_state_after=None,
-                request_meta=dict(request.meta),
-                request_profile=dict(request.profile),
-                request_constraints=dict(request.constraints),
-                request_signals=list(request.signals),
-                request_channel=request.channel,
-                request_region=request.region,
-                request_product_name=request.product_name,
-                completed=loop_result.completed,
-                stop_reason=loop_result.stop_reason,
-                final_feedback=dict(loop_result.final_feedback),
-                step_count=len(loop_result.steps),
-            )
+        last_step = loop_result.steps[-1] if loop_result.steps else None
+        self._evidence_persistence_service.persist(
+            tenant_id=request.tenant_id,
+            business_id=request.business_id,
+            run_id=loop_result.trace.run_id,
+            goal=request.goal,
+            step_index=int(last_step.step_index if last_step is not None else max(len(loop_result.steps) - 1, 0)),
+            action={
+                "action_type": str(last_step.action if last_step is not None else ""),
+                "action_id": str(last_step.action_id if last_step is not None else ""),
+            },
+            execution_result=dict(loop_result.final_feedback),
+            verification_result=dict(loop_result.final_feedback),
+            world_state_before={},
+            world_state_after=None,
+            request_meta=dict(request.meta),
+            request_profile=dict(request.profile),
+            request_constraints=dict(request.constraints),
+            request_signals=list(request.signals),
+            request_channel=request.channel,
+            request_region=request.region,
+            request_product_name=request.product_name,
+            completed=loop_result.completed,
+            stop_reason=loop_result.stop_reason,
+            final_feedback=dict(loop_result.final_feedback),
+            step_count=len(loop_result.steps),
+        )
         if self._ledger is not None:
             self._ledger.write(
                 LedgerRecord(

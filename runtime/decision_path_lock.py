@@ -1,21 +1,26 @@
 """Single-owner decision path contract.
 
 This module contains only structural validation for the canonical decision path:
-    world_state -> registered DecisionCore.issue(...) -> envelope -> executor
+    world_state -> explicit DecisionCore issue()/optimize() -> envelope -> executor
 
 It must not become a second decision engine or add pre-decision business logic.
+The passed issuer is the complete decision dependency for one invocation; the
+runtime path never consults process-global singleton state.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 CANON_DECISION_PATH_LOCK_SINGLE_OWNER = True
 CANON_DECISION_PATH_LOCK_FAIL_CLOSED = True
 CANON_DECISION_PATH_LOCK_NO_DECISION_LOGIC = True
-CANON_DECISION_PATH_LOCK_BINDS_REGISTERED_SINGLETON = True
+CANON_DECISION_PATH_LOCK_BINDS_REGISTERED_SINGLETON = False
+CANON_DECISION_PATH_LOCK_USES_EXPLICIT_ISSUER = True
+CANON_DECISION_PATH_LOCK_NO_HIDDEN_GLOBAL_STATE = True
+CANON_DECISION_PATH_LOCK_COMPAT_OPTIMIZE_ALIAS = True
 CANON_DECISION_PATH_ORDER = (
     "world_state",
     "decision_core",
@@ -25,6 +30,23 @@ CANON_DECISION_PATH_ORDER = (
 
 class DecisionPathLockError(RuntimeError):
     pass
+
+
+DecisionIssuerMethod = Literal["issue", "optimize"]
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionIssuerBinding:
+    """Frozen structural binding to exactly one passed decision issuer.
+
+    The binding chooses one compatibility method once, with ``issue`` taking
+    precedence over ``optimize``. It contains no ranking or decision logic and
+    therefore cannot become a second brain.
+    """
+
+    decision_core: Any
+    method_name: DecisionIssuerMethod
+    invoke: Callable[[Any], Any]
 
 
 @dataclass(frozen=True)
@@ -104,27 +126,55 @@ def lock_world_state(*, state: Any) -> LockedDecisionPath:
     return LockedDecisionPath(stage="world_state", state=state)
 
 
-def _require_registered_decision_core(decision_core: Any) -> Any:
-    from core.ai import require_decision_core_singleton
+def bind_decision_issuer(
+    decision_core: Any,
+    *,
+    method_name: DecisionIssuerMethod | None = None,
+) -> DecisionIssuerBinding:
+    """Bind the explicitly supplied issuer without consulting global state."""
 
-    try:
-        return require_decision_core_singleton(decision_core)
-    except RuntimeError as exc:
+    if isinstance(decision_core, DecisionIssuerBinding):
+        if method_name is None or decision_core.method_name == method_name:
+            return decision_core
+        decision_core = decision_core.decision_core
+
+    if decision_core is None:
+        raise DecisionPathLockError("decision_core_missing")
+
+    method_order: tuple[DecisionIssuerMethod, ...]
+    if method_name is None:
+        method_order = ("issue", "optimize")
+    else:
+        method_order = (method_name,)
+
+    for candidate_name in method_order:
+        candidate = getattr(decision_core, candidate_name, None)
+        if callable(candidate):
+            return DecisionIssuerBinding(
+                decision_core=decision_core,
+                method_name=candidate_name,
+                invoke=candidate,
+            )
+
+    if method_name is not None:
         raise DecisionPathLockError(
-            "noncanonical_decision_core"
-        ) from exc
+            f"decision_core_must_provide_callable_{method_name}"
+        )
+    raise DecisionPathLockError(
+        "decision_core_must_provide_callable_issue_or_optimize"
+    )
 
 
 def resolve_decision_issue_callable(
     decision_core: Any,
 ) -> Callable[[Any], Any]:
-    canonical = _require_registered_decision_core(decision_core)
-    issue = getattr(canonical, "issue", None)
-    if callable(issue):
-        return issue
-    raise DecisionPathLockError(
-        "decision_core_must_provide_callable_issue"
-    )
+    """Resolve the one compatibility issuer callable.
+
+    The historical function name is retained for ABI compatibility. It accepts
+    the canonical ``issue`` method or the documented ``optimize`` alias.
+    """
+
+    return bind_decision_issuer(decision_core).invoke
 
 
 def issue_locked_decision(
@@ -132,15 +182,13 @@ def issue_locked_decision(
     decision_core: Any,
     state: Any,
 ) -> LockedDecisionPath:
-    canonical = _require_registered_decision_core(decision_core)
+    binding = bind_decision_issuer(decision_core)
     locked_state = lock_world_state(state=state)
     build_decision_path_lock_spec().require_transition(
         current_stage=locked_state.stage,
         next_stage="decision_core",
     )
-    envelope = resolve_decision_issue_callable(canonical)(
-        locked_state.state
-    )
+    envelope = binding.invoke(locked_state.state)
     _validate_decision_envelope_shape(envelope)
     return LockedDecisionPath(
         stage="decision_core",
@@ -163,10 +211,16 @@ __all__ = [
     "CANON_DECISION_PATH_LOCK_FAIL_CLOSED",
     "CANON_DECISION_PATH_LOCK_NO_DECISION_LOGIC",
     "CANON_DECISION_PATH_LOCK_BINDS_REGISTERED_SINGLETON",
+    "CANON_DECISION_PATH_LOCK_USES_EXPLICIT_ISSUER",
+    "CANON_DECISION_PATH_LOCK_NO_HIDDEN_GLOBAL_STATE",
+    "CANON_DECISION_PATH_LOCK_COMPAT_OPTIMIZE_ALIAS",
     "CANON_DECISION_PATH_ORDER",
+    "DecisionIssuerBinding",
+    "DecisionIssuerMethod",
     "DecisionPathLockError",
     "DecisionPathLockSpec",
     "LockedDecisionPath",
+    "bind_decision_issuer",
     "build_decision_path_lock_spec",
     "lock_world_state",
     "resolve_decision_issue_callable",
