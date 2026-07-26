@@ -59,29 +59,26 @@ class _EmptyCore:
     pass
 
 
-def test_resolve_headless_decision_callable_accepts_registered_issue_owner() -> None:
+def test_resolve_headless_decision_callable_accepts_explicit_issue_owner() -> None:
     core = _IssueOnlyCore()
-    set_decision_core_singleton(core)
 
     callable_ = resolve_headless_decision_callable(core)
 
     assert callable_({"x": 2}).decision.decision_id == "d-1"
 
 
-def test_resolve_headless_decision_callable_rejects_optimize_only_owner() -> None:
+def test_resolve_headless_decision_callable_accepts_explicit_optimize_alias() -> None:
     core = _OptimizeOnlyCore()
-    set_decision_core_singleton(core)
 
-    with pytest.raises(
-        HeadlessDecisionGatewayContractError,
-        match="issuer_issue_missing",
-    ):
-        resolve_headless_decision_callable(core)
+    callable_ = resolve_headless_decision_callable(core)
+
+    envelope = callable_({"x": 3})
+    assert envelope.decision.decision_id == "d-2"
+    assert envelope.state == {"x": 3}
 
 
-def test_issue_headless_decision_routes_through_registered_runtime_owner() -> None:
+def test_issue_headless_decision_routes_through_explicit_runtime_owner() -> None:
     core = _IssueOnlyCore()
-    set_decision_core_singleton(core)
 
     envelope = issue_headless_decision(
         decision_core=core,
@@ -92,17 +89,23 @@ def test_issue_headless_decision_routes_through_registered_runtime_owner() -> No
     assert envelope.state == {"goal": "grow"}
 
 
-def test_issue_headless_decision_fails_closed_without_registered_owner() -> None:
+def test_issue_headless_decision_fails_closed_for_invalid_explicit_owner() -> None:
     with pytest.raises(
         HeadlessDecisionGatewayContractError,
-        match="canonical_decision_core_not_initialized",
+        match=r"decision_core must provide callable issue\(\) or optimize\(\)",
     ):
         issue_headless_decision(decision_core=_EmptyCore(), state={})
 
 
-def test_issue_headless_decision_rejects_noncanonical_optimize_only_core() -> None:
-    core = _OptimizeOnlyCore()
-    set_decision_core_singleton(core)
+def test_issue_headless_decision_ignores_unrelated_boot_singleton() -> None:
+    boot_registered = _IssueOnlyCore()
+    explicit = _OptimizeOnlyCore()
+    set_decision_core_singleton(boot_registered)
 
-    with pytest.raises(HeadlessDecisionGatewayContractError):
-        issue_headless_decision(decision_core=core, state={"goal": "grow"})
+    envelope = issue_headless_decision(
+        decision_core=explicit,
+        state={"goal": "grow"},
+    )
+
+    assert envelope.decision.decision_id == "d-2"
+    assert envelope.state == {"goal": "grow"}
