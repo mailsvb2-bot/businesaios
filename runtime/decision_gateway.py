@@ -1,7 +1,7 @@
 """Canonical runtime decision gateways.
 
 This module keeps runtime orchestration code on a single canonical path:
-packet -> contract -> safe enrichment -> registered issuer -> locked executor.
+packet -> contract -> safe enrichment -> explicit issuer -> locked executor.
 Historical helper APIs remain available as transitional ABI only.
 """
 
@@ -32,7 +32,9 @@ CANON_RUNTIME_DECISION_GATEWAY_OWNS_EXECUTION_SEQUENCE = True
 CANON_RUNTIME_DECISION_ROUTE_GATEWAY_OWNER = True
 CANON_RUNTIME_DECISION_GATEWAY_COMPAT_ALIAS = True
 CANON_RUNTIME_DECISION_GATEWAY_NAME_RESERVED_FOR_ROUTE_OWNER = True
-CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON = True
+CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON = False
+CANON_RUNTIME_DECISION_GATEWAY_USES_EXPLICIT_ISSUER = True
+CANON_RUNTIME_DECISION_GATEWAY_NO_HIDDEN_GLOBAL_STATE = True
 CANON_RUNTIME_DECISION_GATEWAY_REJECTS_SYNTHETIC_ENVELOPES = True
 CANON_RUNTIME_DECISION_GATEWAY_NO_STRUCTURED_ALT_ISSUER = True
 
@@ -41,25 +43,30 @@ class DecisionGatewayContractError(RuntimeError):
     pass
 
 
-def _registered_decision_core(issuer: Any | None = None) -> Any:
-    from core.ai import require_decision_core_singleton
+def _decision_issuer_binding(issuer: Any):
+    from runtime.decision_path_lock import (
+        DecisionPathLockError,
+        bind_decision_issuer,
+    )
 
     try:
-        return require_decision_core_singleton(issuer)
-    except RuntimeError as exc:
-        error = str(exc)
-        if error == "DECISIONCORE_NOT_INITIALIZED":
-            code = "canonical_decision_core_not_initialized"
-        else:
-            code = "noncanonical_decision_issuer"
-        raise DecisionGatewayContractError(code) from exc
+        return bind_decision_issuer(issuer)
+    except DecisionPathLockError as exc:
+        raise DecisionGatewayContractError(str(exc)) from exc
+
+
+def _registered_decision_core(issuer: Any | None = None) -> Any:
+    """Compatibility helper returning the explicitly supplied issuer.
+
+    The historical private name is retained for focused downstream tests, but
+    runtime execution no longer reads the process-global singleton.
+    """
+
+    return _decision_issuer_binding(issuer).decision_core
 
 
 def validate_runtime_decision_issuer(issuer: DecisionIssuer) -> None:
-    canonical = _registered_decision_core(issuer)
-    issue = getattr(canonical, "issue", None)
-    if not callable(issue):
-        raise DecisionGatewayContractError("issuer_issue_missing")
+    _decision_issuer_binding(issuer)
 
 
 @dataclass
@@ -130,14 +137,14 @@ class RuntimeDecisionIssueGateway:
         )
         from runtime.decision_path_lock import issue_locked_decision
 
-        canonical = _registered_decision_core(self.issuer)
+        binding = _decision_issuer_binding(self.issuer)
         enriched_state = enrich_state_with_decision_input_packet(
             state=state,
             decision_input_packet=decision_input_packet,
         )
         try:
             locked = issue_locked_decision(
-                decision_core=canonical,
+                decision_core=binding,
                 state=enriched_state,
             )
             return locked.envelope
@@ -149,7 +156,7 @@ class RuntimeDecisionIssueGateway:
 
 @dataclass(slots=True, frozen=True)
 class _CanonicalDecisionCallable:
-    issuer: DecisionIssuer
+    issuer: Any
     decision_input_packet: DecisionInputPacket | None = None
 
     def __call__(self, state: Any) -> Any:
@@ -199,11 +206,11 @@ def build_runtime_decision_callable(
     issuer: DecisionIssuer,
     decision_input_packet: DecisionInputPacket | None = None,
 ) -> Callable[[Any], Any]:
-    """Bind the registered issuer to the canonical issue gateway."""
+    """Bind the explicit issuer to the canonical issue/optimize gateway."""
 
-    validate_runtime_decision_issuer(issuer)
+    binding = _decision_issuer_binding(issuer)
     return _CanonicalDecisionCallable(
-        issuer=issuer,
+        issuer=binding,
         decision_input_packet=decision_input_packet,
     )
 
@@ -214,19 +221,24 @@ def optimize_runtime_decision(
     state: Any,
     method_name: str = "optimize",
 ) -> Any:
-    """Invoke the one approved optimize alias on the registered issuer."""
+    """Invoke the one approved optimize alias on the explicit issuer."""
 
-    canonical = _registered_decision_core(issuer)
     if str(method_name) != "optimize":
         raise DecisionGatewayContractError(
             "noncanonical_decision_optimize_method"
         )
-    optimize = getattr(canonical, "optimize", None)
-    if not callable(optimize):
+    from runtime.decision_path_lock import (
+        DecisionPathLockError,
+        bind_decision_issuer,
+    )
+
+    try:
+        binding = bind_decision_issuer(issuer, method_name="optimize")
+    except DecisionPathLockError as exc:
         raise DecisionGatewayContractError(
             "canonical_decision_core_optimize_required"
-        )
-    return optimize(state)
+        ) from exc
+    return binding.invoke(state)
 
 
 def execute_runtime_decision(
