@@ -1,13 +1,31 @@
 from __future__ import annotations
 
-import os
+import os as _stdlib_os
 import platform
 import time
 from pathlib import Path
 from threading import RLock
+from types import SimpleNamespace
 
 from runtime.observability.error_handling import swallow
 from runtime.platform.config.env_flags import env_bool, env_str
+
+
+# Keep the singleton lock's low-level OS hooks module-local. Tests deliberately
+# replace close/write/kill/getpid to exercise fail-closed branches; exposing the
+# process-global ``os`` module here lets those replacements poison unrelated
+# multiprocessing infrastructure such as Python's resource tracker.
+os = SimpleNamespace(
+    O_CREAT=_stdlib_os.O_CREAT,
+    O_EXCL=_stdlib_os.O_EXCL,
+    O_WRONLY=_stdlib_os.O_WRONLY,
+    close=_stdlib_os.close,
+    fsync=_stdlib_os.fsync,
+    getpid=_stdlib_os.getpid,
+    kill=getattr(_stdlib_os, "kill", None),
+    open=_stdlib_os.open,
+    write=_stdlib_os.write,
+)
 
 try:  # pragma: no cover
     import ctypes  # type: ignore
@@ -82,7 +100,7 @@ class SingletonLock:
             except Exception:
                 return False
 
-        if hasattr(os, "kill"):
+        if callable(getattr(os, "kill", None)):
             try:
                 os.kill(pid, 0)
                 return True

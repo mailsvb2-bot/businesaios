@@ -348,21 +348,12 @@ class TelegramClient:
                     ),
                 )
                 if queued:
-                    existing_phase = receipt_phase(existing, default=ACCEPTED_PHASE) if existing is not None else None
-                    if existing_phase == ACCEPTED_PHASE:
-                        recover_stale_receipt(
-                            self.delivery_state,
-                            delivery_key=delivery_key,
-                            payload_digest=payload_digest,
-                            metadata={**accepted_metadata, "delivery_phase": RECOVERY_PHASE},
-                        )
-                    else:
-                        mark_transport_accepted(
-                            self.delivery_state,
-                            delivery_key=delivery_key,
-                            payload_digest=payload_digest,
-                            metadata=accepted_metadata,
-                        )
+                    mark_transport_accepted(
+                        self.delivery_state,
+                        delivery_key=delivery_key,
+                        payload_digest=payload_digest,
+                        metadata=accepted_metadata,
+                    )
                     receipt = existing_receipt(self.delivery_state, delivery_key=delivery_key)
                     phase = receipt_phase(receipt, default=ACCEPTED_PHASE)
                     return True, {"mode": "queued", "delivery_key": delivery_key, "payload_digest": payload_digest, "delivery_finalized": phase == "finalized", "delivery_phase": phase, "receipt": receipt}
