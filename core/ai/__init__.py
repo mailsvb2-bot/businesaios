@@ -7,6 +7,7 @@ from typing import Any
 
 CANON_CORE_AI_NAMESPACE = True
 CANON_DECISION_CORE_SINGLETON_IDENTITY = True
+CANON_DECISION_CORE_SINGLETON_BOOT_GUARD_ONLY = True
 _COMPAT_ALIAS_MAP = {
     "decision_trace": "core.decision.ai_decision_trace",
     "decision_pricing": "application.decision_policy.pricing",
@@ -53,7 +54,12 @@ def get_decision_core_singleton() -> Any:
 
 
 def require_decision_core_singleton(core: Any | None = None) -> Any:
-    """Return the registered core and reject every alternate issuer identity."""
+    """Return the boot-registered core and reject alternate boot identities.
+
+    This is a composition-root guard, not a runtime decision input. Canonical
+    execution receives its issuer explicitly and must never consult this global
+    registry while validating or issuing a decision.
+    """
 
     registered = get_decision_core_singleton()
     if core is not None and core is not registered:
@@ -71,6 +77,7 @@ def _reset_decision_core_singleton_for_tests() -> None:
 __all__ = [
     "CANON_CORE_AI_NAMESPACE",
     "CANON_DECISION_CORE_SINGLETON_IDENTITY",
+    "CANON_DECISION_CORE_SINGLETON_BOOT_GUARD_ONLY",
     "decision_trace",
     "decision_pricing",
     "world_model_pinning",
