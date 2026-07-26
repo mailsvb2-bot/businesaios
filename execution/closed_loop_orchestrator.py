@@ -729,23 +729,21 @@ class ClosedLoopOrchestrator:
                     'source': 'bundle_restore',
                     'status': 'invalid',
                 }
-        node_payloads = []
-        if bundle_payloads:
-            restored_payload = _safe_dict(bundle_payloads[0].get('payload')) or _safe_dict(bundle_payloads[0])
-            local_payload = {
-                'feedback_rows': [row.to_dict() for row in self._economic_memory_store.list_rows()],
-                'roi_rows': [row.to_dict() for row in self._roi_history_store.list_rows()],
-                'snapshot_rows': [row.to_dict() for row in self._economic_policy_snapshot_store.list_rows()],
-                'trace_rows': [row.to_dict() for row in self._economic_trace_store.list_rows()],
-                'metrics_rows': [row.to_dict() for row in self._economic_metrics_store.list_rows()],
-                'export_manifest': _safe_dict(_safe_dict(bundle_payloads[0].get('payload')).get('export_manifest') or _safe_dict(bundle_payloads[0]).get('export_manifest')),
-                'metadata': {'import_validation_status': 'valid'},
-            }
-            local_node_id = self._economic_store_bundle.node_id if self._economic_store_bundle is not None else 'local-primary'
-            node_payloads = [
-                {'node_id': local_node_id, 'payload': local_payload},
-                {'node_id': 'bundle-restore', 'payload': {**restored_payload, 'metadata': {**_safe_dict(restored_payload.get('metadata')), 'import_validation_status': import_validation.get('status', 'valid' if import_validation.get('valid') else 'invalid')}}},
-            ]
+        restored_payload = _safe_dict(bundle_payloads[0].get('payload')) or _safe_dict(bundle_payloads[0])
+        local_payload = {
+            'feedback_rows': [row.to_dict() for row in self._economic_memory_store.list_rows()],
+            'roi_rows': [row.to_dict() for row in self._roi_history_store.list_rows()],
+            'snapshot_rows': [row.to_dict() for row in self._economic_policy_snapshot_store.list_rows()],
+            'trace_rows': [row.to_dict() for row in self._economic_trace_store.list_rows()],
+            'metrics_rows': [row.to_dict() for row in self._economic_metrics_store.list_rows()],
+            'export_manifest': _safe_dict(_safe_dict(bundle_payloads[0].get('payload')).get('export_manifest') or _safe_dict(bundle_payloads[0]).get('export_manifest')),
+            'metadata': {'import_validation_status': 'valid'},
+        }
+        local_node_id = self._economic_store_bundle.node_id if self._economic_store_bundle is not None else 'local-primary'
+        node_payloads = [
+            {'node_id': local_node_id, 'payload': local_payload},
+            {'node_id': 'bundle-restore', 'payload': {**restored_payload, 'metadata': {**_safe_dict(restored_payload.get('metadata')), 'import_validation_status': import_validation.get('status', 'valid' if import_validation.get('valid') else 'invalid')}}},
+        ]
         reconciliation = self._economic_multi_backend_reconciliation.build(
             feedback_rows=[row.to_dict() for row in self._economic_memory_store.list_rows()],
             roi_rows=[row.to_dict() for row in self._roi_history_store.list_rows()],
@@ -757,7 +755,7 @@ class ClosedLoopOrchestrator:
             quorum_size=2,
         ).to_dict()
         reconciliation['import_validation'] = import_validation
-        restored_manifest = _safe_dict(_safe_dict(bundle_payloads[0].get('payload')).get('export_manifest') or _safe_dict(bundle_payloads[0]).get('export_manifest')) if bundle_payloads else {}
+        restored_manifest = _safe_dict(_safe_dict(bundle_payloads[0].get('payload')).get('export_manifest') or _safe_dict(bundle_payloads[0]).get('export_manifest'))
         self._economic_forensics_service.record_event(
             event_type='economic_reconciliation_completed',
             severity='info' if reconciliation.get('consistent') else 'warning',
