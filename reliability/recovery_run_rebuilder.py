@@ -15,15 +15,26 @@ Important:
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
+from types import MappingProxyType
 from typing import Any, Mapping
 
-from reliability.execution_checkpoint_store import ExecutionCheckpoint, ExecutionCheckpointStore
-from reliability.execution_reconciliation import ExecutionReconciliation, ReconciliationReport
+from core.tenancy.normalization import require_tenant_id
+
+from reliability.execution_checkpoint_store import (
+    ExecutionCheckpoint,
+    ExecutionCheckpointStore,
+)
+from reliability.execution_reconciliation import (
+    ExecutionReconciliation,
+    ReconciliationReport,
+)
 from reliability.idempotency_contract import (
     IdempotencyKey,
     IdempotencyRecord,
     IdempotencyState,
     IdempotencyStore,
+    utc_now,
 )
 from reliability.outbox_store import OutboxMessage, OutboxState, OutboxStore
 from reliability.recovery_execution_graph import (
@@ -77,6 +88,7 @@ class RebuiltRunFacts:
     canonical_outbox_message_id: str | None = None
     canonical_idempotency_key: str | None = None
     partial_history_detected: bool = False
+    observed_at: datetime | None = None
 
     @property
     def checkpoint_count(self) -> int:
@@ -104,11 +116,13 @@ class RebuiltRunFacts:
 
     @property
     def has_live_idempotency_lease(self) -> bool:
+        if "has_live_idempotency_lease" in self.derived_flags:
+            return bool(self.derived_flags["has_live_idempotency_lease"])
         record = self.idempotency_record
         return bool(
             record is not None
             and record.state is IdempotencyState.IN_PROGRESS
-            and record.has_live_lease()
+            and record.has_live_lease(now=self.observed_at)
         )
 
     @property
@@ -121,8 +135,10 @@ class RebuiltRunFacts:
 
     @property
     def outbox_is_claimable(self) -> bool:
+        if "outbox_claimable" in self.derived_flags:
+            return bool(self.derived_flags["outbox_claimable"])
         message = self.outbox_message
-        return bool(message is not None and message.is_claimable())
+        return bool(message is not None and message.is_claimable(now=self.observed_at))
 
     @property
     def outbox_is_delivered(self) -> bool:
@@ -143,7 +159,12 @@ class RecoveryRunRebuilder:
         idempotency_store: IdempotencyStore,
         outbox_store: OutboxStore,
         execution_graph: RecoveryExecutionGraph | None = None,
-        required_outbox_stages: tuple[str, ...] = ("execution", "verification", "state_update", "evidence"),
+        required_outbox_stages: tuple[str, ...] = (
+            "execution",
+            "verification",
+            "state_update",
+            "evidence",
+        ),
     ) -> None:
         self._checkpoints = checkpoint_store
         self._idempotency = idempotency_store
@@ -163,8 +184,21 @@ class RecoveryRunRebuilder:
         run_id: str,
         idempotency_key: IdempotencyKey | None = None,
         outbox_message_id: str | None = None,
+        now: datetime | None = None,
     ) -> RebuiltRunFacts:
-        checkpoints = self._checkpoints.list_run(tenant_id=tenant_id, run_id=run_id)
+        tenant = require_tenant_id(tenant_id)
+        run = str(run_id or "").strip()
+        if not run:
+            raise ValueError("run_id is required")
+        observed_at = now or utc_now()
+        if observed_at.tzinfo is None:
+            raise ValueError("now must be timezone-aware")
+        if idempotency_key is not None:
+            idempotency_key.validate()
+            if idempotency_key.tenant_id != tenant:
+                raise ValueError("idempotency key tenant does not match rebuild tenant")
+
+        checkpoints = self._checkpoints.list_run(tenant_id=tenant, run_id=run)
         latest_checkpoint = checkpoints[-1] if checkpoints else None
 
         idempotency_record = None
@@ -174,29 +208,35 @@ class RecoveryRunRebuilder:
         outbox_message = None
         if outbox_message_id is not None:
             outbox_message = self._outbox.get(
-                tenant_id=tenant_id,
+                tenant_id=tenant,
                 message_id=outbox_message_id,
             )
 
         graph_validation = self._graph.validate_run(checkpoints)
-        reconciliation = self._reconciliation.reconcile(
-            tenant_id=tenant_id,
-            run_id=run_id,
-            idempotency_key=idempotency_key,
-            outbox_message_id=outbox_message_id,
+        reconciliation = self._reconciliation.reconcile_snapshot(
+            run_id=run,
+            checkpoints=tuple(checkpoints),
+            idempotency_record=idempotency_record,
+            outbox_message=outbox_message,
         )
 
         latest_stage = None if latest_checkpoint is None else latest_checkpoint.stage
         resume_point = self._graph.safe_resume_point(latest_stage)
 
         anomalies: list[str] = []
+        for checkpoint in checkpoints:
+            if checkpoint.tenant_id != tenant:
+                anomalies.append("checkpoint_tenant_id_mismatch")
+            if str(checkpoint.run_id) != run:
+                anomalies.append("checkpoint_run_id_mismatch")
         anomalies.extend(graph_validation.anomalies)
         anomalies.extend(reconciliation.anomalies)
 
         checkpoint_outbox_ids = {
             str(item.outbox_message_id)
             for item in checkpoints
-            if item.outbox_message_id is not None and str(item.outbox_message_id).strip()
+            if item.outbox_message_id is not None
+            and str(item.outbox_message_id).strip()
         }
         checkpoint_idempotency_keys = {
             str(item.idempotency_key)
@@ -231,17 +271,33 @@ class RecoveryRunRebuilder:
         if len(checkpoint_decision_ids) > 1:
             anomalies.append("multiple_decision_ids_in_single_run")
 
-        if outbox_message_id is not None and canonical_outbox_message_id is not None and str(outbox_message_id) != canonical_outbox_message_id:
+        if (
+            outbox_message_id is not None
+            and canonical_outbox_message_id is not None
+            and str(outbox_message_id) != canonical_outbox_message_id
+        ):
             anomalies.append("requested_outbox_message_id_mismatch")
 
-        if latest_checkpoint is not None and latest_checkpoint.outbox_message_id and outbox_message_id:
+        if (
+            latest_checkpoint is not None
+            and latest_checkpoint.outbox_message_id
+            and outbox_message_id
+        ):
             if str(latest_checkpoint.outbox_message_id) != str(outbox_message_id):
                 anomalies.append("latest_checkpoint_outbox_message_id_mismatch")
 
-        if idempotency_key is not None and canonical_idempotency_key is not None and str(idempotency_key.key) != canonical_idempotency_key:
+        if (
+            idempotency_key is not None
+            and canonical_idempotency_key is not None
+            and str(idempotency_key.key) != canonical_idempotency_key
+        ):
             anomalies.append("requested_idempotency_key_mismatch")
 
-        if latest_checkpoint is not None and latest_checkpoint.idempotency_key and idempotency_key is not None:
+        if (
+            latest_checkpoint is not None
+            and latest_checkpoint.idempotency_key
+            and idempotency_key is not None
+        ):
             if str(latest_checkpoint.idempotency_key) != str(idempotency_key.key):
                 anomalies.append("latest_checkpoint_idempotency_key_mismatch")
 
@@ -249,19 +305,35 @@ class RecoveryRunRebuilder:
             anomalies.append("outbox_message_id_provided_but_missing")
 
         if idempotency_key is not None and idempotency_record is None:
-            if latest_stage in {"execution", "verification", "state_update", "evidence", "completed", "failed"}:
+            if latest_stage in {
+                "execution",
+                "verification",
+                "state_update",
+                "evidence",
+                "completed",
+                "failed",
+            }:
                 anomalies.append("late_run_without_idempotency_record")
 
         if outbox_message is not None:
             if latest_checkpoint is None:
                 anomalies.append("outbox_exists_without_checkpoints")
-            if outbox_message.run_id is not None and str(outbox_message.run_id) != str(run_id):
+            if (
+                outbox_message.run_id is not None
+                and str(outbox_message.run_id) != run
+            ):
                 anomalies.append("outbox_run_id_mismatch")
             if outbox_message.tenant_id != str(tenant_id):
                 anomalies.append("outbox_tenant_id_mismatch")
-            if outbox_message.state is OutboxState.DELIVERED and outbox_message.delivered_at is None:
+            if (
+                outbox_message.state is OutboxState.DELIVERED
+                and outbox_message.delivered_at is None
+            ):
                 anomalies.append("delivered_outbox_missing_delivered_at")
-            if outbox_message.state is OutboxState.DEAD and not str(outbox_message.last_error or "").strip():
+            if (
+                outbox_message.state is OutboxState.DEAD
+                and not str(outbox_message.last_error or "").strip()
+            ):
                 anomalies.append("dead_outbox_missing_last_error")
 
         if idempotency_record is not None:
@@ -273,42 +345,90 @@ class RecoveryRunRebuilder:
                 IdempotencyState.FAILED,
             }:
                 anomalies.append("idempotency_exists_without_checkpoints")
-            if idempotency_record.state is IdempotencyState.COMPLETED and idempotency_record.completed_at is None:
+            if (
+                idempotency_record.state is IdempotencyState.COMPLETED
+                and idempotency_record.completed_at is None
+            ):
                 anomalies.append("completed_idempotency_missing_completed_at")
-            if idempotency_record.state is IdempotencyState.IN_PROGRESS and not idempotency_record.has_live_lease() and latest_stage in {"execution", "verification", "state_update", "evidence"}:
+            if (
+                idempotency_record.state is IdempotencyState.IN_PROGRESS
+                and not idempotency_record.has_live_lease(now=observed_at)
+                and latest_stage
+                in {"execution", "verification", "state_update", "evidence"}
+            ):
                 anomalies.append("late_run_with_expired_idempotency_lease")
 
         if latest_checkpoint is not None:
-            if latest_stage in self._required_outbox_stages and outbox_message_id is None and canonical_outbox_message_id is None:
+            if (
+                latest_stage in self._required_outbox_stages
+                and outbox_message_id is None
+                and canonical_outbox_message_id is None
+            ):
                 anomalies.append("late_stage_without_outbox_message_id_input")
-            if latest_stage in self._required_outbox_stages and not checkpoint_outbox_ids and outbox_message is None:
+            if (
+                latest_stage in self._required_outbox_stages
+                and not checkpoint_outbox_ids
+                and outbox_message is None
+            ):
                 anomalies.append("late_stage_without_any_outbox_reference")
-            if latest_stage in {"decision", "executable_action", *self._required_outbox_stages, "completed", "failed"} and idempotency_key is None and canonical_idempotency_key is None:
+            if (
+                latest_stage
+                in {
+                    "decision",
+                    "executable_action",
+                    *self._required_outbox_stages,
+                    "completed",
+                    "failed",
+                }
+                and idempotency_key is None
+                and canonical_idempotency_key is None
+            ):
                 anomalies.append("late_stage_without_any_idempotency_reference")
 
             if latest_stage == "completed":
-                if idempotency_record is not None and idempotency_record.state is not IdempotencyState.COMPLETED:
+                if (
+                    idempotency_record is not None
+                    and idempotency_record.state is not IdempotencyState.COMPLETED
+                ):
                     anomalies.append("completed_run_without_completed_idempotency")
-                if outbox_message is not None and outbox_message.state is not OutboxState.DELIVERED:
+                if (
+                    outbox_message is not None
+                    and outbox_message.state is not OutboxState.DELIVERED
+                ):
                     anomalies.append("completed_run_without_delivered_outbox")
-                if outbox_message is not None and outbox_message.is_claimable():
+                if (
+                    outbox_message is not None
+                    and outbox_message.is_claimable(now=observed_at)
+                ):
                     anomalies.append("completed_run_with_claimable_outbox")
 
             if latest_stage == "failed":
-                if idempotency_record is not None and idempotency_record.state is IdempotencyState.COMPLETED:
+                if (
+                    idempotency_record is not None
+                    and idempotency_record.state is IdempotencyState.COMPLETED
+                ):
                     anomalies.append("failed_run_with_completed_idempotency")
-                if outbox_message is not None and outbox_message.state is OutboxState.DELIVERED:
+                if (
+                    outbox_message is not None
+                    and outbox_message.state is OutboxState.DELIVERED
+                ):
                     anomalies.append("failed_run_with_delivered_outbox")
 
         if outbox_message is not None and outbox_message.state is OutboxState.DELIVERED:
             if latest_stage in {None, "request", "world_state", "decision"}:
                 anomalies.append("delivered_outbox_before_late_execution_stage")
 
-        if idempotency_record is not None and idempotency_record.state is IdempotencyState.FAILED:
+        if (
+            idempotency_record is not None
+            and idempotency_record.state is IdempotencyState.FAILED
+        ):
             if latest_stage == "completed":
                 anomalies.append("idempotency_failed_but_run_completed")
 
-        if idempotency_record is not None and idempotency_record.state is IdempotencyState.COMPLETED:
+        if (
+            idempotency_record is not None
+            and idempotency_record.state is IdempotencyState.COMPLETED
+        ):
             if latest_stage == "failed":
                 anomalies.append("idempotency_completed_but_run_failed")
 
@@ -326,23 +446,39 @@ class RecoveryRunRebuilder:
             "has_live_idempotency_lease": bool(
                 idempotency_record is not None
                 and idempotency_record.state is IdempotencyState.IN_PROGRESS
-                and idempotency_record.has_live_lease()
+                and idempotency_record.has_live_lease(now=observed_at)
             ),
             "idempotency_terminal": bool(
                 idempotency_record is not None
-                and idempotency_record.state in {IdempotencyState.COMPLETED, IdempotencyState.FAILED}
+                and idempotency_record.state
+                in {IdempotencyState.COMPLETED, IdempotencyState.FAILED}
             ),
-            "outbox_claimable": bool(outbox_message is not None and outbox_message.is_claimable()),
-            "outbox_delivered": bool(outbox_message is not None and outbox_message.state is OutboxState.DELIVERED),
-            "outbox_dead": bool(outbox_message is not None and outbox_message.state is OutboxState.DEAD),
+            "outbox_claimable": bool(
+                outbox_message is not None
+                and outbox_message.is_claimable(now=observed_at)
+            ),
+            "outbox_delivered": bool(
+                outbox_message is not None
+                and outbox_message.state is OutboxState.DELIVERED
+            ),
+            "outbox_dead": bool(
+                outbox_message is not None and outbox_message.state is OutboxState.DEAD
+            ),
             "run_terminal": bool(latest_stage in {"completed", "failed"}),
             "cross_store_consistent": not anomalies,
-            "claimable_outbox_while_idempotency_lease_live": bool(outbox_message is not None and outbox_message.is_claimable() and idempotency_record is not None and idempotency_record.has_live_lease()) if idempotency_record is not None else False,
+            "claimable_outbox_while_idempotency_lease_live": bool(
+                outbox_message is not None
+                and outbox_message.is_claimable(now=observed_at)
+                and idempotency_record is not None
+                and idempotency_record.has_live_lease(now=observed_at)
+            )
+            if idempotency_record is not None
+            else False,
         }
 
         return RebuiltRunFacts(
-            tenant_id=str(tenant_id),
-            run_id=str(run_id),
+            tenant_id=tenant,
+            run_id=run,
             latest_stage=latest_stage,
             latest_checkpoint=latest_checkpoint,
             checkpoints=tuple(checkpoints),
@@ -352,10 +488,11 @@ class RecoveryRunRebuilder:
             reconciliation=reconciliation,
             resume_point=resume_point,
             anomalies=tuple(dict.fromkeys(anomalies)),
-            derived_flags=derived_flags,
+            derived_flags=MappingProxyType(dict(derived_flags)),
             canonical_outbox_message_id=canonical_outbox_message_id,
             canonical_idempotency_key=canonical_idempotency_key,
             partial_history_detected=partial_history_detected,
+            observed_at=observed_at,
         )
 
 
