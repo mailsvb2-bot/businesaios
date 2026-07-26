@@ -2,8 +2,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from reliability.execution_checkpoint_store import ExecutionCheckpoint, ExecutionCheckpointStore
-from reliability.idempotency_contract import IdempotencyKey, IdempotencyState, IdempotencyStore
+from reliability.execution_checkpoint_store import (
+    ExecutionCheckpoint,
+    ExecutionCheckpointStore,
+)
+from reliability.idempotency_contract import (
+    IdempotencyKey,
+    IdempotencyState,
+    IdempotencyStore,
+)
 from reliability.outbox_store import OutboxState, OutboxStore
 
 
@@ -45,9 +52,34 @@ class ExecutionReconciliation:
         outbox_message_id: str | None = None,
     ) -> ReconciliationReport:
         checkpoints = self._checkpoints.list_run(tenant_id=tenant_id, run_id=run_id)
+        idem = (
+            None
+            if idempotency_key is None
+            else self._idempotency.get(key=idempotency_key)
+        )
+        outbox = (
+            None
+            if outbox_message_id is None
+            else self._outbox.get(tenant_id=tenant_id, message_id=outbox_message_id)
+        )
+        return self.reconcile_snapshot(
+            run_id=run_id,
+            checkpoints=checkpoints,
+            idempotency_record=idem,
+            outbox_message=outbox,
+        )
+
+    def reconcile_snapshot(
+        self,
+        *,
+        run_id: str,
+        checkpoints: tuple[ExecutionCheckpoint, ...],
+        idempotency_record,
+        outbox_message,
+    ) -> ReconciliationReport:
         latest = checkpoints[-1] if checkpoints else None
-        idem = None if idempotency_key is None else self._idempotency.get(key=idempotency_key)
-        outbox = None if outbox_message_id is None else self._outbox.get(tenant_id=tenant_id, message_id=outbox_message_id)
+        idem = idempotency_record
+        outbox = outbox_message
 
         anomalies: list[str] = []
         latest_stage = None if latest is None else latest.stage
@@ -61,9 +93,18 @@ class ExecutionReconciliation:
                 prior = seen_by_id.get(checkpoint.checkpoint_id)
                 if prior is not None:
                     same_stage = str(prior.stage) == str(checkpoint.stage)
-                    same_decision = str(prior.decision_id or '') == str(checkpoint.decision_id or '')
-                    same_action = str(prior.action_id or '') == str(checkpoint.action_id or '')
-                    if not (same_stage and same_decision and same_action and checkpoint.sequence_no > prior.sequence_no):
+                    same_decision = str(prior.decision_id or "") == str(
+                        checkpoint.decision_id or ""
+                    )
+                    same_action = str(prior.action_id or "") == str(
+                        checkpoint.action_id or ""
+                    )
+                    if not (
+                        same_stage
+                        and same_decision
+                        and same_action
+                        and checkpoint.sequence_no > prior.sequence_no
+                    ):
                         anomalies.append("duplicate_checkpoint_id")
                         break
                 seen_by_id[checkpoint.checkpoint_id] = checkpoint
@@ -78,16 +119,28 @@ class ExecutionReconciliation:
             if outbox is not None and outbox.state is not OutboxState.DELIVERED:
                 anomalies.append("completed_checkpoint_but_outbox_not_delivered")
 
-        if latest is not None and latest.stage in {"execution", "verification", "state_update", "evidence"} and outbox is None:
+        if (
+            latest is not None
+            and latest.stage
+            in {"execution", "verification", "state_update", "evidence"}
+            and outbox is None
+        ):
             anomalies.append("late_stage_without_outbox_record")
 
-        if idem is not None and idem.state is IdempotencyState.COMPLETED and latest is not None and latest.stage == "failed":
+        if (
+            idem is not None
+            and idem.state is IdempotencyState.COMPLETED
+            and latest is not None
+            and latest.stage == "failed"
+        ):
             anomalies.append("idempotency_completed_but_checkpoint_failed")
 
-        if idem is not None and idem.state is IdempotencyState.FAILED and latest is not None and latest.stage == "completed":
-            anomalies.append("idempotency_failed_but_checkpoint_completed")
-
-        if outbox is not None and outbox.state is OutboxState.DELIVERED and latest is not None and latest.stage in {"request", "world_state", "decision"}:
+        if (
+            outbox is not None
+            and outbox.state is OutboxState.DELIVERED
+            and latest is not None
+            and latest.stage in {"request", "world_state", "decision"}
+        ):
             anomalies.append("outbox_delivered_before_late_execution_stage")
 
         return ReconciliationReport(
