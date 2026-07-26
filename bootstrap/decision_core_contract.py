@@ -7,6 +7,7 @@ surfaces may supply either ``issue`` or ``optimize``; both are aliases into the
 same single decision owner and never represent separate decision engines.
 """
 
+from collections.abc import Callable
 from typing import Any, Protocol, TypeAlias, runtime_checkable
 
 CANON_BOOT_WIRING_ONLY = True
@@ -18,12 +19,12 @@ RUNTIME_DECISION_CORE_COMPAT_METHODS = ("issue", "optimize")
 
 @runtime_checkable
 class RuntimeDecisionIssuePort(Protocol):
-    def issue(self, state: Any) -> Any: ...
+    issue: Callable[[Any], Any]
 
 
 @runtime_checkable
 class RuntimeDecisionOptimizePort(Protocol):
-    def optimize(self, state: Any) -> Any: ...
+    optimize: Callable[[Any], Any]
 
 
 RuntimeDecisionCorePort: TypeAlias = (
