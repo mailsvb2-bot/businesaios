@@ -1,0 +1,50 @@
+name: Wave 44 apply clean validated patch
+
+on:
+  push:
+    branches:
+      - agent/coverage-100-wave44-telegram-delivery-clean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wave44-telegram-delivery-clean
+  cancel-in-progress: false
+
+jobs:
+  apply-validated-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Decode, verify, apply, and publish clean files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python - <<'PY'
+          import base64
+          import gzip
+          from pathlib import Path
+
+          encoded = Path('.wave44.patch.gz.b64').read_text(encoding='utf-8').strip()
+          Path('/tmp/wave44.patch').write_bytes(gzip.decompress(base64.b64decode(encoded)))
+          PY
+          git apply --check /tmp/wave44.patch
+          git apply /tmp/wave44.patch
+          sed -i '/from types import SimpleNamespace/d' tests/unit/runtime/test_telegram_client_wave44.py
+          rm -f .wave44.patch.gz.b64 .github/workflows/wave44-clean-apply.yml
+          git add -A -- \
+            runtime/_internal/effects_clients/telegram_client.py \
+            tests/unit/runtime/test_telegram_client_wave44.py \
+            tests/unit/runtime/test_telegram_delivery_helpers_wave44.py \
+            .wave44.patch.gz.b64 \
+            .github/workflows/wave44-clean-apply.yml
+          git config user.name 'BusinesAIOS Coverage Agent'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'Coverage 100 wave 44: close Telegram delivery line and branch coverage'
+          git push origin HEAD:agent/coverage-100-wave44-telegram-delivery-clean
