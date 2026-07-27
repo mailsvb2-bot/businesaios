@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta
+from decimal import Decimal
+
+from core.finance.money import legacy_float, ratio_decimal
 
 from billing.commercial_cycle_contract import (
     BillingCycleWindow,
@@ -217,11 +220,27 @@ class SubscriptionLifecycleService:
             return 1.0
         if changed_at >= cycle.end_at:
             return 0.0
-        total_seconds = cycle.duration_seconds
-        remaining_seconds = float((cycle.end_at - changed_at).total_seconds())
-        if total_seconds <= 0:
+        if cycle.duration_seconds <= 0:
             return 0.0
-        return max(0.0, min(1.0, remaining_seconds / total_seconds))
+        total_delta = cycle.end_at - cycle.start_at
+        remaining_delta = cycle.end_at - changed_at
+        total_microseconds = (
+            total_delta.days * 86_400_000_000
+            + total_delta.seconds * 1_000_000
+            + total_delta.microseconds
+        )
+        remaining_microseconds = (
+            remaining_delta.days * 86_400_000_000
+            + remaining_delta.seconds * 1_000_000
+            + remaining_delta.microseconds
+        )
+        if total_microseconds <= 0:
+            return 0.0
+        fraction = ratio_decimal(
+            Decimal(remaining_microseconds) / Decimal(total_microseconds),
+            name="proration_fraction",
+        )
+        return legacy_float(fraction, name="proration_fraction")
 
 
 __all__ = ["CANON_BILLING_SUBSCRIPTION_LIFECYCLE", "SubscriptionLifecycleService"]

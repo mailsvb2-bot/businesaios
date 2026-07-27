@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
+from core.finance.money import legacy_float, money_decimal
 from registry.base_registry import BaseRegistry
 from lead_outcomes.client_outcome_contract import ClientOutcomeOrder, ClientOutcomePackage
 
@@ -82,7 +83,10 @@ class ClientOutcomeOrderStore(BaseRegistry):
         next_metadata = dict(current.metadata)
         amendment_fingerprints = list(current.metadata.get('amendment_fingerprints') or ())
         amendment_fingerprint_value = amendment_meta.get('amendment_fingerprint')
-        if amendment_fingerprint_value not in (None, '') and str(amendment_fingerprint_value) not in amendment_fingerprints:
+        if (
+            amendment_fingerprint_value not in (None, '')
+            and str(amendment_fingerprint_value) not in amendment_fingerprints
+        ):
             amendment_fingerprints.append(str(amendment_fingerprint_value))
         next_metadata['amendment_count'] = next_count
         next_metadata['amendments'] = amendments
@@ -103,7 +107,13 @@ class ClientOutcomeOrderStore(BaseRegistry):
                 package_id=str(package_payload['package_id']),
                 label=str(package_payload['label']),
                 requested_clients=int(package_payload['requested_clients']),
-                price_per_verified_client=float(package_payload['price_per_verified_client']),
+                price_per_verified_client=legacy_float(
+                    money_decimal(
+                        package_payload['price_per_verified_client'],
+                        name='price_per_verified_client',
+                    ),
+                    name='price_per_verified_client',
+                ),
                 currency=str(package_payload['currency']),
                 attribution_window_days=int(package_payload['attribution_window_days']),
                 new_client_window_days=int(package_payload['new_client_window_days']),
@@ -128,5 +138,17 @@ class ClientOutcomeOrderPersistenceService:
     def get_order(self, order_id: str) -> ClientOutcomeOrder | None:
         return self.store.get_order(order_id)
 
-    def amend_order(self, *, now: datetime, order_id: str, package: ClientOutcomePackage, metadata: dict[str, Any] | None = None) -> ClientOutcomeOrder | None:
-        return self.store.amend_order(now=now, order_id=order_id, package=package, metadata=metadata)
+    def amend_order(
+        self,
+        *,
+        now: datetime,
+        order_id: str,
+        package: ClientOutcomePackage,
+        metadata: dict[str, Any] | None = None,
+    ) -> ClientOutcomeOrder | None:
+        return self.store.amend_order(
+            now=now,
+            order_id=order_id,
+            package=package,
+            metadata=metadata,
+        )

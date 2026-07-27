@@ -7,6 +7,7 @@ from threading import RLock
 from typing import Mapping
 import os
 
+from core.finance.money import legacy_float, money_decimal
 from core.tenancy.normalization import require_tenant_id
 from governance.persistence_codec import atomic_write_json, from_dataclass, read_json_or_default, to_jsonable
 from tenancy.tenant_audit_scope import TenantAuditScope
@@ -89,7 +90,6 @@ class InMemoryTenantPolicyStore:
 
 
 
-
 def build_default_tenant_policy_bundle(tenant_id: str) -> TenantPolicyBundle:
     tid = require_tenant_id(tenant_id)
     runtime_limits = TenantRuntimeLimits(tenant_id=tid)
@@ -99,7 +99,13 @@ def build_default_tenant_policy_bundle(tenant_id: str) -> TenantPolicyBundle:
         'publications_per_day': float(runtime_limits.max_publications_per_day),
         'memory_writes_per_day': float(runtime_limits.max_memory_writes_per_day),
         'connector_calls_per_hour': float(runtime_limits.max_connector_calls_per_hour),
-        'daily_budget': float(runtime_limits.max_daily_budget),
+        'daily_budget': legacy_float(
+            money_decimal(
+                runtime_limits.max_daily_budget,
+                name='max_daily_budget',
+            ),
+            name='max_daily_budget',
+        ),
     }
     return TenantPolicyBundle(
         tenant_id=tid,

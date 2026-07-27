@@ -4,11 +4,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Mapping
 
+from core.finance.money import legacy_float, money_decimal, rate_decimal
+
 CANON_CLIENT_OUTCOME_CONTRACT = True
 
 
 def _text(value: object) -> str:
-    return str(value or '').strip()
+    return str(value or "").strip()
 
 
 def _safe_dict(value: object) -> dict[str, Any]:
@@ -21,28 +23,35 @@ class ClientOutcomePackage:
     label: str
     requested_clients: int
     price_per_verified_client: float
-    currency: str = 'EUR'
+    currency: str = "EUR"
     attribution_window_days: int = 30
     new_client_window_days: int = 180
     allow_returning_clients: bool = False
     require_payment_proof: bool = False
     require_crm_proof: bool = True
-    trust_tier: str = 'tier0_manual'
+    trust_tier: str = "tier0_manual"
 
-    def normalized_copy(self) -> 'ClientOutcomePackage':
+    def normalized_copy(self) -> ClientOutcomePackage:
         requested = max(1, int(self.requested_clients))
+        price = money_decimal(
+            self.price_per_verified_client,
+            name="price_per_verified_client",
+        )
         return ClientOutcomePackage(
             package_id=_text(self.package_id),
-            label=_text(self.label) or f'{requested} clients',
+            label=_text(self.label) or f"{requested} clients",
             requested_clients=requested,
-            price_per_verified_client=max(0.0, float(self.price_per_verified_client)),
-            currency=_text(self.currency).upper() or 'EUR',
+            price_per_verified_client=legacy_float(
+                price,
+                name="price_per_verified_client",
+            ),
+            currency=_text(self.currency).upper() or "EUR",
             attribution_window_days=max(1, int(self.attribution_window_days)),
             new_client_window_days=max(1, int(self.new_client_window_days)),
             allow_returning_clients=bool(self.allow_returning_clients),
             require_payment_proof=bool(self.require_payment_proof),
             require_crm_proof=bool(self.require_crm_proof),
-            trust_tier=_text(self.trust_tier) or 'tier0_manual',
+            trust_tier=_text(self.trust_tier) or "tier0_manual",
         )
 
 
@@ -68,11 +77,11 @@ class OutcomeLead:
     captured_at: datetime
     tracking_token: str
     source_channel: str
-    session_id: str = ''
-    click_id: str = ''
-    phone_hash: str = ''
-    email_hash: str = ''
-    external_customer_id: str = ''
+    session_id: str = ""
+    click_id: str = ""
+    phone_hash: str = ""
+    email_hash: str = ""
+    external_customer_id: str = ""
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def identity_fingerprint(self) -> str:
@@ -81,7 +90,7 @@ class OutcomeLead:
             _text(self.email_hash).casefold(),
             _text(self.external_customer_id).casefold(),
         ]
-        return '|'.join(part for part in parts if part)
+        return "|".join(part for part in parts if part)
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,14 +103,26 @@ class ClientProofEvent:
     proof_type: str
     status: str
     source: str
-    external_ref: str = ''
+    external_ref: str = ""
     amount: float = 0.0
-    currency: str = 'EUR'
+    currency: str = "EUR"
     metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        amount = money_decimal(self.amount, name="proof_amount")
+        object.__setattr__(self, "amount", legacy_float(amount, name="proof_amount"))
+        object.__setattr__(self, "currency", _text(self.currency).upper() or "EUR")
 
     def is_positive(self) -> bool:
         normalized_status = _text(self.status).casefold()
-        return normalized_status in {'verified', 'confirmed', 'paid', 'won', 'completed', 'succeeded'}
+        return normalized_status in {
+            "verified",
+            "confirmed",
+            "paid",
+            "won",
+            "completed",
+            "succeeded",
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,9 +179,37 @@ class BillableClientRecord:
     quantity: int = 1
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        price = rate_decimal(
+            self.unit_price,
+            name="unit_price",
+            allow_negative=True,
+        )
+        if isinstance(self.quantity, bool):
+            raise ValueError("quantity must be an integer")
+        quantity = int(self.quantity)
+        if quantity != self.quantity:
+            raise ValueError("quantity must be an integer")
+        currency = _text(self.currency).upper()
+        if not currency:
+            raise ValueError("currency is required")
+        object.__setattr__(self, "unit_price", legacy_float(price, name="unit_price"))
+        object.__setattr__(self, "quantity", quantity)
+        object.__setattr__(self, "currency", currency)
+
     @property
     def amount(self) -> float:
-        return round(float(self.unit_price) * int(self.quantity), 2)
+        amount = money_decimal(
+            rate_decimal(
+                self.unit_price,
+                name="unit_price",
+                allow_negative=True,
+            )
+            * self.quantity,
+            name="amount",
+            allow_negative=True,
+        )
+        return legacy_float(amount, name="amount")
 
     def normalized_metadata(self) -> dict[str, Any]:
         return _safe_dict(self.metadata)

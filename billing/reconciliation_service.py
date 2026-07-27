@@ -8,6 +8,7 @@ from runtime.monetization import ChargebackRecord, RefundRecord
 from billing.commercial_cycle_contract import ReconciliationDrift
 from billing.invoice_lifecycle import CommercialInvoiceEnvelope
 from billing.ledger_store import LedgerStoreContract
+from billing.money import quantity_times_minor_units
 from billing.usage_rollup import UsageRollup
 from core.tenancy.normalization import require_tenant_id
 from observability.tenant_metrics_registry import TenantMetricsRegistry
@@ -60,7 +61,11 @@ class BillingReconciliationService:
             rollup.validate()
             if rollup.tenant_id != tid:
                 continue
-            usage_total += int(round(float(rollup.quantity) * rate_map.get(rollup.meter_key, 100)))
+            usage_total += quantity_times_minor_units(
+                rollup.quantity,
+                rate_map.get(rollup.meter_key, 100),
+                quantity_name='rollup_quantity',
+            )
         ledger_total = self._ledger_store.total_for_account(tenant_id=tid, account_code=revenue_account, side='credit')
         refunded_total = sum(int(item.amount_minor) for item in refunds if str(item.tenant_id) == tid)
         chargeback_total = sum(int(item.amount_minor) for item in chargebacks if str(item.tenant_id) == tid)
@@ -78,7 +83,11 @@ class BillingReconciliationService:
                 observed_minor=ledger_total,
                 delta_minor=ledger_total - invoice_total,
                 severity='high',
-                details={'owner': 'billing.reconciliation_service', 'currencies': sorted(ledger_currencies), 'account_code': revenue_account},
+                details={
+                    'owner': 'billing.reconciliation_service',
+                    'currencies': sorted(ledger_currencies),
+                    'account_code': revenue_account,
+                },
             )
             drift.validate()
             drifts.append(drift)
@@ -90,14 +99,41 @@ class BillingReconciliationService:
                 observed_minor=ledger_total,
                 delta_minor=ledger_total - invoice_total,
                 severity='high',
-                details={'owner': 'billing.reconciliation_service', 'currencies': sorted(invoice_currencies)},
+                details={
+                    'owner': 'billing.reconciliation_service',
+                    'currencies': sorted(invoice_currencies),
+                },
             )
             drift.validate()
             drifts.append(drift)
         for key, expected, observed, details in (
-            ('invoice_vs_ledger', invoice_total, ledger_total, {'basis': 'issued_invoice_total'}),
-            ('net_invoice_vs_ledger', net_expected_total, ledger_total, {'basis': 'issued_invoice_total_minus_refunds_and_chargebacks', 'refunded_total': refunded_total, 'chargeback_total': chargeback_total}),
-            ('usage_proxy_vs_ledger', usage_total, ledger_total, {'basis': 'usage_rollup_proxy', 'rate_minor_by_meter': rate_map}),
+            (
+                'invoice_vs_ledger',
+                invoice_total,
+                ledger_total,
+                {'basis': 'issued_invoice_total'},
+            ),
+            (
+                'net_invoice_vs_ledger',
+                net_expected_total,
+                ledger_total,
+                {
+                    'basis': (
+                        'issued_invoice_total_minus_refunds_and_chargebacks'
+                    ),
+                    'refunded_total': refunded_total,
+                    'chargeback_total': chargeback_total,
+                },
+            ),
+            (
+                'usage_proxy_vs_ledger',
+                usage_total,
+                ledger_total,
+                {
+                    'basis': 'usage_rollup_proxy',
+                    'rate_minor_by_meter': rate_map,
+                },
+            ),
         ):
             delta = int(observed) - int(expected)
             if delta == 0:
@@ -116,8 +152,16 @@ class BillingReconciliationService:
             drifts.append(drift)
         report = ReconciliationReport(tenant_id=tid, drifts=tuple(drifts))
         if self._metrics is not None:
-            self._metrics.set_gauge(tenant_id=tid, metric_name='billing_reconciliation_drift_count', value=float(len(report.drifts)))
+            self._metrics.set_gauge(
+                tenant_id=tid,
+                metric_name='billing_reconciliation_drift_count',
+                value=float(len(report.drifts)),
+            )
         return report
 
 
-__all__ = ['BillingReconciliationService', 'CANON_BILLING_RECONCILIATION_SERVICE', 'ReconciliationReport']
+__all__ = [
+    'BillingReconciliationService',
+    'CANON_BILLING_RECONCILIATION_SERVICE',
+    'ReconciliationReport',
+]

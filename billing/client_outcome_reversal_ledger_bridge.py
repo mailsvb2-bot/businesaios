@@ -3,8 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from billing.ledger_event import LedgerEntry, LedgerPosting
 from billing.client_outcome_reversal_contract import ClientOutcomeReversalRecord
+from billing.ledger_event import LedgerEntry, LedgerPosting
+from billing.money import to_minor_units
 
 
 CANON_CLIENT_OUTCOME_REVERSAL_LEDGER_BRIDGE = True
@@ -18,7 +19,7 @@ class ClientOutcomeReversalLedgerBridge:
     def build_posting(self, *, reversal: ClientOutcomeReversalRecord, booked_at: datetime) -> LedgerPosting:
         if booked_at.tzinfo is None:
             raise ValueError('booked_at must be timezone-aware')
-        amount_minor = int(round(float(reversal.amount) * 100.0))
+        amount_minor = to_minor_units(reversal.amount, name="reversal_amount")
         reference_id = reversal.reversal_id
         debit = LedgerEntry(
             tenant_id=reversal.tenant_id,
@@ -50,7 +51,12 @@ class ClientOutcomeReversalLedgerBridge:
             reference_type='client_outcome_reversal',
             reference_id=reference_id,
             entries=(debit, credit),
-            metadata={'reason_code': reversal.reason_code, 'original_billable_record_id': reversal.original_billable_record_id},
+            metadata={
+                'reason_code': reversal.reason_code,
+                'original_billable_record_id': (
+                    reversal.original_billable_record_id
+                ),
+            },
         )
         posting.validate()
         return posting

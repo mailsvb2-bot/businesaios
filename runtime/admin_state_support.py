@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from runtime._internal.effects_domains.admin_pricing_effects import (
+from runtime.admin_pricing_support import (
     build_pricing_change_payload as build_pricing_change_payload,
     emit_pricing_change_event as emit_pricing_change_event,
     emit_pricing_reset as emit_pricing_reset,

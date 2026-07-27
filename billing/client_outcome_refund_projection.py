@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from billing.client_outcome_reversal_contract import ClientOutcomeReversalRecord
+from billing.money import to_minor_units
 from lead_outcomes.client_outcome_contract import BillableClientRecord
 
 
@@ -32,7 +33,7 @@ class ClientOutcomeRefundProjection:
         provider_name = _text(metadata.get('provider_name') or metadata.get('payment_provider'))
         if not invoice_id or not provider_name:
             return None
-        amount_minor = int(round(abs(float(reversal.amount)) * 100))
+        amount_minor = to_minor_units(reversal.amount, name="reversal_amount")
         if amount_minor <= 0:
             return None
         return {

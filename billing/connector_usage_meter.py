@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping
 
+from core.finance.money import legacy_float, quantity_decimal
 from core.tenancy.normalization import require_tenant_id
 from tenancy.tenant_quota_guard import QuotaDimension
 
@@ -30,8 +31,7 @@ class ConnectorUsageRecord:
             raise ValueError("connector_id is required")
         if not str(self.operation or "").strip():
             raise ValueError("operation is required")
-        if float(self.quantity) < 0:
-            raise ValueError("quantity must be >= 0")
+        quantity_decimal(self.quantity, name="quantity")
 
 
 class ConnectorUsageMeter:
@@ -73,7 +73,10 @@ class ConnectorUsageMeter:
             decision = self._quota_enforcer.consume(
                 tenant_id=record.tenant_id,
                 dimension=QuotaDimension.CONNECTOR_CALLS_PER_HOUR.value,
-                amount=float(record.quantity),
+                amount=legacy_float(
+                    quantity_decimal(record.quantity, name="quantity"),
+                    name="quantity",
+                ),
                 meter_key=BillingMeterKey.CONNECTOR_CALLS,
                 idempotency_key=record.idempotency_key,
                 labels=labels,
@@ -81,7 +84,9 @@ class ConnectorUsageMeter:
             )
             if not decision.allowed:
                 raise PermissionError(
-                    f"connector quota exceeded for tenant={record.tenant_id} connector={record.connector_id}: {decision.reason}"
+                    "connector quota exceeded for "
+                    f"tenant={record.tenant_id} "
+                    f"connector={record.connector_id}: {decision.reason}"
                 )
             refreshed = self._find_existing(record)
             if refreshed is not None:
@@ -91,7 +96,10 @@ class ConnectorUsageMeter:
             UsageRecord(
                 tenant_id=record.tenant_id,
                 meter_key=BillingMeterKey.CONNECTOR_CALLS,
-                quantity=float(record.quantity),
+                quantity=legacy_float(
+                    quantity_decimal(record.quantity, name="quantity"),
+                    name="quantity",
+                ),
                 idempotency_key=record.idempotency_key,
                 labels=labels,
                 metadata=metadata,
@@ -110,7 +118,10 @@ class ConnectorUsageMeter:
         return self._quota_enforcer.check(
             tenant_id=tenant_id,
             dimension=QuotaDimension.CONNECTOR_CALLS_PER_HOUR.value,
-            amount=float(quantity),
+            amount=legacy_float(
+                quantity_decimal(quantity, name="quantity"),
+                name="quantity",
+            ),
             meter_key=BillingMeterKey.CONNECTOR_CALLS,
         )
 

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Mapping
+
+from core.finance.money import legacy_float, money_decimal, to_minor_units
 
 from lead_outcomes.client_outcome_commercial_state_store import ClientOutcomeCommercialStateService
 from lead_outcomes.client_outcome_corrected_economics_store import ClientOutcomeCorrectedEconomicsService
@@ -15,11 +18,20 @@ def _safe_dict(value: object) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
 
 
-def _safe_float(value: object) -> float | None:
-    if value in (None, ''):
+def _safe_money(value: object) -> Decimal | None:
+    if value in (None, ""):
         return None
     try:
-        return float(value)
+        return money_decimal(value, allow_negative=True)
+    except ValueError:
+        return None
+
+
+def _safe_minor(value: object) -> int | None:
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
     except (TypeError, ValueError):
         return None
 
@@ -37,9 +49,24 @@ def _reversal_expected_for_status(commercial_status: str) -> bool:
     return commercial_status in {'partial_reversed', 'reversed', 'closed'}
 
 
-def _required_lifecycle_stage_names(*, commercial_status: str, has_billed_revenue: bool, has_corrected_economics: bool, has_dispute: bool, has_reversal: bool, has_refund_request: bool) -> tuple[str, ...]:
+def _required_lifecycle_stage_names(
+    *,
+    commercial_status: str,
+    has_billed_revenue: bool,
+    has_corrected_economics: bool,
+    has_dispute: bool,
+    has_reversal: bool,
+    has_refund_request: bool,
+) -> tuple[str, ...]:
     required = ['selected_and_executed']
-    if commercial_status in {'verified', 'billed', 'disputed', 'partial_reversed', 'reversed', 'closed'}:
+    if commercial_status in {
+        'verified',
+        'billed',
+        'disputed',
+        'partial_reversed',
+        'reversed',
+        'closed',
+    }:
         required.append('verified')
     if has_billed_revenue:
         required.append('billed')
@@ -79,7 +106,14 @@ class ClientOutcomeReconciliationService:
     def reconcile(self, *, order_id: str, lead_id: str) -> ClientOutcomeReconciliationResult:
         commercial_state = self.commercial_state_service.get_state(order_id=order_id, lead_id=lead_id)
         corrected_economics = self.corrected_economics_service.get_state(order_id=order_id, lead_id=lead_id)
-        lifecycle = None if self.lifecycle_service is None else self.lifecycle_service.get_state(order_id=order_id, lead_id=lead_id)
+        lifecycle = (
+            None
+            if self.lifecycle_service is None
+            else self.lifecycle_service.get_state(
+                order_id=order_id,
+                lead_id=lead_id,
+            )
+        )
         found = commercial_state is not None or corrected_economics is not None or lifecycle is not None
         if not found:
             return ClientOutcomeReconciliationResult(
@@ -119,8 +153,16 @@ class ClientOutcomeReconciliationService:
         if commercial_has_reversal != corrected_has_reversal:
             _append_issue(issues, 'reversal_presence_mismatch')
 
-        commercial_reversal_amount = _safe_float(commercial_reversal.get('amount')) if commercial_has_reversal else 0.0
-        corrected_reversal_amount = _safe_float(corrected_reversal.get('amount')) if corrected_has_reversal else 0.0
+        commercial_reversal_amount = (
+            _safe_money(commercial_reversal.get('amount'))
+            if commercial_has_reversal
+            else Decimal('0')
+        )
+        corrected_reversal_amount = (
+            _safe_money(corrected_reversal.get('amount'))
+            if corrected_has_reversal
+            else Decimal('0')
+        )
         if commercial_reversal_amount != corrected_reversal_amount:
             _append_issue(issues, 'reversal_amount_mismatch')
 
@@ -137,7 +179,9 @@ class ClientOutcomeReconciliationService:
         refund_request = _safe_dict(corrected_payload.get('refund_request'))
         has_refund_preview = bool(refund_preview)
         has_refund_request = bool(refund_request)
-        has_billed_revenue = bool(commercial_payload.get('revenue_before_reversal')) or bool(commercial_corrected_revenue)
+        has_billed_revenue = bool(
+            commercial_payload.get('revenue_before_reversal')
+        ) or bool(commercial_corrected_revenue)
         has_corrected_economics = bool(corrected_payload)
         if not commercial_corrected_revenue and corrected_revenue:
             _append_issue(issues, 'missing_commercial_corrected_revenue')
@@ -149,7 +193,7 @@ class ClientOutcomeReconciliationService:
             left = commercial_corrected_revenue.get(key)
             right = corrected_revenue.get(key)
             if key == 'billed_revenue':
-                if _safe_float(left) != _safe_float(right):
+                if _safe_money(left) != _safe_money(right):
                     _append_issue(issues, 'corrected_revenue_billed_revenue_mismatch')
             elif left != right:
                 _append_issue(issues, f'corrected_revenue_{key}_mismatch')
@@ -167,9 +211,16 @@ class ClientOutcomeReconciliationService:
         if has_refund_preview and not has_refund_request:
             _append_issue(issues, 'missing_refund_request')
         if has_refund_request:
-            if _safe_float(refund_request.get('amount_minor')) != (_safe_float(commercial_reversal_amount) or 0.0) * 100.0:
+            expected_refund_minor = to_minor_units(
+                commercial_reversal_amount or Decimal('0'),
+                allow_negative=True,
+            )
+            if _safe_minor(refund_request.get('amount_minor')) != expected_refund_minor:
                 _append_issue(issues, 'refund_request_amount_minor_mismatch')
-            if str(refund_request.get('currency') or '') != str((corrected_reversal or commercial_reversal).get('currency') or ''):
+            expected_currency = str(
+                (corrected_reversal or commercial_reversal).get('currency') or ''
+            )
+            if str(refund_request.get('currency') or '') != expected_currency:
                 _append_issue(issues, 'refund_request_currency_mismatch')
 
         if corrected_payload and not lifecycle_payload:
@@ -200,7 +251,12 @@ class ClientOutcomeReconciliationService:
             issues=tuple(issues),
             commercial_status=commercial_status,
             economics_status=economics_status,
-            reversal_amount=corrected_reversal_amount if corrected_has_reversal else commercial_reversal_amount,
+            reversal_amount=legacy_float(
+                corrected_reversal_amount
+                if corrected_has_reversal
+                else commercial_reversal_amount,
+                name='reversal_amount',
+            ),
             corrected_revenue=corrected_revenue or None,
             commercial_state=commercial_payload or None,
             corrected_economics=corrected_payload or None,
