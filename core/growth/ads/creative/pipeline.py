@@ -170,6 +170,18 @@ def generate_candidates(
     normalized_offer_title = _clean_text(offer_title)
     normalized_offer_details = _clean_text(offer_details)
     normalized_city = _clean_text(city)
+    if not any(
+        (normalized_business_type, normalized_offer_title, normalized_offer_details)
+    ):
+        return [
+            _safe_fallback_candidate(
+                offer_arm=offer_arm,
+                business_type=normalized_business_type,
+                offer_title=normalized_offer_title,
+                offer_details=normalized_offer_details,
+                guardrails=g,
+            )
+        ]
 
     out: list[CreativeCandidate] = []
     for i in range(n):
