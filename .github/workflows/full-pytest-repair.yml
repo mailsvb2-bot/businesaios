@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/full-pytest-security-repair
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
