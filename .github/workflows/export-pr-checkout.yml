@@ -30,3 +30,5 @@ jobs:
           path: /tmp/businesaios-pr-head.tgz
           if-no-files-found: error
           retention-days: 1
+
+# One-use checkout export; remove after artifact download.
