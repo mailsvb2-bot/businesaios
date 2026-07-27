@@ -13,6 +13,35 @@ permissions:
   contents: read
 
 jobs:
+  reported-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run reported regression contour
+        run: |
+          pytest -q \
+            tests/test_decision_core_gate_fail_closed_v27.py \
+            tests/test_decision_ledger.py \
+            tests/test_single_decision_envelope_definition.py \
+            tests/test_runtime_decision_gateway.py \
+            tests/test_security.py \
+            tests/test_hidden_business_logic_wave9.py \
+            tests/test_retention_engine.py
+
   full-pytest:
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -42,7 +71,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          PYTHONPATH=. pytest -q > full-pytest.log 2>&1
+          pytest -q > full-pytest.log 2>&1
           code=$?
           echo "$code" > full-pytest.exit-code
           cat full-pytest.log
