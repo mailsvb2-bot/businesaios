@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from core.observability.silent import swallow
@@ -12,15 +12,45 @@ from core.observability.silent import swallow
 class ProposedAction:
     """A small, explicit action proposal.
 
-    DecisionCore will validate it via SchemaRegistry.
+    ``ranking`` is decision-stage metadata only. It is consumed by the
+    canonical policy stage and never enters the signed action payload.
     """
 
     action: str
     payload: dict[str, Any]
+    ranking: dict[str, float] = field(default_factory=dict)
 
 
-def propose(action: str, payload: dict[str, Any] | None = None) -> ProposedAction:
-    return ProposedAction(action=str(action), payload=dict(payload or {}))
+def propose(
+    action: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    ranking: dict[str, float] | None = None,
+) -> ProposedAction:
+    return ProposedAction(
+        action=str(action),
+        payload=dict(payload or {}),
+        ranking={str(k): float(v) for k, v in dict(ranking or {}).items()},
+    )
+
+
+def normalize_proposed_action(value: Any) -> ProposedAction:
+    """Normalize historical mapping-shaped policy outputs."""
+
+    if isinstance(value, ProposedAction):
+        return value
+    if not isinstance(value, dict):
+        raise TypeError("policy_proposal_must_be_mapping_or_proposed_action")
+    action = str(value.get("action") or "").strip()
+    if not action:
+        raise ValueError("policy_proposal_action_required")
+    raw_payload = value.get("payload")
+    payload = (
+        dict(raw_payload)
+        if isinstance(raw_payload, dict)
+        else {str(k): v for k, v in value.items() if str(k) not in {"action", "ranking"}}
+    )
+    return ProposedAction(action=action, payload=payload)
 
 
 def propose_message(

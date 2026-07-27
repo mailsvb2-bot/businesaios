@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 from core.ai.action_ranking import rank_proposals
@@ -22,23 +23,55 @@ def _fallback_proposal(*, policy: Any, state: Any, trace: Any, reason: str) -> A
     return policy.propose(state)
 
 
+def _materialize_ranked(*, prototype: Any, action: str, payload: dict[str, Any]) -> Any:
+    if isinstance(prototype, dict):
+        return SimpleNamespace(action=str(action), payload=dict(payload))
+    try:
+        return type(prototype)(action=str(action), payload=dict(payload))
+    except TypeError:
+        return SimpleNamespace(action=str(action), payload=dict(payload))
+
+
 def propose_action(*, policy: Any, state: Any, trace: Any) -> Any:
     if not hasattr(policy, "propose_many"):
         return policy.propose(state)
     try:
-        cands = list(policy.propose_many(state) or [])
+        candidates = list(policy.propose_many(state) or [])
     except Exception as exc:
-        return _fallback_proposal(policy=policy, state=state, trace=trace, reason=f"propose_many_error:{exc.__class__.__name__}")
-    if not cands:
-        return _fallback_proposal(policy=policy, state=state, trace=trace, reason="empty_candidates")
-    ranked = rank_proposals(cands)
+        return _fallback_proposal(
+            policy=policy,
+            state=state,
+            trace=trace,
+            reason=f"propose_many_error:{exc.__class__.__name__}",
+        )
+    if not candidates:
+        return _fallback_proposal(
+            policy=policy,
+            state=state,
+            trace=trace,
+            reason="empty_candidates",
+        )
+    ranked = rank_proposals(candidates)
     if not ranked:
-        return _fallback_proposal(policy=policy, state=state, trace=trace, reason="ranked_candidates_empty")
-    prototype = cands[0]
-    out = type(prototype)(action=ranked[0].action, payload=ranked[0].payload)
+        return _fallback_proposal(
+            policy=policy,
+            state=state,
+            trace=trace,
+            reason="ranked_candidates_empty",
+        )
+    selected = ranked[0]
+    output = _materialize_ranked(
+        prototype=candidates[0],
+        action=selected.action,
+        payload=selected.payload,
+    )
     trace.try_add_step(
         name="rank_candidates",
         input={"n": int(len(ranked))},
-        output={"chosen_action": str(ranked[0].action), "score": float(ranked[0].score), "reason": str(ranked[0].reason)},
+        output={
+            "chosen_action": str(selected.action),
+            "score": float(selected.score),
+            "reason": str(selected.reason),
+        },
     )
-    return out
+    return output
