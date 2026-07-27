@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Any
 
 from core.policies.product_domains.retention_domain import RetentionDomainPolicyV1
 from core.policies.product_domains.sales_domain import SalesDomainPolicyV1
