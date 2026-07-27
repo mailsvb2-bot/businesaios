@@ -47,8 +47,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.lock.txt
       - name: Prove critical behavior
+        id: api_proof
+        continue-on-error: true
+        shell: bash
         run: |
-          pytest -q \
+          set +e
+          pytest -x -q --tb=short \
             tests/test_decision_core_gate_fail_closed_v27.py \
             tests/test_decision_ledger.py \
             tests/test_single_decision_envelope_definition.py \
@@ -58,7 +62,27 @@ jobs:
             tests/test_hidden_business_logic_wave9.py \
             tests/test_retention_engine.py \
             tests/test_retention_and_policy_split_v26.py \
-            tests/test_retention_engine_split.py
+            tests/test_retention_engine_split.py \
+            > api-perimeter-proof.log 2>&1
+          code=$?
+          echo "$code" > api-perimeter-proof.exit
+          cat api-perimeter-proof.log
+          exit "$code"
+      - name: Upload API perimeter proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: api-perimeter-proof-${{ github.event.pull_request.head.sha }}
+          path: |
+            api-perimeter-proof.log
+            api-perimeter-proof.exit
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce critical proof
+        if: always()
+        run: |
+          test -f api-perimeter-proof.exit
+          test "$(cat api-perimeter-proof.exit)" = "0"
       - name: Commit clean canonical result
         shell: bash
         run: |
