@@ -1,0 +1,32 @@
+name: Export PR checkout
+
+on:
+  push:
+    branches:
+      - agent/full-pytest-security-repair
+    paths:
+      - .github/workflows/export-pr-checkout.yml
+
+permissions:
+  contents: read
+
+jobs:
+  export-checkout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: agent/full-pytest-security-repair
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify branch head
+        run: test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+      - name: Archive exact checkout
+        run: tar --exclude=.git --exclude=.pytest_cache --exclude='**/__pycache__' -czf /tmp/businesaios-pr-head.tgz .
+      - name: Upload exact checkout
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: businesaios-pr-head-${{ github.sha }}
+          path: /tmp/businesaios-pr-head.tgz
+          if-no-files-found: error
+          retention-days: 1
