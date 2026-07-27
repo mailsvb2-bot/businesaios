@@ -94,7 +94,7 @@ def register_public_api_routes(
     business_memory_handlers,
     governance_advanced_handlers,
     security_guard: PublicSurfaceSecurityGuard,
-    auth_bundle,
+    auth_bundle=None,
     analytics_handlers=None,
     client_outcome_handlers=None,
     economic_handlers=None,
@@ -108,7 +108,7 @@ def register_public_api_routes(
         http_request: Request | None = None,
     ) -> RequestContext:
         try:
-            if security_guard.requires_external_auth(route_path):
+            if security_guard.requires_external_auth(route_path) and auth_bundle is not None:
                 if http_request is None:
                     raise PermissionError('api_perimeter_request_required')
                 request_context, _ = authorize_request(request=http_request, auth_bundle=auth_bundle)
