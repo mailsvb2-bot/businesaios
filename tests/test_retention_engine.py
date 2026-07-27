@@ -1,7 +1,6 @@
-import json
 from pathlib import Path
 
-from core.retention.engine import decide_for_day
+from core.retention.engine import evaluate_for_day
 from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
 
@@ -45,21 +44,24 @@ def test_retention_decision_flow(tmp_path: Path):
             }
         )
 
-        d = decide_for_day(
+        evaluation = evaluate_for_day(
             store,
             tenant_id="t1",
             user_id="u1",
             day_key="2023-11-14",  # matches timestamps above (approx UTC)
             day_index=20,
+            now_ms=1700000200000,
             outbound_telemetry={"qsize": 0, "telegram_api_latency_p90_ms": 0},
         )
 
-        assert 0.0 <= d.hazard <= 1.0
-        assert 0.0 <= d.readiness <= 1.0
-        assert d.offer_arm in ("NONE", "offer_bundle_14_30", "offer_90_21900", "offer_30_14900")
+        assert 0.0 <= evaluation.hazard <= 1.0
+        assert 0.0 <= evaluation.readiness <= 1.0
+        assert evaluation.debug["no_second_brain"] is True
+        assert all(candidate.candidate_id for candidate in evaluation.candidates)
 
-        raw = store.get_user_features_daily(tenant_id="t1", user_id="u1", day_key=d.day_key)
-        assert raw is not None
-        vec = json.loads(raw)
-        assert isinstance(vec, dict)
-        assert len(vec.keys()) == 200
+        raw = store.get_user_features_daily(
+            tenant_id="t1",
+            user_id="u1",
+            day_key=evaluation.day_key,
+        )
+        assert raw is None
