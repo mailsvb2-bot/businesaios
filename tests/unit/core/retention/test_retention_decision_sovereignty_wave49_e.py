@@ -4,36 +4,11 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
-
-import core.retention.arms as arms_mod
-import core.retention.engine as engine_mod
-import core.retention.pricing_flow as pricing_mod
 import core.policies.telegram.unified_policy as unified_mod
-from application.decision_policy.policy_stage import propose_action
-from core.ai.action_ranking import rank_proposals, score_proposal
-from core.policies.telegram.helpers import ProposedAction, normalize_proposed_action, propose
-from core.policies.telegram.retention_integration import (
-    apply_retention_constraints_to_state,
-    merge_retention_plan,
-)
-from core.retention.arms import RetentionArmEvidence
-from core.retention.bandit import choose_arm, update_arm
-from core.retention.decision_adapter import RetentionDecisionAdapter
-from core.retention.decision_adapter_support import (
-    build_offer_proposal,
-    merge_inline_keyboards,
-)
-from core.retention.engine import (
-    RetentionEvaluation,
-    RetentionOfferCandidate,
-    materialize_candidate,
-    neutral_decision,
-)
-from core.retention.pricing_flow import RetentionPriceEvidence
-from runtime._internal.effects_actions.telegram.messaging_parts.tracking import (
-    track_business_event,
-)
+from core.policies.telegram.helpers import propose
+from core.policies.telegram.retention_integration import apply_retention_constraints_to_state
+from core.retention.decision_adapter_support import merge_inline_keyboards
+from core.retention.engine import RetentionEvaluation, RetentionOfferCandidate
 
 
 class FakeStore:
@@ -165,10 +140,15 @@ def test_retention_integration_no_debug_and_existing_constraints() -> None:
         candidates=(),
         debug={},
     )
-    assert apply_retention_constraints_to_state(state=state, evaluation=low_risk) is state
+    assert apply_retention_constraints_to_state(
+        state=state,
+        evaluation=low_risk,
+    ) is state
 
 
-def test_unified_invalid_ttl_bad_pricing_and_retention_constraint_rebuild(monkeypatch) -> None:
+def test_unified_invalid_ttl_bad_pricing_and_retention_constraint_rebuild(
+    monkeypatch,
+) -> None:
     evidence = RetentionEvaluation(
         tenant_id="tenant-a",
         day_key="d",
@@ -218,8 +198,14 @@ def test_support_readers_decorators_and_keyboard_branches(monkeypatch) -> None:
         "log_exception_throttled",
         lambda *_args, **kwargs: calls.append(kwargs["key"]),
     )
-    assert support.read_outbound_metrics(reader=lambda: {"qsize": 1}, logger=None) == {"qsize": 1}
-    assert support.read_outbound_metrics(reader=lambda: (_ for _ in ()).throw(RuntimeError()), logger=None) == {}
+    assert support.read_outbound_metrics(
+        reader=lambda: {"qsize": 1},
+        logger=None,
+    ) == {"qsize": 1}
+    assert support.read_outbound_metrics(
+        reader=lambda: (_ for _ in ()).throw(RuntimeError()),
+        logger=None,
+    ) == {}
 
     class BadState:
         @property
@@ -227,9 +213,13 @@ def test_support_readers_decorators_and_keyboard_branches(monkeypatch) -> None:
             raise RuntimeError
 
     assert support.read_entitlements_from_state(
-        state=SimpleNamespace(economy={"entitlements": {"x": 1}}), logger=None
+        state=SimpleNamespace(economy={"entitlements": {"x": 1}}),
+        logger=None,
     ) == {"x": 1}
-    assert support.read_entitlements_from_state(state=SimpleNamespace(economy=None), logger=None) is None
+    assert support.read_entitlements_from_state(
+        state=SimpleNamespace(economy=None),
+        logger=None,
+    ) is None
     assert support.read_entitlements_from_state(state=BadState(), logger=None) is None
     assert calls == ["retention.outbound_metrics", "retention.entitlements"]
 
@@ -248,7 +238,10 @@ def test_support_readers_decorators_and_keyboard_branches(monkeypatch) -> None:
     )
     payload = {"x": 1}
     assert support.decorate_retention_payload(
-        payload=payload, user_id="u", key="k", msg="m"
+        payload=payload,
+        user_id="u",
+        key="k",
+        msg="m",
     ) is payload
     assert throttled == ["k|u"]
 
@@ -259,7 +252,8 @@ def test_support_readers_decorators_and_keyboard_branches(monkeypatch) -> None:
         "inline_keyboard": [[2]]
     }
     assert merge_inline_keyboards(
-        {"inline_keyboard": [[1]]}, {"inline_keyboard": [[2]]}
+        {"inline_keyboard": [[1]]},
+        {"inline_keyboard": [[2]]},
     ) == {"inline_keyboard": [[1], [2]]}
 
 
@@ -267,14 +261,23 @@ def test_support_private_boundaries_and_offer_rejections(monkeypatch) -> None:
     import core.retention.decision_adapter_support as support
 
     assert support._max_band(SimpleNamespace(price_constraints=None)) is None
-    assert support._max_band(SimpleNamespace(price_constraints={"max_band": " low "})) == "low"
+    assert (
+        support._max_band(SimpleNamespace(price_constraints={"max_band": " low "}))
+        == "low"
+    )
     assert support._max_band(SimpleNamespace(price_constraints={"max_band": 1})) is None
-    assert support._safe_mode_blocks(state=SimpleNamespace(price_constraints=None), arm="a") == (False, "")
     assert support._safe_mode_blocks(
-        state=SimpleNamespace(price_constraints={"mode": "normal"}), arm="a"
+        state=SimpleNamespace(price_constraints=None),
+        arm="a",
     ) == (False, "")
     assert support._safe_mode_blocks(
-        state=SimpleNamespace(price_constraints={"mode": "safe", "disallow_offer_prefixes": "x"}),
+        state=SimpleNamespace(price_constraints={"mode": "normal"}),
+        arm="a",
+    ) == (False, "")
+    assert support._safe_mode_blocks(
+        state=SimpleNamespace(
+            price_constraints={"mode": "safe", "disallow_offer_prefixes": "x"}
+        ),
         arm="a",
     ) == (False, "")
     assert support._safe_mode_blocks(
