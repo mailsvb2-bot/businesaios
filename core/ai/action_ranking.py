@@ -1,12 +1,9 @@
-"""Tiny candidate action ranking.
-
-DecisionCore can optionally select from multiple proposals.
-This module is intentionally dumb and deterministic.
-"""
+"""Canonical deterministic candidate-action ranking for DecisionCore."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import math
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -21,39 +18,59 @@ class RankedProposal:
     reason: str
 
 
-def _get_num(d: dict[str, Any], key: str) -> float:
+def _mapping(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _get_num(data: Mapping[str, Any], key: str) -> float:
     try:
-        return float(d.get(key))
-    except Exception:
+        value = float(data.get(key, 0.0))
+    except (TypeError, ValueError):
         return 0.0
+    return value if math.isfinite(value) else 0.0
+
+
+def _proposal_parts(proposal: Any) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    if isinstance(proposal, Mapping):
+        action = str(proposal.get("action") or "")
+        raw_payload = proposal.get("payload")
+        payload = (
+            _mapping(raw_payload)
+            if isinstance(raw_payload, Mapping)
+            else {str(k): v for k, v in proposal.items() if str(k) not in {"action", "ranking"}}
+        )
+        ranking = _mapping(proposal.get("ranking"))
+        return action, payload, ranking
+    return (
+        str(getattr(proposal, "action", "")),
+        _mapping(getattr(proposal, "payload", {})),
+        _mapping(getattr(proposal, "ranking", {})),
+    )
 
 
 def score_proposal(
     *,
     action: str,
     payload: dict[str, Any],
+    ranking: dict[str, Any] | None = None,
     policy: ActionRankingPolicy = DEFAULT_ACTION_RANKING_POLICY,
 ) -> tuple[float, str]:
-    """Prefer proposals that carry explicit evaluation metadata.
+    """Score decision candidates from metadata that is not signed as action input.
 
-    Supported optional keys in payload:
-      - expected_profit_delta_minor
-      - ope_wis
-      - uplift
-      - risk_penalty
+    Historical payload-embedded metadata remains a read-only compatibility
+    fallback, but canonical callers use ``ProposedAction.ranking``.
     """
 
-    p = dict(payload or {})
-    exp = _get_num(p, "expected_profit_delta_minor")
-    wis = _get_num(p, "ope_wis")
-    uplift = _get_num(p, "uplift")
-    risk = _get_num(p, "risk_penalty")
-
+    metadata = dict(ranking or {}) or dict(payload or {})
+    expected_profit = _get_num(metadata, "expected_profit_delta_minor")
+    ope_wis = _get_num(metadata, "ope_wis")
+    uplift = _get_num(metadata, "uplift")
+    risk = _get_num(metadata, "risk_penalty")
     score = (
-        (exp * float(policy.expected_profit_weight))
-        + (wis * float(policy.ope_wis_weight))
-        + (uplift * float(policy.uplift_weight))
-        - (risk * float(policy.risk_penalty_weight))
+        expected_profit * float(policy.expected_profit_weight)
+        + ope_wis * float(policy.ope_wis_weight)
+        + uplift * float(policy.uplift_weight)
+        - risk * float(policy.risk_penalty_weight)
     )
     return float(score), "meta_profit+ope+uplift-risk"
 
@@ -63,14 +80,30 @@ def rank_proposals(
     *,
     policy: ActionRankingPolicy = DEFAULT_ACTION_RANKING_POLICY,
 ) -> list[RankedProposal]:
-    ranked: list[RankedProposal] = []
-    for pr in list(proposals or []):
+    ranked: list[tuple[int, RankedProposal]] = []
+    for index, proposal in enumerate(list(proposals or [])):
         try:
-            a = str(getattr(pr, "action", ""))
-            pl = dict(getattr(pr, "payload", {}) or {})
-            sc, rsn = score_proposal(action=a, payload=pl, policy=policy)
-            ranked.append(RankedProposal(action=a, payload=pl, score=float(sc), reason=str(rsn)))
-        except Exception:
+            action, payload, ranking = _proposal_parts(proposal)
+            if not action:
+                continue
+            score, reason = score_proposal(
+                action=action,
+                payload=payload,
+                ranking=ranking,
+                policy=policy,
+            )
+            ranked.append(
+                (
+                    index,
+                    RankedProposal(
+                        action=action,
+                        payload=payload,
+                        score=float(score),
+                        reason=str(reason),
+                    ),
+                )
+            )
+        except (TypeError, ValueError, OverflowError):
             continue
-    ranked.sort(key=lambda x: float(x.score), reverse=True)
-    return ranked
+    ranked.sort(key=lambda item: (-float(item[1].score), int(item[0])))
+    return [item for _, item in ranked]
