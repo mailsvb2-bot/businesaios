@@ -9,21 +9,8 @@ import pytest
 import core.retention.arms as arms_mod
 import core.retention.engine as engine_mod
 import core.retention.pricing_flow as pricing_mod
-import core.policies.telegram.unified_policy as unified_mod
-from application.decision_policy.policy_stage import propose_action
-from core.ai.action_ranking import rank_proposals, score_proposal
-from core.policies.telegram.helpers import ProposedAction, normalize_proposed_action, propose
-from core.policies.telegram.retention_integration import (
-    apply_retention_constraints_to_state,
-    merge_retention_plan,
-)
 from core.retention.arms import RetentionArmEvidence
 from core.retention.bandit import choose_arm, update_arm
-from core.retention.decision_adapter import RetentionDecisionAdapter
-from core.retention.decision_adapter_support import (
-    build_offer_proposal,
-    merge_inline_keyboards,
-)
 from core.retention.engine import (
     RetentionEvaluation,
     RetentionOfferCandidate,
@@ -31,9 +18,6 @@ from core.retention.engine import (
     neutral_decision,
 )
 from core.retention.pricing_flow import RetentionPriceEvidence
-from runtime._internal.effects_actions.telegram.messaging_parts.tracking import (
-    track_business_event,
-)
 
 
 class FakeStore:
@@ -205,7 +189,11 @@ def test_retention_bandit_selection_is_locked_but_outcomes_still_update() -> Non
 
 def test_arm_window_filtering_and_base_prices(monkeypatch) -> None:
     failures: list[str] = []
-    monkeypatch.setattr(arms_mod, "exception_throttled", lambda _log, *, key, msg: failures.append(key))
+    monkeypatch.setattr(
+        arms_mod,
+        "exception_throttled",
+        lambda _log, *, key, msg: failures.append(key),
+    )
     now = 1_000_000
     store = FakeStore(
         [
@@ -230,7 +218,12 @@ def test_arm_window_filtering_and_base_prices(monkeypatch) -> None:
     ) == [("unknown", 1.0), ("offer_30_14900", 1.0)]
     assert len(failures) == 2
     shown = FakeStore(
-        [{"event_type": "offer_shown", "payload": {"arm": "offer_30_14900", "day_index": 10}}]
+        [
+            {
+                "event_type": "offer_shown",
+                "payload": {"arm": "offer_30_14900", "day_index": 10},
+            }
+        ]
     )
     assert arms_mod.filter_candidate_arms(
         shown,
@@ -266,7 +259,7 @@ def test_pricing_candidates_are_evidence_not_choice(monkeypatch) -> None:
         base_price_rub=100,
         now_ms=100,
         pricing_ctx="web",
-        env_int=lambda _name, default: 0 if _name == "PRICING_RL_ENABLED" else default,
+        env_int=lambda name, default: 0 if name == "PRICING_RL_ENABLED" else default,
         env_float=lambda _name, default: default,
     )
     assert [item.price_rub for item in disabled] == [100]
@@ -275,15 +268,25 @@ def test_pricing_candidates_are_evidence_not_choice(monkeypatch) -> None:
     monkeypatch.setattr(
         pricing_mod,
         "collect_pricing_evidence",
-        lambda **_kwargs: ({100: (20, 5), 120: (20, 6)}, {"trials": 40, "successes": 11}),
+        lambda **_kwargs: (
+            {100: (20, 5), 120: (20, 6)},
+            {"trials": 40, "successes": 11},
+        ),
     )
     monkeypatch.setattr(pricing_mod, "build_candidates", lambda **_kwargs: [100, 120])
-    monkeypatch.setattr(pricing_mod, "posterior_mean_conv", lambda *, price, **_kwargs: price / 1000)
+    monkeypatch.setattr(
+        pricing_mod,
+        "posterior_mean_conv",
+        lambda *, price, **_kwargs: price / 1000,
+    )
     monkeypatch.setattr(pricing_mod, "choose_probabilities", lambda **_kwargs: [0.4, 0.6])
     monkeypatch.setattr(
         pricing_mod,
         "should_apply_price",
-        lambda *_args, candidate_price_rub, **_kwargs: (candidate_price_rub == 100, {"checked": True}),
+        lambda *_args, candidate_price_rub, **_kwargs: (
+            candidate_price_rub == 100,
+            {"checked": True},
+        ),
     )
     enabled = pricing_mod.build_price_candidates(
         store=store,
@@ -314,24 +317,44 @@ def test_pricing_candidates_are_evidence_not_choice(monkeypatch) -> None:
 
 def test_evaluate_for_day_returns_candidates_without_writes(monkeypatch) -> None:
     store = FakeStore()
-    monkeypatch.setattr(engine_mod.fx_mod, "compute_features_for_day", lambda *_args, **_kwargs: {"x": 1.0})
+    monkeypatch.setattr(
+        engine_mod.fx_mod,
+        "compute_features_for_day",
+        lambda *_args, **_kwargs: {"x": 1.0},
+    )
     monkeypatch.setattr(engine_mod, "estimate_hazard", lambda _features: 0.1)
     monkeypatch.setattr(engine_mod, "estimate_readiness", lambda _features: 0.8)
     monkeypatch.setattr(engine_mod, "should_suppress_marketing", lambda **_kwargs: False)
     monkeypatch.setattr(engine_mod, "has_active_entitlement", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(engine_mod, "is_outbound_overloaded", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(engine_mod, "daily_offer_cap_reached", lambda *_args, **_kwargs: False)
-    monkeypatch.setattr(engine_mod, "build_candidates", lambda **_kwargs: ([('a', 1.0)], None))
-    monkeypatch.setattr(engine_mod, "filter_candidate_arms", lambda *_args, candidates, **_kwargs: candidates)
+    monkeypatch.setattr(engine_mod, "build_candidates", lambda **_kwargs: ([("a", 1.0)], None))
+    monkeypatch.setattr(
+        engine_mod,
+        "filter_candidate_arms",
+        lambda *_args, candidates, **_kwargs: candidates,
+    )
     monkeypatch.setattr(
         engine_mod,
         "score_arm_candidates_event_sourced",
-        lambda *_args, **_kwargs: [RetentionArmEvidence('a', 1, 2, 1, 2/3, 2/3, 1, 0, 'event_stream')],
+        lambda *_args, **_kwargs: [
+            RetentionArmEvidence(
+                "a",
+                1,
+                2,
+                1,
+                2 / 3,
+                2 / 3,
+                1,
+                0,
+                "event_stream",
+            )
+        ],
     )
     monkeypatch.setattr(
         engine_mod,
         "build_price_candidates",
-        lambda **_kwargs: [RetentionPriceEvidence(100, .2, 20, .5, True, True, {})],
+        lambda **_kwargs: [RetentionPriceEvidence(100, 0.2, 20, 0.5, True, True, {})],
     )
     result = engine_mod.evaluate_for_day(
         store,
@@ -349,7 +372,11 @@ def test_evaluate_for_day_returns_candidates_without_writes(monkeypatch) -> None
 
 def test_evaluate_suppression_and_no_candidate_paths(monkeypatch) -> None:
     store = FakeStore()
-    monkeypatch.setattr(engine_mod.fx_mod, "compute_features_for_day", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(
+        engine_mod.fx_mod,
+        "compute_features_for_day",
+        lambda *_args, **_kwargs: {},
+    )
     monkeypatch.setattr(engine_mod, "estimate_hazard", lambda _features: 0.9)
     monkeypatch.setattr(engine_mod, "estimate_readiness", lambda _features: 0.1)
     monkeypatch.setattr(engine_mod, "should_suppress_marketing", lambda **_kwargs: True)
