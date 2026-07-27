@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Mapping
 
-from billing.money import legacy_float, money_decimal, quantity_decimal, rate_decimal
+from core.finance.money import legacy_float, money_decimal, quantity_decimal, rate_decimal
 from core.tenancy.normalization import require_tenant_id
 
 
