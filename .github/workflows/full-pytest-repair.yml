@@ -32,7 +32,11 @@ jobs:
           python -m pip install -r requirements.txt
 
       - name: Run reported regression contour
+        id: targeted
+        continue-on-error: true
+        shell: bash
         run: |
+          set +e
           pytest -q \
             tests/test_decision_core_gate_fail_closed_v27.py \
             tests/test_decision_ledger.py \
@@ -40,7 +44,30 @@ jobs:
             tests/test_runtime_decision_gateway.py \
             tests/test_security.py \
             tests/test_hidden_business_logic_wave9.py \
-            tests/test_retention_engine.py
+            tests/test_retention_engine.py \
+            > reported-regressions.log 2>&1
+          code=$?
+          echo "$code" > reported-regressions.exit-code
+          cat reported-regressions.log
+          exit "$code"
+
+      - name: Upload reported regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reported-regressions-${{ github.sha }}
+          path: |
+            reported-regressions.log
+            reported-regressions.exit-code
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce reported regression success
+        if: always()
+        shell: bash
+        run: |
+          test -f reported-regressions.exit-code
+          test "$(cat reported-regressions.exit-code)" = "0"
 
   full-pytest:
     runs-on: ubuntu-latest
