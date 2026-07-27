@@ -1,0 +1,65 @@
+name: Full pytest repair proof
+
+on:
+  push:
+    branches:
+      - agent/full-pytest-security-repair
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout exact head
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Archive exact checkout
+        run: |
+          tar --exclude=.git --exclude=.pytest_cache --exclude=__pycache__ -czf ../businesaios-full-checkout.tgz .
+          mv ../businesaios-full-checkout.tgz .
+
+      - name: Run documented full pytest command
+        id: pytest
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          PYTHONPATH=. pytest -q > full-pytest.log 2>&1
+          code=$?
+          echo "$code" > full-pytest.exit-code
+          cat full-pytest.log
+          exit "$code"
+
+      - name: Upload checkout and full pytest evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-pytest-repair-${{ github.sha }}
+          path: |
+            businesaios-full-checkout.tgz
+            full-pytest.log
+            full-pytest.exit-code
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce full pytest success
+        if: always()
+        shell: bash
+        run: |
+          test -f full-pytest.exit-code
+          test "$(cat full-pytest.exit-code)" = "0"
