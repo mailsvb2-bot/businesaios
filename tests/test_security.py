@@ -2,6 +2,7 @@ import time
 
 import pytest
 
+from bootstrap.safety_control_boot import build_safety_control_runtime
 from core.ai.decision_core import DecisionCore
 from core.ai.policy_registry import PolicyRegistry
 from core.ai.schema_registry import DecisionSchema, SchemaRegistry
@@ -9,6 +10,7 @@ from core.ai.snapshot_store import MemorySnapshotStore
 from core.ai.world_state import WorldStateV1
 from core.events.log import EventLog
 from core.policies.selector import PolicySelector
+from core.safety.controls.action_identity import canonical_breaker_key
 from core.security.keyring import Keyring
 from core.tenancy.tenant import current_tenant_id
 from runtime.executor import RuntimeExecutor
@@ -21,20 +23,38 @@ from runtime.platform.ledger.sqlite_ledger import SqliteLedger
 class PolicyA:
     id = "p@v1"
 
+    def __init__(self, action: str = "send_message@v1") -> None:
+        self.action = action
+
     def propose(self, state):
-        return type("O", (), {"action": "send_message@v1", "payload": {"user_id": "u1", "text": "hi"}})()
+        payload = {} if self.action == "noop@v1" else {"user_id": "u1", "text": "hi"}
+        return type("O", (), {"action": self.action, "payload": payload})()
 
 
-def build(tmp_path, *, revoked=False, ttl_ms=60_000):
+def build(tmp_path, *, revoked=False, ttl_ms=60_000, action="send_message@v1"):
     schemas = SchemaRegistry()
-    schemas.register(
-        "send_message@v1",
-        1,
-        DecisionSchema(required={"user_id", "text"}, optional=set(), field_types={"user_id": str, "text": str}),
-    )
+    handlers = ActionHandlerRegistry()
+    if action == "noop@v1":
+        schemas.register("noop@v1", 1, DecisionSchema(required=set(), optional=set(), field_types={}))
+        handlers.register("noop@v1", lambda payload, effects, env: None)
+    else:
+        schemas.register(
+            "send_message@v1",
+            1,
+            DecisionSchema(required={"user_id", "text"}, optional=set(), field_types={"user_id": str, "text": str}),
+        )
+        handlers.register(
+            "send_message@v1",
+            lambda payload, effects, env: effects.send_message(
+                decision_id=env.decision.decision_id,
+                correlation_id=env.decision.correlation_id,
+                user_id=payload["user_id"],
+                text=payload["text"],
+            ),
+        )
 
     preg = PolicyRegistry()
-    preg.register(PolicyA())
+    preg.register(PolicyA(action))
     selector = PolicySelector(preg)
 
     keyring = Keyring({"k1": {"secret": b"s1", "revoked": revoked}}, "k1")
@@ -44,17 +64,6 @@ def build(tmp_path, *, revoked=False, ttl_ms=60_000):
     ledger_ctx = SqliteLedger(str(tmp_path / "ledger.db"))
     ledger = ledger_ctx.__enter__()
     guard = RuntimeGuard(keyring, ledger, schemas, event_log=events)
-
-    handlers = ActionHandlerRegistry()
-    handlers.register(
-        "send_message@v1",
-        lambda payload, effects, env: effects.send_message(
-            decision_id=env.decision.decision_id,
-            correlation_id=env.decision.correlation_id,
-            user_id=payload["user_id"],
-            text=payload["text"],
-        ),
-    )
     executor = RuntimeExecutor(guard, handlers, events, policy_registry=preg, decision_core=core)
 
     state = WorldStateV1(
@@ -121,9 +130,10 @@ def test_unknown_action_fails(tmp_path):
 
 
 def test_duplicate_execution_fails(tmp_path):
-    core, executor, state, ledger_ctx = build(tmp_path)
+    core, executor, state, ledger_ctx = build(tmp_path, action="noop@v1")
     env = core.optimize(state)
-    executor.execute(env)
+    result = executor.execute(env)
+    assert result.ok is True
     with pytest.raises(RuntimeError, match="^DUPLICATE_EXECUTION$"):
         executor.execute(env)
     ledger_ctx.__exit__(None, None, None)
@@ -158,20 +168,26 @@ def test_replay_after_revoke_fails(tmp_path):
 
 
 def test_security_rejections_do_not_open_action_circuit(tmp_path):
-    core, executor, state, ledger_ctx = build(tmp_path)
-    valid = core.optimize(state)
-    invalid = type(valid)(
-        decision=valid.decision,
-        payload_hash=valid.payload_hash,
-        signature="AAAA",
-        kid=valid.kid,
-        envelope_version=valid.envelope_version,
-    )
-
-    for _ in range(5):
+    payload = {"user_id": "u1", "text": "hi"}
+    for index in range(5):
+        case_dir = tmp_path / f"case-{index}"
+        case_dir.mkdir()
+        core, executor, state, ledger_ctx = build(case_dir)
+        valid = core.optimize(state)
+        invalid = type(valid)(
+            decision=valid.decision,
+            payload_hash=valid.payload_hash,
+            signature="AAAA",
+            kid=valid.kid,
+            envelope_version=valid.envelope_version,
+        )
         with pytest.raises(RuntimeError, match="^BAD_SIGNATURE$"):
             executor.execute(invalid)
+        ledger_ctx.__exit__(None, None, None)
 
-    result = executor.execute(valid)
-    assert result.ok is True
-    ledger_ctx.__exit__(None, None, None)
+    runtime = build_safety_control_runtime()
+    breaker = runtime.profile.circuit_breaker_store.get(
+        canonical_breaker_key(action="send_message@v1", tenant_id="unknown")
+    )
+    assert breaker.consecutive_failures == 0
+    assert breaker.opened is False
