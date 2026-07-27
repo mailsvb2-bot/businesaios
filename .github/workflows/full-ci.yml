@@ -36,6 +36,10 @@ jobs:
         env:
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.12
         run: python -m scripts.ci.cli --gate full
+      - name: Run documented complete pytest tree
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: pytest -q
       - name: Upload full gate artifacts
         if: always()
         continue-on-error: true
