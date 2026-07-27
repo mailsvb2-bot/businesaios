@@ -89,7 +89,7 @@ def test_tenant_route_guard_validates_registry_and_activity() -> None:
     guard = TenantRouteGuard(tenant_registry=registry, require_active_tenant=True, security_guard=_security_guard())
     tenant_id = guard.enforce(
         principal=AuthPrincipal(subject='s', tenant_id='tenant-a', actor_id='a', roles=(RoleId.OWNER,)),
-        request_context=RequestContext(tenant_id='tenant-a'),
+        request_context=RequestContext(tenant_id='tenant-a', metadata={'transport_encrypted': True}),
         body={'tenant_id': 'tenant-a'},
     )
     assert tenant_id == 'tenant-a'

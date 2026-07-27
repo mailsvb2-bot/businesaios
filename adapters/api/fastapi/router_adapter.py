@@ -259,7 +259,7 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     tenant_policy_store = dependency_container.tenant_policy_store if dependency_container is not None else build_default_tenant_policy_store()
     tenant_quota_guard = dependency_container.tenant_quota_guard if dependency_container is not None else TenantQuotaGuard(policy_store=tenant_policy_store)
     security_bundle = dependency_container.security_owner_bundle() if dependency_container is not None else ApiSecurityOwnerBundle.default()
-    auth_bundle = build_auth_bundle(security_bundle=security_bundle)
+    auth_bundle = dependency_container.api_auth_bundle if dependency_container is not None and dependency_container.api_auth_bundle is not None else build_auth_bundle(security_bundle=security_bundle)
     authz_bundle = AuthzDependencyBundle.default()
     tenant_guard = TenantRouteGuard(tenant_registry=tenant_registry, require_active_tenant=tenant_registry_has_records(tenant_registry), security_guard=security_bundle.api_surface_guard)
     rate_limit_bundle = RateLimitDependencyBundle(tenant_quota_guard=tenant_quota_guard)
@@ -295,6 +295,7 @@ def create_api_router(*, application_service: object, dependency_container: Fast
         business_memory_handlers=business_memory_handlers,
         governance_advanced_handlers=governance_advanced_handlers,
         security_guard=security_bundle.public_surface_guard,
+        auth_bundle=auth_bundle,
         analytics_handlers=analytics_handlers,
         client_outcome_handlers=client_outcome_handlers,
     )

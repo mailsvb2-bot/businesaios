@@ -35,6 +35,7 @@ from entrypoints.api.health_models import HealthResponse
 from entrypoints.api.headless_models import ExecuteGoalRequest, ExecuteGoalResponse
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
+from adapters.api.fastapi.router_support import authorize_request
 from application.public_site.cta_intake import CTALandingIntakeService
 
 
@@ -93,16 +94,31 @@ def register_public_api_routes(
     business_memory_handlers,
     governance_advanced_handlers,
     security_guard: PublicSurfaceSecurityGuard,
+    auth_bundle,
     analytics_handlers=None,
     client_outcome_handlers=None,
     economic_handlers=None,
 ) -> None:
 
-    def enforce_public_security(*, route_path: str, request_context: RequestContext, body: dict | None = None) -> None:
+    def enforce_public_security(
+        *,
+        route_path: str,
+        request_context: RequestContext,
+        body: dict | None = None,
+        http_request: Request | None = None,
+    ) -> RequestContext:
         try:
+            if security_guard.requires_external_auth(route_path):
+                if http_request is None:
+                    raise PermissionError('api_perimeter_request_required')
+                request_context, _ = authorize_request(request=http_request, auth_bundle=auth_bundle)
+                request_context = request_context.with_metadata(route=route_path)
             security_guard.enforce(route_path=route_path, request_context=request_context, body=body)
+        except HTTPException:
+            raise
         except PermissionError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        return request_context
 
     def _body(payload) -> dict | None:
         model_dump = getattr(payload, 'model_dump', None)
@@ -131,8 +147,12 @@ def register_public_api_routes(
 
     @router.post('/actions/execute', response_model=ExecuteActionResponse)
     async def execute_action(http_request: Request, request: ExecuteActionRequest) -> ExecuteActionResponse:
-        request_context = RequestContext.from_http_request(http_request, metadata={'route': '/actions/execute'})
-        enforce_public_security(route_path='/actions/execute', request_context=request_context, body=request.model_dump())
+        request_context = enforce_public_security(
+            route_path='/actions/execute',
+            request_context=RequestContext.from_http_request(http_request, metadata={'route': '/actions/execute'}),
+            body=request.model_dump(),
+            http_request=http_request,
+        )
         idempotency_key = http_request.headers.get('x-idempotency-key') or http_request.headers.get('idempotency-key')
         action_id = http_request.headers.get('x-action-id') or http_request.headers.get('action-id')
         return handlers.execute_action(
@@ -144,14 +164,22 @@ def register_public_api_routes(
 
     @router.post('/goals/execute', response_model=ExecuteGoalResponse)
     def execute_goal(http_request: Request, request: ExecuteGoalRequest) -> ExecuteGoalResponse:
-        request_context = RequestContext.from_http_request(http_request, metadata={'route': '/goals/execute'})
-        enforce_public_security(route_path='/goals/execute', request_context=request_context, body=request.model_dump())
+        request_context = enforce_public_security(
+            route_path='/goals/execute',
+            request_context=RequestContext.from_http_request(http_request, metadata={'route': '/goals/execute'}),
+            body=request.model_dump(),
+            http_request=http_request,
+        )
         return headless_handlers.execute_goal(request)
 
     @router.post('/baselines/promote', response_model=PromoteBaselineResponse)
     def promote_baseline(http_request: Request, request: PromoteBaselineRequest) -> PromoteBaselineResponse:
-        request_context = RequestContext.from_http_request(http_request, metadata={'route': '/baselines/promote'})
-        enforce_public_security(route_path='/baselines/promote', request_context=request_context, body=request.model_dump())
+        request_context = enforce_public_security(
+            route_path='/baselines/promote',
+            request_context=RequestContext.from_http_request(http_request, metadata={'route': '/baselines/promote'}),
+            body=request.model_dump(),
+            http_request=http_request,
+        )
         return governance_handlers.promote_baseline(request)
 
     @router.post('/baselines/select', response_model=SelectBaselineResponse)
@@ -168,8 +196,12 @@ def register_public_api_routes(
 
     @router.post('/baselines/rollback', response_model=RollbackBaselineResponse)
     def rollback_baseline(http_request: Request, request: RollbackBaselineRequest) -> RollbackBaselineResponse:
-        request_context = RequestContext.from_http_request(http_request, metadata={'route': '/baselines/rollback'})
-        enforce_public_security(route_path='/baselines/rollback', request_context=request_context, body=request.model_dump())
+        request_context = enforce_public_security(
+            route_path='/baselines/rollback',
+            request_context=RequestContext.from_http_request(http_request, metadata={'route': '/baselines/rollback'}),
+            body=request.model_dump(),
+            http_request=http_request,
+        )
         return governance_handlers.rollback_baseline(request)
 
     @router.post('/business-memory/get', response_model=BusinessMemoryResponse)
@@ -222,8 +254,12 @@ def register_public_api_routes(
 
     @router.post('/governance/promote-scenario', response_model=PromoteScenarioBaselineResponse)
     def promote_scenario_baseline(http_request: Request, request: PromoteScenarioBaselineRequest) -> PromoteScenarioBaselineResponse:
-        request_context = RequestContext.from_http_request(http_request, metadata={'route': '/governance/promote-scenario'})
-        enforce_public_security(route_path='/governance/promote-scenario', request_context=request_context, body=request.model_dump())
+        request_context = enforce_public_security(
+            route_path='/governance/promote-scenario',
+            request_context=RequestContext.from_http_request(http_request, metadata={'route': '/governance/promote-scenario'}),
+            body=request.model_dump(),
+            http_request=http_request,
+        )
         return governance_advanced_handlers.promote_best_for_scenario(request)
 
     @router.post('/governance/rollback-timeline', response_model=RollbackTimelineResponse)

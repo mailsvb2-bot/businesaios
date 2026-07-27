@@ -31,6 +31,25 @@ def authorize_request(*, request: Request, auth_bundle: AuthDependencyBundle):
         authorization=request.headers.get('Authorization'),
         x_api_key=request.headers.get('X-API-Key'),
     )
+    auth_type = str(principal.metadata.get('auth_type') or '').strip().lower()
+    proof = {'auth_level': auth_type or 'authenticated'}
+    if auth_type == 'api_key':
+        proof['api_key_verified'] = True
+    elif auth_type == 'jwt':
+        proof['jwt_verified'] = True
+    request_context = RequestContext(
+        request_id=request_context.request_id,
+        correlation_id=request_context.correlation_id,
+        tenant_id=request_context.tenant_id or principal.tenant_id,
+        actor_id=request_context.actor_id or principal.actor_id or principal.subject,
+        session_id=request_context.session_id or principal.session_id,
+        subject=request_context.subject or principal.subject,
+        audience=request_context.audience or principal.audience,
+        ip_address=request_context.ip_address,
+        user_agent=request_context.user_agent,
+        token_scopes=request_context.token_scopes or tuple(principal.scopes),
+        metadata={**dict(request_context.metadata), **proof},
+    )
     return request_context, principal
 
 

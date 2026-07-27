@@ -302,6 +302,12 @@ class PublicSurfaceSecurityGuard:
             raise PermissionError(str(verdict.get('reason') or 'public_surface_security_denied'))
         return verdict
 
+    def requires_external_auth(self, route_path: str) -> bool:
+        spec = _ROUTE_SPECS.get(str(route_path).strip())
+        if spec is None:
+            raise PermissionError(f'unknown_public_surface:{route_path}')
+        return self._requires_internal_write_admin_perimeter(spec=spec)
+
     @staticmethod
     def _requires_internal_write_admin_perimeter(*, spec: PublicSurfaceRouteSpec) -> bool:
         return spec.action in {SecurityAction.WRITE, SecurityAction.ADMIN} and 'public' not in spec.tags

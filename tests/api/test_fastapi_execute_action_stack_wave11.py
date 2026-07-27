@@ -6,6 +6,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from interfaces.api.fastapi_dependencies import FastAPIDependencyContainer
+from adapters.api.fastapi.auth_dependencies import AuthDependencyBundle, CompositeAuthPolicy
+from entrypoints.api.api_key_policy import ApiKeyPolicy, InMemoryApiKeyStore
+from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
+from governance.rbac_contract import RoleId
 from interfaces.api.fastapi_router_adapter import create_api_router
 from observability.action_audit_log import ActionAuditLog
 from observability.decision_audit_log import DecisionAuditLog
@@ -25,6 +29,33 @@ class _BootResultStub:
     runtime: object
     decision_application: object
     startup_report: tuple[str, ...] = ()
+
+
+def _test_auth_bundle(tmp_path):
+    security_bundle = ApiSecurityOwnerBundle.default(audit_path=str(tmp_path / 'api-auth-audit.jsonl'))
+    store = InMemoryApiKeyStore()
+    _, raw_key = store.issue(
+        tenant_id='tenant-a',
+        subject='svc-test',
+        actor_id='operator-test',
+        roles=(RoleId.SYSTEM,),
+    )
+    return (
+        AuthDependencyBundle(
+            auth_policy=CompositeAuthPolicy(api_key_policy=ApiKeyPolicy(store=store)),
+            security_guard=security_bundle.api_surface_guard,
+        ),
+        raw_key,
+    )
+
+
+def _secure_headers(raw_key: str, *, idempotency_key: str, action_id: str) -> dict[str, str]:
+    return {
+        'x-api-key': raw_key,
+        'x-tenant-id': 'tenant-a',
+        'x-idempotency-key': idempotency_key,
+        'x-action-id': action_id,
+    }
 
 
 class _Service:
@@ -48,16 +79,22 @@ def test_fastapi_execute_action_uses_canonical_stack_with_generated_request_cont
     monkeypatch.setenv('BUSINESAIOS_API_IDEMPOTENCY_PATH', str(tmp_path / 'api-idem.sqlite3'))
     service = _Service()
     runtime = _RuntimeStub()
+    auth_bundle, raw_key = _test_auth_bundle(tmp_path)
     container = FastAPIDependencyContainer(
         boot_result=_BootResultStub(runtime=runtime, decision_application=service),
         tenant_registry=InMemoryTenantRegistry(),
         tenant_policy_store=InMemoryTenantPolicyStore(),
         tenant_quota_guard=TenantQuotaGuard(policy_store=InMemoryTenantPolicyStore()),
+        api_auth_bundle=auth_bundle,
     )
     app_router = create_api_router(application_service=service, dependency_container=container)
 
-    client = TestClient(app_router)
-    response = client.post('/actions/execute', json={'action_type': 'launch', 'payload': {'x': 1}})
+    client = TestClient(app_router, base_url='https://testserver')
+    response = client.post(
+        '/actions/execute',
+        json={'action_type': 'launch', 'payload': {'x': 1}},
+        headers=_secure_headers(raw_key, idempotency_key='idem-generated-1', action_id='action-generated-1'),
+    )
 
     assert response.status_code == 200
     payload = response.json()
@@ -71,19 +108,22 @@ def test_fastapi_execute_action_threads_header_identity_into_canonical_stack(tmp
     monkeypatch.setenv('BUSINESAIOS_API_IDEMPOTENCY_PATH', str(tmp_path / 'api-idem.sqlite3'))
     service = _Service()
     runtime = _RuntimeStub()
+    auth_bundle, raw_key = _test_auth_bundle(tmp_path)
     container = FastAPIDependencyContainer(
         boot_result=_BootResultStub(runtime=runtime, decision_application=service),
         tenant_registry=InMemoryTenantRegistry(),
         tenant_policy_store=InMemoryTenantPolicyStore(),
         tenant_quota_guard=TenantQuotaGuard(policy_store=InMemoryTenantPolicyStore()),
+        api_auth_bundle=auth_bundle,
     )
     app_router = create_api_router(application_service=service, dependency_container=container)
 
-    client = TestClient(app_router)
+    client = TestClient(app_router, base_url='https://testserver')
     response = client.post(
         '/actions/execute',
         json={'action_type': 'launch', 'payload': {'x': 1}},
         headers={
+            'x-api-key': raw_key,
             'x-tenant-id': 'tenant-a',
             'x-idempotency-key': 'idem-header-1',
             'x-action-id': 'action-header-1',
@@ -101,6 +141,7 @@ def test_fastapi_execute_action_threads_header_identity_into_canonical_stack(tmp
         '/actions/execute',
         json={'action_type': 'launch', 'payload': {'x': 999}},
         headers={
+            'x-api-key': raw_key,
             'x-tenant-id': 'tenant-a',
             'x-idempotency-key': 'idem-header-1',
             'x-action-id': 'action-header-1',
@@ -116,6 +157,7 @@ def test_fastapi_execute_action_replay_does_not_fail_when_quota_is_exhausted_aft
     monkeypatch.setenv('BUSINESAIOS_API_IDEMPOTENCY_PATH', str(tmp_path / 'api-idem.sqlite3'))
     service = _Service()
     runtime = _RuntimeStub()
+    auth_bundle, raw_key = _test_auth_bundle(tmp_path)
     policy_store = InMemoryTenantPolicyStore()
     policy_store.save(__import__('tests.unit.interfaces.api.test_execute_action_stack_wave11', fromlist=['_tenant_policy_bundle'])._tenant_policy_bundle('tenant-a', {'actions_per_hour': 1}))
     container = FastAPIDependencyContainer(
@@ -123,11 +165,13 @@ def test_fastapi_execute_action_replay_does_not_fail_when_quota_is_exhausted_aft
         tenant_registry=InMemoryTenantRegistry(),
         tenant_policy_store=policy_store,
         tenant_quota_guard=TenantQuotaGuard(policy_store=policy_store),
+        api_auth_bundle=auth_bundle,
     )
     app_router = create_api_router(application_service=service, dependency_container=container)
 
-    client = TestClient(app_router)
+    client = TestClient(app_router, base_url='https://testserver')
     headers = {
+        'x-api-key': raw_key,
         'x-tenant-id': 'tenant-a',
         'x-idempotency-key': 'idem-http-replay-1',
         'x-action-id': 'action-http-replay-1',
@@ -180,21 +224,23 @@ def test_fastapi_control_plane_audit_reads_same_execute_action_audit_log(tmp_pat
     monkeypatch.setenv('BUSINESAIOS_API_IDEMPOTENCY_PATH', str(tmp_path / 'api-idem.sqlite3'))
     service = _Service()
     runtime = _RuntimeWithInfraStub()
+    auth_bundle, raw_key = _test_auth_bundle(tmp_path)
     container = FastAPIDependencyContainer(
         boot_result=_BootResultStub(runtime=runtime, decision_application=service),
         tenant_registry=InMemoryTenantRegistry(),
         tenant_policy_store=InMemoryTenantPolicyStore(),
         tenant_quota_guard=TenantQuotaGuard(policy_store=InMemoryTenantPolicyStore()),
+        api_auth_bundle=auth_bundle,
     )
     router = create_api_router(application_service=service, dependency_container=container)
     app = FastAPI()
     app.include_router(router)
-    client = TestClient(app)
+    client = TestClient(app, base_url='https://testserver')
 
     action_response = client.post(
         '/actions/execute',
         json={'action_type': 'launch', 'payload': {'x': 1}},
-        headers={'x-tenant-id': 'tenant-a', 'x-action-id': 'action-audit-1', 'x-idempotency-key': 'idem-audit-1'},
+        headers={'x-api-key': raw_key, 'x-tenant-id': 'tenant-a', 'x-action-id': 'action-audit-1', 'x-idempotency-key': 'idem-audit-1'},
     )
     assert action_response.status_code == 200
 

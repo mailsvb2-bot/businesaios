@@ -92,6 +92,7 @@ def _client(guard):
         business_memory_handlers=_BusinessMemoryHandlers(),
         governance_advanced_handlers=_GovernanceAdvancedHandlers(),
         security_guard=guard,
+        auth_bundle=None,
     )
     from fastapi import FastAPI
     app = FastAPI()
@@ -103,6 +104,9 @@ def test_public_execute_action_flows_through_security_guard():
     calls = []
 
     class Guard:
+        def requires_external_auth(self, _route_path):
+            return False
+
         def enforce(self, **kwargs):
             calls.append(kwargs)
             return {'allowed': True}
@@ -117,6 +121,9 @@ def test_public_execute_action_flows_through_security_guard():
 
 def test_business_memory_summary_denied_when_security_guard_blocks():
     class Guard:
+        def requires_external_auth(self, _route_path):
+            return False
+
         def enforce(self, **kwargs):
             raise PermissionError('security_denied')
 
