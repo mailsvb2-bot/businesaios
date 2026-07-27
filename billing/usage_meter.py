@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Iterable, Mapping, Protocol
 
+from billing.money import legacy_float, quantity_decimal
 from core.tenancy.normalization import require_tenant_id
 from tenancy.tenant_contract import utc_now
 
@@ -26,8 +28,7 @@ class UsageRecord:
         require_tenant_id(self.tenant_id)
         if not str(self.meter_key or "").strip():
             raise ValueError("meter_key is required")
-        if float(self.quantity) < 0:
-            raise ValueError("quantity must be >= 0")
+        quantity_decimal(self.quantity, name="quantity")
         if self.recorded_at.tzinfo is None:
             raise ValueError("recorded_at must be timezone-aware")
 
@@ -37,9 +38,16 @@ class UsageRecord:
             self,
             tenant_id=require_tenant_id(self.tenant_id),
             meter_key=str(self.meter_key).strip(),
-            quantity=float(self.quantity),
+            quantity=legacy_float(
+                quantity_decimal(self.quantity, name="quantity"),
+                name="quantity",
+            ),
             window_key=None if self.window_key is None else str(self.window_key),
-            idempotency_key=None if self.idempotency_key is None else str(self.idempotency_key),
+            idempotency_key=(
+                None
+                if self.idempotency_key is None
+                else str(self.idempotency_key)
+            ),
             labels={str(k): str(v) for k, v in dict(self.labels).items()},
             metadata=dict(self.metadata),
         )
@@ -47,9 +55,20 @@ class UsageRecord:
 
 class UsageMeterContract(Protocol):
     def record(self, record: UsageRecord) -> UsageRecord: ...
-    def total(self, *, tenant_id: str, meter_key: str, window_key: str | None = None) -> float: ...
+    def total(
+        self,
+        *,
+        tenant_id: str,
+        meter_key: str,
+        window_key: str | None = None,
+    ) -> float: ...
     def snapshot(self, *, tenant_id: str) -> dict[str, float]: ...
-    def iter_records(self, *, tenant_id: str | None = None, meter_key: str | None = None) -> Iterable[UsageRecord]: ...
+    def iter_records(
+        self,
+        *,
+        tenant_id: str | None = None,
+        meter_key: str | None = None,
+    ) -> Iterable[UsageRecord]: ...
 
 
 class InMemoryUsageMeter(UsageMeterContract):
@@ -84,52 +103,91 @@ class InMemoryUsageMeter(UsageMeterContract):
         labels: Mapping[str, str] | None = None,
         metadata: Mapping[str, object] | None = None,
     ) -> UsageRecord:
+        normalized_quantity = quantity_decimal(quantity, name="quantity")
         return self.record(
             UsageRecord(
                 tenant_id=require_tenant_id(tenant_id),
                 meter_key=str(meter_key or "").strip(),
-                quantity=float(quantity),
+                quantity=legacy_float(normalized_quantity, name="quantity"),
                 window_key=window_key,
                 recorded_at=recorded_at or utc_now(),
-                idempotency_key=None if idempotency_key is None else str(idempotency_key),
-                labels={str(k): str(v) for k, v in dict(labels or {}).items()},
+                idempotency_key=(
+                    None
+                    if idempotency_key is None
+                    else str(idempotency_key)
+                ),
+                labels={
+                    str(k): str(v)
+                    for k, v in dict(labels or {}).items()
+                },
                 metadata=dict(metadata or {}),
             )
         )
 
-    def total(self, *, tenant_id: str, meter_key: str, window_key: str | None = None) -> float:
+    def total(
+        self,
+        *,
+        tenant_id: str,
+        meter_key: str,
+        window_key: str | None = None,
+    ) -> float:
         tid = require_tenant_id(tenant_id)
         key = str(meter_key or "").strip()
         if not key:
             raise ValueError("meter_key is required")
-        return round(
-            sum(
-                float(item.quantity)
+        total = sum(
+            (
+                quantity_decimal(item.quantity, name="stored_quantity")
                 for item in self._records
                 if item.tenant_id == tid
                 and item.meter_key == key
                 and (window_key is None or item.window_key == window_key)
             ),
-            6,
+            start=Decimal("0"),
+        )
+        return legacy_float(
+            quantity_decimal(total, name="usage_total"),
+            name="usage_total",
         )
 
     def snapshot(self, *, tenant_id: str) -> dict[str, float]:
         tid = require_tenant_id(tenant_id)
-        result: dict[str, float] = {}
+        exact: dict[str, Decimal] = {}
         for item in self._records:
             if item.tenant_id != tid:
                 continue
-            result[item.meter_key] = round(result.get(item.meter_key, 0.0) + float(item.quantity), 6)
-        return result
+            exact[item.meter_key] = exact.get(
+                item.meter_key,
+                Decimal("0"),
+            ) + quantity_decimal(item.quantity, name="stored_quantity")
+        return {
+            meter_key: legacy_float(
+                quantity_decimal(total, name="usage_snapshot"),
+                name="usage_snapshot",
+            )
+            for meter_key, total in exact.items()
+        }
 
-    def iter_records(self, *, tenant_id: str | None = None, meter_key: str | None = None) -> tuple[UsageRecord, ...]:
+    def iter_records(
+        self,
+        *,
+        tenant_id: str | None = None,
+        meter_key: str | None = None,
+    ) -> tuple[UsageRecord, ...]:
         tid = None if tenant_id is None else require_tenant_id(tenant_id)
-        normalized_meter_key = None if meter_key is None else str(meter_key or "").strip()
+        normalized_meter_key = (
+            None
+            if meter_key is None
+            else str(meter_key or "").strip()
+        )
         return tuple(
             item.normalized_copy()
             for item in self._records
             if (tid is None or item.tenant_id == tid)
-            and (normalized_meter_key is None or item.meter_key == normalized_meter_key)
+            and (
+                normalized_meter_key is None
+                or item.meter_key == normalized_meter_key
+            )
         )
 
     @staticmethod

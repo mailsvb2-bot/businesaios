@@ -10,6 +10,7 @@ from billing.client_outcome_dispute_store import ClientOutcomeDisputeStore, Clie
 from billing.client_outcome_negative_usage_builder import ClientOutcomeNegativeUsageBuilder
 from billing.client_outcome_refund_window_policy import ClientOutcomeRefundWindowPolicy
 from billing.dispute_policy import DisputePolicy
+from billing.money import amounts_equal, legacy_float, money_decimal
 from lead_outcomes.client_outcome_contract import BillableClientRecord
 
 
@@ -138,9 +139,21 @@ class ClientOutcomeDisputeService:
             original_billable_record_id=original_record.record_id,
         )
         if existing is not None:
-            amount = float(existing.get('amount') or 0.0)
+            amount_decimal = money_decimal(
+                existing.get('amount') or 0,
+                name='existing_reversal_amount',
+            )
+            amount = legacy_float(amount_decimal, name='existing_reversal_amount')
             currency = str(existing.get('currency') or original_record.currency)
-            reversed_case = case if case.status == 'reversed' else replace(case, status='reversed', resolution_code='accepted_with_reversal')
+            reversed_case = (
+                case
+                if case.status == 'reversed'
+                else replace(
+                    case,
+                    status='reversed',
+                    resolution_code='accepted_with_reversal',
+                )
+            )
             self._dispute_store.save(reversed_case)
             negative_record = BillableClientRecord(
                 record_id=str(existing.get('negative_record_id') or f"{original_record.record_id}:reversal"),
@@ -153,7 +166,12 @@ class ClientOutcomeDisputeService:
                 unit_price=-abs(amount),
                 currency=currency,
                 quantity=1,
-                metadata={**original_record.normalized_metadata(), 'reversal_of': original_record.record_id, 'reversal_reason_code': case.reason_code, 'replayed_reversal': True},
+                metadata={
+                    **original_record.normalized_metadata(),
+                    'reversal_of': original_record.record_id,
+                    'reversal_reason_code': case.reason_code,
+                    'replayed_reversal': True,
+                },
             )
             return ClientOutcomeDisputeResolutionResult(
                 dispute=reversed_case,
@@ -163,7 +181,10 @@ class ClientOutcomeDisputeService:
                     'negative_record_id': negative_record.record_id,
                     'amount': amount,
                     'currency': currency,
-                    'partial_reversal': abs(float(amount) - abs(float(original_record.amount))) > 1e-9,
+                    'partial_reversal': not amounts_equal(
+                        amount_decimal,
+                        abs(original_record.amount),
+                    ),
                     'replayed_reversal': True,
                 },
             )
@@ -206,7 +227,10 @@ class ClientOutcomeDisputeService:
                 'negative_record_id': reversal.negative_record_id,
                 'amount': reversal.amount,
                 'currency': reversal.currency,
-                'partial_reversal': abs(float(reversal.amount) - abs(float(original_record.amount))) > 1e-9,
+                'partial_reversal': not amounts_equal(
+                    reversal.amount,
+                    abs(original_record.amount),
+                ),
             },
         )
 

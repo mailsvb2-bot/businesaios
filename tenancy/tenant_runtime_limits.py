@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.finance.money import legacy_float, money_decimal
 from core.tenancy.normalization import require_tenant_id
 
 
@@ -22,6 +23,17 @@ class TenantRuntimeLimits:
     allow_background_automation: bool = True
     require_human_approval_for_strategic_change: bool = True
 
+    def __post_init__(self) -> None:
+        normalized_budget = money_decimal(
+            self.max_daily_budget,
+            name="max_daily_budget",
+        )
+        object.__setattr__(
+            self,
+            "max_daily_budget",
+            legacy_float(normalized_budget, name="max_daily_budget"),
+        )
+
     def validate(self) -> None:
         require_tenant_id(self.tenant_id)
         for field_name in (
@@ -33,17 +45,25 @@ class TenantRuntimeLimits:
             "max_memory_writes_per_day",
             "max_connector_calls_per_hour",
         ):
-            if int(getattr(self, field_name)) < 0:
-                raise ValueError(f"{field_name} must be >= 0")
-        if float(self.max_daily_budget) < 0:
-            raise ValueError("max_daily_budget must be >= 0")
+            value = getattr(self, field_name)
+            if isinstance(value, bool) or int(value) != value or int(value) < 0:
+                raise ValueError(f"{field_name} must be a non-negative integer")
+        money_decimal(self.max_daily_budget, name="max_daily_budget")
 
     def ensure_within(self, *, field_name: str, value: int | float) -> None:
         self.validate()
         if not hasattr(self, field_name):
             raise AttributeError(field_name)
         limit = getattr(self, field_name)
-        if float(value) > float(limit):
+        if field_name == "max_daily_budget":
+            requested_budget = money_decimal(value, name=field_name)
+            limit_budget = money_decimal(limit, name=field_name)
+            exceeded = requested_budget > limit_budget
+        else:
+            if isinstance(value, bool) or int(value) != value:
+                raise ValueError(f"{field_name} must be an integer")
+            exceeded = int(value) > int(limit)
+        if exceeded:
             raise ValueError(
                 f"{field_name} exceeded for tenant={self.tenant_id}: {value} > {limit}"
             )

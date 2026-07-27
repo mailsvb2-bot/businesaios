@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from boot.app_boot import boot_application
-from interfaces.api.runtime_api_adapter import RuntimeApiAdapter
-from interfaces.telegram.runtime_telegram_adapter import RuntimeTelegramAdapter
+from scripts.ci.repository_sources import read_python_source
 
 
 def test_interfaces_do_not_access_runtime_registry() -> None:
@@ -14,9 +12,8 @@ def test_interfaces_do_not_access_runtime_registry() -> None:
         if not root.exists():
             continue
 
-        for path in root.rglob("*.py"):
-            text = path.read_text(encoding="utf-8")
-
+        for path in sorted(root.rglob("*.py")):
+            text = read_python_source(path)
             forbidden_fragments = (
                 "registry.get(",
                 "build_runtime(",
@@ -24,31 +21,11 @@ def test_interfaces_do_not_access_runtime_registry() -> None:
                 "ReadOnlyRuntimeRegistry",
                 "RuntimeCapabilityAccess",
             )
-
             for fragment in forbidden_fragments:
                 if fragment in text:
                     violations.append(
-                        f"{path.as_posix()} contains forbidden runtime access fragment '{fragment}'"
+                        f"{path.as_posix()} contains forbidden runtime access "
+                        f"fragment '{fragment}'"
                     )
 
     assert not violations, "\n".join(violations)
-
-
-class SomeAction:
-    pass
-
-
-booted = boot_application()
-
-api_adapter = RuntimeApiAdapter(
-    application_service=booted.decision_application,
-)
-telegram_adapter = RuntimeTelegramAdapter(
-    application_service=booted.decision_application,
-)
-
-result = api_adapter.handle_action(SomeAction())
-print(result)
-
-health = api_adapter.health()
-print(health)

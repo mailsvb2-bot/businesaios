@@ -3,11 +3,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
+from decimal import Decimal
 from datetime import datetime
-from math import isfinite
 from typing import Any, Protocol
 
 from billing.commercial_cycle_contract import require_aware_datetime
+from billing.money import legacy_float, money_decimal, quantity_decimal, rate_decimal
 from core.tenancy.normalization import require_tenant_id
 from tenancy.tenant_contract import TenantPlan, utc_now
 
@@ -20,15 +21,33 @@ def _require_text(name: str, value: Any) -> str:
     return value.strip()
 
 
-def _require_number(name: str, value: Any, *, minimum: float = 0.0) -> float:
-    if isinstance(value, bool) or type(value) not in {int, float}:
+def _require_decimal_number(
+    name: str,
+    value: Any,
+    *,
+    minimum: int | float | Decimal = 0,
+) -> Decimal:
+    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
         raise ValueError(f"{name} must be a finite number")
-    normalized = float(value)
-    if not isfinite(normalized):
-        raise ValueError(f"{name} must be a finite number")
-    if normalized < minimum:
+    normalized = quantity_decimal(value, name=name, allow_negative=True)
+    minimum_value = quantity_decimal(
+        minimum,
+        name=f"{name}_minimum",
+        allow_negative=True,
+    )
+    if normalized < minimum_value:
         raise ValueError(f"{name} must be >= {minimum:g}")
     return normalized
+
+
+def _require_number(
+    name: str,
+    value: Any,
+    *,
+    minimum: int | float | Decimal = 0,
+) -> float:
+    normalized = _require_decimal_number(name, value, minimum=minimum)
+    return legacy_float(normalized, name=name)
 
 
 def _require_mapping(name: str, value: Any) -> Mapping[str, object]:
@@ -102,7 +121,10 @@ class PlanRateCardItem:
         return replace(
             self,
             meter_key=self.meter_key.strip(),
-            unit_price=_require_number("unit_price", self.unit_price),
+            unit_price=legacy_float(
+                rate_decimal(self.unit_price, name="unit_price"),
+                name="unit_price",
+            ),
             currency=self.currency.strip().upper(),
             unit_name=self.unit_name.strip(),
             included_units=_require_number("included_units", self.included_units),
@@ -111,12 +133,23 @@ class PlanRateCardItem:
 
     def billable_units(self, quantity: float) -> float:
         normalized = self.normalized_copy()
-        requested = _require_number("quantity", quantity)
-        return max(0.0, requested - normalized.included_units)
+        requested = _require_decimal_number("quantity", quantity)
+        included = _require_decimal_number(
+            "included_units",
+            normalized.included_units,
+        )
+        billable = max(quantity_decimal(0), requested - included)
+        return legacy_float(billable, name="billable_units")
 
     def charge_for(self, quantity: float) -> float:
         normalized = self.normalized_copy()
-        return round(normalized.billable_units(quantity) * normalized.unit_price, 6)
+        billable = quantity_decimal(
+            normalized.billable_units(quantity),
+            name="billable_units",
+        )
+        unit_price = rate_decimal(normalized.unit_price, name="unit_price")
+        charge = money_decimal(billable * unit_price, name="charge")
+        return legacy_float(charge, name="charge")
 
 
 @dataclass(frozen=True)

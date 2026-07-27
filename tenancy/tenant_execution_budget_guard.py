@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from threading import RLock
 from typing import Mapping
 
+from core.finance.money import legacy_float, money_decimal
 from core.tenancy.normalization import require_tenant_id
-from tenancy.tenant_contract import TenantPolicyStoreContract, TenantQuotaCheck, TenantQuotaGuardContract
+from tenancy.tenant_contract import (
+    TenantPolicyStoreContract,
+    TenantQuotaCheck,
+    TenantQuotaGuardContract,
+)
 
 
 CANON_TENANT_EXECUTION_BUDGET_GUARD = True
@@ -23,6 +29,14 @@ class TenantExecutionUsage:
     budget_delta: float = 0.0
     labels: Mapping[str, str] = field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        normalized = money_decimal(self.budget_delta, name="budget_delta")
+        object.__setattr__(
+            self,
+            "budget_delta",
+            legacy_float(normalized, name="budget_delta"),
+        )
+
     def validate(self) -> None:
         require_tenant_id(self.tenant_id)
         for field_name in (
@@ -33,11 +47,10 @@ class TenantExecutionUsage:
             "memory_write_count",
             "connector_call_count",
         ):
-            value = int(getattr(self, field_name))
-            if value < 0:
-                raise ValueError(f"{field_name} must be >= 0")
-        if float(self.budget_delta) < 0:
-            raise ValueError("budget_delta must be >= 0")
+            raw = getattr(self, field_name)
+            if isinstance(raw, bool) or int(raw) != raw or int(raw) < 0:
+                raise ValueError(f"{field_name} must be a non-negative integer")
+        money_decimal(self.budget_delta, name="budget_delta")
         for key, value in dict(self.labels).items():
             if not str(key or "").strip():
                 raise ValueError("label key must be non-empty")
@@ -53,7 +66,7 @@ class TenantExecutionUsage:
             and self.publication_count == 0
             and self.memory_write_count == 0
             and self.connector_call_count == 0
-            and float(self.budget_delta) == 0.0
+            and money_decimal(self.budget_delta, name="budget_delta") == 0
         )
 
 
@@ -71,7 +84,9 @@ class TenantExecutionBudgetVerdict:
     reason: str
     tenant_id: str
     violations: tuple[str, ...] = ()
-    runtime_limit_checks: Mapping[str, TenantRuntimeLimitCheck] = field(default_factory=dict)
+    runtime_limit_checks: Mapping[str, TenantRuntimeLimitCheck] = field(
+        default_factory=dict
+    )
     quota_checks: Mapping[str, TenantQuotaCheck] = field(default_factory=dict)
     consumed: bool = False
 
@@ -105,28 +120,81 @@ class TenantExecutionBudgetGuard:
         runtime_checks: dict[str, TenantRuntimeLimitCheck] = {}
         violations: list[str] = []
 
-        def add_runtime_check(name: str, requested: int | float, limit: int | float) -> None:
-            req = float(requested)
-            lim = float(limit)
-            allowed = req <= lim
-            runtime_checks[name] = TenantRuntimeLimitCheck(name=name, allowed=allowed, requested=req, limit=lim)
+        def add_count_check(name: str, requested: int, limit: int) -> None:
+            allowed = requested <= limit
+            runtime_checks[name] = TenantRuntimeLimitCheck(
+                name=name,
+                allowed=allowed,
+                requested=float(requested),
+                limit=float(limit),
+            )
             if not allowed:
                 violations.append(name)
 
-        add_runtime_check("max_actions_per_run", usage.action_count, getattr(runtime_limits, "max_actions_per_run"))
-        add_runtime_check("max_effects_per_run", usage.effect_count, getattr(runtime_limits, "max_effects_per_run"))
-        add_runtime_check("max_outbound_messages_per_day", usage.outbound_message_count, getattr(runtime_limits, "max_outbound_messages_per_day"))
-        add_runtime_check("max_publications_per_day", usage.publication_count, getattr(runtime_limits, "max_publications_per_day"))
-        add_runtime_check("max_memory_writes_per_day", usage.memory_write_count, getattr(runtime_limits, "max_memory_writes_per_day"))
-        add_runtime_check("max_connector_calls_per_hour", usage.connector_call_count, getattr(runtime_limits, "max_connector_calls_per_hour"))
-        add_runtime_check("max_daily_budget", usage.budget_delta, getattr(runtime_limits, "max_daily_budget"))
+        def add_budget_check(name: str, requested: object, limit: object) -> None:
+            req = money_decimal(requested, name=name)
+            lim = money_decimal(limit, name=name)
+            allowed = req <= lim
+            runtime_checks[name] = TenantRuntimeLimitCheck(
+                name=name,
+                allowed=allowed,
+                requested=legacy_float(req, name=name),
+                limit=legacy_float(lim, name=name),
+            )
+            if not allowed:
+                violations.append(name)
+
+        add_count_check(
+            "max_actions_per_run",
+            usage.action_count,
+            int(getattr(runtime_limits, "max_actions_per_run")),
+        )
+        add_count_check(
+            "max_effects_per_run",
+            usage.effect_count,
+            int(getattr(runtime_limits, "max_effects_per_run")),
+        )
+        add_count_check(
+            "max_outbound_messages_per_day",
+            usage.outbound_message_count,
+            int(getattr(runtime_limits, "max_outbound_messages_per_day")),
+        )
+        add_count_check(
+            "max_publications_per_day",
+            usage.publication_count,
+            int(getattr(runtime_limits, "max_publications_per_day")),
+        )
+        add_count_check(
+            "max_memory_writes_per_day",
+            usage.memory_write_count,
+            int(getattr(runtime_limits, "max_memory_writes_per_day")),
+        )
+        add_count_check(
+            "max_connector_calls_per_hour",
+            usage.connector_call_count,
+            int(getattr(runtime_limits, "max_connector_calls_per_hour")),
+        )
+        add_budget_check(
+            "max_daily_budget",
+            usage.budget_delta,
+            getattr(runtime_limits, "max_daily_budget"),
+        )
 
         requests = self._quota_dimensions_for_usage(usage)
         if hasattr(self._quota_guard, "check_many"):
-            quota_checks = dict(getattr(self._quota_guard, "check_many")(tenant_id=tid, requests=requests))
+            quota_checks = dict(
+                getattr(self._quota_guard, "check_many")(
+                    tenant_id=tid,
+                    requests=requests,
+                )
+            )
         else:
             quota_checks = {
-                dimension: self._quota_guard.check(tenant_id=tid, dimension=dimension, amount=float(amount))
+                dimension: self._quota_guard.check(
+                    tenant_id=tid,
+                    dimension=dimension,
+                    amount=amount,
+                )
                 for dimension, amount in requests
             }
         for dimension, verdict in quota_checks.items():
@@ -135,7 +203,11 @@ class TenantExecutionBudgetGuard:
 
         return TenantExecutionBudgetVerdict(
             allowed=not violations,
-            reason="tenant_execution_budget_allowed" if not violations else "tenant_execution_budget_denied",
+            reason=(
+                "tenant_execution_budget_allowed"
+                if not violations
+                else "tenant_execution_budget_denied"
+            ),
             tenant_id=tid,
             violations=tuple(violations),
             runtime_limit_checks=runtime_checks,
@@ -152,16 +224,33 @@ class TenantExecutionBudgetGuard:
                 return precheck
             requests = self._quota_dimensions_for_usage(usage)
             if hasattr(self._quota_guard, "consume_many"):
-                consumed_checks = dict(getattr(self._quota_guard, "consume_many")(tenant_id=tid, requests=requests))
+                consumed_checks = dict(
+                    getattr(self._quota_guard, "consume_many")(
+                        tenant_id=tid,
+                        requests=requests,
+                    )
+                )
             else:
                 consumed_checks = {
-                    dimension: self._quota_guard.consume(tenant_id=tid, dimension=dimension, amount=float(amount))
+                    dimension: self._quota_guard.consume(
+                        tenant_id=tid,
+                        dimension=dimension,
+                        amount=amount,
+                    )
                     for dimension, amount in requests
                 }
-            failed = [f"quota:{dimension}" for dimension, verdict in consumed_checks.items() if not verdict.allowed]
+            failed = [
+                f"quota:{dimension}"
+                for dimension, verdict in consumed_checks.items()
+                if not verdict.allowed
+            ]
             return TenantExecutionBudgetVerdict(
                 allowed=not failed,
-                reason="tenant_execution_budget_consumed" if not failed else "tenant_execution_budget_atomic_consume_failed",
+                reason=(
+                    "tenant_execution_budget_consumed"
+                    if not failed
+                    else "tenant_execution_budget_atomic_consume_failed"
+                ),
                 tenant_id=tid,
                 violations=tuple(failed),
                 runtime_limit_checks=precheck.runtime_limit_checks,
@@ -170,7 +259,12 @@ class TenantExecutionBudgetGuard:
             )
 
     @classmethod
-    def from_execution_payload(cls, *, tenant_id: str, payload: Mapping[str, object] | None) -> TenantExecutionUsage:
+    def from_execution_payload(
+        cls,
+        *,
+        tenant_id: str,
+        payload: Mapping[str, object] | None,
+    ) -> TenantExecutionUsage:
         body = dict(payload or {})
 
         def _safe_int(value: object) -> int:
@@ -179,11 +273,12 @@ class TenantExecutionBudgetGuard:
             except (TypeError, ValueError):
                 return 0
 
-        def _safe_float(value: object) -> float:
+        def _safe_budget(value: object) -> float:
             try:
-                return max(0.0, float(value or 0.0))
-            except (TypeError, ValueError):
-                return 0.0
+                normalized = money_decimal(value or 0, name="budget_delta")
+            except ValueError:
+                normalized = Decimal("0")
+            return legacy_float(normalized, name="budget_delta")
 
         labels = {
             str(key).strip(): str(value).strip()
@@ -194,11 +289,21 @@ class TenantExecutionBudgetGuard:
             tenant_id=require_tenant_id(tenant_id),
             action_count=_safe_int(body.get("action_count", body.get("actions"))),
             effect_count=_safe_int(body.get("effect_count", body.get("effects"))),
-            outbound_message_count=_safe_int(body.get("outbound_message_count", body.get("outbound"))),
-            publication_count=_safe_int(body.get("publication_count", body.get("publications"))),
-            memory_write_count=_safe_int(body.get("memory_write_count", body.get("memory_writes"))),
-            connector_call_count=_safe_int(body.get("connector_call_count", body.get("connector_calls"))),
-            budget_delta=_safe_float(body.get("budget_delta", body.get("budget_change_amount"))),
+            outbound_message_count=_safe_int(
+                body.get("outbound_message_count", body.get("outbound"))
+            ),
+            publication_count=_safe_int(
+                body.get("publication_count", body.get("publications"))
+            ),
+            memory_write_count=_safe_int(
+                body.get("memory_write_count", body.get("memory_writes"))
+            ),
+            connector_call_count=_safe_int(
+                body.get("connector_call_count", body.get("connector_calls"))
+            ),
+            budget_delta=_safe_budget(
+                body.get("budget_delta", body.get("budget_change_amount"))
+            ),
             labels=labels,
         )
 
@@ -209,20 +314,30 @@ class TenantExecutionBudgetGuard:
             raise AttributeError("policy bundle must expose runtime_limits")
         return runtime_limits
 
-    def _quota_dimensions_for_usage(self, usage: TenantExecutionUsage) -> tuple[tuple[str, float], ...]:
+    def _quota_dimensions_for_usage(
+        self,
+        usage: TenantExecutionUsage,
+    ) -> tuple[tuple[str, float], ...]:
         pairs: list[tuple[str, float]] = []
         if usage.action_count > 0:
             pairs.append((self.ACTIONS_PER_DAY, float(usage.action_count)))
         if usage.outbound_message_count > 0:
-            pairs.append((self.OUTBOUND_MESSAGES_PER_DAY, float(usage.outbound_message_count)))
+            pairs.append(
+                (self.OUTBOUND_MESSAGES_PER_DAY, float(usage.outbound_message_count))
+            )
         if usage.publication_count > 0:
             pairs.append((self.PUBLICATIONS_PER_DAY, float(usage.publication_count)))
         if usage.memory_write_count > 0:
             pairs.append((self.MEMORY_WRITES_PER_DAY, float(usage.memory_write_count)))
         if usage.connector_call_count > 0:
-            pairs.append((self.CONNECTOR_CALLS_PER_HOUR, float(usage.connector_call_count)))
-        if usage.budget_delta > 0:
-            pairs.append((self.DAILY_BUDGET, float(usage.budget_delta)))
+            pairs.append(
+                (self.CONNECTOR_CALLS_PER_HOUR, float(usage.connector_call_count))
+            )
+        budget = money_decimal(usage.budget_delta, name="budget_delta")
+        if budget > 0:
+            pairs.append(
+                (self.DAILY_BUDGET, legacy_float(budget, name="budget_delta"))
+            )
         return tuple(pairs)
 
 
