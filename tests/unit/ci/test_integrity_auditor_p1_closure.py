@@ -17,3 +17,13 @@ def test_telegram_runner_helpers_do_not_import_runtime_boot_env() -> None:
 
     assert "from runtime.boot.env import" not in text
     assert "from runtime.platform.config.env_access import env_float, env_int" in text
+
+
+def test_runtime_side_effect_auditor_has_no_application_findings() -> None:
+    spec = auditor.load_spec()
+    findings = auditor.check_runtime_side_effects(auditor.iter_python_files(), spec)
+
+    assert [
+        (finding.path, finding.line, finding.message)
+        for finding in findings
+    ] == []
