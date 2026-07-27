@@ -9,12 +9,15 @@ from config.pricing_retention_policy import (
     PricingStopLossPolicy,
     RetentionEnginePolicy,
 )
-from config.retention_arms_policy import RetentionArmsPolicy
 from core.pricing.off_policy import ips_estimate_for_price
 from core.pricing.stop_loss import StopLossConfig, should_apply_price
 from core.retention import engine as engine_mod
-from core.retention.arms import choose_arm_event_sourced
-from core.retention.engine import RetentionDayDecision, RetentionEngine
+from core.retention.arms import score_arm_candidates_event_sourced
+from core.retention.engine import (
+    RetentionEngine,
+    RetentionEvaluation,
+    RetentionOfferCandidate,
+)
 from core.retention.engine_support import (
     build_sandbox_suppressed_decision,
     is_outbound_overloaded,
@@ -166,16 +169,15 @@ def test_stop_loss_uses_policy_unit_ratio() -> None:
     assert dbg["note"] == "blocked_conv_drop"
 
 
-def test_choose_arm_event_sourced_uses_policy_fallback_arm() -> None:
-    arm = choose_arm_event_sourced(
+def test_arm_evidence_does_not_invent_a_fallback_candidate() -> None:
+    rows = score_arm_candidates_event_sourced(
         _RetentionStore(),
         tenant_id="t1",
         user_id="u1",
         arms=[],
         now_ms=1,
-        policy=RetentionArmsPolicy(fallback_arm="offer_bundle_14_30"),
     )
-    assert arm == "offer_bundle_14_30"
+    assert rows == []
 
 
 def test_retention_support_uses_policy_thresholds() -> None:
@@ -193,24 +195,40 @@ def test_retention_support_uses_policy_thresholds() -> None:
     assert sandbox["readiness"] == 0.75
 
 
-def test_retention_engine_uses_policy_score_complement_base(monkeypatch) -> None:
-    def _fake_decide_for_day(*args, **kwargs):
-        return RetentionDayDecision(
-            tenant_id="t1",
-            day_key="day:today",
-            day_index=0,
-            hazard=0.25,
-            readiness=0.5,
-            offer_arm="offer_30_14900",
-            offer_price_rub=14900,
-            suppressed=False,
-            reason="chosen",
-            debug={},
-        )
-
-    monkeypatch.setattr(engine_mod, "decide_for_day", _fake_decide_for_day)
+def test_retention_engine_requires_an_explicit_decision_core_candidate(monkeypatch) -> None:
+    candidate = RetentionOfferCandidate(
+        candidate_id="candidate-1",
+        offer_arm="offer_30_14900",
+        offer_price_rub=14900,
+        expected_profit_delta_minor=875.0,
+        ope_wis=0.5,
+        uplift=0.5,
+        risk_penalty=0.25,
+        propensity=None,
+        debug={},
+    )
+    evaluation = RetentionEvaluation(
+        tenant_id="t1",
+        day_key="day:today",
+        day_index=0,
+        hazard=0.25,
+        readiness=0.5,
+        suppressed=False,
+        reason="candidates_ready",
+        candidates=(candidate,),
+        debug={"no_second_brain": True},
+    )
+    monkeypatch.setattr(engine_mod, "evaluate_for_day", lambda *args, **kwargs: evaluation)
     monkeypatch.setattr(engine_mod, "is_retention_allowed", lambda **kwargs: True)
-    engine = RetentionEngine(_UnknownTenantStore(), tenant_id="t1", policy=RetentionEnginePolicy(score_complement_base=2.0))
-    decision = engine.decide_offer(tenant_id="t1", user_id="u1", context={})
+    engine = RetentionEngine(_UnknownTenantStore(), tenant_id="t1")
+
+    assert engine.decide_offer(tenant_id="t1", user_id="u1", context={}) is None
+
+    decision = engine.decide_offer(
+        tenant_id="t1",
+        user_id="u1",
+        context={"selected_candidate_id": "candidate-1"},
+    )
     assert decision is not None
-    assert decision.score == 0.875
+    assert decision.variant_key == "offer_30_14900"
+    assert decision.score == 875.0
