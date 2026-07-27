@@ -4,36 +4,17 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
-
-import core.retention.arms as arms_mod
-import core.retention.engine as engine_mod
-import core.retention.pricing_flow as pricing_mod
-import core.policies.telegram.unified_policy as unified_mod
-from application.decision_policy.policy_stage import propose_action
-from core.ai.action_ranking import rank_proposals, score_proposal
-from core.policies.telegram.helpers import ProposedAction, normalize_proposed_action, propose
+from core.policies.telegram.helpers import propose
 from core.policies.telegram.retention_integration import (
     apply_retention_constraints_to_state,
     merge_retention_plan,
 )
-from core.retention.arms import RetentionArmEvidence
-from core.retention.bandit import choose_arm, update_arm
 from core.retention.decision_adapter import RetentionDecisionAdapter
 from core.retention.decision_adapter_support import (
     build_offer_proposal,
     merge_inline_keyboards,
 )
-from core.retention.engine import (
-    RetentionEvaluation,
-    RetentionOfferCandidate,
-    materialize_candidate,
-    neutral_decision,
-)
-from core.retention.pricing_flow import RetentionPriceEvidence
-from runtime._internal.effects_actions.telegram.messaging_parts.tracking import (
-    track_business_event,
-)
+from core.retention.engine import RetentionEvaluation, RetentionOfferCandidate
 
 
 class FakeStore:
@@ -158,7 +139,9 @@ def test_offer_candidate_is_one_complete_message_and_no_prewrite() -> None:
         {
             "user_id": "user-a",
             "text": "Базовый ответ",
-            "reply_markup": {"inline_keyboard": [[{"text": "Меню", "callback_data": "menu"}]]},
+            "reply_markup": {
+                "inline_keyboard": [[{"text": "Меню", "callback_data": "menu"}]]
+            },
             "track_event_type": "base_shown",
             "track_payload": {"base": True},
         },
@@ -176,14 +159,19 @@ def test_offer_candidate_is_one_complete_message_and_no_prewrite() -> None:
     assert result.payload["text"] == "Базовый ответ\n\nОффер за 14900 ₽"
     assert len(result.payload["reply_markup"]["inline_keyboard"]) == 2
     assert result.payload["track_event_type"] == "offer_shown"
-    assert result.payload["track_payload"]["additional_track_events"][0]["event_type"] == "base_shown"
+    assert (
+        result.payload["track_payload"]["additional_track_events"][0]["event_type"]
+        == "base_shown"
+    )
     assert result.ranking["expected_profit_delta_minor"] == 1000.0
     assert cooldown.marks == 0
 
 
 def test_offer_candidate_respects_action_type_safe_mode_length_and_keyboard() -> None:
     evidence = evaluation(candidate())
-    state = FakeState(price_constraints={"mode": "safe", "disallow_offer_prefixes": ["offer_"]})
+    state = FakeState(
+        price_constraints={"mode": "safe", "disallow_offer_prefixes": ["offer_"]}
+    )
     assert build_offer_proposal(
         base=propose("noop@v1", {}),
         evaluation=evidence,
@@ -203,10 +191,15 @@ def test_offer_candidate_respects_action_type_safe_mode_length_and_keyboard() ->
         user_id="u",
     ) is None
     assert merge_inline_keyboards(None, None) is None
-    assert merge_inline_keyboards({"keyboard": []}, {"inline_keyboard": []}) == {"inline_keyboard": []}
+    assert merge_inline_keyboards(
+        {"keyboard": []},
+        {"inline_keyboard": []},
+    ) == {"inline_keyboard": []}
 
 
-def test_adapter_exposes_base_and_candidates_but_compat_plan_is_telemetry(monkeypatch) -> None:
+def test_adapter_exposes_base_and_candidates_but_compat_plan_is_telemetry(
+    monkeypatch,
+) -> None:
     adapter = RetentionDecisionAdapter(
         event_store=FakeStore(),
         tenant_id="tenant-a",
@@ -240,8 +233,15 @@ def test_constraints_and_legacy_plan_never_create_execute_plan() -> None:
         candidates=(),
         debug={},
     )
-    constrained = apply_retention_constraints_to_state(state=state, evaluation=high_risk)
+    constrained = apply_retention_constraints_to_state(
+        state=state,
+        evaluation=high_risk,
+    )
     assert constrained.price_constraints == {"max_band": "low"}
     base = {"action": "send_message@v1", "user_id": "u", "text": "x"}
-    merged = merge_retention_plan(base=base, plan=SimpleNamespace(steps=[{"action": "x"}]), user_id="u")
+    merged = merge_retention_plan(
+        base=base,
+        plan=SimpleNamespace(steps=[{"action": "x"}]),
+        user_id="u",
+    )
     assert merged.action == "send_message@v1"
