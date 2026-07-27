@@ -74,7 +74,7 @@ def _mark_execution_failed(*, executor: Any, env: Any, reason: str) -> None:
 def preflight_and_verify(*, executor: Any, env: Any, timescale: TimeScale) -> None:
     _checkpoint(executor=executor, env=env, stage="request", payload={"timescale": str(timescale.value if hasattr(timescale, "value") else timescale)})
     _checkpoint(executor=executor, env=env, stage="decision", payload={"action": str(env.decision.action)})
-    # Authenticate the envelope before any operational policy gate.  Otherwise a
+    # Authenticate the envelope before any operational policy gate. Otherwise a
     # global safe-mode state can mask payload/signature/TTL/replay failures and
     # the security regression wall stops exercising the intended controls.
     executor._guard.verify(env)
@@ -165,12 +165,12 @@ def dispatch_effects(*, executor: Any, env: Any, depth: int, enqueue: bool):
             out = executor._handlers.dispatch(env.decision.action, env.decision.payload, executor._effects, env)
     except Exception as exc:
         _mark_execution_failed(executor=executor, env=env, reason=f"dispatch_exception:{type(exc).__name__}")
-        _emit_operational_event(executor=executor, env=ent, event_type="runtime_executor_dispatch_failed", payload={"error_type": type(exc).__name__})
+        _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_dispatch_failed", payload={"error_type": type(exc).__name__})
         raise
     finally:
         clear_effect_capability()
         emit_effect_window(executor._events, opened=False, decision=env.decision)
-    if not effect_succeed(out):
+    if not effect_succeeded(out):
         _mark_execution_failed(executor=executor, env=env, reason="effect_failed")
         _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_effect_failed", payload={"action": str(env.decision.action)})
         raise RuntimeError("EFFECT_FAILED")
