@@ -4,36 +4,11 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
-
-import core.retention.arms as arms_mod
-import core.retention.engine as engine_mod
-import core.retention.pricing_flow as pricing_mod
 import core.policies.telegram.unified_policy as unified_mod
 from application.decision_policy.policy_stage import propose_action
 from core.ai.action_ranking import rank_proposals, score_proposal
 from core.policies.telegram.helpers import ProposedAction, normalize_proposed_action, propose
-from core.policies.telegram.retention_integration import (
-    apply_retention_constraints_to_state,
-    merge_retention_plan,
-)
-from core.retention.arms import RetentionArmEvidence
-from core.retention.bandit import choose_arm, update_arm
-from core.retention.decision_adapter import RetentionDecisionAdapter
-from core.retention.decision_adapter_support import (
-    build_offer_proposal,
-    merge_inline_keyboards,
-)
-from core.retention.engine import (
-    RetentionEvaluation,
-    RetentionOfferCandidate,
-    materialize_candidate,
-    neutral_decision,
-)
-from core.retention.pricing_flow import RetentionPriceEvidence
-from runtime._internal.effects_actions.telegram.messaging_parts.tracking import (
-    track_business_event,
-)
+from core.retention.engine import RetentionEvaluation, RetentionOfferCandidate
 
 
 class FakeStore:
@@ -161,7 +136,11 @@ def test_canonical_ranking_uses_ephemeral_metadata_and_strips_it() -> None:
     ranked = rank_proposals([base, offer])
     assert ranked[0].payload["text"] == "offer"
     assert "ranking" not in ranked[0].payload
-    score, _ = score_proposal(action="x", payload={}, ranking={"expected_profit_delta_minor": float("nan")})
+    score, _ = score_proposal(
+        action="x",
+        payload={},
+        ranking={"expected_profit_delta_minor": float("nan")},
+    )
     assert score == 0.0
 
     class Policy:
@@ -192,7 +171,9 @@ def test_normalize_mapping_never_leaks_ranking_into_payload() -> None:
     assert normalized.payload == {"text": "x"}
 
 
-def test_unified_policy_propose_many_preserves_base_and_exposes_retention(monkeypatch) -> None:
+def test_unified_policy_propose_many_preserves_base_and_exposes_retention(
+    monkeypatch,
+) -> None:
     evidence = evaluation(candidate())
 
     class FakeRetention:
@@ -203,7 +184,13 @@ def test_unified_policy_propose_many_preserves_base_and_exposes_retention(monkey
             self.states.append(state)
             return evidence
 
-        def propose_candidates(self, *, state: Any, base: ProposedAction, evaluation: Any):
+        def propose_candidates(
+            self,
+            *,
+            state: Any,
+            base: ProposedAction,
+            evaluation: Any,
+        ):
             self.states.append(state)
             assert evaluation is evidence
             return [
@@ -220,7 +207,11 @@ def test_unified_policy_propose_many_preserves_base_and_exposes_retention(monkey
         "handle",
         lambda ctx, **_kwargs: propose(
             "send_message@v1",
-            {"user_id": "user-a", "text": "base", "constraints": ctx.state.price_constraints},
+            {
+                "user_id": "user-a",
+                "text": "base",
+                "constraints": ctx.state.price_constraints,
+            },
         ),
     )
     retention = FakeRetention()
@@ -239,14 +230,25 @@ def test_unified_skips_retention_for_admin_domain_or_no_update(monkeypatch) -> N
         def evaluate(self, _state):
             raise AssertionError("retention must not run")
 
-    monkeypatch.setattr(unified_mod, "handle", lambda *_args, **_kwargs: propose("noop@v1", {}))
+    monkeypatch.setattr(
+        unified_mod,
+        "handle",
+        lambda *_args, **_kwargs: propose("noop@v1", {}),
+    )
     admin = unified_mod.UnifiedTelegramPolicyV3(
         retention=FailingRetention(),
         admin_user_ids=("user-a",),
     )
     assert len(admin.propose_many(FakeState())) == 1
     no_update = FakeState(telegram_update=None)
-    assert len(unified_mod.UnifiedTelegramPolicyV3(retention=FailingRetention()).propose_many(no_update)) == 1
+    assert (
+        len(
+            unified_mod.UnifiedTelegramPolicyV3(
+                retention=FailingRetention()
+            ).propose_many(no_update)
+        )
+        == 1
+    )
 
     class Sales:
         def propose(self, _state):
