@@ -76,7 +76,7 @@ def test_payload_tamper_fails(tmp_path):
     tampered = env.decision.payload.copy()
     tampered["text"] = "evil"
     env = type(env)(decision=env.decision.__class__(**{**env.decision.__dict__, "payload": tampered}), payload_hash=env.payload_hash, signature=env.signature, kid=env.kid, envelope_version=env.envelope_version)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="^PAYLOAD_TAMPERED$"):
         executor.execute(env)
     ledger_ctx.__exit__(None, None, None)
 
@@ -85,7 +85,7 @@ def test_signature_tamper_fails(tmp_path):
     core, executor, state, ledger_ctx = build(tmp_path)
     env = core.optimize(state)
     bad = type(env)(decision=env.decision, payload_hash=env.payload_hash, signature="AAAA", kid=env.kid, envelope_version=env.envelope_version)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="^BAD_SIGNATURE$"):
         executor.execute(bad)
     ledger_ctx.__exit__(None, None, None)
 
@@ -94,7 +94,7 @@ def test_unknown_kid_fails(tmp_path):
     core, executor, state, ledger_ctx = build(tmp_path)
     env = core.optimize(state)
     bad = type(env)(decision=env.decision, payload_hash=env.payload_hash, signature=env.signature, kid="k999", envelope_version=env.envelope_version)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="^UNKNOWN_OR_REVOKED_KID$"):
         executor.execute(bad)
     ledger_ctx.__exit__(None, None, None)
 
@@ -106,6 +106,7 @@ def test_unknown_action_fails(tmp_path):
 
     class BadPolicy:
         id = "bad@v1"
+
         def propose(self, state):
             return type("O", (), {"action": "unknown@v1", "payload": {}})()
 
@@ -114,8 +115,8 @@ def test_unknown_action_fails(tmp_path):
     keyring = Keyring({"k1": {"secret": b"s1", "revoked": False}}, "k1")
     events = EventLog(MemoryEventStore(), tenant="default")
     core = DecisionCore(selector, keyring, schemas, MemorySnapshotStore(), events)
-    state = WorldStateV1(1, {}, {}, {}, {}, int(time.time()*1000), user_id="u1")
-    with pytest.raises(ValueError):
+    state = WorldStateV1(1, {}, {}, {}, {}, int(time.time() * 1000), user_id="u1")
+    with pytest.raises(ValueError, match="^UNKNOWN_ACTION$"):
         core.optimize(state)
 
 
@@ -123,7 +124,7 @@ def test_duplicate_execution_fails(tmp_path):
     core, executor, state, ledger_ctx = build(tmp_path)
     env = core.optimize(state)
     executor.execute(env)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="^DUPLICATE_EXECUTION$"):
         executor.execute(env)
     ledger_ctx.__exit__(None, None, None)
 
@@ -132,19 +133,17 @@ def test_ttl_expiry_fails(tmp_path):
     core, executor, state, ledger_ctx = build(tmp_path, ttl_ms=1)
     env = core.optimize(state)
     time.sleep(0.01)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="^TTL_EXPIRED$"):
         executor.execute(env)
     ledger_ctx.__exit__(None, None, None)
 
 
 def test_telegram_mode_requires_numeric_chat_id(tmp_path, monkeypatch):
-    # In RUN_MODE=telegram, payload.user_id is used as Telegram chat_id.
-    # The runtime law must prevent accidental sends to non-numeric ids (e.g., demo_user).
     monkeypatch.setenv("RUN_MODE", "telegram")
 
     core, executor, state, ledger_ctx = build(tmp_path)
     env = core.optimize(state)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="^TELEGRAM_CHAT_ID_REQUIRED$"):
         executor.execute(env)
     ledger_ctx.__exit__(None, None, None)
 
@@ -152,8 +151,27 @@ def test_telegram_mode_requires_numeric_chat_id(tmp_path, monkeypatch):
 def test_replay_after_revoke_fails(tmp_path):
     core, executor, state, ledger_ctx = build(tmp_path)
     env = core.optimize(state)
-    # revoke key after issuance
     executor._guard._keyring.revoke(env.kid)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="^UNKNOWN_OR_REVOKED_KID$"):
         executor.execute(env)
+    ledger_ctx.__exit__(None, None, None)
+
+
+def test_security_rejections_do_not_open_action_circuit(tmp_path):
+    core, executor, state, ledger_ctx = build(tmp_path)
+    valid = core.optimize(state)
+    invalid = type(valid)(
+        decision=valid.decision,
+        payload_hash=valid.payload_hash,
+        signature="AAAA",
+        kid=valid.kid,
+        envelope_version=valid.envelope_version,
+    )
+
+    for _ in range(5):
+        with pytest.raises(RuntimeError, match="^BAD_SIGNATURE$"):
+            executor.execute(invalid)
+
+    result = executor.execute(valid)
+    assert result.ok is True
     ledger_ctx.__exit__(None, None, None)
