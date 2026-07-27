@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import os
 import stat
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 CANON_BOUNDED_REPOSITORY_SOURCE_SCAN = True
 
