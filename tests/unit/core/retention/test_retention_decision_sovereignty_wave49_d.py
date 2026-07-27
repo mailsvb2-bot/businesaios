@@ -6,31 +6,10 @@ from typing import Any
 
 import pytest
 
-import core.retention.arms as arms_mod
-import core.retention.engine as engine_mod
-import core.retention.pricing_flow as pricing_mod
-import core.policies.telegram.unified_policy as unified_mod
 from application.decision_policy.policy_stage import propose_action
 from core.ai.action_ranking import rank_proposals, score_proposal
-from core.policies.telegram.helpers import ProposedAction, normalize_proposed_action, propose
-from core.policies.telegram.retention_integration import (
-    apply_retention_constraints_to_state,
-    merge_retention_plan,
-)
-from core.retention.arms import RetentionArmEvidence
-from core.retention.bandit import choose_arm, update_arm
-from core.retention.decision_adapter import RetentionDecisionAdapter
-from core.retention.decision_adapter_support import (
-    build_offer_proposal,
-    merge_inline_keyboards,
-)
-from core.retention.engine import (
-    RetentionEvaluation,
-    RetentionOfferCandidate,
-    materialize_candidate,
-    neutral_decision,
-)
-from core.retention.pricing_flow import RetentionPriceEvidence
+from core.policies.telegram.helpers import normalize_proposed_action, propose
+from core.retention.engine import RetentionEvaluation, RetentionOfferCandidate
 from runtime._internal.effects_actions.telegram.messaging_parts.tracking import (
     track_business_event,
 )
@@ -336,6 +315,12 @@ def test_helpers_normalization_messages_variants_and_legacy_prices(monkeypatch) 
     )
     assert helpers.build_legacy_prices(default_price_rub=4900) == {"A": 123}
     monkeypatch.setattr(core.plans, "active_plans", lambda: [])
-    assert helpers.build_legacy_prices(default_price_rub=4900) == {"Полный доступ": 4900}
-    monkeypatch.setattr(core.plans, "active_plans", lambda: (_ for _ in ()).throw(RuntimeError()))
+    assert helpers.build_legacy_prices(default_price_rub=4900) == {
+        "Полный доступ": 4900
+    }
+    monkeypatch.setattr(
+        core.plans,
+        "active_plans",
+        lambda: (_ for _ in ()).throw(RuntimeError()),
+    )
     assert helpers.build_legacy_prices(default_price_rub=1) == {"Полный доступ": 1}
