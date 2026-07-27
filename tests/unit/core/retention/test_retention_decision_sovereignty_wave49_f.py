@@ -4,26 +4,9 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
-
-import core.retention.arms as arms_mod
 import core.retention.engine as engine_mod
 import core.retention.pricing_flow as pricing_mod
-import core.policies.telegram.unified_policy as unified_mod
-from application.decision_policy.policy_stage import propose_action
-from core.ai.action_ranking import rank_proposals, score_proposal
-from core.policies.telegram.helpers import ProposedAction, normalize_proposed_action, propose
-from core.policies.telegram.retention_integration import (
-    apply_retention_constraints_to_state,
-    merge_retention_plan,
-)
 from core.retention.arms import RetentionArmEvidence
-from core.retention.bandit import choose_arm, update_arm
-from core.retention.decision_adapter import RetentionDecisionAdapter
-from core.retention.decision_adapter_support import (
-    build_offer_proposal,
-    merge_inline_keyboards,
-)
 from core.retention.engine import (
     RetentionEvaluation,
     RetentionOfferCandidate,
@@ -31,9 +14,6 @@ from core.retention.engine import (
     neutral_decision,
 )
 from core.retention.pricing_flow import RetentionPriceEvidence
-from runtime._internal.effects_actions.telegram.messaging_parts.tracking import (
-    track_business_event,
-)
 
 
 class FakeStore:
@@ -216,7 +196,11 @@ def test_legacy_offer_renderer_is_explicit_and_read_only(monkeypatch) -> None:
         "render_offer_step",
         lambda **_kwargs: ({"track_payload": {"x": 1}}, {}),
     )
-    monkeypatch.setattr(support, "decorate_retention_payload", lambda **kwargs: kwargs["payload"])
+    monkeypatch.setattr(
+        support,
+        "decorate_retention_payload",
+        lambda **kwargs: kwargs["payload"],
+    )
     step, debug = support.try_build_offer_step(
         decision=selected,
         state=FakeState(),
@@ -371,7 +355,11 @@ def test_pricing_all_fallbacks_base_restore_and_stoploss(monkeypatch) -> None:
         "_stoploss_config",
         lambda **_kwargs: (_ for _ in ()).throw(RuntimeError()),
     )
-    monkeypatch.setattr(pricing_mod, "exception_throttled", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        pricing_mod,
+        "exception_throttled",
+        lambda *_args, **_kwargs: None,
+    )
     assert pricing_mod.apply_stoploss(
         store=store,
         tenant_id="t",
@@ -397,7 +385,11 @@ def test_engine_class_sandbox_normal_and_explicit_materialization(monkeypatch) -
 
     expected = evaluation(candidate())
     monkeypatch.setattr(engine_mod, "is_retention_allowed", lambda **_kwargs: True)
-    monkeypatch.setattr(engine_mod, "evaluate_for_day", lambda *_args, **_kwargs: expected)
+    monkeypatch.setattr(
+        engine_mod,
+        "evaluate_for_day",
+        lambda *_args, **_kwargs: expected,
+    )
     assert engine.compute_evidence(user_id="u") is expected
     assert engine.compute_decision(user_id="u").offer_arm == "NONE"
     assert engine.decide_offer(tenant_id="other", user_id="u", context={}) is None
@@ -416,19 +408,33 @@ def test_engine_class_sandbox_normal_and_explicit_materialization(monkeypatch) -
 
 def test_engine_outbound_daily_and_zero_revenue_fallback(monkeypatch) -> None:
     store = FakeStore()
-    monkeypatch.setattr(engine_mod.fx_mod, "compute_features_for_day", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(
+        engine_mod.fx_mod,
+        "compute_features_for_day",
+        lambda *_args, **_kwargs: {},
+    )
     monkeypatch.setattr(engine_mod, "estimate_hazard", lambda _features: 0.1)
     monkeypatch.setattr(engine_mod, "estimate_readiness", lambda _features: 0.8)
     monkeypatch.setattr(engine_mod, "should_suppress_marketing", lambda **_kwargs: False)
     monkeypatch.setattr(engine_mod, "has_active_entitlement", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(engine_mod, "is_outbound_overloaded", lambda *_args, **_kwargs: True)
     assert engine_mod.evaluate_for_day(
-        store, tenant_id="t", user_id="u", day_key="d", day_index=1, now_ms=1
+        store,
+        tenant_id="t",
+        user_id="u",
+        day_key="d",
+        day_index=1,
+        now_ms=1,
     ).reason == "outbound_overload"
     monkeypatch.setattr(engine_mod, "is_outbound_overloaded", lambda *_args, **_kwargs: False)
     monkeypatch.setattr(engine_mod, "daily_offer_cap_reached", lambda *_args, **_kwargs: True)
     assert engine_mod.evaluate_for_day(
-        store, tenant_id="t", user_id="u", day_key="d", day_index=1, now_ms=1
+        store,
+        tenant_id="t",
+        user_id="u",
+        day_key="d",
+        day_index=1,
+        now_ms=1,
     ).reason == "daily_cap"
 
     arm = RetentionArmEvidence("a", 1, 1, 1, 0.5, 0.5, 0, 0, "bandit_state")
@@ -440,7 +446,9 @@ def test_engine_outbound_daily_and_zero_revenue_fallback(monkeypatch) -> None:
     monkeypatch.setattr(
         engine_mod,
         "build_price_candidates",
-        lambda **_kwargs: [RetentionPriceEvidence(100, 0, 0, None, True, True, {})],
+        lambda **_kwargs: [
+            RetentionPriceEvidence(100, 0, 0, None, True, True, {})
+        ],
     )
     rows = engine_mod._offer_candidates(
         store=store,
