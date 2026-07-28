@@ -3,9 +3,11 @@ from __future__ import annotations
 from fastapi import APIRouter
 from fastapi.testclient import TestClient
 
+import adapters.api.fastapi.public_routes as public_routes_module
 from adapters.api.fastapi.public_routes import register_public_api_routes
 from entrypoints.api.action_models import ExecuteActionResponse
 from entrypoints.api.health_models import HealthResponse
+from entrypoints.api.request_context import RequestContext
 
 
 class _HealthHandler:
@@ -80,7 +82,16 @@ class _GovernanceAdvancedHandlers:
         return {'tenant_id': request.tenant_id, 'business_id': request.business_id, 'total_runs': 1, 'completed_runs': 1, 'failed_runs': 0, 'average_goal_score': 1.0, 'active_goals': [], 'learned_preferences': {}, 'recurring_failures': [], 'recurring_wins': [], 'anti_patterns': [], 'trends': {}}
 
 
-def _client(guard):
+class _ClientOutcomeHandlers:
+    def __init__(self) -> None:
+        self.select_calls = 0
+
+    def select_package(self, *, now, request):
+        self.select_calls += 1
+        return {'status': 'selected', 'tenant_id': request.tenant_id, 'business_id': request.business_id}
+
+
+def _client(guard, *, auth_bundle=None, client_outcome_handlers=None):
     router = APIRouter()
     register_public_api_routes(
         router=router,
@@ -92,6 +103,8 @@ def _client(guard):
         business_memory_handlers=_BusinessMemoryHandlers(),
         governance_advanced_handlers=_GovernanceAdvancedHandlers(),
         security_guard=guard,
+        auth_bundle=auth_bundle,
+        client_outcome_handlers=client_outcome_handlers,
     )
     from fastapi import FastAPI
     app = FastAPI()
@@ -103,6 +116,9 @@ def test_public_execute_action_flows_through_security_guard():
     calls = []
 
     class Guard:
+        def requires_external_auth(self, _route_path):
+            return False
+
         def enforce(self, **kwargs):
             calls.append(kwargs)
             return {'allowed': True}
@@ -117,6 +133,9 @@ def test_public_execute_action_flows_through_security_guard():
 
 def test_business_memory_summary_denied_when_security_guard_blocks():
     class Guard:
+        def requires_external_auth(self, _route_path):
+            return False
+
         def enforce(self, **kwargs):
             raise PermissionError('security_denied')
 
@@ -124,3 +143,54 @@ def test_business_memory_summary_denied_when_security_guard_blocks():
     response = client.post('/business-memory/summary', json={'tenant_id': 'tenant-a', 'business_id': 'biz-1'})
     assert response.status_code == 403
     assert response.json()['detail'] == 'security_denied'
+
+
+def test_client_outcome_write_route_fails_closed_without_auth_bundle():
+    handlers = _ClientOutcomeHandlers()
+
+    class Guard:
+        def requires_external_auth(self, route_path):
+            return route_path == '/client-outcome/select'
+
+        def enforce(self, **kwargs):
+            raise AssertionError('security guard must not run without configured perimeter auth')
+
+    client = _client(Guard(), client_outcome_handlers=handlers)
+    response = client.post('/client-outcome/select', json={'tenant_id': 'tenant-a', 'business_id': 'biz-a'})
+
+    assert response.status_code == 403
+    assert response.json()['detail'] == 'api_perimeter_auth_unconfigured'
+    assert handlers.select_calls == 0
+
+
+def test_client_outcome_write_route_threads_http_request_into_auth(monkeypatch):
+    handlers = _ClientOutcomeHandlers()
+    authorize_calls = []
+    guard_calls = []
+    auth_bundle = object()
+
+    def fake_authorize_request(*, request, auth_bundle):
+        authorize_calls.append((request, auth_bundle))
+        return RequestContext.from_http_request(request).with_metadata(api_key_verified=True), object()
+
+    monkeypatch.setattr(public_routes_module, 'authorize_request', fake_authorize_request)
+
+    class Guard:
+        def requires_external_auth(self, route_path):
+            return route_path == '/client-outcome/select'
+
+        def enforce(self, **kwargs):
+            guard_calls.append(kwargs)
+            assert kwargs['request_context'].metadata['api_key_verified'] is True
+            return {'allowed': True}
+
+    client = _client(Guard(), auth_bundle=auth_bundle, client_outcome_handlers=handlers)
+    response = client.post('/client-outcome/select', json={'tenant_id': 'tenant-a', 'business_id': 'biz-a'})
+
+    assert response.status_code == 200
+    assert response.json()['status'] == 'selected'
+    assert handlers.select_calls == 1
+    assert len(authorize_calls) == 1
+    assert authorize_calls[0][0].url.path == '/client-outcome/select'
+    assert authorize_calls[0][1] is auth_bundle
+    assert guard_calls and guard_calls[0]['route_path'] == '/client-outcome/select'

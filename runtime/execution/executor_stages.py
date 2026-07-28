@@ -74,6 +74,10 @@ def _mark_execution_failed(*, executor: Any, env: Any, reason: str) -> None:
 def preflight_and_verify(*, executor: Any, env: Any, timescale: TimeScale) -> None:
     _checkpoint(executor=executor, env=env, stage="request", payload={"timescale": str(timescale.value if hasattr(timescale, "value") else timescale)})
     _checkpoint(executor=executor, env=env, stage="decision", payload={"action": str(env.decision.action)})
+    # Authenticate the envelope before any operational policy gate. Otherwise a
+    # global safe-mode state can mask payload/signature/TTL/replay failures and
+    # the security regression wall stops exercising the intended controls.
+    executor._guard.verify(env)
     enforce_safe_mode(action=str(env.decision.action))
     executor._constitution.assert_decision_envelope(env)
     assert_timescale_allowed(action=str(env.decision.action), timescale=timescale)

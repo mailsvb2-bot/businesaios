@@ -29,7 +29,7 @@ def test_auth_dependencies_accept_api_key_principal() -> None:
 
     principal = bundle.authenticate(
         request=_request({'X-API-Key': raw_key}),
-        request_context=RequestContext(tenant_id='tenant-a'),
+        request_context=RequestContext(tenant_id='tenant-a', metadata={'transport_encrypted': True}),
         authorization=None,
         x_api_key=raw_key,
     )

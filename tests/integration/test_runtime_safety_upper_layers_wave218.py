@@ -15,6 +15,7 @@ def _seed_runtime(monkeypatch, tmp_path: Path):
     monkeypatch.setenv('BUSINESAIOS_SAFETY_DATA_DIR', str(tmp_path / 'safety'))
     monkeypatch.setenv('BUSINESAIOS_TENANT_CONFIG_STORE_PATH', str(tmp_path / 'tenant_config.json'))
     monkeypatch.setenv('BUSINESAIOS_TENANT_CONFIG_AUDIT_LOG_PATH', str(tmp_path / 'tenant_config_audit.jsonl'))
+    monkeypatch.setenv('BUSINESAIOS_SAFETY_PERSISTENT', '1')
     build_safety_control_runtime.cache_clear()
     return build_safety_control_runtime(persistent=True)
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from contracts.decisioning.recommendation_packet_contract import RecommendationPacketContract
@@ -11,17 +13,23 @@ from runtime.integration.decision_input_packet import DecisionInputPacket
 class _Issuer:
     def __init__(self) -> None:
         self.calls = []
+        self.envelope = SimpleNamespace(
+            decision=SimpleNamespace(
+                decision_id="decision-1",
+                correlation_id="correlation-1",
+            )
+        )
 
     def issue(self, state):
         self.calls.append(state)
-        return {'issued': state}
+        return self.envelope
 
 
 def test_issue_runtime_decision_routes_through_protocol() -> None:
     issuer = _Issuer()
-    state = {'x': 1}
+    state = {"x": 1}
     out = issue_runtime_decision(issuer=issuer, state=state)
-    assert out == {'issued': state}
+    assert out is issuer.envelope
     assert issuer.calls == [state]
 
 
@@ -55,7 +63,8 @@ def test_issue_runtime_decision_enriches_state_from_packet() -> None:
         state=state,
         decision_input_packet=packet,
     )
-    issued_state = out["issued"]
+    assert out is issuer.envelope
+    issued_state = issuer.calls[-1]
     assert "meta" in issued_state
     assert issued_state["meta"]["external_packet_id"] == "p1"
     assert "external_world_state_features" in issued_state["meta"]
@@ -93,3 +102,4 @@ def test_issue_runtime_decision_rejects_forbidden_packet_fields() -> None:
             state={"x": 1, "meta": {}},
             decision_input_packet=packet,
         )
+    assert issuer.calls == []

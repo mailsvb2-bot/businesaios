@@ -184,6 +184,102 @@ _ROUTE_SPECS: dict[str, PublicSurfaceRouteSpec] = {
         action=SecurityAction.READ,
         tags=('internal', 'economic', 'sealed_execution', 'audit', 'spend_external', 'client_outcome', 'public_api'),
     ),
+    '/client-outcome/packages': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.packages',
+        resource_type='client_outcome_catalog',
+        action=SecurityAction.READ,
+        tags=('internal', 'client_outcome', 'catalog', 'public_api'),
+    ),
+    '/client-outcome/select': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.select',
+        resource_type='client_outcome_order',
+        action=SecurityAction.WRITE,
+        tags=('internal', 'client_outcome', 'order', 'public_api'),
+    ),
+    '/client-outcome/orders/{order_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.order',
+        resource_type='client_outcome_order',
+        action=SecurityAction.READ,
+        tags=('internal', 'client_outcome', 'order', 'public_api'),
+    ),
+    '/client-outcome/orders/{order_id}/amend': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.order_amend',
+        resource_type='client_outcome_order',
+        action=SecurityAction.WRITE,
+        tags=('internal', 'client_outcome', 'order', 'amendment', 'public_api'),
+    ),
+    '/client-outcome/execute': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.execute',
+        resource_type='client_outcome_execution',
+        action=SecurityAction.WRITE,
+        tags=('internal', 'client_outcome', 'execution', 'public_api'),
+    ),
+    '/client-outcome/disputes/open': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.disputes.open',
+        resource_type='client_outcome_dispute',
+        action=SecurityAction.WRITE,
+        tags=('internal', 'client_outcome', 'dispute', 'public_api'),
+    ),
+    '/client-outcome/disputes/reverse': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.disputes.reverse',
+        resource_type='client_outcome_dispute',
+        action=SecurityAction.ADMIN,
+        tags=('internal', 'client_outcome', 'dispute', 'reversal', 'public_api'),
+    ),
+    '/client-outcome/full-cycle': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.full_cycle',
+        resource_type='client_outcome_cycle',
+        action=SecurityAction.WRITE,
+        tags=('internal', 'client_outcome', 'cycle', 'public_api'),
+    ),
+    '/client-outcome/lifecycle/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.lifecycle',
+        resource_type='client_outcome_lifecycle',
+        action=SecurityAction.READ,
+        tags=('internal', 'client_outcome', 'lifecycle', 'public_api'),
+    ),
+    '/client-outcome/commercial-state/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.commercial_state',
+        resource_type='client_outcome_commercial_state',
+        action=SecurityAction.READ,
+        tags=('internal', 'client_outcome', 'commercial_state', 'public_api'),
+    ),
+    '/client-outcome/corrected-economics/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.corrected_economics',
+        resource_type='client_outcome_economics',
+        action=SecurityAction.READ,
+        tags=('internal', 'client_outcome', 'economics', 'public_api'),
+    ),
+    '/client-outcome/reconciliation/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.reconciliation',
+        resource_type='client_outcome_reconciliation',
+        action=SecurityAction.READ,
+        tags=('internal', 'client_outcome', 'reconciliation', 'public_api'),
+    ),
+    '/client-outcome/orders/{order_id}/{lead_id}/admin-view': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.admin_view',
+        resource_type='client_outcome_admin',
+        action=SecurityAction.ADMIN,
+        tags=('internal', 'client_outcome', 'admin', 'public_api'),
+    ),
+    '/client-outcome/admin-summary': PublicSurfaceRouteSpec(
+        operation_name='api.public.client_outcome.admin_summary',
+        resource_type='client_outcome_admin',
+        action=SecurityAction.ADMIN,
+        tags=('internal', 'client_outcome', 'admin', 'public_api'),
+    ),
+    '/economic/client-outcome-truth/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.economic.client_outcome_truth',
+        resource_type='economic_client_outcome_truth',
+        action=SecurityAction.READ,
+        tags=('internal', 'economic', 'client_outcome', 'truth', 'public_api'),
+    ),
+    '/economic/business-truth/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
+        operation_name='api.public.economic.business_truth',
+        resource_type='economic_business_truth',
+        action=SecurityAction.READ,
+        tags=('internal', 'economic', 'business', 'truth', 'public_api'),
+    ),
     '/public-site/cta/start': PublicSurfaceRouteSpec(
         operation_name='api.public.public_site.cta_start',
         resource_type='public_site_cta_intake',
@@ -301,6 +397,12 @@ class PublicSurfaceSecurityGuard:
         if not bool(verdict.get('allowed', False)):
             raise PermissionError(str(verdict.get('reason') or 'public_surface_security_denied'))
         return verdict
+
+    def requires_external_auth(self, route_path: str) -> bool:
+        spec = _ROUTE_SPECS.get(str(route_path).strip())
+        if spec is None:
+            raise PermissionError(f'unknown_public_surface:{route_path}')
+        return self._requires_internal_write_admin_perimeter(spec=spec)
 
     @staticmethod
     def _requires_internal_write_admin_perimeter(*, spec: PublicSurfaceRouteSpec) -> bool:

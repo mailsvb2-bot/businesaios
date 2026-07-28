@@ -17,6 +17,8 @@ concurrency:
 jobs:
   full-gate:
     runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -36,6 +38,19 @@ jobs:
         env:
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.12
         run: python -m scripts.ci.cli --gate full
+      - name: Run documented complete pytest tree
+        env:
+          BUSINESAIOS_DEEP_TEST_CLEANUP: "1"
+        shell: bash
+        run: |
+          mkdir -p artifacts/ci/literal-pytest
+          set +e
+          pytest -q \
+            --junitxml=artifacts/ci/literal-pytest/junit.xml \
+            2>&1 | tee artifacts/ci/literal-pytest/pytest.log
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > artifacts/ci/literal-pytest/exit-code.txt
+          exit "$status"
       - name: Upload full gate artifacts
         if: always()
         continue-on-error: true

@@ -11,6 +11,7 @@ from entrypoints.api.economic_route_handlers import build_economic_route_handler
 from entrypoints.api.health_handler import HealthHandler
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
+from tests.unit.client_outcome.auth_test_support import AuthenticatedTestBundle
 
 
 class _StubAppService:
@@ -40,6 +41,7 @@ def _build_client() -> TestClient:
         client_outcome_handlers=bundle.client_outcome_handlers,
         economic_handlers=build_economic_route_handlers(client_outcome_handlers=bundle.client_outcome_handlers),
         security_guard=_PermissiveGuard(),
+        auth_bundle=AuthenticatedTestBundle(),
         analytics_handlers=None,
     )
     from fastapi import FastAPI

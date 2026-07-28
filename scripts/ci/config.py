@@ -36,7 +36,8 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             "ci/check_locks.sh",
         ),
         optional_integration_targets=tuple(
-            rel for rel in (
+            rel
+            for rel in (
                 "tests/integration",
                 "tests/runtime",
                 "tests/interfaces",
@@ -44,7 +45,8 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             if (root / rel).exists()
         ),
         lock_targets=tuple(
-            rel for rel in (
+            rel
+            for rel in (
                 "tests/p0/test_startup_hooks_lightweight.py",
                 "tests/p0/test_ci_gate_plan_is_bounded.py",
                 "tests/lock/test_no_merge_conflict_markers.py",
@@ -59,12 +61,14 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
                 "tests/lock/test_ai_ceo_no_second_path.py",
                 "tests/lock/test_runtime_actions_registry_lock.py",
                 "tests/lock/test_messaging_channel_surface_lock.py",
+                "tests/lock/test_known_full_suite_debt_registry.py",
                 "tests/arch/test_agi_no_second_brain_surfaces.py",
             )
             if (root / rel).exists()
         ),
         unit_targets=tuple(
-            rel for rel in (
+            rel
+            for rel in (
                 "tests/unit",
                 "tests/core",
                 "tests/security",
@@ -77,9 +81,11 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
                 "tests/core/experiments",
             )
             if (root / rel).exists()
-        ) or ("tests",),
+        )
+        or ("tests",),
         quality_targets=tuple(
-            rel for rel in (
+            rel
+            for rel in (
                 "application",
                 "core",
                 "runtime",

@@ -14,6 +14,7 @@ import os
 from boot.app_boot_result import AppBootResult
 from boot.bootstrap_config_surface import BootstrapConfigSurface, build_bootstrap_config_surface
 from application.decision.decision_service import DecisionApplicationService
+from adapters.api.fastapi.auth_dependencies import AuthDependencyBundle
 from entrypoints.api.request_context import RequestContext
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 from observability.action_audit_log import ActionAuditLog, build_default_action_audit_log
@@ -88,6 +89,7 @@ class FastAPIDependencyContainer:
     api_idempotency_namespace: str = 'api_request'
     api_idempotency_operation: str = 'execute_action'
     api_idempotency_owner_id: str = 'fastapi-dependency-container'
+    api_auth_bundle: AuthDependencyBundle | None = None
     _api_security_owner_bundle: ApiSecurityOwnerBundle | None = field(default=None, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:

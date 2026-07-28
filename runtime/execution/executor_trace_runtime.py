@@ -76,7 +76,6 @@ def trace_context_for_env(*, env: DecisionEnvelope, safe_dict) -> object | None:
 def execute_with_trace(*, executor, env: DecisionEnvelope) -> ExecutionResult:
     trace_context = executor._trace_context_for_env(env)
     trace_id = getattr(trace_context, 'trace_id', None)
-    payload = executor._safe_dict(getattr(getattr(env, 'decision', None), 'payload', {}) or {})
     with trace_context_scope(trace_context):
         executor._append_decision_trace(env, trace_id)
         _record_runtime_trace_story(executor=executor, env=env, trace_kind='execution', stage='started', trace_id=str(trace_id or ''))
@@ -91,11 +90,6 @@ def execute_with_trace(*, executor, env: DecisionEnvelope) -> ExecutionResult:
                 executor_context_cm=executor_context,
             )
             result = entrypoint_bundle.run(executor=executor, env=env)
-            record_execution_outcome(
-                action=str(getattr(env.decision, 'action', '') or ''),
-                payload=payload,
-                success=bool(getattr(result, 'ok', False)),
-            )
             executor._record_action_audit(
                 env=env,
                 trace_id=trace_id,
@@ -131,12 +125,6 @@ def execute_with_trace(*, executor, env: DecisionEnvelope) -> ExecutionResult:
                 correlation_id=str(env.decision.correlation_id),
             )
         except Exception as exc:
-            with suppress(Exception):
-                record_execution_outcome(
-                    action=str(getattr(env.decision, 'action', '') or ''),
-                    payload=payload,
-                    success=False,
-                )
             executor._record_action_audit(
                 env=env,
                 trace_id=trace_id,
@@ -177,6 +165,7 @@ def execute_core_flow(*, executor, env: DecisionEnvelope, depth: int, timescale,
         success_payload={'dispatch': 'completed'},
         failure_payload_builder=lambda exc: {'error': type(exc).__name__, 'message': str(exc)},
     ) if tenant_id and run_id else nullcontext()
+    dispatch_started = False
     try:
         with isolation_cm, span_cm:
             resolution_result = executor._apply_reliability_gate(env)
@@ -184,6 +173,7 @@ def execute_core_flow(*, executor, env: DecisionEnvelope, depth: int, timescale,
                 return resolution_result
             preflight_fn(executor=executor, env=env, timescale=timescale)
             budget_verdict = executor._enforce_runtime_budget_and_blast_radius(env)
+            dispatch_started = True
             result = executor._dispatch(env, depth=depth, enqueue=True)
             record_execution_outcome(
                 action=str(getattr(env.decision, 'action', '') or ''),
@@ -206,12 +196,13 @@ def execute_core_flow(*, executor, env: DecisionEnvelope, depth: int, timescale,
                 )
             return result
     except Exception as exc:
-        with suppress(Exception):
-            record_execution_outcome(
-                action=str(getattr(env.decision, 'action', '') or ''),
-                payload=payload,
-                success=False,
-            )
+        if dispatch_started:
+            with suppress(Exception):
+                record_execution_outcome(
+                    action=str(getattr(env.decision, 'action', '') or ''),
+                    payload=payload,
+                    success=False,
+                )
         if reliability is not None:
             try:
                 reliability.mark_failed(env, reason=f'runtime_execute:{type(exc).__name__}')

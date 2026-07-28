@@ -21,12 +21,12 @@ class PolicyA:
     id = "p@v1"
 
     def propose(self, state):
-        return type("O", (), {"action": "send_message@v1", "payload": {"user_id": state.user_id, "text": "hi"}})()
+        return type("O", (), {"action": "noop@v1", "payload": {}})()
 
 
 def test_exactly_once_via_guard_and_ledger(tmp_path):
     schemas = SchemaRegistry()
-    schemas.register("send_message@v1", 1, DecisionSchema(required={"user_id", "text"}, optional=set(), field_types={"user_id": str, "text": str}))
+    schemas.register("noop@v1", 1, DecisionSchema(required=set(), optional=set(), field_types={}))
 
     preg = PolicyRegistry()
     preg.register(PolicyA())
@@ -41,23 +41,16 @@ def test_exactly_once_via_guard_and_ledger(tmp_path):
     guard = RuntimeGuard(keyring, ledger, schemas, event_log=events)
 
     handlers = ActionHandlerRegistry()
-    handlers.register(
-        "send_message@v1",
-        lambda payload, effects, env: effects.send_message(
-            decision_id=env.decision.decision_id,
-            correlation_id=env.decision.correlation_id,
-            user_id=payload["user_id"],
-            text=payload["text"],
-        ),
-    )
+    handlers.register("noop@v1", lambda payload, effects, env: None)
 
     executor = RuntimeExecutor(guard, handlers, events, policy_registry=preg, decision_core=core)
 
     state = WorldStateV1(1, {}, {}, {}, {}, int(time.time() * 1000), user_id="u1")
     env = core.optimize(state)
 
-    executor.execute(env)
-    with pytest.raises(RuntimeError):
+    result = executor.execute(env)
+    assert result.ok is True
+    with pytest.raises(RuntimeError, match="^DUPLICATE_EXECUTION$"):
         executor.execute(env)
 
     ledger_ctx.__exit__(None, None, None)

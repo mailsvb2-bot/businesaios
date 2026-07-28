@@ -40,14 +40,14 @@ def _state():
 
 
 def test_decision_core_blocks_when_safety_gate_errors(monkeypatch):
-    import core.ai.decision_core as dc
+    import application.decision_runtime.runtime as decision_runtime
 
     core, events = _build_core()
 
     def _boom(**kwargs):
         raise ValueError("gate exploded")
 
-    monkeypatch.setattr(dc, "gate_action_or_raise", _boom)
+    monkeypatch.setattr(decision_runtime, "gate_action_or_raise", _boom)
 
     with pytest.raises(RuntimeError, match="DECISION_BLOCKED:action_safety_gate_error"):
         core.issue(_state())
