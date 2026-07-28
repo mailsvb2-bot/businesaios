@@ -16,12 +16,13 @@ class PaymentProviderCustomerMixin:
         email: str | None = None,
         metadata: Mapping[str, object] | None = None,
     ) -> PaymentCustomerProfile:
-        """Provision a customer with deterministic, safe provider failover.
+        """Provision through one preselected healthy provider.
 
-        Customer provisioning is not a money movement. Every candidate receives
-        the same stable provisioning idempotency key, so a provider exception can
-        be followed by the next healthy candidate. Monetary operations remain
-        single-attempt after dispatch.
+        Routing may skip a provider that was already known to be unavailable before
+        dispatch. Once ``ensure_customer`` starts, any exception or invalid response
+        is an ambiguous external outcome and must not be sent to a second provider.
+        A deterministic key is still supplied for safe operator reconciliation and
+        retry against the same provider.
         """
 
         tenant = self._require_tenant(tenant_id)
@@ -32,55 +33,54 @@ class PaymentProviderCustomerMixin:
         if not isinstance(currency_value, str) or not currency_value.strip():
             raise ValueError("ensure_customer requires metadata.currency for routed provider selection")
         currency = currency_value.strip().upper()
-        providers = self._ordered_providers(
+        provider = self._first_provider(
             tenant_id=tenant,
             currency=currency,
             operation="ensure_customer",
             metadata=normalized_metadata,
+            missing_message="no routed provider available for ensure_customer",
         )
-        if not providers:
-            raise LookupError("no routed provider available for ensure_customer")
+        provider_name, registration = self._registration_for(provider)
         provisioning_key = self._customer_provisioning_key(
             tenant_id=tenant,
             email=email,
             currency=currency,
         )
-        last_error: Exception | None = None
-        for provider in providers:
-            provider_name, registration = self._registration_for(provider)
-            try:
-                profile = provider.ensure_customer(
-                    tenant_id=tenant,
-                    email=email,
-                    metadata={
-                        **normalized_metadata,
-                        "provider_backend_key": registration.backend_key,
-                        "customer_provisioning_idempotency_key": provisioning_key,
-                    },
-                )
-                if not isinstance(profile, PaymentCustomerProfile):
-                    raise ValueError("routed provider must return PaymentCustomerProfile")
-                normalized = profile.normalized_copy()
-                if normalized.tenant_id != tenant:
-                    raise ValueError("routed provider returned mismatched tenant_id")
-                if normalized.default_currency != currency:
-                    raise ValueError("routed provider returned mismatched default_currency")
-            except Exception as exc:
-                last_error = exc
-                self._safe_mark_failure(provider_name, reason=f"ensure_customer:{type(exc).__name__}")
-                continue
-            self._safe_mark_success(provider_name)
-            return replace(
-                normalized,
+        try:
+            profile = provider.ensure_customer(
+                tenant_id=tenant,
+                email=email,
                 metadata={
-                    **deepcopy(dict(normalized.metadata)),
-                    "owner": "billing.payment_provider_adapter",
-                    "routed_provider": provider_name,
+                    **normalized_metadata,
                     "provider_backend_key": registration.backend_key,
                     "customer_provisioning_idempotency_key": provisioning_key,
                 },
             )
-        raise RuntimeError("all routed providers failed ensure_customer") from last_error
+        except Exception as exc:
+            self._safe_mark_failure(provider_name, reason=f"ensure_customer:{type(exc).__name__}")
+            raise RuntimeError("routed provider failed ensure_customer") from exc
+        try:
+            if not isinstance(profile, PaymentCustomerProfile):
+                raise ValueError("routed provider must return PaymentCustomerProfile")
+            normalized = profile.normalized_copy()
+            if normalized.tenant_id != tenant:
+                raise ValueError("routed provider returned mismatched tenant_id")
+            if normalized.default_currency != currency:
+                raise ValueError("routed provider returned mismatched default_currency")
+        except Exception as exc:
+            self._safe_mark_failure(provider_name, reason=f"ensure_customer_result:{type(exc).__name__}")
+            raise RuntimeError("routed provider returned invalid customer profile") from exc
+        self._safe_mark_success(provider_name)
+        return replace(
+            normalized,
+            metadata={
+                **deepcopy(dict(normalized.metadata)),
+                "owner": "billing.payment_provider_adapter",
+                "routed_provider": provider_name,
+                "provider_backend_key": registration.backend_key,
+                "customer_provisioning_idempotency_key": provisioning_key,
+            },
+        )
 
     @staticmethod
     def _customer_provisioning_key(*, tenant_id: str, email: str | None, currency: str) -> str:
