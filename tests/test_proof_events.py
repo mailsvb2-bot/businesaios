@@ -64,7 +64,17 @@ def test_required_proof_events_emitted(tmp_path):
     handlers = ActionHandlerRegistry()
     handlers.register(
         "capture_payment@v1",
-        lambda payload, effects, env: {"ok": True},
+        lambda payload, effects, env: {
+            "ok": True,
+            "status": "executed",
+            "evidence": {
+                "source": "payment_gateway",
+                "verified": True,
+                "status": "verified",
+                "external_refs": [f"payment:{env.decision.decision_id}"],
+                "confidence": 1.0,
+            },
+        },
     )
 
     reward = RewardEngine()
