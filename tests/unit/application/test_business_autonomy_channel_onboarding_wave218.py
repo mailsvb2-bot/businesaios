@@ -1,9 +1,14 @@
 import pytest
 
-from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessGoalEnvelope, IntegrationMode
+from application.business_autonomy.contracts import (
+    BusinessExecutionRequest,
+    BusinessGoalEnvelope,
+    IntegrationMode,
+    PolicyConstraint,
+)
 from application.business_autonomy.policy_semantics_guard import PolicySemanticsGuard
 from interfaces.api.business_autonomy_route_handlers import build_business_autonomy_route_handlers
-from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
+from tests.support.business_autonomy import build_explicitly_onboarded_service
 
 
 def test_policy_semantics_guard_rejects_conflict() -> None:
@@ -20,13 +25,18 @@ def test_policy_semantics_guard_rejects_conflict() -> None:
 @pytest.mark.asyncio
 async def test_website_business_uses_supervised_adapter_path(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv('DATA_DIR', str(tmp_path))
-    service = build_business_autonomy_guarded_service(business_id='site-biz')
+    service = build_explicitly_onboarded_service(tenant_id='tenant-demo', business_id='site-biz')
     request = BusinessExecutionRequest(
         envelope=BusinessGoalEnvelope(
             business_id='site-biz',
             goal_id='goal-site-1',
             goal_type='profile_publish',
             goal_payload={'estimated_cost': 1.0, 'outbound_count': 1},
+            simulation=True,
+            constraints=(
+                PolicyConstraint(name='monthly_budget_limit', value=10.0),
+                PolicyConstraint(name='outbound_message_limit', value=10),
+            ),
             metadata={'tenant_id': 'tenant-demo', 'non_ai_mode': 'supervised', 'autonomy_tier': 'supervised'},
         ),
         integration_mode=IntegrationMode.PLATFORM_DIRECT,
@@ -36,7 +46,7 @@ async def test_website_business_uses_supervised_adapter_path(tmp_path, monkeypat
     result = await service.execute(request)
     assert result.adapter_name == 'website.default'
     assert result.metadata['channel_kind'] == 'website'
-    assert result.verdict.value in {'accepted', 'completed', 'simulated'}
+    assert result.verdict.value == 'simulated'
 
 
 def test_business_autonomy_fleet_view_surface(tmp_path, monkeypatch) -> None:
