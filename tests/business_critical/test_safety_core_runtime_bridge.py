@@ -12,6 +12,7 @@ from application.business_autonomy.contracts import (
     IntegrationMode,
     PolicyConstraint,
 )
+from application.business_autonomy.execution_subject import business_execution_approval_id
 from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
 from entrypoints.api.approval_route_handlers import ApprovalRouteHandlers
 from governance.approval_contract import ApprovalOutcome
@@ -73,9 +74,8 @@ def _onboarded_service(*, tenant_id: str, business_id: str):
 async def _execute_after_canonical_approval(service, request: BusinessExecutionRequest):
     pending = await service.execute(request)
     assert pending.verdict is ExecutionVerdict.PARTIAL
-    approval_id = f"business-autonomy:{request.envelope.business_id}:{request.envelope.goal_id}"
     ApprovalRouteHandlers(approval_store=service._approval_gate._store).evaluate(
-        approval_id=approval_id,
+        approval_id=business_execution_approval_id(request),
         tenant_id=str(request.envelope.metadata["tenant_id"]),
         actor_id="operator-1",
         role_id=RoleId.OWNER,
