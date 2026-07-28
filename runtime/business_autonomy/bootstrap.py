@@ -48,7 +48,12 @@ from application.business_autonomy.business_connector_framework import (
 from application.business_autonomy.channel_adapter_registry import TypedChannelAdapterRegistry
 from application.business_autonomy.channel_backed_adapter import ChannelBackedBusinessAdapter
 from application.business_autonomy.channel_contracts import ChannelKind
-from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult, IntegrationMode
+from application.business_autonomy.contracts import (
+    BusinessExecutionRequest,
+    BusinessExecutionResult,
+    ExecutionVerdict,
+    IntegrationMode,
+)
 from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from application.business_autonomy.guarded_service import BusinessAutonomyGuardedService
 from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingMode
@@ -80,6 +85,9 @@ from runtime.business_autonomy.distributed_state import (
     FileOperatorOverrideDocumentPort,
     FilePlanningMemoryDocumentPort,
 )
+from runtime.business_autonomy.execution_support import build_execution_runtime, ensure_business_route
+from runtime.business_autonomy.fleet_read_model import BusinessAutonomyFleetReadModel
+from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.sqlite_distributed_state import (
     SQLiteDistributedCompareAndSwap,
     SQLiteDistributedDocumentStore,
@@ -88,9 +96,6 @@ from runtime.business_autonomy.sqlite_distributed_state import (
     SQLiteRegionRouteState,
     SQLiteStateDatabase,
 )
-from runtime.business_autonomy.execution_support import build_execution_runtime, ensure_business_route
-from runtime.business_autonomy.fleet_read_model import BusinessAutonomyFleetReadModel
-from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import build_default_secret_vault
 from storage.distributed_evidence_audit_backend import DistributedEvidenceStore, DistributedGovernanceAuditLog
@@ -124,7 +129,12 @@ class RequestTenantCapabilityRegistryView:
     _business_tenants: dict[str, str] = field(default_factory=dict)
 
     def bind(self, *, tenant_id: str, business_id: str) -> None:
-        self._business_tenants[str(business_id)] = str(tenant_id)
+        key = str(business_id)
+        tenant = str(tenant_id)
+        existing = self._business_tenants.get(key)
+        if existing is not None and existing != tenant:
+            raise ValueError(f"business_id is already bound to another tenant: {key}")
+        self._business_tenants[key] = tenant
 
     def register_for_tenant(self, *, tenant_id: str, business_id: str, capabilities) -> None:
         self.bind(tenant_id=tenant_id, business_id=business_id)
@@ -182,7 +192,12 @@ class RequestTenantTrustRegistryView:
     _business_tenants: dict[str, str] = field(default_factory=dict)
 
     def bind(self, *, tenant_id: str, business_id: str) -> None:
-        self._business_tenants[str(business_id)] = str(tenant_id)
+        key = str(business_id)
+        tenant = str(tenant_id)
+        existing = self._business_tenants.get(key)
+        if existing is not None and existing != tenant:
+            raise ValueError(f"business_id is already bound to another tenant: {key}")
+        self._business_tenants[key] = tenant
 
     def register_for_tenant(self, *, tenant_id: str, snapshot: BusinessTrustSnapshot) -> None:
         self.bind(tenant_id=tenant_id, business_id=snapshot.business_id)
@@ -350,7 +365,7 @@ class RequestScopedBusinessAutonomyGuardedService(BusinessAutonomyGuardedService
                 goal_id=request.envelope.goal_id,
                 execution_id=request.correlation_id,
                 message=str(exc),
-                metadata={"scope_status": "rejected", "failure_type": type(exc).__name__},
+                metadata={'scope_status': 'rejected', 'failure_type': type(exc).__name__},
             )
         return await super().execute(request)
 
@@ -358,78 +373,76 @@ class RequestScopedBusinessAutonomyGuardedService(BusinessAutonomyGuardedService
 def _business_autonomy_state_root() -> str:
     from application.business_autonomy.persistence import business_autonomy_runtime_dir
 
-    return str(business_autonomy_runtime_dir() / "distributed")
+    return str(business_autonomy_runtime_dir() / 'distributed')
 
 
 def _business_autonomy_state_path() -> Path:
     from os import getenv
     from application.business_autonomy.persistence import business_autonomy_runtime_dir
 
-    explicit = str(getenv("BUSINESAIOS_BUSINESS_AUTONOMY_STATE_DB", "") or "").strip()
+    explicit = str(getenv('BUSINESAIOS_BUSINESS_AUTONOMY_STATE_DB', '') or '').strip()
     if explicit:
         return Path(explicit)
-    return business_autonomy_runtime_dir() / "business_autonomy_state.sqlite3"
+    return business_autonomy_runtime_dir() / 'business_autonomy_state.sqlite3'
 
 
 def _build_distributed_state() -> dict[str, object]:
     from os import getenv
 
-    backend = str(getenv("BUSINESAIOS_BUSINESS_AUTONOMY_STATE_BACKEND", "sqlite") or "sqlite").strip().lower()
-    if backend != "sqlite":
-        raise RuntimeError(f"unsupported business autonomy state backend: {backend}")
-    replica_count = int(str(getenv("BUSINESAIOS_RUNTIME_REPLICA_COUNT", "1") or "1"))
+    backend = str(getenv('BUSINESAIOS_BUSINESS_AUTONOMY_STATE_BACKEND', 'sqlite') or 'sqlite').strip().lower()
+    if backend != 'sqlite':
+        raise RuntimeError(f'unsupported business autonomy state backend: {backend}')
+    replica_count = int(str(getenv('BUSINESAIOS_RUNTIME_REPLICA_COUNT', '1') or '1'))
     if replica_count > 1:
-        raise RuntimeError(
-            "MULTI_REPLICA_BUSINESS_AUTONOMY_REQUIRES_EXTERNAL_TRANSACTIONAL_STATE_BACKEND"
-        )
+        raise RuntimeError('MULTI_REPLICA_BUSINESS_AUTONOMY_REQUIRES_EXTERNAL_TRANSACTIONAL_STATE_BACKEND')
 
     database = SQLiteStateDatabase(_business_autonomy_state_path())
     documents = SQLiteDistributedDocumentStore(database)
     evidence_port = SQLiteDistributedEvidenceAppendPort(database)
     return {
-        "database": database,
-        "documents": documents,
-        "approvals": DistributedApprovalStore(FileApprovalDocumentPort(documents)),
-        "operator_overrides": DistributedOperatorOverrideStore(FileOperatorOverrideDocumentPort(documents)),
-        "idempotency": DistributedIdempotencyStore(
-            cas=SQLiteDistributedCompareAndSwap(database, scope="idempotency_records"),
+        'database': database,
+        'documents': documents,
+        'approvals': DistributedApprovalStore(FileApprovalDocumentPort(documents)),
+        'operator_overrides': DistributedOperatorOverrideStore(FileOperatorOverrideDocumentPort(documents)),
+        'idempotency': DistributedIdempotencyStore(
+            cas=SQLiteDistributedCompareAndSwap(database, scope='idempotency_records'),
             sequence=SQLiteDistributedSequenceStore(database),
-            key_prefix="__raw_scoped_key__",
+            key_prefix='__raw_scoped_key__',
         ),
-        "audit": DistributedGovernanceAuditLog(evidence_port, partition_prefix="business_autonomy_audit"),
-        "evidence": DistributedEvidenceStore(evidence_port),
-        "planning_memory": DistributedPlanningMemoryBackend(FilePlanningMemoryDocumentPort(documents)),
-        "registry": DistributedBusinessRegistry(documents=documents),
-        "region_state": SQLiteRegionRouteState(database),
+        'audit': DistributedGovernanceAuditLog(evidence_port, partition_prefix='business_autonomy_audit'),
+        'evidence': DistributedEvidenceStore(evidence_port),
+        'planning_memory': DistributedPlanningMemoryBackend(FilePlanningMemoryDocumentPort(documents)),
+        'registry': DistributedBusinessRegistry(documents=documents),
+        'region_state': SQLiteRegionRouteState(database),
     }
 
 
 def _channel_defaults_for(business_id: str) -> tuple[ChannelKind, str, str, str, dict[str, Any]]:
     normalized = str(business_id).strip().lower()
     security_defaults = {
-        "verified_owner": False,
-        "autonomy_tier": "supervised",
-        "non_ai_mode": NonAiOperatingMode.SUPERVISED.value,
-        "requires_human_approval": True,
+        'verified_owner': False,
+        'autonomy_tier': 'supervised',
+        'non_ai_mode': NonAiOperatingMode.SUPERVISED.value,
+        'requires_human_approval': True,
     }
-    if "site" in normalized or "web" in normalized:
-        return ChannelKind.WEBSITE, "website.default", f"https://{normalized}.example.com", "eu-west-1", {
+    if 'site' in normalized or 'web' in normalized:
+        return ChannelKind.WEBSITE, 'website.default', f'https://{normalized}.example.com', 'eu-west-1', {
             **security_defaults,
-            "action_type": "profile_publish",
+            'action_type': 'profile_publish',
         }
-    if "shop" in normalized or "commerce" in normalized:
-        return ChannelKind.COMMERCE, "commerce.default", f"commerce://{normalized}", "eu-west-1", {
+    if 'shop' in normalized or 'commerce' in normalized:
+        return ChannelKind.COMMERCE, 'commerce.default', f'commerce://{normalized}', 'eu-west-1', {
             **security_defaults,
-            "action_type": "platform_listing_write",
+            'action_type': 'platform_listing_write',
         }
-    if "bot" in normalized:
-        return ChannelKind.CHATBOT, "chatbot.default", f"bot://{normalized}", "eu-west-1", {
+    if 'bot' in normalized:
+        return ChannelKind.CHATBOT, 'chatbot.default', f'bot://{normalized}', 'eu-west-1', {
             **security_defaults,
-            "action_type": "communications_write",
+            'action_type': 'communications_write',
         }
-    return ChannelKind.API_BUSINESS, "api.default", f"api://{normalized}", "eu-west-1", {
+    return ChannelKind.API_BUSINESS, 'api.default', f'api://{normalized}', 'eu-west-1', {
         **security_defaults,
-        "action_type": "internal_execution",
+        'action_type': 'internal_execution',
     }
 
 
@@ -504,44 +517,24 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     capability_registry = RequestTenantCapabilityRegistryView(distributed_registry)
     trust_registry = RequestTenantTrustRegistryView(distributed_registry)
 
-    def ensure_scope_for(
-        *,
-        tenant_id: str,
-        scoped_business_id: str,
-        requested_by: str,
-        envelope_metadata: Mapping[str, Any],
-        allow_registration: bool = False,
-    ) -> None:
-        channel_kind, adapter_key, external_ref, region, security_metadata = _channel_defaults_for(scoped_business_id)
-        metadata = {**dict(envelope_metadata or {}), **security_metadata}
-        globally_bound = distributed_registry.find_unique_by_business_id(scoped_business_id)
-        if globally_bound is not None and globally_bound.tenant_id != tenant_id:
-            raise KeyError(f"cross-tenant business binding forbidden: {tenant_id}:{scoped_business_id}")
+    def ensure_scope_for(*, tenant_id: str, scoped_business_id: str, requested_by: str, envelope_metadata: Mapping[str, Any]) -> None:
+        channel_kind, adapter_key, external_ref, region, metadata = _channel_defaults_for(scoped_business_id)
+        metadata = {**metadata, **dict(envelope_metadata or {})}
         existing = distributed_registry.get(tenant_id, scoped_business_id)
         if existing is None:
-            if not allow_registration:
-                raise KeyError(f"business is not explicitly onboarded for tenant: {tenant_id}:{scoped_business_id}")
-            onboarding_request = BusinessOnboardingRequest(
-                business_id=scoped_business_id,
-                tenant_id=tenant_id,
-                ownership_key=f"owner:{tenant_id}:{scoped_business_id}",
-                region=region,
-                channel_kind=channel_kind,
-                adapter_key=adapter_key,
-                external_ref=external_ref,
-                requested_by=requested_by,
-                metadata=metadata,
-            )
-            onboarding.onboard(onboarding_request)
+            raise KeyError(f'business is not onboarded for tenant: {tenant_id}:{scoped_business_id}')
         ensure_business_route(
             route_state=distributed['region_state'],
             tenant_id=tenant_id,
             business_id=scoped_business_id,
-            primary_region=region,
-            failover_region='us-east-1' if region != 'us-east-1' else 'eu-west-1',
+            primary_region=existing.region or region,
+            failover_region='us-east-1' if (existing.region or region) != 'us-east-1' else 'eu-west-1',
         )
         registry_record = distributed_registry.get(tenant_id, scoped_business_id)
-        assert registry_record is not None
+        if registry_record is None:
+            raise KeyError(f'business registry record missing: {tenant_id}:{scoped_business_id}')
+        if not bool(registry_record.governance_enabled):
+            raise ValueError(f'business governance is not enabled: {tenant_id}:{scoped_business_id}')
         identity = BusinessOnboardingRequest(
             business_id=scoped_business_id,
             tenant_id=tenant_id,
@@ -605,16 +598,29 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
             envelope_metadata=dict(request.envelope.metadata or {}),
         )
 
-    # Admin/read surfaces may ask for capability/trust before the first execution.
-    # Seed is explicit so ordinary execution service construction does not pollute
-    # the canonical distributed registry with tenant-demo records.
     if seed_admin_read_model:
+        tenant_id = 'tenant-demo'
+        scoped_business_id = str(business_id or 'external_business')
+        existing = distributed_registry.get(tenant_id, scoped_business_id)
+        if existing is None:
+            channel_kind, adapter_key, external_ref, region, metadata = _channel_defaults_for(scoped_business_id)
+            onboarding_request = BusinessOnboardingRequest(
+                business_id=scoped_business_id,
+                tenant_id=tenant_id,
+                ownership_key=f'admin-read-model:{tenant_id}:{scoped_business_id}',
+                region=region,
+                channel_kind=channel_kind,
+                adapter_key=adapter_key,
+                external_ref=external_ref,
+                requested_by='platform-admin-read-model',
+                metadata={**metadata, 'admin_read_model_seed': True, 'verified_owner': False},
+            )
+            onboarding.onboard(onboarding_request)
         ensure_scope_for(
-            tenant_id="tenant-demo",
-            scoped_business_id=str(business_id or "external_business"),
-            requested_by="platform",
-            envelope_metadata={"tenant_id": "tenant-demo", "admin_read_model_seed": True},
-            allow_registration=True,
+            tenant_id=tenant_id,
+            scoped_business_id=scoped_business_id,
+            requested_by='platform-admin-read-model',
+            envelope_metadata={'tenant_id': tenant_id, 'admin_read_model_seed': True},
         )
 
     autonomy_service = BusinessAutonomyService(
@@ -659,11 +665,9 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
 
 
 def _tenant_id_from_request(request: BusinessExecutionRequest) -> str:
-    raw = str(request.envelope.metadata.get("tenant_id") or "").strip()
-    if not raw:
-        raise ValueError("tenant_id is required for business autonomy execution")
-    if raw == "global":
-        raise ValueError("global tenant is forbidden for business autonomy execution")
+    raw = str(request.envelope.metadata.get('tenant_id') or '').strip()
+    if not raw or raw == 'global':
+        raise ValueError('tenant_id is required and global fallback is forbidden')
     return raw
 
 
