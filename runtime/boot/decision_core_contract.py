@@ -5,12 +5,12 @@ from __future__ import annotations
 from bootstrap.decision_core_contract import (
     CANON_RUNTIME_DECISION_CORE_SINGLE_CONTRACT,
     RUNTIME_DECISION_CORE_COMPAT_METHODS,
+    RUNTIME_DECISION_CORE_CONTRACT_VERSION,
     RuntimeDecisionCorePort,
     RuntimeDecisionIssuePort,
     RuntimeDecisionOptimizePort,
 )
 
-RUNTIME_DECISION_CORE_CONTRACT_VERSION = "1.0"
 CANON_RUNTIME_DECISION_CORE_CONTRACT = True
 CANON_RUNTIME_DECISION_CORE_CONTRACT_REEXPORT = True
 
