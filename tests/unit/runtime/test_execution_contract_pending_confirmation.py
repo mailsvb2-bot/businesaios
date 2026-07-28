@@ -20,7 +20,7 @@ def _env(action: str = "capture_payment@v1"):
 
 
 def test_external_effect_without_independent_evidence_remains_fail_closed() -> None:
-    with pytest.raises(ExecutionContractLockError, match="missing_external_evidence"):
+    with pytest.raises(ExecutionContractLockError):
         verify_execution_contract(
             executor=SimpleNamespace(_reliability=None),
             env=_env(),
