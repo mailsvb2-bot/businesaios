@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult, ExecutionVerdict
+from application.business_autonomy.execution_subject import scoped_business_idempotency_token
 from application.business_autonomy.guards import (
     ApprovalStatus,
     BusinessApprovalGate,
@@ -211,6 +212,15 @@ class BusinessAutonomyGuardedService:
                 message="An execution with this idempotency key is already in progress.",
                 metadata={"idempotency_status": reservation.status.value},
             )
+        if reservation.status == BusinessIdempotencyReservationStatus.SCOPE_MISMATCH:
+            return BusinessExecutionResult(
+                verdict=ExecutionVerdict.REJECTED,
+                business_id=effective_request.envelope.business_id,
+                goal_id=effective_request.envelope.goal_id,
+                execution_id=effective_request.correlation_id,
+                message="The idempotency key was reused with a different canonical execution subject.",
+                metadata={"idempotency_status": reservation.status.value},
+            )
         if reservation.status != BusinessIdempotencyReservationStatus.ACCEPTED:
             return BusinessExecutionResult(
                 verdict=ExecutionVerdict.REJECTED,
@@ -343,10 +353,7 @@ def _cache_terminal_result(idempotency_store: BusinessIdempotencyStore, key: str
 
 
 def _scoped_idempotency_key(request: BusinessExecutionRequest) -> str:
-    tenant_id = str(request.envelope.metadata.get("tenant_id") or "global").strip() or "global"
-    business_id = str(request.envelope.business_id or "unknown").strip() or "unknown"
-    raw_key = str(request.idempotency_key or request.correlation_id).strip() or str(request.correlation_id)
-    return f"{tenant_id}:{business_id}:{raw_key}"
+    return scoped_business_idempotency_token(request)
 
 
 def _distributed_append_dir() -> Path:

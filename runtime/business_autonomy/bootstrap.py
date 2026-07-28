@@ -522,7 +522,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         metadata = {**metadata, **dict(envelope_metadata or {})}
         existing = distributed_registry.get(tenant_id, scoped_business_id)
         if existing is None:
-            raise KeyError(f'business is not onboarded for tenant: {tenant_id}:{scoped_business_id}')
+            raise KeyError(f'business is not explicitly onboarded for tenant: {tenant_id}:{scoped_business_id}')
         ensure_business_route(
             route_state=distributed['region_state'],
             tenant_id=tenant_id,

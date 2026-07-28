@@ -15,6 +15,12 @@ from application.business_autonomy.contracts import (
     CapabilityKind,
     ExecutionVerdict,
 )
+from application.business_autonomy.execution_subject import (
+    approval_subject_metadata,
+    business_execution_approval_id,
+    business_execution_fingerprint,
+    parse_business_idempotency_token,
+)
 from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
 from application.planning.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
 from application.planning.long_horizon_planner import LongHorizonPlanner
@@ -181,12 +187,14 @@ class PersistentBusinessAutonomyIdempotencyStore:
 
     @staticmethod
     def _idem_key(raw_key: str):
+        stable_key, subject_fingerprint = parse_business_idempotency_token(raw_key)
+        tenant_id = stable_key.split(":", 1)[0]
         return build_idempotency_key(
-            tenant_id="global",
+            tenant_id=tenant_id,
             namespace="business_autonomy",
             operation="execute",
-            key=str(raw_key),
-            semantic_scope={"business_autonomy_key": str(raw_key)},
+            key=stable_key,
+            semantic_scope={"execution_subject_fingerprint": subject_fingerprint},
         )
 
 
@@ -455,7 +463,8 @@ class PersistentBusinessApprovalGate:
         tenant_id = str(metadata.get("tenant_id") or "").strip()
         if not tenant_id or tenant_id == "global":
             return GateDecision(GateStatus.REJECTED, "Canonical approval requires an explicit tenant.")
-        approval_id = str(metadata.get("approval_id") or f"business-autonomy:{request.envelope.business_id}:{request.envelope.goal_id}")
+        approval_id = business_execution_approval_id(request)
+        subject_fingerprint = business_execution_fingerprint(request)
         existing = self._store.get(approval_id)
         if existing is None:
             approval_request = ApprovalRequest(
@@ -465,11 +474,7 @@ class PersistentBusinessApprovalGate:
                 subject_id=str(request.envelope.goal_id),
                 requested_by=str(request.envelope.requested_by or "platform"),
                 reason=str(metadata.get("approval_reason") or "Business autonomy execution requires approval."),
-                metadata={
-                    "business_id": request.envelope.business_id,
-                    "goal_id": request.envelope.goal_id,
-                    "goal_type": request.envelope.goal_type,
-                },
+                metadata=dict(approval_subject_metadata(request)),
             )
             try:
                 existing = self._store.create(approval_request)
@@ -479,11 +484,14 @@ class PersistentBusinessApprovalGate:
         if existing is None:
             return GateDecision(GateStatus.PENDING, "Approval request could not be resolved.")
         bound_business_id = str(existing.request.metadata.get("business_id") or "")
+        bound_fingerprint = str(existing.request.metadata.get("subject_fingerprint") or "")
         if (
-            existing.request.tenant_id != tenant_id
+            existing.request.approval_id != approval_id
+            or existing.request.tenant_id != tenant_id
             or existing.request.subject_type != "business_autonomy_execution"
             or existing.request.subject_id != str(request.envelope.goal_id)
             or bound_business_id != str(request.envelope.business_id)
+            or bound_fingerprint != subject_fingerprint
         ):
             return GateDecision(GateStatus.REJECTED, "Approval binding mismatch.")
         if existing.status is ApprovalStatus.APPROVED:

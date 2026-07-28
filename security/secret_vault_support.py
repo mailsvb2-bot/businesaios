@@ -4,7 +4,7 @@ from pathlib import Path
 
 from security import secret_vault as _canonical
 from security.encryption_policy import EncryptionPolicy
-from security.key_provider import InMemoryKeyProvider, KeyProvider
+from security.key_provider import FileKeyProvider, InMemoryKeyProvider, KeyProvider
 from security.secret_contract import (
     SecretRecord,
     SecretRef,
@@ -99,7 +99,10 @@ class FileSecretVaultMixin(InMemorySecretVaultMixin):
     ) -> None:
         self._root_dir = Path(root_dir)
         self._root_dir.mkdir(parents=True, exist_ok=True)
-        super().__init__(policy=policy, key_provider=key_provider)
+        resolved_key_provider = key_provider or FileKeyProvider(
+            path=self._root_dir / "key_provider.json"
+        )
+        super().__init__(policy=policy, key_provider=resolved_key_provider)
         self._load_records()
 
     def put(

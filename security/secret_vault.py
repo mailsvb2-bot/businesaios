@@ -14,6 +14,7 @@ from pathlib import Path
 from security.encryption_policy import EncryptionAlgorithm, EncryptionPolicy
 from security.key_management_contract import KeyPurpose
 from security.key_provider import (
+    FileKeyProvider,
     InMemoryKeyProvider,
     KeyProvider,
     build_default_key_provider,
@@ -218,6 +219,18 @@ def _parse_datetime(value: object) -> datetime | None:
     if value is None:
         return None
     return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+
+
+def _serialize_key_record(record) -> dict[str, object]:
+    from security.key_provider import _serialize_record
+
+    return _serialize_record(record)
+
+
+def _deserialize_key_record(payload: dict[str, object]):
+    from security.key_provider import _deserialize_record
+
+    return _deserialize_record(payload)
 
 
 def _deserialize_secret_record(payload: dict[str, object]) -> SecretRecord:
@@ -468,7 +481,10 @@ class FileSecretVault(InMemorySecretVault):
     ) -> None:
         self._root_dir = Path(root_dir)
         self._root_dir.mkdir(parents=True, exist_ok=True)
-        super().__init__(policy=policy, key_provider=key_provider)
+        resolved_key_provider = key_provider or FileKeyProvider(
+            path=self._root_dir / "key_provider.json"
+        )
+        super().__init__(policy=policy, key_provider=resolved_key_provider)
         self._load_records()
 
     def put(

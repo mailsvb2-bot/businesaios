@@ -6,6 +6,7 @@ from enum import Enum
 from threading import RLock
 
 from application.business_autonomy.contracts import BusinessExecutionRequest
+from application.business_autonomy.execution_subject import parse_business_idempotency_token
 from application.business_autonomy.safety_core import SafetyRuntimePolicy, validate_blast_radius, validate_budget
 
 
@@ -170,6 +171,7 @@ class BusinessIdempotencyReservationStatus(str, Enum):
     REPLAY_COMPLETED = "replay_completed"
     IN_PROGRESS = "in_progress"
     TERMINAL_FAILED = "terminal_failed"
+    SCOPE_MISMATCH = "scope_mismatch"
 
 
 @dataclass(frozen=True)
@@ -182,36 +184,50 @@ class BusinessIdempotencyReservation:
 class _BusinessIdempotencyRecord:
     owner_id: str
     state: str
+    scope_fingerprint: str
     payload: object | None = None
     failure_reason: str | None = None
 
 
 class BusinessIdempotencyStore:
-    """Process-local compatibility store with reserve-before-effect semantics."""
+    """Process-local compatibility store with subject-bound reserve-before-effect semantics."""
 
     def __init__(self) -> None:
         self._items: dict[str, _BusinessIdempotencyRecord] = {}
         self._lock = RLock()
 
+    @staticmethod
+    def _parts(key: str) -> tuple[str, str]:
+        return parse_business_idempotency_token(key)
+
     def get(self, key: str):
+        stable_key, scope_fingerprint = self._parts(key)
         with self._lock:
-            record = self._items.get(str(key))
-            if record is None or record.state != "completed":
+            record = self._items.get(stable_key)
+            if (
+                record is None
+                or record.scope_fingerprint != scope_fingerprint
+                or record.state != "completed"
+            ):
                 return None
             return record.payload
 
     def reserve(self, key: str, *, owner_id: str) -> BusinessIdempotencyReservation:
-        normalized_key = str(key).strip()
+        stable_key, scope_fingerprint = self._parts(key)
         normalized_owner = str(owner_id).strip()
-        if not normalized_key:
-            raise ValueError("idempotency key is required")
         if not normalized_owner:
             raise ValueError("idempotency owner is required")
         with self._lock:
-            current = self._items.get(normalized_key)
+            current = self._items.get(stable_key)
             if current is None:
-                self._items[normalized_key] = _BusinessIdempotencyRecord(owner_id=normalized_owner, state="in_progress")
+                self._items[stable_key] = _BusinessIdempotencyRecord(
+                    owner_id=normalized_owner,
+                    state="in_progress",
+                    scope_fingerprint=scope_fingerprint,
+                )
                 return BusinessIdempotencyReservation(BusinessIdempotencyReservationStatus.ACCEPTED)
+            if current.scope_fingerprint != scope_fingerprint:
+                return BusinessIdempotencyReservation(BusinessIdempotencyReservationStatus.SCOPE_MISMATCH)
             if current.state == "completed":
                 return BusinessIdempotencyReservation(BusinessIdempotencyReservationStatus.REPLAY_COMPLETED, current.payload)
             if current.state == "failed":
@@ -219,33 +235,44 @@ class BusinessIdempotencyStore:
             return BusinessIdempotencyReservation(BusinessIdempotencyReservationStatus.IN_PROGRESS)
 
     def complete(self, key: str, *, owner_id: str, payload: object) -> None:
+        stable_key, scope_fingerprint = self._parts(key)
         with self._lock:
-            current = self._items.get(str(key))
-            if current is None or current.owner_id != str(owner_id) or current.state != "in_progress":
-                raise ValueError("idempotency reservation ownership mismatch")
+            current = self._items.get(stable_key)
+            if (
+                current is None
+                or current.owner_id != str(owner_id)
+                or current.state != "in_progress"
+                or current.scope_fingerprint != scope_fingerprint
+            ):
+                raise ValueError("idempotency reservation ownership or scope mismatch")
             current.state = "completed"
             current.payload = payload
             current.failure_reason = None
 
     def fail(self, key: str, *, owner_id: str, reason: str) -> None:
+        stable_key, scope_fingerprint = self._parts(key)
         with self._lock:
-            current = self._items.get(str(key))
-            if current is None or current.owner_id != str(owner_id) or current.state != "in_progress":
-                raise ValueError("idempotency reservation ownership mismatch")
+            current = self._items.get(stable_key)
+            if (
+                current is None
+                or current.owner_id != str(owner_id)
+                or current.state != "in_progress"
+                or current.scope_fingerprint != scope_fingerprint
+            ):
+                raise ValueError("idempotency reservation ownership or scope mismatch")
             current.state = "failed"
             current.failure_reason = str(reason)
 
     def put(self, key: str, payload: object) -> None:
-        """Compatibility terminal cache for a rejection that occurred before effects."""
-        normalized_key = str(key).strip()
-        if not normalized_key:
-            raise ValueError("idempotency key is required")
+        """Compatibility terminal cache for a rejection produced before effects."""
+        stable_key, scope_fingerprint = self._parts(key)
         with self._lock:
-            current = self._items.get(normalized_key)
+            current = self._items.get(stable_key)
             if current is None:
-                self._items[normalized_key] = _BusinessIdempotencyRecord(
+                self._items[stable_key] = _BusinessIdempotencyRecord(
                     owner_id="compatibility-cache",
                     state="completed",
+                    scope_fingerprint=scope_fingerprint,
                     payload=payload,
                 )
 
