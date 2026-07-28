@@ -4,20 +4,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Mapping
 
-from registry.base_registry import BaseRegistry
+from registry.base_registry import BaseRegistry, RegistryBackend
 
 
 CANON_CLIENT_OUTCOME_LIFECYCLE_STORE = True
 
 
 class ClientOutcomeLifecycleStore(BaseRegistry):
-    """
-    Auditable lifecycle state owner for a client-outcome lead.
-    One row per (order_id, lead_id) with append-like stage updates.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(kind='client_outcome_lifecycle')
+    def __init__(self, *, backend: RegistryBackend | None = None) -> None:
+        super().__init__(kind='client_outcome_lifecycle', backend=backend)
 
     @staticmethod
     def make_key(*, order_id: str, lead_id: str) -> str:
@@ -51,10 +46,7 @@ class ClientOutcomeLifecycleStore(BaseRegistry):
             'stages': {},
         }
         stages = dict(current.get('stages') or {})
-        stages[str(stage_name)] = {
-            'at': now.isoformat(),
-            'payload': dict(stage_payload),
-        }
+        stages[str(stage_name)] = {'at': now.isoformat(), 'payload': dict(stage_payload)}
         current['stages'] = stages
         current['updated_at'] = now.isoformat()
         self.register(key, current)

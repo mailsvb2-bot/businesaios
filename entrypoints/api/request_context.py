@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ipaddress
+import os
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 from uuid import uuid4
@@ -10,6 +12,7 @@ from tenancy.tenant_context import TenantRequestContext
 
 
 CANON_REQUEST_CONTEXT = True
+CANON_TRUSTED_PROXY_BOUNDARY = True
 
 
 @dataclass(frozen=True)
@@ -117,18 +120,15 @@ class RequestContext:
             scopes = tuple(part for part in scopes_raw.replace(',', ' ').split() if part)
         else:
             scopes = tuple(str(item) for item in scopes_raw)
-        forwarded_for = str(normalized_headers.get('x-forwarded-for') or '').split(',')[0].strip() or None
         return cls(
             request_id=_first_header(normalized_headers, 'x-request-id', 'request-id'),
             correlation_id=_first_header(normalized_headers, 'x-correlation-id', 'correlation-id'),
-            tenant_id=_normalized_optional_tenant(
-                _first_header(normalized_headers, 'x-tenant-id', 'tenant-id')
-            ),
+            tenant_id=_normalized_optional_tenant(_first_header(normalized_headers, 'x-tenant-id', 'tenant-id')),
             actor_id=_first_header(normalized_headers, 'x-actor-id', 'actor-id', 'x-user-id'),
             session_id=_first_header(normalized_headers, 'x-session-id', 'session-id'),
             subject=_first_header(normalized_headers, 'x-auth-subject', 'x-subject'),
             audience=_first_header(normalized_headers, 'x-auth-audience', 'x-audience'),
-            ip_address=forwarded_for or _first_header(normalized_headers, 'x-real-ip'),
+            ip_address=None,
             user_agent=_first_header(normalized_headers, 'user-agent'),
             token_scopes=scopes,
             metadata=dict(metadata or {}),
@@ -140,11 +140,26 @@ class RequestContext:
         url = getattr(request, 'url', None)
         client = getattr(request, 'client', None)
         header_get = getattr(request_headers, 'get', lambda *_: None)
-        forwarded_proto = str(header_get('x-forwarded-proto') or header_get('x-forwarded-protocol') or '').split(',')[0].strip().lower()
-        scheme = forwarded_proto or str(getattr(url, 'scheme', '') or '').strip().lower()
+        peer_ip = str(getattr(client, 'host', '') or '').strip() or None
+        forwarded_headers_trusted = _forwarded_headers_trusted(peer_ip)
+
+        direct_scheme = str(getattr(url, 'scheme', '') or '').strip().lower()
+        forwarded_proto = ''
+        forwarded_for = ''
+        if forwarded_headers_trusted:
+            forwarded_proto = str(
+                header_get('x-forwarded-proto') or header_get('x-forwarded-protocol') or ''
+            ).split(',')[0].strip().lower()
+            forwarded_for = str(header_get('x-forwarded-for') or '').split(',')[0].strip()
+        scheme = forwarded_proto or direct_scheme
+        client_ip = forwarded_for or peer_ip
+
         merged_metadata = {
-            'scheme': scheme or getattr(url, 'scheme', None),
+            **dict(metadata or {}),
+            'scheme': scheme or None,
             'transport_encrypted': scheme == 'https',
+            'peer_ip': peer_ip,
+            'forwarded_headers_trusted': forwarded_headers_trusted,
             'method': getattr(request, 'method', None),
             'path': getattr(url, 'path', None),
             'idempotency_key': header_get('x-idempotency-key') or header_get('idempotency-key'),
@@ -152,14 +167,8 @@ class RequestContext:
             'request_nonce': header_get('x-request-nonce') or header_get('request-nonce'),
             'request_rate': header_get('x-request-rate'),
             'region_hint': header_get('x-region-hint'),
-            **dict(metadata or {}),
         }
         context = cls.from_headers(request_headers, metadata=merged_metadata)
-        if context.ip_address:
-            return context
-        client_host = getattr(client, 'host', None) if client is not None else None
-        if client_host is None:
-            return context
         return RequestContext(
             request_id=context.request_id,
             correlation_id=context.correlation_id,
@@ -168,7 +177,7 @@ class RequestContext:
             session_id=context.session_id,
             subject=context.subject,
             audience=context.audience,
-            ip_address=str(client_host),
+            ip_address=client_ip,
             user_agent=context.user_agent,
             token_scopes=context.token_scopes,
             metadata=dict(context.metadata),
@@ -186,3 +195,41 @@ def _first_header(headers: Mapping[str, Any], *names: str) -> str | None:
 def _normalized_optional_tenant(value: Any) -> str | None:
     normalized = normalize_tenant_id(value)
     return normalized or None
+
+
+def _env_true(name: str) -> bool:
+    return str(os.getenv(name, '') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _trusted_proxy_networks() -> tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...]:
+    raw = str(os.getenv('BUSINESAIOS_TRUSTED_PROXY_IPS', '') or '')
+    result: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+    for item in raw.replace(';', ',').split(','):
+        text = item.strip()
+        if not text:
+            continue
+        try:
+            result.append(ipaddress.ip_network(text, strict=False))
+        except ValueError:
+            continue
+    return tuple(result)
+
+
+def _forwarded_headers_trusted(peer_ip: str | None) -> bool:
+    if not _env_true('BUSINESAIOS_TRUST_PROXY_HEADERS'):
+        return False
+    text = str(peer_ip or '').strip()
+    if not text:
+        return False
+    try:
+        address = ipaddress.ip_address(text)
+    except ValueError:
+        return False
+    return any(address in network for network in _trusted_proxy_networks())
+
+
+__all__ = [
+    'CANON_REQUEST_CONTEXT',
+    'CANON_TRUSTED_PROXY_BOUNDARY',
+    'RequestContext',
+]

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+from entrypoints.api.auth_contract import AuthPrincipal
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
+from governance.rbac_contract import RoleId
 
 
 class AllowingAdapter:
@@ -26,12 +28,25 @@ def _context(**metadata):
     )
 
 
+def _principal(*, tenant_id: str = "tenant-a") -> AuthPrincipal:
+    return AuthPrincipal(
+        subject="operator-a",
+        tenant_id=tenant_id,
+        actor_id="operator-a",
+        roles=(RoleId.OWNER,),
+        scopes=("api.public.execute_action",),
+        audience="public-api",
+        metadata={"auth_type": "jwt"},
+    )
+
+
 def test_internal_write_requires_external_perimeter_proof() -> None:
     with pytest.raises(PermissionError, match="api_perimeter_auth_required"):
         _guard().enforce(
             route_path="/actions/execute",
             request_context=_context(),
             body={"tenant_id": "tenant-a", "idempotency_key": "idem-1", "action_type": "noop@v1"},
+            principal=_principal(),
         )
 
 
@@ -41,6 +56,7 @@ def test_internal_write_requires_tenant_isolation() -> None:
             route_path="/actions/execute",
             request_context=_context(jwt_verified=True),
             body={"tenant_id": "tenant-b", "idempotency_key": "idem-1", "action_type": "noop@v1"},
+            principal=_principal(),
         )
 
 
@@ -57,6 +73,7 @@ def test_internal_write_requires_replay_marker() -> None:
             route_path="/actions/execute",
             request_context=context,
             body={"tenant_id": "tenant-a", "action_type": "noop@v1"},
+            principal=_principal(),
         )
 
 
@@ -66,6 +83,7 @@ def test_internal_write_does_not_accept_request_id_as_replay_proof() -> None:
             route_path="/actions/execute",
             request_context=_context(jwt_verified=True),
             body={"tenant_id": "tenant-a", "request_id": "req-only", "action_type": "noop@v1"},
+            principal=_principal(),
         )
 
 
@@ -74,6 +92,7 @@ def test_internal_write_passes_with_perimeter_tenant_and_replay_marker() -> None
         route_path="/actions/execute",
         request_context=_context(jwt_verified=True),
         body={"tenant_id": "tenant-a", "idempotency_key": "idem-1", "action_type": "noop@v1"},
+        principal=_principal(),
     )
 
     assert verdict["allowed"] is True
@@ -84,6 +103,7 @@ def test_internal_write_accepts_metadata_replay_nonce() -> None:
         route_path="/goals/execute",
         request_context=_context(jwt_verified=True, replay_nonce="nonce-1"),
         body={"tenant_id": "tenant-a", "goal": "smoke"},
+        principal=_principal(),
     )
 
     assert verdict["allowed"] is True

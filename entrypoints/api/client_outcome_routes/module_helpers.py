@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from billing.client_outcome_reversal_contract import ClientOutcomeReversalRecord
 from billing.client_outcome_revenue_control_service import ClientOutcomeRevenueControlService
 from entrypoints.api.client_outcome_cycle_models import ClientOutcomeRevenueResponse
 from entrypoints.api.client_outcome_dispute_models import ClientOutcomeBillableRecordInput
@@ -118,3 +117,24 @@ def _order_from_input(order) -> ClientOutcomeOrder:
         created_at=datetime.fromisoformat(order.created_at),
         metadata={},
     )
+
+
+def _require_order_tenant(
+    handlers,
+    *,
+    order_id: str,
+    tenant_id: str | None = None,
+) -> ClientOutcomeOrder:
+    """Load an order and enforce tenant ownership when crossing a tenant boundary.
+
+    HTTP routes always pass the authenticated tenant explicitly. Trusted in-process
+    domain callers may omit it and receive the order's persisted tenant context,
+    preserving the historical Python API without weakening the public boundary.
+    """
+
+    order = handlers.selection_service.get_order(str(order_id))
+    if order is None:
+        raise KeyError(str(order_id))
+    if tenant_id is not None and str(order.tenant_id).strip() != str(tenant_id).strip():
+        raise PermissionError('client_outcome_order_tenant_mismatch')
+    return order

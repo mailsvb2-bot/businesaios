@@ -40,7 +40,7 @@ def test_session_store_fail_closed_when_timestamps_missing() -> None:
     assert result['payload']['security']['tenant']['bound'] is False
 
 
-def test_request_context_from_headers_and_redaction() -> None:
+def test_request_context_from_headers_does_not_trust_forwarded_identity() -> None:
     ctx = RequestContext.from_headers(
         {
             'X-Request-Id': 'req-1',
@@ -55,7 +55,8 @@ def test_request_context_from_headers_and_redaction() -> None:
     redacted = ctx.redacted_dict(redactor=PayloadRedactor())
     assert redacted['request_id'] == 'req-1'
     assert redacted['metadata']['email'] == '<redacted>'
-    assert redacted['ip_address'] == '<redacted>'
+    assert ctx.ip_address is None
+    assert redacted['ip_address'] is None
     assert ctx.tenant_context(required=True).tenant_id == 'tenant-1'
 
 

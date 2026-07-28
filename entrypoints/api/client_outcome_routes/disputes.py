@@ -1,110 +1,25 @@
 from __future__ import annotations
 
-"""Extracted owner logic for ClientOutcomeRouteHandlers."""
+from datetime import datetime
 
-from datetime import datetime, timezone
-
-from admin.client_outcome_control_plane_service import ClientOutcomeControlPlaneService
-from application.headless.client_outcome_request_enricher import ClientOutcomeRequestEnricher
-from billing.client_outcome_billable_cap_policy import ClientOutcomeBillableCapPolicy
-from billing.client_outcome_dispute_service import ClientOutcomeDisputeService
-from billing.client_outcome_dispute_store import ClientOutcomeDisputeStore, ClientOutcomeReversalStore
-from billing.client_outcome_invoice_aggregator import ClientOutcomeInvoiceAggregator
-from billing.client_outcome_negative_usage_builder import ClientOutcomeNegativeUsageBuilder
-from billing.client_outcome_package_progress import ClientOutcomePackageProgressCalculator
-from billing.client_outcome_refund_projection import ClientOutcomeRefundProjection
-from billing.client_outcome_refund_request_bridge import ClientOutcomeRefundRequestBridge
-from billing.client_outcome_refund_window_policy import ClientOutcomeRefundWindowPolicy
-from billing.client_outcome_revenue_control_service import ClientOutcomeRevenueControlService
 from billing.client_outcome_reversal_contract import ClientOutcomeReversalRecord
-from billing.client_outcome_reversal_ledger_bridge import ClientOutcomeReversalLedgerBridge
-from billing.client_outcome_reversal_posting_service import ClientOutcomeReversalPostingService
-from billing.client_outcome_usage_ledger import ClientOutcomeUsageAppender, ClientOutcomeUsageLedger
-from billing.ledger_store import InMemoryLedgerStore
-from economics.client_outcome_economic_calculator import ClientOutcomeEconomicCalculator
-from economics.client_outcome_economic_snapshot import ClientOutcomeEconomicSnapshot
-from entrypoints.api.client_outcome_admin_models import ClientOutcomeAdminSummaryRequest, ClientOutcomeAdminSummaryResponse
-from entrypoints.api.client_outcome_admin_view_models import ClientOutcomeAdminViewResponse
-from entrypoints.api.client_outcome_commercial_state_models import ClientOutcomeCommercialStateResponse
-from entrypoints.api.client_outcome_corrected_economics_models import ClientOutcomeCorrectedEconomicsResponse
-from entrypoints.api.client_outcome_reconciliation_models import ClientOutcomeReconciliationResponse
-from entrypoints.api.client_outcome_cycle_models import (
-    ClientOutcomeRevenueResponse,
-    ClientOutcomeVerificationResponse,
-    ExecuteClientOutcomeCycleRequest,
-    ExecuteClientOutcomeCycleResponse,
-)
 from entrypoints.api.client_outcome_dispute_models import (
-    ClientOutcomeBillableRecordInput,
     ClientOutcomeDisputeResponse,
     ClientOutcomeReversalResponse,
     OpenClientOutcomeDisputeRequest,
     ReverseClientOutcomeDisputeRequest,
 )
-from entrypoints.api.client_outcome_lifecycle_models import ClientOutcomeLifecycleResponse
-from entrypoints.api.client_outcome_models import (
-    AmendClientOutcomeOrderRequest,
-    ClientOutcomeExecuteResponse,
-    ClientOutcomeOrderAmendResponse,
-    ClientOutcomeOrderLookupResponse,
-    ClientOutcomeOrderResponse,
-    ClientOutcomePackageResponse,
-    SelectClientOutcomePackageRequest,
-)
-from lead_outcomes import OutcomeVerifier
-from lead_outcomes.client_attribution_policy import ClientAttributionPolicy
-from lead_outcomes.client_eligibility_policy import ClientEligibilityPolicy
-from lead_outcomes.client_fraud_policy import ClientFraudPolicy
-from lead_outcomes.client_outcome_commercial_state_store import (
-    ClientOutcomeCommercialStateService,
-    ClientOutcomeCommercialStateStore,
-)
-from lead_outcomes.client_outcome_contract import (
-    BillableClientRecord,
-    ClientOutcomeOrder,
-    ClientOutcomePackage,
-    ClientProofEvent,
-    OutcomeLead,
-)
-from lead_outcomes.client_outcome_corrected_economics_store import (
-    ClientOutcomeCorrectedEconomicsService,
-    ClientOutcomeCorrectedEconomicsStore,
-)
-from lead_outcomes.client_outcome_reconciliation_service import ClientOutcomeReconciliationService
-from lead_outcomes.client_outcome_cycle_idempotency_store import (
-    ClientOutcomeCycleIdempotencyService,
-    ClientOutcomeCycleIdempotencyStore,
-)
-from lead_outcomes.client_outcome_lifecycle_store import (
-    ClientOutcomeLifecyclePersistenceService,
-    ClientOutcomeLifecycleStore,
-)
-from lead_outcomes.client_outcome_order_factory import ClientOutcomeOrderFactory
-from lead_outcomes.client_outcome_order_store import ClientOutcomeOrderPersistenceService, ClientOutcomeOrderStore
-from lead_outcomes.client_outcome_package_catalog import ClientOutcomePackageCatalog
-from lead_outcomes.client_outcome_registry import ClientOutcomeRegistry
-from lead_outcomes.client_outcome_selection_service import ClientOutcomeSelectionInput, ClientOutcomeSelectionService
-from lead_outcomes.client_outcome_service import ClientOutcomeService
-from lead_outcomes.client_verification_service import ClientVerificationService
-from registry.base_registry import BaseRegistry
-from observability.slo_contract import SLIKind
-from observability.tenant_metrics_registry import MetricAggregation, TenantMetricsRegistry
-from runtime.economic_core.client_outcome_bridge import build_client_outcome_truth_snapshot
-from runtime.export.client_outcome_export import export_client_outcome_truth_snapshot, verify_client_outcome_truth_export
+from entrypoints.api.client_outcome_routes.module_helpers import _billable_record_from_input, _require_order_tenant
 
 
-from entrypoints.api.client_outcome_routes.module_helpers import (
-    _billable_record_from_input,
-    _billable_record_payload,
-    _merge_billable_record_metadata,
-    _order_from_input,
-    _order_from_response,
-    _present_order,
-    _revenue_payload,
-)
-
-def open_dispute(handlers, *, now: datetime, request: OpenClientOutcomeDisputeRequest) -> ClientOutcomeDisputeResponse:
+def open_dispute(handlers, *, now: datetime, request: OpenClientOutcomeDisputeRequest, tenant_id: str) -> ClientOutcomeDisputeResponse:
+    order = _require_order_tenant(handlers, order_id=request.order_id, tenant_id=tenant_id)
     record = _billable_record_from_input(request.record)
+    expected = (str(tenant_id), str(order.business_id), str(order.order_id), str(request.lead_id))
+    actual = (str(request.tenant_id), str(request.business_id), str(request.order_id), str(record.lead_id))
+    record_scope = (str(record.tenant_id), str(record.business_id), str(record.order_id), str(record.lead_id))
+    if actual != expected or record_scope != expected:
+        raise PermissionError('client_outcome_dispute_scope_mismatch')
     case = handlers.dispute_service.open_dispute(
         now=now,
         tenant_id=request.tenant_id,
@@ -129,11 +44,24 @@ def open_dispute(handlers, *, now: datetime, request: OpenClientOutcomeDisputeRe
         evidence_fingerprint=str(meta.get('evidence_fingerprint') or ''),
     )
 
-def reverse_dispute(handlers, *, now: datetime, request: ReverseClientOutcomeDisputeRequest) -> ClientOutcomeReversalResponse:
+
+def reverse_dispute(handlers, *, now: datetime, request: ReverseClientOutcomeDisputeRequest, tenant_id: str) -> ClientOutcomeReversalResponse:
     case = handlers.dispute_service.get_case(request.dispute_id)
     if case is None:
         raise KeyError(request.dispute_id)
+    _require_order_tenant(handlers, order_id=case.order_id, tenant_id=tenant_id)
+    if str(case.tenant_id).strip() != str(tenant_id).strip():
+        raise PermissionError('client_outcome_dispute_tenant_mismatch')
     original_record = _billable_record_from_input(request.record)
+    case_scope = (
+        str(case.tenant_id), str(case.business_id), str(case.order_id), str(case.lead_id), str(case.billable_record_id)
+    )
+    record_scope = (
+        str(original_record.tenant_id), str(original_record.business_id), str(original_record.order_id),
+        str(original_record.lead_id), str(original_record.record_id)
+    )
+    if record_scope != case_scope:
+        raise PermissionError('client_outcome_reversal_scope_mismatch')
     result = handlers.dispute_service.accept_and_reverse(
         now=now,
         case=case,
@@ -167,7 +95,11 @@ def reverse_dispute(handlers, *, now: datetime, request: ReverseClientOutcomeDis
         metadata={'source': 'reverse_dispute'},
     )
     posting_result = handlers.reversal_posting_service.append_reversal(reversal=reversal, booked_at=now)
-    refund_preview = handlers.refund_projection.build_preview(original_record=original_record, reversal=reversal, user_id=case.opened_by)
+    refund_preview = handlers.refund_projection.build_preview(
+        original_record=original_record,
+        reversal=reversal,
+        user_id=case.opened_by,
+    )
     return ClientOutcomeReversalResponse(
         dispute_id=case.dispute_id,
         status=result.dispute.status,

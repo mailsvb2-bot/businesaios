@@ -4,21 +4,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Mapping
 
-from registry.base_registry import BaseRegistry
+from registry.base_registry import BaseRegistry, RegistryBackend
 
 
 CANON_CLIENT_OUTCOME_COMMERCIAL_STATE_STORE = True
 
 
 class ClientOutcomeCommercialStateStore(BaseRegistry):
-    """
-    Owner read/write surface for commercial truth of a client-outcome lead.
-    One row per (order_id, lead_id). This complements lifecycle history with
-    normalized current-state snapshots for verification/billing/dispute/reversal/economics.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(kind='client_outcome_commercial_state')
+    def __init__(self, *, backend: RegistryBackend | None = None) -> None:
+        super().__init__(kind='client_outcome_commercial_state', backend=backend)
 
     @staticmethod
     def make_key(*, order_id: str, lead_id: str) -> str:
@@ -32,12 +26,11 @@ class ClientOutcomeCommercialStateStore(BaseRegistry):
             return None
         return dict(row) if isinstance(row, Mapping) else None
 
-
     def get_latest_order_state(self, *, order_id: str) -> dict[str, Any] | None:
         order_prefix = f'{str(order_id).strip()}::'
         latest: dict[str, Any] | None = None
         latest_updated_at = ''
-        for key, row in getattr(self, '_items', {}).items():
+        for key, row in self.items():
             if not str(key).startswith(order_prefix):
                 continue
             payload = dict(row) if isinstance(row, Mapping) else None
@@ -77,54 +70,24 @@ class ClientOutcomeCommercialStateStore(BaseRegistry):
 class ClientOutcomeCommercialStateService:
     store: ClientOutcomeCommercialStateStore
 
-    def record_selected_execution(
-        self,
-        *,
-        order_id: str,
-        lead_id: str,
-        now: datetime,
-        order_payload: Mapping[str, object],
-        execution_payload: Mapping[str, object],
-    ) -> dict[str, Any]:
+    def record_selected_execution(self, *, order_id: str, lead_id: str, now: datetime, order_payload: Mapping[str, object], execution_payload: Mapping[str, object]) -> dict[str, Any]:
         return self.store.upsert_state(
             order_id=order_id,
             lead_id=lead_id,
             now=now,
-            patch={
-                'order': dict(order_payload),
-                'execution': dict(execution_payload),
-                'commercial_status': 'executed',
-            },
+            patch={'order': dict(order_payload), 'execution': dict(execution_payload), 'commercial_status': 'executed'},
         )
 
-    def record_verification(
-        self,
-        *,
-        order_id: str,
-        lead_id: str,
-        now: datetime,
-        payload: Mapping[str, object],
-    ) -> dict[str, Any]:
+    def record_verification(self, *, order_id: str, lead_id: str, now: datetime, payload: Mapping[str, object]) -> dict[str, Any]:
         commercial_status = 'verified' if bool(payload.get('verified')) else 'verification_rejected'
         return self.store.upsert_state(
             order_id=order_id,
             lead_id=lead_id,
             now=now,
-            patch={
-                'verification': dict(payload),
-                'commercial_status': commercial_status,
-            },
+            patch={'verification': dict(payload), 'commercial_status': commercial_status},
         )
 
-    def record_billing(
-        self,
-        *,
-        order_id: str,
-        lead_id: str,
-        now: datetime,
-        billable_record: Mapping[str, object] | None,
-        revenue_payload: Mapping[str, object],
-    ) -> dict[str, Any]:
+    def record_billing(self, *, order_id: str, lead_id: str, now: datetime, billable_record: Mapping[str, object] | None, revenue_payload: Mapping[str, object]) -> dict[str, Any]:
         return self.store.upsert_state(
             order_id=order_id,
             lead_id=lead_id,
@@ -136,22 +99,12 @@ class ClientOutcomeCommercialStateService:
             },
         )
 
-    def record_dispute(
-        self,
-        *,
-        order_id: str,
-        lead_id: str,
-        now: datetime,
-        dispute_payload: Mapping[str, object],
-    ) -> dict[str, Any]:
+    def record_dispute(self, *, order_id: str, lead_id: str, now: datetime, dispute_payload: Mapping[str, object]) -> dict[str, Any]:
         return self.store.upsert_state(
             order_id=order_id,
             lead_id=lead_id,
             now=now,
-            patch={
-                'dispute': dict(dispute_payload),
-                'commercial_status': 'disputed',
-            },
+            patch={'dispute': dict(dispute_payload), 'commercial_status': 'disputed'},
         )
 
     def record_reversal(

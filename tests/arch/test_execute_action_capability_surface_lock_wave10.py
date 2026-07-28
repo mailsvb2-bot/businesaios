@@ -52,11 +52,11 @@ def test_execute_action_stack_uses_canonical_durable_idempotency_bridge_when_ava
 
 def test_fastapi_execute_action_route_threads_header_identity() -> None:
     _ = (ROOT / 'adapters' / 'api' / 'fastapi' / 'router_adapter.py').read_text(encoding='utf-8')
-    public_routes = (ROOT / 'adapters' / 'api' / 'fastapi' / 'public_routes.py').read_text(encoding='utf-8')
-    assert 'x-idempotency-key' in public_routes
-    assert 'x-action-id' in public_routes
-    assert 'idempotency_key=idempotency_key' in public_routes
-    assert 'action_id=action_id' in public_routes
+    public_core_routes = (ROOT / 'adapters' / 'api' / 'fastapi' / 'public_core_routes.py').read_text(encoding='utf-8')
+    assert 'x-idempotency-key' in public_core_routes
+    assert 'x-action-id' in public_core_routes
+    assert 'idempotency_key=idempotency_key' in public_core_routes
+    assert 'action_id=action_id' in public_core_routes
 
 
 def test_execute_action_wrappers_use_canonical_audit_payload_builder_and_tenant_scoped_idempotency_keys() -> None:
@@ -126,7 +126,10 @@ def test_fastapi_router_uses_shared_audit_logs_for_execute_action_and_control_pl
     assert 'shared_action_audit_log = dependency_container.action_audit_log()' in router
     assert 'action_audit_log=shared_action_audit_log' in router
     assert 'AuditRouteHandlers(action_audit_log=shared_action_audit_log' in router
-    assert 'WebhookRouteHandlers(verifier=build_webhook_verifier(), audit_log=shared_action_audit_log, security_guard=security_bundle.webhook_surface_guard)' in router
+    assert 'webhook_handlers = WebhookRouteHandlers(' in router
+    assert 'verifier=build_webhook_verifier()' in router
+    assert 'audit_log=shared_action_audit_log' in router
+    assert 'security_guard=security_bundle.webhook_surface_guard' in router
     assert 'def action_audit_log(self) -> ActionAuditLog:' in dependencies
     assert 'def decision_audit_log(self) -> DecisionAuditLog:' in dependencies
 

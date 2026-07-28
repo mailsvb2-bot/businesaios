@@ -4,14 +4,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from billing.client_outcome_dispute_contract import ClientOutcomeDisputeCase
-from registry.base_registry import BaseRegistry
+from registry.base_registry import BaseRegistry, RegistryBackend
 
 CANON_CLIENT_OUTCOME_DISPUTE_STORE = True
 
 
 class ClientOutcomeDisputeStore(BaseRegistry):
-    def __init__(self) -> None:
-        super().__init__(kind='client_outcome_dispute')
+    def __init__(self, *, backend: RegistryBackend | None = None) -> None:
+        super().__init__(kind='client_outcome_dispute', backend=backend)
 
     def save(self, case: ClientOutcomeDisputeCase) -> None:
         case.validate()

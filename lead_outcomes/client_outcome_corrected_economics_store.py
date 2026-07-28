@@ -4,24 +4,19 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Mapping
 
-from registry.base_registry import BaseRegistry
+from registry.base_registry import BaseRegistry, RegistryBackend
 
 
 CANON_CLIENT_OUTCOME_CORRECTED_ECONOMICS_STORE = True
 
 
 class ClientOutcomeCorrectedEconomicsStore(BaseRegistry):
-    """
-    Owner surface for the corrected economic truth of a client-outcome lead.
-    Keeps the latest post-dispute / post-reversal commercial economics snapshot.
-    """
-
-    def __init__(self) -> None:
-        super().__init__(kind='client_outcome_corrected_economics')
+    def __init__(self, *, backend: RegistryBackend | None = None) -> None:
+        super().__init__(kind='client_outcome_corrected_economics', backend=backend)
 
     @staticmethod
     def make_key(*, order_id: str, lead_id: str) -> str:
-        return f"{str(order_id).strip()}::{str(lead_id).strip()}"
+        return f'{str(order_id).strip()}::{str(lead_id).strip()}'
 
     def get_state(self, *, order_id: str, lead_id: str) -> dict[str, Any] | None:
         key = self.make_key(order_id=order_id, lead_id=lead_id)

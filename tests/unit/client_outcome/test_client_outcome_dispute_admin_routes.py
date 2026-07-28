@@ -45,17 +45,18 @@ def _build_client() -> TestClient:
         analytics_handlers=None,
     )
     from fastapi import FastAPI
+
     app = FastAPI()
     app.include_router(router)
     return TestClient(app)
 
 
-def _record_payload() -> dict[str, object]:
+def _record_payload(*, order_id: str) -> dict[str, object]:
     return {
-        'record_id': 'billable:1',
+        'record_id': f'billable:{order_id}',
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',
-        'order_id': 'order-1',
+        'order_id': order_id,
         'lead_id': 'lead-1',
         'package_id': 'clients-5',
         'verified_at': datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat(),
@@ -69,14 +70,37 @@ def _record_payload() -> dict[str, object]:
 def test_open_reverse_and_admin_summary_routes() -> None:
     client = _build_client()
 
-    opened = client.post('/client-outcome/disputes/open', json={
+    missing = client.post('/client-outcome/disputes/open', json={
         'tenant_id': 'tenant-1',
         'business_id': 'biz-1',
-        'order_id': 'order-1',
+        'order_id': 'missing-order',
         'lead_id': 'lead-1',
         'opened_by': 'owner-1',
         'reason_code': 'missing_proof',
-        'record': _record_payload(),
+        'record': _record_payload(order_id='missing-order'),
+        'metadata': {},
+    })
+    assert missing.status_code == 404, missing.text
+
+    selected = client.post('/client-outcome/select', json={
+        'tenant_id': 'tenant-1',
+        'business_id': 'biz-1',
+        'package_id': 'clients-5',
+        'requested_clients': 5,
+        'metadata': {'test_case': 'dispute_admin_routes'},
+    })
+    assert selected.status_code == 200, selected.text
+    order = selected.json()
+    order_id = order['order_id']
+
+    opened = client.post('/client-outcome/disputes/open', json={
+        'tenant_id': 'tenant-1',
+        'business_id': 'biz-1',
+        'order_id': order_id,
+        'lead_id': 'lead-1',
+        'opened_by': 'owner-1',
+        'reason_code': 'missing_proof',
+        'record': _record_payload(order_id=order_id),
         'metadata': {},
     })
     assert opened.status_code == 200, opened.text
@@ -85,7 +109,7 @@ def test_open_reverse_and_admin_summary_routes() -> None:
 
     reversed_resp = client.post('/client-outcome/disputes/reverse', json={
         'dispute_id': opened_body['dispute_id'],
-        'record': _record_payload(),
+        'record': _record_payload(order_id=order_id),
     })
     assert reversed_resp.status_code == 200, reversed_resp.text
     reversed_body = reversed_resp.json()
@@ -97,12 +121,7 @@ def test_open_reverse_and_admin_summary_routes() -> None:
         assert reversed_body.get('ledger_posting_id') in (None, '')
 
     summary = client.post('/client-outcome/admin-summary', json={
-        'order': {
-            'order_id': 'order-1', 'tenant_id': 'tenant-1', 'business_id': 'biz-1',
-            'package_id': 'clients-5', 'package_label': '5 clients', 'requested_clients': 5,
-            'price_per_verified_client': 70.0, 'currency': 'EUR', 'trust_tier': 'tier1_crm',
-            'created_at': datetime(2026, 4, 13, 12, 0, 0, tzinfo=UTC).isoformat(),
-        },
+        'order': order,
         'economic_snapshot': {
             'verified_clients': 1, 'billable_clients': 1, 'billed_revenue': 70.0,
             'acquisition_cost': 20.0, 'gross_margin': 50.0, 'cac': 20.0,

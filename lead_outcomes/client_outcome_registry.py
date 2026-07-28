@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from registry.base_registry import BaseRegistry
+from registry.base_registry import BaseRegistry, RegistryBackend
 
 CANON_CLIENT_OUTCOME_REGISTRY = True
 
@@ -13,8 +13,8 @@ def _safe_dict(value: object) -> dict[str, Any]:
 
 
 class ClientOutcomeRegistry(BaseRegistry):
-    def __init__(self) -> None:
-        super().__init__(kind='client_outcome')
+    def __init__(self, *, backend: RegistryBackend | None = None) -> None:
+        super().__init__(kind='client_outcome', backend=backend)
 
     def has(self, lead_id: str) -> bool:
         return str(lead_id) in self.snapshot()

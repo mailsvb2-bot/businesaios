@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 CANON_DEMAND_ROUTE_HANDLER = True
+CANON_THIN_HANDLER = True
 
 
 def handle_route_lead(payload, effects, env) -> dict[str, Any]:
@@ -19,4 +20,4 @@ def handle_route_lead(payload, effects, env) -> dict[str, Any]:
     }
 
 
-__all__ = ["CANON_DEMAND_ROUTE_HANDLER", "handle_route_lead"]
+__all__ = ["CANON_DEMAND_ROUTE_HANDLER", "CANON_THIN_HANDLER", "handle_route_lead"]
