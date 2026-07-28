@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from lock.economic_sealed_execution_lock import SEALED_EXECUTION_ROUTE_PATHS
+
 
 def test_sealed_execution_gateway_is_only_public_bridge_to_runtime_internal() -> None:
     root = Path(__file__).resolve().parents[2]
@@ -14,16 +16,10 @@ def test_sealed_execution_gateway_is_only_public_bridge_to_runtime_internal() ->
     assert 'runtime._internal.economic_execution_contract' not in route_handlers
 
 
-def test_sealed_execution_routes_are_registered_in_public_security_guard() -> None:
+def test_sealed_execution_routes_are_registered_in_public_security_specs() -> None:
     root = Path(__file__).resolve().parents[2]
+    route_specs = (root / 'entrypoints' / 'api' / 'public_surface_route_specs.py').read_text(encoding='utf-8', errors='ignore')
     guard = (root / 'entrypoints' / 'api' / 'public_surface_security_guard.py').read_text(encoding='utf-8', errors='ignore')
-    required = [
-        '/economic/truth/click-billing-sealed-execution/{order_id}/{lead_id}',
-        '/economic/export/click-billing-sealed-execution/{order_id}/{lead_id}',
-        '/economic/audit/click-billing-sealed-execution/{order_id}/{lead_id}',
-        '/economic/truth/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}',
-        '/economic/export/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}',
-        '/economic/audit/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}',
-    ]
-    for item in required:
-        assert item in guard
+    for item in SEALED_EXECUTION_ROUTE_PATHS:
+        assert item in route_specs
+    assert '_ROUTE_SPECS.get(str(route_path).strip())' in guard
