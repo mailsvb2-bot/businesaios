@@ -2,25 +2,24 @@ from __future__ import annotations
 
 """Final owner: adapters.api.fastapi.router_support."""
 
-CANON_FASTAPI_ROUTER_SUPPORT_FINAL_OWNER = True
-
-
 import json
 from typing import Any
 
 from fastapi import HTTPException, Request, status
 
-from config.env_flags import env_bool, env_str
-from entrypoints.api.api_key_policy import ApiKeyPolicy, build_default_api_key_store
 from adapters.api.fastapi.auth_dependencies import AuthDependencyBundle, CompositeAuthPolicy
 from adapters.api.fastapi.dependencies import FastAPIDependencyContainer
+from config.env_flags import env_bool, env_str
+from entrypoints.api.api_key_policy import ApiKeyPolicy, build_default_api_key_store
 from entrypoints.api.jwt_policy import JwtPolicy
 from entrypoints.api.request_context import RequestContext
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
 from observability.metrics import InMemoryMetrics
-from security.key_management_contract import KeyPurpose
 from security.key_provider import build_default_key_provider
 from security.webhook_signature_verifier import WebhookSignatureVerifier
+
+
+CANON_FASTAPI_ROUTER_SUPPORT_FINAL_OWNER = True
 
 
 def authorize_request(*, request: Request, auth_bundle: AuthDependencyBundle):
@@ -132,13 +131,12 @@ def build_auth_bundle(*, security_bundle: ApiSecurityOwnerBundle) -> AuthDepende
 
 
 def build_webhook_verifier() -> WebhookSignatureVerifier:
-    provider = build_default_key_provider()
-    default_key_id = env_str('API_CONTROL_PLANE_WEBHOOK_KEY_ID', 'webhook-global-v1').strip() or 'webhook-global-v1'
-    try:
-        provider.get(str(default_key_id))
-    except Exception:
-        provider.issue_key(key_id=default_key_id, purpose=KeyPurpose.WEBHOOK_VERIFICATION)
-    return WebhookSignatureVerifier(key_provider=provider, require_timestamp=True)
+    """Resolve provisioned scoped keys; never mint a global verification key at boot."""
+    return WebhookSignatureVerifier(
+        key_provider=build_default_key_provider(),
+        require_timestamp=True,
+        require_nonce=True,
+    )
 
 
 def resolve_metrics(*, dependency_container: FastAPIDependencyContainer | None) -> InMemoryMetrics:
