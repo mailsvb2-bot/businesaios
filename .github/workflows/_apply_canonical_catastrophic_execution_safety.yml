@@ -7,6 +7,12 @@ on:
     paths:
       - tools/_apply_canonical_catastrophic_execution_safety.py
       - .github/workflows/_apply_canonical_catastrophic_execution_safety.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - tools/_apply_canonical_catastrophic_execution_safety.py
+      - .github/workflows/_apply_canonical_catastrophic_execution_safety.yml
 
 permissions:
   contents: write
@@ -45,5 +51,3 @@ jobs:
           git add -A
           git commit -m "Close canonical execution safety failures"
           git push origin HEAD:agent/canonical-catastrophic-safety-repair
-
-# trigger after workflow installation
