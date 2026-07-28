@@ -1,0 +1,69 @@
+name: Apply AEAD Lock Migration
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'agent/canonical-catastrophic-safety-repair'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Apply exact provider metadata changes
+        run: |
+          set -Eeuo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          file_provider = Path('security/key_provider.py')
+          text = file_provider.read_text(encoding='utf-8')
+          old = '"key_envelope_version": "BAIOS-KE1"'
+          assert text.count(old) == 1, text.count(old)
+          file_provider.write_text(text.replace(old, '"key_envelope_version": "BAIOS-KE2"'), encoding='utf-8')
+
+          sqlite_provider = Path('security/key_provider_sqlite.py')
+          text = sqlite_provider.read_text(encoding='utf-8')
+          old = '''"metadata_json": json.dumps(
+                      {**dict(record.metadata or {}), "key_envelope_version": "BAIOS-KE1"},
+                      ensure_ascii=False,
+                      sort_keys=True,
+                  ),'''
+          new = '''"metadata_json": json.dumps(
+                      dict(record.metadata or {}),
+                      ensure_ascii=False,
+                      sort_keys=True,
+                  ),'''
+          assert text.count(old) == 1, text.count(old)
+          sqlite_provider.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
+      - name: Regenerate transitive release lock
+        run: |
+          set -Eeuo pipefail
+          python -m pip install --disable-pip-version-check uv
+          bash scripts/ci/generate_release_lock.sh
+
+      - name: Commit reproducible result and remove workflow
+        env:
+          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -Eeuo pipefail
+          rm .github/workflows/_apply_aead_lock_migration.yml
+          git config user.name 'mailsvb2-bot'
+          git config user.email '254540704+mailsvb2-bot@users.noreply.github.com'
+          git add security/key_provider.py security/key_provider_sqlite.py requirements.release.lock.txt .github/workflows/_apply_aead_lock_migration.yml
+          test -n "$(git diff --cached --name-only)"
+          git commit -m 'Finalize canonical AEAD persistence migration'
+          git push origin "HEAD:${BRANCH_NAME}"
