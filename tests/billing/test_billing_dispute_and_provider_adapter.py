@@ -131,7 +131,7 @@ def test_routing_payment_provider_adapter_skips_known_unhealthy_provider_before_
         PaymentProviderRegistration(provider_name='primary', provider=primary, currencies=('USD',), priority=1),
         PaymentProviderRegistration(provider_name='secondary', provider=secondary, currencies=('USD',), priority=2),
     ])
-    observed_at = datetime(2026, 4, 10, 10, 0, tzinfo=UTC)
+    observed_at = datetime.now(UTC)
     health.mark_failure('primary', reason='preflight_unavailable', cooldown_seconds=300, now=observed_at)
     router = PaymentProviderRouter(registry=registry, health_registry=health)
     adapter = RoutingPaymentProviderAdapter(router=router, registry=registry)
@@ -182,11 +182,25 @@ def test_routing_payment_provider_adapter_prefers_provider_affinity_before_fallb
 
 def test_tax_policy_bridge_registry_is_fail_closed_for_unknown_country_and_b2b_tax_id() -> None:
     bridge = BillingTaxPolicyBridge(
-        registry=BillingTaxPolicyRegistry(policies=[BillingTaxCountryPolicy(country_code='NL', b2c_tax_rate_bps=2100, b2b_reverse_charge=True)])
+        registry=BillingTaxPolicyRegistry(
+            policies=[BillingTaxCountryPolicy(country_code='NL', require_tax_id_for_business=True)]
+        )
     )
-    assert bridge.resolve(service=MonetizationService(), subtotal_minor=1000, context=TaxContext(country_code='NL')).tax_minor == 210
-    assert bridge.resolve(service=MonetizationService(), subtotal_minor=1000, context=TaxContext(country_code='NL', business_customer=True, tax_id='NL123')).tax_minor == 0
+    assert bridge.resolve(
+        service=MonetizationService(),
+        subtotal_minor=1000,
+        context=TaxContext(country_code='NL'),
+    ).tax_amount_minor == 210
+    assert bridge.resolve(
+        service=MonetizationService(),
+        subtotal_minor=1000,
+        context=TaxContext(country_code='NL', is_business_customer=True, tax_id='NL123'),
+    ).tax_amount_minor == 0
     with pytest.raises(LookupError):
         bridge.resolve(service=MonetizationService(), subtotal_minor=1000, context=TaxContext(country_code='DE'))
     with pytest.raises(ValueError):
-        bridge.resolve(service=MonetizationService(), subtotal_minor=1000, context=TaxContext(country_code='NL', business_customer=True))
+        bridge.resolve(
+            service=MonetizationService(),
+            subtotal_minor=1000,
+            context=TaxContext(country_code='NL', is_business_customer=True),
+        )
