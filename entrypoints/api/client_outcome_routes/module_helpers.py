@@ -119,10 +119,22 @@ def _order_from_input(order) -> ClientOutcomeOrder:
     )
 
 
-def _require_order_tenant(handlers, *, order_id: str, tenant_id: str) -> ClientOutcomeOrder:
+def _require_order_tenant(
+    handlers,
+    *,
+    order_id: str,
+    tenant_id: str | None = None,
+) -> ClientOutcomeOrder:
+    """Load an order and enforce tenant ownership when crossing a tenant boundary.
+
+    HTTP routes always pass the authenticated tenant explicitly. Trusted in-process
+    domain callers may omit it and receive the order's persisted tenant context,
+    preserving the historical Python API without weakening the public boundary.
+    """
+
     order = handlers.selection_service.get_order(str(order_id))
     if order is None:
         raise KeyError(str(order_id))
-    if str(order.tenant_id).strip() != str(tenant_id).strip():
+    if tenant_id is not None and str(order.tenant_id).strip() != str(tenant_id).strip():
         raise PermissionError('client_outcome_order_tenant_mismatch')
     return order
