@@ -108,7 +108,9 @@ def register_public_api_routes(
         http_request: Request | None = None,
     ) -> RequestContext:
         try:
-            if security_guard.requires_external_auth(route_path) and auth_bundle is not None:
+            if security_guard.requires_external_auth(route_path):
+                if auth_bundle is None:
+                    raise PermissionError('api_perimeter_auth_unconfigured')
                 if http_request is None:
                     raise PermissionError('api_perimeter_request_required')
                 request_context, _ = authorize_request(request=http_request, auth_bundle=auth_bundle)
@@ -311,7 +313,12 @@ def register_public_api_routes(
         @router.post('/client-outcome/select')
         def client_outcome_select(http_request: Request, request: SelectClientOutcomePackageRequest):
             ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/select'})
-            enforce_public_security(route_path='/client-outcome/select', request_context=ctx, body=request.model_dump())
+            enforce_public_security(
+                route_path='/client-outcome/select',
+                request_context=ctx,
+                body=request.model_dump(),
+                http_request=http_request,
+            )
             return client_outcome_handlers.select_package(now=datetime.now(timezone.utc), request=request)
 
         @router.get('/client-outcome/orders/{order_id}')
@@ -323,7 +330,12 @@ def register_public_api_routes(
         @router.post('/client-outcome/orders/{order_id}/amend')
         def client_outcome_amend(http_request: Request, order_id: str, request: AmendClientOutcomeOrderRequest):
             ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/orders/{order_id}/amend'})
-            enforce_public_security(route_path='/client-outcome/orders/{order_id}/amend', request_context=ctx, body=request.model_dump())
+            enforce_public_security(
+                route_path='/client-outcome/orders/{order_id}/amend',
+                request_context=ctx,
+                body=request.model_dump(),
+                http_request=http_request,
+            )
             try:
                 return client_outcome_handlers.amend_order(now=datetime.now(timezone.utc), order_id=order_id, request=request)
             except ValueError as exc:
@@ -334,25 +346,45 @@ def register_public_api_routes(
         @router.post('/client-outcome/execute')
         def client_outcome_execute(http_request: Request, request: SelectClientOutcomePackageRequest):
             ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/execute'})
-            enforce_public_security(route_path='/client-outcome/execute', request_context=ctx, body=request.model_dump())
+            enforce_public_security(
+                route_path='/client-outcome/execute',
+                request_context=ctx,
+                body=request.model_dump(),
+                http_request=http_request,
+            )
             return client_outcome_handlers.execute_package(now=datetime.now(timezone.utc), request=request)
 
         @router.post('/client-outcome/disputes/open')
         def client_outcome_open_dispute(http_request: Request, request: OpenClientOutcomeDisputeRequest):
             ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/disputes/open'})
-            enforce_public_security(route_path='/client-outcome/disputes/open', request_context=ctx, body=request.model_dump())
+            enforce_public_security(
+                route_path='/client-outcome/disputes/open',
+                request_context=ctx,
+                body=request.model_dump(),
+                http_request=http_request,
+            )
             return client_outcome_handlers.open_dispute(now=datetime.now(timezone.utc), request=request)
 
         @router.post('/client-outcome/disputes/reverse')
         def client_outcome_reverse_dispute(http_request: Request, request: ReverseClientOutcomeDisputeRequest):
             ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/disputes/reverse'})
-            enforce_public_security(route_path='/client-outcome/disputes/reverse', request_context=ctx, body=request.model_dump())
+            enforce_public_security(
+                route_path='/client-outcome/disputes/reverse',
+                request_context=ctx,
+                body=request.model_dump(),
+                http_request=http_request,
+            )
             return client_outcome_handlers.reverse_dispute(now=datetime.now(timezone.utc), request=request)
 
         @router.post('/client-outcome/full-cycle')
         def client_outcome_full_cycle(http_request: Request, request: ExecuteClientOutcomeCycleRequest):
             ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/full-cycle'})
-            enforce_public_security(route_path='/client-outcome/full-cycle', request_context=ctx, body=request.model_dump())
+            enforce_public_security(
+                route_path='/client-outcome/full-cycle',
+                request_context=ctx,
+                body=request.model_dump(),
+                http_request=http_request,
+            )
             return client_outcome_handlers.execute_full_cycle(now=datetime.now(timezone.utc), request=request)
 
         @router.get('/client-outcome/lifecycle/{order_id}/{lead_id}')
@@ -382,13 +414,23 @@ def register_public_api_routes(
         @router.get('/client-outcome/orders/{order_id}/{lead_id}/admin-view')
         def client_outcome_admin_view(http_request: Request, order_id: str, lead_id: str):
             ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/orders/{order_id}/{lead_id}/admin-view'})
-            enforce_public_security(route_path='/client-outcome/orders/{order_id}/{lead_id}/admin-view', request_context=ctx, body={'order_id': order_id, 'lead_id': lead_id})
+            enforce_public_security(
+                route_path='/client-outcome/orders/{order_id}/{lead_id}/admin-view',
+                request_context=ctx,
+                body={'order_id': order_id, 'lead_id': lead_id},
+                http_request=http_request,
+            )
             return client_outcome_handlers.get_admin_view(order_id=order_id, lead_id=lead_id)
 
         @router.post('/client-outcome/admin-summary')
         def client_outcome_admin_summary(http_request: Request, request: ClientOutcomeAdminSummaryRequest):
             ctx = RequestContext.from_http_request(http_request, metadata={'route': '/client-outcome/admin-summary'})
-            enforce_public_security(route_path='/client-outcome/admin-summary', request_context=ctx, body=request.model_dump())
+            enforce_public_security(
+                route_path='/client-outcome/admin-summary',
+                request_context=ctx,
+                body=request.model_dump(),
+                http_request=http_request,
+            )
             return client_outcome_handlers.build_admin_summary(request=request)
 
     if economic_handlers is not None:
