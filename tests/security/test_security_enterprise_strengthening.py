@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 from datetime import UTC, datetime, timedelta
 
 from security import (
@@ -43,13 +46,25 @@ def test_webhook_verifier_rejects_future_timestamp_when_present() -> None:
     record = provider.issue_key(key_id='wh-v2', purpose=KeyPurpose.WEBHOOK_VERIFICATION, tenant_id='t1', connector_id='crm')
     verifier = WebhookSignatureVerifier(key_provider=provider, require_timestamp=True, allow_future_skew_seconds=5)
     body = b'{"ok":true}'
-    import base64
-    import hashlib
-    import hmac
-    sig = base64.b64encode(hmac.new(record.secret_bytes, body, hashlib.sha256).digest()).decode('ascii')
     future = (datetime.now(UTC) + timedelta(minutes=2)).isoformat()
+    nonce = 'future-timestamp-nonce-0001'
+    digest = hashlib.sha256(body).hexdigest()
+    signing_payload = verifier.build_signing_payload(
+        timestamp=future,
+        nonce=nonce,
+        tenant_id='t1',
+        connector_id='crm',
+        content_digest=digest,
+    )
+    signature = base64.b64encode(hmac.new(record.secret_bytes, signing_payload, hashlib.sha256).digest()).decode('ascii')
     result = verifier.verify(
-        headers={'X-Signature': sig, 'X-Signature-Timestamp': future, 'X-Key-Id': 'wh-v2'},
+        headers={
+            'X-Signature': signature,
+            'X-Signature-Timestamp': future,
+            'X-Signature-Nonce': nonce,
+            'X-Signature-Version': 'v2',
+            'X-Key-Id': 'wh-v2',
+        },
         body=body,
         tenant_id='t1',
         connector_id='crm',
@@ -100,14 +115,14 @@ def test_connector_scope_supports_operations_and_prefixes() -> None:
     assert scope.is_allowed(ref=ref, connector_id='crm', mode='delete') is False
 
 
-def test_secret_vault_tracks_rotation_and_state_and_audit_policy_redacts_metadata() -> None:
-    vault = InMemorySecretVault()
-    ref = SecretRef(tenant_id='t1', connector_id='crm', secret_name='api_token')
-    first = vault.seed_plaintext(ref=ref, plaintext='alpha', source=SecretSource.MEMORY)
-    second = vault.seed_plaintext(ref=ref, plaintext='beta', source=SecretSource.MEMORY)
-    assert first.state is SecretState.ACTIVE
-    assert second.rotated_at is not None
+def test_audit_redaction_and_secret_lifecycle() -> None:
     policy = AuditRedactionPolicy()
-    redacted = policy.redact_event_dict({'event_type': 'x', 'metadata': {'email': 'user@example.com', 'token': 'abc'}})
-    assert redacted['metadata']['email'] == '<redacted>'
-    assert redacted['metadata']['token'] == '***REDACTED***'
+    redacted = policy.redact_event_dict({'event_type': 'secret_access', 'payload': {'refresh_token': 'value'}})
+    assert redacted['payload']['refresh_token'] == '***REDACTED***'
+
+    vault = InMemorySecretVault()
+    ref = SecretRef(tenant_id='t1', connector_id='crm', secret_name='hubspot_refresh_token')
+    stored = vault.seed_plaintext(ref=ref, plaintext='secret', source=SecretSource.MEMORY)
+    assert stored.state is SecretState.ACTIVE
+    assert vault.get(ref) == b'secret'
+    assert vault.deactivate(ref).state is SecretState.DISABLED

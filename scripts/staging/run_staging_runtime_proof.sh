@@ -51,6 +51,21 @@ if [[ -z "$CONTROL_PLANE_API_KEY_PEPPER" ]]; then
   echo "Could not create a non-empty control-plane API-key pepper for staging proof." >&2
   exit 2
 fi
+KEY_PROVIDER_MASTER_KEY_B64="${BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64:-}"
+if [[ -z "$KEY_PROVIDER_MASTER_KEY_B64" ]]; then
+  KEY_PROVIDER_MASTER_KEY_B64="$("$PYTHON_BIN" -c 'import base64, secrets; print(base64.b64encode(secrets.token_bytes(32)).decode("ascii"))')"
+fi
+if ! BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64="$KEY_PROVIDER_MASTER_KEY_B64" "$PYTHON_BIN" - <<'PY'
+from security.key_envelope import load_key_envelope_master_key
+
+key = load_key_envelope_master_key()
+if len(key) != 32:
+    raise SystemExit("staging key-provider master key must be exactly 32 bytes")
+PY
+then
+  echo "Could not create or validate the staging key-provider master key." >&2
+  exit 2
+fi
 CONTROL_PLANE_API_KEY_STORE_PATH="${BAIOS_STAGING_API_KEY_STORE_PATH:-/app/data/api/api_keys.json}"
 if [[ "$CONTROL_PLANE_API_KEY_STORE_PATH" != /* ]]; then
   echo "BAIOS_STAGING_API_KEY_STORE_PATH must be an absolute container path." >&2
@@ -120,6 +135,8 @@ docker run -d \
   -e API_CONTROL_PLANE_API_KEY_PEPPER="$CONTROL_PLANE_API_KEY_PEPPER" \
   -e BUSINESAIOS_API_KEY_STORE_BACKEND=file \
   -e BUSINESAIOS_API_KEY_STORE_PATH="$CONTROL_PLANE_API_KEY_STORE_PATH" \
+  -e BUSINESAIOS_KEY_PROVIDER_BACKEND=file \
+  -e BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64="$KEY_PROVIDER_MASTER_KEY_B64" \
   -e DATABASE_URL="$DATABASE_URL" \
   -e POSTGRES_RUNTIME_ENABLED=1 \
   -e POSTGRES_EVENT_STORE_ENABLED=1 \

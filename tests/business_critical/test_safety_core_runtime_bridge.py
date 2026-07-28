@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from application.business_autonomy.channel_contracts import ChannelKind
 from application.business_autonomy.contracts import (
     BusinessExecutionRequest,
     BusinessGoalEnvelope,
@@ -11,7 +12,15 @@ from application.business_autonomy.contracts import (
     IntegrationMode,
     PolicyConstraint,
 )
-from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
+from application.business_autonomy.execution_subject import business_execution_approval_id
+from application.business_autonomy.onboarding_contract import BusinessOnboardingRequest
+from entrypoints.api.approval_route_handlers import ApprovalRouteHandlers
+from governance.approval_contract import ApprovalOutcome
+from governance.rbac_contract import RoleId
+from runtime.business_autonomy.bootstrap import (
+    build_business_autonomy_admin_dependencies,
+    build_business_autonomy_guarded_service,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -26,6 +35,7 @@ def _request(
     constraints: tuple[PolicyConstraint, ...] = (),
     metadata: dict[str, object] | None = None,
     idempotency_key: str = "idem-safety",
+    simulation: bool = False,
 ) -> BusinessExecutionRequest:
     return BusinessExecutionRequest(
         envelope=BusinessGoalEnvelope(
@@ -33,6 +43,7 @@ def _request(
             goal_id=goal_id,
             goal_type="paid_campaign_launch",
             goal_payload={"estimated_cost": estimated_cost, "outbound_count": outbound_count},
+            simulation=simulation,
             constraints=constraints,
             metadata={"tenant_id": tenant_id, "planning_horizon": "week", **dict(metadata or {})},
         ),
@@ -42,9 +53,41 @@ def _request(
     )
 
 
+def _onboarded_service(*, tenant_id: str, business_id: str):
+    dependencies = build_business_autonomy_admin_dependencies()
+    dependencies["onboarding"].onboard(
+        BusinessOnboardingRequest(
+            business_id=business_id,
+            tenant_id=tenant_id,
+            ownership_key=f"verified-owner:{tenant_id}:{business_id}",
+            region="eu-west-1",
+            channel_kind=ChannelKind.WEBSITE,
+            adapter_key="website.default",
+            external_ref=f"https://{business_id}.example.test",
+            requested_by="business-critical-test-onboarding",
+            metadata={"verified_owner": True, "non_ai_mode": "supervised"},
+        )
+    )
+    return build_business_autonomy_guarded_service(business_id=business_id)
+
+
+async def _execute_after_canonical_approval(service, request: BusinessExecutionRequest):
+    pending = await service.execute(request)
+    assert pending.verdict is ExecutionVerdict.PARTIAL
+    ApprovalRouteHandlers(approval_store=service._approval_gate._store).evaluate(
+        approval_id=business_execution_approval_id(request),
+        tenant_id=str(request.envelope.metadata["tenant_id"]),
+        actor_id="operator-1",
+        role_id=RoleId.OWNER,
+        outcome=ApprovalOutcome.APPROVE,
+        rationale="Approved through canonical governance store.",
+    )
+    return await service.execute(request)
+
+
 async def test_budget_safety_verdict_is_fail_closed_and_visible(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    service = build_business_autonomy_guarded_service(business_id="site-safety")
+    service = _onboarded_service(tenant_id="tenant-safety", business_id="site-safety")
 
     result = await service.execute(
         _request(
@@ -63,12 +106,16 @@ async def test_budget_safety_verdict_is_fail_closed_and_visible(tmp_path, monkey
 
 async def test_blast_radius_safety_verdict_is_fail_closed_and_visible(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    service = build_business_autonomy_guarded_service(business_id="site-safety")
+    service = _onboarded_service(tenant_id="tenant-safety", business_id="site-safety")
 
     result = await service.execute(
         _request(
+            estimated_cost=0.0,
             outbound_count=500,
-            constraints=(PolicyConstraint(name="outbound_message_limit", value=25),),
+            constraints=(
+                PolicyConstraint(name="monthly_budget_limit", value=50.0),
+                PolicyConstraint(name="outbound_message_limit", value=25),
+            ),
             idempotency_key="blast-denied",
         )
     )
@@ -82,23 +129,22 @@ async def test_blast_radius_safety_verdict_is_fail_closed_and_visible(tmp_path, 
 
 async def test_successful_execution_persists_safety_core_verdict_in_artifact(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    service = build_business_autonomy_guarded_service(business_id="site-safety")
-
-    result = await service.execute(
-        _request(
-            estimated_cost=10.0,
-            outbound_count=2,
-            constraints=(
-                PolicyConstraint(name="monthly_budget_limit", value=50.0),
-                PolicyConstraint(name="outbound_message_limit", value=25),
-                PolicyConstraint(name="require_human_approval", value=True),
-            ),
-            metadata={"approved_by": "operator-1"},
-            idempotency_key="safety-visible",
-        )
+    service = _onboarded_service(tenant_id="tenant-safety", business_id="site-safety")
+    request = _request(
+        estimated_cost=10.0,
+        outbound_count=2,
+        constraints=(
+            PolicyConstraint(name="monthly_budget_limit", value=50.0),
+            PolicyConstraint(name="outbound_message_limit", value=25),
+            PolicyConstraint(name="require_human_approval", value=True),
+        ),
+        idempotency_key="safety-visible",
+        simulation=True,
     )
 
-    assert result.verdict in {ExecutionVerdict.COMPLETED, ExecutionVerdict.SIMULATED}
+    result = await _execute_after_canonical_approval(service, request)
+
+    assert result.verdict is ExecutionVerdict.SIMULATED
     assert result.metadata["safety_core"]["budget"]["allowed"] is True
     assert result.metadata["safety_core"]["blast_radius"]["allowed"] is True
 

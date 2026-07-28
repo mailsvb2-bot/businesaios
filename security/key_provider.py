@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import json
 import os
 import secrets
@@ -9,9 +8,14 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable
-from security.key_provider_contracts import KeyProvider
 
+from security.key_envelope import (
+    load_key_envelope_master_key,
+    unwrap_key_material,
+    wrap_key_material,
+)
 from security.key_management_contract import KeyMaterialRecord, KeyPurpose, KeyStatus, utc_now
+from security.key_provider_contracts import KeyProvider
 
 
 CANON_KEY_PROVIDER = True
@@ -43,7 +47,14 @@ def _serialize_record(record: KeyMaterialRecord) -> dict[str, object]:
     return {
         "key_id": record.key_id,
         "purpose": record.purpose.value,
-        "secret_b64": base64.b64encode(bytes(record.secret_bytes)).decode("ascii"),
+        "wrapped_secret": wrap_key_material(
+            bytes(record.secret_bytes),
+            key_id=record.key_id,
+            purpose=record.purpose.value,
+            tenant_id=record.tenant_id,
+            connector_id=record.connector_id,
+        ),
+        "key_envelope_version": "BAIOS-KE2",
         "tenant_id": record.tenant_id,
         "connector_id": record.connector_id,
         "status": record.status.value,
@@ -55,18 +66,34 @@ def _serialize_record(record: KeyMaterialRecord) -> dict[str, object]:
 
 
 def _deserialize_record(payload: dict[str, object]) -> KeyMaterialRecord:
-    expires_raw = payload.get("expires_at")
+    key_id = str(payload.get("key_id") or "").strip()
+    purpose = KeyPurpose(str(payload.get("purpose") or ""))
+    tenant_id = None if payload.get("tenant_id") in {None, ""} else str(payload.get("tenant_id"))
+    connector_id = None if payload.get("connector_id") in {None, ""} else str(payload.get("connector_id"))
+    wrapped = str(payload.get("wrapped_secret") or "").strip()
+    if not wrapped:
+        if payload.get("secret_b64"):
+            raise RuntimeError("legacy plaintext key_provider.json requires explicit migration")
+        raise RuntimeError("wrapped key material is required")
+    metadata = dict(payload.get("metadata") or {})
+    metadata.pop("key_envelope_version", None)
     return KeyMaterialRecord(
-        key_id=str(payload.get("key_id") or "").strip(),
-        purpose=KeyPurpose(str(payload.get("purpose") or "")),
-        secret_bytes=base64.b64decode(str(payload.get("secret_b64") or "")),
-        tenant_id=None if payload.get("tenant_id") in {None, ""} else str(payload.get("tenant_id")),
-        connector_id=None if payload.get("connector_id") in {None, ""} else str(payload.get("connector_id")),
+        key_id=key_id,
+        purpose=purpose,
+        secret_bytes=unwrap_key_material(
+            wrapped,
+            key_id=key_id,
+            purpose=purpose.value,
+            tenant_id=tenant_id,
+            connector_id=connector_id,
+        ),
+        tenant_id=tenant_id,
+        connector_id=connector_id,
         status=KeyStatus(str(payload.get("status") or KeyStatus.ACTIVE.value)),
         created_at=datetime.fromisoformat(str(payload.get("created_at"))),
         activated_at=datetime.fromisoformat(str(payload.get("activated_at"))),
-        expires_at=None if expires_raw in {None, ""} else datetime.fromisoformat(str(expires_raw)),
-        metadata=dict(payload.get("metadata") or {}),
+        expires_at=None if payload.get("expires_at") in {None, ""} else datetime.fromisoformat(str(payload.get("expires_at"))),
+        metadata=metadata,
     )
 
 
@@ -82,8 +109,6 @@ def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
     finally:
         if os.path.exists(temp_name):
             os.unlink(temp_name)
-
-
 
 
 class InMemoryKeyProvider:
@@ -155,7 +180,11 @@ class InMemoryKeyProvider:
         updated = replace(
             current,
             status=KeyStatus.REVOKED,
-            metadata={**dict(current.metadata or {}), "status_changed_at": utc_now().isoformat(), "status_changed_to": KeyStatus.REVOKED.value},
+            metadata={
+                **dict(current.metadata or {}),
+                "status_changed_at": utc_now().isoformat(),
+                "status_changed_to": KeyStatus.REVOKED.value,
+            },
         )
         self._records[key_id] = updated
         return updated
@@ -165,18 +194,32 @@ class InMemoryKeyProvider:
         updated = replace(
             current,
             status=KeyStatus.COMPROMISED,
-            metadata={**dict(current.metadata or {}), "status_changed_at": utc_now().isoformat(), "status_changed_to": KeyStatus.COMPROMISED.value},
+            metadata={
+                **dict(current.metadata or {}),
+                "status_changed_at": utc_now().isoformat(),
+                "status_changed_to": KeyStatus.COMPROMISED.value,
+            },
         )
         self._records[key_id] = updated
         return updated
 
-    def rotate(self, *, current_key_id: str, new_key_id: str, expires_in_seconds: int | None = None) -> KeyMaterialRecord:
+    def rotate(
+        self,
+        *,
+        current_key_id: str,
+        new_key_id: str,
+        expires_in_seconds: int | None = None,
+    ) -> KeyMaterialRecord:
         current = self.get(current_key_id)
         now = utc_now()
         self._records[current_key_id] = replace(
             current,
             status=KeyStatus.DEPRECATED,
-            metadata={**dict(current.metadata or {}), "rotated_to_key_id": new_key_id, "rotated_at": now.isoformat()},
+            metadata={
+                **dict(current.metadata or {}),
+                "rotated_to_key_id": new_key_id,
+                "rotated_at": now.isoformat(),
+            },
         )
         rotated = self.issue_key(
             key_id=new_key_id,
@@ -185,7 +228,13 @@ class InMemoryKeyProvider:
             connector_id=current.connector_id,
             expires_in_seconds=expires_in_seconds,
         )
-        self._records[new_key_id] = replace(rotated, metadata={**dict(rotated.metadata or {}), "rotation_parent_key_id": current.key_id})
+        self._records[new_key_id] = replace(
+            rotated,
+            metadata={
+                **dict(rotated.metadata or {}),
+                "rotation_parent_key_id": current.key_id,
+            },
+        )
         return self._records[new_key_id]
 
     def list_for_purpose(self, purpose: KeyPurpose) -> tuple[KeyMaterialRecord, ...]:
@@ -220,8 +269,18 @@ class FileKeyProvider(InMemoryKeyProvider):
         self._flush()
         return updated
 
-    def rotate(self, *, current_key_id: str, new_key_id: str, expires_in_seconds: int | None = None) -> KeyMaterialRecord:
-        updated = super().rotate(current_key_id=current_key_id, new_key_id=new_key_id, expires_in_seconds=expires_in_seconds)
+    def rotate(
+        self,
+        *,
+        current_key_id: str,
+        new_key_id: str,
+        expires_in_seconds: int | None = None,
+    ) -> KeyMaterialRecord:
+        updated = super().rotate(
+            current_key_id=current_key_id,
+            new_key_id=new_key_id,
+            expires_in_seconds=expires_in_seconds,
+        )
         self._flush()
         return updated
 
@@ -230,31 +289,44 @@ class FileKeyProvider(InMemoryKeyProvider):
             return
         try:
             payload = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"key provider store cannot be read: {self._path}") from exc
         self._records.clear()
         for item in payload.get("records") or []:
-            try:
-                super().register(_deserialize_record(dict(item)))
-            except Exception:
-                continue
+            if not isinstance(item, dict):
+                raise RuntimeError("key provider record must be an object")
+            record = _deserialize_record(dict(item))
+            super().register(record)
 
     def _flush(self) -> None:
-        _atomic_write_json(self._path, {"records": [_serialize_record(record) for record in self._records.values()]})
+        _atomic_write_json(
+            self._path,
+            {"records": [_serialize_record(record) for record in self._records.values()]},
+        )
         try:
             os.chmod(self._path, 0o600)
         except OSError:
             pass
 
 
+def _production_environment() -> bool:
+    return (os.getenv("APP_ENV", os.getenv("ENV", "dev")).strip().lower() or "dev") in {"prod", "production"}
+
+
 def build_default_key_provider() -> KeyProvider:
     mode = describe_key_provider_backend()
     if mode in {"memory", "inmemory"}:
+        if _production_environment():
+            raise RuntimeError("PRODUCTION_KEY_PROVIDER_MUST_BE_PERSISTENT")
         return InMemoryKeyProvider()
+
+    load_key_envelope_master_key()
     if mode == "sqlite":
         from security.key_provider_sqlite import SqliteKeyProvider, SqliteKeyProviderBackend
 
         return SqliteKeyProvider(SqliteKeyProviderBackend(key_provider_sqlite_path()))
+    if mode != "file":
+        raise RuntimeError(f"unsupported key provider backend: {mode}")
     return FileKeyProvider()
 
 

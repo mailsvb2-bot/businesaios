@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import json
 import secrets
 import threading
@@ -9,6 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
+from security.key_envelope import unwrap_key_material, wrap_key_material
 from security.key_management_contract import KeyMaterialRecord, KeyPurpose, KeyStatus, utc_now
 from security.key_provider_contracts import KeyProvider
 from security.key_provider_backend import (
@@ -64,7 +64,13 @@ def _record_to_row(record: KeyMaterialRecord) -> dict[str, object]:
     return {
         "key_id": record.key_id,
         "purpose": record.purpose.value,
-        "secret_b64": base64.b64encode(bytes(record.secret_bytes)).decode("ascii"),
+        "secret_b64": wrap_key_material(
+            bytes(record.secret_bytes),
+            key_id=record.key_id,
+            purpose=record.purpose.value,
+            tenant_id=record.tenant_id,
+            connector_id=record.connector_id,
+        ),
         "tenant_id_norm": _normalize_scope_token(record.tenant_id),
         "connector_id_norm": _normalize_scope_token(record.connector_id),
         "tenant_id": record.tenant_id,
@@ -73,17 +79,31 @@ def _record_to_row(record: KeyMaterialRecord) -> dict[str, object]:
         "created_at": _to_iso(record.created_at),
         "activated_at": _to_iso(record.activated_at),
         "expires_at": _to_iso(record.expires_at),
-        "metadata_json": json.dumps(dict(record.metadata or {}), ensure_ascii=False, sort_keys=True),
+        "metadata_json": json.dumps(
+            dict(record.metadata or {}),
+            ensure_ascii=False,
+            sort_keys=True,
+        ),
     }
 
 
 def _row_to_record(row: Any) -> KeyMaterialRecord:
+    key_id = str(row["key_id"])
+    purpose = KeyPurpose(str(row["purpose"]))
+    tenant_id = _denormalize_scope_token(cast(str | None, row["tenant_id_norm"]))
+    connector_id = _denormalize_scope_token(cast(str | None, row["connector_id_norm"]))
     record = KeyMaterialRecord(
-        key_id=str(row["key_id"]),
-        purpose=KeyPurpose(str(row["purpose"])),
-        secret_bytes=base64.b64decode(str(row["secret_b64"])),
-        tenant_id=_denormalize_scope_token(cast(str | None, row["tenant_id_norm"])),
-        connector_id=_denormalize_scope_token(cast(str | None, row["connector_id_norm"])),
+        key_id=key_id,
+        purpose=purpose,
+        secret_bytes=unwrap_key_material(
+            str(row["secret_b64"]),
+            key_id=key_id,
+            purpose=purpose.value,
+            tenant_id=tenant_id,
+            connector_id=connector_id,
+        ),
+        tenant_id=tenant_id,
+        connector_id=connector_id,
         status=KeyStatus(str(row["status"])),
         created_at=cast(datetime, _from_iso(cast(str | None, row["created_at"]))),
         activated_at=cast(datetime, _from_iso(cast(str | None, row["activated_at"]))),

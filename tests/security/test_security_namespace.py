@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 from datetime import UTC, datetime, timedelta
 
 from infrastructure.observability.redaction import redact_dict
@@ -63,11 +66,29 @@ def test_request_signer_and_webhook_verifier() -> None:
     verifier = WebhookSignatureVerifier(key_provider=provider)
     body = b'{"ok":true}'
     key = provider.get_active_for(purpose=KeyPurpose.WEBHOOK_VERIFICATION, tenant_id='t1', connector_id='crm')
-    import base64
-    import hashlib
-    import hmac
-    sig = base64.b64encode(hmac.new(key.secret_bytes, body, hashlib.sha256).digest()).decode('ascii')
-    result = verifier.verify(headers={'X-Signature': sig}, body=body, tenant_id='t1', connector_id='crm')
+    timestamp = datetime.now(UTC).isoformat()
+    nonce = 'namespace-test-nonce-0001'
+    digest = hashlib.sha256(body).hexdigest()
+    signing_payload = verifier.build_signing_payload(
+        timestamp=timestamp,
+        nonce=nonce,
+        tenant_id='t1',
+        connector_id='crm',
+        content_digest=digest,
+    )
+    signature = base64.b64encode(hmac.new(key.secret_bytes, signing_payload, hashlib.sha256).digest()).decode('ascii')
+    result = verifier.verify(
+        headers={
+            'X-Key-Id': key.key_id,
+            'X-Signature': signature,
+            'X-Signature-Timestamp': timestamp,
+            'X-Signature-Nonce': nonce,
+            'X-Signature-Version': 'v2',
+        },
+        body=body,
+        tenant_id='t1',
+        connector_id='crm',
+    )
     assert result.verified is True
 
 

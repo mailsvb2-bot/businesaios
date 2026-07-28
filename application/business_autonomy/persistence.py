@@ -15,6 +15,12 @@ from application.business_autonomy.contracts import (
     CapabilityKind,
     ExecutionVerdict,
 )
+from application.business_autonomy.execution_subject import (
+    approval_subject_metadata,
+    business_execution_approval_id,
+    business_execution_fingerprint,
+    parse_business_idempotency_token,
+)
 from application.business_autonomy.trust import BusinessTrustSnapshot, BusinessTrustTier
 from application.planning.goal_plan_memory import FileGoalPlanMemoryStore, GoalPlanMemoryService
 from application.planning.long_horizon_planner import LongHorizonPlanner
@@ -25,11 +31,10 @@ from execution.operator_override_contract import (
     OperatorOverrideStatus,
 )
 from execution.operator_override_store import build_default_operator_override_store
-from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest, ApprovalStatus
+from governance.approval_contract import ApprovalRequest, ApprovalStatus
 from governance.approval_store import build_default_approval_store
 from governance.control_plane_audit_log import GovernanceAuditEvent, PersistentGovernanceAuditLog
 from governance.persistence_codec import atomic_write_json, read_json_or_default
-from governance.rbac_contract import RoleId
 from reliability.idempotency_contract import IdempotencyResolution
 from reliability.idempotency_scope import build_idempotency_key
 from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
@@ -100,6 +105,12 @@ class PersistentBusinessAutonomyAudit:
 
 
 class PersistentBusinessAutonomyIdempotencyStore:
+    """Canonical adapter over the reliability idempotency contract.
+
+    The reservation is acquired before any external effect. Completed results
+    are replayed; in-progress and terminal failures fail closed.
+    """
+
     def __init__(self, backend: SQLiteIdempotencyStore | None = None) -> None:
         self._backend = backend or SQLiteIdempotencyStore(business_autonomy_idempotency_store_path())
         self._owner_id = BUSINESS_AUTONOMY_OWNER_ID
@@ -114,31 +125,76 @@ class PersistentBusinessAutonomyIdempotencyStore:
             return None
         return _deserialize_result(payload)
 
-    def put(self, key: str, payload: object) -> None:
-        if not isinstance(payload, BusinessExecutionResult):
-            return None
+    def reserve(self, key: str, *, owner_id: str):
+        from application.business_autonomy.guards import (
+            BusinessIdempotencyReservation,
+            BusinessIdempotencyReservationStatus,
+        )
+
         idem_key = self._idem_key(key)
         decision = self._backend.reserve(
             key=idem_key,
-            owner_id=self._owner_id,
+            owner_id=str(owner_id),
+            metadata_patch={"business_autonomy_key": str(key)},
+        )
+        if decision.resolution is IdempotencyResolution.ACCEPTED:
+            return BusinessIdempotencyReservation(BusinessIdempotencyReservationStatus.ACCEPTED)
+        if decision.resolution is IdempotencyResolution.REPLAY_COMPLETED:
+            payload = decision.record.metadata.get("business_autonomy_result")
+            result = _deserialize_result(payload) if isinstance(payload, Mapping) else None
+            return BusinessIdempotencyReservation(BusinessIdempotencyReservationStatus.REPLAY_COMPLETED, result)
+        if decision.resolution is IdempotencyResolution.REJECTED_IN_PROGRESS:
+            return BusinessIdempotencyReservation(BusinessIdempotencyReservationStatus.IN_PROGRESS)
+        return BusinessIdempotencyReservation(BusinessIdempotencyReservationStatus.TERMINAL_FAILED)
+
+    def complete(self, key: str, *, owner_id: str, payload: object) -> None:
+        if not isinstance(payload, BusinessExecutionResult):
+            raise TypeError("business autonomy idempotency payload must be BusinessExecutionResult")
+        idem_key = self._idem_key(key)
+        self._backend.mark_completed(
+            key=idem_key,
+            owner_id=str(owner_id),
+            result_ref=f"business_autonomy:{key}",
             metadata_patch={"business_autonomy_result": _serialize_result(payload)},
+        )
+
+    def fail(self, key: str, *, owner_id: str, reason: str) -> None:
+        self._backend.mark_failed(
+            key=self._idem_key(key),
+            owner_id=str(owner_id),
+            reason=str(reason),
+            metadata_patch={"business_autonomy_failure": str(reason)},
+        )
+
+    def put(self, key: str, payload: object) -> None:
+        """Compatibility cache for a terminal result produced before effects."""
+        if not isinstance(payload, BusinessExecutionResult):
+            return None
+        owner_id = f"{self._owner_id}:terminal-cache"
+        idem_key = self._idem_key(key)
+        decision = self._backend.reserve(
+            key=idem_key,
+            owner_id=owner_id,
+            metadata_patch={"business_autonomy_key": str(key)},
         )
         if decision.resolution is IdempotencyResolution.ACCEPTED:
             self._backend.mark_completed(
                 key=idem_key,
-                owner_id=self._owner_id,
+                owner_id=owner_id,
                 result_ref=f"business_autonomy:{key}",
                 metadata_patch={"business_autonomy_result": _serialize_result(payload)},
             )
 
     @staticmethod
     def _idem_key(raw_key: str):
+        stable_key, subject_fingerprint = parse_business_idempotency_token(raw_key)
+        tenant_id = stable_key.split(":", 1)[0]
         return build_idempotency_key(
-            tenant_id="global",
+            tenant_id=tenant_id,
             namespace="business_autonomy",
             operation="execute",
-            key=str(raw_key),
-            semantic_scope={"business_autonomy_key": str(raw_key)},
+            key=stable_key,
+            semantic_scope={"execution_subject_fingerprint": subject_fingerprint},
         )
 
 
@@ -395,6 +451,7 @@ class PersistentBusinessApprovalGate:
     def evaluate(self, *, request, requires_approval: bool):
         from application.business_autonomy.guards import ApprovalDecision as GateDecision
         from application.business_autonomy.guards import ApprovalStatus as GateStatus
+
         explicit_constraint_requires_approval = any(
             item.name == "require_human_approval" and bool(item.value) is True
             for item in request.envelope.constraints
@@ -403,9 +460,11 @@ class PersistentBusinessApprovalGate:
             return GateDecision(GateStatus.NOT_REQUIRED, "Approval is not required.")
 
         metadata = dict(request.envelope.metadata)
-        tenant_id = str(metadata.get("tenant_id") or request.envelope.business_id or "global")
-        approval_id = str(metadata.get("approval_id") or f"business-autonomy:{request.envelope.business_id}:{request.envelope.goal_id}")
-        approved_by = metadata.get("approved_by")
+        tenant_id = str(metadata.get("tenant_id") or "").strip()
+        if not tenant_id or tenant_id == "global":
+            return GateDecision(GateStatus.REJECTED, "Canonical approval requires an explicit tenant.")
+        approval_id = business_execution_approval_id(request)
+        subject_fingerprint = business_execution_fingerprint(request)
         existing = self._store.get(approval_id)
         if existing is None:
             approval_request = ApprovalRequest(
@@ -415,33 +474,30 @@ class PersistentBusinessApprovalGate:
                 subject_id=str(request.envelope.goal_id),
                 requested_by=str(request.envelope.requested_by or "platform"),
                 reason=str(metadata.get("approval_reason") or "Business autonomy execution requires approval."),
-                metadata={
-                    "business_id": request.envelope.business_id,
-                    "goal_id": request.envelope.goal_id,
-                    "goal_type": request.envelope.goal_type,
-                },
+                metadata=dict(approval_subject_metadata(request)),
             )
             try:
                 existing = self._store.create(approval_request)
             except ValueError:
                 existing = self._store.get(approval_id)
 
-        if approved_by and existing is not None and existing.status is ApprovalStatus.REQUESTED:
-            decision = ApprovalDecision(
-                approval_id=approval_id,
-                tenant_id=tenant_id,
-                actor_id=str(approved_by),
-                role_id=existing.request.required_role_groups[0][0] if existing.request.required_role_groups else RoleId.OPERATOR,
-                outcome=ApprovalOutcome.APPROVE,
-                rationale=str(metadata.get("approval_note") or "Approved via business autonomy metadata."),
-            )
-            updated = replace(existing, status=ApprovalStatus.APPROVED, decisions=existing.decisions + (decision,), final_reason="approved")
-            self._store.save(updated)
-            existing = updated
-
-        if existing is not None and existing.status is ApprovalStatus.APPROVED:
-            return GateDecision(GateStatus.APPROVED, "Approval provided.", str(approved_by or (existing.decisions[-1].actor_id if existing.decisions else "")))
-        if existing is not None and existing.status in {ApprovalStatus.REJECTED, ApprovalStatus.CANCELLED, ApprovalStatus.EXPIRED}:
+        if existing is None:
+            return GateDecision(GateStatus.PENDING, "Approval request could not be resolved.")
+        bound_business_id = str(existing.request.metadata.get("business_id") or "")
+        bound_fingerprint = str(existing.request.metadata.get("subject_fingerprint") or "")
+        if (
+            existing.request.approval_id != approval_id
+            or existing.request.tenant_id != tenant_id
+            or existing.request.subject_type != "business_autonomy_execution"
+            or existing.request.subject_id != str(request.envelope.goal_id)
+            or bound_business_id != str(request.envelope.business_id)
+            or bound_fingerprint != subject_fingerprint
+        ):
+            return GateDecision(GateStatus.REJECTED, "Approval binding mismatch.")
+        if existing.status is ApprovalStatus.APPROVED:
+            approver = existing.decisions[-1].actor_id if existing.decisions else ""
+            return GateDecision(GateStatus.APPROVED, "Approval provided by canonical governance.", str(approver))
+        if existing.status in {ApprovalStatus.REJECTED, ApprovalStatus.CANCELLED, ApprovalStatus.EXPIRED}:
             return GateDecision(GateStatus.REJECTED, f"Approval not granted: {existing.status.value}.")
         return GateDecision(GateStatus.PENDING, "Approval required but not yet provided.")
 
@@ -453,28 +509,73 @@ class PersistentBusinessOperatorOverridePolicy:
     def evaluate(self, request):
         from application.business_autonomy.guards import OperatorOverrideDecision as GateDecision
         from application.business_autonomy.guards import OperatorOverrideMode
-        metadata = dict(request.envelope.metadata)
-        override_id = metadata.get("override_id")
-        if override_id:
-            record = self._store.get(str(override_id))
-            if record is not None and record.status is OperatorOverrideStatus.APPROVED and record.decision is not None:
-                mode = {
-                    OperatorOverrideResolution.APPROVE_ONCE: OperatorOverrideMode.FORCE_ALLOW,
-                    OperatorOverrideResolution.REJECT: OperatorOverrideMode.FORCE_DENY,
-                    OperatorOverrideResolution.RETRY: OperatorOverrideMode.FORCE_ALLOW,
-                    OperatorOverrideResolution.DOWNGRADE_TO_SUPERVISED: OperatorOverrideMode.FORCE_SIMULATION,
-                    OperatorOverrideResolution.CANCEL: OperatorOverrideMode.FORCE_DENY,
-                }.get(record.decision.resolution, OperatorOverrideMode.NONE)
-                return GateDecision(mode=mode, reason=str(record.decision.note), operator_id=str(record.decision.actor_id))
 
-        raw_mode = metadata.get("operator_override_mode")
-        if raw_mode is None:
-            return GateDecision(OperatorOverrideMode.NONE, "No operator override requested.")
+        override_id = dict(request.envelope.metadata).get("override_id")
+        if not override_id:
+            return GateDecision(OperatorOverrideMode.NONE, "No canonical operator override is recorded.")
+        record = self._store.get(str(override_id))
+        if record is None or record.status is not OperatorOverrideStatus.APPROVED or record.decision is None:
+            return GateDecision(OperatorOverrideMode.NONE, "Canonical operator override is not approved.")
+        try:
+            record.validate_binding(**_operator_override_binding(request))
+        except (RuntimeError, ValueError) as exc:
+            return GateDecision(OperatorOverrideMode.FORCE_DENY, str(exc), override_id=str(override_id))
+        mode = {
+            OperatorOverrideResolution.APPROVE_ONCE: OperatorOverrideMode.FORCE_ALLOW,
+            OperatorOverrideResolution.REJECT: OperatorOverrideMode.FORCE_DENY,
+            OperatorOverrideResolution.RETRY: OperatorOverrideMode.FORCE_ALLOW,
+            OperatorOverrideResolution.DOWNGRADE_TO_SUPERVISED: OperatorOverrideMode.FORCE_SIMULATION,
+            OperatorOverrideResolution.CANCEL: OperatorOverrideMode.FORCE_DENY,
+        }.get(record.decision.resolution, OperatorOverrideMode.NONE)
         return GateDecision(
-            mode=OperatorOverrideMode(str(raw_mode)),
-            reason=str(metadata.get("operator_override_reason", "operator override")),
-            operator_id=str(metadata.get("operator_id")) if metadata.get("operator_id") is not None else None,
+            mode=mode,
+            reason=str(record.decision.note),
+            operator_id=str(record.decision.actor_id),
+            override_id=str(override_id),
         )
+
+    def consume(self, *, override_id: str, request) -> None:
+        record = self._store.get(str(override_id))
+        if record is None or record.status is not OperatorOverrideStatus.APPROVED or record.decision is None:
+            raise RuntimeError("canonical_operator_override_not_approved")
+        record.validate_binding(**_operator_override_binding(request))
+        if record.decision.resolution is OperatorOverrideResolution.APPROVE_ONCE:
+            updated = record.consume_once(execution_id=str(request.correlation_id))
+        elif record.decision.resolution is OperatorOverrideResolution.RETRY:
+            updated = replace(
+                record,
+                status=OperatorOverrideStatus.CONSUMED,
+                consumed_at=datetime.now(UTC),
+                consumed_by_execution_id=str(request.correlation_id),
+                final_reason="retry_override_consumed",
+            )
+        else:
+            return
+        self._store.save(updated)
+
+
+def _operator_override_binding(request) -> dict[str, str]:
+    from execution.operator_override_contract import build_operator_override_subject_fingerprint
+
+    metadata = dict(request.envelope.metadata)
+    tenant_id = str(metadata.get("tenant_id") or "").strip()
+    execution_id = str(request.correlation_id)
+    decision_id = str(metadata.get("decision_id") or request.envelope.goal_id)
+    action_name = str(metadata.get("action_type") or request.envelope.goal_type)
+    subject_fingerprint = build_operator_override_subject_fingerprint(
+        tenant_id=tenant_id,
+        execution_id=execution_id,
+        decision_id=decision_id,
+        action_name=action_name,
+        subject_payload=dict(request.envelope.goal_payload),
+    )
+    return {
+        "tenant_id": tenant_id,
+        "execution_id": execution_id,
+        "decision_id": decision_id,
+        "action_name": action_name,
+        "subject_fingerprint": subject_fingerprint,
+    }
 
 
 class PersistentBusinessPlanningMemorySink:

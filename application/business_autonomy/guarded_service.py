@@ -6,11 +6,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult, ExecutionVerdict
+from application.business_autonomy.execution_subject import scoped_business_idempotency_token
 from application.business_autonomy.guards import (
     ApprovalStatus,
     BusinessApprovalGate,
     BusinessBlastRadiusGuard,
     BusinessBudgetGuard,
+    BusinessIdempotencyReservationStatus,
     BusinessIdempotencyStore,
     BusinessOperatorOverridePolicy,
     OperatorOverrideMode,
@@ -57,9 +59,10 @@ class BusinessAutonomyGuardedService:
                 business_id=request.envelope.business_id,
                 goal_id=request.envelope.goal_id,
                 execution_id=request.correlation_id,
-                message='business autonomy guarded execution dependencies are not configured',
-                metadata={'surface': 'compatibility_guarded_service'},
+                message="business autonomy guarded execution dependencies are not configured",
+                metadata={"surface": "compatibility_guarded_service"},
             )
+
         scoped_idempotency_key = _scoped_idempotency_key(request)
         cached = self._idempotency_store.get(scoped_idempotency_key)
         if cached is not None:
@@ -99,8 +102,8 @@ class BusinessAutonomyGuardedService:
             )
 
         budget = self._budget_guard.evaluate(effective_request)
-        budget_safety = dict(budget.safety_verdict or {"allowed": bool(budget.allowed), "reason": "legacy_budget_guard", "source": "legacy"})
-        if not budget.allowed and override.mode != OperatorOverrideMode.FORCE_ALLOW:
+        budget_safety = dict(budget.safety_verdict or {"allowed": bool(budget.allowed), "reason": "budget_guard", "source": "canonical"})
+        if not budget.allowed:
             result = BusinessExecutionResult(
                 verdict=ExecutionVerdict.REJECTED,
                 business_id=effective_request.envelope.business_id,
@@ -117,8 +120,8 @@ class BusinessAutonomyGuardedService:
             return result
 
         blast = self._blast_radius_guard.evaluate(effective_request)
-        blast_safety = dict(blast.safety_verdict or {"allowed": bool(blast.allowed), "reason": "legacy_blast_radius_guard", "source": "legacy"})
-        if not blast.allowed and override.mode != OperatorOverrideMode.FORCE_ALLOW:
+        blast_safety = dict(blast.safety_verdict or {"allowed": bool(blast.allowed), "reason": "blast_radius_guard", "source": "canonical"})
+        if not blast.allowed:
             result = BusinessExecutionResult(
                 verdict=ExecutionVerdict.REJECTED,
                 business_id=effective_request.envelope.business_id,
@@ -162,8 +165,19 @@ class BusinessAutonomyGuardedService:
             return result
 
         approval = self._approval_gate.evaluate(request=effective_request, requires_approval=trust.requires_approval)
-        if approval.status == ApprovalStatus.PENDING and override.mode != OperatorOverrideMode.FORCE_ALLOW:
+        if approval.status == ApprovalStatus.REJECTED and override.mode != OperatorOverrideMode.FORCE_ALLOW:
             result = BusinessExecutionResult(
+                verdict=ExecutionVerdict.REJECTED,
+                business_id=effective_request.envelope.business_id,
+                goal_id=effective_request.envelope.goal_id,
+                execution_id=effective_request.correlation_id,
+                message=approval.reason,
+                metadata={"approval_status": approval.status.value},
+            )
+            _cache_terminal_result(self._idempotency_store, scoped_idempotency_key, result)
+            return result
+        if approval.status == ApprovalStatus.PENDING and override.mode != OperatorOverrideMode.FORCE_ALLOW:
+            return BusinessExecutionResult(
                 verdict=ExecutionVerdict.PARTIAL,
                 business_id=effective_request.envelope.business_id,
                 goal_id=effective_request.envelope.goal_id,
@@ -175,9 +189,66 @@ class BusinessAutonomyGuardedService:
                     "safety_core": {"budget": budget_safety, "blast_radius": blast_safety},
                 },
             )
-            return result
 
-        result = await self._autonomy_service.execute(effective_request)
+        owner_id = str(effective_request.correlation_id or scoped_idempotency_key)
+        reservation = self._idempotency_store.reserve(scoped_idempotency_key, owner_id=owner_id)
+        if reservation.status == BusinessIdempotencyReservationStatus.REPLAY_COMPLETED:
+            if isinstance(reservation.payload, BusinessExecutionResult):
+                return reservation.payload
+            return BusinessExecutionResult(
+                verdict=ExecutionVerdict.REJECTED,
+                business_id=effective_request.envelope.business_id,
+                goal_id=effective_request.envelope.goal_id,
+                execution_id=effective_request.correlation_id,
+                message="Completed idempotency record has no replayable result.",
+                metadata={"idempotency_status": reservation.status.value},
+            )
+        if reservation.status == BusinessIdempotencyReservationStatus.IN_PROGRESS:
+            return BusinessExecutionResult(
+                verdict=ExecutionVerdict.PARTIAL,
+                business_id=effective_request.envelope.business_id,
+                goal_id=effective_request.envelope.goal_id,
+                execution_id=effective_request.correlation_id,
+                message="An execution with this idempotency key is already in progress.",
+                metadata={"idempotency_status": reservation.status.value},
+            )
+        if reservation.status == BusinessIdempotencyReservationStatus.SCOPE_MISMATCH:
+            return BusinessExecutionResult(
+                verdict=ExecutionVerdict.REJECTED,
+                business_id=effective_request.envelope.business_id,
+                goal_id=effective_request.envelope.goal_id,
+                execution_id=effective_request.correlation_id,
+                message="The idempotency key was reused with a different canonical execution subject.",
+                metadata={"idempotency_status": reservation.status.value},
+            )
+        if reservation.status != BusinessIdempotencyReservationStatus.ACCEPTED:
+            return BusinessExecutionResult(
+                verdict=ExecutionVerdict.REJECTED,
+                business_id=effective_request.envelope.business_id,
+                goal_id=effective_request.envelope.goal_id,
+                execution_id=effective_request.correlation_id,
+                message="The idempotency key is in a terminal failed state.",
+                metadata={"idempotency_status": reservation.status.value},
+            )
+
+        try:
+            if override.mode == OperatorOverrideMode.FORCE_ALLOW and override.override_id:
+                consume = getattr(self._operator_override_policy, "consume", None)
+                if not callable(consume):
+                    raise RuntimeError("canonical_operator_override_consumer_missing")
+                consume(override_id=override.override_id, request=effective_request)
+            result = await self._autonomy_service.execute(effective_request)
+        except Exception as exc:
+            self._idempotency_store.fail(scoped_idempotency_key, owner_id=owner_id, reason=type(exc).__name__)
+            return BusinessExecutionResult(
+                verdict=ExecutionVerdict.FAILED,
+                business_id=effective_request.envelope.business_id,
+                goal_id=effective_request.envelope.goal_id,
+                execution_id=effective_request.correlation_id,
+                message=f"Canonical execution failed before completion: {type(exc).__name__}",
+                metadata={"failure_type": type(exc).__name__, "idempotency_status": "failed"},
+            )
+
         result = type(result)(
             verdict=result.verdict,
             business_id=result.business_id,
@@ -194,7 +265,8 @@ class BusinessAutonomyGuardedService:
                 "safety_core": {"budget": budget_safety, "blast_radius": blast_safety},
             },
         )
-        _cache_terminal_result(self._idempotency_store, scoped_idempotency_key, result)
+        self._idempotency_store.complete(scoped_idempotency_key, owner_id=owner_id, payload=result)
+
         if self._evidence_store is not None and hasattr(self._evidence_store, "append_result"):
             self._evidence_store.append_result(result)
         if self._planning_memory_sink is not None and hasattr(self._planning_memory_sink, "record_execution"):
@@ -281,10 +353,7 @@ def _cache_terminal_result(idempotency_store: BusinessIdempotencyStore, key: str
 
 
 def _scoped_idempotency_key(request: BusinessExecutionRequest) -> str:
-    tenant_id = str(request.envelope.metadata.get("tenant_id") or "global").strip() or "global"
-    business_id = str(request.envelope.business_id or "unknown").strip() or "unknown"
-    raw_key = str(request.idempotency_key or request.correlation_id).strip() or str(request.correlation_id)
-    return f"{tenant_id}:{business_id}:{raw_key}"
+    return scoped_business_idempotency_token(request)
 
 
 def _distributed_append_dir() -> Path:

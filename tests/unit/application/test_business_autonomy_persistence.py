@@ -1,6 +1,13 @@
 import pytest
 
-from application.business_autonomy.contracts import BusinessExecutionResult, ExecutionVerdict
+from application.business_autonomy.contracts import (
+    BusinessExecutionRequest,
+    BusinessExecutionResult,
+    BusinessGoalEnvelope,
+    ExecutionVerdict,
+    IntegrationMode,
+)
+from application.business_autonomy.execution_subject import scoped_business_idempotency_token
 from application.business_autonomy.persistence import (
     PersistentBusinessAutonomyAudit,
     PersistentBusinessAutonomyEvidenceStore,
@@ -21,6 +28,19 @@ async def test_persistent_business_autonomy_audit_roundtrip(tmp_path) -> None:
 def test_persistent_business_autonomy_idempotency_roundtrip(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     store = PersistentBusinessAutonomyIdempotencyStore()
+    request = BusinessExecutionRequest(
+        envelope=BusinessGoalEnvelope(
+            business_id="b1",
+            goal_id="g1",
+            goal_type="internal_read",
+            goal_payload={"resource": "summary"},
+            metadata={"tenant_id": "tenant-a"},
+        ),
+        integration_mode=IntegrationMode.POLICY_GUARDED_DELEGATED,
+        correlation_id="e1",
+        idempotency_key="idem-1",
+    )
+    token = scoped_business_idempotency_token(request)
     result = BusinessExecutionResult(
         verdict=ExecutionVerdict.COMPLETED,
         business_id="b1",
@@ -28,8 +48,8 @@ def test_persistent_business_autonomy_idempotency_roundtrip(tmp_path, monkeypatc
         execution_id="e1",
         message="done",
     )
-    store.put("idem-1", result)
-    loaded = store.get("idem-1")
+    store.put(token, result)
+    loaded = store.get(token)
     assert loaded is not None
     assert loaded.message == "done"
     assert loaded.verdict is ExecutionVerdict.COMPLETED
