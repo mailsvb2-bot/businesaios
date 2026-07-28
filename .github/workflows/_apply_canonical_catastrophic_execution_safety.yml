@@ -30,10 +30,31 @@ jobs:
         with:
           python-version: '3.12'
       - name: Apply canonical repair
+        id: apply
+        continue-on-error: true
         env:
           PYTHONDONTWRITEBYTECODE: '1'
-        run: python tools/_apply_canonical_catastrophic_execution_safety.py
+        shell: bash
+        run: |
+          set +e
+          python tools/_apply_canonical_catastrophic_execution_safety.py > /tmp/canonical-repair.log 2>&1
+          status=$?
+          cat /tmp/canonical-repair.log
+          printf '%s\n' "$status" > /tmp/canonical-repair-status
+          exit "$status"
+      - name: Publish deterministic failure evidence
+        if: steps.apply.outcome == 'failure'
+        shell: bash
+        run: |
+          git reset --hard HEAD
+          cp /tmp/canonical-repair.log tools/_canonical_repair_error.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/_canonical_repair_error.txt
+          git commit -m "Record canonical repair failure evidence"
+          git push origin HEAD:agent/canonical-catastrophic-safety-repair
       - name: Compile changed Python
+        if: steps.apply.outcome == 'success'
         env:
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
@@ -43,11 +64,16 @@ jobs:
             tests/regression/test_canonical_catastrophic_execution_safety.py
           git diff --check
       - name: Commit canonical repair
+        if: steps.apply.outcome == 'success'
         run: |
           rm tools/_apply_canonical_catastrophic_execution_safety.py
           rm .github/workflows/_apply_canonical_catastrophic_execution_safety.yml
+          rm -f tools/_canonical_repair_error.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "Close canonical execution safety failures"
           git push origin HEAD:agent/canonical-catastrophic-safety-repair
+      - name: Fail workflow after evidence publication
+        if: steps.apply.outcome == 'failure'
+        run: exit 1
