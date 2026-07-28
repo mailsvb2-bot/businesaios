@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from application.autonomy.autonomy_tiers import evaluate_autonomy_tier
+from application.autonomy.autonomy_tiers import evaluate_autonomy_transition
 from application.headless.decision_gateway import issue_headless_decision
 from contracts import executable_action as executable_action_contract
 from core.ai.decision_core import project_executable_action
@@ -11,6 +11,7 @@ from execution.headless_trace import HeadlessTrace
 
 CANON_AUTONOMY_DECISION_STEP = True
 CANON_AUTONOMY_DELEGATES_EXECUTABLE_PROJECTION = True
+CANON_AUTONOMY_PRESERVES_DECISION_RISK = True
 
 
 @dataclass(frozen=True)
@@ -56,8 +57,9 @@ class AutonomyDecisionStep:
             state=state,
             envelope=envelope,
         )
-        autonomy_decision = evaluate_autonomy_tier(
-            action_type=str(executable_action.action_type),
+        autonomy_decision = evaluate_autonomy_transition(
+            decided_action_type=str(envelope.decision.action),
+            executable_action_type=str(executable_action.action_type),
             autonomy_tier=request.autonomy_tier,
             approval_policy=dict(request.approval_policy or {}),
         )
@@ -124,6 +126,7 @@ class AutonomyDecisionStep:
 __all__ = [
     "CANON_AUTONOMY_DECISION_STEP",
     "CANON_AUTONOMY_DELEGATES_EXECUTABLE_PROJECTION",
+    "CANON_AUTONOMY_PRESERVES_DECISION_RISK",
     "AutonomyDecisionStep",
     "DecisionStepArtifacts",
 ]
