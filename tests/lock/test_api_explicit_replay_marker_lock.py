@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 GUARD = ROOT / "entrypoints" / "api" / "public_surface_security_guard.py"
+ROUTE_SPECS = ROOT / "entrypoints" / "api" / "public_surface_route_specs.py"
 
 
 def test_internal_write_replay_marker_must_be_explicit() -> None:
@@ -18,7 +19,7 @@ def test_internal_write_replay_marker_must_be_explicit() -> None:
 
 
 def test_public_cta_remains_explicit_public_surface() -> None:
-    text = GUARD.read_text(encoding="utf-8")
+    text = ROUTE_SPECS.read_text(encoding="utf-8")
 
     assert "'/public-site/cta/start'" in text
-    assert "tags=('public', 'public_site', 'cta', 'public_api')" in text
+    assert "('public', 'public_site', 'cta', 'public_api')" in text
