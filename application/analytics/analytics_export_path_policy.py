@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 
 
 CANON_ANALYTICS_EXPORT_SANDBOX = True
+CANON_ANALYTICS_EXPORT_TENANT_ISOLATION = True
 _SAFE_EXPORT_ID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$')
 
 
@@ -51,12 +52,14 @@ class AnalyticsExportPathPolicy:
         return cls(export_root=default_analytics_export_root())
 
     def normalized_relative_file(self, *, requested_path: str | None, tenant_id: str) -> str:
+        tenant_directory = _tenant_directory(tenant_id)
         if requested_path is None or not str(requested_path).strip():
-            return f'{_tenant_directory(tenant_id)}/analytics-dashboard-bundle.json'
-        parts = _relative_parts(str(requested_path), field_name='export_path')
-        if not parts[-1].lower().endswith('.json'):
-            raise ValueError('export_path_must_end_with_json')
-        return '/'.join(parts)
+            parts = ('analytics-dashboard-bundle.json',)
+        else:
+            parts = _relative_parts(str(requested_path), field_name='export_path')
+            if not parts[-1].lower().endswith('.json'):
+                raise ValueError('export_path_must_end_with_json')
+        return '/'.join((tenant_directory, *parts))
 
     def resolve_file(self, *, requested_path: str | None, tenant_id: str) -> Path:
         relative = self.normalized_relative_file(requested_path=requested_path, tenant_id=tenant_id)
@@ -66,12 +69,13 @@ class AnalyticsExportPathPolicy:
         return candidate
 
     def resolve_directory(self, *, requested_dir: str | None, tenant_id: str) -> Path:
+        tenant_directory = _tenant_directory(tenant_id)
         if requested_dir is None or not str(requested_dir).strip():
-            parts = (_tenant_directory(tenant_id),)
+            parts: tuple[str, ...] = ()
         else:
             parts = _relative_parts(str(requested_dir), field_name='export_dir')
         root = self.export_root.expanduser().resolve()
-        candidate = root.joinpath(*parts).resolve()
+        candidate = root.joinpath(tenant_directory, *parts).resolve()
         self._require_within_root(candidate=candidate, root=root)
         return candidate
 
@@ -93,5 +97,6 @@ class AnalyticsExportPathPolicy:
 __all__ = [
     'AnalyticsExportPathPolicy',
     'CANON_ANALYTICS_EXPORT_SANDBOX',
+    'CANON_ANALYTICS_EXPORT_TENANT_ISOLATION',
     'default_analytics_export_root',
 ]
