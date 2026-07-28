@@ -4,8 +4,11 @@ This module centralizes the only allowed post-decision path:
     decision -> guard -> execution -> verification -> state update -> evidence -> next-step context
 
 It intentionally owns no decision logic and no effect dispatching. It only
-cements the canonical post-dispatch contract and fail-closes when verification
-fails or when callers try to persist outcome/evidence through ad-hoc paths.
+cements the canonical post-dispatch contract and fail-closes on terminal
+verification failures or when callers try to persist outcome/evidence through
+ad-hoc paths. A successful execution receipt may be committed while external
+business confirmation is still pending; re-executing an already dispatched
+irreversible effect would violate exactly-once.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ from typing import Any
 
 from application.evidence.evidence_verifier import EvidenceVerifier
 from runtime.boot.actions_registry import get_spec
-from runtime.execution.dispatcher import offline_effect_noop
+from runtime.execution.dispatcher import effect_succeeded, offline_effect_noop
 from runtime.execution.evidence_trust import (
     external_confirmation_required,
     extract_trusted_router_evidence,
@@ -30,8 +33,19 @@ CANON_RUNTIME_EXECUTION_CONTRACT_LOCK_OWNER = True
 CANON_RUNTIME_EXECUTION_CONTRACT_NO_DECISION_LOGIC = True
 CANON_RUNTIME_EXECUTION_CONTRACT_NO_SELF_ISSUED_EVIDENCE = True
 CANON_RUNTIME_EXECUTION_CONTRACT_REGISTRY_BOUND_VERIFICATION = True
+CANON_RUNTIME_EXECUTION_RECEIPT_EXTERNAL_CONFIRMATION_SPLIT = True
 
 _NON_ACTUATION_OUTCOMES = frozenset({"dry_run", "blocked", "duplicate", "skipped", "failed"})
+_PENDING_EXTERNAL_CODES = frozenset(
+    {
+        "missing_external_evidence",
+        "missing_external_confirmation",
+        "untrusted_external_evidence",
+        "verification_pending",
+        "unverified",
+        "unknown",
+    }
+)
 
 
 class ExecutionContractLockError(RuntimeError):
@@ -72,7 +86,7 @@ def _decision_observed_at(env: Any) -> str:
     raw = getattr(decision, "issued_at_ms", None)
     try:
         return datetime.fromtimestamp(int(raw) / 1000, tz=UTC).isoformat()
-    except Exception:
+    except (TypeError, ValueError, OSError, OverflowError):
         return "1970-01-01T00:00:00+00:00"
 
 
@@ -130,9 +144,9 @@ def _action_verification_contract(
     canonical_mode = str(spec.external_confirmation_mode)
     normalized_output = _safe_dict(output)
 
-    # Preserve the repository's existing hermetic headless smoke contract. The
-    # dispatcher only recognizes this state while pytest is active and a known
-    # offline transport marker is present, so production cannot reach it.
+    # A hermetic transport no-op proves that no external actuation occurred. It
+    # must not inject its negative connector evidence into the post-dispatch
+    # verifier or deterministic tests become a false receipt/router conflict.
     if offline_effect_noop(normalized_output):
         return category, "not_required"
 
@@ -172,8 +186,8 @@ def _build_execution_receipt(*, env: Any, output: Mapping[str, Any]) -> dict[str
     return {
         "ok": True,
         "executed": True,
-        "status": str(output.get("status") or "verified"),
-        "source": str(output.get("source") or "executor"),
+        "status": str(output.get("status") or "executed"),
+        "source": "executor",
         "decision_id": str(getattr(decision, "decision_id", "") or ""),
         "correlation_id": str(getattr(decision, "correlation_id", "") or ""),
         "action": str(getattr(decision, "action", "") or ""),
@@ -209,17 +223,50 @@ def _enforce_external_evidence_trust(
     return normalized, False
 
 
+def _may_commit_pending_external_confirmation(
+    *,
+    action: Mapping[str, Any],
+    output: Mapping[str, Any],
+    result: Mapping[str, Any],
+    verification: Mapping[str, Any],
+) -> bool:
+    if not external_confirmation_required(action):
+        return False
+    if not effect_succeeded(output):
+        return False
+    if result_has_trusted_external_evidence(result):
+        return False
+    code = str(verification.get("code") or "").strip().casefold()
+    status = str(verification.get("status") or "").strip().casefold()
+    return code in _PENDING_EXTERNAL_CODES or status in _PENDING_EXTERNAL_CODES
+
+
+def _pending_external_verification(verification: Mapping[str, Any]) -> dict[str, Any]:
+    normalized = dict(verification)
+    normalized.update(
+        {
+            "verified": False,
+            "status": "pending",
+            "code": "external_confirmation_pending",
+            "message": "execution receipt committed; external confirmation is pending",
+            "source_of_truth": "execution_receipt",
+            "retryable": True,
+            "delayed": True,
+            "execution_verified": True,
+            "external_outcome_verified": False,
+        }
+    )
+    return normalized
+
+
 def verify_execution_contract(*, executor: Any, env: Any, output: Mapping[str, Any] | None) -> VerificationStageResult:
     normalized_output = _safe_dict(output)
     verifier = getattr(executor, "_evidence_verifier", None) or EvidenceVerifier()
     action = _build_action_payload(env=env, output=normalized_output)
-    router_evidence = extract_trusted_router_evidence(normalized_output)
+    hermetic_noop = offline_effect_noop(normalized_output)
+    router_evidence = {} if hermetic_noop else extract_trusted_router_evidence(normalized_output)
     feedback = sanitize_feedback_payload(_extract_feedback_payload(normalized_output))
 
-    # Constitutional rule: the execution contract may observe evidence, but it
-    # may never manufacture or promote unattributed positive evidence for itself.
-    # Internal/advisory/bookkeeping actions preserve their receipt-only contract;
-    # external effects require explicitly attributed router/connector evidence.
     result = verifier.verify(
         action=action,
         execution_receipt=_build_execution_receipt(env=env, output=normalized_output),
@@ -234,6 +281,14 @@ def verify_execution_contract(*, executor: Any, env: Any, output: Mapping[str, A
         verification=verification,
         verified=verified,
     )
+    if not verified and _may_commit_pending_external_confirmation(
+        action=action,
+        output=normalized_output,
+        result=result,
+        verification=verification,
+    ):
+        verification = _pending_external_verification(verification)
+
     evidence_bundle = _safe_dict(result.get("evidence_bundle"))
     outcome = _safe_dict(verification.get("outcome") or {})
     external_refs = list(verification.get("external_refs") or outcome.get("external_refs") or [])
@@ -241,6 +296,8 @@ def verify_execution_contract(*, executor: Any, env: Any, output: Mapping[str, A
         "decision_id": str(getattr(getattr(env, "decision", None), "decision_id", "") or ""),
         "correlation_id": str(getattr(getattr(env, "decision", None), "correlation_id", "") or ""),
         "verified": verified,
+        "execution_verified": bool(verified or verification.get("execution_verified")),
+        "external_outcome_verified": bool(verification.get("external_outcome_verified", verified)),
         "verification_status": str(verification.get("status") or ("verified" if verified else "failed")),
         "external_refs": external_refs,
     }
@@ -250,11 +307,12 @@ def verify_execution_contract(*, executor: Any, env: Any, output: Mapping[str, A
         stage="verification",
         payload={
             "verified": verified,
+            "execution_verified": next_step_context["execution_verified"],
             "status": next_step_context["verification_status"],
             "code": str(verification.get("code") or ""),
         },
     )
-    if not verified:
+    if not verified and not next_step_context["execution_verified"]:
         raise ExecutionContractLockError(str(verification.get("code") or verification.get("status") or "verification_failed"))
     return VerificationStageResult(
         verified=verified,
@@ -269,7 +327,11 @@ def commit_verified_execution(*, executor: Any, env: Any, output: Mapping[str, A
     persistence = persist_verified_outcome(
         executor=executor,
         env=env,
-        verification={**dict(verification_result.verification), "verified": bool(verification_result.verified)},
+        verification={
+            **dict(verification_result.verification),
+            "verified": bool(verification_result.verified),
+            "execution_verified": bool(verification_result.next_step_context.get("execution_verified")),
+        },
     )
     return {
         **normalized_output,
@@ -285,6 +347,7 @@ __all__ = [
     "CANON_RUNTIME_EXECUTION_CONTRACT_NO_DECISION_LOGIC",
     "CANON_RUNTIME_EXECUTION_CONTRACT_NO_SELF_ISSUED_EVIDENCE",
     "CANON_RUNTIME_EXECUTION_CONTRACT_REGISTRY_BOUND_VERIFICATION",
+    "CANON_RUNTIME_EXECUTION_RECEIPT_EXTERNAL_CONFIRMATION_SPLIT",
     "ExecutionContractLockError",
     "VerificationStageResult",
     "verify_execution_contract",
