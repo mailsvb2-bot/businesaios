@@ -17,7 +17,6 @@ from billing.client_outcome_reversal_ledger_bridge import ClientOutcomeReversalL
 from billing.client_outcome_reversal_posting_service import ClientOutcomeReversalPostingService
 from billing.client_outcome_revenue_control_service import ClientOutcomeRevenueControlService
 from billing.client_outcome_usage_ledger import ClientOutcomeUsageAppender, ClientOutcomeUsageLedger
-from billing.ledger_store import InMemoryLedgerStore
 from economics.client_outcome_economic_calculator import ClientOutcomeEconomicCalculator
 from entrypoints.api.client_outcome_routes import service as client_service
 from lead_outcomes import OutcomeVerifier
@@ -38,6 +37,7 @@ from lead_outcomes.client_outcome_service import ClientOutcomeService
 from lead_outcomes.client_verification_service import ClientVerificationService
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 from registry.base_registry import BaseRegistry
+from runtime.platform.client_outcome_persistence import ClientOutcomePersistenceOwner
 
 CANON_CLIENT_OUTCOME_ROUTE_HANDLERS = True
 
@@ -63,11 +63,17 @@ class ClientOutcomeRouteHandlers:
 
 
 def build_client_outcome_route_handlers(*, headless_handlers: object | None = None) -> ClientOutcomeRouteHandlers:
+    persistence = ClientOutcomePersistenceOwner.default()
     package_catalog = ClientOutcomePackageCatalog.default_catalog()
     order_factory = ClientOutcomeOrderFactory(package_catalog=package_catalog)
-    order_store = ClientOutcomeOrderStore()
-    dispute_store = ClientOutcomeDisputeStore()
-    reversal_store = ClientOutcomeReversalStore(registry=BaseRegistry(kind='client_outcome_reversal'))
+    order_store = ClientOutcomeOrderStore(backend=persistence.registry('client_outcome_order'))
+    dispute_store = ClientOutcomeDisputeStore(backend=persistence.registry('client_outcome_dispute'))
+    reversal_store = ClientOutcomeReversalStore(
+        registry=BaseRegistry(
+            kind='client_outcome_reversal',
+            backend=persistence.registry('client_outcome_reversal'),
+        )
+    )
     dispute_service = ClientOutcomeDisputeService(
         dispute_store=dispute_store,
         reversal_store=reversal_store,
@@ -76,11 +82,11 @@ def build_client_outcome_route_handlers(*, headless_handlers: object | None = No
     )
     control_plane_service = ClientOutcomeControlPlaneService(dispute_service=dispute_service)
     reversal_posting_service = ClientOutcomeReversalPostingService(
-        ledger_store=InMemoryLedgerStore(),
+        ledger_store=persistence.ledger_store(),
         ledger_bridge=ClientOutcomeReversalLedgerBridge(),
     )
     client_outcome_service = ClientOutcomeService(
-        registry=ClientOutcomeRegistry(),
+        registry=ClientOutcomeRegistry(backend=persistence.registry('client_outcome')),
         verification_service=ClientVerificationService(
             attribution_policy=ClientAttributionPolicy(),
             fraud_policy=ClientFraudPolicy(),
@@ -88,11 +94,11 @@ def build_client_outcome_route_handlers(*, headless_handlers: object | None = No
             outcome_verifier=OutcomeVerifier(),
         ),
     )
-    lifecycle_store = ClientOutcomeLifecycleStore()
-    commercial_state_store = ClientOutcomeCommercialStateStore()
-    corrected_economics_store = ClientOutcomeCorrectedEconomicsStore()
-    cycle_idempotency_store = ClientOutcomeCycleIdempotencyStore()
-    tenant_metrics_registry = TenantMetricsRegistry()
+    lifecycle_store = ClientOutcomeLifecycleStore(backend=persistence.registry('client_outcome_lifecycle'))
+    commercial_state_store = ClientOutcomeCommercialStateStore(backend=persistence.registry('client_outcome_commercial_state'))
+    corrected_economics_store = ClientOutcomeCorrectedEconomicsStore(backend=persistence.registry('client_outcome_corrected_economics'))
+    cycle_idempotency_store = ClientOutcomeCycleIdempotencyStore(backend=persistence.registry('client_outcome_cycle_idempotency'))
+    tenant_metrics_registry = persistence.metrics_registry()
     lifecycle_service = ClientOutcomeLifecyclePersistenceService(store=lifecycle_store)
     commercial_state_service = ClientOutcomeCommercialStateService(store=commercial_state_store)
     corrected_economics_service = ClientOutcomeCorrectedEconomicsService(store=corrected_economics_store)
@@ -107,7 +113,7 @@ def build_client_outcome_route_handlers(*, headless_handlers: object | None = No
         corrected_economics_service=corrected_economics_service,
         lifecycle_service=lifecycle_service,
     )
-    usage_ledger = ClientOutcomeUsageLedger()
+    usage_ledger = ClientOutcomeUsageLedger(backend=persistence.registry('client_outcome_usage'))
     revenue_control_service = ClientOutcomeRevenueControlService(
         usage_ledger=usage_ledger,
         usage_appender=ClientOutcomeUsageAppender(ledger=usage_ledger),
@@ -135,11 +141,12 @@ def build_client_outcome_route_handlers(*, headless_handlers: object | None = No
         tenant_metrics_registry=tenant_metrics_registry,
     )
 
+
 for _name in [
-    'list_packages','select_package','get_order','amend_order','execute_package','open_dispute','reverse_dispute',
-    'get_lifecycle','get_commercial_state','get_corrected_economics','_resolve_tenant_id','_emit_reconciliation_metrics',
-    '_build_operational_metrics_widget','_build_economic_truth_widget','_build_recovery_bridge_widget',
-    'get_reconciliation','get_admin_view','build_admin_summary','execute_full_cycle'
+    'list_packages', 'select_package', 'get_order', 'amend_order', 'execute_package', 'open_dispute', 'reverse_dispute',
+    'get_lifecycle', 'get_commercial_state', 'get_corrected_economics', '_resolve_tenant_id', '_emit_reconciliation_metrics',
+    '_build_operational_metrics_widget', '_build_economic_truth_widget', '_build_recovery_bridge_widget',
+    'get_reconciliation', 'get_admin_view', 'build_admin_summary', 'execute_full_cycle',
 ]:
     if hasattr(client_service, _name):
         setattr(ClientOutcomeRouteHandlers, _name, getattr(client_service, _name))
