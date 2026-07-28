@@ -78,6 +78,8 @@ def test_key_envelope_requires_the_same_external_master(monkeypatch, tmp_path) -
         tenant_id="tenant-a",
         connector_id="connector-a",
     )
+    decoded = base64.b64decode(wrapped, validate=True)
+    assert decoded.startswith(b"BAIOS-KE2:")
     assert unwrap_key_material(
         wrapped,
         key_id="key-a",
@@ -85,6 +87,17 @@ def test_key_envelope_requires_the_same_external_master(monkeypatch, tmp_path) -
         tenant_id="tenant-a",
         connector_id="connector-a",
     ) == b"secret-key-material"
+
+    tampered = bytearray(decoded)
+    tampered[-1] ^= 1
+    with pytest.raises(RuntimeError, match="integrity"):
+        unwrap_key_material(
+            base64.b64encode(tampered).decode("ascii"),
+            key_id="key-a",
+            purpose=KeyPurpose.SECRET_ENCRYPTION.value,
+            tenant_id="tenant-a",
+            connector_id="connector-a",
+        )
 
     monkeypatch.setenv("BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64", base64.b64encode(master_b).decode("ascii"))
     with pytest.raises(RuntimeError, match="integrity"):
