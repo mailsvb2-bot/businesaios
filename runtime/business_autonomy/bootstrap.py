@@ -77,13 +77,16 @@ from runtime.business_autonomy.distributed_runtime_views import (
 )
 from runtime.business_autonomy.distributed_state import (
     FileApprovalDocumentPort,
-    FileDistributedCompareAndSwap,
-    FileDistributedDocumentStore,
-    FileDistributedEvidenceAppendPort,
-    FileDistributedSequenceStore,
     FileOperatorOverrideDocumentPort,
     FilePlanningMemoryDocumentPort,
-    FileRegionRouteState,
+)
+from runtime.business_autonomy.sqlite_distributed_state import (
+    SQLiteDistributedCompareAndSwap,
+    SQLiteDistributedDocumentStore,
+    SQLiteDistributedEvidenceAppendPort,
+    SQLiteDistributedSequenceStore,
+    SQLiteRegionRouteState,
+    SQLiteStateDatabase,
 )
 from runtime.business_autonomy.execution_support import build_execution_runtime, ensure_business_route
 from runtime.business_autonomy.fleet_read_model import BusinessAutonomyFleetReadModel
@@ -354,27 +357,50 @@ class RequestScopedBusinessAutonomyGuardedService(BusinessAutonomyGuardedService
 
 def _business_autonomy_state_root() -> str:
     from application.business_autonomy.persistence import business_autonomy_runtime_dir
+
     return str(business_autonomy_runtime_dir() / "distributed")
 
 
+def _business_autonomy_state_path() -> Path:
+    from os import getenv
+    from application.business_autonomy.persistence import business_autonomy_runtime_dir
+
+    explicit = str(getenv("BUSINESAIOS_BUSINESS_AUTONOMY_STATE_DB", "") or "").strip()
+    if explicit:
+        return Path(explicit)
+    return business_autonomy_runtime_dir() / "business_autonomy_state.sqlite3"
+
+
 def _build_distributed_state() -> dict[str, object]:
-    root = _business_autonomy_state_root()
-    documents = FileDistributedDocumentStore(root_dir=f"{root}/documents")
-    evidence_port = FileDistributedEvidenceAppendPort(root_dir=f"{root}/append")
+    from os import getenv
+
+    backend = str(getenv("BUSINESAIOS_BUSINESS_AUTONOMY_STATE_BACKEND", "sqlite") or "sqlite").strip().lower()
+    if backend != "sqlite":
+        raise RuntimeError(f"unsupported business autonomy state backend: {backend}")
+    replica_count = int(str(getenv("BUSINESAIOS_RUNTIME_REPLICA_COUNT", "1") or "1"))
+    if replica_count > 1:
+        raise RuntimeError(
+            "MULTI_REPLICA_BUSINESS_AUTONOMY_REQUIRES_EXTERNAL_TRANSACTIONAL_STATE_BACKEND"
+        )
+
+    database = SQLiteStateDatabase(_business_autonomy_state_path())
+    documents = SQLiteDistributedDocumentStore(database)
+    evidence_port = SQLiteDistributedEvidenceAppendPort(database)
     return {
+        "database": database,
         "documents": documents,
         "approvals": DistributedApprovalStore(FileApprovalDocumentPort(documents)),
         "operator_overrides": DistributedOperatorOverrideStore(FileOperatorOverrideDocumentPort(documents)),
         "idempotency": DistributedIdempotencyStore(
-            cas=FileDistributedCompareAndSwap(documents, collection="idempotency_records"),
-            sequence=FileDistributedSequenceStore(f"{root}/sequences.json"),
+            cas=SQLiteDistributedCompareAndSwap(database, scope="idempotency_records"),
+            sequence=SQLiteDistributedSequenceStore(database),
             key_prefix="__raw_scoped_key__",
         ),
         "audit": DistributedGovernanceAuditLog(evidence_port, partition_prefix="business_autonomy_audit"),
         "evidence": DistributedEvidenceStore(evidence_port),
         "planning_memory": DistributedPlanningMemoryBackend(FilePlanningMemoryDocumentPort(documents)),
         "registry": DistributedBusinessRegistry(documents=documents),
-        "region_state": FileRegionRouteState(documents),
+        "region_state": SQLiteRegionRouteState(database),
     }
 
 

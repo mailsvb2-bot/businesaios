@@ -256,18 +256,6 @@ def _deserialize_secret_record(payload: dict[str, object]) -> SecretRecord:
     )
 
 
-def _serialize_key_record(record) -> dict[str, object]:
-    from security.key_provider import _serialize_record
-
-    return _serialize_record(record)
-
-
-def _deserialize_key_record(payload: dict[str, object]):
-    from security.key_provider import _deserialize_record
-
-    return _deserialize_record(payload)
-
-
 class SecretVault(ABC):
     @abstractmethod
     def put(
@@ -507,16 +495,12 @@ class FileSecretVault(InMemorySecretVault):
     def _flush(self) -> None:
         path = self._store_path()
         tmp = path.with_suffix(".json.tmp")
-        key_records = getattr(self._key_provider, "_records", {})
         payload = {
             "records": [
                 _serialize_secret_record(record)
                 for record in self.list_records()
             ],
-            "keys": [
-                _serialize_key_record(record)
-                for record in key_records.values()
-            ],
+            "key_storage": "external_key_provider",
         }
         with tmp.open("w", encoding="utf-8") as handle:
             handle.write(
@@ -541,8 +525,8 @@ class FileSecretVault(InMemorySecretVault):
             return
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"secret vault cannot be read: {path}") from exc
         if isinstance(payload, list):
             records_payload = payload
             keys_payload = []
@@ -550,21 +534,15 @@ class FileSecretVault(InMemorySecretVault):
             records_payload = list(payload.get("records") or [])
             keys_payload = list(payload.get("keys") or [])
         else:
-            return
-        for item in keys_payload:
-            if not isinstance(item, dict):
-                continue
-            try:
-                self._key_provider.register(_deserialize_key_record(item))
-            except Exception:
-                continue
+            raise RuntimeError("secret vault payload must be an object or legacy record list")
+        if keys_payload:
+            raise RuntimeError(
+                "legacy inline secret-vault keys are forbidden; run tools/migrate_legacy_inline_vault_keys.py"
+            )
         for item in records_payload:
             if not isinstance(item, dict):
-                continue
-            try:
-                record = _deserialize_secret_record(item)
-            except Exception:
-                continue
+                raise RuntimeError("secret vault record must be an object")
+            record = _deserialize_secret_record(item)
             self._records[record.ref.key()] = record
 
 
