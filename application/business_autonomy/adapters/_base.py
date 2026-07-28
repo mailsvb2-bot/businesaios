@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from application.business_autonomy.channel_contracts import (
     ChannelCapabilityDescriptor,
@@ -9,7 +10,12 @@ from application.business_autonomy.channel_contracts import (
     ChannelIdentity,
     ChannelKind,
 )
-from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult, ExecutionVerdict
+from application.business_autonomy.contracts import (
+    BusinessExecutionEvidence,
+    BusinessExecutionRequest,
+    BusinessExecutionResult,
+    ExecutionVerdict,
+)
 
 
 @dataclass(frozen=True)
@@ -18,6 +24,13 @@ class StaticCapabilityBundle:
 
 
 class BaseStaticChannelAdapter:
+    """Capability descriptor and simulation adapter, never a fake live transport.
+
+    Subclasses that perform real writes must override ``execute`` and return
+    provider evidence. The base preserves discovery and simulation UX, but a
+    non-simulated call fails closed instead of claiming an external effect.
+    """
+
     channel_kind: ChannelKind
     adapter_key: str
     _capability_bundle: StaticCapabilityBundle
@@ -30,19 +43,41 @@ class BaseStaticChannelAdapter:
 
     async def execute(self, *, envelope: ChannelExecutionEnvelope, request: BusinessExecutionRequest) -> BusinessExecutionResult:
         envelope.validate()
-        verdict = ExecutionVerdict.SIMULATED if request.envelope.simulation else ExecutionVerdict.COMPLETED
+        simulated = bool(request.envelope.simulation)
+        verdict = ExecutionVerdict.SIMULATED if simulated else ExecutionVerdict.REJECTED
+        reason = "simulation_completed" if simulated else "external_transport_not_configured"
+        message = (
+            f"{self.adapter_key} simulated the delegated execution envelope."
+            if simulated
+            else f"{self.adapter_key} has no live transport implementation; no external effect was performed."
+        )
+        evidence = (
+            BusinessExecutionEvidence(
+                event_type="channel_adapter_execution_proof",
+                payload={
+                    "adapter_key": self.adapter_key,
+                    "operation": envelope.operation,
+                    "external_effect": False,
+                    "simulation": simulated,
+                    "reason": reason,
+                },
+                timestamp_utc=datetime.now(UTC).isoformat(),
+                source=self.adapter_key,
+            ),
+        )
         return BusinessExecutionResult(
             verdict=verdict,
             business_id=request.envelope.business_id,
             goal_id=request.envelope.goal_id,
             execution_id=request.correlation_id,
-            message=f"{self.adapter_key} accepted delegated execution envelope.",
+            message=message,
             metrics={
                 "channel_kind": self.channel_kind.value,
                 "adapter_key": self.adapter_key,
                 "operation": envelope.operation,
+                "external_effect": False,
             },
-            evidence=(),
+            evidence=evidence,
             delegated_to_domain_engine=True,
             adapter_name=self.adapter_key,
             metadata={
@@ -51,5 +86,8 @@ class BaseStaticChannelAdapter:
                 "route_key": envelope.route_key,
                 "external_ref": envelope.identity.external_ref,
                 "region": envelope.identity.region,
+                "transport_configured": False,
+                "external_effect": False,
+                "execution_reason": reason,
             },
         )
