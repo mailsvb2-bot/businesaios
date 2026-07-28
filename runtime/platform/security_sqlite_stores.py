@@ -21,6 +21,7 @@ from runtime.platform.security_sqlite_backends.group_03 import (
     SignedOperatorApprovalStoreBackend,
     SQLiteSecurityIncidentDrillHistoryBackend,
     SQLiteSecurityOperatorWorkflowStoreBackend,
+    SQLiteWebhookReplayStoreBackend,
 )
 
 CANON_PLATFORM_SECURITY_SQLITE_STORES = True
@@ -42,5 +43,5 @@ __all__ = [
     "SQLiteSecurityIncidentDrillHistoryBackend",
     "SignedOperatorApprovalStoreBackend",
     "SQLiteSecurityOperatorWorkflowStoreBackend",
+    "SQLiteWebhookReplayStoreBackend",
 ]
-
