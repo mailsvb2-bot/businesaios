@@ -3,10 +3,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from execution.verification.evidence_types import evidence_status_is_positive
+from execution.verification.evidence_types import (
+    evidence_status_is_negative,
+    evidence_status_is_positive,
+)
 from execution.verification.verification_contract import verification_policy_from_action
 
 CANON_RUNTIME_EVIDENCE_TRUST_POLICY = True
+CANON_RUNTIME_TERMINAL_NEGATIVE_EVIDENCE = True
 
 _TRUSTED_ROUTER_SOURCES = frozenset(
     {
@@ -127,30 +131,48 @@ def external_confirmation_required(action: Mapping[str, Any]) -> bool:
     return bool(verification_policy_from_action(action).require_external_evidence)
 
 
-def result_has_trusted_external_evidence(result: Mapping[str, Any]) -> bool:
+def _trusted_engine_evidence(result: Mapping[str, Any]):
     verification = _safe_dict(result.get("verification"))
     engine = _safe_dict(verification.get("engine"))
     evidence_rows = engine.get("evidence")
     if not isinstance(evidence_rows, list | tuple):
-        return False
-
+        return ()
+    trusted: list[dict[str, Any]] = []
     for row in evidence_rows:
         item = _safe_dict(row)
-        if not item or not evidence_status_is_positive(item.get("status")):
+        if not item:
             continue
         kind = str(item.get("kind") or item.get("evidence_type") or "").strip().casefold()
         source = item.get("source")
         if kind == "router_result" and _router_source_is_trusted(source):
-            return True
-        if kind in {"connector_snapshot", "callback", "ledger_entry"} and _external_source_is_trusted(source):
-            return True
-    return False
+            trusted.append(item)
+        elif kind in {"connector_snapshot", "callback", "ledger_entry"} and _external_source_is_trusted(source):
+            trusted.append(item)
+    return tuple(trusted)
+
+
+def result_has_trusted_external_evidence(result: Mapping[str, Any]) -> bool:
+    return any(
+        evidence_status_is_positive(item.get("status"))
+        for item in _trusted_engine_evidence(result)
+    )
+
+
+def result_has_trusted_terminal_negative_evidence(result: Mapping[str, Any]) -> bool:
+    """Return true for authoritative external failure/conflict observations."""
+
+    return any(
+        evidence_status_is_negative(item.get("status"))
+        for item in _trusted_engine_evidence(result)
+    )
 
 
 __all__ = [
     "CANON_RUNTIME_EVIDENCE_TRUST_POLICY",
+    "CANON_RUNTIME_TERMINAL_NEGATIVE_EVIDENCE",
     "external_confirmation_required",
     "extract_trusted_router_evidence",
     "result_has_trusted_external_evidence",
+    "result_has_trusted_terminal_negative_evidence",
     "sanitize_feedback_payload",
 ]
