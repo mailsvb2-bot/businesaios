@@ -80,7 +80,7 @@ def _record_to_row(record: KeyMaterialRecord) -> dict[str, object]:
         "activated_at": _to_iso(record.activated_at),
         "expires_at": _to_iso(record.expires_at),
         "metadata_json": json.dumps(
-            {**dict(record.metadata or {}), "key_envelope_version": "BAIOS-KE1"},
+            dict(record.metadata or {}),
             ensure_ascii=False,
             sort_keys=True,
         ),

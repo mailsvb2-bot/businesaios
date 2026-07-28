@@ -54,7 +54,7 @@ def _serialize_record(record: KeyMaterialRecord) -> dict[str, object]:
             tenant_id=record.tenant_id,
             connector_id=record.connector_id,
         ),
-        "key_envelope_version": "BAIOS-KE1",
+        "key_envelope_version": "BAIOS-KE2",
         "tenant_id": record.tenant_id,
         "connector_id": record.connector_id,
         "status": record.status.value,
