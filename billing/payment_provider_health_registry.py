@@ -14,6 +14,7 @@ from billing.commercial_cycle_contract import (
 )
 
 CANON_BILLING_PAYMENT_PROVIDER_HEALTH_REGISTRY = True
+CANON_PAYMENT_PROVIDER_HEALTH_FAIL_CLOSED = True
 
 
 def _require_mapping(name: str, value: Any) -> Mapping[str, object]:
@@ -116,7 +117,7 @@ class PaymentProviderHealthRegistry:
         observed_at = utc_now() if now is None else require_aware_datetime("now", now)
         with self._lock:
             prior = self._statuses.get(key)
-            failure_count = 1 if prior is None else prior.failure_count + 1
+            failure_count = 1 if prior is None else max(0, int(prior.failure_count)) + 1
             status = ProviderHealthStatus(
                 provider_name=key,
                 healthy=False,
@@ -130,15 +131,27 @@ class PaymentProviderHealthRegistry:
         return status.normalized_copy()
 
     def is_available(self, provider_name: str, *, now: datetime | None = None) -> bool:
-        status = self.get(provider_name)
+        """Return availability while malformed health state fails closed."""
+        key = self._normalize_key(provider_name)
         observed_at = utc_now() if now is None else require_aware_datetime("now", now)
+        with self._lock:
+            raw_status = self._statuses.get(key)
+        if raw_status is None:
+            return True
+        try:
+            status = raw_status.normalized_copy()
+        except (TypeError, ValueError):
+            return False
+        if status.healthy:
+            return True
         if status.cooldown_until is None:
-            return status.healthy
+            return False
         return observed_at >= status.cooldown_until
 
 
 __all__ = [
     "CANON_BILLING_PAYMENT_PROVIDER_HEALTH_REGISTRY",
+    "CANON_PAYMENT_PROVIDER_HEALTH_FAIL_CLOSED",
     "PaymentProviderHealthRegistry",
     "ProviderHealthStatus",
 ]
