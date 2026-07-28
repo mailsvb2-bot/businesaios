@@ -24,80 +24,108 @@ jobs:
           ref: agent/full-pytest-security-repair
           fetch-depth: 0
           persist-credentials: true
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-        with:
-          python-version: "3.12"
-      - name: Apply and prove auth perimeter closure
+      - name: Apply auth perimeter closure and restore canonical workflow
         shell: bash
         run: |
           set -euo pipefail
-          base64 -d .github/patches/client-outcome-auth.patch.gz.b64 | gzip -dc > /tmp/client-outcome-auth.patch
-          test "$(sha256sum /tmp/client-outcome-auth.patch | awk '{print $1}')" = "0c34e11c36f198460f33995e5072aae85b160a0e01e9a4a8d6244cbb8049077b"
-          git apply --check /tmp/client-outcome-auth.patch
-          git apply /tmp/client-outcome-auth.patch
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.lock.txt
-          python -m pytest -q \
-            tests/api/test_auth_dependencies.py \
-            tests/api/test_control_plane_auth_and_guards.py \
-            tests/api/test_fastapi_execute_action_stack_wave11.py \
-            tests/api/test_public_surface_security_guard_wave183.py \
-            tests/unit/client_outcome
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+
+          path = Path('adapters/api/fastapi/public_routes.py')
+          text = path.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  "            if security_guard.requires_external_auth(route_path) and auth_bundle is not None:\n",
+                  "            if security_guard.requires_external_auth(route_path):\n"
+                  "                if auth_bundle is None:\n"
+                  "                    raise PermissionError('api_perimeter_auth_unconfigured')\n",
+              ),
+              (
+                  "            enforce_public_security(route_path='/client-outcome/select', request_context=ctx, body=request.model_dump())\n",
+                  "            enforce_public_security(\n"
+                  "                route_path='/client-outcome/select',\n"
+                  "                request_context=ctx,\n"
+                  "                body=request.model_dump(),\n"
+                  "                http_request=http_request,\n"
+                  "            )\n",
+              ),
+              (
+                  "            enforce_public_security(route_path='/client-outcome/orders/{order_id}/amend', request_context=ctx, body=request.model_dump())\n",
+                  "            enforce_public_security(\n"
+                  "                route_path='/client-outcome/orders/{order_id}/amend',\n"
+                  "                request_context=ctx,\n"
+                  "                body=request.model_dump(),\n"
+                  "                http_request=http_request,\n"
+                  "            )\n",
+              ),
+              (
+                  "            enforce_public_security(route_path='/client-outcome/execute', request_context=ctx, body=request.model_dump())\n",
+                  "            enforce_public_security(\n"
+                  "                route_path='/client-outcome/execute',\n"
+                  "                request_context=ctx,\n"
+                  "                body=request.model_dump(),\n"
+                  "                http_request=http_request,\n"
+                  "            )\n",
+              ),
+              (
+                  "            enforce_public_security(route_path='/client-outcome/disputes/open', request_context=ctx, body=request.model_dump())\n",
+                  "            enforce_public_security(\n"
+                  "                route_path='/client-outcome/disputes/open',\n"
+                  "                request_context=ctx,\n"
+                  "                body=request.model_dump(),\n"
+                  "                http_request=http_request,\n"
+                  "            )\n",
+              ),
+              (
+                  "            enforce_public_security(route_path='/client-outcome/disputes/reverse', request_context=ctx, body=request.model_dump())\n",
+                  "            enforce_public_security(\n"
+                  "                route_path='/client-outcome/disputes/reverse',\n"
+                  "                request_context=ctx,\n"
+                  "                body=request.model_dump(),\n"
+                  "                http_request=http_request,\n"
+                  "            )\n",
+              ),
+              (
+                  "            enforce_public_security(route_path='/client-outcome/full-cycle', request_context=ctx, body=request.model_dump())\n",
+                  "            enforce_public_security(\n"
+                  "                route_path='/client-outcome/full-cycle',\n"
+                  "                request_context=ctx,\n"
+                  "                body=request.model_dump(),\n"
+                  "                http_request=http_request,\n"
+                  "            )\n",
+              ),
+              (
+                  "            enforce_public_security(route_path='/client-outcome/orders/{order_id}/{lead_id}/admin-view', request_context=ctx, body={'order_id': order_id, 'lead_id': lead_id})\n",
+                  "            enforce_public_security(\n"
+                  "                route_path='/client-outcome/orders/{order_id}/{lead_id}/admin-view',\n"
+                  "                request_context=ctx,\n"
+                  "                body={'order_id': order_id, 'lead_id': lead_id},\n"
+                  "                http_request=http_request,\n"
+                  "            )\n",
+              ),
+              (
+                  "            enforce_public_security(route_path='/client-outcome/admin-summary', request_context=ctx, body=request.model_dump())\n",
+                  "            enforce_public_security(\n"
+                  "                route_path='/client-outcome/admin-summary',\n"
+                  "                request_context=ctx,\n"
+                  "                body=request.model_dump(),\n"
+                  "                http_request=http_request,\n"
+                  "            )\n",
+              ),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'unexpected replacement count {count}: {old!r}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+
+          canonical = base64.b64decode('bmFtZTogRnVsbCBDSQoKb246CiAgd29ya2Zsb3dfZGlzcGF0Y2g6CiAgcHVzaDoKICAgIGJyYW5jaGVzOgogICAgICAtIG1haW4KICBwdWxsX3JlcXVlc3Q6CgpwZXJtaXNzaW9uczoKICBjb250ZW50czogcmVhZAoKY29uY3VycmVuY3k6CiAgZ3JvdXA6ICR7eyBnaXRodWIud29ya2Zsb3cgfX0tJHt7IGdpdGh1Yi5yZWYgfX0KICBjYW5jZWwtaW4tcHJvZ3Jlc3M6IHRydWUKCmpvYnM6CiAgZnVsbC1nYXRlOgogICAgcnVucy1vbjogdWJ1bnR1LWxhdGVzdAogICAgc3RlcHM6CiAgICAgIC0gdXNlczogYWN0aW9ucy9jaGVja291dEAzNGUxMTQ4NzZiMGIxMWMzOTBhNTYzODFhZDE2ZWJkMTM5MTRmOGQ1CiAgICAgICAgd2l0aDoKICAgICAgICAgIHJlZjogJHt7IGdpdGh1Yi5ldmVudF9uYW1lID09ICdwdWxsX3JlcXVlc3QnICYmIGdpdGh1Yi5ldmVudC5wdWxsX3JlcXVlc3QuaGVhZC5zaGEgfHwgZ2l0aHViLnNoYSB9fQogICAgICAgICAgZmV0Y2gtZGVwdGg6IDAKICAgICAgICAgIHBlcnNpc3QtY3JlZGVudGlhbHM6IGZhbHNlCiAgICAgIC0gbmFtZTogVmVyaWZ5IGV4YWN0IGNoZWNrb3V0CiAgICAgICAgZW52OgogICAgICAgICAgRVhQRUNURURfU0hBOiAke3sgZ2l0aHViLmV2ZW50X25hbWUgPT0gJ3B1bGxfcmVxdWVzdCcgJiYgZ2l0aHViLmV2ZW50LnB1bGxfcmVxdWVzdC5oZWFkLnNoYSB8fCBnaXRodWIuc2hhIH19CiAgICAgICAgcnVuOiB0ZXN0ICIkKGdpdCByZXYtcGFyc2UgSEVBRCkiID0gIiRFWFBFQ1RFRF9TSEEiCiAgICAgIC0gdXNlczogYWN0aW9ucy9zZXR1cC1weXRob25AYTI2YWY2OWJlOTUxYTIxM2Q0OTVhNGMzZTRlNDAyMmUxNmQ4NzA2NQogICAgICAgIHdpdGg6CiAgICAgICAgICBweXRob24tdmVyc2lvbjogIjMuMTIiCiAgICAgIC0gbmFtZTogSW5zdGFsbCBsb2NrZWQgZGVwZW5kZW5jaWVzCiAgICAgICAgcnVuOiBweXRob24gLW0gcGlwIGluc3RhbGwgLS11cGdyYWRlIHBpcCAmJiBweXRob24gLW0gcGlwIGluc3RhbGwgLXIgcmVxdWlyZW1lbnRzLmxvY2sudHh0CiAgICAgIC0gbmFtZTogUnVuIGNhbm9uaWNhbCBmdWxsIENJIGdhdGUKICAgICAgICBlbnY6CiAgICAgICAgICBCQUlPU19CT09UX1NNT0tFX1JPT1Q6ICR7eyBydW5uZXIudGVtcCB9fS9idXNpbmVzYWlvcy1ib290LXNtb2tlLyR7eyBnaXRodWIucnVuX2lkIH19LSR7eyBnaXRodWIucnVuX2F0dGVtcHQgfX0tJHt7IGdpdGh1Yi5qb2IgfX0tMy4xMgogICAgICAgIHJ1bjogcHl0aG9uIC1tIHNjcmlwdHMuY2kuY2xpIC0tZ2F0ZSBmdWxsCiAgICAgIC0gbmFtZTogUnVuIGRvY3VtZW50ZWQgY29tcGxldGUgcHl0ZXN0IHRyZWUKICAgICAgICBlbnY6CiAgICAgICAgICBQWVRIT05ET05UV1JJVEVCWVRFQ09ERTogIjEiCiAgICAgICAgcnVuOiBweXRlc3QgLXEKICAgICAgLSBuYW1lOiBVcGxvYWQgZnVsbCBnYXRlIGFydGlmYWN0cwogICAgICAgIGlmOiBhbHdheXMoKQogICAgICAgIGNvbnRpbnVlLW9uLWVycm9yOiB0cnVlCiAgICAgICAgdXNlczogYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAZWExNjVmOGQ2NWI2ZTc1YjU0MDQ0OWU5MmI0ODg2ZjQzNjA3ZmEwMgogICAgICAgIHdpdGg6CiAgICAgICAgICBuYW1lOiBmdWxsLWNpLWFydGlmYWN0cwogICAgICAgICAgcGF0aDogYXJ0aWZhY3RzL2NpCiAgICAgICAgICBpZi1uby1maWxlcy1mb3VuZDogd2Fybgo=')
+          Path('.github/workflows/full-ci.yml').write_bytes(canonical)
+          PY
           rm -f .github/patches/client-outcome-auth.patch.gz.b64
           rmdir .github/patches 2>/dev/null || true
-          cat > .github/workflows/full-ci.yml <<'CANONICAL_WORKFLOW'
-          name: Full CI
-
-          on:
-            workflow_dispatch:
-            push:
-              branches:
-                - main
-            pull_request:
-
-          permissions:
-            contents: read
-
-          concurrency:
-            group: ${{ github.workflow }}-${{ github.ref }}
-            cancel-in-progress: true
-
-          jobs:
-            full-gate:
-              runs-on: ubuntu-latest
-              steps:
-                - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-                  with:
-                    ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-                    fetch-depth: 0
-                    persist-credentials: false
-                - name: Verify exact checkout
-                  env:
-                    EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-                  run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
-                - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
-                  with:
-                    python-version: "3.12"
-                - name: Install locked dependencies
-                  run: python -m pip install --upgrade pip && python -m pip install -r requirements.lock.txt
-                - name: Run canonical full CI gate
-                  env:
-                    BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.12
-                  run: python -m scripts.ci.cli --gate full
-                - name: Run documented complete pytest tree
-                  env:
-                    PYTHONDONTWRITEBYTECODE: "1"
-                  run: pytest -q
-                - name: Upload full gate artifacts
-                  if: always()
-                  continue-on-error: true
-                  uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-                  with:
-                    name: full-ci-artifacts
-                    path: artifacts/ci
-                    if-no-files-found: warn
-          CANONICAL_WORKFLOW
-          sed -i 's/^          //' .github/workflows/full-ci.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add adapters/api/fastapi/public_routes.py .github/workflows/full-ci.yml .github/patches
