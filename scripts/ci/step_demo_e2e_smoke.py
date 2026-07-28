@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import sys
 from contextlib import suppress
 from pathlib import Path
 
@@ -110,7 +111,7 @@ def run() -> tuple[bool, str]:
         _CI_DEMO_TENANCY_DIR.mkdir(parents=True, exist_ok=True)
         _CI_DEMO_DATA_DIR.mkdir(parents=True, exist_ok=True)
         outcome = run_command(
-            ["python", "main.py"],
+            [sys.executable, "main.py"],
             env=_ci_demo_env(),
             timeout=180,
         )
