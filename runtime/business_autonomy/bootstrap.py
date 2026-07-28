@@ -338,7 +338,17 @@ class RequestScopedBusinessAutonomyGuardedService(BusinessAutonomyGuardedService
         self._ensure_scope = ensure_scope
 
     async def execute(self, request: BusinessExecutionRequest):
-        self._ensure_scope(request)
+        try:
+            self._ensure_scope(request)
+        except (KeyError, ValueError) as exc:
+            return BusinessExecutionResult(
+                verdict=ExecutionVerdict.REJECTED,
+                business_id=request.envelope.business_id,
+                goal_id=request.envelope.goal_id,
+                execution_id=request.correlation_id,
+                message=str(exc),
+                metadata={"scope_status": "rejected", "failure_type": type(exc).__name__},
+            )
         return await super().execute(request)
 
 
@@ -370,30 +380,30 @@ def _build_distributed_state() -> dict[str, object]:
 
 def _channel_defaults_for(business_id: str) -> tuple[ChannelKind, str, str, str, dict[str, Any]]:
     normalized = str(business_id).strip().lower()
-    if 'site' in normalized or 'web' in normalized:
-        return ChannelKind.WEBSITE, 'website.default', f'https://{normalized}.example.com', 'eu-west-1', {
-            'non_ai_mode': NonAiOperatingMode.SUPERVISED.value,
-            'verified_owner': True,
-            'action_type': 'profile_publish',
-            'autonomy_tier': 'supervised',
+    security_defaults = {
+        "verified_owner": False,
+        "autonomy_tier": "supervised",
+        "non_ai_mode": NonAiOperatingMode.SUPERVISED.value,
+        "requires_human_approval": True,
+    }
+    if "site" in normalized or "web" in normalized:
+        return ChannelKind.WEBSITE, "website.default", f"https://{normalized}.example.com", "eu-west-1", {
+            **security_defaults,
+            "action_type": "profile_publish",
         }
-    if 'shop' in normalized or 'commerce' in normalized:
-        return ChannelKind.COMMERCE, 'commerce.default', f'commerce://{normalized}', 'eu-west-1', {
-            'non_ai_mode': NonAiOperatingMode.POLICY_GUIDED.value,
-            'verified_owner': True,
-            'action_type': 'platform_listing_write',
-            'autonomy_tier': 'bounded_autonomy',
+    if "shop" in normalized or "commerce" in normalized:
+        return ChannelKind.COMMERCE, "commerce.default", f"commerce://{normalized}", "eu-west-1", {
+            **security_defaults,
+            "action_type": "platform_listing_write",
         }
-    if 'bot' in normalized:
-        return ChannelKind.CHATBOT, 'chatbot.default', f'bot://{normalized}', 'eu-west-1', {
-            'verified_owner': True,
-            'action_type': 'communications_write',
-            'autonomy_tier': 'bounded_autonomy',
+    if "bot" in normalized:
+        return ChannelKind.CHATBOT, "chatbot.default", f"bot://{normalized}", "eu-west-1", {
+            **security_defaults,
+            "action_type": "communications_write",
         }
-    return ChannelKind.API_BUSINESS, 'api.default', f'api://{normalized}', 'eu-west-1', {
-        'verified_owner': True,
-        'action_type': 'internal_execution',
-        'autonomy_tier': 'bounded_autonomy',
+    return ChannelKind.API_BUSINESS, "api.default", f"api://{normalized}", "eu-west-1", {
+        **security_defaults,
+        "action_type": "internal_execution",
     }
 
 
@@ -468,15 +478,27 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     capability_registry = RequestTenantCapabilityRegistryView(distributed_registry)
     trust_registry = RequestTenantTrustRegistryView(distributed_registry)
 
-    def ensure_scope_for(*, tenant_id: str, scoped_business_id: str, requested_by: str, envelope_metadata: Mapping[str, Any]) -> None:
-        channel_kind, adapter_key, external_ref, region, metadata = _channel_defaults_for(scoped_business_id)
-        metadata = {**metadata, **dict(envelope_metadata or {})}
+    def ensure_scope_for(
+        *,
+        tenant_id: str,
+        scoped_business_id: str,
+        requested_by: str,
+        envelope_metadata: Mapping[str, Any],
+        allow_registration: bool = False,
+    ) -> None:
+        channel_kind, adapter_key, external_ref, region, security_metadata = _channel_defaults_for(scoped_business_id)
+        metadata = {**dict(envelope_metadata or {}), **security_metadata}
+        globally_bound = distributed_registry.find_unique_by_business_id(scoped_business_id)
+        if globally_bound is not None and globally_bound.tenant_id != tenant_id:
+            raise KeyError(f"cross-tenant business binding forbidden: {tenant_id}:{scoped_business_id}")
         existing = distributed_registry.get(tenant_id, scoped_business_id)
         if existing is None:
+            if not allow_registration:
+                raise KeyError(f"business is not explicitly onboarded for tenant: {tenant_id}:{scoped_business_id}")
             onboarding_request = BusinessOnboardingRequest(
                 business_id=scoped_business_id,
                 tenant_id=tenant_id,
-                ownership_key=f'owner:{tenant_id}:{scoped_business_id}',
+                ownership_key=f"owner:{tenant_id}:{scoped_business_id}",
                 region=region,
                 channel_kind=channel_kind,
                 adapter_key=adapter_key,
@@ -562,10 +584,11 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     # the canonical distributed registry with tenant-demo records.
     if seed_admin_read_model:
         ensure_scope_for(
-            tenant_id='tenant-demo',
-            scoped_business_id=str(business_id or 'external_business'),
-            requested_by='platform',
-            envelope_metadata={'tenant_id': 'tenant-demo', 'admin_read_model_seed': True},
+            tenant_id="tenant-demo",
+            scoped_business_id=str(business_id or "external_business"),
+            requested_by="platform",
+            envelope_metadata={"tenant_id": "tenant-demo", "admin_read_model_seed": True},
+            allow_registration=True,
         )
 
     autonomy_service = BusinessAutonomyService(
@@ -610,8 +633,12 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
 
 
 def _tenant_id_from_request(request: BusinessExecutionRequest) -> str:
-    raw = str(request.envelope.metadata.get('tenant_id') or '').strip()
-    return raw or 'tenant-demo'
+    raw = str(request.envelope.metadata.get("tenant_id") or "").strip()
+    if not raw:
+        raise ValueError("tenant_id is required for business autonomy execution")
+    if raw == "global":
+        raise ValueError("global tenant is forbidden for business autonomy execution")
+    return raw
 
 
 def _read_json(path: Path, *, default: Mapping[str, Any]) -> dict[str, Any]:

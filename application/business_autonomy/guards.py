@@ -154,6 +154,7 @@ class OperatorOverrideDecision:
     mode: OperatorOverrideMode
     reason: str
     operator_id: str | None = None
+    override_id: str | None = None
 
 
 class BusinessOperatorOverridePolicy:
