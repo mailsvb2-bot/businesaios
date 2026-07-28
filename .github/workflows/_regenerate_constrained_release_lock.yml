@@ -1,0 +1,43 @@
+name: Regenerate Constrained Release Lock
+
+on:
+  push:
+    branches:
+      - agent/canonical-catastrophic-safety-repair
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    if: github.ref_name == 'agent/canonical-catastrophic-safety-repair' && !contains(github.event.head_commit.message, '[constrained-lock-generated]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+
+      - name: Restore proven baseline and regenerate
+        run: |
+          set -Eeuo pipefail
+          git show origin/main:requirements.release.lock.txt > requirements.release.lock.txt
+          python -m pip install --disable-pip-version-check uv
+          bash scripts/ci/generate_release_lock.sh
+
+      - name: Commit constrained lock
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          set -Eeuo pipefail
+          git config user.name 'mailsvb2-bot'
+          git config user.email '254540704+mailsvb2-bot@users.noreply.github.com'
+          git add requirements.release.lock.txt
+          test -n "$(git diff --cached --name-only)"
+          git commit -m '[constrained-lock-generated] Add cryptography without unrelated upgrades'
+          git push origin "HEAD:${BRANCH_NAME}"
