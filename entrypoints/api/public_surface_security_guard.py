@@ -9,7 +9,9 @@ from security.access_policy import SecurityAction
 from security.owner_factory import build_default_security_adapter
 from security.security_integration_adapter import SecurityIntegrationAdapter
 
+from entrypoints.api.auth_contract import AuthPrincipal
 from entrypoints.api.request_context import RequestContext
+from entrypoints.api.public_surface_route_specs import PublicSurfaceRouteSpec, _ROUTE_SPECS
 
 CANON_API_PUBLIC_SURFACE_SECURITY_GUARD = True
 CANON_API_FINAL_OWNER = True
@@ -19,280 +21,6 @@ CANON_API_INTERNAL_WRITE_ADMIN_EXPLICIT_REPLAY_MARKER = True
 CANON_API_INTERNAL_WRITE_ADMIN_TENANT_ISOLATION = True
 
 
-@dataclass(frozen=True)
-class PublicSurfaceRouteSpec:
-    operation_name: str
-    resource_type: str
-    action: SecurityAction
-    tags: tuple[str, ...]
-
-
-_ROUTE_SPECS: dict[str, PublicSurfaceRouteSpec] = {
-    '/actions/execute': PublicSurfaceRouteSpec(
-        operation_name='api.public.execute_action',
-        resource_type='execute_action',
-        action=SecurityAction.WRITE,
-        tags=('internal', 'execute_action', 'public_api'),
-    ),
-    '/goals/execute': PublicSurfaceRouteSpec(
-        operation_name='api.public.execute_goal',
-        resource_type='goal_execution',
-        action=SecurityAction.WRITE,
-        tags=('internal', 'goal_execution', 'public_api'),
-    ),
-    '/baselines/promote': PublicSurfaceRouteSpec(
-        operation_name='api.public.baselines.promote',
-        resource_type='governance_baseline',
-        action=SecurityAction.ADMIN,
-        tags=('internal', 'governance', 'baseline', 'public_api'),
-    ),
-    '/baselines/select': PublicSurfaceRouteSpec(
-        operation_name='api.public.baselines.select',
-        resource_type='governance_baseline',
-        action=SecurityAction.READ,
-        tags=('internal', 'governance', 'baseline', 'public_api'),
-    ),
-    '/drift/audit': PublicSurfaceRouteSpec(
-        operation_name='api.public.drift.audit',
-        resource_type='drift_audit',
-        action=SecurityAction.READ,
-        tags=('internal', 'governance', 'drift', 'public_api'),
-    ),
-    '/baselines/rollback': PublicSurfaceRouteSpec(
-        operation_name='api.public.baselines.rollback',
-        resource_type='governance_baseline',
-        action=SecurityAction.ADMIN,
-        tags=('internal', 'governance', 'rollback', 'public_api'),
-    ),
-    '/business-memory/get': PublicSurfaceRouteSpec(
-        operation_name='api.public.business_memory.get',
-        resource_type='business_memory',
-        action=SecurityAction.READ,
-        tags=('internal', 'business_memory', 'public_api'),
-    ),
-    '/business-memory/summary': PublicSurfaceRouteSpec(
-        operation_name='api.public.business_memory.summary',
-        resource_type='business_memory',
-        action=SecurityAction.READ,
-        tags=('internal', 'business_memory', 'public_api'),
-    ),
-    '/business-memory/recent-runs': PublicSurfaceRouteSpec(
-        operation_name='api.public.business_memory.recent_runs',
-        resource_type='business_memory',
-        action=SecurityAction.READ,
-        tags=('internal', 'business_memory', 'public_api'),
-    ),
-    '/business-memory/failures': PublicSurfaceRouteSpec(
-        operation_name='api.public.business_memory.failures',
-        resource_type='business_memory',
-        action=SecurityAction.READ,
-        tags=('internal', 'business_memory', 'public_api'),
-    ),
-    '/business-memory/wins': PublicSurfaceRouteSpec(
-        operation_name='api.public.business_memory.wins',
-        resource_type='business_memory',
-        action=SecurityAction.READ,
-        tags=('internal', 'business_memory', 'public_api'),
-    ),
-    '/governance/rollback-recommendation': PublicSurfaceRouteSpec(
-        operation_name='api.public.governance.rollback_recommendation',
-        resource_type='governance_analytics',
-        action=SecurityAction.READ,
-        tags=('internal', 'governance', 'analytics', 'public_api'),
-    ),
-    '/governance/joined-history': PublicSurfaceRouteSpec(
-        operation_name='api.public.governance.joined_history',
-        resource_type='governance_history',
-        action=SecurityAction.READ,
-        tags=('internal', 'governance', 'history', 'public_api'),
-    ),
-    '/governance/verify-promotion-evidence': PublicSurfaceRouteSpec(
-        operation_name='api.public.governance.verify_promotion_evidence',
-        resource_type='governance_evidence',
-        action=SecurityAction.READ,
-        tags=('internal', 'governance', 'evidence', 'public_api'),
-    ),
-    '/governance/promote-scenario': PublicSurfaceRouteSpec(
-        operation_name='api.public.governance.promote_scenario',
-        resource_type='governance_baseline',
-        action=SecurityAction.ADMIN,
-        tags=('internal', 'governance', 'baseline', 'public_api'),
-    ),
-    '/governance/rollback-timeline': PublicSurfaceRouteSpec(
-        operation_name='api.public.governance.rollback_timeline',
-        resource_type='governance_timeline',
-        action=SecurityAction.READ,
-        tags=('internal', 'governance', 'timeline', 'public_api'),
-    ),
-    '/governance/drift-trend': PublicSurfaceRouteSpec(
-        operation_name='api.public.governance.drift_trend',
-        resource_type='governance_analytics',
-        action=SecurityAction.READ,
-        tags=('internal', 'governance', 'analytics', 'public_api'),
-    ),
-    '/governance/business-memory-summary': PublicSurfaceRouteSpec(
-        operation_name='api.public.governance.business_memory_summary',
-        resource_type='business_memory',
-        action=SecurityAction.READ,
-        tags=('internal', 'business_memory', 'governance', 'public_api'),
-    ),
-    '/analytics/business/{tenant_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.analytics.business_scorecard',
-        resource_type='analytics_scorecard',
-        action=SecurityAction.READ,
-        tags=('internal', 'analytics', 'business', 'public_api'),
-    ),
-    '/analytics/dashboard/{tenant_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.analytics.dashboard_bundle',
-        resource_type='analytics_dashboard',
-        action=SecurityAction.READ,
-        tags=('internal', 'analytics', 'dashboard', 'public_api'),
-    ),
-    '/economic/truth/click-billing-sealed-execution/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.economic.truth.click_billing_sealed_execution',
-        resource_type='economic_sealed_execution',
-        action=SecurityAction.READ,
-        tags=('internal', 'economic', 'sealed_execution', 'truth', 'click_billing', 'public_api'),
-    ),
-    '/economic/export/click-billing-sealed-execution/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.economic.export.click_billing_sealed_execution',
-        resource_type='economic_sealed_execution',
-        action=SecurityAction.READ,
-        tags=('internal', 'economic', 'sealed_execution', 'export', 'click_billing', 'public_api'),
-    ),
-    '/economic/audit/click-billing-sealed-execution/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.economic.audit.click_billing_sealed_execution',
-        resource_type='economic_sealed_execution',
-        action=SecurityAction.READ,
-        tags=('internal', 'economic', 'sealed_execution', 'audit', 'click_billing', 'public_api'),
-    ),
-    '/economic/truth/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.economic.truth.spend_external_sealed_execution_client_outcome',
-        resource_type='economic_sealed_execution',
-        action=SecurityAction.READ,
-        tags=('internal', 'economic', 'sealed_execution', 'truth', 'spend_external', 'client_outcome', 'public_api'),
-    ),
-    '/economic/export/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.economic.export.spend_external_sealed_execution_client_outcome',
-        resource_type='economic_sealed_execution',
-        action=SecurityAction.READ,
-        tags=('internal', 'economic', 'sealed_execution', 'export', 'spend_external', 'client_outcome', 'public_api'),
-    ),
-    '/economic/audit/spend-external-sealed-execution/client-outcome/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.economic.audit.spend_external_sealed_execution_client_outcome',
-        resource_type='economic_sealed_execution',
-        action=SecurityAction.READ,
-        tags=('internal', 'economic', 'sealed_execution', 'audit', 'spend_external', 'client_outcome', 'public_api'),
-    ),
-    '/client-outcome/packages': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.packages',
-        resource_type='client_outcome_catalog',
-        action=SecurityAction.READ,
-        tags=('internal', 'client_outcome', 'catalog', 'public_api'),
-    ),
-    '/client-outcome/select': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.select',
-        resource_type='client_outcome_order',
-        action=SecurityAction.WRITE,
-        tags=('internal', 'client_outcome', 'order', 'public_api'),
-    ),
-    '/client-outcome/orders/{order_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.order',
-        resource_type='client_outcome_order',
-        action=SecurityAction.READ,
-        tags=('internal', 'client_outcome', 'order', 'public_api'),
-    ),
-    '/client-outcome/orders/{order_id}/amend': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.order_amend',
-        resource_type='client_outcome_order',
-        action=SecurityAction.WRITE,
-        tags=('internal', 'client_outcome', 'order', 'amendment', 'public_api'),
-    ),
-    '/client-outcome/execute': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.execute',
-        resource_type='client_outcome_execution',
-        action=SecurityAction.WRITE,
-        tags=('internal', 'client_outcome', 'execution', 'public_api'),
-    ),
-    '/client-outcome/disputes/open': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.disputes.open',
-        resource_type='client_outcome_dispute',
-        action=SecurityAction.WRITE,
-        tags=('internal', 'client_outcome', 'dispute', 'public_api'),
-    ),
-    '/client-outcome/disputes/reverse': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.disputes.reverse',
-        resource_type='client_outcome_dispute',
-        action=SecurityAction.ADMIN,
-        tags=('internal', 'client_outcome', 'dispute', 'reversal', 'public_api'),
-    ),
-    '/client-outcome/full-cycle': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.full_cycle',
-        resource_type='client_outcome_cycle',
-        action=SecurityAction.WRITE,
-        tags=('internal', 'client_outcome', 'cycle', 'public_api'),
-    ),
-    '/client-outcome/lifecycle/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.lifecycle',
-        resource_type='client_outcome_lifecycle',
-        action=SecurityAction.READ,
-        tags=('internal', 'client_outcome', 'lifecycle', 'public_api'),
-    ),
-    '/client-outcome/commercial-state/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.commercial_state',
-        resource_type='client_outcome_commercial_state',
-        action=SecurityAction.READ,
-        tags=('internal', 'client_outcome', 'commercial_state', 'public_api'),
-    ),
-    '/client-outcome/corrected-economics/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.corrected_economics',
-        resource_type='client_outcome_economics',
-        action=SecurityAction.READ,
-        tags=('internal', 'client_outcome', 'economics', 'public_api'),
-    ),
-    '/client-outcome/reconciliation/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.reconciliation',
-        resource_type='client_outcome_reconciliation',
-        action=SecurityAction.READ,
-        tags=('internal', 'client_outcome', 'reconciliation', 'public_api'),
-    ),
-    '/client-outcome/orders/{order_id}/{lead_id}/admin-view': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.admin_view',
-        resource_type='client_outcome_admin',
-        action=SecurityAction.ADMIN,
-        tags=('internal', 'client_outcome', 'admin', 'public_api'),
-    ),
-    '/client-outcome/admin-summary': PublicSurfaceRouteSpec(
-        operation_name='api.public.client_outcome.admin_summary',
-        resource_type='client_outcome_admin',
-        action=SecurityAction.ADMIN,
-        tags=('internal', 'client_outcome', 'admin', 'public_api'),
-    ),
-    '/economic/client-outcome-truth/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.economic.client_outcome_truth',
-        resource_type='economic_client_outcome_truth',
-        action=SecurityAction.READ,
-        tags=('internal', 'economic', 'client_outcome', 'truth', 'public_api'),
-    ),
-    '/economic/business-truth/{order_id}/{lead_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.economic.business_truth',
-        resource_type='economic_business_truth',
-        action=SecurityAction.READ,
-        tags=('internal', 'economic', 'business', 'truth', 'public_api'),
-    ),
-    '/public-site/cta/start': PublicSurfaceRouteSpec(
-        operation_name='api.public.public_site.cta_start',
-        resource_type='public_site_cta_intake',
-        action=SecurityAction.WRITE,
-        tags=('public', 'public_site', 'cta', 'public_api'),
-    ),
-    '/public-site/cta/{intake_id}': PublicSurfaceRouteSpec(
-        operation_name='api.public.public_site.cta_status',
-        resource_type='public_site_cta_intake',
-        action=SecurityAction.READ,
-        tags=('public', 'public_site', 'cta', 'public_api'),
-    ),
-}
 
 
 @dataclass(frozen=True)
@@ -310,29 +38,63 @@ class PublicSurfaceSecurityGuard:
         route_path: str,
         request_context: RequestContext,
         body: Mapping[str, Any] | None = None,
+        principal: AuthPrincipal | None = None,
     ) -> dict[str, Any]:
         spec = _ROUTE_SPECS.get(str(route_path).strip())
         if spec is None:
             raise PermissionError(f'unknown_public_surface:{route_path}')
         payload = dict(body or {})
-        tenant_id = self._tenant_id(payload=payload, request_context=request_context)
-        actor_id = self._actor_id(payload=payload, request_context=request_context)
-        self._enforce_internal_write_admin_perimeter(
+        internal = self._is_internal(spec=spec)
+        if internal:
+            if principal is None:
+                raise PermissionError('api_authenticated_principal_required')
+            tenant_id = self._principal_tenant_id(principal=principal, request_context=request_context)
+            actor_id = self._principal_actor_id(principal=principal, request_context=request_context)
+            role_ids = frozenset(principal.roles)
+            if not role_ids:
+                raise PermissionError('api_principal_roles_required')
+            auth_metadata = dict(principal.metadata)
+            auth_type = str(auth_metadata.get('auth_type') or request_context.metadata.get('auth_level') or 'authenticated')
+            subject = principal.subject
+            audience = principal.audience or 'public-api'
+            scopes = tuple(principal.scopes)
+            session_id = principal.session_id
+            is_service = str(auth_metadata.get('principal_kind') or '').strip().lower() == 'service'
+        else:
+            tenant_id = 'public-site'
+            actor_id = 'public-site-entrypoint'
+            role_ids = frozenset({RoleId.SYSTEM})
+            auth_metadata = {}
+            auth_type = 'public_entrypoint'
+            subject = actor_id
+            audience = 'public-api'
+            scopes = (spec.operation_name,)
+            session_id = request_context.normalized_request_id()
+            is_service = True
+
+        self._enforce_internal_perimeter(
             spec=spec,
             payload=payload,
             request_context=request_context,
             tenant_id=tenant_id,
         )
         now = datetime.now(timezone.utc)
+        issued_at = str(auth_metadata.get('issued_at') or now.isoformat())
+        expires_at = str(
+            auth_metadata.get('expires_at')
+            or (now + timedelta(seconds=int(self.default_token_ttl_seconds))).isoformat()
+        )
         actor = ActorContext(
             actor_id=actor_id,
             tenant_id=tenant_id,
-            role_ids=frozenset({RoleId.SYSTEM}),
-            is_service=True,
+            role_ids=role_ids,
+            is_service=is_service,
             attributes={
                 'surface': 'api_public',
                 'route_path': route_path,
-                'subject': actor_id,
+                'subject': subject,
+                'auth_type': auth_type,
+                'public_entrypoint': not internal,
             },
         )
         verdict = self.adapter.evaluate_surface(
@@ -341,31 +103,33 @@ class PublicSurfaceSecurityGuard:
             resource_id=self._resource_id(spec=spec, payload=payload, tenant_id=tenant_id),
             action=spec.action,
             auth_payload={
-                'issued_at': now.isoformat(),
-                'expires_at': (now + timedelta(seconds=int(self.default_token_ttl_seconds))).isoformat(),
+                'issued_at': issued_at,
+                'expires_at': expires_at,
                 'now': now.isoformat(),
-                'subject': actor_id,
-                'audience': 'public-api',
-                'issuer': 'public-surface-security-guard',
-                'session_id': request_context.session_id or request_context.normalized_request_id(),
-                'scopes': (spec.operation_name,),
-                'token_id': request_context.normalized_request_id(),
-                'algorithm': 'HS256',
+                'subject': subject,
+                'audience': audience,
+                'issuer': auth_metadata.get('issuer') or auth_type,
+                'session_id': session_id,
+                'scopes': scopes,
+                'token_id': auth_metadata.get('token_id') or auth_metadata.get('key_id') or request_context.normalized_request_id(),
+                'algorithm': auth_metadata.get('algorithm') or 'HS256',
+                'key_id': auth_metadata.get('key_id'),
+                'not_before': auth_metadata.get('not_before'),
                 'expected_ip': request_context.ip_address,
                 'observed_ip': request_context.ip_address,
                 'expected_user_agent': request_context.user_agent,
                 'observed_user_agent': request_context.user_agent,
-                'auth_level': 'internal_surface',
+                'auth_level': auth_type,
             },
             session_payload={
-                'created_at': now.isoformat(),
+                'created_at': auth_metadata.get('session_created_at') or issued_at,
                 'last_seen_at': now.isoformat(),
                 'now': now.isoformat(),
                 'expected_ip': request_context.ip_address,
                 'observed_ip': request_context.ip_address,
                 'expected_user_agent': request_context.user_agent,
                 'observed_user_agent': request_context.user_agent,
-                'auth_level': 'internal_surface',
+                'auth_level': auth_type,
             },
             compliance_evidence=self._compliance_evidence(request_context=request_context),
             fraud_signals=self._fraud_signals(request_context=request_context, payload=payload, spec=spec),
@@ -378,6 +142,7 @@ class PublicSurfaceSecurityGuard:
                 'metadata': {
                     'tenant_id': tenant_id,
                     'actor_id': actor_id,
+                    'role_ids': tuple(sorted(role.value for role in role_ids)),
                     'route_path': route_path,
                     'business_id': payload.get('business_id'),
                     'baseline_name': payload.get('baseline_name'),
@@ -392,6 +157,8 @@ class PublicSurfaceSecurityGuard:
                 'request_id': request_context.normalized_request_id(),
                 'correlation_id': request_context.normalized_correlation_id(),
                 'method': request_context.metadata.get('method'),
+                'authenticated_subject': subject if internal else None,
+                'authenticated_roles': tuple(sorted(role.value for role in role_ids)),
             },
         )
         if not bool(verdict.get('allowed', False)):
@@ -402,21 +169,16 @@ class PublicSurfaceSecurityGuard:
         spec = _ROUTE_SPECS.get(str(route_path).strip())
         if spec is None:
             raise PermissionError(f'unknown_public_surface:{route_path}')
-        return self._requires_internal_write_admin_perimeter(spec=spec)
+        return self._is_internal(spec=spec)
 
     @staticmethod
-    def _requires_internal_write_admin_perimeter(*, spec: PublicSurfaceRouteSpec) -> bool:
-        return spec.action in {SecurityAction.WRITE, SecurityAction.ADMIN} and 'public' not in spec.tags
+    def _is_internal(*, spec: PublicSurfaceRouteSpec) -> bool:
+        return 'internal' in spec.tags
 
     @staticmethod
     def _external_perimeter_verified(*, request_context: RequestContext) -> bool:
         metadata = dict(request_context.metadata)
-        proof_keys = (
-            'mtls_verified',
-            'api_key_verified',
-            'jwt_verified',
-            'control_plane_verified',
-        )
+        proof_keys = ('mtls_verified', 'api_key_verified', 'jwt_verified', 'control_plane_verified')
         if any(bool(metadata.get(key)) for key in proof_keys):
             return True
         auth_level = str(metadata.get('auth_level') or '').strip().lower()
@@ -431,18 +193,30 @@ class PublicSurfaceSecurityGuard:
                 return True
         return False
 
-    @staticmethod
-    def _tenant_isolation_ok(*, payload: Mapping[str, Any], request_context: RequestContext, tenant_id: str) -> bool:
+    @classmethod
+    def _tenant_isolation_ok(cls, *, payload: Mapping[str, Any], request_context: RequestContext, tenant_id: str) -> bool:
+        candidates: set[str] = set()
         context_tenant = request_context.validated_tenant_id(required=False)
-        nested_payload = payload.get('payload')
-        nested_tenant = nested_payload.get('tenant_id') if isinstance(nested_payload, Mapping) else None
-        candidates = [context_tenant, payload.get('tenant_id'), nested_tenant]
-        normalized = {str(item).strip() for item in candidates if item is not None and str(item).strip()}
-        if not normalized:
-            return False
-        return normalized == {str(tenant_id).strip()}
+        if context_tenant:
+            candidates.add(str(context_tenant).strip())
+        candidates.update(cls._payload_tenant_ids(payload))
+        return bool(candidates) and candidates == {str(tenant_id).strip()}
 
-    def _enforce_internal_write_admin_perimeter(
+    @classmethod
+    def _payload_tenant_ids(cls, value: object) -> set[str]:
+        result: set[str] = set()
+        if isinstance(value, Mapping):
+            for key, item in value.items():
+                if str(key).strip().lower() == 'tenant_id' and item is not None and str(item).strip():
+                    result.add(str(item).strip())
+                else:
+                    result.update(cls._payload_tenant_ids(item))
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            for item in value:
+                result.update(cls._payload_tenant_ids(item))
+        return result
+
+    def _enforce_internal_perimeter(
         self,
         *,
         spec: PublicSurfaceRouteSpec,
@@ -450,15 +224,18 @@ class PublicSurfaceSecurityGuard:
         request_context: RequestContext,
         tenant_id: str,
     ) -> None:
-        if not self._requires_internal_write_admin_perimeter(spec=spec):
+        if not self._is_internal(spec=spec):
             return
-        if not self._effective_transport_security(request_context=request_context):
+        if not self._transport_encrypted(request_context=request_context):
             raise PermissionError('api_transport_security_required')
         if not self._external_perimeter_verified(request_context=request_context):
             raise PermissionError('api_perimeter_auth_required')
         if not self._tenant_isolation_ok(payload=payload, request_context=request_context, tenant_id=tenant_id):
             raise PermissionError('api_tenant_isolation_violation')
-        if not self._replay_marker_present(payload=payload, request_context=request_context):
+        if spec.action in {SecurityAction.WRITE, SecurityAction.ADMIN} and not self._replay_marker_present(
+            payload=payload,
+            request_context=request_context,
+        ):
             raise PermissionError('api_replay_protection_required')
 
     @staticmethod
@@ -466,25 +243,27 @@ class PublicSurfaceSecurityGuard:
         value = request_context.metadata.get('transport_encrypted')
         if isinstance(value, bool):
             return value
-        if value is not None:
-            return str(value).strip().lower() in {'1', 'true', 'yes', 'on', 'https'}
         return str(request_context.metadata.get('scheme') or '').strip().lower() == 'https'
 
     @staticmethod
-    def _tenant_id(*, payload: Mapping[str, Any], request_context: RequestContext) -> str:
-        nested_payload = payload.get('payload')
-        nested_tenant = nested_payload.get('tenant_id') if isinstance(nested_payload, Mapping) else None
-        value = payload.get('tenant_id') or request_context.validated_tenant_id(required=False) or nested_tenant
-        text = str(value or 'public-api').strip()
-        return text or 'public-api'
+    def _principal_tenant_id(*, principal: AuthPrincipal, request_context: RequestContext) -> str:
+        principal_tenant = str(principal.tenant_id or '').strip()
+        context_tenant = str(request_context.validated_tenant_id(required=False) or '').strip()
+        if not principal_tenant:
+            raise PermissionError('api_principal_tenant_required')
+        if context_tenant and context_tenant != principal_tenant:
+            raise PermissionError('api_authenticated_tenant_mismatch')
+        return principal_tenant
 
     @staticmethod
-    def _actor_id(*, payload: Mapping[str, Any], request_context: RequestContext) -> str:
-        meta = payload.get('meta')
-        meta_requested_by = meta.get('requested_by') if isinstance(meta, Mapping) else None
-        candidate = request_context.actor_id or payload.get('user_id') or payload.get('requested_by') or meta_requested_by
-        text = str(candidate or 'public-api').strip()
-        return text or 'public-api'
+    def _principal_actor_id(*, principal: AuthPrincipal, request_context: RequestContext) -> str:
+        principal_actor = str(principal.actor_id or principal.subject or '').strip()
+        context_actor = str(request_context.actor_id or '').strip()
+        if not principal_actor:
+            raise PermissionError('api_principal_actor_required')
+        if context_actor and context_actor != principal_actor:
+            raise PermissionError('api_authenticated_actor_mismatch')
+        return principal_actor
 
     @staticmethod
     def _resource_id(*, spec: PublicSurfaceRouteSpec, payload: Mapping[str, Any], tenant_id: str) -> str:
@@ -501,11 +280,7 @@ class PublicSurfaceSecurityGuard:
 
     @staticmethod
     def _effective_transport_security(*, request_context: RequestContext) -> bool:
-        if PublicSurfaceSecurityGuard._transport_encrypted(request_context=request_context):
-            return True
-        ip_text = str(request_context.ip_address or '').strip().lower()
-        ua_text = str(request_context.user_agent or '').strip().lower()
-        return ip_text in {'127.0.0.1', '::1', 'localhost', 'testclient'} or 'testclient' in ua_text
+        return PublicSurfaceSecurityGuard._transport_encrypted(request_context=request_context)
 
     @staticmethod
     def _compliance_evidence(*, request_context: RequestContext) -> dict[str, object]:
