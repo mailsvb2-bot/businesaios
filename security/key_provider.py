@@ -54,13 +54,14 @@ def _serialize_record(record: KeyMaterialRecord) -> dict[str, object]:
             tenant_id=record.tenant_id,
             connector_id=record.connector_id,
         ),
+        "key_envelope_version": "BAIOS-KE1",
         "tenant_id": record.tenant_id,
         "connector_id": record.connector_id,
         "status": record.status.value,
         "created_at": record.created_at.isoformat(),
         "activated_at": record.activated_at.isoformat(),
         "expires_at": None if record.expires_at is None else record.expires_at.isoformat(),
-        "metadata": {**dict(record.metadata or {}), "key_envelope_version": "BAIOS-KE1"},
+        "metadata": dict(record.metadata or {}),
     }
 
 
@@ -74,6 +75,8 @@ def _deserialize_record(payload: dict[str, object]) -> KeyMaterialRecord:
         if payload.get("secret_b64"):
             raise RuntimeError("legacy plaintext key_provider.json requires explicit migration")
         raise RuntimeError("wrapped key material is required")
+    metadata = dict(payload.get("metadata") or {})
+    metadata.pop("key_envelope_version", None)
     return KeyMaterialRecord(
         key_id=key_id,
         purpose=purpose,
@@ -90,7 +93,7 @@ def _deserialize_record(payload: dict[str, object]) -> KeyMaterialRecord:
         created_at=datetime.fromisoformat(str(payload.get("created_at"))),
         activated_at=datetime.fromisoformat(str(payload.get("activated_at"))),
         expires_at=None if payload.get("expires_at") in {None, ""} else datetime.fromisoformat(str(payload.get("expires_at"))),
-        metadata=dict(payload.get("metadata") or {}),
+        metadata=metadata,
     )
 
 
@@ -177,7 +180,11 @@ class InMemoryKeyProvider:
         updated = replace(
             current,
             status=KeyStatus.REVOKED,
-            metadata={**dict(current.metadata or {}), "status_changed_at": utc_now().isoformat(), "status_changed_to": KeyStatus.REVOKED.value},
+            metadata={
+                **dict(current.metadata or {}),
+                "status_changed_at": utc_now().isoformat(),
+                "status_changed_to": KeyStatus.REVOKED.value,
+            },
         )
         self._records[key_id] = updated
         return updated
@@ -187,18 +194,32 @@ class InMemoryKeyProvider:
         updated = replace(
             current,
             status=KeyStatus.COMPROMISED,
-            metadata={**dict(current.metadata or {}), "status_changed_at": utc_now().isoformat(), "status_changed_to": KeyStatus.COMPROMISED.value},
+            metadata={
+                **dict(current.metadata or {}),
+                "status_changed_at": utc_now().isoformat(),
+                "status_changed_to": KeyStatus.COMPROMISED.value,
+            },
         )
         self._records[key_id] = updated
         return updated
 
-    def rotate(self, *, current_key_id: str, new_key_id: str, expires_in_seconds: int | None = None) -> KeyMaterialRecord:
+    def rotate(
+        self,
+        *,
+        current_key_id: str,
+        new_key_id: str,
+        expires_in_seconds: int | None = None,
+    ) -> KeyMaterialRecord:
         current = self.get(current_key_id)
         now = utc_now()
         self._records[current_key_id] = replace(
             current,
             status=KeyStatus.DEPRECATED,
-            metadata={**dict(current.metadata or {}), "rotated_to_key_id": new_key_id, "rotated_at": now.isoformat()},
+            metadata={
+                **dict(current.metadata or {}),
+                "rotated_to_key_id": new_key_id,
+                "rotated_at": now.isoformat(),
+            },
         )
         rotated = self.issue_key(
             key_id=new_key_id,
@@ -207,7 +228,13 @@ class InMemoryKeyProvider:
             connector_id=current.connector_id,
             expires_in_seconds=expires_in_seconds,
         )
-        self._records[new_key_id] = replace(rotated, metadata={**dict(rotated.metadata or {}), "rotation_parent_key_id": current.key_id})
+        self._records[new_key_id] = replace(
+            rotated,
+            metadata={
+                **dict(rotated.metadata or {}),
+                "rotation_parent_key_id": current.key_id,
+            },
+        )
         return self._records[new_key_id]
 
     def list_for_purpose(self, purpose: KeyPurpose) -> tuple[KeyMaterialRecord, ...]:
@@ -242,8 +269,18 @@ class FileKeyProvider(InMemoryKeyProvider):
         self._flush()
         return updated
 
-    def rotate(self, *, current_key_id: str, new_key_id: str, expires_in_seconds: int | None = None) -> KeyMaterialRecord:
-        updated = super().rotate(current_key_id=current_key_id, new_key_id=new_key_id, expires_in_seconds=expires_in_seconds)
+    def rotate(
+        self,
+        *,
+        current_key_id: str,
+        new_key_id: str,
+        expires_in_seconds: int | None = None,
+    ) -> KeyMaterialRecord:
+        updated = super().rotate(
+            current_key_id=current_key_id,
+            new_key_id=new_key_id,
+            expires_in_seconds=expires_in_seconds,
+        )
         self._flush()
         return updated
 
@@ -262,7 +299,10 @@ class FileKeyProvider(InMemoryKeyProvider):
             super().register(record)
 
     def _flush(self) -> None:
-        _atomic_write_json(self._path, {"records": [_serialize_record(record) for record in self._records.values()]})
+        _atomic_write_json(
+            self._path,
+            {"records": [_serialize_record(record) for record in self._records.values()]},
+        )
         try:
             os.chmod(self._path, 0o600)
         except OSError:
