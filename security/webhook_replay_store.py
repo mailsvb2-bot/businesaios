@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
-import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+from runtime.platform.security_sqlite_stores import SQLiteWebhookReplayStoreBackend
 
 
 CANON_WEBHOOK_REPLAY_STORE = True
@@ -20,13 +21,13 @@ class WebhookReplayClaim:
 
 
 class SQLiteWebhookReplayStore:
-    """Persistent atomic replay registry shared by all local API workers."""
+    """Security-facing replay facade over the runtime-owned atomic backend."""
 
     def __init__(self, path: str | Path, *, retention_seconds: int = 86400) -> None:
         self._path = Path(path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._retention_seconds = max(600, int(retention_seconds))
-        self._initialize()
+        self._backend = SQLiteWebhookReplayStoreBackend(str(self._path))
 
     @property
     def path(self) -> Path:
@@ -41,72 +42,16 @@ class SQLiteWebhookReplayStore:
         moment = now or datetime.now(UTC)
         if moment.tzinfo is None:
             raise ValueError("now must be timezone-aware")
-        claimed_at = moment.astimezone(UTC).isoformat()
-
-        connection = self._connect()
-        try:
-            connection.execute("BEGIN IMMEDIATE")
-            connection.execute(
-                "DELETE FROM webhook_replay_claims WHERE claimed_at_utc < ?",
-                ((moment - timedelta(seconds=self._retention_seconds)).astimezone(UTC).isoformat(),),
-            )
-            try:
-                connection.execute(
-                    """
-                    INSERT INTO webhook_replay_claims (
-                        tenant_id,
-                        connector_id,
-                        nonce,
-                        signature_timestamp,
-                        content_digest,
-                        claimed_at_utc
-                    ) VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        tenant_id,
-                        connector_id,
-                        nonce,
-                        str(claim.signature_timestamp),
-                        str(claim.content_digest),
-                        claimed_at,
-                    ),
-                )
-            except sqlite3.IntegrityError:
-                connection.rollback()
-                return False
-            connection.commit()
-            return True
-        finally:
-            connection.close()
-
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._path, timeout=30.0, isolation_level=None)
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.execute("PRAGMA synchronous=FULL")
-        connection.execute("PRAGMA busy_timeout=30000")
-        return connection
-
-    def _initialize(self) -> None:
-        connection = self._connect()
-        try:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS webhook_replay_claims (
-                    tenant_id TEXT NOT NULL,
-                    connector_id TEXT NOT NULL,
-                    nonce TEXT NOT NULL,
-                    signature_timestamp TEXT NOT NULL,
-                    content_digest TEXT NOT NULL,
-                    claimed_at_utc TEXT NOT NULL,
-                    PRIMARY KEY (tenant_id, connector_id, nonce)
-                )
-                """
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS idx_webhook_replay_claimed_at ON webhook_replay_claims(claimed_at_utc)"
-            )
-        finally:
-            connection.close()
+        normalized = moment.astimezone(UTC)
+        return self._backend.claim(
+            tenant_id=tenant_id,
+            connector_id=connector_id,
+            nonce=nonce,
+            signature_timestamp=str(claim.signature_timestamp),
+            content_digest=str(claim.content_digest),
+            claimed_at_utc=normalized.isoformat(),
+            expires_before_utc=(normalized - timedelta(seconds=self._retention_seconds)).isoformat(),
+        )
 
 
 def webhook_replay_store_path() -> Path:
