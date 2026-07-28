@@ -112,7 +112,10 @@ async def test_blast_radius_safety_verdict_is_fail_closed_and_visible(tmp_path, 
         _request(
             estimated_cost=0.0,
             outbound_count=500,
-            constraints=(PolicyConstraint(name="outbound_message_limit", value=25),),
+            constraints=(
+                PolicyConstraint(name="monthly_budget_limit", value=50.0),
+                PolicyConstraint(name="outbound_message_limit", value=25),
+            ),
             idempotency_key="blast-denied",
         )
     )
