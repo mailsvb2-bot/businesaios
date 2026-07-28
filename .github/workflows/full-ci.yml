@@ -17,6 +17,8 @@ concurrency:
 jobs:
   full-gate:
     runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
@@ -38,7 +40,7 @@ jobs:
         run: python -m scripts.ci.cli --gate full
       - name: Run documented complete pytest tree
         env:
-          PYTHONDONTWRITEBYTECODE: "1"
+          BUSINESAIOS_DEEP_TEST_CLEANUP: "1"
         shell: bash
         run: |
           mkdir -p artifacts/ci/literal-pytest
