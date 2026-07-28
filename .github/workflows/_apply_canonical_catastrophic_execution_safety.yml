@@ -45,3 +45,5 @@ jobs:
           git add -A
           git commit -m "Close canonical execution safety failures"
           git push origin HEAD:agent/canonical-catastrophic-safety-repair
+
+# trigger after workflow installation
