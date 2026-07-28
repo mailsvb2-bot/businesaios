@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Mapping
 
 from billing.ledger_event import LedgerEntry, LedgerPosting
 from core.tenancy.normalization import require_tenant_id
