@@ -8,59 +8,43 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  repair-runtime-safety-test-contracts:
-    if: github.actor != 'github-actions[bot]'
+  full-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: agent/full-pytest-security-repair
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-          persist-credentials: true
+          persist-credentials: false
+      - name: Verify exact checkout
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: "3.12"
-      - name: Apply runtime safety test contract repairs
-        run: |
-          python .github/patches/repair_runtime_safety_test_contracts.py
-          python -m compileall -q \
-            tests/integration/test_runtime_safety_upper_layers_wave218.py \
-            tests/integration/test_runtime_safety_upper_layers_wave219.py \
-            tests/integration/test_runtime_safety_upper_layers_wave220.py \
-            tests/runtime/test_executor_budget_consumed_after_safety.py
       - name: Install locked dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.lock.txt
-      - name: Prove repaired runtime safety contracts
-        run: |
-          pytest -q \
-            tests/integration/test_runtime_safety_upper_layers_wave218.py \
-            tests/integration/test_runtime_safety_upper_layers_wave219.py \
-            tests/integration/test_runtime_safety_upper_layers_wave220.py \
-            tests/runtime/test_executor_budget_consumed_after_safety.py
-      - name: Commit runtime safety test repairs
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add \
-            tests/integration/test_runtime_safety_upper_layers_wave218.py \
-            tests/integration/test_runtime_safety_upper_layers_wave219.py \
-            tests/integration/test_runtime_safety_upper_layers_wave220.py \
-            tests/runtime/test_executor_budget_consumed_after_safety.py
-          git rm .github/patches/repair_runtime_safety_test_contracts.py
-          git diff --cached --check
-          git commit -m "Repair runtime safety integration contracts"
-      - name: Push runtime safety test repairs
-        run: git push origin HEAD:agent/full-pytest-security-repair
-
-  full-gate:
-    if: github.actor == 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Runtime safety repairs pushed; canonical workflow restoration follows."
+      - name: Run canonical full CI gate
+        env:
+          BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.12
+        run: python -m scripts.ci.cli --gate full
+      - name: Run documented complete pytest tree
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: pytest -q
+      - name: Upload full gate artifacts
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: full-ci-artifacts
+          path: artifacts/ci
+          if-no-files-found: warn
