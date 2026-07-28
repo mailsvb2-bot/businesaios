@@ -8,6 +8,9 @@ from runtime.executor import RuntimeExecutor
 class _Guard:
     _ledger = None
 
+    def verify(self, env):
+        return None
+
     def execute_once(self, env):
         return None
 

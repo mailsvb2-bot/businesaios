@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from bootstrap.safety_control_boot import build_safety_control_runtime
@@ -13,6 +14,7 @@ def _seed_runtime(monkeypatch, tmp_path: Path):
     monkeypatch.setenv('BUSINESAIOS_SAFETY_DATA_DIR', str(tmp_path / 'safety'))
     monkeypatch.setenv('BUSINESAIOS_TENANT_CONFIG_STORE_PATH', str(tmp_path / 'tenant_config.json'))
     monkeypatch.setenv('BUSINESAIOS_TENANT_CONFIG_AUDIT_LOG_PATH', str(tmp_path / 'tenant_config_audit.jsonl'))
+    monkeypatch.setenv('BUSINESAIOS_SAFETY_PERSISTENT', '1')
     build_safety_control_runtime.cache_clear()
     return build_safety_control_runtime(persistent=True)
 
@@ -32,7 +34,7 @@ def test_policy_trust_chain_persists_lineage(monkeypatch, tmp_path: Path) -> Non
 def test_approval_guard_escalates_near_expiry(monkeypatch, tmp_path: Path) -> None:
     runtime = _seed_runtime(monkeypatch, tmp_path)
     action_id = 'ap-escalate'
-    runtime.profile.approval_repository.put(ApprovalTicket(action_id=action_id, approvals=('a',), state=ApprovalWorkflowState.PENDING, expires_at='2099-01-01T00:10:00+00:00'))
+    runtime.profile.approval_repository.put(ApprovalTicket(action_id=action_id, approvals=('a',), state=ApprovalWorkflowState.PENDING, expires_at=(datetime.now(UTC) + timedelta(minutes=10)).isoformat()))
     payload = {'tenant_id': 't1', 'approval_id': action_id, 'approval_required': True}
     decisions = evaluate_runtime_action_controls(action='deploy_policy@v1', payload=payload)
     approval = next(item for item in decisions if item.control == 'multi_step_approval')
