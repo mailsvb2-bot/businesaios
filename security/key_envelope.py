@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import base64
-import hashlib
-import hmac
 import os
 import secrets
 from pathlib import Path
+
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from config.env_flags import env_str
 
 
 CANON_KEY_ENVELOPE = True
-_KEY_ENVELOPE_MAGIC = b"BAIOS-KE1:"
+_KEY_ENVELOPE_MAGIC = b"BAIOS-KE2:"
+_REJECTED_INTERMEDIATE_MAGIC = b"BAIOS-KE1:"
+_NONCE_BYTES = 12
+_MINIMUM_CIPHERTEXT_BYTES = 17  # one byte of key material plus the 128-bit GCM tag
 
 
 def _is_production() -> bool:
@@ -75,25 +79,6 @@ def _aad(*, key_id: str, purpose: str, tenant_id: str | None, connector_id: str 
     return ("\n".join(fields) + "\n").encode("utf-8")
 
 
-def _derive(master: bytes, *, label: bytes, nonce: bytes) -> bytes:
-    return hmac.new(master, label + b":" + nonce, hashlib.sha256).digest()
-
-
-def _keystream(key: bytes, *, nonce: bytes, size: int) -> bytes:
-    output = bytearray()
-    counter = 0
-    while len(output) < size:
-        output.extend(hmac.new(key, nonce + counter.to_bytes(8, "big"), hashlib.sha256).digest())
-        counter += 1
-    return bytes(output[:size])
-
-
-def _xor(left: bytes, right: bytes) -> bytes:
-    if len(left) != len(right):
-        raise ValueError("key envelope operands must have equal length")
-    return bytes(a ^ b for a, b in zip(left, right, strict=True))
-
-
 def wrap_key_material(
     secret_bytes: bytes,
     *,
@@ -105,19 +90,18 @@ def wrap_key_material(
     plaintext = bytes(secret_bytes)
     if not plaintext:
         raise ValueError("key material must not be empty")
-    master = load_key_envelope_master_key()
-    nonce = secrets.token_bytes(16)
-    encryption_key = _derive(master, label=b"encryption", nonce=nonce)
-    authentication_key = _derive(master, label=b"authentication", nonce=nonce)
-    ciphertext = _xor(plaintext, _keystream(encryption_key, nonce=nonce, size=len(plaintext)))
-    tag = hmac.new(
-        authentication_key,
-        _aad(key_id=key_id, purpose=purpose, tenant_id=tenant_id, connector_id=connector_id)
-        + nonce
-        + ciphertext,
-        hashlib.sha256,
-    ).digest()
-    return base64.b64encode(_KEY_ENVELOPE_MAGIC + nonce + tag + ciphertext).decode("ascii")
+    nonce = secrets.token_bytes(_NONCE_BYTES)
+    ciphertext = AESGCM(load_key_envelope_master_key()).encrypt(
+        nonce,
+        plaintext,
+        _aad(
+            key_id=key_id,
+            purpose=purpose,
+            tenant_id=tenant_id,
+            connector_id=connector_id,
+        ),
+    )
+    return base64.b64encode(_KEY_ENVELOPE_MAGIC + nonce + ciphertext).decode("ascii")
 
 
 def unwrap_key_material(
@@ -132,25 +116,29 @@ def unwrap_key_material(
         payload = base64.b64decode(str(wrapped), validate=True)
     except Exception as exc:
         raise RuntimeError("invalid key envelope encoding") from exc
+    if payload.startswith(_REJECTED_INTERMEDIATE_MAGIC):
+        raise RuntimeError(
+            "BAIOS-KE1 key envelopes are unsupported; restore the pre-upgrade backup and rotate keys through the approved migration command"
+        )
     if not payload.startswith(_KEY_ENVELOPE_MAGIC):
-        raise RuntimeError("legacy plaintext key material is forbidden; run the explicit key migration")
+        raise RuntimeError("plaintext or unknown key material is forbidden; run the approved key-provider migration")
     body = payload[len(_KEY_ENVELOPE_MAGIC) :]
-    if len(body) < 49:
+    if len(body) < _NONCE_BYTES + _MINIMUM_CIPHERTEXT_BYTES:
         raise RuntimeError("invalid key envelope length")
-    nonce, tag, ciphertext = body[:16], body[16:48], body[48:]
-    master = load_key_envelope_master_key()
-    authentication_key = _derive(master, label=b"authentication", nonce=nonce)
-    expected_tag = hmac.new(
-        authentication_key,
-        _aad(key_id=key_id, purpose=purpose, tenant_id=tenant_id, connector_id=connector_id)
-        + nonce
-        + ciphertext,
-        hashlib.sha256,
-    ).digest()
-    if not hmac.compare_digest(tag, expected_tag):
-        raise RuntimeError("key envelope integrity check failed")
-    encryption_key = _derive(master, label=b"encryption", nonce=nonce)
-    return _xor(ciphertext, _keystream(encryption_key, nonce=nonce, size=len(ciphertext)))
+    nonce, ciphertext = body[:_NONCE_BYTES], body[_NONCE_BYTES:]
+    try:
+        return AESGCM(load_key_envelope_master_key()).decrypt(
+            nonce,
+            ciphertext,
+            _aad(
+                key_id=key_id,
+                purpose=purpose,
+                tenant_id=tenant_id,
+                connector_id=connector_id,
+            ),
+        )
+    except InvalidTag as exc:
+        raise RuntimeError("key envelope integrity check failed") from exc
 
 
 __all__ = [
