@@ -12,6 +12,7 @@ from application.business_autonomy.contracts import (
     IntegrationMode,
     PolicyConstraint,
 )
+from application.business_autonomy.execution_subject import scoped_business_idempotency_token
 from application.business_autonomy.guards import (
     ApprovalStatus,
     BusinessApprovalGate,
@@ -95,9 +96,10 @@ def test_zero_cost_read_only_action_remains_available() -> None:
 
 def test_idempotency_reservation_is_atomic_before_effect() -> None:
     store = BusinessIdempotencyStore()
+    token = scoped_business_idempotency_token(_request())
 
     def reserve(index: int):
-        return store.reserve("tenant-a:biz-a:idem-a", owner_id=f"worker-{index}").status
+        return store.reserve(token, owner_id=f"worker-{index}").status
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         statuses = list(pool.map(reserve, range(32)))
