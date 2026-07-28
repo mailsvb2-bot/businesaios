@@ -75,6 +75,47 @@ else
   exit 1
 fi
 
+# Constraint files are an implementation detail. Remove their random paths from
+# annotations and restore canonical single-source `# via` lines so repeated
+# lock generation is byte-stable when the dependency graph has not changed.
+"$PYTHON_BIN" - "$TMP" <<'PY'
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+lines = path.read_text(encoding="utf-8").splitlines()
+out: list[str] = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    stripped = line.strip()
+    if stripped.startswith("#    uv pip compile "):
+        out.append("#    uv pip compile requirements.txt --generate-hashes")
+        i += 1
+        continue
+    if stripped == "# via":
+        indent = line[: line.index("#")]
+        items: list[str] = []
+        j = i + 1
+        while j < len(lines) and lines[j].strip().startswith("#   "):
+            item = lines[j].strip()[4:].strip()
+            if not item.startswith("-c ") and not item.startswith("--constraint "):
+                items.append(item)
+            j += 1
+        if len(items) == 1:
+            out.append(f"{indent}# via {items[0]}")
+        elif items:
+            out.append(f"{indent}# via")
+            out.extend(f"{indent}#   {item}" for item in items)
+        i = j
+        continue
+    out.append(line)
+    i += 1
+path.write_text("\n".join(out) + "\n", encoding="utf-8")
+PY
+
 {
   echo "# BAIOS_TRANSITIVE_LOCK: true"
   echo "# Generated from requirements.txt. Do not edit by hand."
