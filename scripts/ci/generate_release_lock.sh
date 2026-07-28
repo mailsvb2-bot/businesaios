@@ -37,8 +37,10 @@ input_path, output_path, constraints_path = map(Path, sys.argv[1:])
 name_re = re.compile(r"^\s*([A-Za-z0-9_.-]+)\s*(?:\[[^]]+\])?\s*==")
 locked_re = re.compile(r"^([A-Za-z0-9_.-]+)==([^\s\\]+)")
 
+
 def normalize(value: str) -> str:
     return re.sub(r"[-_.]+", "-", value).lower()
+
 
 top_level: set[str] = set()
 for raw in input_path.read_text(encoding="utf-8").splitlines():
@@ -115,6 +117,49 @@ while i < len(lines):
     i += 1
 path.write_text("\n".join(out) + "\n", encoding="utf-8")
 PY
+
+# The resolver must not silently move any baseline transitive version. This is
+# a second, independent proof after exact constraints: it validates the emitted
+# lock itself and fails before replacing the proven lock.
+if [[ -s "$CONSTRAINTS" ]]; then
+  "$PYTHON_BIN" - "$CONSTRAINTS" "$TMP" <<'PY'
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+
+constraint_path, generated_path = map(Path, sys.argv[1:])
+locked_re = re.compile(r"^([A-Za-z0-9_.-]+)==([^\s\\]+)")
+
+
+def normalize(value: str) -> str:
+    return re.sub(r"[-_.]+", "-", value).lower()
+
+
+def version_map(path: Path) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        match = locked_re.match(raw.strip())
+        if match:
+            result[normalize(match.group(1))] = match.group(2)
+    return result
+
+baseline = version_map(constraint_path)
+generated = version_map(generated_path)
+drift = {
+    name: {"expected": version, "actual": generated.get(name)}
+    for name, version in baseline.items()
+    if generated.get(name) != version
+}
+if drift:
+    details = ", ".join(
+        f"{name}: expected {item['expected']}, got {item['actual'] or '<missing>'}"
+        for name, item in sorted(drift.items())
+    )
+    raise SystemExit(f"unapproved transitive dependency drift: {details}")
+PY
+fi
 
 {
   echo "# BAIOS_TRANSITIVE_LOCK: true"
