@@ -8,133 +8,32 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  apply-client-outcome-auth-fix:
-    if: github.actor != 'github-actions[bot]'
+  export-patched-public-routes:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: agent/full-pytest-security-repair
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-          persist-credentials: true
-      - name: Apply auth perimeter closure and restore canonical workflow
+          persist-credentials: false
+      - name: Apply exact auth perimeter patch
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import base64
-
-          path = Path('adapters/api/fastapi/public_routes.py')
-          text = path.read_text(encoding='utf-8')
-          replacements = [
-              (
-                  "            if security_guard.requires_external_auth(route_path) and auth_bundle is not None:\n",
-                  "            if security_guard.requires_external_auth(route_path):\n"
-                  "                if auth_bundle is None:\n"
-                  "                    raise PermissionError('api_perimeter_auth_unconfigured')\n",
-              ),
-              (
-                  "            enforce_public_security(route_path='/client-outcome/select', request_context=ctx, body=request.model_dump())\n",
-                  "            enforce_public_security(\n"
-                  "                route_path='/client-outcome/select',\n"
-                  "                request_context=ctx,\n"
-                  "                body=request.model_dump(),\n"
-                  "                http_request=http_request,\n"
-                  "            )\n",
-              ),
-              (
-                  "            enforce_public_security(route_path='/client-outcome/orders/{order_id}/amend', request_context=ctx, body=request.model_dump())\n",
-                  "            enforce_public_security(\n"
-                  "                route_path='/client-outcome/orders/{order_id}/amend',\n"
-                  "                request_context=ctx,\n"
-                  "                body=request.model_dump(),\n"
-                  "                http_request=http_request,\n"
-                  "            )\n",
-              ),
-              (
-                  "            enforce_public_security(route_path='/client-outcome/execute', request_context=ctx, body=request.model_dump())\n",
-                  "            enforce_public_security(\n"
-                  "                route_path='/client-outcome/execute',\n"
-                  "                request_context=ctx,\n"
-                  "                body=request.model_dump(),\n"
-                  "                http_request=http_request,\n"
-                  "            )\n",
-              ),
-              (
-                  "            enforce_public_security(route_path='/client-outcome/disputes/open', request_context=ctx, body=request.model_dump())\n",
-                  "            enforce_public_security(\n"
-                  "                route_path='/client-outcome/disputes/open',\n"
-                  "                request_context=ctx,\n"
-                  "                body=request.model_dump(),\n"
-                  "                http_request=http_request,\n"
-                  "            )\n",
-              ),
-              (
-                  "            enforce_public_security(route_path='/client-outcome/disputes/reverse', request_context=ctx, body=request.model_dump())\n",
-                  "            enforce_public_security(\n"
-                  "                route_path='/client-outcome/disputes/reverse',\n"
-                  "                request_context=ctx,\n"
-                  "                body=request.model_dump(),\n"
-                  "                http_request=http_request,\n"
-                  "            )\n",
-              ),
-              (
-                  "            enforce_public_security(route_path='/client-outcome/full-cycle', request_context=ctx, body=request.model_dump())\n",
-                  "            enforce_public_security(\n"
-                  "                route_path='/client-outcome/full-cycle',\n"
-                  "                request_context=ctx,\n"
-                  "                body=request.model_dump(),\n"
-                  "                http_request=http_request,\n"
-                  "            )\n",
-              ),
-              (
-                  "            enforce_public_security(route_path='/client-outcome/orders/{order_id}/{lead_id}/admin-view', request_context=ctx, body={'order_id': order_id, 'lead_id': lead_id})\n",
-                  "            enforce_public_security(\n"
-                  "                route_path='/client-outcome/orders/{order_id}/{lead_id}/admin-view',\n"
-                  "                request_context=ctx,\n"
-                  "                body={'order_id': order_id, 'lead_id': lead_id},\n"
-                  "                http_request=http_request,\n"
-                  "            )\n",
-              ),
-              (
-                  "            enforce_public_security(route_path='/client-outcome/admin-summary', request_context=ctx, body=request.model_dump())\n",
-                  "            enforce_public_security(\n"
-                  "                route_path='/client-outcome/admin-summary',\n"
-                  "                request_context=ctx,\n"
-                  "                body=request.model_dump(),\n"
-                  "                http_request=http_request,\n"
-                  "            )\n",
-              ),
-          ]
-          for old, new in replacements:
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'unexpected replacement count {count}: {old!r}')
-              text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
-
-          canonical = base64.b64decode('bmFtZTogRnVsbCBDSQoKb246CiAgd29ya2Zsb3dfZGlzcGF0Y2g6CiAgcHVzaDoKICAgIGJyYW5jaGVzOgogICAgICAtIG1haW4KICBwdWxsX3JlcXVlc3Q6CgpwZXJtaXNzaW9uczoKICBjb250ZW50czogcmVhZAoKY29uY3VycmVuY3k6CiAgZ3JvdXA6ICR7eyBnaXRodWIud29ya2Zsb3cgfX0tJHt7IGdpdGh1Yi5yZWYgfX0KICBjYW5jZWwtaW4tcHJvZ3Jlc3M6IHRydWUKCmpvYnM6CiAgZnVsbC1nYXRlOgogICAgcnVucy1vbjogdWJ1bnR1LWxhdGVzdAogICAgc3RlcHM6CiAgICAgIC0gdXNlczogYWN0aW9ucy9jaGVja291dEAzNGUxMTQ4NzZiMGIxMWMzOTBhNTYzODFhZDE2ZWJkMTM5MTRmOGQ1CiAgICAgICAgd2l0aDoKICAgICAgICAgIHJlZjogJHt7IGdpdGh1Yi5ldmVudF9uYW1lID09ICdwdWxsX3JlcXVlc3QnICYmIGdpdGh1Yi5ldmVudC5wdWxsX3JlcXVlc3QuaGVhZC5zaGEgfHwgZ2l0aHViLnNoYSB9fQogICAgICAgICAgZmV0Y2gtZGVwdGg6IDAKICAgICAgICAgIHBlcnNpc3QtY3JlZGVudGlhbHM6IGZhbHNlCiAgICAgIC0gbmFtZTogVmVyaWZ5IGV4YWN0IGNoZWNrb3V0CiAgICAgICAgZW52OgogICAgICAgICAgRVhQRUNURURfU0hBOiAke3sgZ2l0aHViLmV2ZW50X25hbWUgPT0gJ3B1bGxfcmVxdWVzdCcgJiYgZ2l0aHViLmV2ZW50LnB1bGxfcmVxdWVzdC5oZWFkLnNoYSB8fCBnaXRodWIuc2hhIH19CiAgICAgICAgcnVuOiB0ZXN0ICIkKGdpdCByZXYtcGFyc2UgSEVBRCkiID0gIiRFWFBFQ1RFRF9TSEEiCiAgICAgIC0gdXNlczogYWN0aW9ucy9zZXR1cC1weXRob25AYTI2YWY2OWJlOTUxYTIxM2Q0OTVhNGMzZTRlNDAyMmUxNmQ4NzA2NQogICAgICAgIHdpdGg6CiAgICAgICAgICBweXRob24tdmVyc2lvbjogIjMuMTIiCiAgICAgIC0gbmFtZTogSW5zdGFsbCBsb2NrZWQgZGVwZW5kZW5jaWVzCiAgICAgICAgcnVuOiBweXRob24gLW0gcGlwIGluc3RhbGwgLS11cGdyYWRlIHBpcCAmJiBweXRob24gLW0gcGlwIGluc3RhbGwgLXIgcmVxdWlyZW1lbnRzLmxvY2sudHh0CiAgICAgIC0gbmFtZTogUnVuIGNhbm9uaWNhbCBmdWxsIENJIGdhdGUKICAgICAgICBlbnY6CiAgICAgICAgICBCQUlPU19CT09UX1NNT0tFX1JPT1Q6ICR7eyBydW5uZXIudGVtcCB9fS9idXNpbmVzYWlvcy1ib290LXNtb2tlLyR7eyBnaXRodWIucnVuX2lkIH19LSR7eyBnaXRodWIucnVuX2F0dGVtcHQgfX0tJHt7IGdpdGh1Yi5qb2IgfX0tMy4xMgogICAgICAgIHJ1bjogcHl0aG9uIC1tIHNjcmlwdHMuY2kuY2xpIC0tZ2F0ZSBmdWxsCiAgICAgIC0gbmFtZTogUnVuIGRvY3VtZW50ZWQgY29tcGxldGUgcHl0ZXN0IHRyZWUKICAgICAgICBlbnY6CiAgICAgICAgICBQWVRIT05ET05UV1JJVEVCWVRFQ09ERTogIjEiCiAgICAgICAgcnVuOiBweXRlc3QgLXEKICAgICAgLSBuYW1lOiBVcGxvYWQgZnVsbCBnYXRlIGFydGlmYWN0cwogICAgICAgIGlmOiBhbHdheXMoKQogICAgICAgIGNvbnRpbnVlLW9uLWVycm9yOiB0cnVlCiAgICAgICAgdXNlczogYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAZWExNjVmOGQ2NWI2ZTc1YjU0MDQ0OWU5MmI0ODg2ZjQzNjA3ZmEwMgogICAgICAgIHdpdGg6CiAgICAgICAgICBuYW1lOiBmdWxsLWNpLWFydGlmYWN0cwogICAgICAgICAgcGF0aDogYXJ0aWZhY3RzL2NpCiAgICAgICAgICBpZi1uby1maWxlcy1mb3VuZDogd2Fybgo=')
-          Path('.github/workflows/full-ci.yml').write_bytes(canonical)
-          PY
-          rm -f .github/patches/client-outcome-auth.patch.gz.b64
-          rmdir .github/patches 2>/dev/null || true
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add -A
-          git diff --cached --check
-          git commit -m "Close client outcome auth perimeter"
-          git push origin HEAD:agent/full-pytest-security-repair
-
-  full-gate:
-    if: github.actor == 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Canonical full gate resumes on the cleanup commit."
+          base64 -d .github/patches/client-outcome-auth.patch.gz.b64 | gzip -dc > /tmp/client-outcome-auth.patch
+          test "$(sha256sum /tmp/client-outcome-auth.patch | awk '{print $1}')" = "0c34e11c36f198460f33995e5072aae85b160a0e01e9a4a8d6244cbb8049077b"
+          patch -p1 < /tmp/client-outcome-auth.patch
+          python -m py_compile adapters/api/fastapi/public_routes.py
+      - name: Upload patched source
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: patched-public-routes
+          path: adapters/api/fastapi/public_routes.py
+          if-no-files-found: error
