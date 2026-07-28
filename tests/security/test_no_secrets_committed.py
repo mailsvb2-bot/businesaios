@@ -2,6 +2,8 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
+
 PATTERNS = [
     re.compile(r"sk-[A-Za-z0-9]{20,}"),
     re.compile(r"ya\.[A-Za-z0-9_\-]{20,}"),
@@ -14,9 +16,11 @@ def _tracked_files(root: Path):
     result = subprocess.run(
         ["git", "ls-files", "-z"],
         cwd=root,
-        check=True,
+        check=False,
         capture_output=True,
     )
+    if result.returncode != 0:
+        pytest.skip("git metadata is unavailable; tracked-file secret scan requires a repository checkout")
     for raw in result.stdout.decode("utf-8", errors="ignore").split("\0"):
         if raw:
             yield root / raw
