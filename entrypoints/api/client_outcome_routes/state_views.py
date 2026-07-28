@@ -10,8 +10,8 @@ from entrypoints.api.client_outcome_routes.state_views_basic import (
     get_commercial_state,
     get_corrected_economics,
     get_lifecycle,
-    get_reconciliation,
 )
+from entrypoints.api.client_outcome_routes.state_views_reconciliation import get_reconciliation
 
 __all__ = [
     '_build_economic_truth_widget',
