@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from lead_outcomes.client_outcome_contract import BillableClientRecord
-from registry.base_registry import BaseRegistry
+from registry.base_registry import BaseRegistry, RegistryBackend
 
 CANON_CLIENT_OUTCOME_USAGE_LEDGER = True
 
@@ -14,16 +14,14 @@ def _safe_dict(value: object) -> dict[str, Any]:
 
 
 class ClientOutcomeUsageLedger(BaseRegistry):
-    def __init__(self) -> None:
-        super().__init__(kind='client_outcome_usage')
+    def __init__(self, *, backend: RegistryBackend | None = None) -> None:
+        super().__init__(kind='client_outcome_usage', backend=backend)
 
     def has_usage(self, record_id: str) -> bool:
         return str(record_id) in self.snapshot()
 
-    def append_usage(self, record: BillableClientRecord) -> None:
-        if self.has_usage(record.record_id):
-            return
-        self.register(record.record_id, {
+    def append_usage(self, record: BillableClientRecord) -> bool:
+        payload = {
             'record_id': record.record_id,
             'tenant_id': record.tenant_id,
             'business_id': record.business_id,
@@ -36,7 +34,15 @@ class ClientOutcomeUsageLedger(BaseRegistry):
             'amount': record.amount,
             'currency': record.currency,
             'metadata': record.normalized_metadata(),
-        })
+        }
+        try:
+            self.register_unique(record.record_id, payload, error_prefix='client_outcome_usage')
+            return True
+        except ValueError:
+            existing = self.maybe_get(record.record_id)
+            if existing != payload:
+                raise
+            return False
 
     def list_usage(self) -> tuple[dict[str, Any], ...]:
         return tuple(_safe_dict(value) for _, value in self.items())
@@ -47,7 +53,4 @@ class ClientOutcomeUsageAppender:
     ledger: ClientOutcomeUsageLedger
 
     def append(self, record: BillableClientRecord) -> bool:
-        if self.ledger.has_usage(record.record_id):
-            return False
-        self.ledger.append_usage(record)
-        return True
+        return self.ledger.append_usage(record)
