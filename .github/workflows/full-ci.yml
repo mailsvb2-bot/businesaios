@@ -27,9 +27,12 @@ jobs:
         run: |
           python .github/patches/apply_client_outcome_auth.py
           python -m py_compile adapters/api/fastapi/public_routes.py
-      - name: Upload patched source
+          git rev-parse 'HEAD^{tree}' > base_tree_sha.txt
+      - name: Upload patched source and base tree
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: patched-public-routes
-          path: adapters/api/fastapi/public_routes.py
+          path: |
+            adapters/api/fastapi/public_routes.py
+            base_tree_sha.txt
           if-no-files-found: error
