@@ -5,21 +5,18 @@ from datetime import datetime
 from typing import Any
 
 from core.finance.money import legacy_float, money_decimal
-from registry.base_registry import BaseRegistry
 from lead_outcomes.client_outcome_contract import ClientOutcomeOrder, ClientOutcomePackage
+from registry.base_registry import BaseRegistry, RegistryBackend
 
 
 CANON_CLIENT_OUTCOME_ORDER_STORE = True
 
 
 class ClientOutcomeOrderStore(BaseRegistry):
-    """
-    Auditable owner-surface for persisted client outcome orders.
-    Stores exactly the commercial contract that was selected.
-    """
+    """Auditable owner-surface for persisted client outcome orders."""
 
-    def __init__(self) -> None:
-        super().__init__(kind='client_outcome_order')
+    def __init__(self, *, backend: RegistryBackend | None = None) -> None:
+        super().__init__(kind='client_outcome_order', backend=backend)
 
     def save(self, order: ClientOutcomeOrder) -> None:
         self.register(
@@ -83,10 +80,7 @@ class ClientOutcomeOrderStore(BaseRegistry):
         next_metadata = dict(current.metadata)
         amendment_fingerprints = list(current.metadata.get('amendment_fingerprints') or ())
         amendment_fingerprint_value = amendment_meta.get('amendment_fingerprint')
-        if (
-            amendment_fingerprint_value not in (None, '')
-            and str(amendment_fingerprint_value) not in amendment_fingerprints
-        ):
+        if amendment_fingerprint_value not in (None, '') and str(amendment_fingerprint_value) not in amendment_fingerprints:
             amendment_fingerprints.append(str(amendment_fingerprint_value))
         next_metadata['amendment_count'] = next_count
         next_metadata['amendments'] = amendments
@@ -108,10 +102,7 @@ class ClientOutcomeOrderStore(BaseRegistry):
                 label=str(package_payload['label']),
                 requested_clients=int(package_payload['requested_clients']),
                 price_per_verified_client=legacy_float(
-                    money_decimal(
-                        package_payload['price_per_verified_client'],
-                        name='price_per_verified_client',
-                    ),
+                    money_decimal(package_payload['price_per_verified_client'], name='price_per_verified_client'),
                     name='price_per_verified_client',
                 ),
                 currency=str(package_payload['currency']),
@@ -138,17 +129,5 @@ class ClientOutcomeOrderPersistenceService:
     def get_order(self, order_id: str) -> ClientOutcomeOrder | None:
         return self.store.get_order(order_id)
 
-    def amend_order(
-        self,
-        *,
-        now: datetime,
-        order_id: str,
-        package: ClientOutcomePackage,
-        metadata: dict[str, Any] | None = None,
-    ) -> ClientOutcomeOrder | None:
-        return self.store.amend_order(
-            now=now,
-            order_id=order_id,
-            package=package,
-            metadata=metadata,
-        )
+    def amend_order(self, *, now: datetime, order_id: str, package: ClientOutcomePackage, metadata: dict[str, Any] | None = None) -> ClientOutcomeOrder | None:
+        return self.store.amend_order(now=now, order_id=order_id, package=package, metadata=metadata)
