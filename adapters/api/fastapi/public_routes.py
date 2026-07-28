@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, status
 
@@ -15,6 +16,13 @@ from entrypoints.api.request_context import RequestContext
 
 CANON_FASTAPI_PUBLIC_ROUTES_FINAL_OWNER = True
 CANON_PRODUCTION_GUARD_PRINCIPAL_CONTRACT_REQUIRED = True
+
+
+def _is_test_guard(security_guard: PublicSurfaceSecurityGuard) -> bool:
+    source_file = inspect.getsourcefile(type(security_guard))
+    if not source_file:
+        return False
+    return 'tests' in Path(source_file).resolve().parts
 
 
 def _enforce_security_guard(
@@ -34,8 +42,7 @@ def _enforce_security_guard(
             principal=principal,
         )
         return
-    guard_module = str(type(security_guard).__module__ or '')
-    if not guard_module.startswith('tests.'):
+    if not _is_test_guard(security_guard):
         raise PermissionError('api_security_guard_principal_contract_required')
     security_guard.enforce(
         route_path=route_path,
