@@ -25,15 +25,20 @@ def test_runtime_internal_execution_contract_is_only_imported_by_allowed_owners(
 def test_public_and_owner_surfaces_do_not_import_runtime_internal_directly() -> None:
     root = Path(__file__).resolve().parents[2]
     for rel in FORBIDDEN_RUNTIME_INTERNAL_IMPORTERS:
-        text = (root / rel).read_text(encoding='utf-8', errors='ignore')
+        path = root / rel
+        assert path.is_file(), f'locked public surface missing: {rel}'
+        text = path.read_text(encoding='utf-8', errors='ignore')
         assert 'runtime._internal.economic_execution_contract' not in text
         assert 'from runtime._internal' not in text
 
 
-def test_sealed_execution_routes_stay_in_public_security_guard_and_fastapi_surface() -> None:
+def test_sealed_execution_routes_stay_in_route_specs_and_fastapi_security_path() -> None:
     root = Path(__file__).resolve().parents[2]
+    route_specs = (root / 'entrypoints' / 'api' / 'public_surface_route_specs.py').read_text(encoding='utf-8', errors='ignore')
     guard = (root / 'entrypoints' / 'api' / 'public_surface_security_guard.py').read_text(encoding='utf-8', errors='ignore')
     routes = (root / 'adapters' / 'api' / 'fastapi' / 'public_routes.py').read_text(encoding='utf-8', errors='ignore')
     for route in SEALED_EXECUTION_ROUTE_PATHS:
-        assert route in guard
-        assert route in routes
+        assert route in route_specs
+    assert 'from entrypoints.api.public_surface_route_specs import PublicSurfaceRouteSpec, _ROUTE_SPECS' in guard
+    assert '_enforce_security_guard(' in routes
+    assert 'security_guard.requires_external_auth(route_path)' in routes
