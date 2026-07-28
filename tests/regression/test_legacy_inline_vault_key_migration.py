@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 from security.key_management_contract import KeyPurpose
 from security.key_provider import FileKeyProvider
