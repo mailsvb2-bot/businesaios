@@ -61,7 +61,7 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
                 "tests/lock/test_ai_ceo_no_second_path.py",
                 "tests/lock/test_runtime_actions_registry_lock.py",
                 "tests/lock/test_messaging_channel_surface_lock.py",
-                "tests/lock/test_known_full_suite_debt_quarantine.py",
+                "tests/lock/test_known_full_suite_debt_registry.py",
                 "tests/arch/test_agi_no_second_brain_surfaces.py",
             )
             if (root / rel).exists()
