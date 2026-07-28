@@ -3,10 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from observability.action_audit_log import ActionAuditLog
 from entrypoints.api.request_context import RequestContext
 from entrypoints.api.webhook_security_surface_guard import WebhookSecuritySurfaceGuard
+from observability.action_audit_log import ActionAuditLog
 from security.payload_redaction import PayloadRedactor
+from security.webhook_replay_store import (
+    SQLiteWebhookReplayStore,
+    WebhookReplayClaim,
+    build_default_webhook_replay_store,
+)
 from security.webhook_signature_verifier import WebhookSignatureVerifier
 
 
@@ -17,9 +22,10 @@ CANON_API_WEBHOOK_ROUTE_HANDLERS = True
 @dataclass(frozen=True, kw_only=True)
 class WebhookRouteHandlers:
     verifier: WebhookSignatureVerifier
+    security_guard: WebhookSecuritySurfaceGuard
     audit_log: ActionAuditLog = field(default_factory=ActionAuditLog)
     payload_redactor: PayloadRedactor = field(default_factory=PayloadRedactor)
-    security_guard: WebhookSecuritySurfaceGuard
+    replay_store: SQLiteWebhookReplayStore = field(default_factory=build_default_webhook_replay_store)
 
     def receive(
         self,
@@ -42,6 +48,36 @@ class WebhookRouteHandlers:
         })
         derived_request_context = request_context or RequestContext.from_headers(headers)
         security_verdict: dict[str, Any] | None = None
+
+        if verification.verified:
+            try:
+                claimed = self.replay_store.claim(
+                    WebhookReplayClaim(
+                        tenant_id=str(tenant_id or ''),
+                        connector_id=str(connector_id or ''),
+                        nonce=str(verification.metadata.get('nonce') or ''),
+                        signature_timestamp=str(verification.metadata.get('timestamp') or ''),
+                        content_digest=str(verification.content_digest or ''),
+                    )
+                )
+            except Exception as exc:
+                verification = type(verification)(
+                    verified=False,
+                    reason=f'replay_store_unavailable:{type(exc).__name__}',
+                    key_id=verification.key_id,
+                    content_digest=verification.content_digest,
+                    metadata=dict(verification.metadata),
+                )
+            else:
+                if not claimed:
+                    verification = type(verification)(
+                        verified=False,
+                        reason='webhook_replay_detected',
+                        key_id=verification.key_id,
+                        content_digest=verification.content_digest,
+                        metadata=dict(verification.metadata),
+                    )
+
         if verification.verified:
             try:
                 security_verdict = self.security_guard.enforce(
@@ -60,6 +96,7 @@ class WebhookRouteHandlers:
                     content_digest=verification.content_digest,
                     metadata=dict(verification.metadata),
                 )
+
         self.audit_log.record({
             'kind': 'webhook',
             'tenant_id': tenant_id,
@@ -68,6 +105,8 @@ class WebhookRouteHandlers:
             'reason': verification.reason,
             'key_id': verification.key_id,
             'content_digest': verification.content_digest,
+            'signature_version': verification.metadata.get('version'),
+            'signature_nonce': verification.metadata.get('nonce'),
             'payload_preview': payload_preview,
             'security_verdict': security_verdict,
         })
