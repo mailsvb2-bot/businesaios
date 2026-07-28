@@ -23,11 +23,13 @@ class AnalyticsSignedExportRouteHandlers:
             tenant_id=str(request.tenant_id),
             window_days=int(request.window_days),
         )
-        export_dir = str(request.export_dir or self.export_root)
         with SqliteAnalyticsManifestChainStore(self.manifest_chain_db_path) as chain_store:
-            service = AnalyticsSignedExportChainService(manifest_chain_store=chain_store)
+            service = AnalyticsSignedExportChainService(
+                manifest_chain_store=chain_store,
+                export_root=self.export_root,
+            )
             return service.export_signed_bundle(
-                export_dir=export_dir,
+                export_dir=request.export_dir,
                 export_id=str(request.export_id),
                 tenant_id=str(request.tenant_id),
                 bundle=bundle,
