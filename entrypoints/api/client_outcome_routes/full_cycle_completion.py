@@ -11,6 +11,7 @@ def complete_full_cycle(
     now,
     request,
     request_payload,
+    idempotency_lease_token,
     execution_response,
     order,
     lead,
@@ -196,11 +197,14 @@ def complete_full_cycle(
         admin_summary=admin_summary_payload,
     )
     if request.idempotency_key:
+        if not idempotency_lease_token:
+            raise RuntimeError('client_outcome_idempotency_lease_token_missing')
         handlers.cycle_idempotency_service.complete(
             tenant_id=request.tenant_id,
             business_id=request.business_id,
             lead_id=request.lead.lead_id,
             idempotency_key=request.idempotency_key,
+            lease_token=idempotency_lease_token,
             now=now,
             request_payload=request_payload,
             response_payload=response.model_dump(mode='json'),
