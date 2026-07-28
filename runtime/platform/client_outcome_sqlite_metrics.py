@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Mapping
 
 from core.tenancy.normalization import require_tenant_id
 from observability.slo_contract import SLIKind
