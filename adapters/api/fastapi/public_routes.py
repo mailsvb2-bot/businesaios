@@ -8,7 +8,11 @@ from fastapi import APIRouter, HTTPException, Request, status
 from adapters.api.fastapi.analytics_routes import register_analytics_routes
 from adapters.api.fastapi.public_client_outcome_routes import register_public_client_outcome_routes
 from adapters.api.fastapi.public_core_routes import register_public_core_routes
-from adapters.api.fastapi.public_site_routes import register_public_site_routes
+from adapters.api.fastapi.public_site_routes import (
+    _cta_status_response,
+    _cta_submit_response,
+    register_public_site_routes,
+)
 from adapters.api.fastapi.router_support import authorize_request
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
@@ -111,17 +115,37 @@ def register_public_api_routes(
         raise exc
 
     register_public_core_routes(
-        router=router, health_handler=health_handler, handlers=handlers, headless_handlers=headless_handlers,
-        governance_handlers=governance_handlers, business_memory_handlers=business_memory_handlers,
-        governance_advanced_handlers=governance_advanced_handlers, enforce_public_security=enforce_public_security,
+        router=router,
+        health_handler=health_handler,
+        handlers=handlers,
+        headless_handlers=headless_handlers,
+        governance_handlers=governance_handlers,
+        business_memory_handlers=business_memory_handlers,
+        governance_advanced_handlers=governance_advanced_handlers,
+        enforce_public_security=enforce_public_security,
     )
     register_public_site_routes(router=router, enforce_public_security=enforce_public_security)
     register_public_client_outcome_routes(
-        router=router, client_outcome_handlers=client_outcome_handlers, economic_handlers=economic_handlers,
-        enforce_public_security=enforce_public_security, authenticated_tenant=authenticated_tenant,
+        router=router,
+        client_outcome_handlers=client_outcome_handlers,
+        economic_handlers=economic_handlers,
+        enforce_public_security=enforce_public_security,
+        authenticated_tenant=authenticated_tenant,
         raise_boundary_error=raise_boundary_error,
     )
     if analytics_handlers is not None:
         register_analytics_routes(
-            router=router, analytics_handlers=analytics_handlers, security_guard=security_guard, auth_bundle=auth_bundle
+            router=router,
+            analytics_handlers=analytics_handlers,
+            security_guard=security_guard,
+            auth_bundle=auth_bundle,
         )
+
+
+__all__ = [
+    'CANON_FASTAPI_PUBLIC_ROUTES_FINAL_OWNER',
+    'CANON_PRODUCTION_GUARD_PRINCIPAL_CONTRACT_REQUIRED',
+    '_cta_status_response',
+    '_cta_submit_response',
+    'register_public_api_routes',
+]
