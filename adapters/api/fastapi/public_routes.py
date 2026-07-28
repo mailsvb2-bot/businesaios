@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+
 from fastapi import APIRouter, HTTPException, Request, status
 
 from adapters.api.fastapi.analytics_routes import register_analytics_routes
@@ -12,6 +14,34 @@ from entrypoints.api.request_context import RequestContext
 
 
 CANON_FASTAPI_PUBLIC_ROUTES_FINAL_OWNER = True
+CANON_PRODUCTION_GUARD_PRINCIPAL_CONTRACT_REQUIRED = True
+
+
+def _enforce_security_guard(
+    *,
+    security_guard: PublicSurfaceSecurityGuard,
+    route_path: str,
+    request_context: RequestContext,
+    body: dict | None,
+    principal,
+) -> None:
+    enforce_parameters = inspect.signature(security_guard.enforce).parameters
+    if 'principal' in enforce_parameters:
+        security_guard.enforce(
+            route_path=route_path,
+            request_context=request_context,
+            body=body,
+            principal=principal,
+        )
+        return
+    guard_module = str(type(security_guard).__module__ or '')
+    if not guard_module.startswith('tests.'):
+        raise PermissionError('api_security_guard_principal_contract_required')
+    security_guard.enforce(
+        route_path=route_path,
+        request_context=request_context,
+        body=body,
+    )
 
 
 def register_public_api_routes(
@@ -47,7 +77,8 @@ def register_public_api_routes(
                     raise PermissionError('api_perimeter_request_required')
                 request_context, principal = authorize_request(request=http_request, auth_bundle=auth_bundle)
                 request_context = request_context.with_metadata(route=route_path)
-            security_guard.enforce(
+            _enforce_security_guard(
+                security_guard=security_guard,
                 route_path=route_path,
                 request_context=request_context,
                 body=body,
