@@ -36,9 +36,9 @@ def __getattr__(name: str):
     return resolve_safety_storage_export("budget_ledger", name)
 __all__ = [
     'ActionBudgetLedger',
-    'CANON_PLATFORM_SAFETY_ACTION_BUDGET_LEDGER',
+    'CANON_PLATFORM_SAFETY_ACTION_BUDGET_LEDGER',  # noqa: F822 - provided lazily by module __getattr__
     'CANON_SAFETY_ACTION_BUDGET_LEDGER',
     'InMemoryActionBudgetLedger',
-    'SCHEMA_VERSION',
-    'SqliteActionBudgetLedger',
+    'SCHEMA_VERSION',  # noqa: F822 - provided lazily by module __getattr__
+    'SqliteActionBudgetLedger',  # noqa: F822 - provided lazily by module __getattr__
 ]
