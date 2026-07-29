@@ -4,11 +4,7 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Protocol
 
-from runtime.platform.safety_approval_repository import (
-    CANON_PLATFORM_SAFETY_APPROVAL_REPOSITORY,
-    SCHEMA_VERSION,
-    PlatformSqliteApprovalRepository,
-)
+from compatibility.safety_storage_exports import resolve_safety_storage_export
 
 from .models import ApprovalTicket, ApprovalWorkflowState
 
@@ -127,13 +123,8 @@ class InMemoryApprovalRepository:
         return executed
 
 
-class SqliteApprovalRepository(PlatformSqliteApprovalRepository):
-    """Safety-facing multi-step approval repository facade.
-
-    SQLite ownership lives in runtime.platform.safety_approval_repository.
-    """
-
-
+def __getattr__(name: str):
+    return resolve_safety_storage_export("approval", name)
 __all__ = [
     'ApprovalRepository',
     'CANON_PLATFORM_SAFETY_APPROVAL_REPOSITORY',
