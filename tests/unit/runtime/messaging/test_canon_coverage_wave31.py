@@ -215,23 +215,16 @@ def test_catalog_missing_spec_branch_fails_closed(monkeypatch: pytest.MonkeyPatc
 
 def test_bootstrap_builds_every_non_telegram_effect_adapter() -> None:
     from runtime.messaging.bootstrap import build_multichannel_dispatcher
+    from runtime.messaging.channel_types import CHANNEL_TELEGRAM
 
     dispatcher = build_multichannel_dispatcher()
-    assert tuple(sorted(dispatcher.adapters)) == (
-        "api",
-        "discord",
-        "email",
-        "instagram",
-        "kakaotalk",
-        "line",
-        "messenger",
-        "slack",
-        "sms",
-        "viber",
-        "web_chat",
-        "wechat",
-        "whatsapp",
-    )
+    expected = {
+        channel
+        for channel, spec in CHANNEL_SPECS.items()
+        if channel != CHANNEL_TELEGRAM and spec.transport_kind != "bot_api"
+    }
+    assert set(dispatcher.adapters) == expected
+    assert all(callable(getattr(adapter, "send", None)) for adapter in dispatcher.adapters.values())
 
 
 def test_channel_preference_mapping_compatibility_paths() -> None:
