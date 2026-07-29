@@ -14,7 +14,7 @@ import time
 from typing import Any
 
 from core.ai.world_state import WorldStateV1
-from runtime._internal.effects_clients.telegram_endpoint import telegram_method_url
+from runtime.effects import telegram_method_url
 from runtime.boot.env import (
     env_bool,
     env_int,
@@ -467,7 +467,7 @@ def run_telegram(
     token = resolve_telegram_bot_token()
     if not token:
         raise RuntimeError(
-            "TELEGRAM_BOT_TOKEN is required for RUN_MODE=telegram"
+            "telegram_token_missing_for_longpoll"
         )
 
     if env_bool("TELEGRAM_USE_WEBHOOK", False) or env_bool(
