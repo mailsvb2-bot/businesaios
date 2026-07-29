@@ -24,6 +24,7 @@ ALLOWED_RUNTIME_SERVICE_NAMES: frozenset[str] = frozenset(
         RuntimeServiceName.ACTION_BUDGET,
         RuntimeServiceName.GOVERNANCE_CHAIN,
         RuntimeServiceName.ACTION_EXECUTOR,
+        RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE,
         RuntimeServiceName.DECISION_CORE,
     }
 )
