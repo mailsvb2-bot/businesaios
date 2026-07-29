@@ -9,6 +9,8 @@ from collections.abc import Mapping
 EXPECTED_CHANNELS = (
     "telegram",
     "whatsapp",
+    "vk",
+    "max",
     "sms",
     "email",
     "messenger",
@@ -26,6 +28,8 @@ EXPECTED_CHANNELS = (
 EXPECTED_CHANNEL_SPECS: Mapping[str, tuple[str, str, str, str]] = {
     "telegram": ("messaging", "TELEGRAM", "configured_noop", "bot_api"),
     "whatsapp": ("messaging", "WHATSAPP", "webhook", "provider_webhook"),
+    "vk": ("messaging", "VK", "webhook", "provider_webhook"),
+    "max": ("messaging", "MAX", "webhook", "provider_webhook"),
     "sms": ("messaging", "SMS", "webhook", "provider_webhook"),
     "email": ("messaging", "EMAIL", "smtp", "smtp"),
     "messenger": ("messaging", "MESSENGER", "webhook", "provider_webhook"),
@@ -56,12 +60,17 @@ def verify_multimessenger_runtime_contract() -> tuple[bool, str]:
     from interfaces.messaging_runtime.channel_loader import BINDING_BUILDERS
     from runtime.messaging import CHANNEL_SPECS
     from runtime.messaging.bootstrap import build_multichannel_dispatcher
-    from runtime.messaging.channel_types import ALL_CHANNELS, CHANNELS, CHANNEL_TELEGRAM
+    from runtime.messaging.channel_types import (
+        ALL_CHANNELS,
+        CHANNELS,
+        CHANNEL_TELEGRAM,
+    )
 
     actual_channels = tuple(ALL_CHANNELS)
     if actual_channels != EXPECTED_CHANNELS:
         return _failure(
-            f"canonical channels drifted: expected={EXPECTED_CHANNELS!r} actual={actual_channels!r}"
+            f"canonical channels drifted: expected={EXPECTED_CHANNELS!r} "
+            f"actual={actual_channels!r}"
         )
     if tuple(CHANNELS) != EXPECTED_CHANNELS:
         return _failure("legacy CHANNELS compatibility list drifted")
@@ -71,7 +80,8 @@ def verify_multimessenger_runtime_contract() -> tuple[bool, str]:
     expected_set = set(EXPECTED_CHANNELS)
     if set(CHANNEL_SPECS) != expected_set:
         return _failure(
-            f"channel spec coverage drifted: missing={sorted(expected_set - set(CHANNEL_SPECS))} "
+            f"channel spec coverage drifted: "
+            f"missing={sorted(expected_set - set(CHANNEL_SPECS))} "
             f"extra={sorted(set(CHANNEL_SPECS) - expected_set)}"
         )
     for channel, expected in EXPECTED_CHANNEL_SPECS.items():
@@ -84,7 +94,8 @@ def verify_multimessenger_runtime_contract() -> tuple[bool, str]:
         )
         if spec.key != channel or actual != expected:
             return _failure(
-                f"channel spec drifted for {channel}: expected={expected!r} actual={actual!r}"
+                f"channel spec drifted for {channel}: "
+                f"expected={expected!r} actual={actual!r}"
             )
 
     dispatcher = build_multichannel_dispatcher()
@@ -92,7 +103,8 @@ def verify_multimessenger_runtime_contract() -> tuple[bool, str]:
     actual_dispatch = set(dispatcher.adapters)
     if actual_dispatch != expected_dispatch:
         return _failure(
-            f"dispatcher coverage drifted: missing={sorted(expected_dispatch - actual_dispatch)} "
+            f"dispatcher coverage drifted: "
+            f"missing={sorted(expected_dispatch - actual_dispatch)} "
             f"extra={sorted(actual_dispatch - expected_dispatch)}"
         )
     missing_send = sorted(
@@ -101,7 +113,9 @@ def verify_multimessenger_runtime_contract() -> tuple[bool, str]:
         if not callable(getattr(adapter, "send", None))
     )
     if missing_send:
-        return _failure("adapters without callable send: " + ", ".join(missing_send))
+        return _failure(
+            "adapters without callable send: " + ", ".join(missing_send)
+        )
 
     expected_runtime_names = {
         canonical_channel_name(channel)
@@ -119,17 +133,23 @@ def verify_multimessenger_runtime_contract() -> tuple[bool, str]:
         capabilities = get_capabilities(channel)
         if capabilities.channel != runtime_name:
             return _failure(
-                f"capability identity drifted for {channel}: {capabilities.channel!r}"
+                f"capability identity drifted for {channel}: "
+                f"{capabilities.channel!r}"
             )
         if capabilities.plain_text is not True:
-            return _failure(f"plain-text user delivery was removed for {channel}")
+            return _failure(
+                f"plain-text user delivery was removed for {channel}"
+            )
         if not callable(BINDING_BUILDERS[runtime_name]):
-            return _failure(f"binding builder is not callable for {channel}")
+            return _failure(
+                f"binding builder is not callable for {channel}"
+            )
 
     return (
         True,
         "multimessenger runtime lock passed "
-        f"({len(EXPECTED_CHANNELS)} channels, {len(expected_dispatch)} non-Telegram adapters)",
+        f"({len(EXPECTED_CHANNELS)} channels, "
+        f"{len(expected_dispatch)} non-Telegram adapters)",
     )
 
 
