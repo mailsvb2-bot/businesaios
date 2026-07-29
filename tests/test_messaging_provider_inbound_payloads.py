@@ -177,6 +177,32 @@ def test_nested_provider_payloads_reach_canonical_message_envelope(
     assert envelope.metadata["raw"] == payload
 
 
+def test_provider_payload_without_message_id_gets_stable_dedupe_identity() -> None:
+    payload = {
+        "userRequest": {
+            "user": {"id": "kakao-user-1"},
+            "utterance": "안녕하세요",
+            "timestamp": "2026-07-29T08:00:00Z",
+        }
+    }
+    binding = load_bindings(enabled_channels=("kakaotalk",))[0]
+
+    first = binding.parse_inbound(payload)
+    retried = binding.parse_inbound(dict(payload))
+    changed = binding.parse_inbound(
+        {
+            "userRequest": {
+                **payload["userRequest"],
+                "utterance": "다른 메시지",
+            }
+        }
+    )
+
+    assert first.message_id.startswith("synthetic-kakaotalk-")
+    assert retried.message_id == first.message_id
+    assert changed.message_id != first.message_id
+
+
 def test_whatsapp_binding_and_world_state_ingress_decode_identically() -> None:
     payload = {
         "entry": [
