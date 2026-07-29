@@ -43,8 +43,11 @@ def test_ai_ceo_plan_error_does_not_leak_exception_text():
     fx = _Effects()
     env = SimpleNamespace(decision=SimpleNamespace(decision_id='d1', correlation_id='c1', issuer_id='businesaios-core', action='ai_ceo_plan@v1', tenant_id='t1'))
     out = handle_ai_ceo_plan({'user_id': 'u1', 'tenant_id': 't1', 'decision_id': 'd1', 'correlation_id': 'c1', 'issued_action': 'ai_ceo_plan@v1'}, fx, env, planner=_BadPlanner())
-    assert 'secret details' not in out['text']
-    assert out['track_payload']['error'] == 'ValueError'
+    assert out['ok'] is False
+    assert out['status'] == 'failed'
+    assert out['reason'] == 'planner_error'
+    assert 'secret details' not in out['delivery']['text']
+    assert out['delivery']['track_payload']['error'] == 'ValueError'
 
 
 def test_run_awaitable_sync_works_inside_running_loop():
