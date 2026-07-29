@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-CANON_PLATFORM_BUSINESS_AUTONOMY_DELAYED_OUTCOME_OWNER = True
-
 import json
 import os
 import sqlite3
@@ -17,6 +15,8 @@ from typing import Any, TypeVar
 from uuid import uuid4
 
 from application.business_autonomy.contracts import BusinessExecutionRequest, BusinessExecutionResult
+
+CANON_PLATFORM_BUSINESS_AUTONOMY_DELAYED_OUTCOME_OWNER = True
 
 _R = TypeVar("_R")
 _PROCESS_STATE_LOCKS_GUARD = RLock()

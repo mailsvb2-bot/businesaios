@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 from types import SimpleNamespace
 
 from core.marketing.async_runner import run_awaitable_sync

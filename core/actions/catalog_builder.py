@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from core.actions.allowed_actions import ALLOWED_ACTIONS
 from core.actions.names import ACTION_ROUTE_LEAD_V1
-from core.ai.schema_registry import DecisionSchema, SchemaRegistry
+from core.ai.schema_registry import DecisionSchema
 
 from .catalog_entry import CatalogEntry
 

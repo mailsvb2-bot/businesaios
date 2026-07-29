@@ -1,12 +1,13 @@
-from __future__ import annotations
-
 """Immutable append-only event store with tamper-evident hash chain."""
+
+from __future__ import annotations
 
 import json
 import os
 from dataclasses import dataclass
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from core.tenancy.normalization import require_tenant_id
 from core.utils.hash_chain import GENESIS, entry_hash

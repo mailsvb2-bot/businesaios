@@ -60,11 +60,7 @@ __all__ = [
     "SafetyControlService",
     "build_default_profile",
     "is_safe_mode",
+    "resolve_operational_safety_runtime",
 ]
 
 CANON_RUNTIME_SAFETY_NAMESPACE = True
-
-
-
-
-__all__ = sorted(set(__all__ + ['resolve_operational_safety_runtime']))

@@ -13,7 +13,6 @@ from scripts.certify_ast import (
     parse_import_bases as parse_import_bases_from_text,
 )
 from scripts.certify_io import count_lines, iter_py_files, read_text
-from scripts.certify_report import CertificationReport
 
 
 def parse_import_bases(py: Path) -> set[str]:

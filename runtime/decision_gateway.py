@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from runtime.decision_gateway_owner import (
+from runtime.decision_gateway_owner import (  # noqa: F401
     COMPAT_DECISION_GATEWAY_FUNCTION,
     CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON,
     CANON_RUNTIME_DECISION_GATEWAY_COMPAT_ALIAS,

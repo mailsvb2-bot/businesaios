@@ -10,7 +10,8 @@ from attribution import ATTRIBUTION_COMPAT_EXPORTS, catalog
 def test_attribution_root_is_thin_catalog_facade() -> None:
     assert attribution_root.CANON_ATTRIBUTION_COMPAT_SHIM is True
     text = Path(attribution_root.__spec__.origin).read_text(encoding="utf-8")
-    assert "from attribution.catalog import ATTRIBUTION_COMPAT_EXPORTS" in text
+    assert "ATTRIBUTION_COMPAT_EXPORTS = _owner().ATTRIBUTION_COMPAT_EXPORTS" in text
+    assert ".catalog import" not in text
     assert "sys.modules" not in text
     assert "types.ModuleType" not in text
     assert "_install_compat_aliases" not in text

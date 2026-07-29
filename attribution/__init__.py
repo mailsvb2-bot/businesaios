@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """Canonical attribution compatibility surface.
 
 All attribution behavior is owned by :mod:`attribution.catalog`. Historical
@@ -7,10 +5,10 @@ submodule import paths are ordinary physical re-export modules, so packaging,
 introspection and static analysis observe the same structure that Python runs.
 """
 
+from __future__ import annotations
+
 from importlib import import_module
 from typing import Any
-
-from attribution.catalog import ATTRIBUTION_COMPAT_EXPORTS
 
 
 CANON_ATTRIBUTION_OWNER_SURFACE = True
@@ -22,6 +20,8 @@ _OWNER_MODULE = "attribution.catalog"
 def _owner() -> Any:
     return import_module(_OWNER_MODULE)
 
+
+ATTRIBUTION_COMPAT_EXPORTS = _owner().ATTRIBUTION_COMPAT_EXPORTS
 
 
 __all__ = [

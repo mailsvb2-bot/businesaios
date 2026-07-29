@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-CANON_HANDLER_HELPER_IMPLEMENTATION_OWNER = True
-
 from typing import Any
 
 from core.events.event_types import is_known
@@ -16,6 +14,8 @@ from runtime.ads import (
     IdempotencyKey,
 )
 from runtime.tenancy import as_tenant_id
+
+CANON_HANDLER_HELPER_IMPLEMENTATION_OWNER = True
 
 
 def decode_ads_plan(raw: Any) -> AdsPlan:

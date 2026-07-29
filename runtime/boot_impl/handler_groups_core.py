@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-CANON_BOOT_HANDLER_GROUP_IMPLEMENTATION_OWNER = True
-
 from core.actions.names import ACTION_ROUTE_LEAD_V1
 from runtime.handlers import ActionHandlerRegistry
 
+CANON_BOOT_HANDLER_GROUP_IMPLEMENTATION_OWNER = True
 CANON_BOOT_WIRING_ONLY = True
 _AI_CEO_HANDLER_REF = "runtime.handlers.ai_ceo_plan:handle_ai_ceo_plan"
 

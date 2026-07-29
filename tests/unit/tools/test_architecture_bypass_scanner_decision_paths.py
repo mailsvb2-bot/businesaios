@@ -307,7 +307,7 @@ def test_exact_canonical_decision_owner_paths_remain_allowed(
 ) -> None:
     for relative in (
         "core/ai/decision_core.py",
-        "runtime/decision_gateway.py",
+        "runtime/decision_gateway_owner.py",
         "runtime/decision_path_lock.py",
     ):
         findings = _scan_source(

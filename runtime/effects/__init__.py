@@ -14,9 +14,6 @@ from typing import Any
 from runtime.firewall.import_guard import allow_internal_import
 from runtime.health.server import HealthSnapshot
 
-with allow_internal_import():
-    from runtime._internal.effects_clients.telegram_endpoint import telegram_method_url as _telegram_method_url
-
 # -------- LLM (network facade) --------
 from .llm_effects import (
     llm_generate_anthropic as llm_generate_anthropic,
@@ -33,6 +30,9 @@ from .llm_effects import (
 
 # Domain helpers (pure, no I/O)
 from .telegram_effects import classify_startup  # noqa: F401
+
+with allow_internal_import():
+    from runtime._internal.effects_clients.telegram_endpoint import telegram_method_url as _telegram_method_url
 
 CANON_RUNTIME_EFFECTS_IMPORT_SURFACE = True
 
