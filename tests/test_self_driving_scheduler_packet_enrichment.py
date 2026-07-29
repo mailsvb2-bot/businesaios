@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 from contracts.decisioning.recommendation_packet_contract import RecommendationPacketContract
 from contracts.decisioning.world_state_contract import WorldStateContract
@@ -21,12 +22,26 @@ class _Learning:
         return {"kind": "deploy", "candidate_policy_id": "p1", "rollout_pct": 10}
 
     def build_deploy_world_state(self, proposal):
-        return _Ws(timestamp_ms=123, safe_mode=False, meta={}, deployment_proposal=dict(proposal))
+        return _Ws(
+            timestamp_ms=123,
+            safe_mode=False,
+            meta={},
+            deployment_proposal=dict(proposal),
+        )
 
 
 class _DecisionCore:
+    def __init__(self) -> None:
+        self.states = []
+
     def issue(self, state):
-        return {"state_meta": dict(getattr(state, "meta", {}) or {})}
+        self.states.append(state)
+        return SimpleNamespace(
+            decision=SimpleNamespace(
+                decision_id="d1",
+                correlation_id="c1",
+            )
+        )
 
 
 class _ExecRes:
@@ -41,7 +56,14 @@ class _Executor:
 
 
 class _Provider:
-    def build_decision_input_packet(self, *, world_state, proposal, generated_at_ms, safe_mode):
+    def build_decision_input_packet(
+        self,
+        *,
+        world_state,
+        proposal,
+        generated_at_ms,
+        safe_mode,
+    ):
         _ = (world_state, proposal, generated_at_ms, safe_mode)
         return DecisionInputPacket(
             recommendation_packet=RecommendationPacketContract(
@@ -68,10 +90,17 @@ class _Provider:
 
 
 def test_self_driving_scheduler_accepts_optional_packet_provider() -> None:
+    decision_core = _DecisionCore()
     res = tick_once(
         learning_system=_Learning(),
-        decision_core=_DecisionCore(),
+        decision_core=decision_core,
         executor=_Executor(),
         decision_input_provider=_Provider(),
     )
+
     assert res.ok is True
+    assert res.decision_id == "d1"
+    assert len(decision_core.states) == 1
+    enriched = decision_core.states[0]
+    assert enriched.meta["external_packet_id"] == "packet-1"
+    assert enriched.meta["external_world_state_features"]["user.intent"] == 0.5
