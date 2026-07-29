@@ -19,8 +19,10 @@ class ChannelCapabilities:
 
 DEFAULT_CAPABILITIES: Mapping[str, ChannelCapabilities] = {
     "telegram": ChannelCapabilities("telegram", True, False, True, True, False, False),
-    "sms": ChannelCapabilities("sms", True, False, False, False, False, False),
     "whatsapp": ChannelCapabilities("whatsapp", True, False, True, True, False, False),
+    "vk": ChannelCapabilities("vk", True, False, True, True, False, False),
+    "max": ChannelCapabilities("max", True, False, True, True, False, False),
+    "sms": ChannelCapabilities("sms", True, False, False, False, False, False),
     "email": ChannelCapabilities("email", True, True, False, True, False, True),
     "messenger": ChannelCapabilities("messenger", True, False, True, True, False, False),
     "instagram": ChannelCapabilities("instagram", True, False, True, True, False, False),
@@ -41,3 +43,6 @@ def get_capabilities(channel: str) -> ChannelCapabilities:
         return DEFAULT_CAPABILITIES[canonical]
     except KeyError as exc:
         raise RuntimeError(f"capabilities not configured for channel: {channel}") from exc
+
+
+__all__ = ["ChannelCapabilities", "DEFAULT_CAPABILITIES", "get_capabilities"]
