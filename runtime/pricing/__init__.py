@@ -9,6 +9,7 @@ CANON_RUNTIME_PACKAGE_ALIAS_NAMESPACE = True
 _PUBLIC_ATTRS = {
     "PricingRouteViolation": ("core.pricing.rl.guard", "PricingRouteViolation"),
     "PricingSelectionContext": ("core.pricing.rl.guard", "PricingSelectionContext"),
+    "PricingSelectionService": ("core.pricing.rl.selection_service", "PricingSelectionService"),
 }
 
 __getattr__, __dir__, __all__ = build_package_alias_namespace(
@@ -16,4 +17,3 @@ __getattr__, __dir__, __all__ = build_package_alias_namespace(
     _PUBLIC_ATTRS,
     extra_exports=['CANON_RUNTIME_PACKAGE_ALIAS_NAMESPACE'],
     )
-
