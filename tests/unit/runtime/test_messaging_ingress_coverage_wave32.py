@@ -4,9 +4,9 @@ import runtime.messaging_ingress as ingress
 from runtime.messaging.channel_types import ALL_CHANNELS
 
 
-def test_supported_channel_catalog_delegates_to_runtime_and_preserves_ingress_only_channels() -> None:
-    assert ingress.INGRESS_ONLY_MESSAGING_CHANNELS == ("vk", "max")
-    assert ingress.SUPPORTED_MESSAGING_CHANNELS == (*ALL_CHANNELS, "vk", "max")
+def test_supported_channel_catalog_delegates_to_runtime_without_ingress_only_exceptions() -> None:
+    assert ingress.INGRESS_ONLY_MESSAGING_CHANNELS == ()
+    assert ingress.SUPPORTED_MESSAGING_CHANNELS == ALL_CHANNELS
     assert ingress.normalize_messaging_channel("tg") == "telegram"
     assert ingress.normalize_messaging_channel("telegram bot") == "telegram"
     assert ingress.normalize_messaging_channel("wa") == "whatsapp"
@@ -70,7 +70,7 @@ def test_generic_payload_adapter_preserves_zero_ids_and_field_priority() -> None
     assert fallback.user_id == "future_channel_user"
     assert fallback.chat_id == ""
     assert fallback.timestamp_ms == 0
-    assert fallback.update_id is None
+    assert str(fallback.update_id).startswith("synthetic-future_channel-")
 
 
 def test_every_concrete_provider_adapter_uses_the_shared_payload_contract() -> None:
@@ -226,20 +226,30 @@ def test_telegram_callback_and_message_variants_are_fail_closed() -> None:
     assert empty.raw == {}
 
 
-def test_private_extractors_cover_absent_non_mapping_and_invalid_values() -> None:
-    assert ingress._first_text({"a": None, "b": 5}, "a", "b") == "5"
-    assert ingress._first_text({}, "missing") == ""
-    assert ingress._first_value({"a": None, "b": 0}, "a", "b") == 0
-    assert ingress._first_value({}, "missing") is None
-    assert ingress._first_int({"a": None, "b": "bad", "c": 4}, "a", "b", "c") == 4
-    assert ingress._first_int({}, "missing") == 0
+def test_ingress_has_no_private_parallel_extractors_and_decoder_fails_closed() -> None:
+    for retired in (
+        "_first_text",
+        "_first_value",
+        "_first_int",
+        "_telegram_message",
+        "_telegram_text",
+        "_telegram_chat_id",
+        "_telegram_sender_id",
+    ):
+        assert not hasattr(ingress, retired)
 
-    assert ingress._telegram_message({"message": "not-a-map"}) == {}
-    assert ingress._telegram_message({"callback_query": "not-a-map"}) == {}
-    assert ingress._telegram_message({"callback_query": {"message": "not-a-map"}}) == {}
-    assert ingress._telegram_text({"callback_query": "not-a-map"}, {"caption": "cap"}) == "cap"
-    assert ingress._telegram_chat_id({"chat": "not-a-map"}) == ""
-    assert ingress._telegram_chat_id({"chat": {"id": None}}) == ""
-    assert ingress._telegram_sender_id({"callback_query": {"from": "not-a-map"}}, {}) == ""
-    assert ingress._telegram_sender_id({}, {"from": "not-a-map"}) == ""
-    assert ingress._telegram_sender_id({}, {"from": {"id": None}}) == ""
+    event = ingress.payload_to_messaging_event(
+        "telegram",
+        {
+            "message": "not-a-map",
+            "callback_query": {"message": "not-a-map"},
+            "timestamp_ms": "invalid",
+        },
+        tenant_id="tenant",
+    )
+    assert event.channel == "telegram"
+    assert event.user_id == "telegram_user"
+    assert event.chat_id == ""
+    assert event.text == ""
+    assert event.timestamp_ms == 0
+    assert str(event.update_id).startswith("synthetic-telegram-")
