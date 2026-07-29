@@ -10,9 +10,9 @@ def __getattr__(name: str):
 
 
 __all__ = [
-    "CANON_PLATFORM_SAFETY_SQLITE_MIGRATIONS",
+    "CANON_PLATFORM_SAFETY_SQLITE_MIGRATIONS",  # noqa: F822 - provided lazily by module __getattr__
     "CANON_SAFETY_SQLITE_MIGRATIONS",
-    "MigrationStep",
-    "SafetySqliteMigrator",
-    "SchemaMigrationPlan",
+    "MigrationStep",  # noqa: F822 - provided lazily by module __getattr__
+    "SafetySqliteMigrator",  # noqa: F822 - provided lazily by module __getattr__
+    "SchemaMigrationPlan",  # noqa: F822 - provided lazily by module __getattr__
 ]
