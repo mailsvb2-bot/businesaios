@@ -56,12 +56,12 @@ def test_sync_failure_records_incident_and_queue_metrics(tmp_path):
     _activate(service, 'telegram_bot', tmp_path)
     provider = provider_map()['telegram_bot']
     runtime = ProviderLiveSyncRuntime(service.secret_vault, transports={})
-    result = runtime.run(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_send', mode='live', payload={})
+    result = runtime.run(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_read', mode='live', payload={})
     assert result.status == 'live_transport_unbound'
     incidents = service.list_provider_runtime_incidents(tenant_id='tenant-a', business_id='biz-a', provider_key='telegram_bot')
     assert incidents and incidents[0]['kind'] == 'sync'
     queue = ProviderQueueExecutionRuntime(service.secret_vault, live_runtime=runtime)
-    queue.enqueue_sync(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_send', mode='dry_run')
+    queue.enqueue_sync(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_read', mode='dry_run')
     metrics = queue.metrics(tenant_id='tenant-a')
     assert metrics['pending'] >= 1
 
