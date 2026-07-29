@@ -186,9 +186,10 @@ def test_iron_10_no_subprocess_outside_effects_impl():
 
 
 def test_iron_11_executor_checks_claim_return_value():
-    txt = _read(ROOT / "runtime" / "executor.py")
-    assert "claimed =" in txt
-    assert "if not claimed" in txt
+    executor = _read(ROOT / "runtime" / "executor.py")
+    stages = _read(ROOT / "runtime" / "execution" / "executor_stages.py")
+    assert "def _claim_or_skip_outbox" in executor
+    assert "if not executor._claim_or_skip_outbox(env):" in stages
 
 
 def test_iron_12_executor_returns_already_claimed_status():

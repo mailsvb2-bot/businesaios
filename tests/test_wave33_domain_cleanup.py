@@ -8,10 +8,13 @@ def _read(path: str) -> str:
 
 
 def test_admin_state_delegates_common_side_effects() -> None:
-    src = _read("runtime/_internal/effects_domains/admin_state.py")
-    assert "admin_state_support" in src
-    assert "emit_toggle_event" in src
-    assert "send_optional_notification" in src
+    domain_src = _read("runtime/_internal/effects_domains/admin_state.py")
+    support_src = _read("runtime/_internal/effects_domains/admin_state_support.py")
+    assert "admin_state_support" in domain_src
+    assert "perform_admin_toggle" in domain_src
+    assert "def emit_toggle_event(" in support_src
+    assert "def send_optional_notification(" in support_src
+    assert "def perform_admin_toggle(" in support_src
 
 
 def test_sales_domain_delegates_offer_building() -> None:

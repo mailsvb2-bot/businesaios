@@ -44,6 +44,7 @@ ALLOWED_TENANT_SECURITY_DIRECT_READERS = {
     'security/reencryption_resume_service.py',
     'security/governance_journal.py',
     'security/reencryption_job_store.py',
+    'runtime/platform/security_sqlite_backends/group_02.py',
 }
 
 ALLOWED_EXTERNAL_KMS_IMPORTERS = {

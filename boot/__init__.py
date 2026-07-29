@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib
 from typing import Any
-
 CANON_BOOT_PACKAGE_API = True
 CANON_LEGACY_BOOTSTRAP_PACKAGE_SHIM = True
 CANON_BOOT_PACKAGE_OWNER = True

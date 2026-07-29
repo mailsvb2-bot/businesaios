@@ -4,11 +4,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_inbound_strict_owner_guard_allows_only_canonical_owners():
-    text = (ROOT / 'runtime/messaging/inbound_strict_owner_guard.py').read_text(encoding='utf-8')
+    text = (ROOT / 'runtime/messaging/inbound_owner_lock.py').read_text(encoding='utf-8')
     assert 'runtime.messaging.inbound_entrypoint' in text
     assert 'runtime.business_autonomy.provider_webhook_inbound_processor' in text
     assert 'interfaces.telegram.telegram_handler' not in text
-    assert 'interfaces.web.chat_widget.api_handlers' not in text
+    assert '_WEB_CHAT_NORMALIZATION_OWNER' in text
+    assert '_ALLOWED_INBOUND_DECISION_ENTRYPOINTS' in text
 
 
 def test_telegram_handler_uses_entrypoint_not_gateway():

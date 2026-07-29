@@ -1,5 +1,7 @@
 """BusinesAIOS Telegram transport entrypoint.
 
+DecisionCore.issue(WorldState) is the only decision source.
+
 Telegram is only one transport. Incoming updates are normalized through the
 canonical messaging ingress adapter before they reach the runtime decision
 gateway. This keeps Telegram, WhatsApp, VK, Max, Slack, Discord, Viber, SMS,

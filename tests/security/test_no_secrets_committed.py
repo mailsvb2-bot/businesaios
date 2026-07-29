@@ -45,7 +45,9 @@ def _tracked_files(root: Path):
         return
     for raw in result.stdout.decode("utf-8", errors="ignore").split("\0"):
         if raw:
-            yield root / raw
+            path = root / raw
+            if path.is_file():
+                yield path
 
 
 def test_no_secrets_in_repo():

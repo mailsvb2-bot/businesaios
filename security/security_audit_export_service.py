@@ -5,6 +5,8 @@ import json
 import time
 from typing import Any, Mapping
 
+from security.external_audit_notarization import NotarizationReceipt
+
 
 CANON_SECURITY_AUDIT_EXPORT_SERVICE = True
 
@@ -18,10 +20,12 @@ class SecurityAuditExportService:
         redaction_policy,
         signer,
         verifier,
+        notarization_provider=None,
     ) -> None:
         self._redaction = redaction_policy
         self._signer = signer
         self._verifier = verifier
+        self._notarization_provider = notarization_provider
 
     @staticmethod
     def _canonical_hash(payload: Mapping[str, Any]) -> str:
@@ -45,22 +49,39 @@ class SecurityAuditExportService:
     ) -> dict[str, object]:
         signed_payload = self.export_payload(payload=payload)
         payload_hash = self._canonical_hash(dict(signed_payload.get('payload') or {}))
-        ts = int(time.time())
-        ledger_anchor = f'ledger::{payload_hash}'
-        receipt = {
-            'notary_provider': 'local-notary',
-            'timestamp_epoch_s': ts,
-            'timestamp_token': f'tsa::{ts}::{payload_hash[:16]}',
-            'ledger_anchor': ledger_anchor,
-            'ledger_anchor_id': ledger_anchor,
-            'payload_hash': payload_hash,
-            'credential_ref': str(credential_ref or ''),
-        }
-        bundle = {
+        bundle_without_receipt = {
             'signed_payload': signed_payload,
             'certification': dict(certification or {}),
-            'notarization_receipt': receipt,
         }
+        if self._notarization_provider is not None:
+            notarized = self._notarization_provider.notarize(
+                bundle=bundle_without_receipt,
+                credential_ref=credential_ref,
+            )
+            ledger_anchor = str(notarized.ledger_anchor_id or '')
+            receipt = {
+                'notary_provider': notarized.provider_name,
+                'receipt_id': notarized.receipt_id,
+                'timestamp_epoch_s': notarized.notarized_at_epoch_s,
+                'timestamp_token': notarized.timestamp_token,
+                'ledger_anchor': ledger_anchor,
+                'ledger_anchor_id': ledger_anchor,
+                'payload_hash': notarized.payload_digest,
+                'credential_ref': str(credential_ref or ''),
+            }
+        else:
+            ts = int(time.time())
+            ledger_anchor = f'ledger::{payload_hash}'
+            receipt = {
+                'notary_provider': 'local-notary',
+                'timestamp_epoch_s': ts,
+                'timestamp_token': f'tsa::{ts}::{payload_hash[:16]}',
+                'ledger_anchor': ledger_anchor,
+                'ledger_anchor_id': ledger_anchor,
+                'payload_hash': payload_hash,
+                'credential_ref': str(credential_ref or ''),
+            }
+        bundle = {**bundle_without_receipt, 'notarization_receipt': receipt}
         return {'bundle': bundle, 'notarization_receipt': receipt}
 
     def verify_export(self, *, signed_payload: Mapping[str, Any]) -> bool:
@@ -74,6 +95,33 @@ class SecurityAuditExportService:
         receipt = dict(bundle.get('notarization_receipt') or exported_bundle.get('notarization_receipt') or {})
         if not self.verify_export(signed_payload=signed_payload):
             return False
+        if self._notarization_provider is not None:
+            try:
+                notarized = NotarizationReceipt(
+                    provider_name=str(receipt['notary_provider']),
+                    receipt_id=str(receipt['receipt_id']),
+                    payload_digest=str(receipt['payload_hash']),
+                    notarized_at_epoch_s=int(receipt['timestamp_epoch_s']),
+                    timestamp_token=(
+                        None if receipt.get('timestamp_token') is None else str(receipt['timestamp_token'])
+                    ),
+                    ledger_anchor_id=(
+                        None
+                        if not (receipt.get('ledger_anchor_id') or receipt.get('ledger_anchor'))
+                        else str(receipt.get('ledger_anchor_id') or receipt.get('ledger_anchor'))
+                    ),
+                )
+            except (KeyError, TypeError, ValueError):
+                return False
+            return bool(
+                self._notarization_provider.verify_receipt(
+                    bundle={
+                        'signed_payload': signed_payload,
+                        'certification': dict(bundle.get('certification') or {}),
+                    },
+                    receipt=notarized,
+                )
+            )
         payload_hash = self._canonical_hash(dict(signed_payload.get('payload') or {}))
         anchor = str(receipt.get('ledger_anchor_id') or receipt.get('ledger_anchor') or '')
         return str(receipt.get('payload_hash') or '') == payload_hash and anchor.endswith(payload_hash)

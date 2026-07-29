@@ -171,9 +171,17 @@ def test_decision_execution_service_builder_preserves_runtime_execution_contract
 
     import runtime.execution.decision_execution_service as mod
 
-    fake_module = type('M', (), {'DecisionCommand': _DecisionCommand})
-    monkeypatch.setattr(mod.importlib, 'import_module', lambda name: fake_module)
+    locked = object()
+    monkeypatch.setattr(
+        mod,
+        'validate_and_lock_execution_path',
+        lambda *, command, keyring: locked if isinstance(command, _DecisionCommand) and keyring == 'kr' else None,
+    )
+    monkeypatch.setattr(
+        mod,
+        'execute_locked_decision',
+        lambda *, executor, locked_path: {'status': 'ok', 'executor': executor, 'locked_path': locked_path},
+    )
 
     result = service.run(_DecisionCommand())
-    assert result['status'] == 'ok'
-    assert executor.last == {'signed_with': 'kr', 'validated': True}
+    assert result == {'status': 'ok', 'executor': executor, 'locked_path': locked}

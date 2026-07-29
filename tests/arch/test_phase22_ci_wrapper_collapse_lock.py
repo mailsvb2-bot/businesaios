@@ -40,17 +40,17 @@ def test_step_registry_keeps_ci_contract_in_one_owner() -> None:
         "def integration_tests()",
         "def verify_release()",
         "def build_artifact()",
-        "def run_canon_audit()",
-        "def run_project_shape()",
-        "def run_lock_tests()",
-        "def run_unit_tests()",
-        "def run_integration_tests()",
+        "def _lazy_handler(",
+        'canon_audit(): _lazy_handler("scripts.ci.step_canon_audit")',
+        'lock_tests(): _lazy_handler("scripts.ci.step_lock_tests")',
+        'unit_tests(): _lazy_handler("scripts.ci.step_unit_tests")',
+        'integration_tests(): _lazy_handler("scripts.ci.step_integration_tests")',
     ]:
         assert token in text, token
-    assert "from scripts.ci.step_build_artifact import run as run_build_artifact" in text
-    assert "from scripts.ci.step_quality import run as run_quality" in text
-    assert "from scripts.ci.step_verify_release import run as run_verify_release" in text
-    assert "_REGISTRY: dict[str, StepHandler]" in text
+    assert "from scripts.ci.step_canon_audit import" not in text
+    assert "from scripts.ci.step_lock_tests import" not in text
+    assert "from scripts.ci.step_unit_tests import" not in text
+    assert "from scripts.ci.step_integration_tests import" not in text
 
 def test_release_and_ci_entrypoints_remain() -> None:
     required = [

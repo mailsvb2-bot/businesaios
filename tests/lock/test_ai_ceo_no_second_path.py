@@ -22,6 +22,7 @@ def test_ai_ceo_action_single_source_of_truth():
         str(root / "core" / "policies" / "telegram" / "handlers" / "ai_ceo.py"),
         str(root / "runtime" / "handlers" / "ai_ceo_plan.py"),
         str(root / "runtime" / "boot" / "actions_catalog.py"),
+        str(root / "runtime" / "boot_impl" / "actions_catalog.py"),
         str(root / "runtime" / "boot" / "actions_registry.py"),
         str(root / "runtime" / "boot" / "registration_manifest.py"),
     }

@@ -108,7 +108,7 @@ def test_execution_memory_exports_shared_projection_helpers() -> None:
 def test_headless_and_opportunity_surfaces_reuse_canonical_business_memory_helpers() -> None:
     mapper_text = (ROOT / "application" / "headless" / "goal_mapper.py").read_text(encoding="utf-8")
     detector_text = (ROOT / "execution" / "opportunity_detector.py").read_text(encoding="utf-8")
-    persistence_text = (ROOT / "execution" / "evidence_feedback_state.py").read_text(encoding="utf-8")
+    persistence_text = (ROOT / "application" / "evidence" / "evidence_feedback_state.py").read_text(encoding="utf-8")
     assembly_text = (ROOT / "application" / "autonomy" / "autonomy_state_assembly.py").read_text(encoding="utf-8")
     assert "project_business_memory_evidence" in mapper_text
     assert "project_business_memory_profile" in mapper_text
@@ -128,7 +128,7 @@ def test_headless_feedback_uses_canonical_business_memory_projection() -> None:
 def test_governance_and_persistence_surfaces_reuse_canonical_governance_summary() -> None:
     governance_text = (ROOT / "execution" / "governance_service.py").read_text(encoding="utf-8")
     evidence_text = (ROOT / "execution" / "canonical_governance_evidence.py").read_text(encoding="utf-8")
-    persistence_text = (ROOT / "execution" / "evidence_feedback_state.py").read_text(encoding="utf-8")
+    persistence_text = (ROOT / "application" / "evidence" / "evidence_feedback_state.py").read_text(encoding="utf-8")
     assert "project_business_memory_governance_summary" in governance_text
     assert "project_business_memory_governance_summary" in evidence_text
     assert "project_business_memory_governance_summary" in persistence_text

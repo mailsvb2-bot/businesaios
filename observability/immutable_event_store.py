@@ -31,8 +31,6 @@ class ImmutableEventStore:
     def __init__(self, path: str | Path) -> None:
         self._path = Path(path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        if not self._path.exists():
-            self._path.touch()
 
     @property
     def path(self) -> Path:
@@ -95,7 +93,7 @@ class ImmutableEventStore:
         records: list[ImmutableEventRecord] = []
         self._path.parent.mkdir(parents=True, exist_ok=True)
         if not self._path.exists():
-            self._path.touch()
+            return ()
         with self._path.open('r', encoding='utf-8') as handle:
             for line_no, line in enumerate(handle, start=1):
                 text = line.strip()

@@ -28,8 +28,8 @@ def test_ads_apply_execute_action_is_single_path() -> None:
     rel = sorted(p.relative_to(ROOT).as_posix() for p in hits)
     assert rel == [
         "core/policies/telegram/handlers/ads_apply_flow.py",
-        "runtime/boot/actions_catalog.py",
-        "runtime/handlers/ads_apply_execute.py",
+        "runtime/boot_impl/actions_catalog.py",
+        "runtime/handler_impl/ads_apply_execute.py",
     ], f"Unexpected ads_apply_execute@v1 paths: {rel}"
 
 

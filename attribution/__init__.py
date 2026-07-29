@@ -12,6 +12,7 @@ from typing import Any
 
 from attribution.catalog import ATTRIBUTION_COMPAT_EXPORTS
 
+
 CANON_ATTRIBUTION_OWNER_SURFACE = True
 CANON_ATTRIBUTION_COMPAT_SHIM = True
 CANON_ATTRIBUTION_PROVENANCE_NAMESPACE = True
@@ -20,6 +21,7 @@ _OWNER_MODULE = "attribution.catalog"
 
 def _owner() -> Any:
     return import_module(_OWNER_MODULE)
+
 
 
 __all__ = [

@@ -8,13 +8,17 @@ from __future__ import annotations
 
 from core.runtime.safe_mode import is_safe_mode
 from core.safety.controls.action_context import SafetyActionContext
+from core.safety.controls.action_identity import canonical_action_id, canonical_breaker_key
+from core.safety.controls.observability.event_store import SafetyEvent
 from core.safety.controls.control_result import ControlDecision, ControlStatus
 from core.safety.controls.profile import (
     PersistentSafetyStoreFactory,
+    PersistentSafetyStores,
     SafetyControlProfile,
     build_default_profile as _build_core_default_profile,
 )
 from core.safety.controls.service import SafetyControlService
+from core.safety.controls.support.runtime_paths import safety_sqlite_path
 from core.safety.operational.runtime_bootstrap import (
     resolve_operational_safety_runtime as resolve_operational_safety_runtime,
 )
@@ -47,6 +51,11 @@ __all__ = [
     "RUNTIME_SAFETY_PUBLIC_API",
     "SAFETY_CONTROLS_CANON",
     "SafetyActionContext",
+    "safety_sqlite_path",
+    "canonical_breaker_key",
+    "canonical_action_id",
+    "SafetyEvent",
+    "PersistentSafetyStores",
     "SafetyControlProfile",
     "SafetyControlService",
     "build_default_profile",

@@ -15,6 +15,6 @@ def test_runtime_observability_exposes_trace_story_owner() -> None:
 
 def test_world_state_and_decision_surfaces_use_runtime_trace_story() -> None:
     integration = (ROOT / "runtime" / "integration" / "world_state_integration_service.py").read_text(encoding="utf-8")
-    gateway = (ROOT / "runtime" / "decision_gateway.py").read_text(encoding="utf-8")
+    gateway = (ROOT / "runtime" / "decision_gateway_owner.py").read_text(encoding="utf-8")
     assert "record_world_state_trace(" in integration
     assert "record_decision_trace(" in gateway

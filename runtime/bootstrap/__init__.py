@@ -17,8 +17,6 @@ from __future__ import annotations
 
 import atexit
 from importlib import import_module
-from typing import Any
-
 from bootstrap.logging_setup import setup_logging
 from runtime.bootstrap_process import apply_process_hygiene, maybe_disable_singleton_lock_in_dev_test
 from runtime.bootstrap_prod_guards import (
@@ -40,7 +38,7 @@ CANON_RUNTIME_BOOTSTRAP_PACKAGE_LAZY_EXPORTS = True
 _BOOTSTRAP_DONE = False
 _SINGLETON_LOCK: SingletonLock | None = None
 
-_EXPORT_MAP: dict[str, tuple[str, str]] = {
+_EXPORT_MAP = {
     "build_crm_service": ("runtime.bootstrap.crm_bootstrap", "build_crm_service"),
     "build_crm_connector_registry": (
         "runtime.bootstrap.crm_connector_boot",
@@ -80,7 +78,7 @@ def _load_process_bootstrap_owner():
     return _run_process_bootstrap_compat
 
 
-def _load_attr(module_name: str, attr_name: str) -> Any:
+def _load_attr(module_name: str, attr_name: str) -> object:
     return getattr(import_module(module_name), attr_name)
 
 
@@ -117,7 +115,7 @@ def bootstrap(*, acquire_singleton_lock: bool = True) -> None:
     run_process_bootstrap(acquire_singleton_lock=acquire_singleton_lock)
 
 
-def __getattr__(name: str) -> Any:
+def __getattr__(name: str) -> object:
     if name in {
         "CANON_RUNTIME_BOOTSTRAP_PROCESS_ONLY",
         "CANON_RUNTIME_PROCESS_BOOTSTRAP",
@@ -133,10 +131,7 @@ def __getattr__(name: str) -> Any:
     if target is None:
         raise AttributeError(name)
     module_name, attr_name = target
-    value = _load_attr(module_name, attr_name)
-    if name not in {"bootstrap_runtime", "get_bootstrapped_runtime"}:
-        globals()[name] = value
-    return value
+    return _load_attr(module_name, attr_name)
 
 
 __all__ = [

@@ -5,7 +5,7 @@ import shutil
 
 from scripts.ci.paths import repo_root
 from scripts.ci.pytest_tools import run_pytest_with_report
-from scripts.ci.subprocess_io import run_command
+from scripts.ci.subprocess_io import isolated_cargo_target, run_command
 from scripts.ci.user_scenario_targets import USER_SCENARIO_MARK_EXPRESSION, USER_SCENARIO_TARGETS
 
 
@@ -23,20 +23,22 @@ def _run_rust_user_scenario_matrix() -> tuple[bool, str]:
     if not fixture_path.exists():
         return False, "rust user scenario fixture missing"
 
-    outcome = run_command(
-        [
-            cargo,
-            "run",
-            "--quiet",
-            "--bin",
-            "user_scenario_matrix_runner",
-            "--",
-            "--json",
-            str(fixture_path),
-        ],
-        timeout=180,
-        cwd=crate_dir,
-    )
+    with isolated_cargo_target("user-scenario-matrix") as cargo_env:
+        outcome = run_command(
+            [
+                cargo,
+                "run",
+                "--quiet",
+                "--bin",
+                "user_scenario_matrix_runner",
+                "--",
+                "--json",
+                str(fixture_path),
+            ],
+            timeout=180,
+            cwd=crate_dir,
+            env=cargo_env,
+        )
     if outcome.returncode != 0:
         return False, "rust user scenario matrix runner failed"
 

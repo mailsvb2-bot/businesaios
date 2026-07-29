@@ -29,7 +29,7 @@ def test_runtime_handlers_keep_boundary_public_surfaces() -> None:
         "runtime/handlers/ml_score.py": ["from runtime.ml import"],
         "runtime/handlers/reward_observe_candidates.py": ["from runtime.reward import"],
         "runtime/_internal/effects_actions/llm_completion_support.py": ["from runtime.llm import LLMMessage, LLMRequest"],
-        "runtime/audit/world_model_replay_audit.py": ["from runtime.world_model import replay_state_against_world_model"],
+        "runtime/audit/world_model_replay_audit.py": ["from runtime.world_model import", "replay_state_against_world_model"],
         "runtime/enforcement/rate_limit.py": ["from runtime.ratelimit import ("],
         "runtime/evolution/worker.py": ["from runtime.evolution import EvolutionOutbox, handle_evolution_job"],
         "runtime/handlers/behavior_graph.py": ["from runtime.behavior import BehaviorGraphStore, build_behavior_graph_from_events"],

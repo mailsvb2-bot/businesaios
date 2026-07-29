@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_decision_gateway_and_scheduler_surfaces_hold_single_path_markers() -> None:
-    gateway = (ROOT / "runtime" / "decision_gateway.py").read_text(encoding="utf-8")
+    gateway = (ROOT / "runtime" / "decision_gateway_owner.py").read_text(encoding="utf-8")
     scheduler = (ROOT / "runtime" / "self_driving_scheduler.py").read_text(encoding="utf-8")
     assert "CANON_RUNTIME_DECISION_GATEWAY_SINGLE_PATH = True" in gateway
     assert "CANON_RUNTIME_DECISION_GATEWAY_NO_RAW_DECISION_LOGIC = True" in gateway

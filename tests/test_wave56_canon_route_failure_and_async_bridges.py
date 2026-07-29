@@ -81,8 +81,8 @@ def test_normalized_tenant_id_rejects_placeholders():
 def test_run_product_preflight_if_any_skips_placeholder_tenant(monkeypatch):
     from runtime.boot import system_builder_steps as mod
 
-    fake_tenant_mod = SimpleNamespace(current_tenant_id=lambda: 'default')
-    monkeypatch.setitem(sys.modules, 'core.tenancy.tenant', fake_tenant_mod)
+    import runtime.tenancy as tenant_mod
+    monkeypatch.setattr(tenant_mod, 'current_tenant_id', lambda: 'default')
 
     called = {'n': 0}
 

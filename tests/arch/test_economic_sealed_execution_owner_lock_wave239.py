@@ -12,7 +12,7 @@ def test_sealed_execution_gateway_is_only_public_bridge_to_runtime_internal() ->
     assert 'build_spend_runtime_execution_contract' in gateway
 
     route_handlers = (root / 'entrypoints' / 'api' / 'economic_route_handlers.py').read_text(encoding='utf-8', errors='ignore')
-    assert 'from runtime.executor import build_click_provider_dispatch_execution_contract, build_spend_runtime_execution_contract' in route_handlers
+    assert 'from runtime.economic_execution import (' in route_handlers
     assert 'runtime._internal.economic_execution_contract' not in route_handlers
 
 

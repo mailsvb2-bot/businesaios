@@ -13,23 +13,26 @@ def test_decision_path_lock_declares_single_owner_contract() -> None:
     text = _text('runtime/decision_path_lock.py')
     assert 'CANON_DECISION_PATH_LOCK_SINGLE_OWNER = True' in text
     assert 'CANON_DECISION_PATH_LOCK_FAIL_CLOSED = True' in text
-    assert "'world_state'," in text
-    assert "'decision_core'," in text
-    assert "'executor'," in text
+    assert 'decision_envelope_missing_decision' in text
+    assert 'def bind_decision_issuer(' in text
+    assert 'def lock_decision_for_executor(' in text
     assert 'def issue_locked_decision(' in text
 
 
 def test_runtime_gateway_uses_decision_path_lock_owner() -> None:
-    text = _text('runtime/decision_gateway.py')
+    text = _text('runtime/decision_gateway_owner.py')
     assert 'from runtime.decision_path_lock import issue_locked_decision' in text
-    assert 'issue_locked_decision(decision_core=self.issuer, state=enriched_state)' in text
+    assert 'issue_locked_decision(' in text
+    assert 'decision_core=binding' in text
+    assert 'state=enriched_state' in text
     assert '.issue(enriched_state)' not in text
 
 
 def test_headless_gateway_uses_decision_path_lock_owner() -> None:
     text = _text('application/headless/decision_gateway.py')
-    assert 'from runtime.decision_path_lock import DecisionPathLockError, issue_locked_decision, resolve_decision_issue_callable' in text
-    assert 'issue_locked_decision(decision_core=self.decision_core, state=state)' in text
+    assert 'from runtime.decision_gateway import (' in text
+    assert 'issue_runtime_decision(' in text
+    assert 'CANON_HEADLESS_DECISION_GATEWAY_DELEGATES_TO_RUNTIME = True' in text
     assert "for attribute_name in ('optimize', 'issue', 'decide')" not in text
 
 

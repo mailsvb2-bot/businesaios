@@ -18,7 +18,8 @@ def test_heavy_split_delegations_and_helper_modules_stay_collapsed() -> None:
 
     executor = _read("runtime/executor.py")
     assert "runtime.executor_runtime_support" in executor
-    assert "from runtime.executor_recovery_flow import execute_recovery_flow, has_proof_event" in executor
+    assert "from runtime.executor_recovery_flow import execute_recovery_flow" in executor
+    assert "def _has_proof_event(" in executor
     assert "execute_recovery_flow(" in executor
 
     support = _read("runtime/executor_runtime_support.py")

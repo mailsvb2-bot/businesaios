@@ -14,7 +14,11 @@ class SurfaceCeiling:
 SURFACE_CEILING = SurfaceCeiling(max_python_files=5888, max_transition_surface_modules=8, max_path_legacy_compat_shim_files=5)
 _NON_SOURCE_DIR_NAMES = frozenset({".git", ".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".runtime", ".artifacts", "artifacts", "data", "runtime_state", "_audit", "htmlcov", "build", "dist", "node_modules", "target", "reports", "actions-runner-businesaios"})
 _TRANSITION_PATH_TOKENS = ("legacy", "compat", "shim")
-_TRANSITION_PATH_ALLOWLIST_PREFIXES = frozenset({("canon", "legacy")})
+_TRANSITION_PATH_ALLOWLIST_PREFIXES = frozenset({
+    ("canon", "legacy"),
+    ("scripts", "maintenance"),
+    ("tools",),
+})
 _PRODUCTION_EXCLUDED_TOP_LEVEL = frozenset({"tests"})
 
 

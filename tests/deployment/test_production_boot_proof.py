@@ -180,6 +180,7 @@ def test_production_boot_is_proved_for_prod_profile(monkeypatch, tmp_path) -> No
     monkeypatch.setenv('BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE', '1')
     monkeypatch.setenv('BUSINESAIOS_API_KEY_STORE_PATH', str(tmp_path / 'api_keys.json'))
     monkeypatch.setenv('BUSINESAIOS_TENANT_REGISTRY_PATH', str(tmp_path / 'tenant_registry.json'))
+    monkeypatch.setenv('BUSINESAIOS_DATA_DIR', str(tmp_path / 'runtime_data'))
     monkeypatch.setenv('BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64', 'eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg=')
     monkeypatch.setenv('API_CONTROL_PLANE_API_KEY_PEPPER', 'prod-proof-pepper')
     monkeypatch.setenv('DECISION_SIGNING_KID', 'prod-proof-signing-k1')

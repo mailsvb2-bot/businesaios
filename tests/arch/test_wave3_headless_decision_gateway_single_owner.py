@@ -12,7 +12,8 @@ def _text(path: str) -> str:
 def test_headless_decision_gateway_declares_single_path_owner() -> None:
     text = _text('application/headless/decision_gateway.py')
     assert 'CANON_HEADLESS_DECISION_GATEWAY_SINGLE_PATH = True' in text
-    assert 'CANON_HEADLESS_DECISION_GATEWAY_ISSUE_OWNER = True' in text
+    assert 'CANON_HEADLESS_DECISION_GATEWAY_ISSUE_OWNER = False' in text
+    assert 'CANON_HEADLESS_DECISION_GATEWAY_DELEGATES_TO_RUNTIME = True' in text
     assert 'def issue_headless_decision(' in text
 
 

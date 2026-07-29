@@ -1,3 +1,8 @@
+"""Canonical execute-action composition.
+
+ExecuteActionHandler -> reliability guards -> control-plane envelope.
+"""
+
 from __future__ import annotations
 CANON_API_EXECUTE_ACTION_STACK_FINAL_OWNER = True
 

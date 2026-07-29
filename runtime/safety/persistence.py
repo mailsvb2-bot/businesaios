@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from core.safety.controls.profile import PersistentSafetyStores
-from core.safety.controls.support.runtime_paths import safety_sqlite_path
+from runtime.safety import PersistentSafetyStores, safety_sqlite_path
 from runtime.platform.safety_action_budget_ledger import PlatformSqliteActionBudgetLedger
 from runtime.platform.safety_approval_repository import PlatformSqliteApprovalRepository
 from runtime.platform.safety_circuit_breaker_store import PlatformSqliteCircuitBreakerStore

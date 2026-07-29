@@ -14,6 +14,9 @@ from typing import Any
 from runtime.firewall.import_guard import allow_internal_import
 from runtime.health.server import HealthSnapshot
 
+with allow_internal_import():
+    from runtime._internal.effects_clients.telegram_endpoint import telegram_method_url as _telegram_method_url
+
 # -------- LLM (network facade) --------
 from .llm_effects import (
     llm_generate_anthropic as llm_generate_anthropic,
@@ -77,11 +80,7 @@ def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, 
 def telegram_method_url(token: str, method: str) -> str:
     """Build a Telegram API method URL through the explicit effects boundary."""
 
-    with allow_internal_import():
-        from runtime._internal.effects_clients.telegram_endpoint import (
-            telegram_method_url as _build_telegram_method_url,
-        )
-    return _build_telegram_method_url(token, method)
+    return _telegram_method_url(token, method)
 
 
 def http_get(*, url: str, headers: dict, params: dict | None = None, timeout_s: int = 30):

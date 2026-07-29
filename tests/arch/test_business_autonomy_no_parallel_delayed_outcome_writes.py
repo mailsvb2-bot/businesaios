@@ -5,7 +5,7 @@ from pathlib import Path
 
 def test_business_autonomy_no_parallel_delayed_outcome_writes() -> None:
     root = Path(__file__).resolve().parents[2]
-    owner = "runtime/business_autonomy/delayed_outcome_bridge.py"
+    owner = "runtime/platform/business_autonomy_delayed_outcome_bridge.py"
     facade = "application/business_autonomy/delayed_outcome_bridge.py"
     offenders: list[str] = []
 

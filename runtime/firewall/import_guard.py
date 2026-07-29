@@ -44,6 +44,34 @@ ALLOWED_CALLERS = {
 
 FORBIDDEN_MODULE_PREFIXES = FORBIDDEN_PREFIXES
 
+_INTERNAL_PERMISSION_CALLERS = {
+    "runtime.effects",
+    "runtime.economic_execution",
+    "runtime.handler_loader",
+    "runtime.execution.executor_state",
+    "runtime.execution.provider_outbound_sender",
+    "runtime.executor",
+}
+
+
+def _permission_caller_module() -> str:
+    try:
+        frame = sys._getframe(2)
+        while frame is not None:
+            module = str(frame.f_globals.get("__name__", "") or "")
+            if module and module not in {__name__, "contextlib"}:
+                return module
+            frame = frame.f_back
+        return ""
+    except Exception:
+        return ""
+
+
+def _assert_internal_permission_caller() -> None:
+    caller = _permission_caller_module()
+    if caller not in _INTERNAL_PERMISSION_CALLERS:
+        raise PermissionError(f"runtime_internal_import_permission_denied:{caller or 'unknown'}")
+
 
 def _env_enabled() -> bool:
     return os.getenv("BUSINESAIOS_DISABLE_IMPORT_FIREWALL") not in {"1", "true", "True"}
@@ -138,6 +166,7 @@ DEACTIVATE_IMPORT_FIREWALL = deactivate_import_firewall
 
 @contextmanager
 def integration_import_allowed():
+    _assert_internal_permission_caller()
     t = _token.set(True)
     try:
         yield
@@ -163,6 +192,8 @@ class _InternalImportPermission:
         self._tokens = []
 
     def set(self, value: bool):
+        if value:
+            _assert_internal_permission_caller()
         return _token.set(bool(value))
 
     def reset(self, token) -> None:
@@ -172,6 +203,7 @@ class _InternalImportPermission:
         return integration_import_allowed()
 
     def __enter__(self):
+        _assert_internal_permission_caller()
         token = _token.set(True)
         self._tokens.append(token)
         return self

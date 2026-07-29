@@ -7,6 +7,8 @@ function and exception names without maintaining a second authority table.
 
 from __future__ import annotations
 
+CANON_MESSAGING_INBOUND_STRICT_COMPAT_SURFACE = True
+
 from runtime.messaging.inbound_owner_lock import (
     InboundOwnerViolation,
     assert_inbound_decision_owner as assert_inbound_owner,

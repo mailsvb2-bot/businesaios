@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -69,15 +68,10 @@ class DecisionExecutionService:
     def run(self, command: Any) -> Any:
         if self._keyring is None:
             raise RuntimeError("DecisionExecutionService requires keyring to sign DecisionCommand envelopes")
-        decision_command = importlib.import_module('application.decisioning.decision_command').DecisionCommand
-        if isinstance(command, decision_command):
-            command.validate()
-            envelope = command.to_signed_envelope(self._keyring)
-            execute = getattr(self._executor, 'execute', None)
-            if not callable(execute):
-                raise RuntimeError('executor_must_provide_callable_execute')
-            return execute(envelope)
-        locked_path = validate_and_lock_execution_path(command=command, keyring=self._keyring)
+        locked_path = validate_and_lock_execution_path(
+            command=command,
+            keyring=self._keyring,
+        )
         return execute_locked_decision(executor=self._executor, locked_path=locked_path)
 
 
@@ -90,6 +84,5 @@ __all__ = [
     "build_bound_decision_execution_service",
     "build_bound_decision_execution_service_spec",
     "build_decision_execution_service",
-    "importlib",
     "validate_and_run_decision_command",
 ]

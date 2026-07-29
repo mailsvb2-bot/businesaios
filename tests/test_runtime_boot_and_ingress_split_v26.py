@@ -16,6 +16,6 @@ def test_update_processor_uses_split_helpers_v26():
 
 
 def test_ads_apply_handler_uses_helper_surface_v26():
-    text = Path("runtime/handlers/ads_apply_execute.py").read_text(encoding="utf-8")
+    text = Path("runtime/handler_impl/ads_apply_execute.py").read_text(encoding="utf-8")
     assert "build_apply_request" in text
     assert "summary_text" in text

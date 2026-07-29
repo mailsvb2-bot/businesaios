@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import re
 import shutil
-import subprocess
 
 from scripts.ci.paths import repo_root
+from scripts.ci.subprocess_io import isolated_cargo_target, run_command
 
 
 def _executed_test_count(output: str) -> int:
@@ -22,14 +22,14 @@ def run() -> tuple[bool, str]:
     if not manifest.exists():
         return False, f"Rust integrity core manifest missing: {manifest.relative_to(root)}"
 
-    outcome = subprocess.run(
-        [cargo, "test", "--manifest-path", str(manifest)],
-        cwd=root,
-        text=True,
-        capture_output=True,
-        timeout=180,
-        check=False,
-    )
+    with isolated_cargo_target("integrity-core") as cargo_env:
+        outcome = run_command(
+            [cargo, "test", "--manifest-path", str(manifest)],
+            cwd=root,
+            env=cargo_env,
+            timeout=180,
+            echo_output=False,
+        )
     output = "\n".join(part for part in (outcome.stdout, outcome.stderr) if part).strip()
 
     if outcome.returncode != 0:

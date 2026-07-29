@@ -4,7 +4,7 @@ from pathlib import Path
 def test_evidence_persistence_support_owners_exist() -> None:
     feedback = Path('execution/evidence_persistence_feedback.py').read_text(encoding='utf-8')
     reliability = Path('execution/evidence_persistence_reliability.py').read_text(encoding='utf-8')
-    persistence = Path('execution/evidence_persistence.py').read_text(encoding='utf-8')
+    persistence = Path('application/evidence/evidence_persistence.py').read_text(encoding='utf-8')
     assert 'CANON_EVIDENCE_PERSISTENCE_FEEDBACK = True' in feedback
     assert 'CANON_EVIDENCE_PERSISTENCE_RELIABILITY = True' in reliability
     assert 'from execution.evidence_persistence_feedback import (' in persistence

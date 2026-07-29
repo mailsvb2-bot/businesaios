@@ -12,6 +12,7 @@ class GrowthProposalService:
     """Compatibility forwarder to the one canonical Growth Strategy owner.
 
     This legacy surface performs no scoring, thresholding or proposal ranking.
+    It must not apply policy directly and must not emit actions on its own.
     It only preserves older callers by carrying their inputs into the registered
     ``growth_propose@v1`` action. Decision signing and execution remain owned by
     the canonical gateway and Growth Strategy service.

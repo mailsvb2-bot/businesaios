@@ -46,7 +46,7 @@ CANONICAL_DECISION_OWNER_DIR_PREFIXES = ("tests/",)
 CANONICAL_DECISION_OWNER_FILES = frozenset(
     {
         CANONICAL_DECISION_CORE_PATH,
-        "runtime/decision_gateway.py",
+        "runtime/decision_gateway_owner.py",
         "runtime/decision_path_lock.py",
     }
 )

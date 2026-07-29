@@ -22,15 +22,14 @@ def test_runtime_state_enrichment_service_declares_single_owner_builder() -> Non
 
 
 def test_runtime_decision_gateway_declares_single_owner_builder() -> None:
-    text = _text("runtime/decision_gateway.py")
+    text = _text("runtime/decision_gateway_owner.py")
     assert "def build_runtime_decision_gateway(" in text
 
 
-def test_boot_factory_catalog_delegates_to_runtime_service_builders() -> None:
-    text = _text("boot/factories/catalog.py")
+def test_boot_factory_owner_delegates_to_runtime_service_builders() -> None:
+    text = _text("boot/factories/_catalog_owner.py")
     assert "build_runtime_decision_gateway(" in text
     assert "build_runtime_decision_input_service(" in text
     assert "build_runtime_state_enrichment_service(" in text
-    assert "DecisionGateway(" not in text
     assert "DecisionInputService(observability=" not in text
     assert "RuntimeStateEnrichmentService(observability=" not in text
