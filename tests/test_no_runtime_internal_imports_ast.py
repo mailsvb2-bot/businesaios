@@ -6,9 +6,12 @@ from pathlib import Path
 # Only these files may import runtime._internal.*
 ALLOWLIST = {
     "runtime/executor.py",
-    # If you truly need it elsewhere, add explicitly, but keep it minimal.
-    # "runtime/_internal/__init__.py",
+    "runtime/effects/__init__.py",
+    "runtime/execution/provider_outbound_sender.py",
 }
+
+IDENTITY_FACADE = "runtime/execution/provider_outbound_sender.py"
+EFFECTS_BOUNDARY = "runtime/effects/__init__.py"
 
 
 FORBIDDEN_PREFIXES = (
@@ -92,3 +95,49 @@ def test_no_runtime_internal_imports_outside_executor():
         "Move the import into runtime/executor.py and access effects only via EffectsPort.\n"
         "Offenders:\n- " + "\n- ".join(offenders)
     )
+
+
+def test_provider_outbound_compatibility_exception_is_identity_only() -> None:
+    root = Path(__file__).resolve().parents[1]
+    path = root / IDENTITY_FACADE
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+
+    assert not [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda))
+    ]
+    source = path.read_text(encoding="utf-8")
+    assert "with allow_internal_import():" in source
+    assert "sys.modules[__name__] = _OWNER" in source
+    assert "importlib" not in source
+    assert '"runtime._internal" +' not in source
+
+
+def test_effects_boundary_has_one_explicit_guarded_internal_import() -> None:
+    root = Path(__file__).resolve().parents[1]
+    path = root / EFFECTS_BOUNDARY
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    internal_imports = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        and str(node.module or "").startswith("runtime._internal")
+    ]
+    assert len(internal_imports) == 1
+    assert internal_imports[0].module == "runtime._internal.effects_clients.telegram_endpoint"
+
+    guarded = False
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.With):
+            continue
+        if any(
+            isinstance(item.context_expr, ast.Call)
+            and isinstance(item.context_expr.func, ast.Name)
+            and item.context_expr.func.id == "allow_internal_import"
+            for item in node.items
+        ):
+            guarded = any(internal_import is child for child in ast.walk(node) for internal_import in internal_imports)
+            if guarded:
+                break
+    assert guarded
