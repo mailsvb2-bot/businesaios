@@ -65,7 +65,17 @@ class _Rollout:
 
 class _DecisionCore:
     def issue(self, ws):
-        return type("Env", (), {"decision": type("Decision", (), {"decision_id": "d1"})()})()
+        return type(
+            "Env",
+            (),
+            {
+                "decision": type(
+                    "Decision",
+                    (),
+                    {"decision_id": "d1", "correlation_id": "c1"},
+                )()
+            },
+        )()
 
 
 class _Executor:
