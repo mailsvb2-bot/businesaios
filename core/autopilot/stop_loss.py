@@ -1,12 +1,12 @@
-"""Auto stop-loss orchestration for Business Autopilot.
+"""Deterministic stop-loss action construction for Business Autopilot.
 
-This module is deterministic: it only builds *plans* (actions) based on inputs.
-It does NOT execute side-effects.
+This module never executes effects and never reads the wall clock. It builds one
+canonical ``set_user_setting@v1`` payload, whose existing effect owner persists
+the state and optionally notifies the user under the same signed decision.
 """
 
 from __future__ import annotations
 
-import time
 from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass
@@ -16,6 +16,7 @@ from core.autopilot.guardrails import GuardrailVerdict
 
 STOP_LOSS_SETTING_KEY = "autopilot:stop_loss"
 
+
 @dataclass(frozen=True)
 class StopLossState:
     active: bool
@@ -24,8 +25,12 @@ class StopLossState:
     details: dict[str, Any] | None = None
 
     @staticmethod
-    def from_settings(settings: Mapping[str, Any] | None) -> StopLossState:
-        raw = (settings or {}).get(STOP_LOSS_SETTING_KEY) if isinstance(settings, Mapping) else None
+    def from_settings(settings: Mapping[str, Any] | None) -> "StopLossState":
+        raw = (
+            (settings or {}).get(STOP_LOSS_SETTING_KEY)
+            if isinstance(settings, Mapping)
+            else None
+        )
         if not isinstance(raw, dict):
             return StopLossState(False)
         try:
@@ -33,7 +38,11 @@ class StopLossState:
                 active=bool(raw.get("active")),
                 reason=str(raw.get("reason") or ""),
                 since_ms=int(raw.get("since_ms") or 0),
-                details=dict(raw.get("details") or {}) if isinstance(raw.get("details"), dict) else None,
+                details=(
+                    dict(raw.get("details") or {})
+                    if isinstance(raw.get("details"), dict)
+                    else None
+                ),
             )
         except (TypeError, ValueError):
             return StopLossState(False)
@@ -49,68 +58,122 @@ class StopLossState:
         return out
 
 
-
-
 def _format_stop_loss_details(details: dict[str, Any] | None) -> str:
     if not isinstance(details, dict) or not details:
         return ""
 
-    def _fmt_money_minor(v: object) -> str:
+    def _fmt_money_minor(value: object) -> str:
         try:
-            i = int(v)
+            amount = int(value)
         except (TypeError, ValueError):
-            return str(v)
-        sign = "-" if i < 0 else ""
-        i = abs(i)
-        return f"{sign}{i} (minor)"
+            return str(value)
+        sign = "-" if amount < 0 else ""
+        return f"{sign}{abs(amount)} (minor)"
 
-    reason_lines = []
-    for k in ("cac_minor", "profit_minor", "spend_minor", "limit", "days"):
-        if k in details:
-            val = details.get(k)
-            if k in {"cac_minor", "profit_minor", "spend_minor", "limit"} and isinstance(val, int | float | str):
-                with suppress(TypeError, ValueError):
-                    val = _fmt_money_minor(val)
-            reason_lines.append(f"• {k}: {val}")
-
-    # include any other keys deterministically
-    for k in sorted(details.keys()):
-        if k in {"cac_minor", "profit_minor", "spend_minor", "limit", "days"}:
+    lines = []
+    primary_keys = ("cac_minor", "profit_minor", "spend_minor", "limit", "days")
+    for key in primary_keys:
+        if key not in details:
             continue
-        reason_lines.append(f"• {k}: {details.get(k)}")
-    return "\n" + "\n".join(reason_lines) + "\n"
-def build_stop_loss_state_from_verdict(*, verdict: GuardrailVerdict, now_ms: int | None = None) -> StopLossState:
+        value = details.get(key)
+        if key in {"cac_minor", "profit_minor", "spend_minor", "limit"}:
+            with suppress(TypeError, ValueError):
+                value = _fmt_money_minor(value)
+        lines.append(f"• {key}: {value}")
+
+    for key in sorted(details):
+        if key not in primary_keys:
+            lines.append(f"• {key}: {details.get(key)}")
+    return "\n" + "\n".join(lines) + "\n"
+
+
+def build_stop_loss_state_from_verdict(
+    *,
+    verdict: GuardrailVerdict,
+    now_ms: int,
+    existing: StopLossState | None = None,
+) -> StopLossState:
+    """Project a guardrail verdict into deterministic persisted state."""
+
     if verdict.allow:
         return StopLossState(False)
+    previous = existing or StopLossState(False)
+    reason = str(verdict.reason or "STOP_LOSS")
+    since_ms = (
+        int(previous.since_ms)
+        if previous.active and previous.reason == reason and previous.since_ms > 0
+        else max(0, int(now_ms))
+    )
     return StopLossState(
-        True,
-        reason=str(verdict.reason or "STOP_LOSS"),
-        since_ms=int(now_ms if now_ms is not None else int(time.time() * 1000)),
-        details=dict(verdict.details or {}) if isinstance(verdict.details, Mapping) else None,
+        active=True,
+        reason=reason,
+        since_ms=since_ms,
+        details=(
+            dict(verdict.details or {})
+            if isinstance(verdict.details, Mapping)
+            else None
+        ),
     )
 
 
 def build_stop_loss_plan(
     *,
+    tenant_id: str,
     user_id: str,
     verdict: GuardrailVerdict,
     existing: StopLossState,
-    session_patch: dict[str, Any] | None = None,
+    now_ms: int,
     callback_query_id: str | None = None,
-) -> list[dict[str, Any]]:
-    state = build_stop_loss_state_from_verdict(verdict=verdict)
-    if existing.active and existing.reason == state.reason:
-        return []
-    payload = {
+) -> dict[str, Any]:
+    """Build the single canonical setting action payload for activation.
+
+    The historical function name is retained as a stable import surface. The
+    returned value is intentionally one action payload, not an unsigned bundle
+    of nested effects.
+    """
+
+    state = build_stop_loss_state_from_verdict(
+        verdict=verdict,
+        now_ms=now_ms,
+        existing=existing,
+    )
+    return {
+        "tenant_id": str(tenant_id),
         "user_id": str(user_id),
-        "stop_loss": state.to_dict(),
-        "session_patch": dict(session_patch or {}),
-        "reason_text": f"Автопилот остановлен: {state.reason}{_format_stop_loss_details(state.details)}",
+        "key": STOP_LOSS_SETTING_KEY,
+        "value": state.to_dict(),
+        "notify_text": (
+            f"Автопилот остановлен: {state.reason}"
+            f"{_format_stop_loss_details(state.details)}"
+        ),
+        "callback_query_id": callback_query_id,
+        "channel": "telegram",
     }
-    actions: list[dict[str, Any]] = [
-        {"action_type": "update_session", "payload": payload},
-        {"action_type": "notify_user", "payload": {"user_id": str(user_id), "text": payload["reason_text"]}},
-    ]
-    if callback_query_id:
-        actions.append({"action_type": "answer_callback", "payload": {"callback_query_id": callback_query_id, "text": "Автопилот остановлен"}})
-    return actions
+
+
+def build_clear_stop_loss_plan(
+    *,
+    tenant_id: str,
+    user_id: str,
+    callback_query_id: str | None = None,
+) -> dict[str, Any]:
+    """Build one signed setting action that clears stop-loss and confirms it."""
+
+    return {
+        "tenant_id": str(tenant_id),
+        "user_id": str(user_id),
+        "key": STOP_LOSS_SETTING_KEY,
+        "value": StopLossState(False).to_dict(),
+        "notify_text": "Stop-loss сброшен. Автопилот можно запустить снова.",
+        "callback_query_id": callback_query_id,
+        "channel": "telegram",
+    }
+
+
+__all__ = [
+    "STOP_LOSS_SETTING_KEY",
+    "StopLossState",
+    "build_clear_stop_loss_plan",
+    "build_stop_loss_plan",
+    "build_stop_loss_state_from_verdict",
+]
