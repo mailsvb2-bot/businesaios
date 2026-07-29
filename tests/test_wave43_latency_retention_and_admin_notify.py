@@ -37,7 +37,8 @@ class _Owner:
 
 
 class _EventLog:
-    def __init__(self):
+    def __init__(self, tenant_id: str = "tenant-a"):
+        self.tenant_id = tenant_id
         self.events = []
 
     def emit(self, **kwargs):
@@ -59,11 +60,12 @@ def test_latency_read_models_respect_explicit_now_ms_window():
 
     brief = latency_brief(store, days=7, now_ms=now_ms)
     breakdown = latency_breakdown(store, days=7, now_ms=now_ms)
-    breaches = sla_breaches_brief(store, days=7, now_ms=now_ms)
+    breaches = sla_breaches_brief(store, days=7, p95_threshold_ms=50, now_ms=now_ms)
 
     assert brief["samples"] == 1
     assert breakdown["samples"] == 1
-    assert breaches["breaches"][0]["ts_ms"] == inside_ts
+    assert breaches["breaches"] == 1
+    assert breaches["buttons"] == ["go"]
     assert all(call["end_ms"] == now_ms for call in store.calls if "end_ms" in call)
 
 
@@ -90,33 +92,34 @@ def test_admin_notification_event_emitted_only_after_success():
         owner,
         decision_id="d1",
         correlation_id="c1",
+        tenant_id="tenant-a",
         admin_id="a1",
         notify_text="hello",
         notify_reply_markup=None,
         callback_query_id="cb1",
         channel="telegram",
+        channel_policy=None,
         event_log=log,
     )
     assert result["ok"] is True
     assert [e["event_type"] for e in log.events] == ["admin_notification_sent"]
 
 
-def test_admin_notification_failure_emits_failed_event_and_reraises():
+def test_admin_notification_failure_is_observable_and_non_fatal():
     owner = _Owner(fail=True)
     log = _EventLog()
-    try:
-        send_optional_notification(
-            owner,
-            decision_id="d1",
-            correlation_id="c1",
-            admin_id="a1",
-            notify_text="hello",
-            notify_reply_markup=None,
-            callback_query_id="cb1",
-            channel="telegram",
-            event_log=log,
-        )
-        raise AssertionError("expected RuntimeError")
-    except RuntimeError:
-        pass
+    result = send_optional_notification(
+        owner,
+        decision_id="d1",
+        correlation_id="c1",
+        tenant_id="tenant-a",
+        admin_id="a1",
+        notify_text="hello",
+        notify_reply_markup=None,
+        callback_query_id="cb1",
+        channel="telegram",
+        channel_policy=None,
+        event_log=log,
+    )
+    assert result == {"ok": False, "error": "RuntimeError"}
     assert [e["event_type"] for e in log.events] == ["admin_notification_failed"]
