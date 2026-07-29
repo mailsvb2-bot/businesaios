@@ -8,6 +8,7 @@ class _DummyState:
     def __init__(self) -> None:
         self.user_id = "u1"
         self.tenant_id = "tenantA"
+        self.timestamp_ms = 1_700_000_000_000
         self.product = {
             "product_id": "organization_platform",
             "domain": "organization_platform",
@@ -16,7 +17,12 @@ class _DummyState:
         }
 
 
-def _ctx(*, callback_data: str, settings: dict | None = None, dashboard: dict | None = None) -> TelegramCtx:
+def _ctx(
+    *,
+    callback_data: str,
+    settings: dict | None = None,
+    dashboard: dict | None = None,
+) -> TelegramCtx:
     return TelegramCtx(
         state=_DummyState(),
         text="",
@@ -44,20 +50,60 @@ def _ctx(*, callback_data: str, settings: dict | None = None, dashboard: dict | 
     )
 
 
-def test_autopilot_launch_triggers_stop_loss_plan():
+def test_autopilot_launch_triggers_stop_loss_action():
     settings = {
-        "autopilot:session": {"stage": "ready:launch", "diag": {"avg_check_rub": 500, "margin_pct": 50, "leads_per_day": 3}},
+        "autopilot:session": {
+            "stage": "ready:launch",
+            "diag": {
+                "avg_check_rub": 500,
+                "margin_pct": 50,
+                "leads_per_day": 3,
+            },
+        },
     }
-    dashboard = {"today": {"profit_minor": -200, "cac_minor": 0, "leads": 0, "purchases": 0, "revenue_minor": 0}}
-    out = handle(_ctx(callback_data="autopilot:launch", settings=settings, dashboard=dashboard), default_price_rub=490)
-    assert out.action == "execute_plan@v1"
-    steps = list(out.payload.get("steps") or [])
-    assert any(s.get("action") == "set_user_setting@v1" and s.get("payload", {}).get("key") == "autopilot:stop_loss" for s in steps)
+    dashboard = {
+        "today": {
+            "profit_minor": -200,
+            "cac_minor": 0,
+            "leads": 0,
+            "purchases": 0,
+            "revenue_minor": 0,
+        }
+    }
+    out = handle(
+        _ctx(
+            callback_data="autopilot:launch",
+            settings=settings,
+            dashboard=dashboard,
+        ),
+        default_price_rub=490,
+    )
+
+    assert out.action == "set_user_setting@v1"
+    assert out.payload["tenant_id"] == "tenantA"
+    assert out.payload["key"] == "autopilot:stop_loss"
+    assert out.payload["value"]["active"] is True
+    assert out.payload["value"]["since_ms"] == 1_700_000_000_000
 
 
 def test_autopilot_can_clear_stop_loss():
-    settings = {"autopilot:stop_loss": {"active": True, "reason": "STOP_LOSS_PROFIT", "since_ms": 1}}
-    out = handle(_ctx(callback_data="autopilot:stop_loss:clear", settings=settings), default_price_rub=490)
-    assert out.action == "execute_plan@v1"
-    steps = list(out.payload.get("steps") or [])
-    assert any(s.get("action") == "set_user_setting@v1" and s.get("payload", {}).get("key") == "autopilot:stop_loss" for s in steps)
+    settings = {
+        "autopilot:stop_loss": {
+            "active": True,
+            "reason": "STOP_LOSS_PROFIT",
+            "since_ms": 1,
+        }
+    }
+    out = handle(
+        _ctx(callback_data="autopilot:stop_loss:clear", settings=settings),
+        default_price_rub=490,
+    )
+
+    assert out.action == "set_user_setting@v1"
+    assert out.payload["tenant_id"] == "tenantA"
+    assert out.payload["key"] == "autopilot:stop_loss"
+    assert out.payload["value"] == {
+        "active": False,
+        "reason": "",
+        "since_ms": 0,
+    }
