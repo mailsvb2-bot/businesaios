@@ -6,19 +6,17 @@ import sys
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
 from adapters.api.fastapi.dependencies import FastAPIBootResult, FastAPIDependencyContainer
 from bootstrap.health_server import start_health_server
 from bootstrap.runtime_boot import build_runtime_orchestrator
-from core.ai.decision import Decision
+from bootstrap.security_boot_surface import build_security_boot_surface
 from entrypoints.api.action_models import ExecuteActionRequest
 from entrypoints.api.api_key_policy import PersistentApiKeyStore
 from entrypoints.api.fastapi_app_factory import create_fastapi_app
 from governance.rbac_contract import RoleId
-from kernel.decision_crypto import sign_decision
 from runtime.enforcement.idempotency_gate import mark_execution_once
 from runtime.wiring import build_durable_stores, resolve_storage_config
 from scripts.ci.http_probe_io import fetch_text
@@ -117,42 +115,21 @@ class _ProofApplicationService:
     def startup_audit_events(self) -> tuple[str, ...]:
         return ('boot:prod', 'storage:postgres', 'migrations:ready')
 
-    def execute_action(self, action: ExecuteActionRequest) -> dict[str, object]:
-        now_ms = 1_713_690_000_000
-        decision = Decision(
-            decision_id='dec-prod-proof-1',
-            issuer_id='decision-core',
-            issued_at_ms=now_ms,
-            expires_at_ms=now_ms + 60_000,
-            policy_id='prod-proof-policy',
-            action=action.action_type,
-            payload=dict(action.payload),
-            snapshot_id='snap-prod-proof-1',
-            state_hash='state-proof',
-            correlation_id='corr-prod-proof-1',
-            state_schema_version=1,
-            action_schema_version=1,
-            envelope_version=1,
-        )
-        material = sign_decision(decision=decision, secret=b'prod-proof-secret', kid='kid-prod-proof')
-        envelope = SimpleNamespace(
-            decision=decision,
-            payload_hash=material.payload_hash,
-            signature=material.signature,
-            kid=material.kid,
-            envelope_version=1,
-            policy_version='v1',
-            rollout_group='stable',
-            canary_flag=False,
-        )
+    def execute_action(self, action) -> dict[str, object]:
+        envelope = action
+        decision = getattr(envelope, 'decision', None)
+        if decision is None:
+            raise TypeError('canonical DecisionEnvelope required')
+        now_ms = int(decision.issued_at_ms)
+        action_payload = dict(decision.payload)
 
         self._decision_archive.put(envelope)
-        self._snapshot_store.put(decision.snapshot_id, json.dumps({'payload': action.payload}, sort_keys=True).encode('utf-8'))
+        self._snapshot_store.put(decision.snapshot_id, json.dumps({'payload': action_payload}, sort_keys=True).encode('utf-8'))
         self._outbox.enqueue_once(
             decision_id=decision.decision_id,
             correlation_id=decision.correlation_id,
             action=decision.action,
-            payload_json=json.dumps(action.payload, sort_keys=True),
+            payload_json=json.dumps(action_payload, sort_keys=True),
         )
         payment_job_id = self._payment_outbox.enqueue_once(dedupe_key='payment-proof-1', payload={'decision_id': decision.decision_id})
         self._payment_outbox.mark_delivered(payment_job_id)
@@ -204,15 +181,19 @@ def test_production_boot_is_proved_for_prod_profile(monkeypatch, tmp_path) -> No
     monkeypatch.setenv('BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE', '1')
     monkeypatch.setenv('BUSINESAIOS_API_KEY_STORE_PATH', str(tmp_path / 'api_keys.json'))
     monkeypatch.setenv('BUSINESAIOS_TENANT_REGISTRY_PATH', str(tmp_path / 'tenant_registry.json'))
+    monkeypatch.setenv('BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64', 'eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg=')
+    monkeypatch.setenv('API_CONTROL_PLANE_API_KEY_PEPPER', 'prod-proof-pepper')
+    monkeypatch.setenv('DECISION_SIGNING_KID', 'prod-proof-signing-k1')
+    monkeypatch.setenv('DECISION_SIGNING_SECRET', 'prod-proof-decision-signing-secret')
     tenant_registry = PersistentTenantRegistry(path=tmp_path / 'tenant_registry.json')
     tenant_registry.register(TenantRecord(tenant_id='tenant-proof', display_name='Production Proof Tenant', plan=TenantPlan.ENTERPRISE, status=TenantStatus.ACTIVE))
-    api_key_store = PersistentApiKeyStore(path=tmp_path / 'api_keys.json')
+    api_key_store = PersistentApiKeyStore(path=tmp_path / 'api_keys.json', pepper='prod-proof-pepper')
     _, control_plane_api_key = api_key_store.issue(
         tenant_id='tenant-proof',
         subject='prod-proof-control-plane',
         actor_id='prod-proof-control-plane',
         roles=(RoleId.OWNER,),
-        scopes=('control_plane:read', 'control_plane:admin'),
+        scopes=('control_plane:read', 'control_plane:admin', 'api.public.execute_action'),
         display_name='Production proof control-plane principal',
         metadata={'proof': 'production_boot'},
     )
@@ -244,16 +225,24 @@ def test_production_boot_is_proved_for_prod_profile(monkeypatch, tmp_path) -> No
             runtime_infra=resources,
             startup_report=service.startup_audit_events(),
         )
-        container = FastAPIDependencyContainer(boot_result=boot_result)
+        security_surface = build_security_boot_surface()
+        container = FastAPIDependencyContainer(
+            boot_result=boot_result,
+            shared_observability=security_surface.shared_runtime_payload(),
+        )
         app = create_fastapi_app(application_service=service, dependency_container=container)
 
         health_thread = start_health_server(port=18089, state_fn=lambda: {'ok': True, 'profile': 'prod', 'backend': storage.backend}, name='prod-proof')
         try:
-            with TestClient(app) as client:
+            with TestClient(app, base_url="https://testserver") as client:
                 health_payload = client.get('/health').json()
                 readiness_payload = client.get('/readyz').json()
                 tenants_payload = client.get('/control-plane/admin/tenants', headers=auth_headers).json()
-                action_response = client.post('/actions/execute', json={'action_type': 'pricing.publish_offer', 'payload': {'offer_id': 'offer-1', 'amount': 199}}).json()
+                action_response = client.post(
+                    '/actions/execute',
+                    json={'action_type': 'pricing.publish_offer', 'payload': {'offer_id': 'offer-1', 'amount': 199}},
+                    headers={**auth_headers, 'X-Idempotency-Key': 'prod-proof-1', 'X-Action-ID': 'prod-proof-action-1'},
+                ).json()
                 audit_payload = client.get('/control-plane/audit/actions', headers=auth_headers).json()
 
                 assert health_payload['status'] in {'ok', 'degraded'}
@@ -272,10 +261,10 @@ def test_production_boot_is_proved_for_prod_profile(monkeypatch, tmp_path) -> No
                 assert latest is not None
                 assert latest['event_type'] == 'decision_executed'
                 assert latest['payload']['verification_status'] == 'verified'
-                assert decision_archive.get('dec-prod-proof-1') is not None
-                assert snapshot_store.get('snap-prod-proof-1') is not None
-                assert ledger.is_executed('dec-prod-proof-1') is True
-                assert outbox.status('dec-prod-proof-1') == 'delivered'
+                assert decision_archive.get(action_response['details']['decision_id']) is not None
+                assert snapshot_store.get(action_response['details']['snapshot_id']) is not None
+                assert ledger.is_executed(action_response['details']['decision_id']) is True
+                assert outbox.status(action_response['details']['decision_id']) == 'delivered'
 
                 _, raw_health = fetch_text('http://127.0.0.1:18089/health', timeout=2)
                 assert '"profile":"prod"' in raw_health

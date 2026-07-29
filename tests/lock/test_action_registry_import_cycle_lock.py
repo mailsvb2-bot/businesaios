@@ -27,7 +27,7 @@ def test_runtime_registry_imports_before_core_actions_without_cycle() -> None:
     _run_fresh_import(
         "import runtime.boot.actions_registry as registry\n"
         "import core.actions as actions\n"
-        "assert actions.ALLOWED_ACTIONS == tuple(sorted(registry.SPECS))\n"
+        "assert actions.ALLOWED_ACTIONS == tuple(sorted(registry.SPECS.keys()))\n"
     )
 
 

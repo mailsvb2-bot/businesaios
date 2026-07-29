@@ -4,32 +4,34 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DEBT_FILE = ROOT / "tests" / "known_full_suite_debt.txt"
-MAX_KNOWN_DEBT = 172
+ROOT_CONFTEST = ROOT / "conftest.py"
+QUARANTINE_MARKERS = (
+    "BUSINESAIOS_RUN_KNOWN_FULL_SUITE_DEBT",
+    "known full-suite contract debt quarantined",
+    "known_full_suite_debt.txt",
+)
 
 
-def _entries() -> list[str]:
-    return [
-        line.strip()
-        for line in DEBT_FILE.read_text(encoding="utf-8").splitlines()
-        if line.strip() and not line.lstrip().startswith("#")
+def test_known_full_suite_debt_registry_is_retired() -> None:
+    assert not DEBT_FILE.exists()
+    assert not ROOT_CONFTEST.exists()
+
+
+def test_complete_tree_cannot_restore_known_debt_quarantine() -> None:
+    inspected = [
+        ROOT / "tests" / "conftest.py",
+        ROOT / ".github" / "workflows" / "ci.yml",
+        ROOT / ".github" / "workflows" / "full-ci.yml",
+        ROOT / ".github" / "workflows" / "ci-full.yml",
     ]
-
-
-def test_known_full_suite_debt_is_exact_bounded_and_auditable() -> None:
-    entries = _entries()
-
-    assert entries == sorted(entries)
-    assert len(entries) == len(set(entries))
-    assert len(entries) <= MAX_KNOWN_DEBT
-
-    for node_id in entries:
-        assert "::" in node_id
-        assert not any(token in node_id for token in ("*", "?", "[", "]"))
-        path, test_name = node_id.split("::", maxsplit=1)
-        assert path.startswith("tests/")
-        assert test_name.startswith("test_")
-        assert (ROOT / path).is_file(), node_id
-
-
-def test_known_full_suite_debt_can_only_shrink_without_explicit_lock_update() -> None:
-    assert len(_entries()) <= MAX_KNOWN_DEBT
+    offenders: list[str] = []
+    for path in inspected:
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        for marker in QUARANTINE_MARKERS:
+            if marker in text:
+                offenders.append(f"{path.relative_to(ROOT).as_posix()}:{marker}")
+    assert offenders == [], (
+        "Known full-suite quarantine must not return: " + ", ".join(offenders)
+    )

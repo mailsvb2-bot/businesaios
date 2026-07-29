@@ -1,12 +1,37 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from interfaces.api.action_models import ExecuteActionRequest
 from interfaces.api.api_handler_bundle import build_api_handler_bundle
 from interfaces.api.execute_action_api_stack import build_execute_action_api_stack
 from interfaces.api.execute_action_handler import build_execute_action_handler
 from interfaces.api.execute_action_port_provider import build_execute_action_port_provider
+from entrypoints.api.request_context import RequestContext
 from observability.action_audit_log import ActionAuditLog
 from runtime.execution.decision_execution_service import build_decision_execution_service
+
+
+class _Binding:
+    def signed_envelope(self, *, action, payload, request_context, action_id):
+        return SimpleNamespace(
+            decision=SimpleNamespace(
+                action=action,
+                payload=dict(payload),
+                decision_id=f"api:{action_id}",
+                correlation_id=request_context.normalized_correlation_id(),
+            )
+        )
+
+
+def _context(request_id: str) -> RequestContext:
+    return RequestContext(
+        tenant_id="tenant-a",
+        request_id=request_id,
+        actor_id="actor-a",
+        subject="subject-a",
+        metadata={"authenticated_principal": True},
+    )
 
 
 class _Service:
@@ -17,9 +42,9 @@ class _Service:
         self.calls += 1
         return {
             'status': 'ok',
-            'action_type': action.action_type,
+            'action_type': action.decision.action,
             'reason': 'executed',
-            'details': {'payload': dict(action.payload), 'kwargs': kwargs},
+            'details': {'payload': dict(action.decision.payload), 'kwargs': kwargs},
         }
 
     def startup_audit_events(self):
@@ -29,6 +54,9 @@ class _Service:
 class _DependencyContainer:
     tenant_quota_guard = None
     api_idempotency_store = None
+
+    def decision_command_binding(self):
+        return _Binding()
 
 
 class _Executor:
@@ -88,13 +116,21 @@ class _Runtime:
 
 def test_execute_action_owner_builders_preserve_canonical_stack() -> None:
     service = _Service()
-    handler = build_execute_action_handler(application_service=service)
-    response = handler.handle(ExecuteActionRequest(action_type='launch', payload={'x': 1}))
+    handler = build_execute_action_handler(application_service=service, command_binding=_Binding())
+    response = handler.handle(
+        ExecuteActionRequest(action_type='launch', payload={'x': 1}),
+        request_context=_context('req-handler'),
+        action_id='action-handler',
+    )
     assert response.status == 'ok'
     assert service.calls == 1
 
-    stack = build_execute_action_api_stack(application_service=service)
-    response2 = stack.handle(ExecuteActionRequest(action_type='ship', payload={'y': 2, 'idempotency_key': 'idem-stack'}))
+    stack = build_execute_action_api_stack(application_service=service, command_binding=_Binding())
+    response2 = stack.handle(
+        ExecuteActionRequest(action_type='ship', payload={'y': 2, 'idempotency_key': 'idem-stack'}),
+        request_context=_context('req-stack'),
+        action_id='action-stack',
+    )
     assert response2.status == 'ok'
     assert service.calls == 2
 
@@ -108,7 +144,11 @@ def test_execute_action_port_provider_builds_one_port_for_bundle_reuse() -> None
     )
     port = provider.build_port()
     assert port is not None
-    response = port.handle(ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-1'}))
+    response = port.handle(
+        ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-1'}),
+        request_context=_context('req-port'),
+        action_id='action-port',
+    )
     assert response.status == 'ok'
 
     bundle = build_api_handler_bundle(
@@ -118,7 +158,11 @@ def test_execute_action_port_provider_builds_one_port_for_bundle_reuse() -> None
         headless_runtime_provider=__import__('interfaces.api.headless_runtime_provider', fromlist=['build_headless_runtime_provider']).build_headless_runtime_provider(runtime=_Runtime()),
     )
     assert bundle.execute_action_port_provider is not None
-    assert bundle.route_handlers.execute_action(ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-2'})).status == 'ok'
+    assert bundle.route_handlers.execute_action(
+        ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-2'}),
+        request_context=_context('req-bundle'),
+        action_id='action-bundle',
+    ).status == 'ok'
 
 
 def test_decision_execution_service_builder_preserves_runtime_execution_contract(monkeypatch) -> None:

@@ -19,6 +19,8 @@ class DependencyContainerLike(Protocol):
     tenant_quota_guard: object
     api_idempotency_store: object
 
+    def decision_command_binding(self) -> object: ...
+
 
 class ExecuteActionPortLike(Protocol):
     def handle(self, request, *, request_context=None, idempotency_key=None, action_id=None): ...
@@ -36,6 +38,7 @@ class ExecuteActionPortProvider:
             return None
         return build_execute_action_api_stack(
             application_service=self.application_service,
+            command_binding=dependency_container.decision_command_binding(),
             tenant_quota_guard=dependency_container.tenant_quota_guard,
             action_audit_log=self.action_audit_log,
             idempotency_store=dependency_container.api_idempotency_store,

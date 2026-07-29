@@ -32,6 +32,7 @@ CANON_API_EXECUTE_ACTION_STACK_WRAPPER_BUILDERS = True
 def build_execute_action_api_stack(
     *,
     application_service: object,
+    command_binding: object | None = None,
     tenant_quota_guard: TenantQuotaGuard | None = None,
     action_audit_log: ActionAuditLog | None = None,
     idempotency_store: object | None = None,
@@ -45,6 +46,7 @@ def build_execute_action_api_stack(
     )
     stack_bundle = build_execute_action_stack_bundle(
         application_service=application_service,
+        command_binding=command_binding,
         retry_policy=retry_policy,
         idempotency=IdempotencyExecutor(store=_idempotency_store_or_default(idempotency_store)),
         action_audit_log=audit_log,

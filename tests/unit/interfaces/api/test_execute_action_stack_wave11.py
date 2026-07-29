@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import queue
 import threading
+from types import SimpleNamespace
 
 from entrypoints.api.request_context import RequestContext
 from interfaces.api.action_models import ExecuteActionRequest
@@ -19,6 +20,27 @@ from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_runtime_limits import TenantRuntimeLimits
 
 
+class _Binding:
+    def signed_envelope(self, *, action, payload, request_context, action_id):
+        return SimpleNamespace(
+            decision=SimpleNamespace(
+                action=action,
+                payload=dict(payload),
+                decision_id=f"api:{action_id}",
+                correlation_id=request_context.normalized_correlation_id(),
+            )
+        )
+
+
+def _authenticated_context(tenant_id: str = "tenant-a") -> RequestContext:
+    return RequestContext(
+        tenant_id=tenant_id,
+        actor_id="actor-1",
+        subject="subject-1",
+        metadata={"authenticated_principal": True},
+    )
+
+
 class _Service:
     def __init__(self) -> None:
         self.calls = 0
@@ -29,9 +51,9 @@ class _Service:
         self.last_action = action
         return {
             'status': 'ok',
-            'action_type': action.action_type,
+            'action_type': action.decision.action,
             'reason': 'executed',
-            'details': {'echo': dict(action.payload)},
+            'details': {'echo': dict(action.decision.payload)},
         }
 
     def startup_audit_events(self):
@@ -93,7 +115,7 @@ def test_execute_action_with_guards_uses_normalized_request_id_when_request_cont
 def test_route_handlers_pass_request_context_into_canonical_execute_action_port() -> None:
     port = _Port()
     handlers = RouteHandlers(application_service=_Service(), execute_action_port=port)
-    context = RequestContext(tenant_id='tenant-a')
+    context = _authenticated_context()
 
     handlers.execute_action(ExecuteActionRequest(action_type='launch', payload={}), request_context=context)
 
@@ -108,13 +130,14 @@ def test_build_execute_action_api_stack_executes_through_canonical_wrappers() ->
     quota_guard = TenantQuotaGuard(policy_store=store)
     stack = build_execute_action_api_stack(
         application_service=service,
+        command_binding=_Binding(),
         tenant_quota_guard=quota_guard,
         action_audit_log=audit_log,
     )
 
     response = stack.handle(
         ExecuteActionRequest(action_type='launch', payload={'tenant_id': 'tenant-a', 'action_id': 'a-1'}),
-        request_context=RequestContext(tenant_id='tenant-a'),
+        request_context=_authenticated_context(),
     )
 
     assert response.status == 'ok'
@@ -124,9 +147,9 @@ def test_build_execute_action_api_stack_executes_through_canonical_wrappers() ->
 
 def test_build_execute_action_api_stack_replays_completed_idempotency_response() -> None:
     service = _Service()
-    stack = build_execute_action_api_stack(application_service=service)
+    stack = build_execute_action_api_stack(application_service=service, command_binding=_Binding())
     request = ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-1', 'action_id': 'a-1'})
-    context = RequestContext(tenant_id='tenant-a')
+    context = _authenticated_context()
 
     first = stack.handle(request, request_context=context)
     second = stack.handle(request, request_context=context)
@@ -143,16 +166,16 @@ def test_build_execute_action_api_stack_blocks_in_progress_idempotency_key() -> 
             self.last_action = action
             return {
                 'status': 'ok',
-                'action_type': action.action_type,
+                'action_type': action.decision.action,
                 'reason': 'executed',
-                'details': {'echo': dict(action.payload)},
+                'details': {'echo': dict(action.decision.payload)},
             }
 
     service = _BlockingService()
     store = __import__('infra.idempotency_store', fromlist=['InMemoryIdempotencyStore']).InMemoryIdempotencyStore()
-    stack = build_execute_action_api_stack(application_service=service, idempotency_store=store)
+    stack = build_execute_action_api_stack(application_service=service, command_binding=_Binding(), idempotency_store=store)
     request = ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-2', 'action_id': 'a-2'})
-    context = RequestContext(tenant_id='tenant-a')
+    context = _authenticated_context()
 
     first = stack.handle(request, request_context=context)
     second = stack.handle(request, request_context=context)
@@ -170,11 +193,12 @@ def test_build_execute_action_api_stack_quota_does_not_charge_idempotency_replay
     quota_guard = TenantQuotaGuard(policy_store=store)
     stack = build_execute_action_api_stack(
         application_service=service,
+        command_binding=_Binding(),
         tenant_quota_guard=quota_guard,
         action_audit_log=audit_log,
     )
     request = ExecuteActionRequest(action_type='launch', payload={'tenant_id': 'tenant-a', 'idempotency_key': 'idem-3', 'action_id': 'a-3'})
-    context = RequestContext(tenant_id='tenant-a')
+    context = _authenticated_context()
 
     first = stack.handle(request, request_context=context)
     replay = stack.handle(request, request_context=context)
@@ -203,9 +227,9 @@ def test_build_execute_action_api_stack_quota_bypasses_in_progress_duplicate() -
             assert self.release.wait(10.0)
             return {
                 'status': 'ok',
-                'action_type': action.action_type,
+                'action_type': action.decision.action,
                 'reason': 'executed',
-                'details': {'echo': dict(action.payload)},
+                'details': {'echo': dict(action.decision.payload)},
             }
 
     service = _SlowService()
@@ -215,11 +239,12 @@ def test_build_execute_action_api_stack_quota_bypasses_in_progress_duplicate() -
     quota_guard = TenantQuotaGuard(policy_store=store)
     stack = build_execute_action_api_stack(
         application_service=service,
+        command_binding=_Binding(),
         tenant_quota_guard=quota_guard,
         action_audit_log=audit_log,
     )
     request = ExecuteActionRequest(action_type='launch', payload={'tenant_id': 'tenant-a', 'idempotency_key': 'idem-slow', 'action_id': 'slow-1'})
-    context = RequestContext(tenant_id='tenant-a')
+    context = _authenticated_context()
     first_result: dict[str, object] = {}
 
     def _run_first() -> None:
@@ -258,7 +283,7 @@ def test_route_handlers_delegate_to_explicit_execute_action_handler_with_context
                 'capability_view': {},
             })()
 
-    context = RequestContext(tenant_id='tenant-a')
+    context = _authenticated_context()
     handler = _Handler()
     route_handlers = RouteHandlers(application_service=_Service(), execute_action_handler=handler)
 
@@ -306,19 +331,19 @@ def test_execute_action_stack_durable_idempotency_blocks_parallel_duplicate_with
             assert self.release.wait(120.0), "blocking service was not released before duplicate-check timeout"
             return {
                 'status': 'ok',
-                'action_type': action.action_type,
+                'action_type': action.decision.action,
                 'reason': 'executed',
-                'details': {'echo': dict(action.payload)},
+                'details': {'echo': dict(action.decision.payload)},
             }
 
     service = _BlockingService()
     durable_store = __import__('reliability.idempotency_sqlite_backend', fromlist=['SQLiteIdempotencyStore']).SQLiteIdempotencyStore(
         tmp_path / 'parallel.sqlite3'
     )
-    stack_a = build_execute_action_api_stack(application_service=service, idempotency_store=durable_store)
-    stack_b = build_execute_action_api_stack(application_service=service, idempotency_store=durable_store)
+    stack_a = build_execute_action_api_stack(application_service=service, command_binding=_Binding(), idempotency_store=durable_store)
+    stack_b = build_execute_action_api_stack(application_service=service, command_binding=_Binding(), idempotency_store=durable_store)
     request = ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-parallel', 'action_id': 'parallel-1'})
-    context = RequestContext(tenant_id='tenant-a')
+    context = _authenticated_context()
 
     first_result: queue.Queue[object] = queue.Queue()
     second_result: queue.Queue[object] = queue.Queue()
@@ -400,9 +425,9 @@ def test_execute_action_stack_default_idempotency_blocks_terminal_failed_retries
             self.calls += 1
             raise RuntimeError('boom')
 
-    stack = build_execute_action_api_stack(application_service=_FailingService())
+    stack = build_execute_action_api_stack(application_service=_FailingService(), command_binding=_Binding())
     request = ExecuteActionRequest(action_type='launch', payload={'idempotency_key': 'idem-fail', 'action_id': 'fail-1'})
-    context = RequestContext(tenant_id='tenant-a')
+    context = _authenticated_context()
 
     try:
         stack.handle(request, request_context=context)

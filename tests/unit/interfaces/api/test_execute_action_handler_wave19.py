@@ -3,6 +3,33 @@ from __future__ import annotations
 from entrypoints.api.request_context import RequestContext
 from interfaces.api.action_models import ExecuteActionRequest
 from interfaces.api.execute_action_handler import ExecuteActionHandler
+from types import SimpleNamespace
+
+
+class _Binding:
+    def signed_envelope(self, *, action, payload, request_context, action_id):
+        return SimpleNamespace(
+            decision=SimpleNamespace(
+                action=action,
+                payload=dict(payload),
+                decision_id=f"api:{action_id}",
+                correlation_id=request_context.normalized_correlation_id(),
+            )
+        )
+
+
+def _context(*, tenant_id: str, request_id: str) -> RequestContext:
+    return RequestContext(
+        tenant_id=tenant_id,
+        request_id=request_id,
+        actor_id="actor-1",
+        subject="subject-1",
+        metadata={"authenticated_principal": True},
+    )
+
+
+def _payload(envelope):
+    return envelope.decision.payload
 
 
 class _MinimalService:
@@ -13,9 +40,9 @@ class _MinimalService:
         self.last_action = action
         return {
             'status': 'ok',
-            'action_type': action.action_type,
+            'action_type': action.decision.action,
             'reason': 'executed',
-            'details': {'echo': dict(action.payload)},
+            'details': {'echo': dict(action.decision.payload)},
         }
 
 
@@ -33,16 +60,16 @@ class _IdentityAwareService:
         self.last_action_id = action_id
         return {
             'status': 'ok',
-            'action_type': action.action_type,
+            'action_type': action.decision.action,
             'reason': 'executed',
-            'details': {'echo': dict(action.payload)},
+            'details': {'echo': dict(action.decision.payload)},
         }
 
 
 def test_execute_action_handler_canonicalizes_identity_into_action_payload() -> None:
     service = _MinimalService()
-    handler = ExecuteActionHandler(application_service=service)
-    context = RequestContext(tenant_id='tenant-a', request_id='req-1')
+    handler = ExecuteActionHandler(application_service=service, command_binding=_Binding())
+    context = _context(tenant_id='tenant-a', request_id='req-1')
 
     response = handler.handle(
         ExecuteActionRequest(action_type='launch', payload={'channel': 'email'}),
@@ -53,16 +80,16 @@ def test_execute_action_handler_canonicalizes_identity_into_action_payload() -> 
 
     assert response.status == 'ok'
     assert service.last_action is not None
-    assert service.last_action.payload['channel'] == 'email'
-    assert service.last_action.payload['tenant_id'] == 'tenant-a'
-    assert service.last_action.payload['idempotency_key'] == 'idem-1'
-    assert service.last_action.payload['action_id'] == 'action-1'
+    assert _payload(service.last_action)['channel'] == 'email'
+    assert _payload(service.last_action)['tenant_id'] == 'tenant-a'
+    assert _payload(service.last_action)['idempotency_key'] == 'idem-1'
+    assert _payload(service.last_action)['action_id'] == 'action-1'
 
 
 def test_execute_action_handler_threads_identity_to_application_service_when_supported() -> None:
     service = _IdentityAwareService()
-    handler = ExecuteActionHandler(application_service=service)
-    context = RequestContext(tenant_id='tenant-a', request_id='req-2')
+    handler = ExecuteActionHandler(application_service=service, command_binding=_Binding())
+    context = _context(tenant_id='tenant-a', request_id='req-2')
 
     response = handler.handle(
         ExecuteActionRequest(action_type='launch', payload={}),
@@ -75,13 +102,13 @@ def test_execute_action_handler_threads_identity_to_application_service_when_sup
     assert service.last_request_context is context
     assert service.last_idempotency_key == 'idem-2'
     assert service.last_action_id == 'action-2'
-    assert service.last_action.payload['tenant_id'] == 'tenant-a'
+    assert _payload(service.last_action)['tenant_id'] == 'tenant-a'
 
 
 def test_execute_action_handler_uses_request_context_request_id_as_canonical_fallback_identity() -> None:
     service = _MinimalService()
-    handler = ExecuteActionHandler(application_service=service)
-    context = RequestContext(tenant_id='tenant-a', request_id='req-fallback')
+    handler = ExecuteActionHandler(application_service=service, command_binding=_Binding())
+    context = _context(tenant_id='tenant-a', request_id='req-fallback')
 
     response = handler.handle(
         ExecuteActionRequest(action_type='launch', payload={}),
@@ -89,9 +116,9 @@ def test_execute_action_handler_uses_request_context_request_id_as_canonical_fal
     )
 
     assert response.status == 'ok'
-    assert service.last_action.payload['tenant_id'] == 'tenant-a'
-    assert service.last_action.payload['idempotency_key'] == 'req-fallback'
-    assert service.last_action.payload['action_id'] == 'req-fallback'
+    assert _payload(service.last_action)['tenant_id'] == 'tenant-a'
+    assert _payload(service.last_action)['idempotency_key'] == 'req-fallback'
+    assert _payload(service.last_action)['action_id'] == 'req-fallback'
 
 
 class _KwargsOnlyService:
@@ -103,16 +130,16 @@ class _KwargsOnlyService:
         action = kwargs['action']
         return {
             'status': 'ok',
-            'action_type': action.action_type,
+            'action_type': action.decision.action,
             'reason': 'executed',
-            'details': {'echo': dict(action.payload)},
+            'details': {'echo': dict(action.decision.payload)},
         }
 
 
 def test_execute_action_handler_threads_identity_into_kwargs_only_application_service() -> None:
     service = _KwargsOnlyService()
-    handler = ExecuteActionHandler(application_service=service)
-    context = RequestContext(tenant_id='tenant-a', request_id='req-kwargs')
+    handler = ExecuteActionHandler(application_service=service, command_binding=_Binding())
+    context = _context(tenant_id='tenant-a', request_id='req-kwargs')
 
     response = handler.handle(
         ExecuteActionRequest(action_type='launch', payload={}),

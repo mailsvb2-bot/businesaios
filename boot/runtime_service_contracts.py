@@ -77,9 +77,14 @@ class ActionExecutor(SealedType):
             )
 
     def execute(self, action: object) -> dict:
+        decision = getattr(action, "decision", None)
         return {
             "status": "accepted",
-            "action_type": type(action).__name__,
+            "action_type": str(getattr(decision, "action", "") or type(action).__name__),
+            "details": {
+                "decision_id": str(getattr(decision, "decision_id", "") or ""),
+                "correlation_id": str(getattr(decision, "correlation_id", "") or ""),
+            },
         }
 
 
