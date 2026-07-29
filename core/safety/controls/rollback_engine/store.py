@@ -3,11 +3,7 @@ from __future__ import annotations
 from threading import RLock
 from typing import Protocol
 
-from runtime.platform.safety_rollback_store import (
-    CANON_PLATFORM_SAFETY_ROLLBACK_STORE,
-    SCHEMA_VERSION,
-    PlatformSqliteRollbackPlanStore,
-)
+from compatibility.safety_storage_exports import resolve_safety_storage_export
 
 from .models import RollbackExecutionState, RollbackPlan, RollbackReceipt, RollbackReconciliationState
 
@@ -80,13 +76,8 @@ class InMemoryRollbackPlanStore:
         return self.compare_and_set(tenant_id=tenant_id, action_id=action_id, expected_version=int(plan.version), plan=RollbackPlan(**{**plan.__dict__, 'reconciliation_state': state, 'reconciliation_error': str(error or '')}))
 
 
-class SqliteRollbackPlanStore(PlatformSqliteRollbackPlanStore):
-    """Safety-facing rollback plan store facade.
-
-    SQLite ownership lives in runtime.platform.safety_rollback_store.
-    """
-
-
+def __getattr__(name: str):
+    return resolve_safety_storage_export("rollback", name)
 def _key(*, tenant_id: str, action_id: str) -> str:
     return f"{str(tenant_id).strip() or 'unknown'}::{str(action_id).strip()}"
 
