@@ -28,11 +28,19 @@ def test_best_effort_route_ids_prefers_env_decision():
 def test_growth_propose_route_violation_keeps_env_ids_and_safe_text():
     fx = _Effects()
     env = SimpleNamespace(decision=SimpleNamespace(decision_id='d1', correlation_id='c1'))
-    out = handle_growth_propose({'user_id': 'u1'}, fx, env, proposal_service=None, proposal_gateway=None)
-    assert out['decision_id'] == 'd1'
-    assert out['correlation_id'] == 'c1'
-    assert 'route contract' in out['text'].lower()
-    assert out['track_payload']['error'] == 'DecisionRouteViolation'
+    out = handle_growth_propose(
+        {'user_id': 'u1'},
+        fx,
+        env,
+        event_store=None,
+    )
+    assert out['ok'] is False
+    assert out['status'] == 'blocked'
+    assert out['reason'] == 'route_violation'
+    assert out['delivery']['decision_id'] == 'd1'
+    assert out['delivery']['correlation_id'] == 'c1'
+    assert 'route contract' in out['delivery']['text'].lower()
+    assert out['delivery']['track_payload']['error'] == 'DecisionRouteViolation'
 
 
 def test_ai_ceo_plan_error_does_not_leak_exception_text():
