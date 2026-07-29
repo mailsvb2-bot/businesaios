@@ -1,49 +1,19 @@
-from pathlib import Path
+from __future__ import annotations
 
-# The ONLY place real integrations are allowed:
-# NOTE: transport clients may be split into runtime/_internal/effects_clients/*
-ALLOWED_FILES = {
-    "runtime/_internal/_effects_impl.py",
-    "runtime/_internal/http_transport.py",
-    "runtime/_internal/effect_payloads.py",
-    "runtime/_internal/effect_router.py",
-    "runtime/_internal/effect_types.py",
-    # Non-executing provider metadata and token-resolution surfaces are allowed
-    # to mention external endpoints/env keys; transport execution remains sealed.
-    "runtime/business_autonomy/provider_transport_bindings.py",
-    "runtime/boot/telegram_webhook_runner.py",
-}
-
-ALLOWED_PREFIXES = ("runtime/_internal/effects_clients/", "runtime/_internal/effects_actions/", "canon/domain_fs/",)
-MARKERS = [
-    "api.telegram.org",
-    "api.yookassa.ru",
-    "YOOKASSA",
-    "TELEGRAM_BOT_TOKEN",
-    "import requests",
-    "from requests",
-    "import httpx",
-    "from httpx",
-    "urllib.request",
-    "urllib3.",
-    "socket.socket",
-    "aiohttp.",
-]
+from tests.business_autonomy.test_no_direct_network_outside_effects import (
+    test_external_api_literals_are_only_in_sealed_effects_or_provider_transport as _assert_external_literals_sealed,
+)
+from tests.business_autonomy.test_no_direct_network_outside_effects import (
+    test_no_direct_network_primitives_outside_sealed_effects_or_provider_transport as _assert_network_primitives_sealed,
+)
+from tests.business_autonomy.test_no_direct_network_outside_effects import (
+    test_no_subprocess_curl_or_wget_outside_tests as _assert_no_network_subprocesses,
+)
 
 
-def test_no_network_markers_outside_sealed_effects():
-    root = Path(__file__).resolve().parents[1]
-    bad = []
-    for py in root.rglob("*.py"):
-        rel = py.relative_to(root).as_posix()
-        if rel in ALLOWED_FILES or rel.startswith(ALLOWED_PREFIXES):
-            continue
-        if rel.startswith(("tests/", "scripts/")):
-            continue
-        txt = py.read_text(encoding="utf-8", errors="ignore")
-        for m in MARKERS:
-            if m in txt:
-                bad.append(f"{rel} -> {m}")
-                break
-    if bad:
-        raise AssertionError("Network/integration markers found outside sealed effects:\n" + "\n".join(sorted(bad)))
+def test_no_network_outside_canonical_effect_and_provider_boundaries() -> None:
+    """Keep one network policy and one scanner implementation repository-wide."""
+
+    _assert_network_primitives_sealed()
+    _assert_no_network_subprocesses()
+    _assert_external_literals_sealed()
