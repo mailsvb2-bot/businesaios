@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any, Mapping
 
-from boot.factories.decision_core_factory import build_decision_core
+from boot.factories.decision_core_factory import build_runtime_decision_execution_service
 
 
 class _ReplayGovernance:
@@ -10,8 +11,8 @@ class _ReplayGovernance:
         self.allowed = allowed
         self.calls: list[object] = []
 
-    def evaluate(self, action: object) -> bool:
-        self.calls.append(action)
+    def evaluate(self, envelope: object) -> bool:
+        self.calls.append(envelope)
         return self.allowed
 
 
@@ -19,11 +20,11 @@ class _ReplayExecutor:
     def __init__(self) -> None:
         self.calls: list[object] = []
 
-    def execute(self, action: object) -> dict[str, Any]:
-        self.calls.append(action)
+    def execute(self, envelope: object) -> dict[str, Any]:
+        self.calls.append(envelope)
         return {
             "status": "executed",
-            "action_type": type(action).__name__,
+            "action_type": str(envelope.decision.action),
             "reason": None,
             "trace": {
                 "route": "DecisionCore->RuntimeExecutor",
@@ -33,19 +34,24 @@ class _ReplayExecutor:
         }
 
 
-class _ReplayAction:
-    pass
-
-
-
 def replay_runtime_decision(payload: Mapping[str, Any]) -> dict[str, Any]:
     action_name = str(payload.get("action_type", "ReplayAction"))
-    action_type = type(action_name, (_ReplayAction,), {})
-    action = action_type()
     governance = _ReplayGovernance(bool(payload.get("allowed", False)))
     executor = _ReplayExecutor()
-    core = build_decision_core(governance_chain=governance, action_executor=executor)
-    result = dict(core.decide_and_execute(action))
+    execution_service = build_runtime_decision_execution_service(
+        governance_chain=governance,
+        action_executor=executor,
+    )
+    envelope = SimpleNamespace(
+        decision=SimpleNamespace(
+            decision_id=str(payload.get("decision_id") or "formal-replay-decision"),
+            correlation_id=str(payload.get("correlation_id") or "formal-replay-correlation"),
+            action=action_name,
+            payload=dict(payload),
+        )
+    )
+    result = dict(execution_service.execute(envelope))
+    result.pop("action", None)
     result.setdefault("action_type", action_name)
     if result.get("status") == "blocked":
         result["reason"] = "governance_rejected"
