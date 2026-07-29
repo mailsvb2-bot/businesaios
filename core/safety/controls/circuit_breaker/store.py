@@ -33,10 +33,10 @@ class InMemoryCircuitBreakerStore:
 def __getattr__(name: str):
     return resolve_safety_storage_export("circuit_breaker", name)
 __all__ = [
-    'CANON_PLATFORM_SAFETY_CIRCUIT_BREAKER_STORE',
+    'CANON_PLATFORM_SAFETY_CIRCUIT_BREAKER_STORE',  # noqa: F822 - provided lazily by module __getattr__
     'CANON_SAFETY_CIRCUIT_BREAKER_STORE',
     'CircuitBreakerStore',
     'InMemoryCircuitBreakerStore',
-    'SCHEMA_VERSION',
-    'SqliteCircuitBreakerStore',
+    'SCHEMA_VERSION',  # noqa: F822 - provided lazily by module __getattr__
+    'SqliteCircuitBreakerStore',  # noqa: F822 - provided lazily by module __getattr__
 ]
