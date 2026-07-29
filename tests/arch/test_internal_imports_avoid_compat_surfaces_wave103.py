@@ -33,7 +33,8 @@ def test_runtime_execution_uses_runtime_observability_owner() -> None:
 def test_boot_runtime_integration_uses_core_application_owner() -> None:
     text = _read("boot/runtime_integration.py")
     assert "from runtime.application.application_service import" not in text
-    assert "from core.application.decision_service import DecisionApplicationService" in text
+    assert "from runtime.application import (" in text
+    assert "from application.decision.decision_service import" not in text
 
 
 
