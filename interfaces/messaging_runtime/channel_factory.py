@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from runtime.messaging.channel_normalizer import normalize_channel
+
 from .capabilities import get_capabilities
 from .channel_binding import ChannelBinding
 from .parsing import parse_inbound_payload
@@ -15,7 +17,12 @@ async def _missing_sender(_outbound):
     raise TransportSendNotConfigured("transport sender is not configured")
 
 
-def build_channel_binding(*, channel: str, sender: Callable | None = None) -> ChannelBinding:
+def build_channel_binding(
+    *,
+    channel: str,
+    sender: Callable | None = None,
+) -> ChannelBinding:
+    channel = normalize_channel(channel)
     capabilities = get_capabilities(channel)
 
     def parse_inbound(raw: dict):
