@@ -12,7 +12,7 @@ from observability.event_bus import EventBus
 
 def test_narrowing_audit_records_rejections():
     core = DecisionService(DecisionSelector(), DecisionValidator(), DecisionPublisher(DecisionAuditLog(), EventBus()), DecisionHistory())
-    result, audit = core.issue(
+    result, audit = core.select_action(
         DecisionSpace([
             DecisionCandidate('raise_budget', 'ads', 1.0, 10.0, 0.95, payload={'budget_delta': 0.4}),
             DecisionCandidate('notify_owner', 'internal', 0.4, 3.0, 0.9),
