@@ -30,10 +30,10 @@ class InMemoryRunawayLoopStore:
 def __getattr__(name: str):
     return resolve_safety_storage_export("runaway_loop", name)
 __all__ = [
-    'CANON_PLATFORM_SAFETY_RUNAWAY_LOOP_STORE',
+    'CANON_PLATFORM_SAFETY_RUNAWAY_LOOP_STORE',  # noqa: F822 - provided lazily by module __getattr__
     'CANON_SAFETY_RUNAWAY_LOOP_STORE',
     'InMemoryRunawayLoopStore',
     'RunawayLoopStore',
-    'SCHEMA_VERSION',
-    'SqliteRunawayLoopStore',
+    'SCHEMA_VERSION',  # noqa: F822 - provided lazily by module __getattr__
+    'SqliteRunawayLoopStore',  # noqa: F822 - provided lazily by module __getattr__
 ]
