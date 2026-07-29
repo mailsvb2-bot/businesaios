@@ -51,6 +51,22 @@ if [[ -z "$CONTROL_PLANE_API_KEY_PEPPER" ]]; then
   echo "Could not create a non-empty control-plane API-key pepper for staging proof." >&2
   exit 2
 fi
+DECISION_SIGNING_SECRET="${DECISION_SIGNING_SECRET:-}"
+if [[ -z "$DECISION_SIGNING_SECRET" ]]; then
+  DECISION_SIGNING_SECRET="$("$PYTHON_BIN" -c 'import secrets; print(secrets.token_urlsafe(64))')"
+fi
+if ! DECISION_SIGNING_SECRET="$DECISION_SIGNING_SECRET" "$PYTHON_BIN" - <<'PY_SECRET'
+import os
+
+from core.ai.issuer import require_signing_secret_is_safe
+
+secret = os.environ.get("DECISION_SIGNING_SECRET", "")
+require_signing_secret_is_safe(env="production", secret_raw=secret)
+PY_SECRET
+then
+  echo "Could not create or validate a production-safe decision signing secret." >&2
+  exit 2
+fi
 KEY_PROVIDER_MASTER_KEY_B64="${BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64:-}"
 if [[ -z "$KEY_PROVIDER_MASTER_KEY_B64" ]]; then
   KEY_PROVIDER_MASTER_KEY_B64="$("$PYTHON_BIN" -c 'import base64, secrets; print(base64.b64encode(secrets.token_bytes(32)).decode("ascii"))')"
@@ -131,6 +147,7 @@ docker run -d \
   -e API_PORT="$CONTAINER_PORT" \
   -e ENV=production \
   -e APP_ENV=production \
+  -e DECISION_SIGNING_SECRET="$DECISION_SIGNING_SECRET" \
   -e API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS=0 \
   -e API_CONTROL_PLANE_API_KEY_PEPPER="$CONTROL_PLANE_API_KEY_PEPPER" \
   -e BUSINESAIOS_API_KEY_STORE_BACKEND=file \
