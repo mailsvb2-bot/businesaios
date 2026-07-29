@@ -127,9 +127,9 @@ def __getattr__(name: str):
     return resolve_safety_storage_export("approval", name)
 __all__ = [
     'ApprovalRepository',
-    'CANON_PLATFORM_SAFETY_APPROVAL_REPOSITORY',
+    'CANON_PLATFORM_SAFETY_APPROVAL_REPOSITORY',  # noqa: F822 - provided lazily by module __getattr__
     'CANON_SAFETY_APPROVAL_REPOSITORY',
     'InMemoryApprovalRepository',
-    'SCHEMA_VERSION',
-    'SqliteApprovalRepository',
+    'SCHEMA_VERSION',  # noqa: F822 - provided lazily by module __getattr__
+    'SqliteApprovalRepository',  # noqa: F822 - provided lazily by module __getattr__
 ]
