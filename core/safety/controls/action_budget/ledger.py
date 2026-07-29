@@ -4,11 +4,7 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Protocol
 
-from runtime.platform.safety_action_budget_ledger import (
-    CANON_PLATFORM_SAFETY_ACTION_BUDGET_LEDGER,
-    SCHEMA_VERSION,
-    PlatformSqliteActionBudgetLedger,
-)
+from compatibility.safety_storage_exports import resolve_safety_storage_export
 
 CANON_SAFETY_ACTION_BUDGET_LEDGER = True
 
@@ -36,13 +32,8 @@ class InMemoryActionBudgetLedger:
             self.actions_by_tenant[key] = int(self.actions_by_tenant.get(key, 0)) + 1
 
 
-class SqliteActionBudgetLedger(PlatformSqliteActionBudgetLedger):
-    """Safety-facing action budget ledger facade.
-
-    SQLite ownership lives in runtime.platform.safety_action_budget_ledger.
-    """
-
-
+def __getattr__(name: str):
+    return resolve_safety_storage_export("budget_ledger", name)
 __all__ = [
     'ActionBudgetLedger',
     'CANON_PLATFORM_SAFETY_ACTION_BUDGET_LEDGER',
