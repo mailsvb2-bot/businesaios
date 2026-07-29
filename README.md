@@ -79,7 +79,8 @@ pytest -q
 
 The complete tree runs without a hidden debt registry, wildcard exclusions, skip lists,
 or an xfail baseline. Any failing test is release-blocking until its underlying defect is fixed.
-Every required release workflow must pass on the exact pull-request head SHA before merge.
+Every required release workflow must pass on the exact pull-request head SHA before merge;
+results from an earlier commit are not transferable.
 
 ## Architecture
 
