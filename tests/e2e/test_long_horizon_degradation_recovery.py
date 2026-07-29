@@ -30,6 +30,10 @@ def test_long_horizon_degradation_then_recovery_keeps_one_owner_path(tmp_path) -
     )
     assert degraded_report.steps[0].action == "notify_owner"
     assert degraded_report.final_feedback["capability_planning"]["fallback_used"] is True
+    assert degraded_report.steps[0].status == "approval_required"
+    assert degraded_report.steps[0].attempted is False
+    degraded_owner_path = dict(degraded_report.final_feedback["owner_path"])
+    assert degraded_owner_path["stage_observation_counts"]["verification"] == 0
 
     recovered = build_harness(
         shared_root,
@@ -58,4 +62,4 @@ def test_long_horizon_degradation_then_recovery_keeps_one_owner_path(tmp_path) -
     assert owner_path["resumed_from_previous_run"] is True
     assert owner_path["observation_count"] >= 2
     assert owner_path["stage_observation_counts"]["routing"] >= 2
-    assert owner_path["stage_observation_counts"]["verification"] >= 2
+    assert owner_path["stage_observation_counts"]["verification"] == 1
