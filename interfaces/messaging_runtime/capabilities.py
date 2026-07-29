@@ -30,8 +30,8 @@ DEFAULT_CAPABILITIES: Mapping[str, ChannelCapabilities] = {
     "kakaotalk": ChannelCapabilities("kakaotalk", True, False, True, True, False, False),
     "slack": ChannelCapabilities("slack", True, False, True, True, True, False),
     "discord": ChannelCapabilities("discord", True, False, True, True, True, False),
-    "webchat": ChannelCapabilities("webchat", True, False, True, False, False, False),
-    "api_gateway": ChannelCapabilities("api_gateway", True, False, False, False, True, False),
+    "web_chat": ChannelCapabilities("web_chat", True, False, True, False, False, False),
+    "api": ChannelCapabilities("api", True, False, False, False, True, False),
 }
 
 
@@ -41,4 +41,3 @@ def get_capabilities(channel: str) -> ChannelCapabilities:
         return DEFAULT_CAPABILITIES[canonical]
     except KeyError as exc:
         raise RuntimeError(f"capabilities not configured for channel: {channel}") from exc
-
