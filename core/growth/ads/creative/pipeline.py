@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from typing import Any
 
 from core.ads.ads_service import AdsPlan, AdsService
 from core.llm.agent import LLMAgent, LLMTaskContext, TaskType
+from core.llm.agent.parse import extract_json_block
 from core.llm.contracts import LLMClient, LLMMessage, LLMRequest
 from core.llm.templated import TemplatedLLM
 
@@ -45,7 +47,34 @@ def _parse_labeled_line(line: str) -> tuple[str, str] | None:
     return None
 
 
+def _parse_structured_creative(text: str) -> tuple[str, str, str, str] | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        payload, _remainder = extract_json_block(raw)
+    if not isinstance(payload, dict):
+        return None
+    headline = _clean_text(payload.get("headline"))[:60]
+    primary = _clean_text(
+        payload.get("primary_text") or payload.get("primary")
+    )[:200]
+    description = _clean_text(payload.get("description"))[:90]
+    cta = _CTA_VALUES.get(
+        _clean_text(payload.get("cta")).lower(), "Learn More"
+    )
+    if not headline and not primary and not description:
+        return None
+    return headline, primary, description, cta
+
+
 def _parse_llm_text(text: str) -> tuple[str, str, str, str]:
+    structured = _parse_structured_creative(text)
+    if structured is not None:
+        return structured
+
     headline = ""
     primary = ""
     desc = ""
