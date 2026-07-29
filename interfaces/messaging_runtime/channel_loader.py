@@ -29,12 +29,16 @@ BINDING_BUILDERS = {
     "kakaotalk": build_kakaotalk_binding,
     "slack": build_slack_binding,
     "discord": build_discord_binding,
-    "webchat": build_webchat_binding,
-    "api_gateway": build_api_gateway_binding,
+    "web_chat": build_webchat_binding,
+    "api": build_api_gateway_binding,
 }
 
 
-def load_bindings(*, enabled_channels: tuple[str, ...], senders: dict[str, object] | None = None):
+def load_bindings(
+    *,
+    enabled_channels: tuple[str, ...],
+    senders: dict[str, object] | None = None,
+):
     senders = dict(senders or {})
     bindings = []
     for raw_channel in enabled_channels:
@@ -42,10 +46,11 @@ def load_bindings(*, enabled_channels: tuple[str, ...], senders: dict[str, objec
         try:
             builder = BINDING_BUILDERS[channel]
         except KeyError as exc:
-            raise RuntimeError(f"binding builder not configured for channel: {raw_channel}") from exc
+            raise RuntimeError(
+                f"binding builder not configured for channel: {raw_channel}"
+            ) from exc
         sender = senders.get(raw_channel)
         if sender is None:
             sender = senders.get(channel)
         bindings.append(builder(sender=sender))
     return tuple(bindings)
-
