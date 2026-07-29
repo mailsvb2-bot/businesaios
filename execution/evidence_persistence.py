@@ -1,23 +1,21 @@
-"""Compat shim for application.evidence.evidence_persistence.
-
-Keep owner traces visible for execution-root architecture locks while delegating
-real ownership to application.evidence.evidence_persistence.
-"""
+"""Compatibility facade for the canonical application evidence owner."""
 
 from __future__ import annotations
 
-from execution.evidence_feedback_state import apply_feedback_to_world_state as _apply_feedback_world_state
-from application.evidence.evidence_persistence import EvidencePersistenceService as _OwnerEvidencePersistenceService
-from application.evidence.evidence_persistence import *  # noqa: F401,F403
+from application.evidence.evidence_persistence import (
+    CANON_EVIDENCE_PERSISTENCE,
+    EvidencePersistenceService,
+    PersistenceArtifacts,
+    apply_feedback_to_world_state,
+)
 
-CANON_EVIDENCE_PERSISTENCE = True
 CANON_MEMORY_EVIDENCE_PERSISTENCE = True
+CANON_COMPAT_SHIM = True
 
-class EvidencePersistenceService(_OwnerEvidencePersistenceService):
-    def __init__(self, *args, **kwargs):
-        # self._reliability = EvidencePersistenceReliabilitySupport(
-        super().__init__(*args, **kwargs)
-
-
-def apply_feedback_to_world_state(*args, **kwargs):
-    return _apply_feedback_world_state(*args, **kwargs)
+__all__ = [
+    "CANON_EVIDENCE_PERSISTENCE",
+    "CANON_MEMORY_EVIDENCE_PERSISTENCE",
+    "EvidencePersistenceService",
+    "PersistenceArtifacts",
+    "apply_feedback_to_world_state",
+]
