@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from typing import Any
 
+from contracts.messaging_event_identity import stable_transport_message_id
 from runtime.messaging.channel_normalizer import normalize_channel
 
 PathPart = str | int
@@ -34,7 +35,10 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("message", "text"),
             ("message", "caption"),
             ("callback_query", "data"),
+            ("callback_query", "message", "text"),
+            ("callback_query", "message", "caption"),
             ("edited_message", "text"),
+            ("edited_message", "caption"),
         ),
         "message_id": (
             ("message", "message_id"),
@@ -43,6 +47,7 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
         ),
         "timestamp": (
             ("message", "date"),
+            ("callback_query", "message", "date"),
             ("edited_message", "date"),
         ),
         "name": (
@@ -82,6 +87,7 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
             ("entry", 0, "messaging", 0, "message", "text"),
             ("entry", 0, "messaging", 0, "postback", "title"),
             ("entry", 0, "messaging", 0, "postback", "payload"),
+            ("message",),
         ),
         "message_id": (("entry", 0, "messaging", 0, "message", "mid"),),
         "timestamp": (("entry", 0, "messaging", 0, "timestamp"),),
@@ -209,8 +215,8 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
 _GENERIC_KEYS = {
     "user_id": ("user_id", "from_id", "sender_id", "author_id", "phone", "email", "wa_id"),
     "chat_id": ("chat_id", "peer_id", "conversation_id", "channel_id", "thread_id", "to"),
-    "text": ("text", "body", "message", "caption", "content", "subject", "utterance"),
-    "message_id": ("message_id", "event_id", "update_id", "client_msg_id", "id", "mid"),
+    "text": ("text", "body", "caption", "content", "subject", "utterance"),
+    "message_id": ("update_id", "event_id", "message_id", "client_msg_id", "mid"),
     "timestamp": ("timestamp_ms", "timestamp", "date_ms", "created_at_ms", "event_time", "date", "ts"),
     "locale": ("locale", "language", "lang"),
     "subject": ("subject",),
@@ -234,18 +240,23 @@ def _path_value(payload: Any, path: FieldPath) -> Any:
     return current
 
 
-def _scalar_text(value: Any) -> str:
+def _scalar_value(value: Any) -> Any:
     if value is None or isinstance(value, (Mapping, list, tuple, set)):
-        return ""
-    return str(value).strip()
+        return None
+    return value
 
 
-def _first_path(payload: Mapping[str, Any], paths: tuple[FieldPath, ...]) -> str:
+def _scalar_text(value: Any) -> str:
+    scalar = _scalar_value(value)
+    return "" if scalar is None else str(scalar).strip()
+
+
+def _first_path_value(payload: Mapping[str, Any], paths: tuple[FieldPath, ...]) -> Any:
     for path in paths:
-        value = _scalar_text(_path_value(payload, path))
-        if value:
+        value = _scalar_value(_path_value(payload, path))
+        if value is not None and str(value).strip():
             return value
-    return ""
+    return None
 
 
 def _nested_mappings(payload: Mapping[str, Any], *, limit: int = 256):
@@ -263,18 +274,18 @@ def _nested_mappings(payload: Mapping[str, Any], *, limit: int = 256):
                     queue.extend(item for item in value if isinstance(item, Mapping))
 
 
-def _deep_first(payload: Mapping[str, Any], keys: tuple[str, ...]) -> str:
+def _deep_first_value(payload: Mapping[str, Any], keys: tuple[str, ...]) -> Any:
     for node in _nested_mappings(payload):
         for key in keys:
             if key not in node:
                 continue
-            value = _scalar_text(node.get(key))
-            if value:
+            value = _scalar_value(node.get(key))
+            if value is not None and str(value).strip():
                 return value
-    return ""
+    return None
 
 
-def _timestamp_ms(value: str) -> int:
+def _timestamp_ms(value: Any, *, already_ms: bool = False) -> int:
     raw = str(value or "").strip()
     if not raw:
         return 0
@@ -288,9 +299,40 @@ def _timestamp_ms(value: str) -> int:
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
         return int(parsed.timestamp() * 1000)
-    if numeric <= 0:
+    if numeric < 0:
         return 0
+    if already_ms:
+        return int(numeric)
     return int(numeric if numeric >= 1_000_000_000_000 else numeric * 1000)
+
+
+def _timestamp_from_payload(
+    payload: Mapping[str, Any],
+    explicit_paths: tuple[FieldPath, ...],
+) -> int:
+    for path in explicit_paths:
+        value = _scalar_value(_path_value(payload, path))
+        if value is None:
+            continue
+        parsed = _timestamp_ms(value, already_ms=str(path[-1]).endswith("_ms"))
+        if parsed:
+            return parsed
+    for node in _nested_mappings(payload):
+        for key in _GENERIC_KEYS["timestamp"]:
+            if key not in node:
+                continue
+            parsed = _timestamp_ms(node.get(key), already_ms=key.endswith("_ms"))
+            if parsed:
+                return parsed
+    return 0
+
+
+def _canonical_or_passthrough(channel: str) -> str:
+    raw = str(channel or "").strip().lower().replace("-", "_").replace(" ", "_")
+    try:
+        return normalize_channel(raw)
+    except ValueError:
+        return raw or "unknown"
 
 
 def decode_provider_inbound(
@@ -298,30 +340,49 @@ def decode_provider_inbound(
     channel: str,
     payload: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    canonical = normalize_channel(channel)
+    canonical = _canonical_or_passthrough(channel)
     raw = dict(payload or {})
     paths = _PROVIDER_PATHS.get(canonical, {})
 
-    def field(name: str) -> str:
-        explicit = _first_path(raw, paths.get(name, ()))
-        if explicit:
+    def field_value(name: str) -> Any:
+        explicit = _first_path_value(raw, paths.get(name, ()))
+        if explicit is not None:
             return explicit
-        return _deep_first(raw, _GENERIC_KEYS.get(name, ()))
+        return _deep_first_value(raw, _GENERIC_KEYS.get(name, ()))
 
-    user_id = field("user_id")
-    chat_id = field("chat_id") or user_id
-    timestamp_raw = field("timestamp")
+    def field_text(name: str) -> str:
+        return _scalar_text(field_value(name))
+
+    user_id = field_text("user_id")
+    chat_id = field_text("chat_id")
+    if not user_id:
+        user_id = chat_id
+
+    provider_message_id = _first_path_value(raw, paths.get("message_id", ()))
+    if provider_message_id is None:
+        for key in ("update_id", "event_id", "message_id", "client_msg_id", "id", "mid"):
+            value = _scalar_value(raw.get(key))
+            if value is not None and str(value).strip():
+                provider_message_id = value
+                break
+    if provider_message_id is None:
+        provider_message_id = _deep_first_value(raw, _GENERIC_KEYS["message_id"])
+    message_id = (
+        provider_message_id
+        if provider_message_id is not None and str(provider_message_id).strip()
+        else stable_transport_message_id(channel=canonical, payload=raw)
+    )
     return {
         "channel": canonical,
         "user_id": user_id,
         "chat_id": chat_id,
-        "text": field("text"),
-        "message_id": field("message_id"),
+        "text": field_text("text"),
+        "message_id": message_id,
         "external_user_ref": user_id or chat_id,
-        "timestamp_ms": _timestamp_ms(timestamp_raw),
-        "locale": field("locale") or None,
-        "subject": field("subject") or None,
-        "name": field("name") or None,
+        "timestamp_ms": _timestamp_from_payload(raw, paths.get("timestamp", ())),
+        "locale": field_text("locale") or None,
+        "subject": field_text("subject") or None,
+        "name": field_text("name") or None,
         "raw": raw,
     }
 
