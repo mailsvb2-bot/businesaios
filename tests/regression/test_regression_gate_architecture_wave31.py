@@ -1,26 +1,34 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-ALLOWED_EXECUTE_FILES = {
-    "boot/registrations/register_decision_core.py",
-    "execution/action_dispatcher.py",
-}
+CANONICAL_EXECUTION_OWNER = "boot/runtime_service_contracts.py"
 
 
 def test_no_new_raw_action_executor_execute_calls_escape_canonical_gate() -> None:
-    violations: list[str] = []
+    calls: list[tuple[str, str]] = []
     for path in ROOT.rglob("*.py"):
         rel = path.relative_to(ROOT).as_posix()
         if rel.startswith("tests/"):
             continue
-        text = path.read_text(encoding="utf-8")
-        if "action_executor.execute(" not in text:
-            continue
-        if rel not in ALLOWED_EXECUTE_FILES:
-            violations.append(rel)
-    assert not violations, "Unexpected raw action_executor.execute(...) outside canonical files: " + ", ".join(violations)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            owner = node.func.value
+            if (
+                node.func.attr == "execute"
+                and isinstance(owner, ast.Attribute)
+                and isinstance(owner.value, ast.Name)
+                and owner.value.id == "self"
+                and owner.attr == "action_executor"
+            ):
+                argument = ast.unparse(node.args[0]) if node.args else ""
+                calls.append((rel, argument))
+
+    assert calls == [(CANONICAL_EXECUTION_OWNER, "envelope")]
 
 
 def test_runtime_boot_observability_is_not_silent_or_partial() -> None:
