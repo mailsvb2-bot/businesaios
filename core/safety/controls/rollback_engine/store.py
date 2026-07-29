@@ -83,10 +83,10 @@ def _key(*, tenant_id: str, action_id: str) -> str:
 
 
 __all__ = [
-    'CANON_PLATFORM_SAFETY_ROLLBACK_STORE',
+    'CANON_PLATFORM_SAFETY_ROLLBACK_STORE',  # noqa: F822 - provided lazily by module __getattr__
     'CANON_SAFETY_ROLLBACK_STORE',
     'RollbackPlanStore',
     'InMemoryRollbackPlanStore',
-    'SCHEMA_VERSION',
-    'SqliteRollbackPlanStore',
+    'SCHEMA_VERSION',  # noqa: F822 - provided lazily by module __getattr__
+    'SqliteRollbackPlanStore',  # noqa: F822 - provided lazily by module __getattr__
 ]
