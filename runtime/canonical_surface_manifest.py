@@ -97,6 +97,7 @@ ALLOWED_OPERATOR_NETWORK_PROBES: tuple[str, ...] = (
 )
 
 ALLOWED_NETWORK_LITERAL_SURFACES: tuple[str, ...] = (
+    "canon/sealed_effect_policy.py",
     "runtime/_internal/_effects_impl.py",
     "runtime/_internal/effects_clients/telegram_endpoint.py",
     "runtime/_internal/effects_clients/telegram_client.py",
