@@ -77,14 +77,8 @@ The complete pytest tree can also be run directly:
 pytest -q
 ```
 
-A complete-tree run quarantines only the exact historical node IDs recorded in
-`tests/known_full_suite_debt.txt`. The list is bounded by a canonical lock test,
-contains no wildcards, and is not applied to targeted or canonical CI shards.
-To execute the recorded debt as well:
-
-```bash
-BUSINESAIOS_RUN_KNOWN_FULL_SUITE_DEBT=1 pytest -q
-```
+The complete tree runs without a hidden debt registry, wildcard exclusions, skip lists,
+or an xfail baseline. Any failing test is release-blocking until its underlying defect is fixed.
 
 ## Architecture
 
