@@ -15,6 +15,7 @@ from importlib import import_module
 from typing import Any
 
 from runtime.boot.env import env_bool, env_guard_production_mode, env_str
+from runtime.service_names import RuntimeServiceName
 
 CANON_MAIN_RUNTIME_ENTRYPOINT = True
 CANON_MAIN_USES_RUNTIME_ENTRYPOINT_SHIM = True
@@ -115,7 +116,7 @@ def _run_demo_e2e_smoke() -> None:
     decision_execution = getattr(exports, "decision_execution", None)
     if decision_execution is None:
         raise RuntimeError("demo e2e smoke failed: decision_execution export missing")
-    observability = getattr(exports, "observability", None)
+    observability = getattr(exports, RuntimeServiceName.OBSERVABILITY, None)
     audit_events = getattr(observability, "audit_events", None)
     if callable(audit_events):
         audit_events()
