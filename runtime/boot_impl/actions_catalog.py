@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from core.actions.names import ACTION_ROUTE_LEAD_V1
+from core.actions.names import ACTION_AI_CEO_PLAN_V1, ACTION_ROUTE_LEAD_V1
 
 CANON_BOOT_IMPLEMENTATION_OWNER = True
 SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
@@ -21,7 +21,7 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("ads_rl_train_tick@v1", "runtime.handlers.ads_rl_train_tick:handle_ads_rl_train_tick", True, "ads", 30, 30),
     ("ads_rl_report@v1", "runtime.handlers.ads_rl_report:handle_ads_rl_report", True, "ads", 60, 60),
     ("ads_autopilot_tick@v1", "runtime.handlers.ads_autopilot_tick:handle_ads_autopilot_tick", True, "ads", 30, 30),
-    ("ai_ceo_plan@v1", "runtime.handlers.ai_ceo_plan:handle_ai_ceo_plan", True, "llm", 60, 30),
+    (ACTION_AI_CEO_PLAN_V1, "runtime.handlers.ai_ceo_plan:handle_ai_ceo_plan", True, "llm", 60, 30),
     ("autopilot_decision@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
     ("autopilot_run_started@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
     ("autopilot_started@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
@@ -98,7 +98,7 @@ EXTERNAL_EFFECT_ACTIONS: frozenset[str] = frozenset(
         "ads_autopilot_tick@v1",
         "ads_rl_suggest@v1",
         "ads_rl_train_tick@v1",
-        "ai_ceo_plan@v1",
+        ACTION_AI_CEO_PLAN_V1,
         "apply_pricing_change@v1",
         "capture_payment@v1",
         "create_payment_and_send_link@v1",
