@@ -1,27 +1,39 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from runtime.application.action_dispatcher import ActionDispatcher
 from runtime.domain_ports import DecisionExecutionPort
 
 
-class _DecisionCoreStub:
+class _ExecutionOwnerStub:
     def __init__(self) -> None:
         self.calls: list[object] = []
 
-    def decide_and_execute(self, action: object) -> dict:
-        self.calls.append(action)
-        return {"status": "executed", "action_type": type(action).__name__}
+    def execute(self, envelope: object) -> dict:
+        self.calls.append(envelope)
+        return {
+            "status": "executed",
+            "action_type": envelope.decision.action,
+        }
 
 
-class _Action:
-    pass
-
+def _envelope():
+    return SimpleNamespace(
+        decision=SimpleNamespace(
+            decision_id="decision-1",
+            correlation_id="correlation-1",
+            action="notify_owner@v1",
+            payload={},
+        )
+    )
 
 
 def test_application_and_domain_ports_preserve_single_decision_flow() -> None:
-    core = _DecisionCoreStub()
-    port = DecisionExecutionPort(decision_core=core)
+    owner = _ExecutionOwnerStub()
+    port = DecisionExecutionPort(decision_core=owner)
     dispatcher = ActionDispatcher(decision_execution_port=port)
-    result = dispatcher.dispatch(_Action())
+    envelope = _envelope()
+    result = dispatcher.dispatch(envelope)
     assert result["status"] == "executed"
-    assert len(core.calls) == 1
+    assert owner.calls == [envelope]
