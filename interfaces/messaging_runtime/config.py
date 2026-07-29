@@ -4,6 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from runtime.messaging.channel_normalizer import normalize_channel
+
 
 @dataclass(frozen=True)
 class ChannelProviderConfig:
@@ -49,10 +51,13 @@ def build_default_runtime_config() -> RuntimeConfig:
         "email": ChannelProviderConfig("email", "default-email"),
         "messenger": ChannelProviderConfig("messenger", "default-messenger"),
         "viber": ChannelProviderConfig("viber", "default-viber"),
-        "webchat": ChannelProviderConfig("webchat", "default-webchat"),
-        "api_gateway": ChannelProviderConfig("api_gateway", "default-api-gateway"),
+        "web_chat": ChannelProviderConfig("web_chat", "default-webchat"),
+        "api": ChannelProviderConfig("api", "default-api-gateway"),
     }
-    config = RuntimeConfig(channels=channels, defaults={"queue_limit": 1000, "max_attempts": 3})
+    config = RuntimeConfig(
+        channels=channels,
+        defaults={"queue_limit": 1000, "max_attempts": 3},
+    )
     config.validate()
     return config
 
@@ -62,7 +67,10 @@ def load_runtime_config(raw: dict | None = None) -> RuntimeConfig:
         return build_default_runtime_config()
 
     channels = {}
-    for channel, payload in dict(raw.get("channels", {})).items():
+    for raw_channel, payload in dict(raw.get("channels", {})).items():
+        channel = normalize_channel(raw_channel)
+        if channel in channels:
+            raise ValueError(f"duplicate channel after normalization: {raw_channel}")
         channels[channel] = ChannelProviderConfig(
             channel=channel,
             provider=str(payload.get("provider", "")),
