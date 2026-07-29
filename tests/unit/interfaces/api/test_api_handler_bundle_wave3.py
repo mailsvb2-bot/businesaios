@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 
+from entrypoints.api.request_context import RequestContext
 from interfaces.api.action_models import ExecuteActionRequest
 from interfaces.api.api_handler_bundle import build_api_handler_bundle
 from interfaces.api.headless_models import ExecuteGoalRequest
@@ -12,17 +14,39 @@ class _Service:
     def __init__(self) -> None:
         self.calls = 0
 
-    def execute_action(self, action):
+    def execute_action(self, action, **kwargs):
         self.calls += 1
         return {
             'status': 'ok',
-            'action_type': action.action_type,
+            'action_type': action.decision.action,
             'reason': 'executed',
-            'details': {'echo': dict(action.payload)},
+            'details': {'echo': dict(action.decision.payload), 'kwargs': kwargs},
         }
 
     def startup_audit_events(self):
         return ()
+
+
+class _Binding:
+    def signed_envelope(self, *, action, payload, request_context, action_id):
+        return SimpleNamespace(
+            decision=SimpleNamespace(
+                action=action,
+                payload=dict(payload),
+                decision_id=f"api:{action_id}",
+                correlation_id=request_context.normalized_correlation_id(),
+            )
+        )
+
+
+def _context() -> RequestContext:
+    return RequestContext(
+        request_id="request-1",
+        tenant_id="tenant-a",
+        actor_id="actor-a",
+        subject="subject-a",
+        metadata={"authenticated_principal": True},
+    )
 
 
 class _Contract:
@@ -65,6 +89,9 @@ class _DependencyContainer:
     tenant_quota_guard = None
     api_idempotency_store = None
 
+    def decision_command_binding(self):
+        return _Binding()
+
 
 def test_api_handler_bundle_reuses_one_runtime_provider_and_executes_action_stack() -> None:
     service = _Service()
@@ -76,7 +103,11 @@ def test_api_handler_bundle_reuses_one_runtime_provider_and_executes_action_stac
         headless_runtime_provider=__import__('interfaces.api.headless_runtime_provider', fromlist=['build_headless_runtime_provider']).build_headless_runtime_provider(runtime=runtime),
     )
 
-    response = bundle.route_handlers.execute_action(ExecuteActionRequest(action_type='launch', payload={'x': 1, 'idempotency_key': 'idem-1'}))
+    response = bundle.route_handlers.execute_action(
+        ExecuteActionRequest(action_type='launch', payload={'x': 1, 'idempotency_key': 'idem-1'}),
+        request_context=_context(),
+        action_id='action-1',
+    )
     assert response.status == 'ok'
     assert service.calls == 1
 
