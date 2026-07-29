@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from sqlite3 import Connection
 
-from core.safety.controls.multi_step_approval.models import ApprovalTicket, ApprovalWorkflowState
+from contracts.safety_approval import ApprovalTicket, ApprovalWorkflowState
 from runtime.platform.safety_sqlite_migrations import SafetySqliteMigrator, SchemaMigrationPlan
 
 CANON_PLATFORM_SAFETY_APPROVAL_REPOSITORY = True
