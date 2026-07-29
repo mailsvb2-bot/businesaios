@@ -13,7 +13,6 @@ from adapters.api.fastapi.dependencies import FastAPIBootResult, FastAPIDependen
 from bootstrap.health_server import start_health_server
 from bootstrap.runtime_boot import build_runtime_orchestrator
 from bootstrap.security_boot_surface import build_security_boot_surface
-from entrypoints.api.action_models import ExecuteActionRequest
 from entrypoints.api.api_key_policy import PersistentApiKeyStore
 from entrypoints.api.fastapi_app_factory import create_fastapi_app
 from governance.rbac_contract import RoleId

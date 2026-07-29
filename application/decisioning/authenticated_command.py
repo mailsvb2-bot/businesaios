@@ -12,7 +12,8 @@ import hashlib
 import json
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from typing import Any
 
 from application.decisioning.decision_command import DecisionCommand
 from entrypoints.api.request_context import RequestContext

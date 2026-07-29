@@ -170,6 +170,17 @@ def _remove_runtime_artifacts() -> None:
     _unlink_matching_files(ROOT / "security", ("*.jsonl",))
     _unlink_matching_files(ROOT, ("wave*_*.txt",))
 
+    # Runtime stores must never leak into the source tree. Release-integrity
+    # tests request this cleanup explicitly before checking repository hygiene.
+    mutable_data_root = ROOT / "data"
+    if mutable_data_root.exists():
+        for pattern in ("*.sqlite", "*.sqlite3", "*.db", "*.sqlite-wal", "*.sqlite-shm", "*.sqlite3-wal", "*.sqlite3-shm", "*.db-wal", "*.db-shm"):
+            for path in mutable_data_root.rglob(pattern):
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    pass
+
     if os.environ.get("BUSINESAIOS_DEEP_TEST_CLEANUP", "").strip() == "1":
         for path in ROOT.rglob("__pycache__"):
             if path.is_dir():
