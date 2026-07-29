@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from billing.dispute_policy import DisputeClassification
-from core.tenancy.normalization import require_tenant_id
+from contracts.tenant_identity import require_tenant_id
 
 CANON_PLATFORM_BILLING_DISPUTE_STORE = True
 DISPUTE_SCHEMA_VERSION = 1
