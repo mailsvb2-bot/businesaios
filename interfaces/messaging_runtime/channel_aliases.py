@@ -1,11 +1,19 @@
+"""Interface compatibility surface for canonical runtime channel names."""
+
 from __future__ import annotations
 
-CANONICAL_CHANNEL_ALIASES = {
-    'web_chat': 'webchat',
-    'api': 'api_gateway',
-}
+from runtime.messaging.channel_normalizer import normalize_channel
+
+CANON_MESSAGING_RUNTIME_CHANNEL_NORMALIZER_DELEGATE = True
 
 
 def canonical_channel_name(channel: str) -> str:
-    key = str(channel or '').strip()
-    return CANONICAL_CHANNEL_ALIASES.get(key, key)
+    """Normalize legacy/provider spellings through the sole runtime owner."""
+
+    return normalize_channel(channel)
+
+
+__all__ = [
+    "CANON_MESSAGING_RUNTIME_CHANNEL_NORMALIZER_DELEGATE",
+    "canonical_channel_name",
+]
