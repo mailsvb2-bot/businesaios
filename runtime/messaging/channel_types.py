@@ -1,41 +1,29 @@
+"""Runtime compatibility surface for the canonical messaging channel catalog."""
+
 from __future__ import annotations
 
-CHANNEL_TELEGRAM = "telegram"
-CHANNEL_WHATSAPP = "whatsapp"
-CHANNEL_VK = "vk"
-CHANNEL_MAX = "max"
-CHANNEL_SMS = "sms"
-CHANNEL_EMAIL = "email"
-CHANNEL_MESSENGER = "messenger"
-CHANNEL_INSTAGRAM = "instagram"
-CHANNEL_WEB_CHAT = "web_chat"
-CHANNEL_API = "api"
-CHANNEL_LINE = "line"
-CHANNEL_WECHAT = "wechat"
-CHANNEL_KAKAOTALK = "kakaotalk"
-CHANNEL_VIBER = "viber"
-CHANNEL_SLACK = "slack"
-CHANNEL_DISCORD = "discord"
-
-ALL_CHANNELS = (
-    CHANNEL_TELEGRAM,
-    CHANNEL_WHATSAPP,
-    CHANNEL_VK,
-    CHANNEL_MAX,
-    CHANNEL_SMS,
-    CHANNEL_EMAIL,
-    CHANNEL_MESSENGER,
-    CHANNEL_INSTAGRAM,
-    CHANNEL_WEB_CHAT,
+from contracts.messaging_channels import (
+    ALL_CHANNELS,
     CHANNEL_API,
-    CHANNEL_LINE,
-    CHANNEL_WECHAT,
-    CHANNEL_KAKAOTALK,
-    CHANNEL_VIBER,
-    CHANNEL_SLACK,
     CHANNEL_DISCORD,
+    CHANNEL_EMAIL,
+    CHANNEL_INSTAGRAM,
+    CHANNEL_KAKAOTALK,
+    CHANNEL_LINE,
+    CHANNEL_MAX,
+    CHANNEL_MESSENGER,
+    CHANNEL_SLACK,
+    CHANNEL_SMS,
+    CHANNEL_TELEGRAM,
+    CHANNEL_VIBER,
+    CHANNEL_VK,
+    CHANNEL_WEB_CHAT,
+    CHANNEL_WECHAT,
+    CHANNEL_WHATSAPP,
 )
 
+# Mutable-list compatibility for historical callers. Channel identity remains
+# owned exclusively by contracts.messaging_channels.ALL_CHANNELS.
 CHANNELS = list(ALL_CHANNELS)
 
 __all__ = [
