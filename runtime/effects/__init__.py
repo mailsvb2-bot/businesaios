@@ -74,6 +74,16 @@ def start_yookassa_webhook_server_in_thread(*, host: str, port: int, path: str, 
 
 # -------- HTTP (network facade) --------
 
+def telegram_method_url(token: str, method: str) -> str:
+    """Build a Telegram API method URL through the explicit effects boundary."""
+
+    with allow_internal_import():
+        from runtime._internal.effects_clients.telegram_endpoint import (
+            telegram_method_url as _build_telegram_method_url,
+        )
+    return _build_telegram_method_url(token, method)
+
+
 def http_get(*, url: str, headers: dict, params: dict | None = None, timeout_s: int = 30):
     return _effects_impl().http_get(url=url, headers=headers, params=params, timeout_s=timeout_s)
 
@@ -151,6 +161,7 @@ __all__ = [
     "start_health_server_in_thread",
     "start_telegram_webhook_server_in_thread",
     "start_yookassa_webhook_server_in_thread",
+    "telegram_method_url",
     "http_get",
     "http_post",
     "http_json",
