@@ -3,11 +3,12 @@ from __future__ import annotations
 from contracts.decisioning.recommendation_packet_contract import RecommendationPacketContract
 from contracts.decisioning.world_state_contract import WorldStateContract
 from runtime.audit_log import RuntimeAuditLog
-from runtime.decision_gateway import DecisionGateway
+from runtime.decision_gateway import DecisionGateway, build_runtime_decision_callable
 from runtime.decision_input.decision_input_service import DecisionInputService
 from runtime.decision_input.runtime_state_enrichment import RuntimeStateEnrichmentService
 from runtime.integration.decision_input_packet import DecisionInputPacket
 from runtime.runtime_observability import RuntimeObservability
+from tests.e2e._capturing_decision_issuer import CapturingDecisionIssuer
 
 
 def test_decision_gateway_only_enriches_and_calls_core() -> None:
@@ -41,14 +42,15 @@ def test_decision_gateway_only_enriches_and_calls_core() -> None:
         )
     )
 
-    def fake_core(ctx: dict[str, object]) -> dict[str, object]:
-        assert "external_world_state_features" in ctx
-        assert "winner" not in ctx
-        return {"ok": True}
+    issuer = CapturingDecisionIssuer()
 
     result = gateway.route(
         packet=packet,
         canonical_context={"base": 1},
-        decision_core_callable=fake_core,
+        decision_core_callable=build_runtime_decision_callable(issuer=issuer),
     )
-    assert result == {"ok": True}
+    assert result.decision.decision_id == issuer.decision_id
+    assert len(issuer.captured_states) == 1
+    context = issuer.captured_states[0]
+    assert "external_world_state_features" in context
+    assert "winner" not in context
