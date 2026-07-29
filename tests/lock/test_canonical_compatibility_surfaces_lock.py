@@ -14,7 +14,6 @@ from application.planning.strategy_memory import (
 )
 from core.ai import (
     _reset_decision_core_singleton_for_tests,
-    set_decision_core_singleton,
 )
 from core.strategic_horizon import constants, engine
 from execution.long_horizon_planner import LongHorizonPlanner
