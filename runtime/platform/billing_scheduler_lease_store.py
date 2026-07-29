@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from core.tenancy.normalization import require_tenant_id
+from contracts.tenant_identity import require_tenant_id
 
 CANON_PLATFORM_BILLING_SCHEDULER_LEASE_STORE = True
 LEASE_SCHEMA_VERSION = 1
