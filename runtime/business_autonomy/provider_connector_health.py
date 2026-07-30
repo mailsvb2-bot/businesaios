@@ -9,7 +9,6 @@ from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_CONNECTOR_HEALTH = True
-
 _REQUIRED_BY_PROVIDER = {
     'telegram_bot': ('bot_token',),
     'whatsapp_cloud': ('access_token', 'phone_number_id'),
@@ -71,19 +70,15 @@ class ProviderConnectorHealthService:
                 missing.append(field_key)
         if missing:
             return ProviderHealthProbeResult(
-                provider_key=provider.provider_key,
-                status='misconfigured',
-                probe_mode=mode,
-                reason='missing_required_secrets',
+                provider_key=provider.provider_key, status='misconfigured',
+                probe_mode=mode, reason='missing_required_secrets',
                 metadata={'missing_fields': tuple(missing), 'present_fields': tuple(present)},
             )
         shallow = self._shallow_validate(provider_key=provider.provider_key, tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id)
         if not shallow[0]:
             return ProviderHealthProbeResult(
-                provider_key=provider.provider_key,
-                status='invalid_secret_shape',
-                probe_mode=mode,
-                reason=shallow[1],
+                provider_key=provider.provider_key, status='invalid_secret_shape',
+                probe_mode=mode, reason=shallow[1],
                 metadata={'present_fields': tuple(present)},
             )
         live_ready = bool(provider_transport_binding_for_key(provider.provider_key).get('live_ready'))
@@ -94,8 +89,7 @@ class ProviderConnectorHealthService:
                 metadata={'present_fields': tuple(present), 'live_probe_supported': False},
             )
         return ProviderHealthProbeResult(
-            provider_key=provider.provider_key,
-            status='ready_for_live_probe' if mode == 'live' else 'ready_for_credentials',
+            provider_key=provider.provider_key, status='ready_for_live_probe' if mode == 'live' else 'ready_for_credentials',
             probe_mode=mode, reason='validated_secret_shape',
             metadata={'present_fields': tuple(present), 'live_probe_supported': live_ready},
         )
