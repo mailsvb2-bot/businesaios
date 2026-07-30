@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from typing import Any
 
 from scripts.ci.paths import repo_root
 
@@ -35,6 +36,43 @@ FORBIDDEN_MARKERS = {
     "getrandom",
     "proptest",
 }
+
+
+def _compact_diagnostic(value: object, *, limit: int = 2000) -> str:
+    text = str(value or "").strip().replace("\x00", "")
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "...<truncated>"
+
+
+def _parse_audit_json(stdout: str) -> dict[str, Any] | None:
+    text = str(stdout or "").strip()
+    if not text:
+        return None
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _audit_failure_kind(*, returncode: int | None, payload: dict[str, Any] | None, stderr: str) -> str:
+    if returncode is None:
+        return "tool_error"
+    if payload is not None:
+        vulnerabilities = payload.get("vulnerabilities")
+        if isinstance(vulnerabilities, dict):
+            found = vulnerabilities.get("found")
+            count = vulnerabilities.get("count")
+            if found is True or (isinstance(count, int) and count > 0):
+                return "vulnerabilities_found"
+        warnings = payload.get("warnings")
+        if isinstance(warnings, dict) and any(bool(value) for value in warnings.values()):
+            return "policy_warning"
+    lowered = str(stderr or "").lower()
+    if any(marker in lowered for marker in ("network", "failed to fetch", "could not resolve", "connection", "database")):
+        return "database_or_network_error"
+    return "audit_command_failed"
 
 
 def _package_names(lock_text: str) -> set[str]:
@@ -95,14 +133,42 @@ def run() -> tuple[bool, str]:
     for marker in sorted(FORBIDDEN_MARKERS):
         if marker in lowered:
             violations.append(f"forbidden_dependency_marker:{marker}")
+
     cargo_audit = shutil.which("cargo-audit") or shutil.which("cargo-audit.exe")
     audit_available = cargo_audit is not None
     audit_status = "unavailable"
+    audit_returncode: int | None = None
+    audit_stdout = ""
+    audit_stderr = ""
+    audit_payload: dict[str, Any] | None = None
+    audit_failure_kind: str | None = None
     if cargo_audit is not None:
-        completed = subprocess.run([cargo_audit, "audit"], cwd=crate, capture_output=True, text=True, timeout=180)
-        audit_status = "passed" if completed.returncode == 0 else "failed"
-        if completed.returncode != 0:
+        try:
+            completed = subprocess.run(
+                [cargo_audit, "audit", "--json"],
+                cwd=crate,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+            audit_returncode = int(completed.returncode)
+            audit_stdout = _compact_diagnostic(completed.stdout)
+            audit_stderr = _compact_diagnostic(completed.stderr)
+            audit_payload = _parse_audit_json(completed.stdout)
+            audit_status = "passed" if completed.returncode == 0 else "failed"
+            if completed.returncode != 0:
+                audit_failure_kind = _audit_failure_kind(
+                    returncode=audit_returncode,
+                    payload=audit_payload,
+                    stderr=completed.stderr,
+                )
+                violations.append("cargo_audit_failed")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            audit_status = "failed"
+            audit_failure_kind = "tool_error"
+            audit_stderr = _compact_diagnostic(f"{type(exc).__name__}: {exc}")
             violations.append("cargo_audit_failed")
+
     report = {
         "artifact": "rust_supply_chain",
         "passed": not violations,
@@ -112,11 +178,23 @@ def run() -> tuple[bool, str]:
         "lock_packages": sorted(lock_packages),
         "cargo_audit_available": audit_available,
         "cargo_audit_status": audit_status,
+        "cargo_audit_returncode": audit_returncode,
+        "cargo_audit_failure_kind": audit_failure_kind,
+        "cargo_audit_stdout": audit_stdout,
+        "cargo_audit_stderr": audit_stderr,
+        "cargo_audit_report": audit_payload,
         "violations": violations,
     }
     _write_report(report)
     if violations:
-        return False, "rust safety supply chain violations: " + ", ".join(violations[:5])
+        message = "rust safety supply chain violations: " + ", ".join(violations[:5])
+        if "cargo_audit_failed" in violations:
+            detail = audit_stderr or audit_stdout or "no cargo-audit diagnostic output"
+            message += (
+                f"; cargo_audit_failure_kind={audit_failure_kind or 'unknown'}"
+                f"; returncode={audit_returncode!r}; detail={_compact_diagnostic(detail, limit=800)}"
+            )
+        return False, message
     suffix = "cargo-audit unavailable; allowlist policy passed" if not audit_available else "cargo-audit passed; allowlist policy passed"
     return True, f"rust safety supply chain diagnostic passed ({suffix})"
 
