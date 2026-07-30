@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-import subprocess
+from pathlib import Path
 
+from tests._infra.tracked_files import tracked_files
 
-def _tracked(pattern: str) -> tuple[str, ...]:
-    completed = subprocess.run(
-        ["git", "ls-files", pattern],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return tuple(line.strip() for line in completed.stdout.splitlines() if line.strip())
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_runtime_jsonl_artifacts_are_not_tracked() -> None:
-    offenders = _tracked("runtime/data/**/*.jsonl")
+    offenders = tuple(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in tracked_files(REPO_ROOT, "runtime/data/**/*.jsonl")
+    )
     assert offenders == ()
