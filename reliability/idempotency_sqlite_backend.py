@@ -20,6 +20,7 @@ from reliability.idempotency_backend import (
 from reliability.idempotency_contract import IdempotencyKey, IdempotencyRecord, IdempotencyState
 
 CANON_IDEMPOTENCY_SQLITE_BACKEND = True
+SQLiteBackendError = sqlite3.Error
 _IDEMPOTENCY_SCHEMA_VERSION = 1
 
 
@@ -381,6 +382,7 @@ class SQLiteIdempotencyStore(BaseBackendIdempotencyStore):
 __all__ = [
     'CANON_IDEMPOTENCY_BACKEND',
     'CANON_IDEMPOTENCY_SQLITE_BACKEND',
+    'SQLiteBackendError',
     'SQLiteIdempotencyBackend',
     'SQLiteIdempotencyStore',
 ]

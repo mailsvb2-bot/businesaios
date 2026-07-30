@@ -34,11 +34,27 @@ class _Env:
 
 
 class _BrokenIdempotencyStore:
+    def get(self, *, key):
+        return IdempotencyRecord(idempotency_key=key, state=IdempotencyState.IN_PROGRESS, owner_id="runtime-executor")
+
     def mark_completed(self, **kwargs):
         raise RuntimeError("completion persistence unavailable")
 
     def mark_failed(self, **kwargs):
         raise RuntimeError("failure persistence unavailable")
+
+
+class _MissingOrTerminalIdempotencyStore:
+    def __init__(self, record):
+        self.record = record
+
+    def get(self, *, key):
+        return self.record
+
+    def mark_completed(self, **kwargs):
+        raise AssertionError("terminal or missing record must not be mutated")
+
+    mark_failed = mark_completed
 
 
 class _BrokenRecovery:
@@ -89,6 +105,16 @@ def test_runtime_reliability_completion_and_failure_persistence_fail_closed() ->
         runtime.mark_completed(_env())
     with pytest.raises(RuntimeError, match="failure persistence unavailable"):
         runtime.mark_failed(_env(), reason="dispatch failed")
+
+
+def test_runtime_reliability_missing_or_terminal_reservation_is_explicit_noop() -> None:
+    env = _env()
+    _runtime(idempotency_store=_MissingOrTerminalIdempotencyStore(None)).mark_completed(env)
+    key = _runtime().idempotency_key_for_env(env)
+    completed = IdempotencyRecord(idempotency_key=key, state=IdempotencyState.COMPLETED, owner_id="runtime-executor")
+    runtime = _runtime(idempotency_store=_MissingOrTerminalIdempotencyStore(completed))
+    runtime.mark_completed(env)
+    runtime.mark_failed(env, reason="late failure")
 
 
 def test_runtime_reliability_reconciliation_failure_is_visible() -> None:
