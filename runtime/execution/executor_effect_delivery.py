@@ -24,14 +24,14 @@ def attach_effect_delivery_metadata(self, *, env, output: Mapping[str, Any] | No
     }
     outbox = getattr(self, '_outbox', None)
     if outbox is not None:
-        try:
-            row = get_delivery_info(
-                outbox,
-                decision_id=decision_id,
-                tenant_id=_decision_tenant_id(decision),
-            )
-        except Exception:
-            row = None
+        # Delivery metadata is part of the success contract. A failed outbox read
+        # is not equivalent to an absent row and must not be converted into a
+        # successful response with unverifiable delivery state.
+        row = get_delivery_info(
+            outbox,
+            decision_id=decision_id,
+            tenant_id=_decision_tenant_id(decision),
+        )
         if isinstance(row, Mapping):
             delivery['runtime_outbox_status'] = row.get('status') or row.get('state')
             delivery['runtime_outbox_retry_count'] = row.get('retry_count') or row.get('delivery_attempts')
@@ -47,8 +47,8 @@ def attach_effect_delivery_metadata(self, *, env, output: Mapping[str, Any] | No
         delivery['transport_meta'] = handler_meta
     reliability = getattr(self, '_reliability', None)
     if reliability is not None and hasattr(reliability, 'reconcile'):
-        try:
-            delivery['reconciliation'] = reliability.reconcile(env)
-        except Exception:
-            delivery['reconciliation'] = None
+        # Reconciliation verifies that the persisted execution state agrees with
+        # the outbox result. Propagate failures so callers never receive a false
+        # success when this verification could not be completed.
+        delivery['reconciliation'] = reliability.reconcile(env)
     return {**payload, 'effect_delivery': delivery}
