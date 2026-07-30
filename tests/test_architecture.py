@@ -95,7 +95,15 @@ def test_no_private_internal_imports_outside_executor():
         # import other runtime/_internal modules.
         if rel.startswith(("runtime/_internal/", "tests/")):
             continue
-        if rel in ("runtime/executor.py", "runtime/effects.py", "tests/test_architecture.py"):
+        if rel in (
+            "runtime/executor.py",
+            "runtime/effects.py",
+            "runtime/effects/__init__.py",
+            "runtime/execution/provider_outbound_sender.py",
+            "tests/test_architecture.py",
+        ):
+            # The exact guarded/identity-only shapes of the two public facades
+            # are enforced by tests/test_no_runtime_internal_imports_ast.py.
             continue
         tree = _parse(py)
         for node in ast.walk(tree):

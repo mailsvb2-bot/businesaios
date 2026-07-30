@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -14,8 +15,10 @@ CRATE_MANIFEST = Path("rust/businessaios_safety_core/Cargo.toml")
 
 
 @pytest.mark.skipif(shutil.which("cargo") is None, reason="cargo is required for Rust safety parity")
-def test_python_and_rust_safety_core_match_golden_fixtures_exactly() -> None:
+def test_python_and_rust_safety_core_match_golden_fixtures_exactly(tmp_path: Path) -> None:
     payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
+    env = os.environ.copy()
+    env["CARGO_TARGET_DIR"] = str(tmp_path / "cargo-target")
     completed = subprocess.run(
         [
             "cargo",
@@ -32,6 +35,7 @@ def test_python_and_rust_safety_core_match_golden_fixtures_exactly() -> None:
         check=True,
         capture_output=True,
         text=True,
+        env=env,
     )
     rust_report = json.loads(completed.stdout)
     assert rust_report["passed"] is True
