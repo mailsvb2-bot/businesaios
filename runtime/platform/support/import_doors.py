@@ -49,7 +49,7 @@ def _physical_module_path(fullname: str) -> Path | None:
 
 
 RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS = _load_runtime_platform_support_import_doors()
-
+RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS["runtime.platform.support.storage.artifacts"] = {name: "runtime.platform.support.storage.generated_stores" for name in ("ArtifactStore", "CheckpointStore", "EvaluationStore", "ModelArtifactStore", "PackagingStore", "ReportStore", "SignatureStore")}
 
 class _RuntimePlatformSupportDoorFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
     def find_spec(self, fullname: str, path=None, target=None):
@@ -57,7 +57,7 @@ class _RuntimePlatformSupportDoorFinder(importlib.abc.MetaPathFinder, importlib.
             return None
         if _physical_module_path(fullname) is not None:
             return None
-        return importlib.machinery.ModuleSpec(fullname, self)
+        return importlib.machinery.ModuleSpec(fullname, self, is_package=any(name.startswith(f"{fullname}.") for name in RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS))
 
     def create_module(self, spec):
         return ModuleType(spec.name)
