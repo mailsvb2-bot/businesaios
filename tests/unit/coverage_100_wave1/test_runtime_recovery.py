@@ -55,7 +55,8 @@ def _env(*, decision_id: str = "decision-1", tenant_id: str | None = "tenant-a",
 
 def test_recovery_helpers_normalize_plans_ids_and_tenants(monkeypatch: pytest.MonkeyPatch) -> None:
     assert recovery._recovery_plan(executor=SimpleNamespace(), env=object()) is None
-    assert recovery._recovery_plan(executor=_Executor(plan_failure=True), env=object()) is None
+    with pytest.raises(RuntimeError, match="plan"):
+        recovery._recovery_plan(executor=_Executor(plan_failure=True), env=object())
     assert recovery._plan_action(None) == ""
     assert recovery._plan_action(SimpleNamespace(recovery_action=" Retry ")) == "retry"
     assert recovery._resolve_recovery_action(executor=_Executor(action="WAIT"), env=object()) == "wait"
@@ -72,7 +73,7 @@ def test_recovery_helpers_normalize_plans_ids_and_tenants(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(recovery, "_decision_tenant_id", lambda decision: "tenant-env")
     assert recovery._env_tenant_id(env=_env(), item={"tenant_id": "tenant-item"}) == "tenant-env"
-    monkeypatch.setattr(recovery, "_decision_tenant_id", lambda decision: (_ for _ in ()).throw(RuntimeError("bad")))
+    monkeypatch.setattr(recovery, "_decision_tenant_id", lambda decision: "")
     assert recovery._env_tenant_id(env=_env(), item={"tenant_id": "tenant-item"}) == "tenant-item"
     no_decision = SimpleNamespace(decision=None, metadata={"tenant_id": "tenant-meta"})
     assert recovery._resolve_recovery_tenant_id(env=no_decision, item={}) == "tenant-meta"
@@ -86,6 +87,9 @@ def test_iter_recoverable_items_supports_all_legacy_surfaces_and_zero_limit() ->
     all_box = SimpleNamespace(list_claimable_all=lambda *, limit: [_Item(), None])
     assert len(tuple(recovery._iter_recoverable_items(outbox=all_box, limit=2))) == 2
     assert recovery._iter_recoverable_items(outbox=all_box, limit=0) == ()
+    warnings: list[str] = []
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(recovery, "_warn_recovery_issue", lambda **kwargs: warnings.append(kwargs["key"]))
     bad_all = SimpleNamespace(list_claimable_all=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
     assert recovery._iter_recoverable_items(outbox=bad_all, limit=1) == ()
 
@@ -114,6 +118,8 @@ def test_iter_recoverable_items_supports_all_legacy_surfaces_and_zero_limit() ->
     assert tuple(recovery._iter_recoverable_items(outbox=pending, limit=1))[0]["decision_id"] == "decision-1"
     pending_bad = SimpleNamespace(list_pending=lambda **kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
     assert recovery._iter_recoverable_items(outbox=pending_bad, limit=1) == ()
+    assert warnings == ["recovery.outbox.list_claimable_all", "recovery.outbox.list_claimable", "recovery.outbox.list_claimable", "recovery.outbox.list_pending"]
+    monkeypatch.undo()
 
 
 def test_claim_terminal_and_quarantine_helpers_are_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -124,10 +130,13 @@ def test_claim_terminal_and_quarantine_helpers_are_fail_closed(monkeypatch: pyte
     assert calls == []
     assert recovery._ensure_claim_or_skip(outbox=object(), item={}) is False
 
+    warnings: list[dict] = []
+    monkeypatch.setattr(recovery, "_warn_recovery_issue", lambda **kwargs: warnings.append(kwargs))
     monkeypatch.setattr(recovery, "get_delivery_info", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
-    assert recovery._ensure_claim_or_skip(outbox=object(), item={"decision_id": "d", "tenant_id": "t", "state": "delivering"}) is True
+    assert recovery._ensure_claim_or_skip(outbox=object(), item={"decision_id": "d", "tenant_id": "t", "state": "delivering"}) is False
     monkeypatch.setattr(recovery, "claim_or_skip", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("bad")))
     assert recovery._ensure_claim_or_skip(outbox=object(), item={"decision_id": "d"}) is False
+    assert [item["key"] for item in warnings] == ["recovery.claim.ownership_read", "recovery.claim.acquire"]
 
     quarantine: list[tuple[object, str]] = []
     terminal: list[tuple[object, str]] = []
@@ -144,13 +153,14 @@ def test_claim_terminal_and_quarantine_helpers_are_fail_closed(monkeypatch: pyte
     recovery._quarantine_item(outbox=object(), env=existing, item={"decision_id": "d"}, reason="existing")
     recovery._finalize_terminal_skip(outbox=object(), env=existing, item={"decision_id": "d"}, reason="existing")
 
-    warnings: list[dict] = []
+    warnings = []
     monkeypatch.setattr(recovery, "_warn_recovery_issue", lambda **kwargs: warnings.append(kwargs))
     monkeypatch.setattr(recovery, "quarantine_recovery_outcome", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("q")))
     monkeypatch.setattr(recovery, "finalize_terminal_recovery_outcome", lambda **kwargs: (_ for _ in ()).throw(RuntimeError("s")))
     recovery._quarantine_item(outbox=object(), env=existing, item={"decision_id": "d"}, reason="q")
-    recovery._finalize_terminal_skip(outbox=object(), env=existing, item={"decision_id": "d"}, reason="s")
-    assert {item["key"] for item in warnings} == {"recovery.dead_letter.move", "recovery.terminal_skip.finalize"}
+    with pytest.raises(RuntimeError, match="s"):
+        recovery._finalize_terminal_skip(outbox=object(), env=existing, item={"decision_id": "d"}, reason="s")
+    assert {item["key"] for item in warnings} == {"recovery.dead_letter.move"}
 
 
 def test_non_resume_actions_and_failure_classification(monkeypatch: pytest.MonkeyPatch) -> None:
