@@ -1,0 +1,69 @@
+name: Apply reviewed execution reliability patch
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/apply-execution-reliability-wave1-pr.yml
+      - .github/workflows/apply-execution-reliability-wave1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.lock.txt
+      - name: Extract and apply reviewed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_workflow=.github/workflows/apply-execution-reliability-wave1.yml
+          sed -n "/<<'PATCH_B64'/,/^PATCH_B64$/p" "$source_workflow" | sed '1d;$d' > /tmp/wave1.patch.gz.b64
+          test -s /tmp/wave1.patch.gz.b64
+          base64 -d /tmp/wave1.patch.gz.b64 | gzip -d > /tmp/wave1.patch
+          git apply --check /tmp/wave1.patch
+          git apply /tmp/wave1.patch
+      - name: Validate fail-closed contour
+        run: |
+          python -m compileall -q \
+            reliability/idempotency_sqlite_backend.py \
+            runtime/execution/reliability_runtime.py \
+            runtime/execution/outcome_persistence_lock.py \
+            runtime/execution/executor_reliability.py \
+            runtime/execution/executor_stages.py \
+            tests/unit/runtime/test_execution_reliability_fail_closed.py \
+            tests/lock/test_execution_reliability_exception_contract.py
+          python -m pytest -q \
+            tests/reliability \
+            tests/unit/runtime/test_execution_reliability_fail_closed.py \
+            tests/unit/runtime/test_outcome_persistence_lock_wave4.py \
+            tests/unit/runtime/execution/test_headless_failure_boundary.py \
+            tests/arch/test_wave4_outcome_persistence_single_owner.py \
+            tests/arch/test_wave4_recovery_persistence_terminal_owner.py \
+            tests/lock/test_execution_reliability_exception_contract.py \
+            tests/unit/coverage/test_broad_top_gap_import_contract_wave4.py
+      - name: Publish only product and regression changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f \
+            .github/workflows/apply-execution-reliability-wave1.yml \
+            .github/workflows/apply-execution-reliability-wave1-pr.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fail closed on execution reliability persistence'
+          git push origin HEAD:agent/execution-reliability-fail-closed-wave1
