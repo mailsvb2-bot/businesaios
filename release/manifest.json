@@ -4,7 +4,7 @@
     "assets/audio/demo/work.opus": "238c0d1ff51975078a9fc8565968d46ce351e0a1113af5083dc6b2f6d4fe06a8",
     "data/plans.json": "d936437253516c26f25dac8c61b93c6e26c6ffc90e3810d0bc9cf0fc220a07f6"
   },
-  "release_tag": "v26.4.3-v27",
+  "release_tag": "v26.5.0-v28",
   "schema_version": 1,
-  "version": "26.4.3"
+  "version": "26.5.0"
 }
