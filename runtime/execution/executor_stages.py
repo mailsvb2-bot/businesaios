@@ -127,16 +127,26 @@ def _review_product_capability(*, executor: Any, env: Any) -> None:
 
 def dispatch_effects(*, executor: Any, env: Any, depth: int, enqueue: bool):
     ck = executor._extract_ck(str(env.decision.snapshot_id))
+    queue_metadata: dict[str, Any] = {}
     if enqueue:
         enqueue_once(executor._outbox, decision=env.decision)
         queue_metadata = build_delivery_metadata(decision=env.decision, mode="enqueue", owner_id="runtime-executor")
-        _checkpoint(executor=executor, env=env, stage="queue_dispatch", payload={"mode": "outbox", "enqueued": True, **queue_metadata})
         _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_outbox_enqueued", payload={"action": str(env.decision.action), "outbox_mode": "enqueue_once", **queue_metadata})
     if not executor._claim_or_skip_outbox(env):
-        _checkpoint(executor=executor, env=env, stage="execution", payload={"status": "already_claimed"})
+        _checkpoint(
+            executor=executor,
+            env=env,
+            stage="execution",
+            payload={"status": "already_claimed", "enqueue": bool(enqueue), **queue_metadata},
+        )
         _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_claim_skipped", payload={"reason": "already_claimed"})
         return executor._already_claimed_result(env)
-    _checkpoint(executor=executor, env=env, stage="execution", payload={"enqueue": bool(enqueue), "claimed": True})
+    _checkpoint(
+        executor=executor,
+        env=env,
+        stage="execution",
+        payload={"enqueue": bool(enqueue), "claimed": True, **queue_metadata},
+    )
     check_and_emit_world_model_pin(
         event_log=executor._events,
         snapshot_store=executor._snapshot_store,
