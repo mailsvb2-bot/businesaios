@@ -4,11 +4,11 @@ from dataclasses import dataclass
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderHealthProbeResult
+from runtime.business_autonomy.provider_transport_bindings import provider_transport_binding_for_key
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_CONNECTOR_HEALTH = True
-
 _REQUIRED_BY_PROVIDER = {
     'telegram_bot': ('bot_token',),
     'whatsapp_cloud': ('access_token', 'phone_number_id'),
@@ -26,11 +26,11 @@ _REQUIRED_BY_PROVIDER = {
     'ozon_marketplace': ('client_id', 'api_key'),
     'hubspot': ('private_app_token',),
     'meta_ads': ('access_token', 'account_id'),
-    'google_ads': ('refresh_token', 'customer_id', 'developer_token'),
+    'google_ads': ('developer_token', 'refresh_token', 'client_id', 'client_secret'),
     'tiktok_ads': ('access_token', 'advertiser_id'),
     'postgres_runtime': ('dsn',),
-    'redis_runtime': ('url',),
-    'clickhouse_export': ('endpoint', 'database', 'username', 'password'),
+    'redis_runtime': ('redis_url',),
+    'clickhouse_export': ('endpoint', 'database'),
 }
 
 
@@ -56,8 +56,7 @@ class ProviderConnectorHealthService:
     def probe(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, probe_mode: str = 'dry_run') -> ProviderHealthProbeResult:
         mode = str(probe_mode or 'dry_run').strip().lower() or 'dry_run'
         required = _REQUIRED_BY_PROVIDER.get(provider.provider_key, tuple(field.field_key for field in provider.secret_fields if field.required))
-        present = []
-        missing = []
+        present, missing = [], []
         for field_key in required:
             value = self._read_optional_secret(
                 tenant_id=tenant_id,
@@ -71,28 +70,28 @@ class ProviderConnectorHealthService:
                 missing.append(field_key)
         if missing:
             return ProviderHealthProbeResult(
-                provider_key=provider.provider_key,
-                status='misconfigured',
-                probe_mode=mode,
-                reason='missing_required_secrets',
+                provider_key=provider.provider_key, status='misconfigured',
+                probe_mode=mode, reason='missing_required_secrets',
                 metadata={'missing_fields': tuple(missing), 'present_fields': tuple(present)},
             )
         shallow = self._shallow_validate(provider_key=provider.provider_key, tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id)
         if not shallow[0]:
             return ProviderHealthProbeResult(
-                provider_key=provider.provider_key,
-                status='invalid_secret_shape',
-                probe_mode=mode,
-                reason=shallow[1],
+                provider_key=provider.provider_key, status='invalid_secret_shape',
+                probe_mode=mode, reason=shallow[1],
                 metadata={'present_fields': tuple(present)},
             )
-        status = 'ready_for_live_probe' if mode == 'live' else 'ready_for_credentials'
+        live_ready = bool(provider_transport_binding_for_key(provider.provider_key).get('live_ready'))
+        if mode == 'live' and not live_ready:
+            return ProviderHealthProbeResult(
+                provider_key=provider.provider_key, status='live_probe_unsupported',
+                probe_mode=mode, reason='live_transport_not_ready',
+                metadata={'present_fields': tuple(present), 'live_probe_supported': False},
+            )
         return ProviderHealthProbeResult(
-            provider_key=provider.provider_key,
-            status=status,
-            probe_mode=mode,
-            reason='validated_secret_shape',
-            metadata={'present_fields': tuple(present), 'live_probe_supported': True},
+            provider_key=provider.provider_key, status='ready_for_live_probe' if mode == 'live' else 'ready_for_credentials',
+            probe_mode=mode, reason='validated_secret_shape',
+            metadata={'present_fields': tuple(present), 'live_probe_supported': live_ready},
         )
 
     def _shallow_validate(self, *, provider_key: str, tenant_id: str, connector_id: str, business_id: str) -> tuple[bool, str]:
@@ -100,7 +99,7 @@ class ProviderConnectorHealthService:
             dsn = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.dsn')
             return (dsn.startswith('postgres://') or dsn.startswith('postgresql://'), 'invalid_postgres_dsn' if dsn else 'missing_postgres_dsn')
         if provider_key == 'redis_runtime':
-            url = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.url')
+            url = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.redis_url')
             return (url.startswith('redis://') or url.startswith('rediss://'), 'invalid_redis_url' if url else 'missing_redis_url')
         if provider_key == 'clickhouse_export':
             endpoint = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.endpoint')
