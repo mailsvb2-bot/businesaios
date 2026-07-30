@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderHealthProbeResult
+from runtime.business_autonomy.provider_transport_bindings import provider_transport_binding_for_key
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
@@ -86,13 +87,22 @@ class ProviderConnectorHealthService:
                 reason=shallow[1],
                 metadata={'present_fields': tuple(present)},
             )
+        live_ready = bool(provider_transport_binding_for_key(provider.provider_key).get('live_ready'))
+        if mode == 'live' and not live_ready:
+            return ProviderHealthProbeResult(
+                provider_key=provider.provider_key,
+                status='live_probe_unsupported',
+                probe_mode=mode,
+                reason='live_transport_not_ready',
+                metadata={'present_fields': tuple(present), 'live_probe_supported': False},
+            )
         status = 'ready_for_live_probe' if mode == 'live' else 'ready_for_credentials'
         return ProviderHealthProbeResult(
             provider_key=provider.provider_key,
             status=status,
             probe_mode=mode,
             reason='validated_secret_shape',
-            metadata={'present_fields': tuple(present), 'live_probe_supported': True},
+            metadata={'present_fields': tuple(present), 'live_probe_supported': live_ready},
         )
 
     def _shallow_validate(self, *, provider_key: str, tenant_id: str, connector_id: str, business_id: str) -> tuple[bool, str]:
