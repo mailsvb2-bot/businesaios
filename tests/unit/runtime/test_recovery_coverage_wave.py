@@ -193,7 +193,8 @@ def test_plan_and_terminal_helpers_fail_closed(monkeypatch):
             plan=lambda item: (_ for _ in ()).throw(RuntimeError())
         )
     )
-    assert recovery._recovery_plan(executor=executor, env=object()) is None
+    with pytest.raises(RuntimeError):
+        recovery._recovery_plan(executor=executor, env=object())
     assert recovery._plan_action(None) == ""
     warnings = []
     monkeypatch.setattr(
@@ -212,7 +213,8 @@ def test_plan_and_terminal_helpers_fail_closed(monkeypatch):
     recovery._quarantine_item(
         outbox=object(), env=SimpleNamespace(decision=None), item={"decision_id": "d1"}, reason="x"
     )
-    recovery._finalize_terminal_skip(
-        outbox=object(), env=SimpleNamespace(decision=None), item={"decision_id": "d2"}, reason="y"
-    )
-    assert warnings == ["recovery.dead_letter.move", "recovery.terminal_skip.finalize"]
+    with pytest.raises(RuntimeError):
+        recovery._finalize_terminal_skip(
+            outbox=object(), env=SimpleNamespace(decision=None), item={"decision_id": "d2"}, reason="y"
+        )
+    assert warnings == ["recovery.dead_letter.move"]

@@ -35,12 +35,7 @@ _WAIT_ACTIONS = frozenset({"wait"})
 
 def _recovery_plan(*, executor: RuntimeExecutor, env: Any):
     reliability = getattr(executor, "_reliability", None)
-    if reliability is None:
-        return None
-    try:
-        return reliability.plan(env)
-    except Exception:
-        return None
+    return None if reliability is None else reliability.plan(env)
 
 def _warn_recovery_issue(*, key: str, msg: str, exc: Exception) -> None:
     log_exception_throttled(log, key=key, msg=f"{msg} error={type(exc).__name__}", throttle_ms=60_000)
@@ -83,6 +78,19 @@ def _normalize_item(item: Any) -> dict[str, Any]:
         "available_at": getattr(item, "available_at", None),
     }
 
+def _read_outbox_items(*, primary, fallback=None, key: str) -> tuple[dict[str, Any], ...]:
+    try:
+        rows = primary()
+    except TypeError:
+        if fallback is None:
+            raise
+        return _read_outbox_items(primary=fallback, key=key)
+    except Exception as exc:  # outbox enumeration boundary: outage means no dispatch
+        _warn_recovery_issue(key=key, msg="recovery: outbox enumeration failed", exc=exc)
+        return ()
+    return tuple(_normalize_item(item) for item in rows)
+
+
 def _iter_recoverable_items(*, outbox: Any, limit: int) -> Iterable[dict[str, Any]]:
     if outbox is None:
         return ()
@@ -90,25 +98,15 @@ def _iter_recoverable_items(*, outbox: Any, limit: int) -> Iterable[dict[str, An
     if max_items == 0:
         return ()
     if hasattr(outbox, "list_claimable_all"):
-        try:
-            return tuple(_normalize_item(item) for item in outbox.list_claimable_all(limit=max_items))
-        except Exception:
-            return ()
+        return _read_outbox_items(primary=lambda: outbox.list_claimable_all(limit=max_items), key="recovery.outbox.list_claimable_all")
     if hasattr(outbox, "list_claimable"):
-        try:
-            return tuple(_normalize_item(item) for item in outbox.list_claimable(limit=max_items))
-        except TypeError:
-            try:
-                return tuple(_normalize_item(item) for item in outbox.list_claimable(tenant_id="default", limit=max_items))
-            except Exception:
-                return ()
-        except Exception:
-            return ()
+        return _read_outbox_items(
+            primary=lambda: outbox.list_claimable(limit=max_items),
+            fallback=lambda: outbox.list_claimable(tenant_id="default", limit=max_items),
+            key="recovery.outbox.list_claimable",
+        )
     if hasattr(outbox, "list_pending"):
-        try:
-            return tuple(_normalize_item(item) for item in outbox.list_pending(limit=max_items))
-        except Exception:
-            return ()
+        return _read_outbox_items(primary=lambda: outbox.list_pending(limit=max_items), key="recovery.outbox.list_pending")
     return ()
 
 def _item_tenant_id(item: dict[str, Any]) -> str:
@@ -125,7 +123,7 @@ def _env_tenant_id(*, env: Any, item: dict[str, Any]) -> str:
             tenant_id = str(_decision_tenant_id(decision) or "").strip()
             if tenant_id:
                 return tenant_id
-        except Exception:
+        except Exception:  # tenant compatibility fallback to the persisted outbox item
             pass
     return str(item.get("tenant_id") or "").strip()
 
@@ -149,13 +147,15 @@ def _ensure_claim_or_skip(*, outbox: Any, item: dict[str, Any]) -> bool:
     if status_value == "delivering":
         try:
             current = get_delivery_info(outbox, decision_id=decision_id, tenant_id=tenant_id)
-        except Exception:
-            current = None
+        except Exception as exc:  # ownership-read boundary: never reclaim on an unknown state
+            _warn_recovery_issue(key="recovery.claim.ownership_read", msg="recovery: ownership read failed", exc=exc)
+            return False
         if isinstance(current, dict) and str(current.get("status") or current.get("state") or "").strip().lower() == "delivering":
             return True
     try:
         return bool(claim_or_skip(outbox, decision_id=decision_id, tenant_id=tenant_id, owner_id="runtime-recovery"))
-    except Exception:
+    except Exception as exc:  # claim boundary: an unknown claim result must not dispatch
+        _warn_recovery_issue(key="recovery.claim.acquire", msg="recovery: claim failed", exc=exc)
         return False
 
 def _finalize_terminal_skip(*, outbox: Any, env: Any, item: dict[str, Any], reason: str) -> None:
@@ -173,15 +173,12 @@ def _finalize_terminal_skip(*, outbox: Any, env: Any, item: dict[str, Any], reas
                 payload={"tenant_id": _item_tenant_id(item)},
             )
         )
-    try:
-        finalize_terminal_recovery_outcome(
-            executor=terminal_executor,
-            env=terminal_env,
-            reason=str(reason),
-            backend_name="runtime_recovery_terminal",
-        )
-    except Exception as exc:
-        _warn_recovery_issue(key="recovery.terminal_skip.finalize", msg="recovery: failed to finalize terminal skip", exc=exc)
+    finalize_terminal_recovery_outcome(
+        executor=terminal_executor,
+        env=terminal_env,
+        reason=str(reason),
+        backend_name="runtime_recovery_terminal",
+    )
 
 def _plan_action(plan: Any) -> str:
     return str(getattr(plan, "recovery_action", "") or "").strip().lower()
