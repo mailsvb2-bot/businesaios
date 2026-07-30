@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           source_workflow=.github/workflows/apply-execution-reliability-wave1-ci-fix.yml
-          sed -n "/<<'PATCH_B64'/,/^PATCH_B64$/p" "$source_workflow" | sed '1d;$d' > /tmp/fix.patch.gz.b64
+          sed -n "/<<'PATCH_B64'/,/^PATCH_B64$/p" "$source_workflow" | sed '1d;$d' | tr -d '[:space:]' > /tmp/fix.patch.gz.b64
           test -s /tmp/fix.patch.gz.b64
           base64 -d /tmp/fix.patch.gz.b64 | gzip -d > /tmp/fix.patch
           git apply --check /tmp/fix.patch
