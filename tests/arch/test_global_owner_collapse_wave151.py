@@ -62,7 +62,7 @@ INTERNAL_OWNER_IMPORTS = {
     'runtime/ceo/__init__.py': 'from core.actions import build_schema_registry',
     'execution/effectors/router.py': 'from execution.effectors import build_effector',
     'boot/registrations/__init__.py': '_install_package_alias_modules()',
-    'boot/registrations/register_action_executor.py': 'from boot.factories import build_action_executor',
+    'boot/registrations/register_action_executor.py': 'from boot.factories.action_executor_factory import build_action_executor',
     'observability/revenue_metrics.py': 'from observability import RevenueMetrics as RevenueMetrics',
     'config/business_quality_thresholds.py': 'from config import QUALITY_FLOOR as QUALITY_FLOOR',
 }

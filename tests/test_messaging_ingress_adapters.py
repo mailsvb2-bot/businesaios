@@ -26,7 +26,7 @@ def test_concrete_messaging_adapters_return_ingress_events():
         "viber": viber_payload_to_messaging_event,
         "sms": sms_payload_to_messaging_event,
         "email": email_payload_to_messaging_event,
-        "webchat": webchat_payload_to_messaging_event,
+        "web_chat": webchat_payload_to_messaging_event,
     }
 
     for channel, adapter in adapters.items():

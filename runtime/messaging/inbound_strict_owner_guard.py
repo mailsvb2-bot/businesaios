@@ -12,4 +12,6 @@ from runtime.messaging.inbound_owner_lock import (
     assert_inbound_decision_owner as assert_inbound_owner,
 )
 
+CANON_MESSAGING_INBOUND_STRICT_COMPAT_SURFACE = True
+
 __all__ = ["InboundOwnerViolation", "assert_inbound_owner"]

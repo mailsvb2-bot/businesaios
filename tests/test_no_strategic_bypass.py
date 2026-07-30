@@ -9,17 +9,20 @@ from pathlib import Path
 # CONFIG
 # ============================================================
 
-# Canonical strategic engine file (single source of truth)
+# Canonical strategic owners. Runtime behavior belongs to the engine; reusable
+# enum contracts live in the dedicated contract module so every consumer imports
+# the same types instead of redefining them.
 CANON_ENGINE_REL = Path("core/strategic_horizon/engine.py")
+CANON_CONTRACTS_REL = Path("core/strategic_horizon/contracts.py")
 
-# Names that must exist ONLY in the canonical engine module
-SINGLETON_SYMBOLS = {
-    "StrategicHorizonEngine",
-    "StrategicMode",
-    "LearningRegime",
-    "SystemState",
-    "StrategicVector",
+SINGLETON_SYMBOL_OWNERS = {
+    "StrategicHorizonEngine": CANON_ENGINE_REL,
+    "SystemState": CANON_ENGINE_REL,
+    "StrategicVector": CANON_ENGINE_REL,
+    "StrategicMode": CANON_CONTRACTS_REL,
+    "LearningRegime": CANON_CONTRACTS_REL,
 }
+SINGLETON_SYMBOLS = frozenset(SINGLETON_SYMBOL_OWNERS)
 
 # Enum members that must not be re-declared elsewhere as strategic regime enums
 CANON_MODE_MEMBERS = {"DEFENSE", "STABILIZE", "OPTIMIZE", "EXPAND", "RESEARCH"}
@@ -45,12 +48,24 @@ IGNORE_DIRS = {
 # Files where duplication is allowed (tests may import symbols, but must not redefine them)
 ALLOW_REDEFS_IN = {
     CANON_ENGINE_REL,
+    CANON_CONTRACTS_REL,
 }
 
 # Optional: allow these files to contain string literals like "stabilize"/"defense" (docs, configs)
 ALLOW_MODE_LITERALS_IN_DIRS = {
     Path("docs"),
     Path("core/finance/strategic/scenarios"),
+}
+
+# These files describe the approved DecisionCore method contract. Their
+# ``optimize`` literal names an issuer method, not a strategic operating mode.
+ALLOW_MODE_LITERALS_IN_FILES = {
+    CANON_ENGINE_REL,
+    CANON_CONTRACTS_REL,
+    Path("bootstrap/decision_core_contract.py"),
+    Path("canon/anti_second_brain_rules.py"),
+    Path("runtime/decision_gateway_owner.py"),
+    Path("runtime/decision_path_lock.py"),
 }
 
 MODE_STRING_LITERALS = {"stabilize", "optimize", "expand", "research", "defense"}
@@ -157,6 +172,8 @@ def _collect_findings(root: Path, file_path: Path) -> FileFindings:
 
 
 def _is_allowed_mode_literals(rel: Path) -> bool:
+    if rel in ALLOW_MODE_LITERALS_IN_FILES:
+        return True
     # Allow docs/ or other explicitly allowed dirs
     for d in ALLOW_MODE_LITERALS_IN_DIRS:
         try:
@@ -177,34 +194,33 @@ def test_strategic_engine_is_single_source_of_truth_file_exists():
     assert engine.exists(), f"Canonical engine file not found: {CANON_ENGINE_REL}"
 
 
-def test_no_redefinition_of_strategic_singletons_outside_engine():
-    """
-    Hard rule:
-    StrategicHorizonEngine / StrategicMode / LearningRegime / SystemState / StrategicVector
-    must be defined ONLY in core/strategic_horizon/engine.py
-    """
+def test_no_redefinition_of_strategic_singletons_outside_canonical_owners():
+    """Every strategic singleton is defined by exactly one declared owner."""
     root = _repo_root()
     offenders: list[tuple[Path, set[str]]] = []
+    definitions: dict[str, list[Path]] = {name: [] for name in SINGLETON_SYMBOLS}
 
     for p in _iter_py_files(root):
         rel = p.relative_to(root)
-
         findings = _collect_findings(root, p)
-        if not findings.defined_singletons:
-            continue
+        for name in findings.defined_singletons:
+            definitions[name].append(rel)
+            if rel != SINGLETON_SYMBOL_OWNERS[name]:
+                offenders.append((rel, {name}))
 
-        if rel in ALLOW_REDEFS_IN:
-            continue
-
-        offenders.append((rel, set(findings.defined_singletons)))
-
-    assert not offenders, (
-        "Strategic singleton symbols must not be re-defined outside the canonical engine.\n"
-        + "\n".join([f"- {rel}: {sorted(names)}" for rel, names in offenders])
+    missing_or_duplicate = {
+        name: paths
+        for name, paths in definitions.items()
+        if paths != [SINGLETON_SYMBOL_OWNERS[name]]
+    }
+    assert not offenders and not missing_or_duplicate, (
+        "Strategic singleton symbols must have exactly one canonical owner.\n"
+        + "\n".join(f"- {rel}: {sorted(names)}" for rel, names in offenders)
+        + (f"\nowner mismatch: {missing_or_duplicate}" if missing_or_duplicate else "")
     )
 
 
-def test_no_regime_enum_duplication_outside_engine():
+def test_no_regime_enum_duplication_outside_contract_owner():
     """
     Hard rule:
     No other Enum in the repo should replicate the strategic regime members set,
@@ -234,7 +250,7 @@ def test_no_mode_string_literals_outside_allowed_locations():
     If someone starts sprinkling raw literals 'stabilize/defense/...'
     across business code, that's usually bypass drift.
 
-    This test flags such literals outside engine.py and allowed docs/config directories.
+    This test flags such literals outside canonical owners and allowed docs/config directories.
     """
     root = _repo_root()
     offenders: list[Path] = []
@@ -242,8 +258,6 @@ def test_no_mode_string_literals_outside_allowed_locations():
     for p in _iter_py_files(root):
         rel = p.relative_to(root)
 
-        if rel == CANON_ENGINE_REL:
-            continue
         if _is_allowed_mode_literals(rel):
             continue
 

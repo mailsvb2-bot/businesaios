@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-from admin.admin_tenant_scope import normalize_admin_tenant_id
+from core.admin.read_models.common_support import normalize_admin_tenant_id
 from config.admin_latency_read_model_policy import DEFAULT_ADMIN_LATENCY_READ_MODEL_POLICY, AdminLatencyReadModelPolicy
 from core.observability.latency_window import resolve_window_range
 

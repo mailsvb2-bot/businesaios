@@ -8,6 +8,7 @@ from interfaces.api.fastapi_app_factory import create_fastapi_app
 from interfaces.api.fastapi_dependencies import FastAPIDependencyContainer
 from interfaces.api.health_handler import HealthHandler
 from observability.metrics import InMemoryMetrics
+from tests.api._authenticated_command_fixture import build_authenticated_command_binding
 
 
 @dataclass(frozen=True)
@@ -35,7 +36,10 @@ def test_health_handler_readiness_uses_startup_events() -> None:
 
 def test_fastapi_app_factory_registers_security_and_health_routes() -> None:
     service = _AppService()
-    container = FastAPIDependencyContainer(boot_result=_BootResultStub(decision_application=service))
+    container = FastAPIDependencyContainer(
+        boot_result=_BootResultStub(decision_application=service),
+        authenticated_decision_command_binding=build_authenticated_command_binding(),
+    )
     app = create_fastapi_app(application_service=service, dependency_container=container)
     client = TestClient(app)
     assert client.get('/health').status_code == 200

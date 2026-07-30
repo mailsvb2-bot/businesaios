@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from runtime.executor import build_click_provider_dispatch_execution_contract, build_spend_runtime_execution_contract
+from runtime.economic_execution import (
+    build_click_provider_dispatch_execution_contract,
+    build_spend_runtime_execution_contract,
+)
 from runtime.economic_core import EconomicAdminReadService
 from entrypoints.api.economic_routes import service as economic_service
 
 CANON_ECONOMIC_ROUTE_HANDLERS = True
+_SEALED_EXECUTION_CONTRACT_BUILDERS = (
+    build_click_provider_dispatch_execution_contract,
+    build_spend_runtime_execution_contract,
+)
 
 
 @dataclass(frozen=True, slots=True)

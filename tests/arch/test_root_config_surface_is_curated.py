@@ -8,6 +8,7 @@ ALLOWED_TOP_LEVEL_CONFIG_FILES = {
     ".env.example",
     "pytest.ini",
     "ruff.toml",
+    "pyproject.toml",
     "mypy-world-model.ini",
 }
 

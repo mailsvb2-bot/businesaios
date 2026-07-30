@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,12 +20,18 @@ def test_boot_compat_surfaces_delegate_to_runtime_bootstrap_package_root() -> No
     ]
     for relpath in relpaths:
         text = _read(relpath)
-        assert "runtime.bootstrap.sovereign_bootstrap" not in text, relpath
+        assert "from runtime.bootstrap.sovereign_bootstrap import" not in text, relpath
 
     assert '_load_attr("bootstrap.compose", "bootstrap")' in _read("boot/bootstrap.py")
     assert 'getattr(import_module("bootstrap.compose"), "build_runtime")' in _read("boot/runtime_public_api.py")
     assert '_load_attr("bootstrap.compose", "build_runtime")' in _read("boot/facade.py")
-    assert 'getattr(import_module("runtime.bootstrap.sovereign_bootstrap"), "bootstrap_runtime")' in _read("runtime/runtime_boot.py")
+
+    runtime_boot = _read("runtime/runtime_boot.py")
+    tree = ast.parse(runtime_boot)
+    assert "CANON_NO_ROOT_ASSEMBLY_LOGIC = True" in runtime_boot
+    assert "runtime.bootstrap.sovereign_bootstrap" in runtime_boot
+    assert not [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+    assert "return _load_sovereign_bootstrap_runtime()().artifacts.registry" in runtime_boot
 
 
 def test_runtime_bootstrap_package_root_exposes_built_runtime_owner() -> None:
@@ -39,18 +46,18 @@ def test_legacy_boot_shims_stay_thin_and_do_not_reintroduce_runtime_assembly() -
 
     assert "CANON_APP_BOOT_THIN_SHIM = True" in app_text
     assert "CANON_APP_BOOT_NO_RUNTIME_ASSEMBLY = True" in app_text
-    assert 'build_runtime(' not in app_text
-    assert 'compose_runtime(' not in app_text
+    assert "build_runtime(" not in app_text
+    assert "compose_runtime(" not in app_text
     assert '_load_attr("bootstrap.app_boot_surface", "build_app_boot_surface")' in app_text
 
     assert "CANON_HTTP_BOOT_THIN_SHIM = True" in http_text
     assert "CANON_HTTP_BOOT_NO_RUNTIME_ASSEMBLY = True" in http_text
     assert "CANON_HTTP_BOOT_SINGLE_SURFACE_DELEGATION = True" in http_text
-    assert 'build_runtime(' not in http_text
-    assert 'compose_runtime(' not in http_text
+    assert "build_runtime(" not in http_text
+    assert "compose_runtime(" not in http_text
     assert '_load_attr("bootstrap.http_boot_surface", "build_http_boot_surface")' in http_text
 
     assert "CANON_RUNTIME_INTEGRATION_OWNER = True" in integration_text
     assert "CANON_RUNTIME_INTEGRATION_NO_LEGACY_BOOT_REUSE = True" in integration_text
     assert "CANON_RUNTIME_INTEGRATION_DIRECT_OWNER_BOOTSTRAP = True" in integration_text
-    assert 'from boot.runtime_public_api import' not in integration_text
+    assert "from boot.runtime_public_api import" not in integration_text

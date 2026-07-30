@@ -34,8 +34,10 @@ def test_every_baseline_requirement_has_a_real_scenario() -> None:
 
 
 def test_required_ci_build_release_gates_see_regression_impact_enforcement() -> None:
-    assert required_gates() == ("fast", "full", "pre-release", "release")
-    for gate in required_gates():
+    assert required_gates() == ("acceptance", "fast", "full", "pre-release", "release")
+    acceptance_steps = _gate_steps("acceptance")
+    assert "user-scenario-gate" in acceptance_steps
+    for gate in ("fast", "full", "pre-release", "release"):
         steps = _gate_steps(gate)
         assert "regression-impact" in steps
         assert steps.index("regression-impact") < steps.index("import-smoke")

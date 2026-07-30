@@ -16,8 +16,11 @@ def test_boot_runtime_integration_surfaces_do_not_issue_raw_decisions() -> None:
         assert '.optimize(' not in text, rel
 
 
-def test_register_decision_core_remains_only_boot_compat_owner() -> None:
+def test_register_decision_core_remains_only_boot_compat_registration() -> None:
     text = Path('boot/registrations/register_decision_core.py').read_text(encoding='utf-8')
-    assert 'def decide_and_execute(self, action: object) -> dict:' in text
-    assert 'self.governance_chain.evaluate(action)' in text
-    assert 'self.action_executor.execute(action)' in text
+    factory = Path('boot/factories/decision_core_factory.py').read_text(encoding='utf-8')
+    assert 'return register_runtime_decision_execution_service(registry)' in text
+    assert 'RuntimeServiceName.RUNTIME_DECISION_EXECUTION_SERVICE' in text
+    assert 'build_runtime_decision_execution_service(' in factory
+    assert '.issue(' not in text
+    assert '.decide(' not in text

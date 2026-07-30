@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import shared.numbers as _shared_numbers
+import kernel.numbers as _shared_numbers
 from config.decision_safety_policy import DEFAULT_DECISION_VALIDATOR_POLICY, DecisionValidatorPolicy
 from core.constraints.decision import DecisionConstraints
 from kernel.decision_candidate import DecisionCandidate

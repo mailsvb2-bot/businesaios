@@ -1,6 +1,9 @@
-from __future__ import annotations
-CANON_API_EXECUTE_ACTION_STACK_FINAL_OWNER = True
+"""Canonical execute-action composition.
 
+ExecuteActionHandler -> reliability guards -> control-plane envelope.
+"""
+
+from __future__ import annotations
 
 from entrypoints.api.execute_action_api_contracts import ExecuteActionApiStack
 
@@ -13,15 +16,14 @@ from infra.maintenance_mode import MaintenanceMode
 from infra.retry_models import RetryPolicySpec
 from infra.retry_policy import RetryPolicy
 from infra.runtime_guardrails import RuntimeGuardrails
-from entrypoints.api.action_models import ExecuteActionRequest, ExecuteActionResponse
 from entrypoints.api.execute_action_idempotency_store import build_api_execute_action_idempotency_store
 from entrypoints.api.execute_action_stack_bundle import build_execute_action_stack_bundle
-from entrypoints.api.request_context import RequestContext
 from observability.action_audit_log import ActionAuditLog, build_default_action_audit_log
 from reliability.idempotency_store import InMemoryIdempotencyStore as ReliabilityInMemoryIdempotencyStore
 from tenancy.tenant_quota_guard import QuotaDimension, TenantQuotaGuard
 
 
+CANON_API_EXECUTE_ACTION_STACK_FINAL_OWNER = True
 CANON_API_EXECUTE_ACTION_STACK = True
 CANON_API_EXECUTE_ACTION_STACK_WRAPPER_BUILDERS = True
 
@@ -32,6 +34,7 @@ CANON_API_EXECUTE_ACTION_STACK_WRAPPER_BUILDERS = True
 def build_execute_action_api_stack(
     *,
     application_service: object,
+    command_binding: object | None = None,
     tenant_quota_guard: TenantQuotaGuard | None = None,
     action_audit_log: ActionAuditLog | None = None,
     idempotency_store: object | None = None,
@@ -45,6 +48,7 @@ def build_execute_action_api_stack(
     )
     stack_bundle = build_execute_action_stack_bundle(
         application_service=application_service,
+        command_binding=command_binding,
         retry_policy=retry_policy,
         idempotency=IdempotencyExecutor(store=_idempotency_store_or_default(idempotency_store)),
         action_audit_log=audit_log,

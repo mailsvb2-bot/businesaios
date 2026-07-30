@@ -3,9 +3,11 @@ from __future__ import annotations
 from interfaces.messaging.discord import build_binding as build_discord_binding
 from interfaces.messaging.email import build_binding as build_email_binding
 from interfaces.messaging.instagram import build_binding as build_instagram_binding
+from interfaces.messaging.max import build_binding as build_max_binding
 from interfaces.messaging.messenger import build_binding as build_messenger_binding
 from interfaces.messaging.slack import build_binding as build_slack_binding
 from interfaces.messaging.sms import build_binding as build_sms_binding
+from interfaces.messaging.vk import build_binding as build_vk_binding
 from interfaces.messaging.whatsapp import build_binding as build_whatsapp_binding
 from interfaces.messaging_runtime.channel_aliases import canonical_channel_name
 from interfaces.regional.kakaotalk import build_binding as build_kakaotalk_binding
@@ -19,6 +21,8 @@ from interfaces.web.chat_widget.runtime_binding import build_binding as build_we
 BINDING_BUILDERS = {
     "telegram": build_telegram_binding,
     "whatsapp": build_whatsapp_binding,
+    "vk": build_vk_binding,
+    "max": build_max_binding,
     "sms": build_sms_binding,
     "email": build_email_binding,
     "messenger": build_messenger_binding,
@@ -29,12 +33,16 @@ BINDING_BUILDERS = {
     "kakaotalk": build_kakaotalk_binding,
     "slack": build_slack_binding,
     "discord": build_discord_binding,
-    "webchat": build_webchat_binding,
-    "api_gateway": build_api_gateway_binding,
+    "web_chat": build_webchat_binding,
+    "api": build_api_gateway_binding,
 }
 
 
-def load_bindings(*, enabled_channels: tuple[str, ...], senders: dict[str, object] | None = None):
+def load_bindings(
+    *,
+    enabled_channels: tuple[str, ...],
+    senders: dict[str, object] | None = None,
+):
     senders = dict(senders or {})
     bindings = []
     for raw_channel in enabled_channels:
@@ -42,10 +50,14 @@ def load_bindings(*, enabled_channels: tuple[str, ...], senders: dict[str, objec
         try:
             builder = BINDING_BUILDERS[channel]
         except KeyError as exc:
-            raise RuntimeError(f"binding builder not configured for channel: {raw_channel}") from exc
+            raise RuntimeError(
+                f"binding builder not configured for channel: {raw_channel}"
+            ) from exc
         sender = senders.get(raw_channel)
         if sender is None:
             sender = senders.get(channel)
         bindings.append(builder(sender=sender))
     return tuple(bindings)
 
+
+__all__ = ["BINDING_BUILDERS", "load_bindings"]

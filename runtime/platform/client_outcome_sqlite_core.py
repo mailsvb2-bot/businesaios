@@ -139,6 +139,31 @@ class SQLiteJsonRegistryBackend:
             )
             conn.commit()
 
+    def compare_and_replace(self, key: str, expected: object, value: object) -> bool:
+        normalized = str(key).strip()
+        if not normalized:
+            raise ValueError('registry key is required')
+        expected_payload = _json_dumps(expected)
+        replacement_payload = _json_dumps(value)
+        with self._owner._lock, self._owner._connect() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            cursor = conn.execute(
+                '''
+                UPDATE client_outcome_registry
+                SET payload_json=?, updated_at_epoch_ms=?
+                WHERE namespace=? AND item_key=? AND payload_json=?
+                ''',
+                (
+                    replacement_payload,
+                    int(time.time() * 1000),
+                    self._namespace,
+                    normalized,
+                    expected_payload,
+                ),
+            )
+            conn.commit()
+            return int(cursor.rowcount or 0) == 1
+
     def register_unique(self, key: str, value: object) -> None:
         normalized = str(key).strip()
         if not normalized:

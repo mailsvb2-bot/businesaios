@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,7 +16,18 @@ class Impulse:
     anti_impulse: float = 0.0
 
     def as_tuple(self) -> tuple[float, float, float, float, float]:
-        return (float(self.dI), float(self.dT), float(self.dV), float(self.dP), float(self.anti_impulse))
+        return (
+            float(self.dI),
+            float(self.dT),
+            float(self.dV),
+            float(self.dP),
+            float(self.anti_impulse),
+        )
+
+    def __iter__(self) -> Iterator[float]:
+        """Preserve the public tuple-compatible impulse contract."""
+
+        return iter(self.as_tuple())
 
 
 @dataclass(frozen=True)
@@ -42,13 +54,15 @@ def apply_impulse(
         "trust": clamp01(float(state.get("trust", z)) + impulse.dT),
         "value": clamp01(float(state.get("value", z)) + impulse.dV),
         "permission": clamp01(float(state.get("permission", z)) + impulse.dP),
-        "anti_impulse": clamp01(float(state.get("anti_impulse", z)) + impulse.anti_impulse),
+        "anti_impulse": clamp01(
+            float(state.get("anti_impulse", z)) + impulse.anti_impulse
+        ),
     }
 
 
 def impulse_for_event(
+    event: Mapping[str, Any],
     *,
-    event: dict[str, Any],
     policy: ImpulseBoundsPolicy = DEFAULT_IMPULSE_BOUNDS_POLICY,
 ) -> Impulse:
     et = str(event.get("event_type") or event.get("type") or "").strip()
@@ -69,7 +83,9 @@ def impulse_for_event(
         anti += policy.bounds.ui_rage_anti_delta
         dT += policy.bounds.ui_rage_trust_delta
 
-    if et in {"offer_shown", "paywall_opened"} and float(payload.get("fatigue", z) or z) > z:
+    if et in {"offer_shown", "paywall_opened"} and float(
+        payload.get("fatigue", z) or z
+    ) > z:
         anti += policy.bounds.fatigue_anti_delta
 
     if et == "audio_stopped":

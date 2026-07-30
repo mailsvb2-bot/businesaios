@@ -19,8 +19,10 @@ class ChannelCapabilities:
 
 DEFAULT_CAPABILITIES: Mapping[str, ChannelCapabilities] = {
     "telegram": ChannelCapabilities("telegram", True, False, True, True, False, False),
-    "sms": ChannelCapabilities("sms", True, False, False, False, False, False),
     "whatsapp": ChannelCapabilities("whatsapp", True, False, True, True, False, False),
+    "vk": ChannelCapabilities("vk", True, False, True, True, False, False),
+    "max": ChannelCapabilities("max", True, False, True, True, False, False),
+    "sms": ChannelCapabilities("sms", True, False, False, False, False, False),
     "email": ChannelCapabilities("email", True, True, False, True, False, True),
     "messenger": ChannelCapabilities("messenger", True, False, True, True, False, False),
     "instagram": ChannelCapabilities("instagram", True, False, True, True, False, False),
@@ -30,8 +32,8 @@ DEFAULT_CAPABILITIES: Mapping[str, ChannelCapabilities] = {
     "kakaotalk": ChannelCapabilities("kakaotalk", True, False, True, True, False, False),
     "slack": ChannelCapabilities("slack", True, False, True, True, True, False),
     "discord": ChannelCapabilities("discord", True, False, True, True, True, False),
-    "webchat": ChannelCapabilities("webchat", True, False, True, False, False, False),
-    "api_gateway": ChannelCapabilities("api_gateway", True, False, False, False, True, False),
+    "web_chat": ChannelCapabilities("web_chat", True, False, True, False, False, False),
+    "api": ChannelCapabilities("api", True, False, False, False, True, False),
 }
 
 
@@ -42,3 +44,5 @@ def get_capabilities(channel: str) -> ChannelCapabilities:
     except KeyError as exc:
         raise RuntimeError(f"capabilities not configured for channel: {channel}") from exc
 
+
+__all__ = ["ChannelCapabilities", "DEFAULT_CAPABILITIES", "get_capabilities"]

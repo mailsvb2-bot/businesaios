@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 from runtime.canonical_surface_manifest import (
@@ -86,18 +87,28 @@ def test_public_api_and_routing_perimeters_stay_canonical() -> None:
 def test_effect_and_network_perimeters_remain_sealed() -> None:
     assert 'runtime/_internal/effect_router.py' in ALLOWED_EFFECT_DOMAIN_ENTRYPOINTS
     assert 'runtime/_internal/router_support.py' in ALLOWED_EFFECT_ROUTER_IMPORTERS
-    network_tokens = ('import requests', 'import httpx', 'import aiohttp', 'import urllib3', 'import socket')
-    literal_tokens = ('api.telegram.org', 'TELEGRAM_BOT_TOKEN', 'YOOKASSA')
+    network_modules = {"requests", "httpx", "aiohttp", "urllib3", "socket"}
+    literal_tokens = ("api.telegram.org", "TELEGRAM_BOT_TOKEN", "YOOKASSA")
     offenders: list[str] = []
     for path in _iter_py_files():
         rel = path.relative_to(PROJECT_ROOT).as_posix()
-        if rel.startswith('tests/'):
+        if rel.startswith("tests/"):
             continue
-        source = path.read_text(encoding='utf-8')
-        if any(tok in source for tok in network_tokens) and rel not in ALLOWED_NETWORK_PRIMITIVE_IMPORTERS:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+        imported_roots: set[str] = set()
+        string_literals: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported_roots.update(alias.name.split(".", 1)[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported_roots.add(node.module.split(".", 1)[0])
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                string_literals.add(node.value)
+        if imported_roots.intersection(network_modules) and rel not in ALLOWED_NETWORK_PRIMITIVE_IMPORTERS:
             offenders.append(rel)
             continue
-        if any(tok in source for tok in literal_tokens) and rel not in ALLOWED_NETWORK_LITERAL_SURFACES:
+        if any(token in literal for token in literal_tokens for literal in string_literals) and rel not in ALLOWED_NETWORK_LITERAL_SURFACES:
             offenders.append(rel)
     assert offenders == []
 

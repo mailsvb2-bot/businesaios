@@ -6,7 +6,7 @@ without binding itself to core tenancy internals.
 
 from __future__ import annotations
 
-from core.tenancy.normalization import (
+from contracts.tenant_identity import (
     UNKNOWN_TENANT_ID,
     is_placeholder_tenant_id,
     normalize_tenant_id,

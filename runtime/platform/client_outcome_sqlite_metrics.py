@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 
-from core.tenancy.normalization import require_tenant_id
+from contracts.tenant_identity import require_tenant_id
 from observability.slo_contract import SLIKind
 from observability.tenant_metrics_registry import MetricAggregation, MetricSample, TenantMetricsRegistry, utc_now
 from runtime.platform.client_outcome_sqlite_core import _SQLiteOwner, _json_dumps, _json_loads

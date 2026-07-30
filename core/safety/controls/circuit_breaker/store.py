@@ -4,11 +4,7 @@ from dataclasses import dataclass, field
 from threading import RLock
 from typing import Protocol
 
-from runtime.platform.safety_circuit_breaker_store import (
-    CANON_PLATFORM_SAFETY_CIRCUIT_BREAKER_STORE,
-    SCHEMA_VERSION,
-    PlatformSqliteCircuitBreakerStore,
-)
+from compatibility.safety_storage_exports import resolve_safety_storage_export
 
 from .models import CircuitBreakerState
 
@@ -34,18 +30,13 @@ class InMemoryCircuitBreakerStore:
             self.states[str(state.key)] = state
 
 
-class SqliteCircuitBreakerStore(PlatformSqliteCircuitBreakerStore):
-    """Safety-facing circuit-breaker store facade.
-
-    SQLite ownership lives in runtime.platform.safety_circuit_breaker_store.
-    """
-
-
+def __getattr__(name: str):
+    return resolve_safety_storage_export("circuit_breaker", name)
 __all__ = [
-    'CANON_PLATFORM_SAFETY_CIRCUIT_BREAKER_STORE',
+    'CANON_PLATFORM_SAFETY_CIRCUIT_BREAKER_STORE',  # noqa: F822 - provided lazily by module __getattr__
     'CANON_SAFETY_CIRCUIT_BREAKER_STORE',
     'CircuitBreakerStore',
     'InMemoryCircuitBreakerStore',
-    'SCHEMA_VERSION',
-    'SqliteCircuitBreakerStore',
+    'SCHEMA_VERSION',  # noqa: F822 - provided lazily by module __getattr__
+    'SqliteCircuitBreakerStore',  # noqa: F822 - provided lazily by module __getattr__
 ]

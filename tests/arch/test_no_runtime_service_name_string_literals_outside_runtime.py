@@ -49,6 +49,7 @@ ALLOWED_PATH_FRAGMENTS = (
     "runtime/boot/system_builder_parts/runtime_services.py",
     "runtime/modules/builtin_modules.py",
     "scripts/check_world_snapshot_no_second_brain.py",
+    "scripts/ci/integrity/decision_authority_alias_exemptions.py",
 )
 
 

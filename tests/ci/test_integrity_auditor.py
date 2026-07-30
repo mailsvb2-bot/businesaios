@@ -37,6 +37,6 @@ def test_canonical_flow_check_reports_missing_terms(tmp_path: Path) -> None:
     findings = check_canonical_flow([path], spec)
 
     assert findings
-    assert findings[0].check_id == "P0_CANONICAL_FLOW"
+    assert findings[0].check_id == "P1_CANONICAL_FLOW"
     assert "policy" in findings[0].message
     assert "guard" in findings[0].message

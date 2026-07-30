@@ -3,6 +3,7 @@ from __future__ import annotations
 CANON_ECONOMIC_SEALED_EXECUTION_LOCK = True
 ALLOWED_RUNTIME_INTERNAL_IMPORT_OWNERS = (
     'runtime/executor.py',
+    'runtime/economic_execution.py',
     'runtime/_internal/economic_execution_contract.py',
     'tests/arch/test_economic_sealed_execution_owner_lock_wave239.py',
     'tests/arch/test_economic_sealed_execution_hardening_wave240.py',
@@ -67,6 +68,7 @@ FORBIDDEN_DIRECT_SEALED_RUNTIME_MARKERS = (
 
 ALLOWED_SEALED_EXECUTION_HELPER_OWNERS = (
     'runtime/executor.py',
+    'runtime/economic_execution.py',
     'runtime/_internal/economic_execution_contract.py',
     'entrypoints/api/economic_route_handlers.py',
     'entrypoints/api/economic_routes/payloads.py',

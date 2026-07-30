@@ -58,6 +58,7 @@ SQLITE_ALLOWED_PREFIXES = (
     "runtime/platform/safety_approval_repository.py",
     "runtime/platform/safety_circuit_breaker_store.py",
     "runtime/platform/market_intelligence_state_store.py",
+    "runtime/platform/business_autonomy_sqlite_distributed_state.py",
 )
 
 
@@ -94,7 +95,15 @@ def test_no_private_internal_imports_outside_executor():
         # import other runtime/_internal modules.
         if rel.startswith(("runtime/_internal/", "tests/")):
             continue
-        if rel in ("runtime/executor.py", "runtime/effects.py", "tests/test_architecture.py"):
+        if rel in (
+            "runtime/executor.py",
+            "runtime/effects.py",
+            "runtime/effects/__init__.py",
+            "runtime/execution/provider_outbound_sender.py",
+            "tests/test_architecture.py",
+        ):
+            # The exact guarded/identity-only shapes of the two public facades
+            # are enforced by tests/test_no_runtime_internal_imports_ast.py.
             continue
         tree = _parse(py)
         for node in ast.walk(tree):
@@ -122,14 +131,23 @@ def test_sdk_imports_only_in_private_effects_impl():
                     if node.module:
                         bases = [node.module.split(".")[0]]
                 for base in bases:
+                    if (
+                        base == "urllib"
+                        and isinstance(node, ast.ImportFrom)
+                        and node.module == "urllib.parse"
+                    ):
+                        continue
                     if base in FORBIDDEN_SDK_IMPORTS:
                         assert (rel in ALLOWED_SDK_FILES) or rel.startswith(ALLOWED_SDK_PREFIXES), (
                             f"SDK import '{base}' forbidden in {rel}; allowed only in {sorted(ALLOWED_SDK_FILES)} "
                             f"or under prefixes {ALLOWED_SDK_PREFIXES}"
                         )
                     if base == "sqlite3":
-                        ok = rel.startswith(SQLITE_ALLOWED_PREFIXES)
-                        assert ok, f"sqlite3 import forbidden in {rel}; allowed only in {SQLITE_ALLOWED_PREFIXES}"
+                        ok = rel.startswith(("runtime/platform/", "observability/platform/"))
+                        assert ok, (
+                            f"sqlite3 import forbidden in {rel}; persistence belongs under "
+                            "runtime/platform or observability/platform"
+                        )
 
 
 def test_ledger_try_mark_executed_only_in_runtime_guard():

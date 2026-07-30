@@ -3,51 +3,30 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from contracts.messaging_channels import ALL_CHANNELS
+
 FunnelStage = Literal["acquisition", "activation", "retention", "referral", "revenue"]
-GROWTH_MESSAGING_CHANNELS = (
-    "telegram",
-    "whatsapp",
-    "sms",
-    "email",
-    "messenger",
-    "instagram",
-    "web_chat",
-    "api",
-    "line",
-    "wechat",
-    "kakaotalk",
-    "viber",
-    "slack",
-    "discord",
-    "push",
-)
-Channel = Literal[
+
+GROWTH_NON_MESSAGING_CHANNELS = (
     "organic",
     "seo",
     "content",
     "referral",
     "partnerships",
-    "email",
-    "sms",
-    "push",
-    "telegram",
-    "whatsapp",
-    "messenger",
-    "instagram",
-    "web_chat",
-    "api",
-    "line",
-    "wechat",
-    "kakaotalk",
-    "viber",
-    "slack",
-    "discord",
+)
+GROWTH_MESSAGING_CHANNELS = (*ALL_CHANNELS, "push")
+GROWTH_PAID_CHANNELS = (
     "meta_ads",
     "google_ads",
     "tiktok_ads",
     "vk_ads",
     "yandex_direct",
     "other_paid",
+)
+Channel = Literal[
+    *GROWTH_NON_MESSAGING_CHANNELS,
+    *GROWTH_MESSAGING_CHANNELS,
+    *GROWTH_PAID_CHANNELS,
 ]
 
 

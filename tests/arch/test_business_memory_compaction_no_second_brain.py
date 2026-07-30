@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from application.memory.business_memory_state_adapter import BusinessMemoryStateAdapter
+from application.memory.business_operating_memory import project_business_memory_state_context
+
 ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = ROOT / "execution" / "business_memory_policy.py"
 COMPACTOR_PATH = ROOT / "execution" / "business_memory_compactor.py"
@@ -49,23 +52,43 @@ def test_world_state_updater_stays_feedback_only_without_decision_paths() -> Non
         assert marker not in text, f"world_state_updater must not reference {marker}."
 
 
-def test_execution_query_and_state_adapter_reuse_canonical_memory_projection() -> None:
-    query_text = (ROOT / "execution" / "business_memory_query.py").read_text(encoding="utf-8")
-    adapter_text = (ROOT / "execution" / "business_memory_state_adapter.py").read_text(encoding="utf-8")
+def test_final_query_and_state_adapter_reuse_canonical_memory_projection() -> None:
+    query_text = (ROOT / "application" / "memory" / "business_memory_query.py").read_text(encoding="utf-8")
+    adapter_text = (ROOT / "application" / "memory" / "business_memory_state_adapter.py").read_text(encoding="utf-8")
     assert "project_business_memory_contract_bundle" in query_text
     assert "project_business_memory_contract_bundle" in adapter_text
     assert "project_business_memory_meta_payloads" in adapter_text
     assert "meta.update(meta_payloads)" in adapter_text
 
 
-def test_state_adapter_uses_canonical_memory_rehydration_before_projection() -> None:
-    adapter_text = (ROOT / "execution" / "business_memory_state_adapter.py").read_text(encoding="utf-8")
+def test_final_state_adapter_uses_canonical_memory_rehydration_before_projection() -> None:
+    adapter_text = (ROOT / "application" / "memory" / "business_memory_state_adapter.py").read_text(encoding="utf-8")
     assert "canonicalize_business_memory_payload" in adapter_text
 
 
-def test_state_adapter_reuses_canonical_state_projection_surface() -> None:
-    adapter_text = (ROOT / "execution" / "business_memory_state_adapter.py").read_text(encoding="utf-8")
-    assert "project_business_memory_state_context" in adapter_text
+def test_final_state_adapter_matches_canonical_state_projection_surface() -> None:
+    payload = {
+        "business_profile": {"segment": "clinic"},
+        "active_goals": [{"goal_id": "g1", "status": "active"}],
+    }
+    assert BusinessMemoryStateAdapter().to_state_context(payload) == (
+        project_business_memory_state_context(payload)
+    )
+
+
+def test_execution_memory_compat_surfaces_are_pure_reexports() -> None:
+    surfaces = {
+        "business_memory_query.py": "application.memory.business_memory_query",
+        "business_memory_state_adapter.py": "application.memory.business_memory_state_adapter",
+        "business_memory_governance.py": "application.memory.business_memory_governance",
+        "business_memory_promotion.py": "application.memory.business_memory_promotion",
+    }
+    for filename, owner in surfaces.items():
+        text = (ROOT / "execution" / filename).read_text(encoding="utf-8")
+        assert f"from {owner} import" in text
+        assert "FINAL_OWNER" in text
+        assert "\nclass " not in text
+        assert "\ndef " not in text
 
 
 def test_execution_memory_exports_shared_projection_helpers() -> None:
@@ -85,7 +108,7 @@ def test_execution_memory_exports_shared_projection_helpers() -> None:
 def test_headless_and_opportunity_surfaces_reuse_canonical_business_memory_helpers() -> None:
     mapper_text = (ROOT / "application" / "headless" / "goal_mapper.py").read_text(encoding="utf-8")
     detector_text = (ROOT / "execution" / "opportunity_detector.py").read_text(encoding="utf-8")
-    persistence_text = (ROOT / "execution" / "evidence_feedback_state.py").read_text(encoding="utf-8")
+    persistence_text = (ROOT / "application" / "evidence" / "evidence_feedback_state.py").read_text(encoding="utf-8")
     assembly_text = (ROOT / "application" / "autonomy" / "autonomy_state_assembly.py").read_text(encoding="utf-8")
     assert "project_business_memory_evidence" in mapper_text
     assert "project_business_memory_profile" in mapper_text
@@ -102,11 +125,10 @@ def test_headless_feedback_uses_canonical_business_memory_projection() -> None:
     assert "project_business_memory_feedback_snapshot" in feedback_text
 
 
-
 def test_governance_and_persistence_surfaces_reuse_canonical_governance_summary() -> None:
     governance_text = (ROOT / "execution" / "governance_service.py").read_text(encoding="utf-8")
     evidence_text = (ROOT / "execution" / "canonical_governance_evidence.py").read_text(encoding="utf-8")
-    persistence_text = (ROOT / "execution" / "evidence_feedback_state.py").read_text(encoding="utf-8")
+    persistence_text = (ROOT / "application" / "evidence" / "evidence_feedback_state.py").read_text(encoding="utf-8")
     assert "project_business_memory_governance_summary" in governance_text
     assert "project_business_memory_governance_summary" in evidence_text
     assert "project_business_memory_governance_summary" in persistence_text
@@ -124,15 +146,14 @@ def test_execution_memory_exports_feedback_snapshot_helper() -> None:
 
 
 def test_meta_surfaces_reuse_canonical_business_memory_meta_payloads() -> None:
-    adapter_text = Path("execution/business_memory_state_adapter.py").read_text(encoding="utf-8")
+    adapter_text = Path("application/memory/business_memory_state_adapter.py").read_text(encoding="utf-8")
     assembly_text = Path("application/autonomy/autonomy_state_assembly.py").read_text(encoding="utf-8")
     assert "project_business_memory_meta_payloads" in adapter_text
     assert "project_business_memory_meta_payloads" in assembly_text
 
 
-
-def test_governance_and_promotion_helpers_reuse_canonical_governance_summary() -> None:
-    governance_gate_text = (ROOT / "execution" / "business_memory_governance.py").read_text(encoding="utf-8")
-    promotion_text = (ROOT / "execution" / "business_memory_promotion.py").read_text(encoding="utf-8")
+def test_governance_and_promotion_owners_reuse_canonical_governance_summary() -> None:
+    governance_gate_text = (ROOT / "application" / "memory" / "business_memory_governance.py").read_text(encoding="utf-8")
+    promotion_text = (ROOT / "application" / "memory" / "business_memory_promotion.py").read_text(encoding="utf-8")
     assert "project_business_memory_governance_summary" in governance_gate_text
     assert "project_business_memory_governance_summary" in promotion_text

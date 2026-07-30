@@ -20,7 +20,17 @@ class _Effects:
 
     def send_message(self, **kwargs):
         self.calls.append(kwargs)
-        return {"ok": True, **kwargs}
+        return {
+            "ok": True,
+            **kwargs,
+            "router_evidence": {
+                "source": "effect_router",
+                "verified": True,
+                "status": "verified",
+                "external_refs": ["telegram:message:1"],
+                "confidence": 1.0,
+            },
+        }
 
 
 class _Planner:
@@ -41,14 +51,20 @@ def test_ai_ceo_plan_handler_blocks_without_valid_route():
     effects = _Effects()
     env = SimpleNamespace(decision=SimpleNamespace(decision_id="d1", correlation_id="c1"))
     out = handle_ai_ceo_plan({"user_id": "u1", "tenant_id": "t1"}, effects, env, planner=_Planner())
-    assert out["track_event_type"] == "ai_ceo_plan_blocked@v1"
+    assert out["ok"] is False
+    assert out["status"] == "blocked"
+    assert out["reason"] == "route_violation"
+    assert out["delivery"]["track_event_type"] == "ai_ceo_plan_blocked@v1"
 
 
 def test_ai_ceo_plan_handler_uses_route_and_planner():
     effects = _Effects()
     env = SimpleNamespace(decision=_Decision())
     out = handle_ai_ceo_plan({"user_id": "u1", "tenant_id": "t1"}, effects, env, planner=_Planner())
-    assert out["decision_id"] == "d1"
-    assert out["correlation_id"] == "c1"
-    assert out["user_id"] == "u1"
-    assert out["track_event_type"] == "ai_ceo_plan@v1"
+    assert out["ok"] is True
+    assert out["status"] == "verified"
+    assert out["delivery"]["decision_id"] == "d1"
+    assert out["delivery"]["correlation_id"] == "c1"
+    assert out["delivery"]["tenant_id"] == "t1"
+    assert out["delivery"]["user_id"] == "u1"
+    assert out["delivery"]["track_event_type"] == "ai_ceo_plan@v1"

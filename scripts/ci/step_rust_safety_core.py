@@ -5,7 +5,7 @@ import shutil
 
 from application.business_autonomy.safety_core_diagnostics import write_safety_core_parity_evidence
 from scripts.ci.paths import repo_root
-from scripts.ci.subprocess_io import run_command
+from scripts.ci.subprocess_io import isolated_cargo_target, run_command
 
 
 def run() -> tuple[bool, str]:
@@ -16,15 +16,22 @@ def run() -> tuple[bool, str]:
     crate_dir = root / "rust" / "businessaios_safety_core"
     if not crate_dir.exists():
         return False, "rust safety core crate missing"
-    test_outcome = run_command([cargo, "test", "--quiet"], timeout=180, cwd=crate_dir)
-    if test_outcome.returncode != 0:
-        return False, "rust safety core cargo tests failed"
     fixture_path = root / "safety_fixtures" / "businessaios_safety_core_golden.json"
-    fixture_outcome = run_command(
-        [cargo, "run", "--quiet", "--bin", "safety_fixture_runner", "--", "--json", str(fixture_path)],
-        timeout=180,
-        cwd=crate_dir,
-    )
+    with isolated_cargo_target("safety-core") as cargo_env:
+        test_outcome = run_command(
+            [cargo, "test", "--quiet"],
+            timeout=180,
+            cwd=crate_dir,
+            env=cargo_env,
+        )
+        if test_outcome.returncode != 0:
+            return False, "rust safety core cargo tests failed"
+        fixture_outcome = run_command(
+            [cargo, "run", "--quiet", "--bin", "safety_fixture_runner", "--", "--json", str(fixture_path)],
+            timeout=180,
+            cwd=crate_dir,
+            env=cargo_env,
+        )
     if fixture_outcome.returncode != 0:
         return False, "rust safety core shared fixture runner failed"
     try:

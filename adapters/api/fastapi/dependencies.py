@@ -90,6 +90,7 @@ class FastAPIDependencyContainer:
     api_idempotency_operation: str = 'execute_action'
     api_idempotency_owner_id: str = 'fastapi-dependency-container'
     api_auth_bundle: AuthDependencyBundle | None = None
+    authenticated_decision_command_binding: object | None = None
     _api_security_owner_bundle: ApiSecurityOwnerBundle | None = field(default=None, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -97,6 +98,18 @@ class FastAPIDependencyContainer:
             object.__setattr__(self, "config_surface", build_bootstrap_config_surface())
         if self.shared_observability is None:
             object.__setattr__(self, 'shared_observability', {})
+        if self.authenticated_decision_command_binding is None:
+            shared_binding = (
+                self.shared_observability.get('authenticated_decision_command_binding')
+                if isinstance(self.shared_observability, Mapping)
+                else None
+            )
+            if shared_binding is not None:
+                object.__setattr__(
+                    self,
+                    'authenticated_decision_command_binding',
+                    shared_binding,
+                )
         if self.tenant_registry is None:
             object.__setattr__(self, 'tenant_registry', _resolve_tenant_runtime_service(self.boot_result, 'tenant_registry', build_default_tenant_registry))
         if self.tenant_policy_store is None:
@@ -109,6 +122,15 @@ class FastAPIDependencyContainer:
             object.__setattr__(self, 'tenant_quota_guard', quota_guard)
         if self.api_idempotency_store is None:
             object.__setattr__(self, 'api_idempotency_store', SQLiteIdempotencyStore(self._default_api_idempotency_path()))
+
+    def decision_command_binding(self) -> object:
+        binding = self.authenticated_decision_command_binding
+        if binding is None:
+            raise RuntimeError('authenticated_decision_command_binding_not_wired')
+        signed_envelope = getattr(binding, 'signed_envelope', None)
+        if not callable(signed_envelope):
+            raise TypeError('authenticated_decision_command_binding_requires_signed_envelope')
+        return binding
 
     def application_service(self) -> DecisionApplicationService:
         return self.boot_result.decision_application
@@ -215,7 +237,7 @@ class FastAPIDependencyContainer:
             return metrics
         return InMemoryMetrics()
 
-    def redact_payload(self, payload: Mapping[str, Any] | None) -> dict[str, Any]:
+    def redact_payload(self, payload: Mapping[str, Any] | None = None) -> dict[str, Any]:
         redacted = self.payload_redactor.redact(dict(payload or {}))
         if isinstance(redacted, dict):
             return redacted
@@ -261,7 +283,7 @@ class FastAPIDependencyContainer:
         request_id: str,
         payload: Mapping[str, Any] | None = None,
         operation: str | None = None,
-    ):
+    ) -> str:
         return build_idempotency_key(
             tenant_id=tenant_id,
             namespace=self.api_idempotency_namespace,

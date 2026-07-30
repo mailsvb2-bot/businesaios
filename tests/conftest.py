@@ -12,6 +12,15 @@ import pytest
 sys.dont_write_bytecode = True
 os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
 
+# Repository test runs disable third-party plugin autoload for hermeticity.
+# Load only the required async plugin in that mode. With normal autoload enabled,
+# leave registration to pytest so the plugin is not registered twice.
+pytest_plugins = (
+    ("pytest_asyncio.plugin",)
+    if os.environ.get("PYTEST_DISABLE_PLUGIN_AUTOLOAD") == "1"
+    else ()
+)
+
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -42,6 +51,20 @@ def _isolate_decision_core_singleton():
         yield
     finally:
         _reset_decision_core_singleton_for_tests()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_process_global_safety_runtime(monkeypatch):
+    """Prevent one test's breaker/budget state from poisoning another test."""
+
+    from bootstrap.safety_control_boot import build_safety_control_runtime
+
+    monkeypatch.setenv("BUSINESAIOS_SAFETY_PERSISTENT", "0")
+    build_safety_control_runtime.cache_clear()
+    try:
+        yield
+    finally:
+        build_safety_control_runtime.cache_clear()
 
 
 def _safe_path_part(value: str) -> str:
@@ -146,6 +169,17 @@ def _remove_runtime_artifacts() -> None:
     )
     _unlink_matching_files(ROOT / "security", ("*.jsonl",))
     _unlink_matching_files(ROOT, ("wave*_*.txt",))
+
+    # Runtime stores must never leak into the source tree. Release-integrity
+    # tests request this cleanup explicitly before checking repository hygiene.
+    mutable_data_root = ROOT / "data"
+    if mutable_data_root.exists():
+        for pattern in ("*.sqlite", "*.sqlite3", "*.db", "*.sqlite-wal", "*.sqlite-shm", "*.sqlite3-wal", "*.sqlite3-shm", "*.db-wal", "*.db-shm"):
+            for path in mutable_data_root.rglob(pattern):
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    pass
 
     if os.environ.get("BUSINESAIOS_DEEP_TEST_CLEANUP", "").strip() == "1":
         for path in ROOT.rglob("__pycache__"):

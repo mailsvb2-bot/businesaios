@@ -137,7 +137,11 @@ def test_profit_metrics_service_uses_minor_units_multiplier_policy() -> None:
             ],
         )
     )
-    snap = service.profit_lookback(tenant_id="t1", lookback_days=3650)
+    snap = service.profit_between_ms(
+        tenant_id="t1",
+        start_ms=2_099_999_000_000,
+        end_ms=2_100_001_000_000,
+    )
     assert snap.revenue_minor == 500
     assert snap.ads_spend_minor == 200
     assert snap.profit_minor == 300

@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 from interfaces.api.runtime_api_bundle import build_runtime_api_bundle
 from observability.action_audit_log import ActionAuditLog
 from observability.decision_audit_log import DecisionAuditLog
 from observability.metrics import InMemoryMetrics
+
+
+class _Binding:
+    def signed_envelope(self, *, action, payload, request_context, action_id):
+        return SimpleNamespace(decision=SimpleNamespace(action=action, payload=dict(payload)))
 
 
 class _Service:
@@ -49,6 +55,9 @@ class _ContainerStub:
     boot_result: object
     tenant_quota_guard: object | None = None
     api_idempotency_store: object | None = None
+
+    def decision_command_binding(self):
+        return _Binding()
 
 
 def test_runtime_api_bundle_builds_shared_runtime_adapter_and_handlers() -> None:

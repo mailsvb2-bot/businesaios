@@ -15,6 +15,7 @@ ALLOWED_IMPORT_PREFIXES = (
     "config.",
     "governance.",
     "survival.",
+    "compatibility.",
 )
 
 

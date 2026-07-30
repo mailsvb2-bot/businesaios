@@ -1,8 +1,8 @@
 """Canonical runtime messaging registry.
 
-The channel catalog now lives directly in the package namespace instead of a
-standalone ``catalog.py`` module. This keeps ownership local to the package
-without changing the exposed runtime behavior.
+The channel catalog lives directly in the package namespace. Runtime dispatch,
+configuration, capabilities and certification derive from these canonical
+channel identities instead of maintaining partial messenger lists.
 """
 
 from __future__ import annotations
@@ -12,13 +12,27 @@ from runtime.messaging.channel_spec import ChannelSpec
 from runtime.messaging.inbound_to_world_state import map_inbound_to_world_state
 
 
-def _spec(key: str, family: str, env_prefix: str, default_mode: str, delivery_backend: str) -> ChannelSpec:
-    return ChannelSpec(key, family, env_prefix, default_mode, delivery_backend)
+def _spec(
+    key: str,
+    family: str,
+    env_prefix: str,
+    default_mode: str,
+    delivery_backend: str,
+) -> ChannelSpec:
+    return ChannelSpec(
+        key,
+        family,
+        env_prefix,
+        default_mode,
+        delivery_backend,
+    )
 
 
 _CHANNELS = (
     _spec("telegram", "messaging", "TELEGRAM", "configured_noop", "bot_api"),
     _spec("whatsapp", "messaging", "WHATSAPP", "webhook", "provider_webhook"),
+    _spec("vk", "messaging", "VK", "webhook", "provider_webhook"),
+    _spec("max", "messaging", "MAX", "webhook", "provider_webhook"),
     _spec("sms", "messaging", "SMS", "webhook", "provider_webhook"),
     _spec("email", "messaging", "EMAIL", "smtp", "smtp"),
     _spec("instagram", "messaging", "INSTAGRAM", "webhook", "provider_webhook"),
@@ -48,4 +62,10 @@ def get_channel_spec(channel: str) -> ChannelSpec:
     return spec
 
 
-__all__ = ["CHANNEL_SPECS", "ChannelSpec", "get_channel_spec", "map_inbound_to_world_state", "normalize_channel"]
+__all__ = [
+    "CHANNEL_SPECS",
+    "ChannelSpec",
+    "get_channel_spec",
+    "map_inbound_to_world_state",
+    "normalize_channel",
+]

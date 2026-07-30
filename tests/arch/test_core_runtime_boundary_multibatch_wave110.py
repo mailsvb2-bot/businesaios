@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import importlib
 from pathlib import Path
 
@@ -28,5 +29,14 @@ def test_runtime_boundary_files_use_runtime_public_apis_only() -> None:
         text = Path(rel).read_text(encoding='utf-8')
         assert 'from core.' not in text, rel
         assert 'import core.' not in text, rel
+        tree = ast.parse(text, filename=rel)
+        imports: dict[str, set[str]] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                imports.setdefault(node.module, set()).update(alias.name for alias in node.names)
         for needle in required:
-            assert needle in text, (rel, needle)
+            prefix, _, imported = needle.partition(" import")
+            module = prefix.removeprefix("from ").strip()
+            assert module in imports, (rel, module, imports)
+            expected_names = {name.strip() for name in imported.strip().strip("()").split(",") if name.strip()}
+            assert expected_names <= imports[module], (rel, module, expected_names, imports[module])

@@ -10,6 +10,7 @@ from observability.metrics import InMemoryMetrics
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore
 from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_registry import InMemoryTenantRegistry
+from tests.api._authenticated_command_fixture import build_authenticated_command_binding
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ def test_create_api_router_uses_dependency_container_instead_of_private_inmemory
         tenant_registry=InMemoryTenantRegistry(),
         tenant_policy_store=InMemoryTenantPolicyStore(),
         tenant_quota_guard=TenantQuotaGuard(policy_store=InMemoryTenantPolicyStore()),
+        authenticated_decision_command_binding=build_authenticated_command_binding(),
     )
     router = create_api_router(application_service=object(), dependency_container=container)
     paths = {route.path for route in router.routes if isinstance(route, APIRoute)}
@@ -45,7 +47,6 @@ def test_create_api_router_registers_control_plane_routes() -> None:
     assert ('/control-plane/approvals/submit', ('POST',)) in route_map
 
 
-
 def test_create_api_router_registers_analytics_routes_when_telemetry_store_available() -> None:
     runtime = _RuntimeStub()
     container = FastAPIDependencyContainer(
@@ -54,6 +55,7 @@ def test_create_api_router_registers_analytics_routes_when_telemetry_store_avail
         tenant_policy_store=InMemoryTenantPolicyStore(),
         tenant_quota_guard=TenantQuotaGuard(policy_store=InMemoryTenantPolicyStore()),
         shared_observability={"telemetry_event_store": object()},
+        authenticated_decision_command_binding=build_authenticated_command_binding(),
     )
     router = create_api_router(application_service=object(), dependency_container=container)
     paths = {route.path for route in router.routes if isinstance(route, APIRoute)}

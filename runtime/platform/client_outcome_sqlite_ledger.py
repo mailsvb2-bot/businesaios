@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from datetime import datetime
 
 from billing.ledger_event import LedgerEntry, LedgerPosting
-from core.tenancy.normalization import require_tenant_id
+from contracts.tenant_identity import require_tenant_id
 from runtime.platform.client_outcome_sqlite_core import _SQLiteOwner, _json_dumps, _json_loads
 
 

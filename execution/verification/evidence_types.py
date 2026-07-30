@@ -138,7 +138,6 @@ class EvidenceItem:
                 self.status,
                 ",".join(self.external_refs),
                 _payload_digest(self.payload),
-                self.observed_at.isoformat(),
             ]
         )
         return sha256(raw.encode("utf-8")).hexdigest()[:24]

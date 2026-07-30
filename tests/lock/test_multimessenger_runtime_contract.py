@@ -13,4 +13,4 @@ def test_complete_multimessenger_runtime_surface_is_locked() -> None:
     ok, message = verify_multimessenger_runtime_contract()
 
     assert ok, message
-    assert len(EXPECTED_CHANNELS) == 14
+    assert len(EXPECTED_CHANNELS) == 16

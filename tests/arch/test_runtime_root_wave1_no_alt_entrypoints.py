@@ -32,5 +32,5 @@ def test_runtime_bootstrap_and_runtime_boot_do_not_become_root_assembly_surfaces
     assert 'register_component(' not in bootstrap_text
     assert '_load_sovereign_bootstrap_runtime' in runtime_boot_text
     assert 'import_module("runtime.bootstrap.sovereign_bootstrap")' in runtime_boot_text
-    assert 'getattr(import_module("runtime.bootstrap.sovereign_bootstrap"), "bootstrap_runtime")' in runtime_boot_text
+    assert 'import_module("runtime.bootstrap.sovereign_bootstrap").bootstrap_runtime' in runtime_boot_text
     assert 'bootstrap_runtime().artifacts.registry' not in runtime_boot_text

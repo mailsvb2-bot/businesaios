@@ -41,10 +41,18 @@ def test_wave10_runtime_boot_support_cluster_is_package_owned_alias_surface() ->
         "route_surface": "bootstrap.route_surface",
         "self_check": "bootstrap.self_check",
     }
+    static_contract_surfaces = {
+        "assembly_runtime",
+        "boot_observability",
+        "boot_phases",
+        "registration_manifest",
+        "self_check",
+    }
     owner_root = (ROOT / "runtime/boot/__init__.py").read_text(encoding="utf-8")
     assert "_COMPAT_MODULE_ALIAS_MAP" in owner_root
     for alias_name, owner in mapping.items():
-        assert not (ROOT / f"runtime/boot/{alias_name}.py").exists()
+        surface_path = ROOT / f"runtime/boot/{alias_name}.py"
+        assert surface_path.exists() is (alias_name in static_contract_surfaces)
         compat = importlib.import_module(f"runtime.boot.{alias_name}")
         assert hasattr(compat, "__getattr__") or compat is importlib.import_module(owner)
 

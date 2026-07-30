@@ -22,7 +22,18 @@ class PolicyA:
     id = "p@v1"
 
     def propose(self, state):
-        return type("O", (), {"action": "send_message@v1", "payload": {"user_id": "u1", "text": "hi", "tenant_id": "tenant-1"}})()
+        return type(
+            "O",
+            (),
+            {
+                "action": "send_message@v1",
+                "payload": {
+                    "user_id": "u1",
+                    "text": "hi",
+                    "tenant_id": "tenant-1",
+                },
+            },
+        )()
 
 
 def test_runtime_executor_persists_reliability_checkpoints(tmp_path, monkeypatch):
@@ -32,7 +43,11 @@ def test_runtime_executor_persists_reliability_checkpoints(tmp_path, monkeypatch
     schemas.register(
         "send_message@v1",
         1,
-        DecisionSchema(required={"user_id", "text"}, optional={"tenant_id"}, field_types={"user_id": str, "text": str, "tenant_id": str}),
+        DecisionSchema(
+            required={"user_id", "text"},
+            optional={"tenant_id"},
+            field_types={"user_id": str, "text": str, "tenant_id": str},
+        ),
     )
 
     preg = PolicyRegistry()
@@ -47,29 +62,72 @@ def test_runtime_executor_persists_reliability_checkpoints(tmp_path, monkeypatch
     outbox_ctx = SqliteOutbox(str(tmp_path / "outbox.db"))
     outbox = outbox_ctx.__enter__()
 
-    core = DecisionCore(selector, keyring, schemas, MemorySnapshotStore(), events, decision_archive=archive)
+    core = DecisionCore(
+        selector,
+        keyring,
+        schemas,
+        MemorySnapshotStore(),
+        events,
+        decision_archive=archive,
+    )
 
     ledger_ctx = SqliteLedger(str(tmp_path / "ledger.db"))
     ledger = ledger_ctx.__enter__()
     guard = RuntimeGuard(keyring, ledger, schemas, event_log=events)
 
     handlers = ActionHandlerRegistry()
-    handlers.register("send_message@v1", lambda payload, effects, env: {"ok": True, "echo": payload["text"]})
 
-    executor = RuntimeExecutor(guard, handlers, events, policy_registry=preg, decision_core=core, outbox=outbox, decision_archive=archive)
+    def _send_message(payload, effects, env):
+        del effects, env
+        return {
+            "ok": True,
+            "status": "verified",
+            "echo": payload["text"],
+            "router_evidence": {
+                "source": "effect_router",
+                "verified": True,
+                "status": "verified",
+                "external_refs": ["telegram:message:checkpoint-1"],
+                "confidence": 1.0,
+            },
+        }
+
+    handlers.register("send_message@v1", _send_message)
+
+    executor = RuntimeExecutor(
+        guard,
+        handlers,
+        events,
+        policy_registry=preg,
+        decision_core=core,
+        outbox=outbox,
+        decision_archive=archive,
+    )
 
     state = WorldStateV1(1, {}, {}, {}, {}, int(time.time() * 1000), user_id="u1")
     env = core.optimize(state)
 
     result = executor.execute(env)
     assert result.ok is True
-    assert result.output['effect_delivery']['decision_id'] == str(env.decision.decision_id)
-    assert result.output['effect_delivery']['runtime_outbox_status'] == 'delivered'
+    assert result.output["effect_delivery"]["decision_id"] == str(
+        env.decision.decision_id
+    )
+    assert result.output["effect_delivery"]["runtime_outbox_status"] == "delivered"
 
-    checkpoint_path = tmp_path / "data" / "reliability" / "execution_checkpoints.jsonl"
+    checkpoint_path = (
+        tmp_path / "data" / "reliability" / "execution_checkpoints.jsonl"
+    )
     assert checkpoint_path.exists()
-    rows = [json.loads(line) for line in checkpoint_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    stages = [row["stage"] for row in rows if row["run_id"] == str(env.decision.decision_id)]
+    rows = [
+        json.loads(line)
+        for line in checkpoint_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    stages = [
+        row["stage"]
+        for row in rows
+        if row["run_id"] == str(env.decision.decision_id)
+    ]
     assert "request" in stages
     assert "decision" in stages
     assert "execution" in stages

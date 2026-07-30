@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.pricing.rl.selection_service import PricingSelectionService
+from runtime.pricing import PricingSelectionService
 from runtime.boot.actions_registry import get_spec
 from runtime.boot.system_builder_parts.runtime_services import build_runtime_services
 from runtime.handlers.pricing_select import handle_pricing_select
@@ -60,7 +60,7 @@ def test_select_tariff_is_registered_as_confirmed_durable_business_write() -> No
 def test_boot_builds_the_existing_canonical_pricing_selection_service() -> None:
     source = inspect.getsource(build_runtime_services)
 
-    assert "PricingSelectionService" in source
+    assert "from runtime.pricing import PricingSelectionService" in source
     assert "ctx.set_value('pricing_selection_service', PricingSelectionService()" in source
 
 

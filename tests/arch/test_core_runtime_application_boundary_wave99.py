@@ -20,7 +20,8 @@ def test_runtime_application_package_root_installs_core_aliases() -> None:
     assert '"action_result_presenter": "application.decision.action_result_presenter"' in text
     assert '"action_validator": "application.decision.action_validator"' in text
     assert "_install_compat_aliases()" in text
-    assert "install_public_api=False" in text
+    assert "install_public_api_alias(__name__)" in text
+    assert "install_public_api=False" not in text
 
 
 def test_collapsed_runtime_application_shim_files_are_removed() -> None:

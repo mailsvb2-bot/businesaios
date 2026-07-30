@@ -88,6 +88,7 @@ def _is_allowed_file(rel: str) -> bool:
     return rel in {
         "runtime/executor.py",
         "runtime/admin_state_support.py",
+        "runtime/effects/__init__.py",
         "runtime/execution/provider_outbound_sender.py",
     }
 

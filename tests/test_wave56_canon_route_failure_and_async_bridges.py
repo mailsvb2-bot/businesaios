@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 from types import SimpleNamespace
 
 from core.marketing.async_runner import run_awaitable_sync
@@ -28,11 +27,19 @@ def test_best_effort_route_ids_prefers_env_decision():
 def test_growth_propose_route_violation_keeps_env_ids_and_safe_text():
     fx = _Effects()
     env = SimpleNamespace(decision=SimpleNamespace(decision_id='d1', correlation_id='c1'))
-    out = handle_growth_propose({'user_id': 'u1'}, fx, env, proposal_service=None, proposal_gateway=None)
-    assert out['decision_id'] == 'd1'
-    assert out['correlation_id'] == 'c1'
-    assert 'route contract' in out['text'].lower()
-    assert out['track_payload']['error'] == 'DecisionRouteViolation'
+    out = handle_growth_propose(
+        {'user_id': 'u1'},
+        fx,
+        env,
+        event_store=None,
+    )
+    assert out['ok'] is False
+    assert out['status'] == 'blocked'
+    assert out['reason'] == 'route_violation'
+    assert out['delivery']['decision_id'] == 'd1'
+    assert out['delivery']['correlation_id'] == 'c1'
+    assert 'route contract' in out['delivery']['text'].lower()
+    assert out['delivery']['track_payload']['error'] == 'DecisionRouteViolation'
 
 
 def test_ai_ceo_plan_error_does_not_leak_exception_text():
@@ -43,8 +50,11 @@ def test_ai_ceo_plan_error_does_not_leak_exception_text():
     fx = _Effects()
     env = SimpleNamespace(decision=SimpleNamespace(decision_id='d1', correlation_id='c1', issuer_id='businesaios-core', action='ai_ceo_plan@v1', tenant_id='t1'))
     out = handle_ai_ceo_plan({'user_id': 'u1', 'tenant_id': 't1', 'decision_id': 'd1', 'correlation_id': 'c1', 'issued_action': 'ai_ceo_plan@v1'}, fx, env, planner=_BadPlanner())
-    assert 'secret details' not in out['text']
-    assert out['track_payload']['error'] == 'ValueError'
+    assert out['ok'] is False
+    assert out['status'] == 'failed'
+    assert out['reason'] == 'planner_error'
+    assert 'secret details' not in out['delivery']['text']
+    assert out['delivery']['track_payload']['error'] == 'ValueError'
 
 
 def test_run_awaitable_sync_works_inside_running_loop():
@@ -70,8 +80,8 @@ def test_normalized_tenant_id_rejects_placeholders():
 def test_run_product_preflight_if_any_skips_placeholder_tenant(monkeypatch):
     from runtime.boot import system_builder_steps as mod
 
-    fake_tenant_mod = SimpleNamespace(current_tenant_id=lambda: 'default')
-    monkeypatch.setitem(sys.modules, 'core.tenancy.tenant', fake_tenant_mod)
+    import runtime.tenancy as tenant_mod
+    monkeypatch.setattr(tenant_mod, 'current_tenant_id', lambda: 'default')
 
     called = {'n': 0}
 

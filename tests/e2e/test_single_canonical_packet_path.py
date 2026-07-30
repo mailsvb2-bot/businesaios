@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from runtime.advisory.autonomy_advisory_packet import AutonomyAdvisoryPacket
 from runtime.audit_log import RuntimeAuditLog
-from runtime.decision_gateway import DecisionGateway
+from runtime.decision_gateway import DecisionGateway, build_runtime_decision_callable
 from runtime.decision_input.decision_input_service import DecisionInputService
 from runtime.decision_input.runtime_state_enrichment import RuntimeStateEnrichmentService
 from runtime.integration.runtime_packet_provider import RuntimePacketProvider
@@ -10,6 +10,7 @@ from runtime.integration.runtime_packet_request import RuntimePacketRequest
 from runtime.integration.world_state_integration_service import WorldStateIntegrationService
 from runtime.market.market_snapshot import MarketSnapshot
 from runtime.runtime_observability import RuntimeObservability
+from tests.e2e._capturing_decision_issuer import CapturingDecisionIssuer
 
 
 def test_single_canonical_packet_path() -> None:
@@ -57,16 +58,17 @@ def test_single_canonical_packet_path() -> None:
         )
     )
 
-    def fake_core(ctx: dict[str, object]) -> dict[str, object]:
-        assert "external_world_state_features" in ctx
-        assert "external_packet_id" in ctx
-        assert "winner" not in ctx
-        assert "candidate_ids" not in ctx
-        return {"ok": True}
+    issuer = CapturingDecisionIssuer()
 
     result = gateway.route(
         packet=packet,
         canonical_context={"base": 1},
-        decision_core_callable=fake_core,
+        decision_core_callable=build_runtime_decision_callable(issuer=issuer),
     )
-    assert result == {"ok": True}
+    assert result.decision.decision_id == issuer.decision_id
+    assert len(issuer.captured_states) == 1
+    context = issuer.captured_states[0]
+    assert "external_world_state_features" in context
+    assert "external_packet_id" in context
+    assert "winner" not in context
+    assert "candidate_ids" not in context

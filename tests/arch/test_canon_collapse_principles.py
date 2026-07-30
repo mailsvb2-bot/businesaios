@@ -56,6 +56,7 @@ def _count_metrics():
             continue
         total_files += 1
         if path.suffix == ".py":
+            python_files += 1
             try:
                 with path.open("r", encoding="utf-8", errors="ignore") as fh:
                     python_lines += sum(1 for _ in fh)
@@ -143,16 +144,16 @@ def test_decision_envelope_shape_is_owned_by_decision_path_lock() -> None:
 
 
 def test_runtime_gateways_do_not_bypass_decision_path_lock() -> None:
-    runtime_gateway_text = _read("runtime/decision_gateway.py")
+    runtime_gateway_text = _read("runtime/decision_gateway_owner.py")
     headless_gateway_text = _read("application/headless/decision_gateway.py")
-    runtime_gateway_tree = _tree("runtime/decision_gateway.py")
+    runtime_gateway_tree = _tree("runtime/decision_gateway_owner.py")
     headless_gateway_tree = _tree("application/headless/decision_gateway.py")
 
     assert "from runtime.decision_path_lock import issue_locked_decision" in runtime_gateway_text
     assert _calls_function(runtime_gateway_tree, "issue_locked_decision")
-    assert "from runtime.decision_path_lock import" in headless_gateway_text
-    assert "issue_locked_decision" in headless_gateway_text
-    assert _calls_function(headless_gateway_tree, "issue_locked_decision")
+    assert "from runtime.decision_gateway import (" in headless_gateway_text
+    assert "issue_runtime_decision" in headless_gateway_text
+    assert _calls_function(headless_gateway_tree, "issue_runtime_decision")
     assert ".issue(enriched_state)" not in runtime_gateway_text
     assert "for attribute_name in ('optimize', 'issue', 'decide')" not in headless_gateway_text
 

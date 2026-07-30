@@ -31,6 +31,7 @@ class ExecuteActionStackBundle:
 def build_execute_action_stack_bundle(
     *,
     application_service: object,
+    command_binding: object | None,
     retry_policy: RetryPolicy,
     idempotency: IdempotencyExecutor,
     action_audit_log: ActionAuditLog,
@@ -40,7 +41,10 @@ def build_execute_action_stack_bundle(
     quota_amount: float,
     consume_quota_after_success_only: bool,
 ) -> ExecuteActionStackBundle:
-    handler = build_execute_action_handler(application_service=application_service)
+    handler = build_execute_action_handler(
+        application_service=application_service,
+        command_binding=command_binding,
+    )
     guarded_handler = build_execute_action_guarded_handler(
         handler=handler,
         retry_policy=retry_policy,

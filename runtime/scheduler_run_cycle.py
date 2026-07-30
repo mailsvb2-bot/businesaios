@@ -13,7 +13,11 @@ from runtime.scheduler_parts.deploy_flow import (
     begin_rollout,
     request_rollout_execution,
 )
-from runtime.scheduler_parts.feedback import build_policy_metadata, guard_feedback_pipeline
+from runtime.scheduler_parts.feedback import (
+    build_policy_metadata,
+    component_identity,
+    guard_feedback_pipeline,
+)
 from runtime.scheduler_parts.result import LearningJobResult
 
 CANON_RUNTIME_SCHEDULER_RUN_CYCLE_ORCHESTRATOR_ONLY = True
@@ -46,10 +50,17 @@ def run_learning_cycle(job) -> LearningJobResult:
 
     train_dataset_id = f"{snapshot_id}:train"
     eval_dataset_id = f"{snapshot_id}:eval"
+    trainer_component = component_identity(
+        job._trainer, fallback="learning.trainer"
+    )
+    evaluator_component = component_identity(
+        job._validator, fallback="learning.validator"
+    )
     policy_meta = build_policy_metadata(
         policy_id=best_policy_id,
         train_dataset_id=train_dataset_id,
         trained_at_ms=now_ms,
+        trainer_component=trainer_component,
     )
 
     try:
@@ -60,6 +71,8 @@ def run_learning_cycle(job) -> LearningJobResult:
             train_dataset_id=train_dataset_id,
             eval_dataset_id=eval_dataset_id,
             now_ms=now_ms,
+            trainer_component=trainer_component,
+            evaluator_component=evaluator_component,
         )
     except (FeedbackLoopViolation, AutopilotFeedbackGuardViolation) as exc:
         return job._skip_result(f"feedback_guard:{exc.__class__.__name__}", snapshot_id=snapshot_id, model_id=model_id)

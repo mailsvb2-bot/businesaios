@@ -10,7 +10,7 @@ from math import isfinite
 from pathlib import Path
 from typing import Any
 
-from core.tenancy.normalization import require_tenant_id
+from contracts.tenant_identity import require_tenant_id
 
 CANON_PLATFORM_BILLING_SCHEDULER_JOB_STORE = True
 SCHEMA_VERSION = 1

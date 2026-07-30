@@ -21,7 +21,11 @@ class PolicyA:
     id = "p@v1"
 
     def propose(self, state):
-        return type("O", (), {"action": "send_message@v1", "payload": {"user_id": "u1", "text": "hi"}})()
+        return type(
+            "O",
+            (),
+            {"action": "send_message@v1", "payload": {"user_id": "u1", "text": "hi"}},
+        )()
 
 
 def test_recovery_executes_effects_when_ledger_marked(tmp_path):
@@ -29,7 +33,11 @@ def test_recovery_executes_effects_when_ledger_marked(tmp_path):
     schemas.register(
         "send_message@v1",
         1,
-        DecisionSchema(required={"user_id", "text"}, optional=set(), field_types={"user_id": str, "text": str}),
+        DecisionSchema(
+            required={"user_id", "text"},
+            optional=set(),
+            field_types={"user_id": str, "text": str},
+        ),
     )
 
     preg = PolicyRegistry()
@@ -44,7 +52,14 @@ def test_recovery_executes_effects_when_ledger_marked(tmp_path):
     outbox_ctx = SqliteOutbox(str(tmp_path / "outbox.db"))
     outbox = outbox_ctx.__enter__()
 
-    core = DecisionCore(selector, keyring, schemas, MemorySnapshotStore(), events, decision_archive=archive)
+    core = DecisionCore(
+        selector,
+        keyring,
+        schemas,
+        MemorySnapshotStore(),
+        events,
+        decision_archive=archive,
+    )
 
     ledger_ctx = SqliteLedger(str(tmp_path / "ledger.db"))
     ledger = ledger_ctx.__enter__()
@@ -52,12 +67,33 @@ def test_recovery_executes_effects_when_ledger_marked(tmp_path):
 
     handlers = ActionHandlerRegistry()
     calls = []
-    handlers.register(
-        "send_message@v1",
-        lambda payload, effects, env: calls.append((payload["user_id"], payload["text"], env.decision.decision_id)),
-    )
 
-    executor = RuntimeExecutor(guard, handlers, events, policy_registry=preg, decision_core=core, outbox=outbox, decision_archive=archive)
+    def _send_message(payload, effects, env):
+        del effects
+        calls.append((payload["user_id"], payload["text"], env.decision.decision_id))
+        return {
+            "ok": True,
+            "status": "verified",
+            "router_evidence": {
+                "source": "effect_router",
+                "verified": True,
+                "status": "verified",
+                "external_refs": ["telegram:message:recovered-1"],
+                "confidence": 1.0,
+            },
+        }
+
+    handlers.register("send_message@v1", _send_message)
+
+    executor = RuntimeExecutor(
+        guard,
+        handlers,
+        events,
+        policy_registry=preg,
+        decision_core=core,
+        outbox=outbox,
+        decision_archive=archive,
+    )
 
     state = WorldStateV1(1, {}, {}, {}, {}, int(time.time() * 1000), user_id="u1")
     env = core.optimize(state)
@@ -71,7 +107,8 @@ def test_recovery_executes_effects_when_ledger_marked(tmp_path):
         payload_json="{}",
     )
 
-    # Recovery should run effects even though ledger is already marked.
+    # Recovery should run effects even though the ledger is already marked, and
+    # only finalize after a trusted transport receipt is observed.
     executor.execute_recovery(env)
     assert calls and calls[0][0] == "u1"
 

@@ -34,4 +34,7 @@ def test_autopilot_activation_end_to_end():
         feedback_pipeline=FeedbackPipeline(),
     )
     assert result['decision_result'].approved is True
-    assert result['execution_result'].status == 'accepted'
+    assert result['decision_result'].recommended is True
+    assert result['decision_result'].executable_action is None
+    assert result['execution_result'].status == 'skipped'
+    assert result['execution_result'].message == 'no_executable_action'

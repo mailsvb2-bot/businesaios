@@ -54,11 +54,14 @@ def test_runtime_config_store_noop_save_and_revision_increment() -> None:
     )
 
     assert first.version is not None
-    assert same is first
+    assert same == first
+    assert same is not first
     assert changed.version is not None
     assert first.version.revision == 1
+    assert same.version.revision == 1
     assert changed.version.revision == 2
     assert changed.environment == "prod"
+    assert len(store.history(profile_name="main", environment="prod")) == 2
 
 
 def test_policy_config_store_optimistic_concurrency_guard() -> None:

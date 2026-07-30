@@ -81,9 +81,6 @@ class ProviderLiveSyncRuntime:
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
         binding = ProviderTransportBindings().describe(provider)
         request_base = {'provider_key': provider.provider_key, 'operation': normalized_operation, 'tenant_id': str(tenant_id), 'business_id': str(business_id), 'payload': dict(payload or {}), 'domain': provider.domain, 'adapter_key': provider.adapter_key, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider)}
-        if normalized_mode == 'live' and provider.provider_key not in self.transports:
-            result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_transport_unbound', accepted=False, metadata={'request_envelope': request_base, 'transport_binding': binding})
-            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
         write_guard_decision = self.write_guard.evaluate(provider=provider, operation=normalized_operation, mode=normalized_mode)
         if not write_guard_decision.allowed:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status=write_guard_decision.status, accepted=False, metadata={'provider_write_guard': write_guard_decision.to_metadata(), 'request_envelope': request_base})

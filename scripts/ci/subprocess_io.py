@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Mapping, Sequence
+import tempfile
+from contextlib import contextmanager
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -65,6 +68,27 @@ def _merged_env(env: Mapping[str, str] | None = None, *, use_base_env: bool = Tr
     if env:
         merged_env.update({str(k): str(v) for k, v in env.items()})
     return merged_env
+
+
+
+
+@contextmanager
+def isolated_cargo_target(scope: str) -> Iterator[dict[str, str]]:
+    """Keep Cargo build products outside the tracked repository tree."""
+
+    normalized_scope = "".join(
+        character if character.isalnum() or character in {"-", "_"} else "-"
+        for character in str(scope).strip()
+    ).strip("-") or "cargo"
+    parent = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
+    parent.mkdir(parents=True, exist_ok=True)
+    target_dir = Path(
+        tempfile.mkdtemp(prefix=f"businesaios-{normalized_scope}-", dir=str(parent))
+    )
+    try:
+        yield {"CARGO_TARGET_DIR": str(target_dir)}
+    finally:
+        shutil.rmtree(target_dir, ignore_errors=True)
 
 
 def run_command(
@@ -176,4 +200,11 @@ def run_pytest(args: Sequence[str], *, timeout: float | None = None) -> CommandO
     return run_command(command, timeout=timeout)
 
 
-__all__ = ["CommandOutcome", "run_command", "run_python", "run_pytest", "stream_command"]
+__all__ = [
+    "CommandOutcome",
+    "isolated_cargo_target",
+    "run_command",
+    "run_python",
+    "run_pytest",
+    "stream_command",
+]

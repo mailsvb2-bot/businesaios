@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from config.decision_safety_policy import (
@@ -16,7 +17,7 @@ from config.tenant_config_store import InMemoryTenantConfigStore, PersistentTena
 from observability.tenant_metrics_registry import TenantMetricsRegistry
 
 from .action_budget.guard import ActionBudgetGuard
-from .action_budget.ledger import InMemoryActionBudgetLedger, SqliteActionBudgetLedger
+from .action_budget.ledger import InMemoryActionBudgetLedger
 from .action_budget.models import ActionBudget
 from .action_catalog import ActionSafetyCatalog, build_default_action_catalog
 from .blast_radius.analyzer import StaticBlastRadiusAnalyzer
@@ -27,7 +28,7 @@ from .boot_integrity import SafetyBootIntegrityChecker
 from .circuit_breaker.feedback import CircuitBreakerFeedback
 from .circuit_breaker.guard import CircuitBreakerGuard
 from .circuit_breaker.policy import CircuitBreakerPolicy
-from .circuit_breaker.store import InMemoryCircuitBreakerStore, SqliteCircuitBreakerStore
+from .circuit_breaker.store import InMemoryCircuitBreakerStore
 from .decision_sandbox.executor import PredicateSandboxExecutor
 from .decision_sandbox.guard import DecisionSandboxGuard
 from .key_registry import SafetyKeyRegistry
@@ -35,7 +36,7 @@ from .kill_switch.guard import KillSwitchGuard
 from .kill_switch.registry import InMemoryKillSwitchRegistry
 from .multi_step_approval.guard import MultiStepApprovalGuard
 from .multi_step_approval.models import ApprovalPolicy
-from .multi_step_approval.repository import InMemoryApprovalRepository, SqliteApprovalRepository
+from .multi_step_approval.repository import InMemoryApprovalRepository
 from .observability.event_store import JsonlSafetyEventStore
 from .policy_manifest import PolicyManifestSigner
 from .policy_trust_chain import PolicyTrustChain
@@ -45,17 +46,29 @@ from .risk_scoring.guard import RiskScoreGuard
 from .risk_scoring.scorer import RiskScorer
 from .rollback_engine.registry import InMemoryRollbackRegistry
 from .rollback_engine.service import RollbackPlanner
-from .rollback_engine.store import InMemoryRollbackPlanStore, SqliteRollbackPlanStore
+from .rollback_engine.store import InMemoryRollbackPlanStore
 from .rollback_verifier import RollbackVerifier
 from .runaway_loop_guard.guard import RunawayLoopGuard
-from .runaway_loop_guard.store import InMemoryRunawayLoopStore, SqliteRunawayLoopStore
+from .runaway_loop_guard.store import InMemoryRunawayLoopStore
 from .safety_supervisor import SafetySupervisor
 from .service import SafetyControlService
 from .simulation_gate.evidence import SimulationEvidenceVerifier
 from .simulation_gate.models import SimulationGatePolicy
 from .simulation_gate.service import SimulationGate
-from .support.runtime_paths import safety_jsonl_path, safety_sqlite_path
+from .support.runtime_paths import safety_jsonl_path
 from .support.tenant_policy_resolver import TenantSafetyPolicyResolver
+
+
+@dataclass(frozen=True)
+class PersistentSafetyStores:
+    circuit_breaker_store: object
+    action_budget_ledger: object
+    approval_repository: object
+    runaway_loop_store: object
+    rollback_plan_store: object
+
+
+PersistentSafetyStoreFactory = Callable[[int], PersistentSafetyStores]
 
 
 @dataclass(frozen=True)
@@ -189,6 +202,7 @@ def build_default_profile(
     reward_guard_defaults: RewardGuardPolicyDefaults | None = None,
     persistent: bool = False,
     tenant_config_store: InMemoryTenantConfigStore | None = None,
+    persistent_store_factory: PersistentSafetyStoreFactory | None = None,
 ) -> SafetyControlProfile:
     profile_policy = policy or DEFAULT_SAFETY_PROFILE_POLICY
     scorer_policy = risk_scorer_policy or DEFAULT_RISK_SCORER_POLICY
@@ -202,19 +216,30 @@ def build_default_profile(
     policy_trust_chain = PolicyTrustChain(path=safety_jsonl_path('policy_trust_chain'), snapshot_path=safety_jsonl_path('policy_trust_chain_snapshot')) if persistent else PolicyTrustChain()
     tenant_policy_resolver = TenantSafetyPolicyResolver(tenant_config_store, manifest_signer=policy_manifest_signer, trust_chain=policy_trust_chain)
     kill_switch_registry = InMemoryKillSwitchRegistry()
-    circuit_breaker_store = SqliteCircuitBreakerStore(sqlite_path=safety_sqlite_path('circuit_breaker')) if persistent else InMemoryCircuitBreakerStore()
+    if persistent:
+        if persistent_store_factory is None:
+            raise RuntimeError(
+                "persistent safety stores require runtime composition wiring"
+            )
+        persistent_stores = persistent_store_factory(
+            profile_policy.runaway_loop_repetition_threshold
+        )
+        circuit_breaker_store = persistent_stores.circuit_breaker_store
+        action_budget_ledger = persistent_stores.action_budget_ledger
+        approval_repository = persistent_stores.approval_repository
+        runaway_loop_store = persistent_stores.runaway_loop_store
+        rollback_plan_store = persistent_stores.rollback_plan_store
+    else:
+        circuit_breaker_store = InMemoryCircuitBreakerStore()
+        action_budget_ledger = InMemoryActionBudgetLedger()
+        approval_repository = InMemoryApprovalRepository()
+        runaway_loop_store = InMemoryRunawayLoopStore()
+        rollback_plan_store = InMemoryRollbackPlanStore()
     circuit_breaker_feedback = CircuitBreakerFeedback(
         circuit_breaker_store,
         threshold=profile_policy.circuit_breaker_max_consecutive_failures,
     )
-    action_budget_ledger = SqliteActionBudgetLedger(sqlite_path=safety_sqlite_path('action_budget')) if persistent else InMemoryActionBudgetLedger()
-    approval_repository = SqliteApprovalRepository(sqlite_path=safety_sqlite_path('approval')) if persistent else InMemoryApprovalRepository()
-    runaway_loop_store = SqliteRunawayLoopStore(
-        sqlite_path=safety_sqlite_path('runaway_loop'),
-        maxlen=max(profile_policy.runaway_loop_repetition_threshold + 2, 5),
-    ) if persistent else InMemoryRunawayLoopStore()
     rollback_registry = InMemoryRollbackRegistry()
-    rollback_plan_store = SqliteRollbackPlanStore(sqlite_path=safety_sqlite_path('rollback_plans')) if persistent else InMemoryRollbackPlanStore()
     action_catalog = build_default_action_catalog()
     tenant_metrics_registry = TenantMetricsRegistry()
     rollback_verifier = RollbackVerifier()

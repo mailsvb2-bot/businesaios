@@ -17,7 +17,7 @@ from core.policy.decision_validator import DecisionValidator
 from core.scorers.selector import DecisionSelector
 from kernel.decision_candidate import DecisionCandidate
 from kernel.world_state import WorldStateV1
-from shared.numbers import coerce_float
+from kernel.numbers import coerce_float
 
 CANON_DEMAND_ROUTE_POLICY = True
 

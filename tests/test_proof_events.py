@@ -28,13 +28,13 @@ class PayPolicy:
         )()
 
 
-def test_required_proof_events_emitted(tmp_path):
-    import core.ai.decision_core as dc
+def test_required_proof_events_emitted(tmp_path, monkeypatch):
+    import application.decision_runtime.runtime as decision_runtime
 
     def _allow_gate(**kwargs):
         return True, "ok", {}
 
-    dc.gate_action_or_raise = _allow_gate
+    monkeypatch.setattr(decision_runtime, "gate_action_or_raise", _allow_gate)
 
     schemas = SchemaRegistry()
     schemas.register(
@@ -64,7 +64,17 @@ def test_required_proof_events_emitted(tmp_path):
     handlers = ActionHandlerRegistry()
     handlers.register(
         "capture_payment@v1",
-        lambda payload, effects, env: {"ok": True},
+        lambda payload, effects, env: {
+            "ok": True,
+            "status": "executed",
+            "evidence": {
+                "source": "payment_gateway",
+                "verified": True,
+                "status": "verified",
+                "external_refs": [f"payment:{env.decision.decision_id}"],
+                "confidence": 1.0,
+            },
+        },
     )
 
     reward = RewardEngine()

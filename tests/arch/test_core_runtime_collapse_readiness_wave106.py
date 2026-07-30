@@ -35,6 +35,7 @@ def test_project_internal_code_no_longer_imports_collapsed_or_ready_compat_surfa
     allowed_prefixes = ("tests/",)
     allowed_owner_files = {
         "boot/runtime_orchestrator.py",
+        "boot/runtime_public_api.py",
         "bootstrap/compose.py",
         "bootstrap/runtime_integration.py",
         "interfaces/multichannel/__init__.py",

@@ -55,7 +55,7 @@ def test_server_boot_surface_supports_health_readiness_and_execute_flow(monkeypa
         subject='deployment-contract-control-plane',
         actor_id='deployment-contract-control-plane',
         roles=(RoleId.OWNER,),
-        scopes=('control_plane:read', 'control_plane:admin'),
+        scopes=('control_plane:read', 'control_plane:admin', 'api.public.execute_action'),
         display_name='Deployment contract control-plane principal',
         metadata={'test': 'server_deployment_contract'},
     )
@@ -65,7 +65,7 @@ def test_server_boot_surface_supports_health_readiness_and_execute_flow(monkeypa
         'X-Forwarded-Proto': 'https',
     }
     surface = build_system_boot_surface()
-    with TestClient(surface.http_app) as client:
+    with TestClient(surface.http_app, base_url="https://testserver") as client:
         assert client.get('/health').status_code == 200
         ready = client.get('/readyz')
         assert ready.status_code == 200
@@ -73,7 +73,7 @@ def test_server_boot_surface_supports_health_readiness_and_execute_flow(monkeypa
         result = client.post(
             '/actions/execute',
             json={'action_type': 'pricing.publish_offer', 'payload': {'offer_id': 'srv-1', 'amount': 199}},
-            headers={'x-tenant-id': 'tenant-a', 'x-idempotency-key': 'srv-test-1', 'x-action-id': 'srv-test-action-1'},
+            headers={**auth_headers, 'X-Idempotency-Key': 'srv-test-1', 'X-Action-ID': 'srv-test-action-1'},
         )
         assert result.status_code == 200
         payload = result.json()

@@ -13,6 +13,9 @@ def test_capability_degradation_flow_falls_back_on_low_health_score(tmp_path) ->
     report = harness.run(make_request(goal="Publish under degraded capability", max_steps=1, meta={"runtime_capabilities": {"create_listing": {"enabled": True, "healthy": False, "health_score": 0.10}}}))
     step = report.steps[0]
     assert step.action == "notify_owner"
-    assert harness.executor.seen_actions == ["notify_owner"]
+    assert harness.executor.seen_actions == []
+    assert step.status == "approval_required"
+    assert step.attempted is False
+    assert step.operator_required is True
     assert step.payload["capability_fallback_reason"] == "low_health_score"
     assert report.final_feedback["capability_planning"]["fallback_used"] is True

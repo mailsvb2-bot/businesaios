@@ -48,6 +48,19 @@ def _coerce_bool(value: object) -> bool | None:
     return None
 
 
+def _with_default_observed_at(
+    payload: Mapping[str, Any] | None,
+    *,
+    default_observed_at: object,
+) -> dict[str, Any]:
+    normalized = _safe_dict(payload)
+    if normalized and not _text(normalized.get("observed_at")):
+        observed_at = _text(default_observed_at)
+        if observed_at:
+            normalized["observed_at"] = observed_at
+    return normalized
+
+
 @dataclass(frozen=True, slots=True)
 class EvidenceVerificationContext:
     action: dict[str, Any]
@@ -98,11 +111,22 @@ class EvidenceVerifier:
         action_payload = _safe_dict(action)
         action_type = _text(action_payload.get("action_type"))
         action_id = _text(action_payload.get("action_id"))
-        receipt_payload = _safe_dict(execution_receipt)
+        default_observed_at = action_payload.get("requested_at") or action_payload.get("observed_at")
+        receipt_payload = _with_default_observed_at(
+            execution_receipt,
+            default_observed_at=default_observed_at,
+        )
         feedback_payload = normalize_feedback_contract(feedback)
-        router_payload = normalize_router_evidence(router_evidence)
+        router_payload = _with_default_observed_at(
+            normalize_router_evidence(router_evidence),
+            default_observed_at=default_observed_at,
+        )
 
-        builder = EffectEvidenceBuilder(action_type=action_type, action_id=action_id)
+        builder = EffectEvidenceBuilder(
+            action_type=action_type,
+            action_id=action_id,
+            default_observed_at=default_observed_at,
+        )
         evidence_items = []
 
         if receipt_payload:
@@ -120,7 +144,10 @@ class EvidenceVerifier:
             )
 
         evidence_block = _safe_dict(feedback_payload.get("evidence"))
-        router_from_feedback = _safe_dict(evidence_block.get("router_result"))
+        router_from_feedback = _with_default_observed_at(
+            evidence_block.get("router_result"),
+            default_observed_at=default_observed_at,
+        )
         if router_from_feedback:
             builder.add_feedback_evidence(feedback=feedback_payload)
             rf_verified = _coerce_bool(router_from_feedback.get("verified"))
@@ -157,7 +184,10 @@ class EvidenceVerifier:
         if isinstance(connector_rows, Mapping):
             connector_rows = [connector_rows]
         for row in connector_rows:
-            connector_payload = _safe_dict(row)
+            connector_payload = _with_default_observed_at(
+                row,
+                default_observed_at=default_observed_at,
+            )
             if not connector_payload:
                 continue
             builder.add_connector_snapshot(source=_text(connector_payload.get("source") or "connector"), payload=connector_payload)
@@ -177,7 +207,14 @@ class EvidenceVerifier:
                 )
             )
 
-        generic_evidence = evidence_block if evidence_block and not router_from_feedback else {}
+        generic_evidence = (
+            _with_default_observed_at(
+                evidence_block,
+                default_observed_at=default_observed_at,
+            )
+            if evidence_block and not router_from_feedback
+            else {}
+        )
         if generic_evidence:
             generic_refs = _safe_list(generic_evidence.get("external_refs") or feedback_payload.get("external_refs"))
             if generic_refs or _text(generic_evidence.get("status")):

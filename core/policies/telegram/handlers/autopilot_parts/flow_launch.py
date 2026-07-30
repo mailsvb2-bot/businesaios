@@ -14,9 +14,22 @@ AUTOPILOT_DECISION_V1 = "autopilot_decision@v1"
 AUTOPILOT_STARTED_V1 = "autopilot_started@v1"
 
 
-def build_launch_action(ctx, *, user_id: str, default_price_rub: int, sess: dict, sl, logger):
-    tenant_id = normalize_tenant_id_or_unknown(getattr(ctx.state, "tenant_id", None))
-    contract = resolve_autopilot_contract(product=getattr(ctx.state, "product", {}) or {}, tenant_id=tenant_id)
+def build_launch_action(
+    ctx,
+    *,
+    user_id: str,
+    default_price_rub: int,
+    sess: dict,
+    sl,
+    logger,
+):
+    tenant_id = normalize_tenant_id_or_unknown(
+        getattr(ctx.state, "tenant_id", None)
+    )
+    contract = resolve_autopilot_contract(
+        product=getattr(ctx.state, "product", {}) or {},
+        tenant_id=tenant_id,
+    )
 
     diag = dict(sess.get("diag") or {}) if isinstance(sess.get("diag"), dict) else {}
     tasks = serialize_tasks(build_tasks_from_diagnostics(diag))
@@ -24,16 +37,15 @@ def build_launch_action(ctx, *, user_id: str, default_price_rub: int, sess: dict
     sess["stage"] = "running"
 
     verdict = stop_loss_verdict(ctx, contract=contract, logger=logger)
-    if (not verdict.allow) and (not sl.active):
-        sess_a = dict(sess)
-        sess_a["stage"] = "audit:stop_loss"
+    if not verdict.allow:
         return propose(
-            "execute_plan@v1",
+            "set_user_setting@v1",
             build_stop_loss_plan(
+                tenant_id=tenant_id,
                 user_id=str(user_id),
                 verdict=verdict,
                 existing=sl,
-                session_patch=sess_a,
+                now_ms=int(getattr(ctx.state, "timestamp_ms", 0) or 0),
                 callback_query_id=ctx.callback_query_id,
             ),
         )
@@ -50,7 +62,9 @@ def build_launch_action(ctx, *, user_id: str, default_price_rub: int, sess: dict
         user_id=str(user_id),
     )
     changes = {"suggested_price_minor": int(rec.price_minor), "currency": rec.currency}
-    tasks_text = "\n".join([f"- {t.get('title', '')}: {t.get('details', '')}" for t in tasks])
+    tasks_text = "\n".join(
+        [f"- {task.get('title', '')}: {task.get('details', '')}" for task in tasks]
+    )
 
     return propose(
         "execute_plan@v1",
@@ -75,14 +89,21 @@ def build_launch_action(ctx, *, user_id: str, default_price_rub: int, sess: dict
                             "kind": "price_reco",
                             "reason": rec.reason,
                             "changes": changes,
-                            "guardrails": {"allow": bool(verdict.allow), "reason": verdict.reason},
+                            "guardrails": {
+                                "allow": bool(verdict.allow),
+                                "reason": verdict.reason,
+                            },
                         },
                         "source": "autopilot",
                     },
                 },
                 {
                     "action": "set_user_setting@v1",
-                    "payload": {"user_id": str(user_id), "key": "autopilot:session", "value": dict(sess)},
+                    "payload": {
+                        "user_id": str(user_id),
+                        "key": "autopilot:session",
+                        "value": dict(sess),
+                    },
                 },
                 {
                     "action": "send_message@v1",

@@ -13,6 +13,10 @@ def test_staging_runtime_proof_supplies_production_control_plane_auth() -> None:
     required = (
         'CONTROL_PLANE_API_KEY_PEPPER="${API_CONTROL_PLANE_API_KEY_PEPPER:-}"',
         "secrets.token_urlsafe(48)",
+        'DECISION_SIGNING_SECRET="${DECISION_SIGNING_SECRET:-}"',
+        "secrets.token_urlsafe(64)",
+        'require_signing_secret_is_safe(env="production", secret_raw=secret)',
+        '-e DECISION_SIGNING_SECRET="$DECISION_SIGNING_SECRET" \\',
         'CONTROL_PLANE_API_KEY_STORE_PATH="${BAIOS_STAGING_API_KEY_STORE_PATH:-/app/data/api/api_keys.json}"',
         '-e API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS=0 \\',
         '-e API_CONTROL_PLANE_API_KEY_PEPPER="$CONTROL_PLANE_API_KEY_PEPPER" \\',
@@ -23,3 +27,4 @@ def test_staging_runtime_proof_supplies_production_control_plane_auth() -> None:
 
     assert not missing, f"staging runtime proof misses production auth wiring: {missing}"
     assert 'echo "$CONTROL_PLANE_API_KEY_PEPPER"' not in script
+    assert 'echo "$DECISION_SIGNING_SECRET"' not in script

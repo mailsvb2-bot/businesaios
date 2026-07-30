@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import time
-
 from core.behavior.behavioral_state_builder import BehavioralStateBuilder
 from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
@@ -20,7 +18,7 @@ def test_golden_replay_real_event_store_trace(tmp_path):
     tenant_id = "default"
     user_id = "u1"
 
-    now = int(time.time() * 1000)
+    now = 1_700_000_000_000
     events = [
         {"tenant_id": tenant_id, "user_id": user_id, "source": "telegram", "event_type": "ui_click", "timestamp_ms": now + 1, "payload": {"button_id": "start"}},
         {"tenant_id": tenant_id, "user_id": user_id, "source": "telegram", "event_type": "offer_shown", "timestamp_ms": now + 2, "payload": {"offer_id": "offer_30_a", "funnel_stage": "consideration"}},
@@ -54,4 +52,4 @@ def test_golden_replay_real_event_store_trace(tmp_path):
     assert snap1 == snap2
 
     # Golden hash: if behavior/operator logic changes, this will flag it loudly.
-    assert _stable_hash(snap1) == "d32d8e8822e0052b31482e7006efc06a2ac26e9528007b7d2a3f0ab98d991513"
+    assert _stable_hash(snap1) == "ed02480bb1e6e2f5d8494957941516f173eb195c43780e03b144aeca25f2b905"

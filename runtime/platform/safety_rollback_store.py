@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from sqlite3 import Connection
 
-from core.safety.controls.rollback_engine.models import (
+from contracts.safety_rollback import (
     RollbackAction,
     RollbackExecutionState,
     RollbackPlan,

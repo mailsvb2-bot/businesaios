@@ -83,6 +83,7 @@ ALLOWED_EFFECT_DOMAIN_ENTRYPOINTS: tuple[str, ...] = (
 
 ALLOWED_NETWORK_PRIMITIVE_IMPORTERS: tuple[str, ...] = (
     "runtime/_internal/http_transport.py",
+    "runtime/_internal/effects_clients/provider_outbound_sender.py",
     "runtime/_internal/market_intelligence/http_transport.py",
     "runtime/security/ast_bypass_guard.py",
     "runtime/business_autonomy/provider_http_live_clients.py",
@@ -96,7 +97,9 @@ ALLOWED_OPERATOR_NETWORK_PROBES: tuple[str, ...] = (
 )
 
 ALLOWED_NETWORK_LITERAL_SURFACES: tuple[str, ...] = (
+    "canon/sealed_effect_policy.py",
     "runtime/_internal/_effects_impl.py",
+    "runtime/_internal/effects_clients/telegram_endpoint.py",
     "runtime/_internal/effects_clients/telegram_client.py",
     "runtime/_internal/effects_clients/yookassa_client.py",
     "runtime/_internal/effects_clients/yookassa_webhook_server.py",
@@ -125,7 +128,6 @@ EVIDENCE_ONLY_ROUTE_HELPERS: tuple[str, ...] = (
     "execution.routing.capability_latency_model",
     "execution.routing.capability_proofability_score",
 )
-
 
 CANONICAL_PACKAGE_OWNER_SURFACES: tuple[str, ...] = (
     "boot.factories",

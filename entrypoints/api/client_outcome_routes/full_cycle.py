@@ -14,10 +14,17 @@ from entrypoints.api.client_outcome_routes.module_helpers import (
 from lead_outcomes.client_outcome_contract import ClientProofEvent, OutcomeLead
 
 
-def execute_full_cycle(handlers, *, now: datetime, request: ExecuteClientOutcomeCycleRequest, tenant_id: str) -> ExecuteClientOutcomeCycleResponse:
+def execute_full_cycle(
+    handlers,
+    *,
+    now: datetime,
+    request: ExecuteClientOutcomeCycleRequest,
+    tenant_id: str,
+) -> ExecuteClientOutcomeCycleResponse:
     if str(request.tenant_id).strip() != str(tenant_id).strip():
         raise PermissionError('client_outcome_cycle_tenant_mismatch')
     request_payload = request.model_dump(mode='json')
+    idempotency_lease_token: str | None = None
     if request.idempotency_key:
         reservation = handlers.cycle_idempotency_service.reserve(
             tenant_id=request.tenant_id,
@@ -29,6 +36,9 @@ def execute_full_cycle(handlers, *, now: datetime, request: ExecuteClientOutcome
         )
         if reservation.get('response') is not None:
             return ExecuteClientOutcomeCycleResponse(**dict(reservation['response']))
+        idempotency_lease_token = str(reservation.get('lease_token') or '').strip()
+        if not idempotency_lease_token:
+            raise RuntimeError('client_outcome_idempotency_lease_token_missing')
 
     selection_request = SelectClientOutcomePackageRequest(
         tenant_id=request.tenant_id,
@@ -166,6 +176,7 @@ def execute_full_cycle(handlers, *, now: datetime, request: ExecuteClientOutcome
         now=now,
         request=request,
         request_payload=request_payload,
+        idempotency_lease_token=idempotency_lease_token,
         execution_response=execution_response,
         order=order,
         lead=lead,

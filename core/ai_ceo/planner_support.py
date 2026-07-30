@@ -89,6 +89,7 @@ def _build_blocked_step(step: CEOPlanStepV1, *, autonomy: AutonomyPolicyV1, snap
     tenant_id = str(original_payload.get("tenant_id") or track_payload.get("tenant_id") or "").strip()
     plan_id = str(track_payload.get("plan_id") or "").strip()
     if tenant_id:
+        payload["tenant_id"] = tenant_id
         payload["track_payload"]["tenant_id"] = tenant_id
     if plan_id:
         payload["track_payload"]["plan_id"] = plan_id
@@ -123,6 +124,7 @@ def build_default_plan_steps(*, tenant_id: str, user_id: str, locale: str, chann
             rationale="AI подготовит контекст для изменения цены; само изменение остаётся отдельным подтверждаемым действием.",
             action="send_message@v1",
             payload={
+                "tenant_id": safe_tenant,
                 "user_id": safe_user,
                 "text": "💸 AI CEO: откройте Pricing → Review, чтобы посмотреть рекомендованную цену и применить её с подтверждением.",
                 "track_event_type": "ai_ceo_pricing_review_prompt",
@@ -135,6 +137,7 @@ def build_default_plan_steps(*, tenant_id: str, user_id: str, locale: str, chann
             rationale="Подготовим запуск рекламы через preview/confirm с лимитами и kill-switch.",
             action="send_message@v1",
             payload={
+                "tenant_id": safe_tenant,
                 "user_id": safe_user,
                 "text": "📣 AI CEO: откройте Ads Apply → Preview → Confirm. Запуск идёт только через защищённый runtime-контракт.",
                 "track_event_type": "ai_ceo_ads_apply_prompt",

@@ -126,7 +126,16 @@ def canonical_effect_result(action_type: str | EffectActionType, raw_result: Any
         resolved_timestamp = float(explicit_timestamp)
     else:
         mode = _text(payload.get("mode")).lower()
-        if status is EffectResultStatus.SKIPPED or mode in {"noop", "dedup", "best_effort"}:
+        error = _text(payload.get("error") or payload.get("message")).lower()
+        hermetic_failure = error in {
+            "network_disabled_in_this_runtime",
+            "telegram_bot_token_missing",
+        }
+        if (
+            status is EffectResultStatus.SKIPPED
+            or mode in {"noop", "dedup", "best_effort"}
+            or hermetic_failure
+        ):
             # Hermetic / no-op / deduplicated results must stay deterministic across
             # replay. Real connector timestamps should be passed explicitly by the
             # effect implementation when needed.

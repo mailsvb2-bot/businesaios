@@ -45,3 +45,16 @@ def test_no_core_import_in_runtime_platform():
             continue
         for mod in _imports_in_file(f):
             assert not mod.startswith("core"), f"core import leak: {f} -> {mod}"
+
+
+def test_neutral_safety_and_tenant_contracts_preserve_compatibility_identity():
+    from contracts.safety_approval import ApprovalTicket as NeutralApprovalTicket
+    from contracts.safety_rollback import RollbackPlan as NeutralRollbackPlan
+    from contracts.tenant_identity import require_tenant_id as neutral_require_tenant_id
+    from core.safety.controls.multi_step_approval.models import ApprovalTicket
+    from core.safety.controls.rollback_engine.models import RollbackPlan
+    from core.tenancy.normalization import require_tenant_id
+
+    assert ApprovalTicket is NeutralApprovalTicket
+    assert RollbackPlan is NeutralRollbackPlan
+    assert require_tenant_id is neutral_require_tenant_id

@@ -19,8 +19,9 @@
       "optimization_target": "route_quality_and_business_value",
       "selected_from_candidates": 0,
       "blocked_candidate_count": 0,
-      "manual_review_reason": "no_safe_candidates",
-      "candidate_count": 0
+      "manual_review_reason": "decision_core_rejected_all_candidates",
+      "candidate_count": 0,
+      "decision_id": "snapshot-reject"
     }
   },
   "expected_trace": {
@@ -29,7 +30,8 @@
     "optimization_target": "route_quality_and_business_value",
     "selected_from_candidates": 0,
     "blocked_candidate_count": 0,
-    "manual_review_reason": "no_safe_candidates",
-    "candidate_count": 0
+    "manual_review_reason": "decision_core_rejected_all_candidates",
+    "candidate_count": 0,
+    "decision_id": "snapshot-reject"
   }
 }

@@ -28,10 +28,13 @@ def test_pricing_route_violation_keeps_safe_message_and_ids():
     effects = _Effects()
     env = type("Env", (), {"decision": type("D", (), {"decision_id": "d1", "correlation_id": "c1"})()})()
     out = handle_pricing_select({"user_id": "u1"}, effects, env, selection_service=None)
-    assert out["decision_id"] == "d1"
-    assert out["correlation_id"] == "c1"
-    assert "route contract" in out["text"].lower()
-    assert out["track_payload"]["error"] == "DecisionRouteViolation"
+    assert out["ok"] is False
+    assert out["status"] == "blocked"
+    assert out["reason"] == "route_violation"
+    assert out["delivery"]["decision_id"] == "d1"
+    assert out["delivery"]["correlation_id"] == "c1"
+    assert "route contract" in out["delivery"]["text"].lower()
+    assert out["delivery"]["track_payload"]["error"] == "DecisionRouteViolation"
 
 
 def test_inbound_message_requires_real_tenant():

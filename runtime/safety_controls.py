@@ -1,12 +1,19 @@
 from __future__ import annotations
 
-from contextlib import suppress
+import logging
 from typing import Any
 
 from bootstrap.safety_control_boot import build_safety_control_runtime
-from core.safety.controls.action_identity import canonical_action_id, canonical_breaker_key
-from core.safety.controls.observability.event_store import SafetyEvent
-from runtime.safety import ControlDecision, ControlStatus, SafetyActionContext
+from runtime.safety import (
+    ControlDecision,
+    ControlStatus,
+    SafetyActionContext,
+    SafetyEvent,
+    canonical_action_id,
+    canonical_breaker_key,
+)
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _payload_dict(payload: Any) -> dict[str, Any]:
@@ -39,13 +46,14 @@ def build_runtime_safety_context(*, action: str, payload: Any) -> SafetyActionCo
     )
 
 
-def _record_safety_event(*, action: str, payload: Any, stage: str, status: str, control: str = '', reason: str = '', details: dict[str, Any] | None = None) -> None:
+def _record_safety_event(*, action: str, payload: Any, stage: str, status: str, control: str = '', reason: str = '', details: dict[str, Any] | None = None) -> bool:
     runtime = build_safety_control_runtime()
     data = _payload_dict(payload)
+    tenant_id = str(data.get('tenant_id') or 'unknown')
     try:
         runtime.profile.event_store.append(
             SafetyEvent(
-                tenant_id=str(data.get('tenant_id') or 'unknown'),
+                tenant_id=tenant_id,
                 action=str(action),
                 stage=str(stage),
                 status=str(status),
@@ -54,8 +62,19 @@ def _record_safety_event(*, action: str, payload: Any, stage: str, status: str, 
                 details=dict(details or {}),
             )
         )
-    except Exception:
-        return
+    except Exception as exc:
+        _LOGGER.exception(
+            'safety_event_append_failed',
+            extra={
+                'tenant_id': tenant_id,
+                'action': str(action),
+                'stage': str(stage),
+                'status': str(status),
+                'error_type': exc.__class__.__name__,
+            },
+        )
+        return False
+    return True
 
 
 def evaluate_runtime_action_controls(*, action: str, payload: Any) -> list[ControlDecision]:
@@ -93,15 +112,49 @@ def record_action_success(*, action: str, payload: Any) -> None:
         canonical_breaker_key(action=str(action), tenant_id=tenant_id)
     )
     action_id = canonical_action_id(action=str(action), tenant_id=tenant_id, payload=data)
-    with suppress(Exception):
+    try:
         runtime.profile.rollback_planner.mark_executed(tenant_id=tenant_id, action_id=action_id)
+    except Exception as exc:
+        _LOGGER.exception(
+            'rollback_mark_executed_failed',
+            extra={
+                'tenant_id': tenant_id,
+                'action': str(action),
+                'action_id': action_id,
+                'error_type': exc.__class__.__name__,
+            },
+        )
+        _record_safety_event(
+            action=action,
+            payload=payload,
+            stage='rollback_mark_executed',
+            status='failure',
+            reason='rollback_mark_executed_failed',
+            details={'action_id': action_id, 'error_type': exc.__class__.__name__},
+        )
     owner = _worker_owner(payload)
     try:
         if owner and hasattr(runtime.profile.approval_repository, 'acquire_lease'):
             runtime.profile.approval_repository.acquire_lease(action_id=action_id, owner=owner)
         runtime.profile.approval_repository.mark_executed(action_id=action_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        _LOGGER.exception(
+            'approval_mark_executed_failed',
+            extra={
+                'tenant_id': tenant_id,
+                'action': str(action),
+                'action_id': action_id,
+                'error_type': exc.__class__.__name__,
+            },
+        )
+        _record_safety_event(
+            action=action,
+            payload=payload,
+            stage='approval_mark_executed',
+            status='failure',
+            reason='approval_mark_executed_failed',
+            details={'action_id': action_id, 'error_type': exc.__class__.__name__},
+        )
 
     if bool(data.get('rollback_verification_required')) or str(action).startswith('rollback_'):
         try:
@@ -133,8 +186,23 @@ def record_action_failure(*, action: str, payload: Any) -> None:
             runtime.profile.rollback_planner._store.acquire_lease(tenant_id=tenant_id, action_id=action_id, owner=owner)
         runtime.profile.rollback_planner.confirm_execution(tenant_id=tenant_id, action_id=action_id, confirmation_token=plan.confirmation_token)
         runtime.profile.rollback_planner.append_receipt(tenant_id=tenant_id, action_id=action_id, step_index=0, action='rollback_prepare', status='confirmed', details={'source_action': str(action), 'worker_owner': owner})
-    except Exception:
-        pass
+    except Exception as exc:
+        _LOGGER.exception(
+            'rollback_prepare_failed',
+            extra={
+                'tenant_id': tenant_id,
+                'action': str(action),
+                'error_type': exc.__class__.__name__,
+            },
+        )
+        _record_safety_event(
+            action=action,
+            payload=payload,
+            stage='rollback_prepare',
+            status='failure',
+            reason='rollback_prepare_failed',
+            details={'error_type': exc.__class__.__name__},
+        )
     _record_safety_event(action=action, payload=payload, stage='outcome', status='failure', reason='execution_failed')
 
 

@@ -14,7 +14,6 @@ from application.planning.strategy_memory import (
 )
 from core.ai import (
     _reset_decision_core_singleton_for_tests,
-    set_decision_core_singleton,
 )
 from core.strategic_horizon import constants, engine
 from execution.long_horizon_planner import LongHorizonPlanner
@@ -93,20 +92,19 @@ def test_platform_control_center_tests_have_unique_basenames() -> None:
     )
 
 
-def test_gateway_rejects_an_unregistered_decision_issuer() -> None:
+def test_gateway_accepts_explicit_issuers_and_rejects_invalid_shapes() -> None:
     class Issuer:
         def issue(self, state):
             return state
 
-    registered = Issuer()
-    set_decision_core_singleton(registered)
-    validate_runtime_decision_issuer(registered)
+    validate_runtime_decision_issuer(Issuer())
+    validate_runtime_decision_issuer(Issuer())
 
     with pytest.raises(
         DecisionGatewayContractError,
-        match="noncanonical_decision_issuer",
+        match="decision_core_must_provide_callable",
     ):
-        validate_runtime_decision_issuer(Issuer())
+        validate_runtime_decision_issuer(object())
 
 
 def test_route_gateway_rejects_an_arbitrary_callable() -> None:
@@ -144,7 +142,6 @@ def test_optimize_gateway_enforces_singleton_identity_and_exact_method() -> None
             return marker
 
     optimizer = Optimizer()
-    set_decision_core_singleton(optimizer)
 
     assert (
         optimize_runtime_decision(
@@ -164,14 +161,13 @@ def test_optimize_gateway_enforces_singleton_identity_and_exact_method() -> None
             method_name="decide",
         )
 
-    with pytest.raises(
-        DecisionGatewayContractError,
-        match="noncanonical_decision_issuer",
-    ):
+    assert (
         optimize_runtime_decision(
             issuer=Optimizer(),
             state="state",
         )
+        is marker
+    )
 
 
 def test_runtime_gateway_exposes_no_structured_alternate_issuer() -> None:

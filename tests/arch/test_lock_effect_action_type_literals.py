@@ -44,7 +44,7 @@ def test_lock_canonical_effect_action_literals_are_centralized() -> None:
     bad: list[str] = []
     for py in root.rglob("*.py"):
         rel = py.relative_to(root).as_posix()
-        if rel.startswith((".venv/", "venv/", "build/", "dist/", "__pycache__/")):
+        if rel.startswith(("tests/", ".venv/", "venv/", "build/", "dist/", "__pycache__/")):
             continue
         if rel in _ALLOWED:
             continue

@@ -1,5 +1,12 @@
+from types import SimpleNamespace
+
 from interfaces.api.execute_action_stack_bundle import build_execute_action_stack_bundle
 from observability.action_audit_log import ActionAuditLog
+
+
+class _Binding:
+    def signed_envelope(self, *, action, payload, request_context, action_id):
+        return SimpleNamespace(decision=SimpleNamespace(action=action, payload=dict(payload)))
 
 
 class _App:
@@ -55,6 +62,7 @@ class _Guardrails:
 def test_build_execute_action_stack_bundle_returns_linear_stack() -> None:
     bundle = build_execute_action_stack_bundle(
         application_service=_App(),
+        command_binding=_Binding(),
         retry_policy=_RetryPolicy(),
         idempotency=_Idempotency(),
         action_audit_log=ActionAuditLog(),

@@ -4,6 +4,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from runtime.messaging.channel_normalizer import normalize_channel
+from runtime.messaging.channel_types import ALL_CHANNELS
+
 
 @dataclass(frozen=True)
 class ChannelProviderConfig:
@@ -42,17 +45,31 @@ class RuntimeConfig:
             item.validate()
 
 
+_DEFAULT_PROVIDER_OVERRIDES = {
+    "web_chat": "default-webchat",
+    "api": "default-api-gateway",
+}
+
+
+def _default_provider_name(channel: str) -> str:
+    return _DEFAULT_PROVIDER_OVERRIDES.get(
+        channel,
+        f"default-{channel.replace('_', '-')}",
+    )
+
+
 def build_default_runtime_config() -> RuntimeConfig:
     channels = {
-        "sms": ChannelProviderConfig("sms", "default-sms"),
-        "whatsapp": ChannelProviderConfig("whatsapp", "default-whatsapp"),
-        "email": ChannelProviderConfig("email", "default-email"),
-        "messenger": ChannelProviderConfig("messenger", "default-messenger"),
-        "viber": ChannelProviderConfig("viber", "default-viber"),
-        "webchat": ChannelProviderConfig("webchat", "default-webchat"),
-        "api_gateway": ChannelProviderConfig("api_gateway", "default-api-gateway"),
+        channel: ChannelProviderConfig(
+            channel,
+            _default_provider_name(channel),
+        )
+        for channel in ALL_CHANNELS
     }
-    config = RuntimeConfig(channels=channels, defaults={"queue_limit": 1000, "max_attempts": 3})
+    config = RuntimeConfig(
+        channels=channels,
+        defaults={"queue_limit": 1000, "max_attempts": 3},
+    )
     config.validate()
     return config
 
@@ -62,7 +79,12 @@ def load_runtime_config(raw: dict | None = None) -> RuntimeConfig:
         return build_default_runtime_config()
 
     channels = {}
-    for channel, payload in dict(raw.get("channels", {})).items():
+    for raw_channel, payload in dict(raw.get("channels", {})).items():
+        channel = normalize_channel(raw_channel)
+        if channel in channels:
+            raise ValueError(
+                f"duplicate channel after normalization: {raw_channel}"
+            )
         channels[channel] = ChannelProviderConfig(
             channel=channel,
             provider=str(payload.get("provider", "")),
@@ -77,3 +99,11 @@ def load_runtime_config(raw: dict | None = None) -> RuntimeConfig:
     config = RuntimeConfig(channels=channels, defaults=defaults)
     config.validate()
     return config
+
+
+__all__ = [
+    "ChannelProviderConfig",
+    "RuntimeConfig",
+    "build_default_runtime_config",
+    "load_runtime_config",
+]

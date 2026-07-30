@@ -24,10 +24,13 @@ def test_runtime_governance_modules_use_public_surface() -> None:
         "runtime/boot/governance/governance_registration.py": [
             "from runtime.governance import PolicyState",
         ],
-        "runtime/handlers/ads_rl_suggest.py": [
-            "from runtime.governance import ProfitMetricsService, PolicyUpdateGate, PolicyUpdateGateError",
+        "runtime/handler_impl/ads_rl_suggest.py": [
+            "from runtime.governance import",
+            "ProfitMetricsService",
+            "PolicyUpdateGate",
+            "PolicyUpdateGateError",
         ],
-        "runtime/handlers/ads_rl_train_tick.py": [
+        "runtime/handler_impl/ads_rl_train_tick.py": [
             "from runtime.governance import ProfitMetricsService",
         ],
     }

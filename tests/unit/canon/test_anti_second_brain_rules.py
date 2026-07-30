@@ -89,7 +89,7 @@ def test_canonical_authority_vocabulary_contains_legacy_contract() -> None:
 
 def test_only_file_exact_production_paths_own_decision_authority() -> None:
     assert CANONICAL_DECISION_CORE_PATH in CANONICAL_DECISION_OWNER_PREFIXES
-    assert "runtime/decision_gateway.py" in CANONICAL_DECISION_OWNER_PREFIXES
+    assert "runtime/decision_gateway_owner.py" in CANONICAL_DECISION_OWNER_PREFIXES
     assert "runtime/decision_path_lock.py" in CANONICAL_DECISION_OWNER_PREFIXES
     for delegated_path in (
         "application/headless/decision_gateway.py",
@@ -104,7 +104,7 @@ def test_only_file_exact_production_paths_own_decision_authority() -> None:
 
 def test_exact_runtime_owners_retain_single_path_markers() -> None:
     expected_true = {
-        "runtime/decision_gateway.py": {
+        "runtime/decision_gateway_owner.py": {
             "CANON_RUNTIME_DECISION_GATEWAY_SINGLE_PATH",
             "CANON_RUNTIME_DECISION_GATEWAY_NO_RAW_DECISION_LOGIC",
             "CANON_RUNTIME_DECISION_GATEWAY_USES_EXPLICIT_ISSUER",
@@ -121,7 +121,7 @@ def test_exact_runtime_owners_retain_single_path_markers() -> None:
         },
     }
     expected_false = {
-        "runtime/decision_gateway.py": {
+        "runtime/decision_gateway_owner.py": {
             "CANON_RUNTIME_DECISION_GATEWAY_BINDS_REGISTERED_SINGLETON",
         },
         "runtime/decision_path_lock.py": {

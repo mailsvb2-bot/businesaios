@@ -4,17 +4,13 @@ import json
 import os
 from pathlib import Path
 
+from compatibility.legacy_storage_environment import LEGACY_STORAGE_ENV_KEYS
 from runtime.production_boot_contract import ProductionBootProbe, evaluate_production_boot
 from scripts.ci.paths import repo_root
 
 REAL_BOOT_EVIDENCE_NAME = "real_runtime_boot_evidence.json"
 CANON_PRODUCTION_BOOT_ENV_DRIFT_GUARD = True
-LEGACY_ENV_KEYS = (
-    "METRO_DB_ENGINE",
-    "STORAGE_DB_ENGINE",
-    "METRO_DATABASE_URL",
-    "METRO_POSTGRES_DSN",
-)
+LEGACY_ENV_KEYS = LEGACY_STORAGE_ENV_KEYS
 
 
 def _write_artifact(payload: dict[str, object]) -> None:

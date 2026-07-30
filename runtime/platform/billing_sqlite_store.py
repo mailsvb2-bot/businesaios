@@ -12,7 +12,7 @@ from sqlite3 import IntegrityError
 from billing.commercial_cycle_contract import CommercialCollectionResult
 from billing.ledger_event import LedgerEntry, LedgerPosting
 from billing.ledger_store import LedgerStoreContract
-from core.tenancy.normalization import require_tenant_id
+from contracts.tenant_identity import require_tenant_id
 
 CANON_PLATFORM_BILLING_SQLITE_STORE = True
 SCHEMA_VERSION = 1

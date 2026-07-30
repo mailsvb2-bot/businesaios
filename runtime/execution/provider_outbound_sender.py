@@ -1,11 +1,13 @@
-"""Canonical public facade for sealed provider outbound transport."""
+"""Canonical compatibility alias for the sealed provider transport owner."""
 
 from __future__ import annotations
 
-import importlib
 import sys
 
-CANON_PROVIDER_OUTBOUND_TRANSPORT_FACADE = True
-_OWNER = importlib.import_module("runtime._internal.effects_clients.provider_outbound_sender")
+from runtime.firewall.import_guard import allow_internal_import
+
+with allow_internal_import():
+    from runtime._internal.effects_clients import provider_outbound_sender as _OWNER
+
 _OWNER.CANON_PROVIDER_OUTBOUND_TRANSPORT_FACADE = True
 sys.modules[__name__] = _OWNER

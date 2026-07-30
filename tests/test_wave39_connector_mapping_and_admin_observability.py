@@ -21,7 +21,8 @@ class _DummyOwner:
 
 
 class _DummyEventLog:
-    def __init__(self) -> None:
+    def __init__(self, tenant_id: str = "tenant-a") -> None:
+        self.tenant_id = tenant_id
         self.events = []
 
     def emit(self, **kwargs):
@@ -57,11 +58,13 @@ def test_admin_notification_emits_observability_event_when_sent():
         owner,
         decision_id="d1",
         correlation_id="c1",
+        tenant_id="tenant-a",
         admin_id="a1",
         notify_text="hello",
         notify_reply_markup=None,
         callback_query_id="cb1",
         channel="telegram",
+        channel_policy=None,
         event_log=event_log,
     )
     assert result["ok"] is True

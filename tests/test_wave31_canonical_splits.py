@@ -24,8 +24,10 @@ def test_ads_rl_service_is_advisory_only_and_uses_support() -> None:
 def test_ai_ceo_planner_remains_plan_only() -> None:
     text = _read("core/ai_ceo/planner.py")
     assert "DecisionCore remains the single issuer" in text
-    assert "CEOPlanBuilder" in text
-    assert "apply_policy_and_rank" in text
+    assert "from core.ai_ceo.planner_core import build_ceo_plan" in text
+    assert "from core.ai_ceo.scoring import rank_steps" in text
+    assert "executor" not in text.casefold()
+    assert "execute(" not in text
 
 
 def test_ads_connector_shared_read_surface_used() -> None:

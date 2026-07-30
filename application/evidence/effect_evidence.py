@@ -130,10 +130,17 @@ class EffectEvidenceBundle:
 
 
 class EffectEvidenceBuilder:
-    def __init__(self, *, action_type: str, action_id: str = "") -> None:
+    def __init__(
+        self,
+        *,
+        action_type: str,
+        action_id: str = "",
+        default_observed_at: datetime | str | None = None,
+    ) -> None:
         self._action_type = _text(action_type)
         self._action_id = _text(action_id)
         self._records: list[EffectEvidenceRecord] = []
+        self._default_observed_at = _parse_observed_at(default_observed_at)
 
     def add_record(
         self,
@@ -158,7 +165,11 @@ class EffectEvidenceBuilder:
                 payload=row_payload,
                 external_refs=refs,
                 confidence=max(0.0, min(1.0, _safe_float(confidence))),
-                observed_at=_parse_observed_at(observed_at or row_payload.get("observed_at")) or _utc_now(),
+                observed_at=(
+                    _parse_observed_at(observed_at or row_payload.get("observed_at"))
+                    or self._default_observed_at
+                    or _utc_now()
+                ),
             )
         )
         return self

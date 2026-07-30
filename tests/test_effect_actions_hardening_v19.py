@@ -6,7 +6,8 @@ from runtime.executor import executor_context
 
 
 class _EventLog:
-    def __init__(self) -> None:
+    def __init__(self, tenant_id: str = "tenant-a") -> None:
+        self.tenant_id = tenant_id
         self.events = []
 
     def emit(self, **kw):
@@ -58,7 +59,11 @@ def test_capture_payment_unsupported_provider_fails_honestly():
             amount=100,
             currency="RUB",
             provider="stripe",
-            metadata=None,
+            metadata={
+                "tenant_id": "tenant-a",
+                "product_id": "product-a",
+                "order_id": "order-a",
+            },
         )
     assert out["ok"] is False
     assert out["meta"]["mode"] == "unsupported"
@@ -100,7 +105,12 @@ def test_send_audio_uses_audio_url_contract(monkeypatch):
 
         def send_audio(self, **kwargs):
             assert kwargs["audio_url"] == "/tmp/a.ogg"
-            return True, {"sent": True}
+            return True, {
+                "sent": True,
+                "external_id": "audio-1",
+                "delivery_phase": "finalized",
+                "delivery_finalized": True,
+            }
 
     monkeypatch.setattr(
         "runtime._internal.effects_clients.telegram_client.TelegramClient",
@@ -110,6 +120,7 @@ def test_send_audio_uses_audio_url_contract(monkeypatch):
         out = fx.send_audio(
             decision_id="d1",
             correlation_id="c1",
+            tenant_id="tenant-a",
             user_id="u1",
             path="/tmp/a.ogg",
             kind="voice",

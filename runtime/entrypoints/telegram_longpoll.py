@@ -1,5 +1,7 @@
 """BusinesAIOS Telegram transport entrypoint.
 
+DecisionCore.issue(WorldState) is the only decision source.
+
 Telegram is only one transport. Incoming updates are normalized through the
 canonical messaging ingress adapter before they reach the runtime decision
 gateway. This keeps Telegram, WhatsApp, VK, Max, Slack, Discord, Viber, SMS,
@@ -14,6 +16,7 @@ import time
 from typing import Any
 
 from core.ai.world_state import WorldStateV1
+from runtime.effects import telegram_method_url
 from runtime.boot.env import (
     env_bool,
     env_int,
@@ -23,7 +26,10 @@ from runtime.boot.env import (
 )
 from runtime.bootstrap import bootstrap as _bootstrap
 from runtime.decision_gateway import execute_runtime_decision
-from runtime.messaging_ingress import messaging_event_to_world_state, telegram_update_to_messaging_event
+from runtime.messaging_ingress import (
+    messaging_event_to_world_state,
+    telegram_update_to_messaging_event,
+)
 
 CANON_RUNTIME_ENTRYPOINT_THIN_SHIM = True
 CANON_RUNTIME_ENTRYPOINT_BOOTSTRAP_DELEGATES_TO_SOVEREIGN_BOOTSTRAP = True
@@ -40,15 +46,19 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
-def _telegram_api_base() -> str:
-    return env_str("TELEGRAM_API_BASE", "https://api.telegram.org").strip().rstrip("/")
-
-
 def _telegram_api_url(token: str, method: str) -> str:
-    return f"{_telegram_api_base()}/bot{str(token).strip()}/{str(method).strip()}"
+    """Compatibility helper delegating to the sole endpoint owner."""
+
+    return telegram_method_url(token, method)
 
 
-def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, *, timeout_s: int = 30) -> Any:
+def _http_json(
+    method: str,
+    url: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    timeout_s: int = 30,
+) -> Any:
     from runtime.effects import http_json
 
     return http_json(method, url, payload or {}, timeout_s=timeout_s)
@@ -61,7 +71,12 @@ def _response_payload(response: Any) -> dict[str, Any]:
     return {}
 
 
-def _append_event(event_log: Any, *, event_type: str, payload: dict[str, Any] | None = None) -> None:
+def _append_event(
+    event_log: Any,
+    *,
+    event_type: str,
+    payload: dict[str, Any] | None = None,
+) -> None:
     if event_log is None:
         return
     event = {
@@ -79,7 +94,14 @@ def _append_event(event_log: Any, *, event_type: str, payload: dict[str, Any] | 
                 continue
 
 
-def _copy_world_state(state: WorldStateV1, *, user: dict[str, Any], session: dict[str, Any], meta: dict[str, Any], timestamp_ms: int) -> WorldStateV1:
+def _copy_world_state(
+    state: WorldStateV1,
+    *,
+    user: dict[str, Any],
+    session: dict[str, Any],
+    meta: dict[str, Any],
+    timestamp_ms: int,
+) -> WorldStateV1:
     return WorldStateV1(
         schema_version=state.schema_version,
         user=user,
@@ -100,7 +122,11 @@ def _copy_world_state(state: WorldStateV1, *, user: dict[str, Any], session: dic
     )
 
 
-def _world_state_from_update(update: dict[str, Any], *, transport: str = "longpoll") -> WorldStateV1:
+def _world_state_from_update(
+    update: dict[str, Any],
+    *,
+    transport: str = "longpoll",
+) -> WorldStateV1:
     event = telegram_update_to_messaging_event(
         update,
         tenant_id=env_str("TENANT_ID", "default").strip() or "default",
@@ -124,24 +150,57 @@ def _world_state_from_update(update: dict[str, Any], *, transport: str = "longpo
         **dict(state.meta or {}),
         "transport": str(transport or "telegram"),
     }
-    return _copy_world_state(state, user=user, session=session, meta=meta, timestamp_ms=timestamp_ms)
+    return _copy_world_state(
+        state,
+        user=user,
+        session=session,
+        meta=meta,
+        timestamp_ms=timestamp_ms,
+    )
 
 
 def _validate_startup(token: str) -> None:
     from runtime.effects import classify_startup
 
     timeout_s = max(1, env_int("TELEGRAM_STARTUP_TIMEOUT_S", 10))
-    getme = _response_payload(_http_json("GET", _telegram_api_url(token, "getMe"), timeout_s=timeout_s))
-    webhook = _response_payload(_http_json("GET", _telegram_api_url(token, "getWebhookInfo"), timeout_s=timeout_s))
+    getme = _response_payload(
+        _http_json(
+            "GET",
+            _telegram_api_url(token, "getMe"),
+            timeout_s=timeout_s,
+        )
+    )
+    webhook = _response_payload(
+        _http_json(
+            "GET",
+            _telegram_api_url(token, "getWebhookInfo"),
+            timeout_s=timeout_s,
+        )
+    )
     report = classify_startup(getme, webhook)
-    if not report.ok and report.code == "TELEGRAM_WEBHOOK_ENABLED" and env_bool("TELEGRAM_AUTO_DELETE_WEBHOOK", True):
+    if (
+        not report.ok
+        and report.code == "TELEGRAM_WEBHOOK_ENABLED"
+        and env_bool("TELEGRAM_AUTO_DELETE_WEBHOOK", True)
+    ):
         _http_json(
             "POST",
             _telegram_api_url(token, "deleteWebhook"),
-            {"drop_pending_updates": env_bool("TELEGRAM_DROP_PENDING_UPDATES_ON_START", False)},
+            {
+                "drop_pending_updates": env_bool(
+                    "TELEGRAM_DROP_PENDING_UPDATES_ON_START",
+                    False,
+                )
+            },
             timeout_s=timeout_s,
         )
-        webhook = _response_payload(_http_json("GET", _telegram_api_url(token, "getWebhookInfo"), timeout_s=timeout_s))
+        webhook = _response_payload(
+            _http_json(
+                "GET",
+                _telegram_api_url(token, "getWebhookInfo"),
+                timeout_s=timeout_s,
+            )
+        )
         report = classify_startup(getme, webhook)
     if not report.ok:
         raise RuntimeError(f"{report.code}: {report.hint}")
@@ -158,13 +217,28 @@ def _start_health_if_enabled(event_log: Any) -> Any:
 
     host = env_str("HEALTH_HOST", "127.0.0.1")
     snapshot = HealthSnapshot(event_log=event_log, name="telegram")
-    return start_health_server_in_thread(snapshot=snapshot, host=host, port=port)
+    return start_health_server_in_thread(
+        snapshot=snapshot,
+        host=host,
+        port=port,
+    )
 
 
-def _execute_update(*, core: Any, executor: Any, event_log: Any, update: dict[str, Any], transport: str) -> None:
+def _execute_update(
+    *,
+    core: Any,
+    executor: Any,
+    event_log: Any,
+    update: dict[str, Any],
+    transport: str,
+) -> None:
     raw_update_id = update.get("update_id")
     state = _world_state_from_update(update, transport=transport)
-    result = execute_runtime_decision(issuer=core, executor=executor, state=state)
+    result = execute_runtime_decision(
+        issuer=core,
+        executor=executor,
+        state=state,
+    )
     _append_event(
         event_log,
         event_type="telegram_update_executed",
@@ -177,16 +251,29 @@ def _execute_update(*, core: Any, executor: Any, event_log: Any, update: dict[st
     )
 
 
-def _run_longpoll(*, token: str, core: Any, executor: Any, event_log: Any) -> None:
+def _run_longpoll(
+    *,
+    token: str,
+    core: Any,
+    executor: Any,
+    event_log: Any,
+) -> None:
     _validate_startup(token)
     _start_health_if_enabled(event_log)
 
     poll_timeout_s = max(1, env_int("TELEGRAM_POLL_TIMEOUT_S", 30))
-    request_timeout_s = max(poll_timeout_s + 5, env_int("TELEGRAM_REQUEST_TIMEOUT_S", poll_timeout_s + 5))
+    request_timeout_s = max(
+        poll_timeout_s + 5,
+        env_int("TELEGRAM_REQUEST_TIMEOUT_S", poll_timeout_s + 5),
+    )
     idle_sleep_s = max(0, env_int("TELEGRAM_IDLE_SLEEP_MS", 250)) / 1000.0
     offset: int | None = None
 
-    _append_event(event_log, event_type="telegram_started", payload={"mode": "longpoll"})
+    _append_event(
+        event_log,
+        event_type="telegram_started",
+        payload={"mode": "longpoll"},
+    )
     _LOG.info("telegram long polling started")
 
     while True:
@@ -204,25 +291,46 @@ def _run_longpoll(*, token: str, core: Any, executor: Any, event_log: Any) -> No
             )
             if not response.get("ok"):
                 raise RuntimeError(str(response.get("description") or response))
-            updates = response.get("result") if isinstance(response.get("result"), list) else []
-            _append_event(event_log, event_type="telegram_polled", payload={"updates": len(updates)})
+            updates = (
+                response.get("result")
+                if isinstance(response.get("result"), list)
+                else []
+            )
+            _append_event(
+                event_log,
+                event_type="telegram_polled",
+                payload={"updates": len(updates)},
+            )
             for update in updates:
                 if not isinstance(update, dict):
                     continue
                 raw_update_id = update.get("update_id")
                 if raw_update_id is not None:
                     offset = int(raw_update_id) + 1
-                _execute_update(core=core, executor=executor, event_log=event_log, update=update, transport="longpoll")
+                _execute_update(
+                    core=core,
+                    executor=executor,
+                    event_log=event_log,
+                    update=update,
+                    transport="longpoll",
+                )
             if not updates and idle_sleep_s > 0:
                 time.sleep(idle_sleep_s)
         except KeyboardInterrupt:
-            _append_event(event_log, event_type="telegram_stopped", payload={"reason": "keyboard_interrupt"})
+            _append_event(
+                event_log,
+                event_type="telegram_stopped",
+                payload={"reason": "keyboard_interrupt"},
+            )
             raise
         except Exception as exc:
             _append_event(
                 event_log,
                 event_type="telegram_poll_error",
-                payload={"error": type(exc).__name__, "message": str(exc)},
+                payload={
+                    "error": type(exc).__name__,
+                    "message": str(exc),
+                },
             )
             _LOG.exception("telegram polling iteration failed")
             time.sleep(max(1, env_int("TELEGRAM_ERROR_SLEEP_S", 3)))
@@ -239,36 +347,79 @@ def _webhook_public_url(path: str) -> str:
     return f"{base}{normalized_path}"
 
 
-def _set_webhook_if_configured(*, token: str, path: str, secret_token: str) -> None:
+def _set_webhook_if_configured(
+    *,
+    token: str,
+    path: str,
+    secret_token: str,
+) -> None:
     webhook_url = _webhook_public_url(path)
     if not webhook_url:
         return
     payload: dict[str, Any] = {
         "url": webhook_url,
-        "drop_pending_updates": env_bool("TELEGRAM_DROP_PENDING_UPDATES_ON_START", False),
+        "drop_pending_updates": env_bool(
+            "TELEGRAM_DROP_PENDING_UPDATES_ON_START",
+            False,
+        ),
     }
     if secret_token:
         payload["secret_token"] = secret_token
     timeout_s = max(1, env_int("TELEGRAM_STARTUP_TIMEOUT_S", 10))
-    response = _response_payload(_http_json("POST", _telegram_api_url(token, "setWebhook"), payload, timeout_s=timeout_s))
+    response = _response_payload(
+        _http_json(
+            "POST",
+            _telegram_api_url(token, "setWebhook"),
+            payload,
+            timeout_s=timeout_s,
+        )
+    )
     if not response.get("ok"):
         raise RuntimeError(str(response.get("description") or response))
 
 
-def _run_webhook(*, token: str, core: Any, executor: Any, event_log: Any) -> None:
+def _run_webhook(
+    *,
+    token: str,
+    core: Any,
+    executor: Any,
+    event_log: Any,
+) -> None:
     from runtime.effects import start_telegram_webhook_server_in_thread
     from runtime.health.server import HealthSnapshot
 
-    host = env_str("TELEGRAM_WEBHOOK_HOST", env_str("HEALTH_HOST", "0.0.0.0"))
-    port = env_int("TELEGRAM_WEBHOOK_PORT", env_int("TELEGRAM_HEALTH_PORT", 8088))
+    host = env_str(
+        "TELEGRAM_WEBHOOK_HOST",
+        env_str("HEALTH_HOST", "0.0.0.0"),
+    )
+    port = env_int(
+        "TELEGRAM_WEBHOOK_PORT",
+        env_int("TELEGRAM_HEALTH_PORT", 8088),
+    )
     path = env_str("TELEGRAM_WEBHOOK_PATH", "/telegram-webhook/")
-    secret_token = env_str("TELEGRAM_WEBHOOK_SECRET_TOKEN", env_str("TELEGRAM_WEBHOOK_SECRET", ""))
+    secret_token = env_str(
+        "TELEGRAM_WEBHOOK_SECRET_TOKEN",
+        env_str("TELEGRAM_WEBHOOK_SECRET", ""),
+    )
 
     def _on_update(update: dict[str, Any]) -> None:
-        _append_event(event_log, event_type="telegram_webhook_received", payload={"update_id": update.get("update_id")})
-        _execute_update(core=core, executor=executor, event_log=event_log, update=update, transport="webhook")
+        _append_event(
+            event_log,
+            event_type="telegram_webhook_received",
+            payload={"update_id": update.get("update_id")},
+        )
+        _execute_update(
+            core=core,
+            executor=executor,
+            event_log=event_log,
+            update=update,
+            transport="webhook",
+        )
 
-    snapshot = HealthSnapshot(event_log=event_log, name="telegram-webhook")
+    snapshot = HealthSnapshot(
+        event_log=event_log,
+        name="telegram-webhook",
+    )
     start_telegram_webhook_server_in_thread(
         host=host,
         port=port,
@@ -277,8 +428,16 @@ def _run_webhook(*, token: str, core: Any, executor: Any, event_log: Any) -> Non
         secret_token=secret_token,
         snapshot=snapshot,
     )
-    _set_webhook_if_configured(token=token, path=path, secret_token=secret_token)
-    _append_event(event_log, event_type="telegram_started", payload={"mode": "webhook", "port": port, "path": path})
+    _set_webhook_if_configured(
+        token=token,
+        path=path,
+        secret_token=secret_token,
+    )
+    _append_event(
+        event_log,
+        event_type="telegram_started",
+        payload={"mode": "webhook", "port": port, "path": path},
+    )
     _LOG.info("telegram webhook receiver started")
     while True:
         time.sleep(max(1, env_int("TELEGRAM_WEBHOOK_IDLE_SLEEP_S", 3600)))
@@ -309,12 +468,27 @@ def run_telegram(
 
     token = resolve_telegram_bot_token()
     if not token:
-        raise RuntimeError("TELEGRAM_BOT_TOKEN is required for RUN_MODE=telegram")
+        raise RuntimeError(
+            "telegram_token_missing_for_longpoll"
+        )
 
-    if env_bool("TELEGRAM_USE_WEBHOOK", False) or env_bool("TELEGRAM_WEBHOOK_ENABLED", False):
-        _run_webhook(token=token, core=core, executor=executor, event_log=event_log)
+    if env_bool("TELEGRAM_USE_WEBHOOK", False) or env_bool(
+        "TELEGRAM_WEBHOOK_ENABLED",
+        False,
+    ):
+        _run_webhook(
+            token=token,
+            core=core,
+            executor=executor,
+            event_log=event_log,
+        )
         return
-    _run_longpoll(token=token, core=core, executor=executor, event_log=event_log)
+    _run_longpoll(
+        token=token,
+        core=core,
+        executor=executor,
+        event_log=event_log,
+    )
 
 
 __all__ = [

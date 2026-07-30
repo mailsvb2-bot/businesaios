@@ -17,6 +17,7 @@ from observability.metrics import InMemoryMetrics
 from tenancy.tenant_policy_store import InMemoryTenantPolicyStore
 from tenancy.tenant_quota_guard import TenantQuotaGuard
 from tenancy.tenant_registry import InMemoryTenantRegistry
+from tests.api._authenticated_command_fixture import build_authenticated_command_binding
 
 
 @dataclass(frozen=True)
@@ -62,13 +63,13 @@ class _Service:
     def __init__(self) -> None:
         self.calls = 0
 
-    def execute_action(self, action):
+    def execute_action(self, action, **kwargs):
         self.calls += 1
         return {
             'status': 'ok',
-            'action_type': action.action_type,
+            'action_type': action.decision.action,
             'reason': 'executed',
-            'details': {'echo': dict(action.payload)},
+            'details': {'echo': dict(action.decision.payload), 'kwargs': kwargs},
         }
 
     def startup_audit_events(self):
@@ -86,6 +87,7 @@ def test_fastapi_execute_action_uses_canonical_stack_with_generated_request_cont
         tenant_policy_store=InMemoryTenantPolicyStore(),
         tenant_quota_guard=TenantQuotaGuard(policy_store=InMemoryTenantPolicyStore()),
         api_auth_bundle=auth_bundle,
+        authenticated_decision_command_binding=build_authenticated_command_binding(),
     )
     app_router = create_api_router(application_service=service, dependency_container=container)
 
@@ -115,6 +117,7 @@ def test_fastapi_execute_action_threads_header_identity_into_canonical_stack(tmp
         tenant_policy_store=InMemoryTenantPolicyStore(),
         tenant_quota_guard=TenantQuotaGuard(policy_store=InMemoryTenantPolicyStore()),
         api_auth_bundle=auth_bundle,
+        authenticated_decision_command_binding=build_authenticated_command_binding(),
     )
     app_router = create_api_router(application_service=service, dependency_container=container)
 
@@ -166,6 +169,7 @@ def test_fastapi_execute_action_replay_does_not_fail_when_quota_is_exhausted_aft
         tenant_policy_store=policy_store,
         tenant_quota_guard=TenantQuotaGuard(policy_store=policy_store),
         api_auth_bundle=auth_bundle,
+        authenticated_decision_command_binding=build_authenticated_command_binding(),
     )
     app_router = create_api_router(application_service=service, dependency_container=container)
 
@@ -185,9 +189,6 @@ def test_fastapi_execute_action_replay_does_not_fail_when_quota_is_exhausted_aft
     assert service.calls == 1
 
 
-
-
-
 @dataclass(frozen=True)
 class _RuntimeInfraStub:
     action_audit_log: ActionAuditLog = field(default_factory=ActionAuditLog)
@@ -200,8 +201,6 @@ class _RuntimeWithInfraStub:
     runtime_infra: object = field(default_factory=_RuntimeInfraStub)
 
 
-
-
 def test_fastapi_control_plane_uses_shared_decision_audit_log(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv('BUSINESAIOS_DATA_DIR', str(tmp_path))
     service = _Service()
@@ -212,6 +211,7 @@ def test_fastapi_control_plane_uses_shared_decision_audit_log(tmp_path, monkeypa
         tenant_registry=InMemoryTenantRegistry(),
         tenant_policy_store=InMemoryTenantPolicyStore(),
         tenant_quota_guard=TenantQuotaGuard(policy_store=InMemoryTenantPolicyStore()),
+        authenticated_decision_command_binding=build_authenticated_command_binding(),
     )
     router = create_api_router(application_service=service, dependency_container=container)
     app = FastAPI()
@@ -219,6 +219,7 @@ def test_fastapi_control_plane_uses_shared_decision_audit_log(tmp_path, monkeypa
 
     assert container.decision_audit_log() is runtime.runtime_infra.decision_audit_log
     assert runtime.runtime_infra.decision_audit_log.list_by_trace(trace_id='trace-1', limit=10)[0]['decision_id'] == 'dec-1'
+
 
 def test_fastapi_control_plane_audit_reads_same_execute_action_audit_log(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv('BUSINESAIOS_API_IDEMPOTENCY_PATH', str(tmp_path / 'api-idem.sqlite3'))
@@ -231,6 +232,7 @@ def test_fastapi_control_plane_audit_reads_same_execute_action_audit_log(tmp_pat
         tenant_policy_store=InMemoryTenantPolicyStore(),
         tenant_quota_guard=TenantQuotaGuard(policy_store=InMemoryTenantPolicyStore()),
         api_auth_bundle=auth_bundle,
+        authenticated_decision_command_binding=build_authenticated_command_binding(),
     )
     router = create_api_router(application_service=service, dependency_container=container)
     app = FastAPI()
@@ -249,6 +251,5 @@ def test_fastapi_control_plane_audit_reads_same_execute_action_audit_log(tmp_pat
         'x-tenant-id': 'tenant-a',
         'x-actor-id': 'operator-1',
     })
-    # fallback auth path may reject trace-filtered empty response depending on bundle; raw log must still be shared.
     assert runtime.runtime_infra.action_audit_log.records
     assert any(str(item.get('action_id')) == 'action-audit-1' for item in runtime.runtime_infra.action_audit_log.records)

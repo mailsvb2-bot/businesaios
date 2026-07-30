@@ -5,12 +5,21 @@ import re
 import time
 import uuid
 from dataclasses import asdict
-from typing import Any
+from typing import Any, get_args
 
 from core.llm.contracts import LLMMessage, LLMRequest
 from core.observability.silent import swallow
 
-from .contracts import GrowthGoalV1, GrowthHypothesisV1, GrowthSignalV1
+from .contracts import (
+    GROWTH_MESSAGING_CHANNELS,
+    Channel,
+    GrowthGoalV1,
+    GrowthHypothesisV1,
+    GrowthSignalV1,
+)
+
+_GROWTH_CHANNEL_OPTIONS = "|".join(str(value) for value in get_args(Channel))
+_SUPPORTED_MESSAGING_CHANNELS = ", ".join(GROWTH_MESSAGING_CHANNELS)
 
 
 def generate_hypotheses(llm: Any, *, tenant_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int = 8, model: str = "") -> tuple[GrowthHypothesisV1, ...]:
@@ -31,14 +40,14 @@ def generate_hypotheses(llm: Any, *, tenant_id: str, goal: GrowthGoalV1, signals
 
 
 def _build_request(*, tenant_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int, model: str) -> LLMRequest:
-    sys = """You are an AI growth strategist for a small business autopilot.
+    sys = f"""You are an AI growth strategist for a small business autopilot.
 Return ONLY valid JSON.
 
 Output format:
 [
-  {
+  {{
     "stage": "acquisition|activation|retention|referral|revenue",
-    "channel": "organic|seo|content|referral|partnerships|email|sms|push|telegram|whatsapp|messenger|instagram|web_chat|api|line|wechat|kakaotalk|viber|slack|discord|meta_ads|google_ads|tiktok_ads|vk_ads|yandex_direct|other_paid",
+    "channel": "{_GROWTH_CHANNEL_OPTIONS}",
     "title": "short",
     "mechanism": "why it works",
     "expected_impact": "e.g. +10% profit in 14 days",
@@ -46,13 +55,13 @@ Output format:
     "risk": "low|medium|high",
     "metric": "profit_minor|revenue_minor|spend_minor|leads|retention_d7_pct|conversion_lead_to_purchase_pct",
     "horizon_days": 7-30,
-    "action_hints": {"optional": "freeform"}
-  }
+    "action_hints": {{"optional": "freeform"}}
+  }}
 ]
 
 Rules:
 - Be concrete and testable.
-- Prefer actions executable through supported messaging channels and Ads.
+- Prefer actions executable through supported messaging channels: {_SUPPORTED_MESSAGING_CHANNELS}; Ads are also supported.
 - Use signals.top_channels when available; Telegram is supported but not assumed.
 - Avoid vague advice like "improve marketing".
 - Do NOT include any text outside JSON.
@@ -102,7 +111,7 @@ def _parse_json_array(text: str) -> list[dict[str, Any]]:
         raw = (m.group(1) or "").strip()
     try:
         obj = json.loads(raw)
-    except Exception:
+    except json.JSONDecodeError:
         a = raw.find("[")
         b = raw.rfind("]")
         if a >= 0 and b >= 0 and b > a:
@@ -143,5 +152,5 @@ def _coerce_hypothesis(d: dict[str, Any], *, tenant_id: str, now_ms: int) -> Gro
             horizon_days=int(d.get("horizon_days") or 14),
             action_hints=dict(d.get("action_hints") or {}),
         )
-    except Exception:
+    except (TypeError, ValueError):
         return None

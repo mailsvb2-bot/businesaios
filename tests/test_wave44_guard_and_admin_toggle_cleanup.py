@@ -21,7 +21,8 @@ class _Ledger:
 
 
 class _EventLog:
-    def __init__(self):
+    def __init__(self, tenant_id: str = "tenant-a"):
+        self.tenant_id = tenant_id
         self.rows = []
 
     def emit(self, **kwargs):
@@ -33,7 +34,15 @@ class _Owner:
         self.answered = []
         self.sent = []
 
-    def _telegram_answer_callback(self, callback_query_id: str):
+    def _telegram_answer_callback(
+        self,
+        callback_query_id: str,
+        *,
+        user_id: str,
+        decision_id: str,
+        correlation_id: str,
+    ):
+        del user_id, decision_id, correlation_id
         self.answered.append(callback_query_id)
 
     def send_message(self, **kwargs):
@@ -63,6 +72,7 @@ def test_perform_admin_toggle_preserves_event_and_notification_contract():
         owner,
         decision_id="d-1",
         correlation_id="c-1",
+        tenant_id="tenant-a",
         admin_id="admin-7",
         target_user_id="user-9",
         field_name="role",
@@ -72,6 +82,7 @@ def test_perform_admin_toggle_preserves_event_and_notification_contract():
         notify_reply_markup={"inline_keyboard": []},
         callback_query_id="cb-1",
         channel="telegram",
+        channel_policy=None,
         event_log=log,
     )
 

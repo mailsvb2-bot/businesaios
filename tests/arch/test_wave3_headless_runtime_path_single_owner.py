@@ -10,7 +10,7 @@ def test_headless_runtime_paths_have_single_owner() -> None:
 
 def test_headless_boot_and_governance_use_shared_paths_owner() -> None:
     boot = Path('execution/headless_boot.py').read_text(encoding='utf-8')
-    governance = Path('execution/governance_service.py').read_text(encoding='utf-8')
+    governance = Path('application/governance/governance_service.py').read_text(encoding='utf-8')
     assert 'build_headless_runtime_paths' in boot
     assert 'build_headless_runtime_paths' in governance
     assert 'Path(".runtime") / "headless_ledger"' not in boot
