@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from contextlib import suppress
 from typing import Any
 
 from runtime.execution.executor_audit import emit_decision_executed
@@ -25,12 +24,14 @@ def _checkpoint(*, executor: Any, env: Any, stage: str, payload: Mapping[str, An
     reliability = getattr(executor, "_reliability", None)
     if reliability is None:
         return
-    try:
-        decision_id = str(getattr(getattr(env, "decision", None), "decision_id", "") or "")
-        checkpoint_id = f"{stage}:{decision_id}" if decision_id else stage
-        reliability.append_checkpoint(env, stage=stage, checkpoint_id=checkpoint_id, payload=dict(payload))
-    except Exception:
-        return
+    decision_id = str(getattr(getattr(env, "decision", None), "decision_id", "") or "")
+    checkpoint_id = f"{stage}:{decision_id}" if decision_id else stage
+    reliability.append_checkpoint(
+        env,
+        stage=stage,
+        checkpoint_id=checkpoint_id,
+        payload=dict(payload),
+    )
 
 
 def _safe_dict(value: object) -> dict[str, Any]:
@@ -140,8 +141,7 @@ def finalize_recovered_outcome(*, executor: Any, env: Any, reason: str, backend_
     )
     reliability = getattr(executor, "_reliability", None)
     if reliability is not None:
-        with suppress(Exception):
-            reliability.mark_completed(env)
+        reliability.mark_completed(env)
     _checkpoint(
         executor=executor,
         env=env,

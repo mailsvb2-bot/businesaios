@@ -9,12 +9,13 @@ from typing import Any
 from reliability.distributed_lock import DistributedLock, build_distributed_lock
 from reliability.execution_checkpoint_store import (
     ExecutionCheckpoint,
+    CANON_CHECKPOINT_STAGE_ORDER,
     ExecutionCheckpointStore,
     JsonlExecutionCheckpointStore,
 )
 from reliability.idempotency_contract import IdempotencyKey
 from reliability.idempotency_scope import build_idempotency_key, build_runtime_request_scope
-from reliability.idempotency_sqlite_backend import SQLiteIdempotencyStore
+from reliability.idempotency_sqlite_backend import SQLiteBackendError, SQLiteIdempotencyStore
 from reliability.idempotency_store import JsonlIdempotencyStore
 from reliability.leader_election import LeaderElection, LeadershipLease
 from reliability.recovery_orchestrator import RecoveryOrchestrator
@@ -148,18 +149,18 @@ class RuntimeReliability:
 
     def mark_completed(self, env: Any, *, owner_id: str = "runtime-executor") -> None:
         key = self.idempotency_key_for_env(env)
-        try:
-            run_id = self.run_id_for_env(env)
-            self.idempotency_store.mark_completed(key=key, owner_id=owner_id, result_ref=run_id, result_digest=run_id)
-        except Exception:
-            return None
+        record = self.idempotency_store.get(key=key)
+        if record is None or record.is_terminal():
+            return
+        run_id = self.run_id_for_env(env)
+        self.idempotency_store.mark_completed(key=key, owner_id=owner_id, result_ref=run_id, result_digest=run_id)
 
     def mark_failed(self, env: Any, *, owner_id: str = "runtime-executor", reason: str | None = None) -> None:
         key = self.idempotency_key_for_env(env)
-        try:
-            self.idempotency_store.mark_failed(key=key, owner_id=owner_id, reason=reason)
-        except Exception:
-            return None
+        record = self.idempotency_store.get(key=key)
+        if record is None or record.is_terminal():
+            return
+        self.idempotency_store.mark_failed(key=key, owner_id=owner_id, reason=reason)
 
     def plan(self, env: Any):
         key = self.idempotency_key_for_env(env)
@@ -170,17 +171,14 @@ class RuntimeReliability:
             outbox_message_id=self.run_id_for_env(env),
         )
 
-    def reconcile(self, env: Any) -> dict[str, Any] | None:
-        try:
-            key = self.idempotency_key_for_env(env)
-            report = self.recovery_orchestrator.reconcile(
-                tenant_id=self.tenant_id_for_env(env),
-                run_id=self.run_id_for_env(env),
-                idempotency_key=key,
-                outbox_message_id=self.run_id_for_env(env),
-            )
-        except Exception:
-            return None
+    def reconcile(self, env: Any) -> dict[str, Any]:
+        key = self.idempotency_key_for_env(env)
+        report = self.recovery_orchestrator.reconcile(
+            tenant_id=self.tenant_id_for_env(env),
+            run_id=self.run_id_for_env(env),
+            idempotency_key=key,
+            outbox_message_id=self.run_id_for_env(env),
+        )
         payload = {
             "latest_stage": getattr(report, "latest_stage", None),
             "is_clean": bool(getattr(report, "is_clean", False)),
@@ -188,10 +186,7 @@ class RuntimeReliability:
             "outbox_state": getattr(report, "outbox_state", None),
             "idempotency_state": getattr(report, "idempotency_state", None),
         }
-        try:
-            plan = self.plan(env)
-        except Exception:
-            return payload
+        plan = self.plan(env)
         payload["recovery_plan"] = {
             "recovery_action": getattr(plan, "recovery_action", None),
             "reason": getattr(plan, "reason", None),
@@ -215,6 +210,9 @@ class RuntimeReliability:
         tenant_id = self.tenant_id_for_env(env)
         run_id = self.run_id_for_env(env)
         latest = self.checkpoint_store.latest(tenant_id=tenant_id, run_id=run_id)
+        if latest is not None and latest.stage != "failed" and stage in CANON_CHECKPOINT_STAGE_ORDER and latest.stage in CANON_CHECKPOINT_STAGE_ORDER:
+            if CANON_CHECKPOINT_STAGE_ORDER.index(stage) <= CANON_CHECKPOINT_STAGE_ORDER.index(latest.stage):
+                return latest
         next_seq = int(sequence_no) if sequence_no is not None else (0 if latest is None else int(latest.sequence_no) + 1)
         decision = getattr(env, "decision", None)
         cp = ExecutionCheckpoint(
@@ -267,7 +265,7 @@ def _build_runtime_idempotency_store(*, runtime_infra: Any | None = None):
         return JsonlIdempotencyStore(_idempotency_jsonl_path(runtime_infra=runtime_infra))
     try:
         return SQLiteIdempotencyStore(_idempotency_sqlite_path(runtime_infra=runtime_infra))
-    except Exception:
+    except (OSError, SQLiteBackendError):
         return JsonlIdempotencyStore(_idempotency_jsonl_path(runtime_infra=runtime_infra))
 
 

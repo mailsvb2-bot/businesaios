@@ -21,15 +21,12 @@ def _checkpoint(*, executor: Any, env: Any, stage: str, payload: dict[str, Any] 
     reliability = getattr(executor, "_reliability", None)
     if reliability is None:
         return
-    try:
-        reliability.append_checkpoint(
-            env,
-            stage=stage,
-            checkpoint_id=f"{stage}:{getattr(getattr(env, 'decision', None), 'decision_id', 'unknown')}",
-            payload=dict(payload or {}),
-        )
-    except Exception:
-        return
+    reliability.append_checkpoint(
+        env,
+        stage=stage,
+        checkpoint_id=f"{stage}:{getattr(getattr(env, 'decision', None), 'decision_id', 'unknown')}",
+        payload=dict(payload or {}),
+    )
 
 
 def _emit_operational_event(*, executor: Any, env: Any, event_type: str, payload: dict[str, Any]) -> None:
@@ -45,30 +42,24 @@ def _emit_operational_event(*, executor: Any, env: Any, event_type: str, payload
             correlation_id=str(getattr(env.decision, "correlation_id", "unknown")),
             payload=dict(payload),
         )
-    except Exception:
-        return
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        executor._logger.warning("runtime_execution.operational_event_emit_failed", exc_info=exc)
 
 
 def _mark_execution_completed(*, executor: Any, env: Any) -> None:
     reliability = getattr(executor, "_reliability", None)
     if reliability is None:
         return
-    try:
-        reliability.mark_completed(env)
-        _checkpoint(executor=executor, env=env, stage="completed", payload={"status": "ok"})
-    except Exception:
-        return
+    reliability.mark_completed(env)
+    _checkpoint(executor=executor, env=env, stage="completed", payload={"status": "ok"})
 
 
 def _mark_execution_failed(*, executor: Any, env: Any, reason: str) -> None:
     reliability = getattr(executor, "_reliability", None)
     if reliability is None:
         return
-    try:
-        reliability.mark_failed(env, reason=reason)
-        _checkpoint(executor=executor, env=env, stage="failed", payload={"reason": str(reason)})
-    except Exception:
-        return
+    reliability.mark_failed(env, reason=reason)
+    _checkpoint(executor=executor, env=env, stage="failed", payload={"reason": str(reason)})
 
 
 def preflight_and_verify(*, executor: Any, env: Any, timescale: TimeScale) -> None:
@@ -115,7 +106,8 @@ def _review_product_capability(*, executor: Any, env: Any) -> None:
     world = load_world(executor._snapshot_store, str(env.decision.snapshot_id))
     try:
         product = getattr(world, "product", None) if world is not None else None
-    except Exception:
+    except (AttributeError, RuntimeError) as exc:
+        executor._logger.warning("runtime_execution.product_projection_failed", exc_info=exc)
         product = None
     pg = review_action(product=product if isinstance(product, dict) else {}, action=str(env.decision.action))
     if pg.allow:
@@ -163,7 +155,7 @@ def dispatch_effects(*, executor: Any, env: Any, depth: int, enqueue: bool):
             correlation_key=str(ck) if ck else None,
         ):
             out = executor._handlers.dispatch(env.decision.action, env.decision.payload, executor._effects, env)
-    except Exception as exc:
+    except Exception as exc:  # top-level dispatch boundary: record failure, then re-raise unchanged
         _mark_execution_failed(executor=executor, env=env, reason=f"dispatch_exception:{type(exc).__name__}")
         _emit_operational_event(executor=executor, env=env, event_type="runtime_executor_dispatch_failed", payload={"error_type": type(exc).__name__})
         raise
@@ -196,7 +188,7 @@ def _observe_reward_and_learning(*, executor: Any, env: Any, out: Any, depth: in
     try:
         if isinstance(details, dict) and 'ltv' in details:
             ltv = float(details.get('ltv'))
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         ltv = None
     executor._learning.observe_reward(policy_id=str(env.decision.policy_id), reward=float(reward), ltv=ltv)
     if depth < executor._max_meta_depth:
