@@ -57,3 +57,38 @@ def test_tenant_hard_gate_fails_if_store_missing_tenant_param():
 
     with pytest.raises(SystemExit):
         validate_runtime_objects(tenant_id="default", event_store=BadStore(), event_log=BadLog())
+
+
+def test_tenant_hard_gate_accepts_strict_event_payload_store():
+    from runtime.boot.tenant_hard_gate import validate_runtime_objects
+
+    class PayloadStore:
+        def append_event(self, event: dict):
+            if not str(event.get("tenant_id") or "").strip():
+                raise ValueError("tenant_id required")
+            return None
+
+        def iter_events(self, *, tenant_id: str, user_id: str, since_ts: int, limit: int = 100):
+            if not str(tenant_id or "").strip():
+                raise ValueError("tenant_id required")
+            return []
+
+    class TenantLog:
+        tenant_id = "default"
+
+        def emit(self, *, event_type: str, user_id: str, payload: dict):
+            return {"event_type": event_type, "user_id": user_id, "payload": payload}
+
+    validate_runtime_objects(tenant_id="default", event_store=PayloadStore(), event_log=TenantLog())
+
+
+def test_tenant_hard_gate_audits_repository_root(monkeypatch: pytest.MonkeyPatch):
+    from pathlib import Path
+
+    import bootstrap.tenant_hard_gate as gate
+
+    seen: list[str] = []
+    monkeypatch.setattr("scripts.audit_tenant_usage.audit", lambda root: seen.append(root) or 0)
+    gate.preflight_env(run_mode="telegram", cfg=gate.TenantHardGateConfig(audit_repo=True, require_env_tenant=False))
+
+    assert seen == [str(Path(gate.__file__).resolve().parents[1])]
