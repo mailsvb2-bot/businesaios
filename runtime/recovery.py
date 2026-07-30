@@ -59,11 +59,7 @@ def _quarantine_item(*, outbox: Any, env: Any, item: dict[str, Any], reason: str
             )
         )
     try:
-        quarantine_recovery_outcome(
-            executor=quarantine_executor,
-            env=quarantine_env,
-            reason=str(reason),
-        )
+        quarantine_recovery_outcome(executor=quarantine_executor, env=quarantine_env, reason=str(reason))
     except Exception as exc:
         _warn_recovery_issue(key="recovery.dead_letter.move", msg="recovery: failed to quarantine", exc=exc)
 
@@ -84,8 +80,7 @@ def _normalize_item(item: Any) -> dict[str, Any]:
 
 
 def _read_outbox_items(*, primary, fallback=None, key: str) -> tuple[dict[str, Any], ...]:
-    readers = (primary, fallback) if fallback is not None else (primary,)
-    for index, reader in enumerate(readers):
+    for index, reader in enumerate((primary, fallback) if fallback is not None else (primary,)):
         try:
             rows = reader()
         except Exception as exc:  # outbox enumeration boundary: outage means no dispatch
