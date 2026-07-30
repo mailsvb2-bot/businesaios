@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -68,3 +69,12 @@ def test_effect_delivery_metadata_keeps_verified_delivery_fields(monkeypatch):
     assert result["ok"] is True
     assert result["effect_delivery"]["runtime_outbox_status"] == "delivered"
     assert result["effect_delivery"]["reconciliation"] == {"state": "completed"}
+
+
+def test_enqueue_evidence_uses_canonical_execution_checkpoint():
+    source = Path("runtime/execution/executor_stages.py").read_text(encoding="utf-8")
+
+    assert 'stage="queue_dispatch"' not in source
+    assert 'stage="execution"' in source
+    assert '"claimed": True, **queue_metadata' in source
+    assert '"status": "already_claimed", "enqueue": bool(enqueue), **queue_metadata' in source
