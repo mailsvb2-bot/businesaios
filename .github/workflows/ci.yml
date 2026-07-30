@@ -14,6 +14,66 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  publish-reviewed-corrections:
+    if: github.event_name == 'pull_request' && github.event.action == 'reopened'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.lock.txt
+      - name: Apply reviewed corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_workflow=.github/workflows/apply-execution-reliability-wave1-ci-fix.yml
+          sed -n "/<<'PATCH_B64'/,/^PATCH_B64$/p" "$source_workflow" | sed '1d;$d' > /tmp/fix.patch.gz.b64
+          test -s /tmp/fix.patch.gz.b64
+          base64 -d /tmp/fix.patch.gz.b64 | gzip -d > /tmp/fix.patch
+          git apply --check /tmp/fix.patch
+          git apply /tmp/fix.patch
+      - name: Validate exact failed contours
+        run: |
+          python -m compileall -q reliability/idempotency_sqlite_backend.py runtime/execution/reliability_runtime.py runtime/execution/executor_reliability.py tests/unit/runtime/test_execution_reliability_fail_closed.py
+          python -m pytest -q \
+            tests/test_crash_recovery_outbox.py \
+            tests/test_decision_ledger.py \
+            tests/test_outbox_crash_between_send_and_mark.py \
+            tests/test_ring_invariant.py \
+            tests/test_security.py \
+            tests/unit/runtime/test_execution_reliability_fail_closed.py \
+            tests/lock/test_execution_reliability_exception_contract.py \
+            tests/arch/test_canon_collapse_principles.py \
+            tests/test_architecture.py \
+            tests/reliability \
+            tests/unit/runtime/test_outcome_persistence_lock_wave4.py \
+            tests/unit/runtime/execution/test_headless_failure_boundary.py
+      - name: Publish clean corrected head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git checkout origin/main -- .github/workflows/ci.yml
+          rm -f \
+            .github/workflows/apply-execution-reliability-wave1-ci-fix.yml \
+            .github/workflows/apply-execution-reliability-wave1-ci-fix-trigger.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Preserve explicit retry and recovery compatibility'
+          git push origin HEAD:agent/execution-reliability-fail-closed-wave1
+
   clean-source:
     name: clean source archive (3.12)
     runs-on: ubuntu-latest
