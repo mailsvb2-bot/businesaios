@@ -26,11 +26,11 @@ _REQUIRED_BY_PROVIDER = {
     'ozon_marketplace': ('client_id', 'api_key'),
     'hubspot': ('private_app_token',),
     'meta_ads': ('access_token', 'account_id'),
-    'google_ads': ('refresh_token', 'customer_id', 'developer_token'),
+    'google_ads': ('developer_token', 'refresh_token', 'client_id', 'client_secret'),
     'tiktok_ads': ('access_token', 'advertiser_id'),
     'postgres_runtime': ('dsn',),
-    'redis_runtime': ('url',),
-    'clickhouse_export': ('endpoint', 'database', 'username', 'password'),
+    'redis_runtime': ('redis_url',),
+    'clickhouse_export': ('endpoint', 'database'),
 }
 
 
@@ -100,7 +100,7 @@ class ProviderConnectorHealthService:
             dsn = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.dsn')
             return (dsn.startswith('postgres://') or dsn.startswith('postgresql://'), 'invalid_postgres_dsn' if dsn else 'missing_postgres_dsn')
         if provider_key == 'redis_runtime':
-            url = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.url')
+            url = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.redis_url')
             return (url.startswith('redis://') or url.startswith('rediss://'), 'invalid_redis_url' if url else 'missing_redis_url')
         if provider_key == 'clickhouse_export':
             endpoint = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.endpoint')
