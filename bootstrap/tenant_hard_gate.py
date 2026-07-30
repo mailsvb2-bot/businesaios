@@ -1,7 +1,6 @@
 from __future__ import annotations
 CANON_BOOT_WIRING_ONLY = True
 
-
 """
 PATCHSET E — Tenant hard gate (runtime self-check)
 
@@ -31,11 +30,9 @@ from runtime.boot.canonical.tenant import resolve_tenant
 
 EMPTY_TENANT_ID_PROBE = str()
 
-
 def _accepts_keyword(fn: Callable[..., Any], param: str) -> bool:
     from runtime.decision_input import accepts_keyword
     return bool(accepts_keyword(fn, param))
-
 
 def _req_non_empty(name: str, value: Optional[str]) -> str:
     v = str(value or "").strip()
@@ -45,7 +42,6 @@ def _req_non_empty(name: str, value: Optional[str]) -> str:
             f"Set TENANT_ID (or provide tenant_id via boot config/contract)."
         )
     return v
-
 
 def _has_param(fn: Callable[..., Any], param: str) -> bool:
     return _accepts_keyword(fn, param)
@@ -103,7 +99,7 @@ def preflight_env(*, run_mode: str, cfg: Optional[TenantHardGateConfig] = None) 
             from scripts.audit_tenant_usage import audit as _audit
         except ImportError as e:
             _fail(f"cannot import scripts.audit_tenant_usage.audit: {type(e).__name__}")
-        repo_root = Path(__file__).resolve().parents[2]
+        repo_root = Path(__file__).resolve().parents[1]
         rc = int(_audit(str(repo_root)))
         if rc != 0:
             _fail(
@@ -117,8 +113,9 @@ def validate_runtime_objects(*, tenant_id: str, event_store: Any, event_log: Any
 
     if not hasattr(event_store, "append_event"):
         _fail("event_store has no append_event()")
-    if not _has_param(getattr(event_store, "append_event"), "tenant_id"):
-        _fail("event_store append_event must accept tenant_id= (strict)")
+    append_event = getattr(event_store, "append_event")
+    if not (_has_param(append_event, "tenant_id") or _has_param(append_event, "event")):
+        _fail("event_store append_event must accept tenant_id= or a strict event payload")
 
     if not hasattr(event_store, "iter_events"):
         _fail("event_store has no iter_events()")
@@ -130,7 +127,10 @@ def validate_runtime_objects(*, tenant_id: str, event_store: Any, event_log: Any
             _fail("event_store count_events must accept tenant_id= (strict)")
 
     try:
-        getattr(event_store, "append_event")(tenant_id=EMPTY_TENANT_ID_PROBE, event_type="__probe__", user_id="__probe__", payload={})
+        if _has_param(append_event, "tenant_id"):
+            append_event(tenant_id=EMPTY_TENANT_ID_PROBE, event_type="__probe__", user_id="__probe__", payload={})
+        else:
+            append_event({"tenant_id": EMPTY_TENANT_ID_PROBE, "event_type": "__probe__", "user_id": "__probe__", "payload": {}})
         _fail("event_store append_event accepted empty tenant_id (must raise)")
     except SystemExit:
         raise
