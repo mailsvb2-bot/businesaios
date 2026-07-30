@@ -38,6 +38,12 @@ jobs:
         env:
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-3.12
         run: python -m scripts.ci.cli --gate full
+      - name: Reset mutable tool caches before literal pytest
+        shell: bash
+        run: |
+          find . -type d \
+            \( -name ".ruff_cache" -o -name ".pytest_cache" -o -name ".mypy_cache" \) \
+            -prune -exec rm -rf {} +
       - name: Run documented complete pytest tree
         env:
           BUSINESAIOS_DEEP_TEST_CLEANUP: "1"

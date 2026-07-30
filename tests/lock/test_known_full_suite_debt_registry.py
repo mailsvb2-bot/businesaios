@@ -35,3 +35,21 @@ def test_complete_tree_cannot_restore_known_debt_quarantine() -> None:
     assert offenders == [], (
         "Known full-suite quarantine must not return: " + ", ".join(offenders)
     )
+
+def test_full_ci_resets_tool_caches_before_literal_pytest() -> None:
+    workflow = ROOT / ".github" / "workflows" / "full-ci.yml"
+    text = workflow.read_text(encoding="utf-8")
+    cleanup_marker = "- name: Reset mutable tool caches before literal pytest"
+    literal_marker = "- name: Run documented complete pytest tree"
+
+    assert cleanup_marker in text
+    assert literal_marker in text
+    cleanup_start = text.index(cleanup_marker)
+    literal_start = text.index(literal_marker)
+    assert cleanup_start < literal_start
+
+    cleanup_block = text[cleanup_start:literal_start]
+    for cache_dir in (".ruff_cache", ".pytest_cache", ".mypy_cache"):
+        assert cache_dir in cleanup_block
+    assert "artifacts/ci" not in cleanup_block
+
