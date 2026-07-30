@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from runtime.platform.support.storage import artifacts
 from runtime.platform.support.storage.artifacts.checkpoint_store import CheckpointStore
 from runtime.platform.support.storage.datasets.rollout_store import RolloutStore
 from runtime.platform.support.storage.registry.policy_registry_store import PolicyRegistryStore
@@ -17,3 +18,8 @@ def test_generated_store_imports_remain_compatible() -> None:
     assert checkpoint.get("a") == 1
     assert rollout.get("b") == 2
     assert registry.get("c") == 3
+    assert artifacts.CheckpointStore is CheckpointStore
+    assert {
+        "CheckpointStore", "EvaluationStore", "ModelArtifactStore",
+        "PackagingStore", "ReportStore", "SignatureStore",
+    } <= set(artifacts.__all__)
