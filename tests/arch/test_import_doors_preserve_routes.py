@@ -68,3 +68,14 @@ def test_runtime_platform_support_import_doors_preserve_registered_synthetic_rou
 
     assert checked_routes > 0
     assert failures == []
+
+
+def test_runtime_platform_support_import_doors_create_missing_parent_packages() -> None:
+    import runtime.platform.support  # noqa: F401 - installs the import-door finder
+
+    parent = importlib.import_module("runtime.platform.support.storage.artifacts")
+    child = importlib.import_module("runtime.platform.support.storage.artifacts.artifact_store")
+    owner = importlib.import_module("runtime.platform.support.storage.generated_stores")
+
+    assert hasattr(parent, "__path__")
+    assert child.ArtifactStore is owner.ArtifactStore
