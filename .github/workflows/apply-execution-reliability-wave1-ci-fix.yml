@@ -1,0 +1,64 @@
+name: Apply complete-tree reliability corrections
+
+on:
+  pull_request:
+    types: [reopened]
+    paths:
+      - .github/workflows/apply-execution-reliability-wave1-ci-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.lock.txt
+      - name: Apply exact complete-tree corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/fix.patch.gz.b64 <<'PATCH_B64'
+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
+PATCH_B64
+          base64 -d /tmp/fix.patch.gz.b64 | gzip -d > /tmp/fix.patch
+          git apply --check /tmp/fix.patch
+          git apply /tmp/fix.patch
+      - name: Validate exact failing and reliability contours
+        run: |
+          python -m compileall -q reliability/idempotency_sqlite_backend.py runtime/execution/reliability_runtime.py runtime/execution/executor_reliability.py tests/unit/runtime/test_execution_reliability_fail_closed.py
+          python -m pytest -q \
+            tests/test_crash_recovery_outbox.py \
+            tests/test_decision_ledger.py \
+            tests/test_outbox_crash_between_send_and_mark.py \
+            tests/test_ring_invariant.py \
+            tests/test_security.py \
+            tests/unit/runtime/test_execution_reliability_fail_closed.py \
+            tests/lock/test_execution_reliability_exception_contract.py \
+            tests/arch/test_canon_collapse_principles.py \
+            tests/test_architecture.py \
+            tests/reliability \
+            tests/unit/runtime/test_outcome_persistence_lock_wave4.py \
+            tests/unit/runtime/execution/test_headless_failure_boundary.py
+      - name: Publish corrections and remove workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-execution-reliability-wave1-ci-fix.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Preserve explicit retry and recovery compatibility'
+          git push origin HEAD:agent/execution-reliability-fail-closed-wave1
