@@ -31,6 +31,18 @@ def test_plan_storage_outage_blocks_claim_and_dispatch(monkeypatch) -> None:
     assert calls == []
 
 
+@pytest.mark.parametrize("method", ["list_claimable_all", "list_pending"])
+def test_type_error_without_signature_fallback_is_an_enumeration_outage(monkeypatch, method: str) -> None:
+    warnings: list[str] = []
+    outbox = SimpleNamespace(
+        **{method: lambda **kwargs: (_ for _ in ()).throw(TypeError("OUTBOX_READ_FAILED"))}
+    )
+    monkeypatch.setattr(subject, "_warn_recovery_issue", lambda **kwargs: warnings.append(kwargs["key"]))
+
+    assert subject._iter_recoverable_items(outbox=outbox, limit=1) == ()
+    assert warnings == [f"recovery.outbox.{method}"]
+
+
 def test_delivering_ownership_read_outage_never_attempts_reclaim(monkeypatch) -> None:
     calls: list[str] = []
     warnings: list[str] = []
