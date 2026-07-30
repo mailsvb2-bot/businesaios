@@ -57,8 +57,7 @@ class ProviderConnectorHealthService:
     def probe(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, probe_mode: str = 'dry_run') -> ProviderHealthProbeResult:
         mode = str(probe_mode or 'dry_run').strip().lower() or 'dry_run'
         required = _REQUIRED_BY_PROVIDER.get(provider.provider_key, tuple(field.field_key for field in provider.secret_fields if field.required))
-        present = []
-        missing = []
+        present, missing = [], []
         for field_key in required:
             value = self._read_optional_secret(
                 tenant_id=tenant_id,
@@ -90,18 +89,14 @@ class ProviderConnectorHealthService:
         live_ready = bool(provider_transport_binding_for_key(provider.provider_key).get('live_ready'))
         if mode == 'live' and not live_ready:
             return ProviderHealthProbeResult(
-                provider_key=provider.provider_key,
-                status='live_probe_unsupported',
-                probe_mode=mode,
-                reason='live_transport_not_ready',
+                provider_key=provider.provider_key, status='live_probe_unsupported',
+                probe_mode=mode, reason='live_transport_not_ready',
                 metadata={'present_fields': tuple(present), 'live_probe_supported': False},
             )
-        status = 'ready_for_live_probe' if mode == 'live' else 'ready_for_credentials'
         return ProviderHealthProbeResult(
             provider_key=provider.provider_key,
-            status=status,
-            probe_mode=mode,
-            reason='validated_secret_shape',
+            status='ready_for_live_probe' if mode == 'live' else 'ready_for_credentials',
+            probe_mode=mode, reason='validated_secret_shape',
             metadata={'present_fields': tuple(present), 'live_probe_supported': live_ready},
         )
 
