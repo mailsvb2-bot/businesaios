@@ -14,6 +14,9 @@ from runtime.business_autonomy.provider_http_live_clients import (
 from runtime.business_autonomy.provider_live_probe_runtime import (
     ProviderLiveProbeRuntime,
 )
+from runtime.business_autonomy.provider_transport_bindings import (
+    provider_transport_binding_for_key,
+)
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
 
@@ -126,3 +129,24 @@ def test_every_provider_reaches_declared_dry_run_state_without_network(
     assert statuses == {"probe_prepared_only": 8, "probe_unsupported": 14}
     assert network_attempts == []
     assert not (tmp_path / "data").exists()
+
+
+def test_every_provider_live_readiness_matches_transport_binding() -> None:
+    cases = 0
+    for provider in PROVIDERS:
+        vault = InMemorySecretVault()
+        _seed_required_secrets(vault, provider)
+        health = ProviderConnectorHealthService(vault).probe(
+            provider=provider,
+            tenant_id="tenant-probe-matrix",
+            business_id="business-probe-matrix",
+            probe_mode="live",
+        )
+        live_ready = bool(
+            provider_transport_binding_for_key(provider.provider_key).get("live_ready")
+        )
+        expected = "ready_for_live_probe" if live_ready else "live_probe_unsupported"
+        assert health.status == expected, provider.provider_key
+        assert bool(health.metadata.get("live_probe_supported")) is live_ready
+        cases += 1
+    assert cases == 22
