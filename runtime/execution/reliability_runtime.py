@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -148,18 +149,17 @@ class RuntimeReliability:
 
     def mark_completed(self, env: Any, *, owner_id: str = "runtime-executor") -> None:
         key = self.idempotency_key_for_env(env)
-        try:
-            run_id = self.run_id_for_env(env)
-            self.idempotency_store.mark_completed(key=key, owner_id=owner_id, result_ref=run_id, result_digest=run_id)
-        except Exception:
-            return None
+        run_id = self.run_id_for_env(env)
+        self.idempotency_store.mark_completed(
+            key=key,
+            owner_id=owner_id,
+            result_ref=run_id,
+            result_digest=run_id,
+        )
 
     def mark_failed(self, env: Any, *, owner_id: str = "runtime-executor", reason: str | None = None) -> None:
         key = self.idempotency_key_for_env(env)
-        try:
-            self.idempotency_store.mark_failed(key=key, owner_id=owner_id, reason=reason)
-        except Exception:
-            return None
+        self.idempotency_store.mark_failed(key=key, owner_id=owner_id, reason=reason)
 
     def plan(self, env: Any):
         key = self.idempotency_key_for_env(env)
@@ -170,17 +170,14 @@ class RuntimeReliability:
             outbox_message_id=self.run_id_for_env(env),
         )
 
-    def reconcile(self, env: Any) -> dict[str, Any] | None:
-        try:
-            key = self.idempotency_key_for_env(env)
-            report = self.recovery_orchestrator.reconcile(
-                tenant_id=self.tenant_id_for_env(env),
-                run_id=self.run_id_for_env(env),
-                idempotency_key=key,
-                outbox_message_id=self.run_id_for_env(env),
-            )
-        except Exception:
-            return None
+    def reconcile(self, env: Any) -> dict[str, Any]:
+        key = self.idempotency_key_for_env(env)
+        report = self.recovery_orchestrator.reconcile(
+            tenant_id=self.tenant_id_for_env(env),
+            run_id=self.run_id_for_env(env),
+            idempotency_key=key,
+            outbox_message_id=self.run_id_for_env(env),
+        )
         payload = {
             "latest_stage": getattr(report, "latest_stage", None),
             "is_clean": bool(getattr(report, "is_clean", False)),
@@ -188,10 +185,7 @@ class RuntimeReliability:
             "outbox_state": getattr(report, "outbox_state", None),
             "idempotency_state": getattr(report, "idempotency_state", None),
         }
-        try:
-            plan = self.plan(env)
-        except Exception:
-            return payload
+        plan = self.plan(env)
         payload["recovery_plan"] = {
             "recovery_action": getattr(plan, "recovery_action", None),
             "reason": getattr(plan, "reason", None),
@@ -267,7 +261,7 @@ def _build_runtime_idempotency_store(*, runtime_infra: Any | None = None):
         return JsonlIdempotencyStore(_idempotency_jsonl_path(runtime_infra=runtime_infra))
     try:
         return SQLiteIdempotencyStore(_idempotency_sqlite_path(runtime_infra=runtime_infra))
-    except Exception:
+    except (OSError, sqlite3.Error):
         return JsonlIdempotencyStore(_idempotency_jsonl_path(runtime_infra=runtime_infra))
 
 

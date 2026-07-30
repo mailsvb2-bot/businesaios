@@ -131,6 +131,7 @@ class SQLiteIdempotencyBackend(IdempotencyBackend):
         with self._write_lock:
             conn = self._connection()
             conn.execute('BEGIN IMMEDIATE')
+            committed = False
             try:
                 row = conn.execute(
                     """
@@ -198,10 +199,16 @@ class SQLiteIdempotencyBackend(IdempotencyBackend):
                     payload,
                 )
                 conn.commit()
-                return BackendMutationResult(stored_record=stored, previous_record=existing, created=existing is None, revision=next_revision)
-            except Exception:
-                conn.rollback()
-                raise
+                committed = True
+                return BackendMutationResult(
+                    stored_record=stored,
+                    previous_record=existing,
+                    created=existing is None,
+                    revision=next_revision,
+                )
+            finally:
+                if not committed and conn.in_transaction:
+                    conn.rollback()
 
     def scan_non_terminal(self) -> Iterable[IdempotencyRecord]:
         self._ensure_schema()
@@ -226,6 +233,7 @@ class SQLiteIdempotencyBackend(IdempotencyBackend):
         with self._write_lock:
             conn = self._connection()
             conn.execute('BEGIN IMMEDIATE')
+            committed = False
             try:
                 cursor = conn.execute(
                     """
@@ -248,24 +256,25 @@ class SQLiteIdempotencyBackend(IdempotencyBackend):
                 )
                 deleted = int(cursor.rowcount or 0)
                 conn.commit()
+                committed = True
                 return deleted
-            except Exception:
-                conn.rollback()
-                raise
+            finally:
+                if not committed and conn.in_transaction:
+                    conn.rollback()
 
     def compact(self) -> None:
         conn = self._connection()
-        with suppress(Exception):
+        with suppress(sqlite3.Error):
             conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
-        with suppress(Exception):
+        with suppress(sqlite3.Error):
             conn.execute('VACUUM')
 
     def close(self) -> None:
         conn = getattr(self._local, 'conn', None)
         if conn is not None:
-            with suppress(Exception):
+            with suppress(sqlite3.Error):
                 conn.execute('PRAGMA wal_checkpoint(PASSIVE)')
-            with suppress(Exception):
+            with suppress(sqlite3.Error):
                 conn.close()
             self._local.conn = None
 
