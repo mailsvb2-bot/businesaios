@@ -16,10 +16,6 @@ from runtime.service_names import RuntimeServiceName
 from runtime.service_types import RuntimeServiceType
 
 
-def _safe_dict(value: object) -> dict[str, Any]:
-    return dict(value) if isinstance(value, Mapping) else {}
-
-
 def _safe_bool(value: object) -> bool:
     if isinstance(value, bool):
         return value
@@ -44,10 +40,10 @@ def _safe_float(value: object, *, default: float = 0.0) -> float:
 def _payload(action: object) -> dict[str, Any]:
     if isinstance(action, Mapping):
         return dict(action)
-    payload = getattr(action, 'payload', None)
-    if isinstance(payload, Mapping):
+    owner = getattr(action, 'decision', None) or action
+    if isinstance(payload := getattr(owner, 'payload', None), Mapping):
         body = dict(payload)
-        body.setdefault('action_type', str(getattr(action, 'action_type', '') or ''))
+        body.setdefault('action_type', str(getattr(owner, 'action', getattr(owner, 'action_type', '')) or ''))
         return body
     return {}
 
