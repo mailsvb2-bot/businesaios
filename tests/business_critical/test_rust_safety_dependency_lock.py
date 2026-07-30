@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
-CRATE_DIR = Path("rust/businessaios_safety_core")
+from tests._infra.tracked_files import DELIVERY_SCAN_EXCLUDED_DIRS, tracked_files
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CRATE_DIR = REPO_ROOT / "rust/businessaios_safety_core"
 
 
 def test_rust_safety_core_has_reproducible_dependency_lock() -> None:
@@ -11,7 +13,9 @@ def test_rust_safety_core_has_reproducible_dependency_lock() -> None:
     cargo_lock = CRATE_DIR / "Cargo.lock"
 
     assert cargo_toml.exists(), "Rust safety core Cargo.toml is required"
-    assert cargo_lock.exists(), "Rust safety core Cargo.lock must be committed for reproducible release gates"
+    assert cargo_lock.exists(), (
+        "Rust safety core Cargo.lock must be committed for reproducible release gates"
+    )
 
     lock_text = cargo_lock.read_text(encoding="utf-8")
     assert "name = \"businessaios_safety_core\"" in lock_text
@@ -21,10 +25,13 @@ def test_rust_safety_core_has_reproducible_dependency_lock() -> None:
 
 
 def test_rust_safety_core_target_directory_is_not_tracked() -> None:
-    completed = subprocess.run(
-        ["git", "ls-files", "rust/businessaios_safety_core/target"],
-        check=True,
-        capture_output=True,
-        text=True,
+    fallback_excluded_dirs = DELIVERY_SCAN_EXCLUDED_DIRS - {"target"}
+    offenders = tuple(
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in tracked_files(
+            REPO_ROOT,
+            "rust/businessaios_safety_core/target",
+            fallback_excluded_dirs=fallback_excluded_dirs,
+        )
     )
-    assert completed.stdout.strip() == "", "Rust target/ must stay local and must not be committed"
+    assert offenders == (), "Rust target/ must stay local and must not be committed"
