@@ -128,7 +128,8 @@ class PolicyRegistry:
             self._rollout_pct = 0
             return
         self._meta.register_candidate(PolicyRef(policy_id=pid, version="v1"))
-        self._meta.start_canary(PolicyRef(policy_id=pid, version="v1"))
+        if pct > 0:
+            self._meta.start_canary(PolicyRef(policy_id=pid, version="v1"))
         self._candidate = pid
         self._rollout_pct = pct
 
