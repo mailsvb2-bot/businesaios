@@ -99,6 +99,14 @@ class PolicySelector:
 
         return self._registry.active()
 
+    def resolve_shadow_policy(self, state, *, production_policy_id: str):
+        candidate_id, pct = self._registry.rollout_config()
+        if not candidate_id or int(pct or 0) != 0 or str(candidate_id) == str(production_policy_id):
+            return None
+        candidate = self._registry.maybe_get(candidate_id)
+        module = str(getattr(type(candidate), "__module__", ""))
+        return candidate if candidate is not None and module.startswith("core.policies.") else None
+
     select = resolve_policy
 
     def _get_optional(self, policy_id: str, *, miss_key: str):
