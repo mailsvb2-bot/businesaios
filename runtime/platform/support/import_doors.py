@@ -15,12 +15,15 @@ _SUPPORT_PACKAGE = "runtime.platform.support"
 _SUPPORT_PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
-def _load_runtime_platform_support_import_doors() -> dict[str, dict[str, str]]:
+def _load_runtime_platform_support_import_doORS() -> dict[str, dict[str, str]]:
     registry_path = Path(__file__).with_name("import_doors_registry.json")
     with registry_path.open("r", encoding="utf-8") as fh:
         raw = json.load(fh)
     return {
-        str(module_name): {str(export_name): str(target_module) for export_name, target_module in exports.items()}
+        str(module_name): {
+            str(export_name): str(target_module)
+            for export_name, target_module in exports.items()
+        }
         for module_name, exports in raw.items()
     }
 
@@ -48,8 +51,8 @@ def _physical_module_path(fullname: str) -> Path | None:
     return None
 
 
-RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS = _load_runtime_platform_support_import_doors()
-RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS["runtime.platform.support.storage.artifacts"] = {name: "runtime.platform.support.storage.generated_stores" for name in ("ArtifactStore", "CheckpointStore", "EvaluationStore", "ModelArtifactStore", "PackagingStore", "ReportStore", "SignatureStore")}
+RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS = _load_runtime_platform_support_import_doORS()
+
 
 class _RuntimePlatformSupportDoorFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
     def find_spec(self, fullname: str, path=None, target=None):
@@ -57,7 +60,11 @@ class _RuntimePlatformSupportDoorFinder(importlib.abc.MetaPathFinder, importlib.
             return None
         if _physical_module_path(fullname) is not None:
             return None
-        return importlib.machinery.ModuleSpec(fullname, self, is_package=any(name.startswith(f"{fullname}.") for name in RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS))
+        is_package = any(
+            name.startswith(f"{fullname}.")
+            for name in RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS
+        )
+        return importlib.machinery.ModuleSpec(fullname, self, is_package=is_package)
 
     def create_module(self, spec):
         return ModuleType(spec.name)
