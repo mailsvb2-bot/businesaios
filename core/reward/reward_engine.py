@@ -18,6 +18,7 @@ from core.actions.proof_registry import ACTION_PROOF_EVENT
 from core.ai.snapshot_store import SnapshotStore
 from core.economics.brain import EconomicBrain
 from core.reward.delayed import eligible as _delayed_eligible
+from core.policies.shadow import ShadowDecisionLedger
 from core.reward.observe_flow import observe_governed_reward, shape_fallback_reward
 
 
@@ -110,14 +111,15 @@ class RewardEngine:
 
         # 1) Governed reward from canonical snapshot (preferred)
         governed = observe_governed_reward(engine=self, env=env)
-        if governed is not None:
-            return float(governed)
-
-        # 2) Safe baseline + bounded shaping
-        base_reward = float(self._fallback_money_reward(env, execution_output))
-        return shape_fallback_reward(
-            engine=self,
-            env=env,
-            execution_output=execution_output,
-            reward=base_reward,
-        )
+        if governed is None:
+            governed = shape_fallback_reward(
+                engine=self, env=env, execution_output=execution_output,
+                reward=float(self._fallback_money_reward(env, execution_output)),
+            )
+        reward = float(governed)
+        try:
+            if self._events is not None:
+                ShadowDecisionLedger(self._events).record_production_outcome(decision_id=str(env.decision.decision_id), actual_reward=reward)
+        except Exception:
+            pass
+        return reward

@@ -125,6 +125,10 @@ def run_decision(*, core: Any, state: Any, envelope_version: int, logger: Any) -
             decision_id=str(built.decision.decision_id),
             correlation_id=str(built.decision.correlation_id),
         )
+        try:
+            core.dispatch_shadow(state=state, production_envelope=built.envelope, production_policy_id=str(getattr(policy, "id", "")))
+        except Exception:
+            exception_throttled(logger, key=f"{user_id}|shadow_observer", msg=f"decision_core: shadow observer failed user={user_id}")
         return built.envelope
 
 

@@ -7,6 +7,7 @@ from core.ai import (
     get_decision_core_singleton,
     set_decision_core_singleton,
 )
+from core.policies.shadow import ShadowEvaluator
 from runtime.boot import boot_decision_core
 
 
@@ -53,6 +54,10 @@ def test_boot_registers_the_exact_core_before_returning(monkeypatch) -> None:
     assert result_world_model is world_model
     assert result_core is core
     assert get_decision_core_singleton() is core
+    shadow_observer = captured.pop("shadow_observer")
+    assert isinstance(shadow_observer, ShadowEvaluator)
+    assert shadow_observer.ledger.event_log == "events"
+    assert shadow_observer.schemas == "schemas"
     assert captured == {
         "selector": "selector",
         "keyring": "keyring",

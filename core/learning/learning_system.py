@@ -91,7 +91,7 @@ class LearningSystem:
                 raise RuntimeError("MODEL_REGISTRY_CONTRACT_VIOLATION:latest_validated")
             rec = latest_validated()
             if rec and getattr(rec, "candidate_policy_id", None):
-                proposal = {"kind": "deploy", "candidate_policy_id": str(rec.candidate_policy_id), "rollout_pct": DEFAULT_LEARNING_SYSTEM_POLICY.default_rollout_pct}
+                proposal = {"kind": "deploy", "candidate_policy_id": str(rec.candidate_policy_id), "rollout_pct": 0}
                 ph = str(proposal)
                 if ph != self._last_proposal_hash:
                     self._last_proposal_hash = ph
@@ -133,7 +133,7 @@ class LearningSystem:
             return None
 
         # Minimal rollout policy: start at 10% when first time proposing.
-        proposal = {"kind": "deploy", "candidate_policy_id": best, "rollout_pct": DEFAULT_LEARNING_SYSTEM_POLICY.default_rollout_pct}
+        proposal = {"kind": "deploy", "candidate_policy_id": best, "rollout_pct": 0}
         ph = str(proposal)
         if ph == self._last_proposal_hash:
             return None

@@ -18,6 +18,7 @@ CANON_BOUNDARY_LOCKS = (
     "surface_growth_boundary",
     "release_manifest_workflow_boundary",
     "admin_visibility_boundary",
+    "shadow_observer_boundary",
 )
 
 
@@ -120,6 +121,7 @@ def test_canon_boundary_lock_pack_names_all_guarded_edges() -> None:
         "surface_growth_boundary",
         "release_manifest_workflow_boundary",
         "admin_visibility_boundary",
+        "shadow_observer_boundary",
     }
 
 
@@ -188,6 +190,7 @@ def test_boundary_locks_have_dedicated_existing_owners() -> None:
         "surface_growth_boundary": "tests/arch/test_canon_collapse_principles.py",
         "release_manifest_workflow_boundary": "bootstrap/prod_guards.py",
         "admin_visibility_boundary": "tests/arch/test_runtime_governance_surfaces_wave102.py",
+        "shadow_observer_boundary": "tests/arch/test_shadow_observer_no_second_brain.py",
     }
     missing = [path for path in expected.values() if not (PROJECT_ROOT / path).exists()]
     assert not missing, "Missing boundary lock owners:\n" + "\n".join(missing)

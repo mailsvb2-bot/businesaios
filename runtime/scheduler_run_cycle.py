@@ -100,19 +100,14 @@ def run_learning_cycle(job) -> LearningJobResult:
         return rollout_pct
 
     rollout_id = f"{model_id}:{best_policy_id}"
-    try:
-        begin_rollout(
-            policy_rollout_manager=job._policy_rollout_manager,
-            baseline_state=baseline_state,
-            best_policy_id=best_policy_id,
-            rollout_pct=int(rollout_pct),
-            now_ms=now_ms,
-            rollout_id=rollout_id,
-        )
-    except RolloutGuardViolation as exc:
-        return job._skip_result(f"rollout_guard:{exc.__class__.__name__}", snapshot_id=snapshot_id, model_id=model_id)
-
-    job._active_rollout_id = rollout_id
+    status_fn = getattr(job._decision_core, "shadow_rollout_status", None)
+    shadow_status = status_fn(best_policy_id) if callable(status_fn) else {"registered": True, "promotable": True}
+    if shadow_status.get("promotable"):
+        try:
+            begin_rollout(policy_rollout_manager=job._policy_rollout_manager, baseline_state=baseline_state, best_policy_id=best_policy_id, rollout_pct=int(rollout_pct), now_ms=now_ms, rollout_id=rollout_id)
+        except RolloutGuardViolation as exc:
+            return job._skip_result(f"rollout_guard:{exc.__class__.__name__}", snapshot_id=snapshot_id, model_id=model_id)
+        job._active_rollout_id = rollout_id
     result = request_rollout_execution(
         decision_core=job._decision_core,
         executor=job._executor,
@@ -125,6 +120,7 @@ def run_learning_cycle(job) -> LearningJobResult:
         rollout_id=rollout_id,
         on_cleanup_error_module="runtime.scheduler",
         decision_input_provider=job._decision_input_provider,
+        shadow_status=shadow_status,
     )
     if result.status == "deploy_failed":
         job._active_rollout_id = None

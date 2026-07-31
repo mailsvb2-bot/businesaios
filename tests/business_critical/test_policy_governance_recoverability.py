@@ -18,6 +18,9 @@ class FakeEventLog:
             raise RuntimeError("event-store-down")
         self.events.append(dict(event))
 
+    def iter_events(self):
+        return iter(self.events)
+
 
 class FakeRuntimePolicyRegistry:
     def __init__(self) -> None:
@@ -85,6 +88,7 @@ def test_lifecycle_registry_snapshot_restore_is_exact() -> None:
 
 def test_failed_deploy_audit_restores_exact_pre_effect_registry_state(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(policy_actions, "assert_called_from_executor", lambda: None)
+    monkeypatch.setattr(policy_actions.RolloutGuard, "allow_promotion", lambda *_args, **_kwargs: True)
     effects = FakePolicyEffects(fail_event="policy_deployed")
     before = dict(effects.policy_registry.state)
 
