@@ -107,6 +107,9 @@ class PolicySelector:
         module = str(getattr(type(candidate), "__module__", ""))
         return candidate if candidate is not None and module.startswith("core.policies.") else None
 
+    def is_registered_shadow_candidate(self, candidate_policy_id: str) -> bool:
+        configured, pct = self._registry.rollout_config(); return bool(configured and str(configured) == str(candidate_policy_id) and int(pct or 0) == 0)
+
     select = resolve_policy
 
     def _get_optional(self, policy_id: str, *, miss_key: str):
