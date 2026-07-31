@@ -2,6 +2,8 @@ from __future__ import annotations
 
 CANON_ANTI_SECOND_BRAIN_RULES = True
 CANONICAL_DECISION_CORE_PATH = "core/ai/decision_core.py"
+CANONICAL_SHADOW_EVIDENCE_PATH = "core/policies/shadow.py"
+SHADOW_POLICY_MODULE_PREFIX = "core.policies."
 
 # Names that unambiguously express final decision authority even without a
 # receiver. Generic lifecycle verbs such as issue/optimize are contextual so
@@ -15,6 +17,7 @@ HARD_DECISION_AUTHORITY_METHODS = frozenset(
         "select_final_action",
     }
 )
+SHADOW_FORBIDDEN_AUTHORITY_METHODS = HARD_DECISION_AUTHORITY_METHODS | frozenset({"build_envelope", "deploy_policy", "execute", "promote", "rollback", "set_rollout", "sign", "start_canary"})
 CONTEXTUAL_DECISION_AUTHORITY_METHODS = frozenset({"issue", "optimize"})
 DECISION_AUTHORITY_METHODS = (
     HARD_DECISION_AUTHORITY_METHODS | CONTEXTUAL_DECISION_AUTHORITY_METHODS
