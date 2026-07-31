@@ -15,7 +15,7 @@ _SUPPORT_PACKAGE = "runtime.platform.support"
 _SUPPORT_PACKAGE_ROOT = Path(__file__).resolve().parent
 
 
-def _load_runtime_platform_support_import_doORS() -> dict[str, dict[str, str]]:
+def _load_runtime_platform_support_import_doors() -> dict[str, dict[str, str]]:
     registry_path = Path(__file__).with_name("import_doors_registry.json")
     with registry_path.open("r", encoding="utf-8") as fh:
         raw = json.load(fh)
@@ -51,7 +51,7 @@ def _physical_module_path(fullname: str) -> Path | None:
     return None
 
 
-RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS = _load_runtime_platform_support_import_doORS()
+RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS = _load_runtime_platform_support_import_doors()
 
 
 class _RuntimePlatformSupportDoorFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
