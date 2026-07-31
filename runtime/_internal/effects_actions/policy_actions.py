@@ -1,13 +1,9 @@
-"""Sealed governed policy effects.
-
-Policy deployment and rollback mutate one tenant runtime policy registry. The
-registry state is snapshotted before mutation and restored exactly when the
-audit proof cannot persist.
-"""
-
 from __future__ import annotations
 
 from typing import Any
+
+from core.policies.shadow import ShadowDecisionLedger
+from core.policies.staged_rollout import RolloutGuard
 
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.security.runtime_asserts import assert_called_from_executor
@@ -46,6 +42,10 @@ class PolicyEffectsMixin:
             "candidate_policy_id": str(candidate_policy_id),
             "rollout_pct": int(rollout_pct),
         }
+        if int(rollout_pct) > 0:
+            metrics = ShadowDecisionLedger(self.event_log).metrics(str(candidate_policy_id))
+            if not RolloutGuard.allow_promotion(metrics):
+                raise RuntimeError("SHADOW_PROMOTION_BLOCKED")
         snapshot = self.policy_registry.snapshot_runtime_state()
         try:
             self.policy_registry.set_rollout(
