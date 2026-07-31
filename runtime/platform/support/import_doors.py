@@ -20,7 +20,10 @@ def _load_runtime_platform_support_import_doors() -> dict[str, dict[str, str]]:
     with registry_path.open("r", encoding="utf-8") as fh:
         raw = json.load(fh)
     return {
-        str(module_name): {str(export_name): str(target_module) for export_name, target_module in exports.items()}
+        str(module_name): {
+            str(export_name): str(target_module)
+            for export_name, target_module in exports.items()
+        }
         for module_name, exports in raw.items()
     }
 
@@ -57,7 +60,11 @@ class _RuntimePlatformSupportDoorFinder(importlib.abc.MetaPathFinder, importlib.
             return None
         if _physical_module_path(fullname) is not None:
             return None
-        return importlib.machinery.ModuleSpec(fullname, self)
+        is_package = any(
+            name.startswith(f"{fullname}.")
+            for name in RUNTIME_PLATFORM_SUPPORT_IMPORT_DOORS
+        )
+        return importlib.machinery.ModuleSpec(fullname, self, is_package=is_package)
 
     def create_module(self, spec):
         return ModuleType(spec.name)

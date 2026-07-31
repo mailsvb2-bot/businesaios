@@ -34,6 +34,7 @@ os.environ["BUSINESAIOS_ALLOW_TEST_SQLITE_FALLBACK"] = "1"
 
 _RELEASE_INTEGRITY_TESTS = {
     "tests/test_release_clean.py",
+    "tests/arch/test_archive_hygiene_runtime_artifacts_excluded.py",
     "tests/test_release_gate.py",
     "tests/lock/test_super_locks_no_zip_sqlite.py",
     "tests/test_canon_package_v21.py",
@@ -162,6 +163,10 @@ def _remove_runtime_artifacts() -> None:
     _unlink_matching_files(
         ROOT / "runtime" / "data" / "demo",
         ("*.db", "*.db-shm", "*.db-wal"),
+    )
+    _unlink_matching_files(
+        ROOT / "runtime" / "entrypoints" / "data",
+        ("*.db", "*.db-shm", "*.db-wal", "*.sqlite", "*.sqlite-shm", "*.sqlite-wal", "*.sqlite3", "*.sqlite3-shm", "*.sqlite3-wal"),
     )
     _unlink_matching_files(
         ROOT / "runtime" / "data" / "security",

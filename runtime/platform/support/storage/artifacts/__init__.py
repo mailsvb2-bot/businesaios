@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from runtime.platform.support.storage.generated_stores import (
+    ArtifactStore,
     CheckpointStore,
     EvaluationStore,
     ModelArtifactStore,
@@ -10,6 +11,7 @@ from runtime.platform.support.storage.generated_stores import (
 )
 
 __all__ = [
+    "ArtifactStore",
     "CheckpointStore",
     "EvaluationStore",
     "ModelArtifactStore",
