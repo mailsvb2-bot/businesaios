@@ -7,6 +7,7 @@ from typing import Any
 from bootstrap.world_model_boot_check import build_and_verify_default_world_model
 from core.ai import set_decision_core_singleton
 from core.ai.decision_core import DecisionCore
+from core.policies.shadow import ShadowDecisionLedger, ShadowEvaluator
 
 CANON_BOOT_WIRING_ONLY = True
 CANON_BOOT_REGISTERS_DECISION_CORE_SINGLETON = True
@@ -38,6 +39,7 @@ def build_decision_core(
         decision_archive=decision_archive,
         world_model=world_model,
         issuer_id=issuer_id,
+        shadow_observer=ShadowEvaluator(ShadowDecisionLedger(event_log), schemas),
     )
     set_decision_core_singleton(core)
     return world_model, core
