@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 ENVELOPE_VERSION = 1
 SOVEREIGN_DECISION_CORE = True
 CANON_EXECUTABLE_ACTION_PROJECTION_OWNER = True
+CANON_SHADOW_OBSERVATION_OWNER = True
 
 
 def _sign_payload(payload: dict, *, secret: bytes) -> str:
@@ -122,6 +123,7 @@ class DecisionCore:
         ttl_ms: int = 5 * 60 * 1000,
         world_model: DecisionWorldModelPort | None = None,
         issuer_id: str = "businesaios-core",
+        shadow_observer=None,
     ):
         self._selector = selector
         self._keyring = keyring
@@ -131,6 +133,7 @@ class DecisionCore:
         self._archive = decision_archive
         self._ttl_ms = int(ttl_ms)
         self._issuer_id = str(issuer_id or "businesaios-core").strip() or "businesaios-core"
+        self._shadow_observer = shadow_observer
 
         if world_model is not None and not isinstance(world_model, DecisionWorldModelPort):
             raise TypeError(
@@ -157,6 +160,12 @@ class DecisionCore:
         Canonical implementation lives in core.ai.decision_pricing.merge_price_constraints.
         """
         return merge_price_constraints(base=base, override=override, logger=logger)
+
+    def observe_shadow(self, *, state, production_envelope, production_policy_id: str):
+        """Record evidence beside an already-issued decision; never issue one."""
+        if self._shadow_observer is None: return None
+        candidate = self._selector.resolve_shadow_policy(state, production_policy_id=str(production_policy_id))
+        return self._shadow_observer.observe(state=state, production_envelope=production_envelope, candidate_policy=candidate)
 
     def decide(self, state):
         return run_decision(core=self, state=state, envelope_version=ENVELOPE_VERSION, logger=logger)
