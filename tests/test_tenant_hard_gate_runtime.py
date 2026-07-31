@@ -82,6 +82,78 @@ def test_tenant_hard_gate_accepts_strict_event_payload_store():
     validate_runtime_objects(tenant_id="default", event_store=PayloadStore(), event_log=TenantLog())
 
 
+def test_tenant_hard_gate_rejects_keyword_only_event_payload_store():
+    from runtime.boot.tenant_hard_gate import validate_runtime_objects
+
+    class KeywordOnlyStore:
+        def append_event(self, *, event: dict):
+            raise ValueError("tenant_id required")
+
+        def iter_events(self, *, tenant_id: str, user_id: str, since_ts: int, limit: int = 100):
+            return []
+
+    class TenantLog:
+        tenant_id = "default"
+
+        def emit(self, *, event_type: str, user_id: str, payload: dict):
+            return None
+
+    with pytest.raises(SystemExit):
+        validate_runtime_objects(
+            tenant_id="default",
+            event_store=KeywordOnlyStore(),
+            event_log=TenantLog(),
+        )
+
+
+def test_tenant_hard_gate_rejects_event_store_with_extra_required_argument():
+    from runtime.boot.tenant_hard_gate import validate_runtime_objects
+
+    class ExtraArgumentStore:
+        def append_event(self, event: dict, required: object):
+            raise ValueError("tenant_id required")
+
+        def iter_events(self, *, tenant_id: str, user_id: str, since_ts: int, limit: int = 100):
+            return []
+
+    class TenantLog:
+        tenant_id = "default"
+
+        def emit(self, *, event_type: str, user_id: str, payload: dict):
+            return None
+
+    with pytest.raises(SystemExit):
+        validate_runtime_objects(
+            tenant_id="default",
+            event_store=ExtraArgumentStore(),
+            event_log=TenantLog(),
+        )
+
+
+def test_tenant_hard_gate_rejects_type_error_from_event_payload_store():
+    from runtime.boot.tenant_hard_gate import validate_runtime_objects
+
+    class BrokenPayloadStore:
+        def append_event(self, event: dict):
+            raise TypeError("internal payload handling failed")
+
+        def iter_events(self, *, tenant_id: str, user_id: str, since_ts: int, limit: int = 100):
+            return []
+
+    class TenantLog:
+        tenant_id = "default"
+
+        def emit(self, *, event_type: str, user_id: str, payload: dict):
+            return None
+
+    with pytest.raises(SystemExit, match="contract is unusable"):
+        validate_runtime_objects(
+            tenant_id="default",
+            event_store=BrokenPayloadStore(),
+            event_log=TenantLog(),
+        )
+
+
 def test_tenant_hard_gate_audits_repository_root(monkeypatch: pytest.MonkeyPatch):
     from pathlib import Path
 
