@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from threading import Event, Lock
+import time
 
 import pytest
 
@@ -76,7 +78,7 @@ def envelope(*, action="noop@v1", decision_id="d-1"):
             correlation_id="c-1",
             policy_id="active@v1",
             action=action,
-            payload={"actor_id": "u-1", "expected_cost": 1.0, "amount": 100.0},
+            payload={"tenant_id": "t-1", "actor_id": "u-1", "expected_cost": 1.0, "amount": 100.0},
             issued_at_ms=0,
             snapshot_id="s-1",
         )
@@ -100,6 +102,14 @@ def test_shadow_observation_uses_copy_and_never_describes_an_effect() -> None:
     assert events.rows[0]["event_type"] == SHADOW_DECISION_EVALUATED
 
 
+def test_shadow_validates_the_same_normalized_payload_as_production() -> None:
+    class TenantSchema:
+        def validate(self, _action, payload):
+            if payload.get("tenant_id") != "t-1": raise ValueError("missing tenant")
+    row = ShadowEvaluator(ShadowDecisionLedger(MemoryEvents()), TenantSchema()).observe({}, envelope(), Candidate())
+    assert row["status"] == "evaluated" and "schema_error" not in row
+
+
 def test_shadow_failures_are_evidence_not_production_failures() -> None:
     events = MemoryEvents()
     evaluator = ShadowEvaluator(ShadowDecisionLedger(events), Schemas())
@@ -113,6 +123,18 @@ def test_shadow_failures_are_evidence_not_production_failures() -> None:
 
     row = ShadowEvaluator(ShadowDecisionLedger(BrokenEvents()), Schemas()).observe({}, envelope(), Candidate())
     assert row["status"] == "evaluated"
+
+
+def test_shadow_dispatch_is_bounded_and_never_delays_production() -> None:
+    from core.ai.decision_core import DecisionCore
+    started, release = Event(), Event()
+    core = DecisionCore.__new__(DecisionCore); core._shadow_busy = Lock()
+    core._shadow_observer = object()
+    core.observe_shadow = lambda **_kwargs: (started.set(), release.wait(1.0))
+    before = time.perf_counter(); assert core.dispatch_shadow(state={}, production_envelope=envelope(), production_policy_id="active@v1") is True
+    assert time.perf_counter() - before < 0.1 and started.wait(0.2)
+    assert core.dispatch_shadow(state={}, production_envelope=envelope(), production_policy_id="active@v1") is False
+    release.set()
 
 
 def test_outcome_attribution_is_explicit_and_event_backed() -> None:
@@ -129,7 +151,7 @@ def test_outcome_attribution_is_explicit_and_event_backed() -> None:
     assert production["counterfactual"] is False
     assert before["production_outcome_count"] == 1
     assert before["outcome_count"] == 0
-    assert outcome["regret"] == 0.5
+    assert outcome["regret"] == 0.0
     assert outcome["counterfactual"] is True
     assert events.rows[-1]["event_type"] == SHADOW_OUTCOME_ATTRIBUTED
     assert metrics["decision_count"] == 1
@@ -140,6 +162,9 @@ def test_outcome_attribution_is_explicit_and_event_backed() -> None:
     assert is_known(SHADOW_DECISION_EVALUATED)
     assert is_known(SHADOW_PRODUCTION_OUTCOME_OBSERVED)
     assert is_known(SHADOW_OUTCOME_ATTRIBUTED)
+    events2 = MemoryEvents(); evaluator2 = ShadowEvaluator(ShadowDecisionLedger(events2), Schemas())
+    evaluator2.observe({}, envelope(decision_id="d-2"), Candidate()); evaluator2.record_production_outcome("d-2", 2.0)
+    assert evaluator2.attribute_counterfactual("d-2", 1.0, evaluator_id="causal@v1", evidence_ref="replay:2")["regret"] == 1.0
 
 
 def test_promotion_gate_is_fail_closed_and_requires_outcomes() -> None:
@@ -269,7 +294,7 @@ def test_canonical_decision_run_invokes_shadow_on_enriched_constrained_state(mon
         _archive=None,
         _snapshots=SimpleNamespace(put=lambda *_args: None),
         _selector=object(),
-        observe_shadow=lambda **kwargs: observed.update(kwargs),
+        dispatch_shadow=lambda **kwargs: observed.update(kwargs),
     )
     monkeypatch.setattr(decision_run, "Span", FakeSpan)
     monkeypatch.setattr(decision_run, "enrich_state_with_world_model", lambda **_kwargs: {"stage": "enriched"})
@@ -338,3 +363,38 @@ def test_counterfactual_reward_requires_governed_evidence() -> None:
     assert evaluator.attribute_counterfactual("d-1", 2.0, evaluator_id="", evidence_ref="replay:1") is None
     assert evaluator.attribute_counterfactual("d-1", 2.0, evaluator_id="causal@v1", evidence_ref="") is None
     assert evaluator.metrics()["outcome_count"] == 0
+
+
+def test_scheduler_registers_shadow_before_canary(monkeypatch) -> None:
+    from runtime.scheduler_parts import deploy_flow
+    captured = []
+    monkeypatch.setattr(deploy_flow, "build_system_world_state", lambda **kwargs: SimpleNamespace(timestamp_ms=kwargs["now_ms"], safe_mode=False))
+    monkeypatch.setattr(deploy_flow, "request_scheduler_decision_execution", lambda **kwargs: captured.append(dict(kwargs["proposal"])) or SimpleNamespace(ok=True, decision_id="d-stage"))
+    rollout = SimpleNamespace(calls=[], begin_rollout=lambda policy_id, pct: rollout.calls.append((policy_id, pct)))
+    core = SimpleNamespace(shadow_rollout_status=lambda _pid: {"registered": False, "promotable": False})
+    result = deploy_flow.request_rollout_execution(decision_core=core, executor=object(), policy_rollout_manager=object(), rollout=rollout, auto_deploy_guard=None, best_policy_id="candidate@v2", rollout_pct=10, now_ms=1, rollout_id="r-1", on_cleanup_error_module="test")
+    assert result.status == "shadow_registered" and captured == [{"kind": "deploy", "candidate_policy_id": "candidate@v2", "rollout_pct": 0}]
+    assert rollout.calls == []
+
+    core.shadow_rollout_status = lambda _pid: {"registered": True, "promotable": False}
+    pending = deploy_flow.request_rollout_execution(decision_core=core, executor=object(), policy_rollout_manager=object(), rollout=rollout, auto_deploy_guard=None, best_policy_id="candidate@v2", rollout_pct=10, now_ms=2, rollout_id="r-2", on_cleanup_error_module="test")
+    assert pending.status == "shadow_evidence_pending" and len(captured) == 1
+
+    core.shadow_rollout_status = lambda _pid: {"registered": True, "promotable": True}
+    promoted = deploy_flow.request_rollout_execution(decision_core=core, executor=object(), policy_rollout_manager=object(), rollout=rollout, auto_deploy_guard=None, best_policy_id="candidate@v2", rollout_pct=10, now_ms=3, rollout_id="r-3", on_cleanup_error_module="test")
+    assert promoted.status == "deploy_requested" and captured[-1]["rollout_pct"] == 10
+    assert rollout.calls == [("candidate@v2", 10)]
+
+
+def test_learning_candidates_enter_shadow_at_zero_percent() -> None:
+    from core.learning.learning_system import LearningSystem
+    learning = LearningSystem(min_samples=1); learning.observe_reward(policy_id="candidate@v2", reward=1.0)
+    assert learning.maybe_propose_deployment()["rollout_pct"] == 0
+
+
+def test_online_evaluation_compatibility_exports_remain_available() -> None:
+    from runtime.platform.support.evaluation.online import HoldoutEval, LiveRewardTracking, LiveSafetyEval, ShadowEval
+    assert HoldoutEval().evaluate("c", {"holdout_score": 0.5}).metrics["holdout_score"] == 0.5
+    assert LiveRewardTracking().track([1.0, 3.0]) == 2.0
+    assert LiveSafetyEval().evaluate("c", {"violations": 0.25}).metrics["live_safety"] == 0.75
+    assert ShadowEval().evaluate("c", {"shadow_score": 0.4}).metrics["shadow_score"] == 0.4
