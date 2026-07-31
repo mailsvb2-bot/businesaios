@@ -104,7 +104,7 @@ def test_decision_core_is_the_only_shadow_observation_owner() -> None:
     assert "def observe_shadow(" in owner
     assert "self._shadow_observer" in owner
     assert "self._shadow_observer.observe(" in owner
-    assert "core.observe_shadow(" in caller
+    assert "core.dispatch_shadow(" in caller
     assert "_shadow_observer" not in caller
 
     direct_observer_callers: list[str] = []
@@ -116,7 +116,7 @@ def test_decision_core_is_the_only_shadow_observation_owner() -> None:
         text = path.read_text(encoding="utf-8", errors="ignore")
         if "_shadow_observer.observe(" in text:
             direct_observer_callers.append(relative)
-        if ".observe_shadow(" in text:
+        if ".dispatch_shadow(" in text:
             shadow_entry_callers.append(relative)
     assert direct_observer_callers == [OWNER_PATH]
     assert shadow_entry_callers == [CALLER_PATH]
