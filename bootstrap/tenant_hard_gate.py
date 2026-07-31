@@ -19,6 +19,7 @@ Design notes:
 """
 
 from dataclasses import dataclass
+from inspect import signature
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -30,9 +31,21 @@ from runtime.boot.canonical.tenant import resolve_tenant
 
 EMPTY_TENANT_ID_PROBE = str()
 
+
 def _accepts_keyword(fn: Callable[..., Any], param: str) -> bool:
     from runtime.decision_input import accepts_keyword
     return bool(accepts_keyword(fn, param))
+
+
+def _accepts_positional_event(fn: Callable[..., Any]) -> bool:
+    """Prove that boot's canonical one-positional-event call shape is usable."""
+
+    try:
+        signature(fn).bind({"tenant_id": EMPTY_TENANT_ID_PROBE})
+    except (TypeError, ValueError):
+        return False
+    return True
+
 
 def _req_non_empty(name: str, value: Optional[str]) -> str:
     v = str(value or "").strip()
@@ -43,9 +56,9 @@ def _req_non_empty(name: str, value: Optional[str]) -> str:
         )
     return v
 
+
 def _has_param(fn: Callable[..., Any], param: str) -> bool:
     return _accepts_keyword(fn, param)
-
 
 
 def _emit_probe(event_log: Any, *, tenant_id: str, event_type: str, payload: dict[str, Any]) -> None:
@@ -114,8 +127,13 @@ def validate_runtime_objects(*, tenant_id: str, event_store: Any, event_log: Any
     if not hasattr(event_store, "append_event"):
         _fail("event_store has no append_event()")
     append_event = getattr(event_store, "append_event")
-    if not (_has_param(append_event, "tenant_id") or _has_param(append_event, "event")):
-        _fail("event_store append_event must accept tenant_id= or a strict event payload")
+    accepts_tenant_kwargs = _has_param(append_event, "tenant_id")
+    accepts_event_payload = _has_param(append_event, "event") and _accepts_positional_event(append_event)
+    if not (accepts_tenant_kwargs or accepts_event_payload):
+        _fail(
+            "event_store append_event must accept tenant_id= or exactly one "
+            "positional strict event payload"
+        )
 
     if not hasattr(event_store, "iter_events"):
         _fail("event_store has no iter_events()")
@@ -127,13 +145,27 @@ def validate_runtime_objects(*, tenant_id: str, event_store: Any, event_log: Any
             _fail("event_store count_events must accept tenant_id= (strict)")
 
     try:
-        if _has_param(append_event, "tenant_id"):
-            append_event(tenant_id=EMPTY_TENANT_ID_PROBE, event_type="__probe__", user_id="__probe__", payload={})
+        if accepts_tenant_kwargs:
+            append_event(
+                tenant_id=EMPTY_TENANT_ID_PROBE,
+                event_type="__probe__",
+                user_id="__probe__",
+                payload={},
+            )
         else:
-            append_event({"tenant_id": EMPTY_TENANT_ID_PROBE, "event_type": "__probe__", "user_id": "__probe__", "payload": {}})
+            append_event(
+                {
+                    "tenant_id": EMPTY_TENANT_ID_PROBE,
+                    "event_type": "__probe__",
+                    "user_id": "__probe__",
+                    "payload": {},
+                }
+            )
         _fail("event_store append_event accepted empty tenant_id (must raise)")
     except SystemExit:
         raise
+    except TypeError as exc:
+        _fail(f"event_store append_event contract is unusable: {exc}")
     except Exception:
         swallow(__name__, 'runtime/boot/tenant_hard_gate.py')
 
