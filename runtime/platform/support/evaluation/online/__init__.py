@@ -1,27 +1,21 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from core.policies.shadow import ShadowEvaluator as ShadowEval
-from core.policies.staged_rollout import RolloutGuard as StagedRolloutEval
-@dataclass(frozen=True)
-class EvaluationResult:
-    candidate_id: str
-    metrics: dict[str, float]
-
+from runtime.platform.support.contracts.evaluation import EvaluationResult
 class CanaryEval:
-    def evaluate(self, candidate_id: str, payload) -> EvaluationResult:
-        return EvaluationResult(candidate_id, {"canary_score": float(payload.get("canary_score", 0.0))})
-
-
-class LiveEval:
-    def evaluate(self, candidate_id: str, payload) -> EvaluationResult:
-        return EvaluationResult(candidate_id, {"live_safety": max(0.0, 1.0 - float(payload.get("violations", 0.0)))})
-
-
+    def evaluate(self, candidate_id, payload): return EvaluationResult(candidate_id=candidate_id, metrics={"canary_score": float(payload.get("canary_score", 0.0))})
+class HoldoutEval:
+    def evaluate(self, candidate_id, payload): return EvaluationResult(candidate_id=candidate_id, metrics={"holdout_score": float(payload.get("holdout_score", 0.0))})
+class LiveRewardTracking:
+    def track(self, rewards): return sum(rewards) / len(rewards) if rewards else 0.0
+class LiveSafetyEval:
+    def evaluate(self, candidate_id, payload): return EvaluationResult(candidate_id=candidate_id, metrics={"live_safety": max(0.0, 1.0 - float(payload.get("violations", 0.0)))})
+class ShadowEval:
+    def evaluate(self, candidate_id, payload): return EvaluationResult(candidate_id=candidate_id, metrics={"shadow_score": float(payload.get("shadow_score", 0.0))})
+class StagedRolloutEval:
+    def evaluate(self, candidate_id, payload): return EvaluationResult(candidate_id=candidate_id, metrics={"staged_score": float(payload.get("staged_score", 0.0))})
 class OnlineEvaluator:
-    def __init__(self, canary: CanaryEval | None = None, shadow: object | None = None) -> None: self._canary, self._shadow = canary or CanaryEval(), shadow
-    def evaluate(self, candidate_id: str, payload) -> EvaluationResult:
-        score = self._canary.evaluate(candidate_id, payload).metrics["canary_score"]
-        return EvaluationResult(candidate_id, {"online_score": (score + float(payload.get("shadow_score", 0.0))) / 2.0})
-
-
-__all__ = ["CanaryEval", "EvaluationResult", "LiveEval", "OnlineEvaluator", "ShadowEval", "StagedRolloutEval"]
+    def __init__(self, canary=None, shadow=None): self._canary, self._shadow = canary or CanaryEval(), shadow or ShadowEval()
+    def evaluate(self, candidate_id, payload):
+        score = self._canary.evaluate(candidate_id, payload).metrics.get("canary_score", 0.0) + self._shadow.evaluate(candidate_id, payload).metrics.get("shadow_score", 0.0)
+        return EvaluationResult(candidate_id=candidate_id, metrics={"online_score": score / 2.0})
+_ALIAS_EXPORTS = {"canary_eval":"CanaryEval", "holdout_eval":"HoldoutEval", "live_reward_tracking":"LiveRewardTracking", "live_safety_eval":"LiveSafetyEval", "online_evaluator":"OnlineEvaluator", "shadow_eval":"ShadowEval", "staged_rollout_eval":"StagedRolloutEval"}
+__all__ = list(_ALIAS_EXPORTS.values()) + list(_ALIAS_EXPORTS)
