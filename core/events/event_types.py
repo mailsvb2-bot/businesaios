@@ -108,6 +108,9 @@ PAYMENTS_RECONCILE_FAILED = "payments_reconcile_failed"
 DECISION_ISSUED = "decision_issued"
 DECISION_EXECUTED = "decision_executed"
 DECISION_BLOCKED = "decision_blocked"
+SHADOW_DECISION_EVALUATED = "shadow_decision_evaluated@v1"
+SHADOW_PRODUCTION_OUTCOME_OBSERVED = "shadow_production_outcome_observed@v1"
+SHADOW_OUTCOME_ATTRIBUTED = "shadow_outcome_attributed@v1"
 AI_DECISION_TRACE = "ai_decision_trace"
 DATA_EXPORT = "data_export"
 DATA_DELETE = "data_delete"
@@ -252,6 +255,9 @@ KNOWN_EVENT_TYPES: set[str] = {
     DECISION_ISSUED,
     DECISION_EXECUTED,
     DECISION_BLOCKED,
+    SHADOW_DECISION_EVALUATED,
+    SHADOW_PRODUCTION_OUTCOME_OBSERVED,
+    SHADOW_OUTCOME_ATTRIBUTED,
     AI_DECISION_TRACE,
     DATA_EXPORT,
     DATA_DELETE,
