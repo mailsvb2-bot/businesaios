@@ -25,7 +25,7 @@ class LiveCanaryPolicy:
     candidate_pct: float = 0.0
     initial_canary_pct: int = 1
     allowed_tenant_ids: tuple[str, ...] = ()
-    allowed_actions: tuple[str, ...] = ("send_preapproved_message@v1",)
+    allowed_actions: tuple[str, ...] = ("send_message@v1",)
     outcome_event_types: tuple[str, ...] = (
         "booking_confirmed@v1",
         "payment_succeeded",
@@ -42,7 +42,7 @@ class LiveCanaryPolicy:
     min_assignments: int = 1000
     min_candidate_assignments: int = 10
     min_outcomes_per_arm: int = 10
-    min_duration_seconds: int = 24 * 60 * 60
+    min_duration_seconds: int = 72 * 60 * 60
     outcome_window_seconds: int = 72 * 60 * 60
 
     @property
@@ -81,6 +81,8 @@ class LiveCanaryPolicy:
             issues.append("min_outcomes_per_arm_must_be_positive")
         if self.min_duration_seconds < 0 or self.outcome_window_seconds < 1:
             issues.append("invalid_time_window")
+        if self.min_duration_seconds < self.outcome_window_seconds:
+            issues.append("minimum_duration_must_cover_outcome_window")
         return tuple(issues)
 
     def assert_valid(self) -> None:
@@ -90,6 +92,9 @@ class LiveCanaryPolicy:
 
     @classmethod
     def from_env(cls) -> "LiveCanaryPolicy":
+        outcome_window = int(
+            os.getenv("LIVE_CANARY_OUTCOME_WINDOW_SECONDS", str(72 * 60 * 60))
+        )
         return cls(
             enabled=_bool("LIVE_CANARY_ENABLED", False),
             experiment_id=os.getenv("LIVE_CANARY_EXPERIMENT_ID", "").strip(),
@@ -98,7 +103,7 @@ class LiveCanaryPolicy:
             initial_canary_pct=int(os.getenv("LIVE_CANARY_INITIAL_PCT", "1")),
             allowed_tenant_ids=_csv("LIVE_CANARY_TENANTS"),
             allowed_actions=_csv("LIVE_CANARY_ALLOWED_ACTIONS")
-            or ("send_preapproved_message@v1",),
+            or ("send_message@v1",),
             outcome_event_types=_csv("LIVE_CANARY_OUTCOME_EVENTS")
             or ("booking_confirmed@v1", "payment_succeeded", "purchase_success"),
             max_candidate_actions_per_day=int(
@@ -129,11 +134,9 @@ class LiveCanaryPolicy:
                 os.getenv("LIVE_CANARY_MIN_OUTCOMES_PER_ARM", "10")
             ),
             min_duration_seconds=int(
-                os.getenv("LIVE_CANARY_MIN_DURATION_SECONDS", str(24 * 60 * 60))
+                os.getenv("LIVE_CANARY_MIN_DURATION_SECONDS", str(outcome_window))
             ),
-            outcome_window_seconds=int(
-                os.getenv("LIVE_CANARY_OUTCOME_WINDOW_SECONDS", str(72 * 60 * 60))
-            ),
+            outcome_window_seconds=outcome_window,
         )
 
 
