@@ -70,9 +70,10 @@ def iter_events(
     limit: int | None = None,
 ):
     store = getattr(event_log, "_store", None)
-    if store is None:
-        return iter(())
-    tenant_id = str(event_log._tenant.tenant_id)
+    tenant_id = str(
+        getattr(event_log, "tenant_id", "")
+        or getattr(getattr(event_log, "_tenant", None), "tenant_id", "")
+    )
     start = max(0, int(start_ms))
     end = int(end_ms) if end_ms is not None else 2**63 - 1
     allowed_types = tuple(str(item) for item in (event_types or ()) if str(item))
@@ -81,8 +82,11 @@ def iter_events(
     normalized_limit = max(1, int(limit)) if limit is not None else None
 
     iterator = getattr(store, "iter_events", None)
+    if not callable(iterator) and store is None:
+        iterator = getattr(event_log, "iter_events", None)
     if callable(iterator):
-        kwargs: dict[str, Any] = {
+        kwargs: dict[str, Any] = {}
+        required = {
             "tenant_id": tenant_id,
             "start_ms": start,
             "end_ms": end,
@@ -93,14 +97,16 @@ def iter_events(
             "user_id": normalized_user,
             "limit": normalized_limit,
         }
-        for name, value in optional.items():
+        for name, value in {**required, **optional}.items():
             if value is not None and _supports_keyword(iterator, name):
                 kwargs[name] = value
         events = iterator(**kwargs)
-    elif hasattr(store, "_events"):
+    elif store is not None and hasattr(store, "_events"):
         events = iter(store._events)
-    else:
+    elif store is not None:
         events = iter(store)
+    else:
+        events = iter(())
 
     return _filtered_events(
         events,
