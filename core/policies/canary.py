@@ -43,7 +43,8 @@ class CanaryPolicyResolver:
             material,
             hashlib.sha256,
         ).digest()
-        return int.from_bytes(digest[:8], "big") / float(2**64)
+        bucket = int.from_bytes(digest[:8], "big") % 10_000
+        return bucket / 10_000.0
 
     def resolve_policy(self, user_id: str, *, tenant_id: str = "") -> PolicyRef:
         active = self.registry.active()
