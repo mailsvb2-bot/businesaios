@@ -124,7 +124,7 @@ def run_decision(
             out=out,
             built=built,
             tenant_id=str(tenant_id),
-            subject_id=str(actor_id or user_id),
+            subject_id=str(actor_id or ""),
             expected_cost=float(payload.get("expected_cost") or 0.0),
         )
         core._snapshots.put(built.decision.snapshot_id, built.state_bytes)
@@ -231,10 +231,17 @@ def _record_live_canary_assignment(
     expected_cost: float,
 ) -> None:
     coordinator = getattr(core, "_live_canary", None)
-    if coordinator is None or coordinator.live_rollout_pct() <= 0:
+    if coordinator is None:
         return
 
     selected_policy_id = _policy_id(policy)
+    selected_candidate = selected_policy_id == coordinator.candidate_policy_id
+    active_policy_id = _active_policy_id(core)
+    if coordinator.live_rollout_pct() <= 0:
+        if selected_candidate and active_policy_id != selected_policy_id:
+            raise RuntimeError("LIVE_CANARY_IN_FLIGHT_CANDIDATE_REVOKED")
+        return
+
     action = str(getattr(out, "action", ""))
     purpose = str(_state_field(state, "purpose") or "").strip()
     assignment = coordinator.assign(
@@ -242,7 +249,7 @@ def _record_live_canary_assignment(
         subject_id=subject_id,
         decision_id=str(built.decision.decision_id),
         correlation_id=str(built.decision.correlation_id),
-        production_policy_id=_active_policy_id(core),
+        production_policy_id=active_policy_id,
         action=action,
         purpose=purpose,
         eligible=_state_flag(
@@ -251,7 +258,6 @@ def _record_live_canary_assignment(
         ),
         expected_cost=expected_cost,
     )
-    selected_candidate = selected_policy_id == coordinator.candidate_policy_id
     if not assignment.eligible:
         if selected_candidate:
             raise RuntimeError("LIVE_CANARY_INELIGIBLE_CANDIDATE_SELECTED")
