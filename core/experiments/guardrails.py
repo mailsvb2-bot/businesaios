@@ -59,10 +59,15 @@ class LiveCanaryGuard:
         if stats.candidate.complaint_rate > policy.max_complaint_rate:
             immediate.append("candidate_complaint_rate")
         if (
-            float(metrics.get("candidate_cost", 0.0) or 0.0)
+            float(metrics.get("candidate_cost_24h", 0.0) or 0.0)
             > policy.max_daily_cost
         ):
             immediate.append("candidate_cost_budget")
+        if (
+            int(metrics.get("candidate_actions_24h", 0) or 0)
+            > policy.max_candidate_actions_per_day
+        ):
+            immediate.append("candidate_action_frequency")
         if (
             int(metrics.get("assignment_count", 0) or 0)
             >= policy.min_assignments
