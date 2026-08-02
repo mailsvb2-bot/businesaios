@@ -57,6 +57,7 @@ def _force_rollback(
     except Exception:
         coordinator.policy_registry.restore_runtime_state(snapshot)
         raise
+    coordinator._rollback_required = False
     try:
         coordinator.event_log.emit(
             event_type=CANARY_GUARDRAIL_BREACHED,
@@ -154,6 +155,11 @@ def record_live_canary_executor_result(
             critical_violation=bool(output.get("critical_violation")),
             complaint=bool(output.get("complaint")),
             executed_at_ms=int(time.time() * 1000),
+        )
+        coordinator.evaluate_and_maybe_rollback(
+            decision_id=f"execution-guard:{decision_id}",
+            correlation_id=correlation_id,
+            tenant_id=tenant_id,
         )
     except Exception as exc:
         try:
