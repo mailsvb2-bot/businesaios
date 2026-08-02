@@ -6,8 +6,8 @@ from collections import Counter
 from collections.abc import Iterable
 from typing import Any
 
-from core.experiments.assignment import ExperimentArm, ExperimentAssignment
-from core.experiments.live_canary_events import (
+from core.experiments.builders.live_canary_assignment import ExperimentArm, ExperimentAssignment
+from core.experiments.events.live_canary_events import (
     BUSINESS_OUTCOME_OBSERVED,
     CANDIDATE_ACTION_EXECUTED,
     CONTROL_ACTION_EXECUTED,

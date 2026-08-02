@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from config.live_canary_policy import LiveCanaryPolicy
-from core.experiments.statistics import LiveCanaryStatistics, summarize
+from core.experiments.evaluators.live_canary_statistics import LiveCanaryStatistics, summarize
 
 
 class CanaryDecision(str, Enum):

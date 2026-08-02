@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
+from core.experiments.live_canary_events import BUSINESS_OUTCOME_OBSERVED
 from runtime.experiments.live_canary import LiveCanaryCoordinator
 
 log = logging.getLogger(__name__)
@@ -90,6 +91,16 @@ class LiveCanaryOutcomeObserver:
             success = _success(payload)
             if success is None:
                 continue
+            evidence_ref = _evidence_ref(event)
+            already_attributed = any(
+                _payload(existing).get("outcome_type") == event_type
+                and _payload(existing).get("evidence_ref") == evidence_ref
+                for existing in self.coordinator.ledger.events_for_decision(
+                    decision_id, BUSINESS_OUTCOME_OBSERVED
+                )
+            )
+            if already_attributed:
+                continue
             try:
                 self.coordinator.record_outcome(
                     decision_id=decision_id,
@@ -99,7 +110,7 @@ class LiveCanaryOutcomeObserver:
                     arm=str(assignment.get("arm") or ""),
                     outcome_type=event_type,
                     success=success,
-                    evidence_ref=_evidence_ref(event),
+                    evidence_ref=evidence_ref,
                     observed_at_ms=_observed_at_ms(event, payload),
                 )
                 recorded += 1

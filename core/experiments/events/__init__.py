@@ -2,7 +2,7 @@ from core.experiments.events.assignment_recorded import AssignmentRecorded
 from core.experiments.events.experiment_evaluated import ExperimentEvaluated
 from core.experiments.events.experiment_registered import ExperimentRegistered
 from core.experiments.events.rollout_blocked import RolloutBlocked
-from core.experiments.live_canary_events import (
+from core.experiments.events.live_canary_events import (
     BUSINESS_OUTCOME_OBSERVED,
     CANARY_AUTO_ROLLED_BACK,
     CANARY_GUARDRAIL_BREACHED,

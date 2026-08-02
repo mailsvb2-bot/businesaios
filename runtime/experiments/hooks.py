@@ -6,7 +6,7 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-from core.actions.proof_registry import ACTION_PROOF_EVENT
+from runtime.proofs import ACTION_PROOF_EVENT
 from core.experiments.live_canary_events import (
     CANARY_AUTO_ROLLED_BACK,
     CANARY_GUARDRAIL_BREACHED,

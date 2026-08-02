@@ -3,9 +3,9 @@
   "baseline_total_python_lines": 324009,
   "reconciled_clean_head_total_python_lines": 361624,
   "pre_existing_head_total_python_lines_debt": 37615,
-  "current_iteration_total_python_lines_budget": 733,
-  "current_iteration_scope": "honest-full-tree closure: execution path lock, thin runtime owners, deterministic replay, tenant, security, and compatibility boundaries",
+  "current_iteration_total_python_lines_budget": 3241,
+  "current_iteration_scope": "reviewed randomized live-canary closure: stable assignment, verified execution proof, real outcome attribution, staged promotion, executor-governed rollback, and regression coverage",
   "policy": "Do not raise canon/metrics_baseline.json. The ledger records the exact pre-existing PR-head line debt separately from reviewed closure work.",
-  "current_iteration_current_total_python_lines": 362357,
+  "current_iteration_current_total_python_lines": 364865,
   "closure_condition": "Burn down pre-existing debt over subsequent canonical collapse work; this closure may not exceed its exact reviewed line delta."
 }

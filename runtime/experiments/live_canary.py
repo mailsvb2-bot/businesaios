@@ -10,7 +10,7 @@ from config.live_canary_policy import (
     DEFAULT_LIVE_CANARY_POLICY,
     LiveCanaryPolicy,
 )
-from core.actions.proof_registry import ACTION_PROOF_EVENT
+from runtime.proofs import ACTION_PROOF_EVENT
 from core.experiments.assignment import (
     ExperimentArm,
     ExperimentAssignment,
