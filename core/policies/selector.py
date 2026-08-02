@@ -38,9 +38,13 @@ def _mapping_attr(state: Any, name: str) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
 
 
+def _top_level_value(state: Any, name: str) -> Any:
+    return state.get(name) if isinstance(state, Mapping) else getattr(state, name, None)
+
+
 def _state_value(state: Any, *names: str) -> str:
     for name in names:
-        value = state.get(name) if isinstance(state, Mapping) else getattr(state, name, None)
+        value = _top_level_value(state, name)
         if value is not None and str(value).strip():
             return str(value).strip()
     meta = _mapping_attr(state, "meta")
@@ -53,18 +57,16 @@ def _state_value(state: Any, *names: str) -> str:
 
 def _canonical_tenant_id(state: Any) -> str:
     product_metadata = _mapping_attr(state, "product_metadata")
-    top_level = (
-        state.get("tenant_id")
-        if isinstance(state, Mapping)
-        else getattr(state, "tenant_id", None)
+    return normalize_tenant_id(
+        product_metadata.get("tenant_id")
+        or _top_level_value(state, "tenant_id")
     )
-    return normalize_tenant_id(product_metadata.get("tenant_id") or top_level)
 
 
 def _canonical_actor_id(state: Any) -> str:
     user = _mapping_attr(state, "user")
     for candidate in (
-        _state_value(state, "user_id"),
+        _top_level_value(state, "user_id"),
         user.get("actor_id"),
         user.get("user_id"),
         user.get("id"),
@@ -77,7 +79,7 @@ def _canonical_actor_id(state: Any) -> str:
 
 
 def _state_bool(state: Any, name: str) -> bool:
-    value = state.get(name) if isinstance(state, Mapping) else getattr(state, name, None)
+    value = _top_level_value(state, name)
     if value is None:
         value = _mapping_attr(state, "meta").get(name)
     if isinstance(value, bool):
@@ -124,9 +126,11 @@ class PolicySelector:
             ) or self._registry.active()
 
         purpose = _state_value(state, "purpose")
+        tenant_id = _canonical_tenant_id(state)
         live_policy = self._resolver.live_policy
         live_eligible = bool(
             live_policy.enabled
+            and tenant_id in live_policy.allowed_tenant_ids
             and purpose in live_policy.allowed_purposes
             and _state_bool(state, live_policy.eligibility_state_key)
         )
@@ -152,7 +156,7 @@ class PolicySelector:
         if cand and pct_i > self._policy.rollout_pct_floor:
             ref = self._resolver.select_policy(
                 _canonical_actor_id(state),
-                tenant_id=_canonical_tenant_id(state),
+                tenant_id=tenant_id,
                 purpose=purpose,
                 eligible=live_eligible,
             )
