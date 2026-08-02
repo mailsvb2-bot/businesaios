@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import time
 from collections.abc import Mapping
 from typing import Any
@@ -21,6 +22,14 @@ def _coordinator(decision_core: Any) -> Any | None:
 
 def _safe_mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _finite(value: object, default: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if math.isfinite(number) else default
 
 
 def _force_rollback(
@@ -75,57 +84,61 @@ def record_live_canary_executor_result(
     env: Any,
     result: Any,
 ) -> None:
+    """Record real executor evidence without ever masking the execution result."""
+
     coordinator = _coordinator(getattr(executor, "_decision_core", None))
     if coordinator is None:
         return
-    decision = getattr(env, "decision", None)
-    decision_id = str(getattr(decision, "decision_id", "") or "")
-    assignment = coordinator.ledger.assignment_for_decision(decision_id)
-    if assignment is None or assignment.get("eligible") is not True:
-        return
+    try:
+        decision = getattr(env, "decision", None)
+        decision_id = str(getattr(decision, "decision_id", "") or "")
+        assignment = coordinator.ledger.assignment_for_decision(decision_id)
+        if assignment is None or assignment.get("eligible") is not True:
+            return
 
-    correlation_id = str(getattr(decision, "correlation_id", "") or "") or None
-    tenant_id = str(assignment.get("tenant_id") or "")
-    action = str(getattr(decision, "action", "") or "")
-    ok = bool(getattr(result, "ok", False))
-    output = _safe_mapping(getattr(result, "output", None))
-    proof_event_type = ACTION_PROOF_EVENT.get(action) if ok else _EXECUTION_FAILURE_SOURCE
-    if not proof_event_type:
-        _force_rollback(
-            coordinator,
-            decision_id=f"execution-integrity:{decision_id}",
-            correlation_id=correlation_id,
-            tenant_id=tenant_id,
-            reason="missing_action_proof_contract",
+        correlation_id = str(getattr(decision, "correlation_id", "") or "") or None
+        tenant_id = str(assignment.get("tenant_id") or "")
+        action = str(getattr(decision, "action", "") or "")
+        ok = bool(getattr(result, "ok", False))
+        output = _safe_mapping(getattr(result, "output", None))
+        proof_event_type = (
+            ACTION_PROOF_EVENT.get(action) if ok else _EXECUTION_FAILURE_SOURCE
         )
-        return
-
-    if not ok:
-        try:
-            coordinator.event_log.emit(
-                event_type=proof_event_type,
-                source="runtime_executor",
-                user_id="system",
-                decision_id=decision_id,
-                correlation_id=correlation_id,
-                payload={
-                    "ok": False,
-                    "error": str(getattr(result, "error", "") or ""),
-                    "output": output,
-                },
-            )
-        except Exception:
+        if not proof_event_type:
             _force_rollback(
                 coordinator,
                 decision_id=f"execution-integrity:{decision_id}",
                 correlation_id=correlation_id,
                 tenant_id=tenant_id,
-                reason="execution_failure_evidence_unavailable",
+                reason="missing_action_proof_contract",
             )
             return
 
-    payload = _safe_mapping(getattr(decision, "payload", None))
-    try:
+        if not ok:
+            try:
+                coordinator.event_log.emit(
+                    event_type=proof_event_type,
+                    source="runtime_executor",
+                    user_id="system",
+                    decision_id=decision_id,
+                    correlation_id=correlation_id,
+                    payload={
+                        "ok": False,
+                        "error": str(getattr(result, "error", "") or ""),
+                        "output": output,
+                    },
+                )
+            except Exception:
+                _force_rollback(
+                    coordinator,
+                    decision_id=f"execution-integrity:{decision_id}",
+                    correlation_id=correlation_id,
+                    tenant_id=tenant_id,
+                    reason="execution_failure_evidence_unavailable",
+                )
+                return
+
+        payload = _safe_mapping(getattr(decision, "payload", None))
         coordinator.record_execution(
             decision_id=decision_id,
             correlation_id=correlation_id,
@@ -133,8 +146,8 @@ def record_live_canary_executor_result(
             action=action,
             ok=ok,
             cost=max(
-                float(payload.get("expected_cost") or 0.0),
-                float(output.get("cost") or output.get("actual_cost") or 0.0),
+                _finite(payload.get("expected_cost")),
+                _finite(output.get("cost", output.get("actual_cost"))),
             ),
             proof_event_type=proof_event_type,
             evidence_ref=f"runtime-execution:{decision_id}",
@@ -143,13 +156,34 @@ def record_live_canary_executor_result(
             executed_at_ms=int(time.time() * 1000),
         )
     except Exception as exc:
-        _force_rollback(
-            coordinator,
-            decision_id=f"execution-integrity:{decision_id}",
-            correlation_id=correlation_id,
-            tenant_id=tenant_id,
-            reason=f"execution_evidence_error:{type(exc).__name__}",
-        )
+        try:
+            assignment = coordinator.ledger.assignment_for_decision(
+                str(getattr(getattr(env, "decision", None), "decision_id", "") or "")
+            )
+            tenant_id = str((assignment or {}).get("tenant_id") or "")
+            decision_id = str(
+                getattr(getattr(env, "decision", None), "decision_id", "") or ""
+            )
+            correlation_id = (
+                str(
+                    getattr(
+                        getattr(env, "decision", None),
+                        "correlation_id",
+                        "",
+                    )
+                    or ""
+                )
+                or None
+            )
+            _force_rollback(
+                coordinator,
+                decision_id=f"execution-integrity:{decision_id}",
+                correlation_id=correlation_id,
+                tenant_id=tenant_id,
+                reason=f"execution_evidence_error:{type(exc).__name__}",
+            )
+        except Exception:
+            log.exception("live_canary_executor_evidence_rollback_failed")
 
 
 def record_live_canary_business_outcome(
