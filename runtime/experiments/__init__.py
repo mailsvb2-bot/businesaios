@@ -13,6 +13,10 @@ _PUBLIC_ATTRS = {
         "runtime.experiments.live_canary",
         "LiveCanaryCoordinator",
     ),
+    "LiveCanaryWatchdog": (
+        "runtime.experiments.watchdog",
+        "LiveCanaryWatchdog",
+    ),
     "build_experiment": (
         "core.experiments.builders.experiment_plan_builder",
         "build_experiment",
