@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from threading import Event, Lock, Thread
 from typing import Any
 
+from core.events.log_queries import event_timestamp_ms
 from core.events.log_queries import iter_events as iter_event_window
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import BUSINESS_OUTCOME_OBSERVED
@@ -72,7 +73,7 @@ class LiveCanaryOutcomeObserver:
         )
         events.sort(
             key=lambda event: (
-                _observed_at_ms(event, _payload(event)),
+                event_timestamp_ms(event),
                 source_event_evidence_ref(event),
             )
         )
@@ -160,19 +161,18 @@ class LiveCanaryOutcomeObserver:
         cursor = self._cursor_ms
         seen = set(self._seen_refs_at_cursor)
         for event in self._new_events():
-            payload = _payload(event)
-            observed_at_ms = _observed_at_ms(event, payload)
+            log_timestamp_ms = event_timestamp_ms(event)
             evidence_ref = source_event_evidence_ref(event)
-            if observed_at_ms < cursor:
+            if log_timestamp_ms < cursor:
                 continue
-            if observed_at_ms == cursor and evidence_ref in seen:
+            if log_timestamp_ms == cursor and evidence_ref in seen:
                 continue
             consumed, increment = self._attribute_event(event, evidence_ref)
             if not consumed:
                 break
             recorded += increment
-            if observed_at_ms > cursor:
-                cursor = observed_at_ms
+            if log_timestamp_ms > cursor:
+                cursor = log_timestamp_ms
                 seen = {evidence_ref}
             else:
                 seen.add(evidence_ref)
