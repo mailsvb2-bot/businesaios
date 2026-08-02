@@ -45,6 +45,16 @@ def _state_value(state: Any, *names: str) -> str:
     return ""
 
 
+def _state_bool(state: Any, name: str) -> bool:
+    value = state.get(name) if isinstance(state, dict) else getattr(state, name, None)
+    if value is None:
+        meta = state.get("meta") if isinstance(state, dict) else getattr(state, "meta", None)
+        value = meta.get(name) if isinstance(meta, dict) else None
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 class PolicySelector:
     def __init__(
         self,
@@ -83,19 +93,18 @@ class PolicySelector:
                 miss_key="deployment",
             ) or self._registry.active()
 
-        meta = getattr(state, "meta", None) or {}
-        if isinstance(state, dict):
-            meta = state.get("meta") or meta
-        if isinstance(meta, dict):
-            purpose = str(meta.get("purpose") or "").strip()
-            policy_id = _PURPOSE_POLICY.get(purpose)
-            if policy_id:
-                selected = self._get_optional(
-                    policy_id,
-                    miss_key=purpose,
-                )
-                if selected is not None:
-                    return selected
+        purpose = _state_value(state, "purpose")
+        live_policy = self._resolver.live_policy
+        live_eligible = bool(
+            live_policy.enabled
+            and purpose in live_policy.allowed_purposes
+            and _state_bool(state, live_policy.eligibility_state_key)
+        )
+        policy_id = _PURPOSE_POLICY.get(purpose)
+        if policy_id and not live_eligible:
+            selected = self._get_optional(policy_id, miss_key=purpose)
+            if selected is not None:
+                return selected
 
         safe_mode = state.get("safe_mode", False) if isinstance(state, dict) else getattr(state, "safe_mode", False)
         if safe_mode and self._safe:
@@ -113,7 +122,12 @@ class PolicySelector:
         if cand and pct_i > self._policy.rollout_pct_floor:
             uid = _state_value(state, "user_id", "actor_id", "customer_id")
             tenant_id = _state_value(state, "tenant_id")
-            ref = self._resolver.select_policy(uid, tenant_id=tenant_id)
+            ref = self._resolver.select_policy(
+                uid,
+                tenant_id=tenant_id,
+                purpose=purpose,
+                eligible=live_eligible,
+            )
             return self._registry.get(ref.policy_id)
 
         return self._registry.active()
