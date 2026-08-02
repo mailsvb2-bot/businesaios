@@ -11,17 +11,25 @@ from runtime.experiments.live_canary import LiveCanaryCoordinator
 
 
 class Registry:
-    def __init__(self) -> None:
+    def __init__(self, *, rollout_pct: int = 100) -> None:
         self.calls: list[dict] = []
+        self.candidate_policy_id = "candidate@v2"
+        self.rollout_pct = rollout_pct
 
     def snapshot_runtime_state(self):
-        return tuple(self.calls)
+        return (tuple(self.calls), self.rollout_pct)
 
     def restore_runtime_state(self, snapshot):
-        self.calls = list(snapshot)
+        calls, self.rollout_pct = snapshot
+        self.calls = list(calls)
 
     def set_rollout(self, **kwargs):
         self.calls.append(dict(kwargs))
+        self.candidate_policy_id = str(kwargs["candidate_policy_id"])
+        self.rollout_pct = int(kwargs["rollout_pct"])
+
+    def rollout_config(self):
+        return self.candidate_policy_id, self.rollout_pct
 
 
 class AuditFailureEvents:
@@ -80,10 +88,12 @@ def policy(**overrides) -> LiveCanaryPolicy:
         experiment_id="metro-followup-2026-08",
         assignment_secret="z" * 32,
         candidate_pct=100.0,
+        max_candidate_pct=100.0,
         allowed_tenant_ids=("tenant-a",),
-        allowed_actions=("send_preapproved_message@v1",),
+        allowed_actions=("send_message@v1",),
         outcome_event_types=("booking_confirmed@v1",),
         max_candidate_actions_per_day=50,
+        max_candidate_actions_per_subject_24h=1,
         max_daily_cost=100.0,
         min_assignments=1,
         min_candidate_assignments=1,
@@ -116,6 +126,7 @@ def test_rolling_cost_and_frequency_limits_force_rollback() -> None:
     metrics = {
         "candidate_actions_24h": 51,
         "candidate_cost_24h": 101.0,
+        "candidate_max_actions_per_subject_24h": 2,
         "candidate_executions": 51,
         "candidate_errors": 0,
         "candidate_complaints": 0,
@@ -126,9 +137,10 @@ def test_rolling_cost_and_frequency_limits_force_rollback() -> None:
     assert result.decision is CanaryDecision.ROLLBACK
     assert "candidate_cost_budget" in result.reasons
     assert "candidate_action_frequency" in result.reasons
+    assert "candidate_subject_frequency" in result.reasons
 
 
-def test_outcome_requires_assignment_arm_and_window() -> None:
+def test_outcome_requires_assignment_arm_source_proof_and_window() -> None:
     events = MemoryEvents()
     coordinator = LiveCanaryCoordinator(
         event_log=events,
@@ -142,7 +154,9 @@ def test_outcome_requires_assignment_arm_and_window() -> None:
         decision_id="d-1",
         correlation_id="c-1",
         production_policy_id="active@v1",
-        action="send_preapproved_message@v1",
+        action="send_message@v1",
+        purpose="live_canary",
+        eligible=True,
     )
     assert assignment.arm is ExperimentArm.CANDIDATE
     assigned = events.get_events("d-1", "experiment_assignment@v1")[-1][
@@ -160,6 +174,28 @@ def test_outcome_requires_assignment_arm_and_window() -> None:
             observed_at_ms=assigned + 1,
         )
 
+    with pytest.raises(
+        RuntimeError,
+        match="LIVE_CANARY_VERIFIED_SOURCE_EVENT_REQUIRED",
+    ):
+        coordinator.record_outcome(
+            decision_id="d-1",
+            correlation_id="c-1",
+            arm=ExperimentArm.CANDIDATE,
+            outcome_type="booking_confirmed@v1",
+            success=True,
+            evidence_ref="booking:1",
+            observed_at_ms=assigned + 1,
+        )
+
+    events.emit(
+        event_type="booking_confirmed@v1",
+        source="booking_webhook",
+        user_id="customer-1",
+        decision_id="d-1",
+        correlation_id="c-1",
+        payload={"success": True, "amount": 3500.0},
+    )
     with pytest.raises(RuntimeError, match="LIVE_CANARY_OUTCOME_WINDOW_EXPIRED"):
         coordinator.record_outcome(
             decision_id="d-1",
