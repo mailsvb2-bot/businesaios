@@ -45,9 +45,18 @@ class PolicyEffectsMixin:
             raise RuntimeError("LIVE_CANARY_POLICY_REGISTRY_REQUIRED")
         runtime_candidate, _runtime_pct = rollout_config()
         runtime = str(runtime_candidate or "").strip()
-        if configured and runtime and configured != runtime:
+        governed_identity = getattr(
+            self.policy_registry,
+            "governed_candidate_identity",
+            None,
+        )
+        governed = str(
+            governed_identity() if callable(governed_identity) else ""
+        ).strip()
+        bound = governed or runtime
+        if configured and bound and configured != bound:
             raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
-        effective = configured or runtime
+        effective = configured or bound
         if effective and requested != effective:
             raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
 
