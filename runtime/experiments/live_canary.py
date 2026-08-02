@@ -92,6 +92,7 @@ class LiveCanaryCoordinator:
         )
         self._assignment_lock = Lock()
         self._rollback_required = False
+        self._rollback_result: GuardrailResult | None = None
 
     @property
     def rollback_required(self) -> bool:
@@ -120,7 +121,14 @@ class LiveCanaryCoordinator:
         )
 
     def _guard_result(self) -> GuardrailResult:
-        if self.live_rollout_pct() <= 0:
+        rollout_pct = self.live_rollout_pct()
+        if self._rollback_required and rollout_pct > 0:
+            return self._rollback_result or GuardrailResult(
+                CanaryDecision.ROLLBACK,
+                ("local_circuit_open",),
+                {},
+            )
+        if rollout_pct <= 0:
             return GuardrailResult(
                 CanaryDecision.CONTINUE,
                 ("rollout_inactive",),
@@ -144,6 +152,7 @@ class LiveCanaryCoordinator:
         tenant_id: str,
     ) -> None:
         self._rollback_required = True
+        self._rollback_result = result
         try:
             self.event_log.emit(
                 event_type=CANARY_GUARDRAIL_BREACHED,
@@ -392,6 +401,7 @@ class LiveCanaryCoordinator:
             self.policy_registry.restore_runtime_state(snapshot)
             raise
         self._rollback_required = False
+        self._rollback_result = None
 
         self.event_log.emit(
             event_type=CANARY_GUARDRAIL_BREACHED,
