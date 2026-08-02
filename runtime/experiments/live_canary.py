@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import time
 from dataclasses import asdict, replace
+from threading import Lock
 from typing import Any
 
 from config.live_canary_policy import (
@@ -65,6 +66,7 @@ class LiveCanaryCoordinator:
             candidate_policy_id=self.candidate_policy_id,
             outcome_window_seconds=policy.outcome_window_seconds,
         )
+        self._assignment_lock = Lock()
 
     def live_rollout_pct(self) -> float:
         getter = getattr(self.policy_registry, "rollout_config", None)
@@ -100,25 +102,37 @@ class LiveCanaryCoordinator:
         eligible: bool,
         expected_cost: float = 0.0,
     ) -> ExperimentAssignment:
-        effective = self._effective_policy()
-        assignment = StableExperimentAssigner(effective).assign(
-            tenant_id=tenant_id,
-            subject_id=subject_id,
-            candidate_policy_id=self.candidate_policy_id,
-            action=action,
-            purpose=purpose,
-            eligible=eligible,
-        )
-        self.ledger.record_assignment(
-            assignment,
-            decision_id=decision_id,
-            correlation_id=correlation_id,
-            production_policy_id=production_policy_id,
-            action=action,
-            candidate_pct=effective.candidate_pct,
-            expected_cost=expected_cost,
-        )
-        return assignment
+        with self._assignment_lock:
+            effective = self._effective_policy()
+            assignment = StableExperimentAssigner(effective).assign(
+                tenant_id=tenant_id,
+                subject_id=subject_id,
+                candidate_policy_id=self.candidate_policy_id,
+                action=action,
+                purpose=purpose,
+                eligible=eligible,
+            )
+            self.ledger.record_assignment(
+                assignment,
+                decision_id=decision_id,
+                correlation_id=correlation_id,
+                production_policy_id=production_policy_id,
+                action=action,
+                candidate_pct=effective.candidate_pct,
+                expected_cost=expected_cost,
+            )
+            if assignment.eligible:
+                guard = self.evaluate_and_maybe_rollback(
+                    decision_id=f"assignment-guard:{decision_id}",
+                    correlation_id=correlation_id,
+                    tenant_id=assignment.tenant_id,
+                )
+                if (
+                    assignment.arm is ExperimentArm.CANDIDATE
+                    and guard.decision is CanaryDecision.ROLLBACK
+                ):
+                    raise RuntimeError("LIVE_CANARY_ASSIGNMENT_GUARD_BLOCKED")
+            return assignment
 
     def assert_candidate_action_allowed(
         self,
@@ -162,6 +176,7 @@ class LiveCanaryCoordinator:
 
     def record_execution(self, **kwargs: Any) -> dict[str, Any]:
         decision_id = str(kwargs.get("decision_id") or "")
+        correlation_id = kwargs.get("correlation_id")
         assignment = self._assignment_payload(decision_id)
         arm = str(getattr(kwargs.get("arm"), "value", kwargs.get("arm")))
         if arm != str(assignment.get("arm") or ""):
@@ -203,10 +218,17 @@ class LiveCanaryCoordinator:
         kwargs["complaint"] = bool(
             kwargs.get("complaint") or proof_payload.get("complaint")
         )
-        return self.ledger.record_execution(**kwargs)
+        recorded = self.ledger.record_execution(**kwargs)
+        self.evaluate_and_maybe_rollback(
+            decision_id=f"execution-guard:{decision_id}",
+            correlation_id=correlation_id,
+            tenant_id=str(assignment.get("tenant_id") or ""),
+        )
+        return recorded
 
     def record_outcome(self, **kwargs: Any) -> dict[str, Any]:
         decision_id = str(kwargs.get("decision_id") or "")
+        correlation_id = kwargs.get("correlation_id")
         assignment = self._assignment_payload(decision_id)
         arm = str(getattr(kwargs.get("arm"), "value", kwargs.get("arm")))
         if arm != str(assignment.get("arm") or ""):
@@ -241,7 +263,13 @@ class LiveCanaryCoordinator:
                 source_payload.get("amount", source_payload.get("value", 0.0)),
             )
         )
-        return self.ledger.record_outcome(**kwargs)
+        recorded = self.ledger.record_outcome(**kwargs)
+        self.evaluate_and_maybe_rollback(
+            decision_id=f"outcome-guard:{decision_id}",
+            correlation_id=correlation_id,
+            tenant_id=str(assignment.get("tenant_id") or ""),
+        )
+        return recorded
 
     def evaluate(self) -> GuardrailResult:
         effective = self._effective_policy()
