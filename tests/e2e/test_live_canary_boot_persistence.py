@@ -95,6 +95,25 @@ def install_boot_spies(monkeypatch, policy, registry):
     return calls, selector
 
 
+def install_deploy_spies(monkeypatch, policy) -> None:
+    monkeypatch.setattr(policy_actions, "assert_called_from_executor", lambda: None)
+    monkeypatch.setattr(
+        policy_actions,
+        "assert_event_log_tenant",
+        lambda _event_log, *, tenant_id, operation: tenant_id,
+    )
+    monkeypatch.setattr(
+        policy_actions.RolloutGuard,
+        "allow_promotion",
+        lambda _metrics: True,
+    )
+    monkeypatch.setattr(
+        policy_actions,
+        "DEFAULT_LIVE_CANARY_POLICY",
+        policy,
+    )
+
+
 def test_enabled_canary_boots_inactive_before_first_deployment(monkeypatch) -> None:
     registry = BootRegistry(candidate=None, rollout_pct=0)
     calls, selector = install_boot_spies(
@@ -176,20 +195,8 @@ def test_deploy_rejects_candidate_different_from_attached_identity(
 ) -> None:
     registry = BootRegistry(candidate=None, rollout_pct=0)
     effects = PolicyEffects(registry)
-    monkeypatch.setattr(policy_actions, "assert_called_from_executor", lambda: None)
-    monkeypatch.setattr(
-        policy_actions,
-        "assert_event_log_tenant",
-        lambda _event_log, *, tenant_id, operation: tenant_id,
-    )
-    monkeypatch.setattr(
-        policy_actions.RolloutGuard,
-        "allow_promotion",
-        lambda _metrics: True,
-    )
-    monkeypatch.setattr(
-        policy_actions,
-        "DEFAULT_LIVE_CANARY_POLICY",
+    install_deploy_spies(
+        monkeypatch,
         configured_policy("attached-candidate@v2"),
     )
 
@@ -205,4 +212,52 @@ def test_deploy_rejects_candidate_different_from_attached_identity(
             rollout_pct=1,
         )
 
+    assert registry.mutations == []
+
+
+def test_programmatic_config_uses_runtime_candidate_as_effective_identity(
+    monkeypatch,
+) -> None:
+    registry = BootRegistry(candidate="runtime-candidate@v2", rollout_pct=1)
+    effects = PolicyEffects(registry)
+    install_deploy_spies(monkeypatch, configured_policy(""))
+
+    with pytest.raises(
+        RuntimeError,
+        match="LIVE_CANARY_CANDIDATE_ID_MISMATCH",
+    ):
+        effects.deploy_policy(
+            decision_id="deploy-programmatic-drift",
+            correlation_id="deploy-programmatic-drift-correlation",
+            tenant_id="tenant-a",
+            candidate_policy_id="different-candidate@v3",
+            rollout_pct=1,
+        )
+
+    assert registry.mutations == []
+
+
+def test_zero_percent_registration_cannot_change_governed_candidate_identity(
+    monkeypatch,
+) -> None:
+    registry = BootRegistry(candidate="attached-candidate@v2", rollout_pct=0)
+    effects = PolicyEffects(registry)
+    install_deploy_spies(
+        monkeypatch,
+        configured_policy("attached-candidate@v2"),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="LIVE_CANARY_CANDIDATE_ID_MISMATCH",
+    ):
+        effects.deploy_policy(
+            decision_id="register-shadow-drift",
+            correlation_id="register-shadow-drift-correlation",
+            tenant_id="tenant-a",
+            candidate_policy_id="different-candidate@v3",
+            rollout_pct=0,
+        )
+
+    assert registry.rollout_config() == ("attached-candidate@v2", 0)
     assert registry.mutations == []
