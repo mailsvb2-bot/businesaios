@@ -1,0 +1,142 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+
+
+def _csv(name: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in os.getenv(name, "").split(",") if item.strip())
+
+
+def _bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+@dataclass(frozen=True)
+class LiveCanaryPolicy:
+    """Fail-closed configuration for one randomized live business experiment."""
+
+    enabled: bool = False
+    experiment_id: str = ""
+    assignment_secret: str = ""
+    candidate_pct: float = 0.0
+    initial_canary_pct: int = 1
+    allowed_tenant_ids: tuple[str, ...] = ()
+    allowed_actions: tuple[str, ...] = ("send_preapproved_message@v1",)
+    outcome_event_types: tuple[str, ...] = (
+        "booking_confirmed@v1",
+        "payment_succeeded",
+        "purchase_success",
+    )
+    max_candidate_actions_per_day: int = 50
+    max_daily_cost: float = 100.0
+    max_error_rate: float = 0.05
+    max_critical_violations: int = 0
+    max_complaint_rate: float = 0.01
+    max_cost_per_outcome_ratio: float = 1.25
+    max_relative_conversion_drop: float = 0.05
+    max_sample_ratio_z: float = 4.0
+    min_assignments: int = 1000
+    min_candidate_assignments: int = 10
+    min_outcomes_per_arm: int = 10
+    min_duration_seconds: int = 24 * 60 * 60
+    outcome_window_seconds: int = 72 * 60 * 60
+
+    @property
+    def candidate_fraction(self) -> float:
+        return max(0.0, min(1.0, float(self.candidate_pct) / 100.0))
+
+    def validate(self) -> tuple[str, ...]:
+        issues: list[str] = []
+        if not self.enabled:
+            return ()
+        if not self.experiment_id.strip():
+            issues.append("experiment_id_required")
+        if len(self.assignment_secret.encode("utf-8")) < 32:
+            issues.append("assignment_secret_must_be_at_least_32_bytes")
+        if not 0.0 < float(self.candidate_pct) <= 100.0:
+            issues.append("candidate_pct_out_of_range")
+        if not self.allowed_tenant_ids:
+            issues.append("allowed_tenant_ids_required")
+        if not self.allowed_actions:
+            issues.append("allowed_actions_required")
+        if self.max_candidate_actions_per_day < 1:
+            issues.append("max_candidate_actions_per_day_must_be_positive")
+        if self.max_daily_cost < 0:
+            issues.append("max_daily_cost_must_be_non_negative")
+        if not 0 <= self.max_error_rate <= 1:
+            issues.append("max_error_rate_out_of_range")
+        if not 0 <= self.max_complaint_rate <= 1:
+            issues.append("max_complaint_rate_out_of_range")
+        if self.max_cost_per_outcome_ratio < 1:
+            issues.append("max_cost_per_outcome_ratio_must_be_at_least_one")
+        if not 0 <= self.max_relative_conversion_drop < 1:
+            issues.append("max_relative_conversion_drop_out_of_range")
+        if self.min_assignments < 1 or self.min_candidate_assignments < 1:
+            issues.append("minimum_assignment_counts_must_be_positive")
+        if self.min_outcomes_per_arm < 1:
+            issues.append("min_outcomes_per_arm_must_be_positive")
+        if self.min_duration_seconds < 0 or self.outcome_window_seconds < 1:
+            issues.append("invalid_time_window")
+        return tuple(issues)
+
+    def assert_valid(self) -> None:
+        issues = self.validate()
+        if issues:
+            raise ValueError("invalid live canary policy: " + ",".join(issues))
+
+    @classmethod
+    def from_env(cls) -> "LiveCanaryPolicy":
+        return cls(
+            enabled=_bool("LIVE_CANARY_ENABLED", False),
+            experiment_id=os.getenv("LIVE_CANARY_EXPERIMENT_ID", "").strip(),
+            assignment_secret=os.getenv("LIVE_CANARY_ASSIGNMENT_SECRET", ""),
+            candidate_pct=float(os.getenv("LIVE_CANARY_CANDIDATE_PCT", "0")),
+            initial_canary_pct=int(os.getenv("LIVE_CANARY_INITIAL_PCT", "1")),
+            allowed_tenant_ids=_csv("LIVE_CANARY_TENANTS"),
+            allowed_actions=_csv("LIVE_CANARY_ALLOWED_ACTIONS")
+            or ("send_preapproved_message@v1",),
+            outcome_event_types=_csv("LIVE_CANARY_OUTCOME_EVENTS")
+            or ("booking_confirmed@v1", "payment_succeeded", "purchase_success"),
+            max_candidate_actions_per_day=int(
+                os.getenv("LIVE_CANARY_MAX_ACTIONS_PER_DAY", "50")
+            ),
+            max_daily_cost=float(os.getenv("LIVE_CANARY_MAX_DAILY_COST", "100")),
+            max_error_rate=float(os.getenv("LIVE_CANARY_MAX_ERROR_RATE", "0.05")),
+            max_critical_violations=int(
+                os.getenv("LIVE_CANARY_MAX_CRITICAL_VIOLATIONS", "0")
+            ),
+            max_complaint_rate=float(
+                os.getenv("LIVE_CANARY_MAX_COMPLAINT_RATE", "0.01")
+            ),
+            max_cost_per_outcome_ratio=float(
+                os.getenv("LIVE_CANARY_MAX_COST_PER_OUTCOME_RATIO", "1.25")
+            ),
+            max_relative_conversion_drop=float(
+                os.getenv("LIVE_CANARY_MAX_RELATIVE_CONVERSION_DROP", "0.05")
+            ),
+            max_sample_ratio_z=float(
+                os.getenv("LIVE_CANARY_MAX_SAMPLE_RATIO_Z", "4")
+            ),
+            min_assignments=int(os.getenv("LIVE_CANARY_MIN_ASSIGNMENTS", "1000")),
+            min_candidate_assignments=int(
+                os.getenv("LIVE_CANARY_MIN_CANDIDATE_ASSIGNMENTS", "10")
+            ),
+            min_outcomes_per_arm=int(
+                os.getenv("LIVE_CANARY_MIN_OUTCOMES_PER_ARM", "10")
+            ),
+            min_duration_seconds=int(
+                os.getenv("LIVE_CANARY_MIN_DURATION_SECONDS", str(24 * 60 * 60))
+            ),
+            outcome_window_seconds=int(
+                os.getenv("LIVE_CANARY_OUTCOME_WINDOW_SECONDS", str(72 * 60 * 60))
+            ),
+        )
+
+
+DEFAULT_LIVE_CANARY_POLICY = LiveCanaryPolicy.from_env()
+
+__all__ = ["DEFAULT_LIVE_CANARY_POLICY", "LiveCanaryPolicy"]
