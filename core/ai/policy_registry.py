@@ -29,6 +29,7 @@ class PolicyRuntimeStateSnapshot:
     previous_policy_id: str | None
     candidate_policy_id: str | None
     rollout_pct: int
+    governed_candidate_policy_id: str | None
 
 
 class PolicyRegistry:
@@ -40,6 +41,9 @@ class PolicyRegistry:
         # rollout config (candidate + pct) - legacy API preserved
         self._candidate: str | None = None
         self._rollout_pct: int = 0
+        # Identity survives full promotion/rollback so a governed experiment
+        # cannot silently switch candidates after rollout fields are cleared.
+        self._governed_candidate: str | None = None
 
     def register(self, policy) -> None:
         """Register a policy during system wiring.
@@ -91,6 +95,11 @@ class PolicyRegistry:
     def rollout_config(self) -> tuple[str | None, int]:
         return self._candidate, int(self._rollout_pct)
 
+    def governed_candidate_identity(self) -> str | None:
+        """Return the immutable candidate bound to the current governed epoch."""
+
+        return self._governed_candidate or self._candidate
+
     def snapshot_runtime_state(self) -> PolicyRuntimeStateSnapshot:
         assert_called_from_runtime_executor()
         return PolicyRuntimeStateSnapshot(
@@ -98,6 +107,7 @@ class PolicyRegistry:
             previous_policy_id=self._previous,
             candidate_policy_id=self._candidate,
             rollout_pct=int(self._rollout_pct),
+            governed_candidate_policy_id=self._governed_candidate,
         )
 
     def restore_runtime_state(self, snapshot: PolicyRuntimeStateSnapshot) -> None:
@@ -108,6 +118,7 @@ class PolicyRegistry:
         self._previous = snapshot.previous_policy_id
         self._candidate = snapshot.candidate_policy_id
         self._rollout_pct = int(snapshot.rollout_pct)
+        self._governed_candidate = snapshot.governed_candidate_policy_id
 
     # --- SIDE-EFFECT API (must be called only by runtime/_effects_impl through executor) ---
 
@@ -120,8 +131,9 @@ class PolicyRegistry:
             raise KeyError(pid)
         if pct < 0 or pct > 100:
             raise ValueError("BAD_ROLLOUT_PCT")
+        self._governed_candidate = pid
         if pct >= 100:
-            # Full activate, clear rollout
+            # Full activate, clear live rollout while retaining governed identity.
             self._previous = (self._meta.active().policy_id if self._meta.active() else None)
             self._meta.promote(PolicyRef(policy_id=pid, version="v1"))
             self._candidate = None
@@ -136,7 +148,7 @@ class PolicyRegistry:
     def rollback(self) -> None:
         # SIDE-EFFECT: must be executed ONLY through runtime/executor effect window.
         assert_called_from_runtime_executor()
-        # rollback canary + clear rollout
+        # rollback canary + clear rollout; governed identity remains bound.
         self._candidate = None
         self._rollout_pct = 0
         self._meta.rollback()
