@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import time
 from types import SimpleNamespace
 
 from config.live_canary_policy import LiveCanaryPolicy
+from core.experiments.assignment import StableExperimentAssigner
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
+from core.experiments.ledger import LiveCanaryLedger
 from core.policies.selector import PolicySelector
 from runtime._internal.effects_actions import policy_actions
 from runtime.experiments.live_canary import LiveCanaryCoordinator
+from runtime.boot import boot_decision_core
 from runtime.experiments.watchdog import LiveCanaryWatchdog
 
 
@@ -216,3 +220,103 @@ def test_watchdog_submits_rollback_without_mutating_registry_directly() -> None:
     assert registry.rollout_pct == 5
     assert registry.calls == []
     assert coordinator.rollback_required is True
+
+
+def test_full_promotion_disables_canary_assignment() -> None:
+    registry = Registry(rollout_pct=0)
+    registry.candidate_policy_id = None
+    coordinator = LiveCanaryCoordinator(
+        event_log=MemoryEvents(),
+        policy_registry=registry,
+        candidate_policy_id="candidate@v2",
+        policy=policy(candidate_pct=10.0, max_candidate_pct=100.0),
+    )
+    assert coordinator.live_rollout_pct() == 0.0
+    result = coordinator._guard_result()
+    assert result.decision is CanaryDecision.CONTINUE
+    assert result.reasons == ("rollout_inactive",)
+
+
+def test_rolling_safety_budget_spans_all_rollout_stages() -> None:
+    events = MemoryEvents()
+    ledger = LiveCanaryLedger(
+        events,
+        experiment_id="review-closure-canary",
+        candidate_policy_id="candidate@v2",
+        outcome_window_seconds=60,
+    )
+    now_ms = int(time.time() * 1000)
+    for index, candidate_pct in enumerate((1.0, 5.0), start=1):
+        stage_policy = policy(
+            candidate_pct=100.0,
+            max_candidate_pct=100.0,
+        )
+        assignment = StableExperimentAssigner(stage_policy).assign(
+            tenant_id="tenant-a",
+            subject_id="same-customer",
+            candidate_policy_id="candidate@v2",
+            action="send_message@v1",
+            purpose="live_canary",
+            eligible=True,
+        )
+        ledger.record_assignment(
+            assignment,
+            decision_id=f"stage-{index}",
+            correlation_id=f"c-{index}",
+            production_policy_id="active@v1",
+            action="send_message@v1",
+            candidate_pct=candidate_pct,
+            expected_cost=6.0,
+            assigned_at_ms=now_ms - index,
+        )
+    metrics = ledger.metrics(candidate_pct=5.0)
+    assert metrics["assignment_count"] == 1
+    assert metrics["candidate_actions_24h"] == 2
+    assert metrics["candidate_expected_cost_24h"] == 12.0
+    assert metrics["candidate_max_actions_per_subject_24h"] == 2
+
+
+def test_selector_rejects_meta_only_tenant_for_live_canary() -> None:
+    selector = PolicySelector(SelectorRegistry())
+    selector._resolver.live_policy = policy(
+        candidate_pct=100.0,
+        max_candidate_pct=100.0,
+    )
+    state = {
+        "user_id": "customer-1",
+        "meta": {
+            "tenant_id": "tenant-a",
+            "purpose": "live_canary",
+            "live_canary_eligible": True,
+        },
+    }
+    assert selector.resolve_policy(state).id == "active@v1"
+
+
+def test_boot_starts_automatic_outcome_supervisor(monkeypatch) -> None:
+    configured = policy(outcome_poll_seconds=1.0)
+    monkeypatch.setattr(
+        boot_decision_core,
+        "DEFAULT_LIVE_CANARY_POLICY",
+        configured,
+    )
+    calls: list[str] = []
+    monkeypatch.setattr(
+        boot_decision_core,
+        "attach_live_canary",
+        lambda core, **_kwargs: calls.append("attach"),
+    )
+    monkeypatch.setattr(
+        boot_decision_core,
+        "start_live_canary_runtime",
+        lambda core: calls.append("start"),
+    )
+    selector = SimpleNamespace(
+        _registry=SimpleNamespace(
+            rollout_config=lambda: ("candidate@v2", 1),
+        )
+    )
+    boot_decision_core._attach_configured_live_canary(
+        SimpleNamespace(), selector
+    )
+    assert calls == ["attach", "start"]

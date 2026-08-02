@@ -17,6 +17,14 @@ _PUBLIC_ATTRS = {
         "runtime.experiments.watchdog",
         "LiveCanaryWatchdog",
     ),
+    "LiveCanaryOutcomeObserver": (
+        "runtime.experiments.outcome_observer",
+        "LiveCanaryOutcomeObserver",
+    ),
+    "LiveCanaryOutcomeSupervisor": (
+        "runtime.experiments.outcome_observer",
+        "LiveCanaryOutcomeSupervisor",
+    ),
     "attach_live_canary": (
         "runtime.experiments.wiring",
         "attach_live_canary",
@@ -28,6 +36,10 @@ _PUBLIC_ATTRS = {
     "detach_live_canary": (
         "runtime.experiments.wiring",
         "detach_live_canary",
+    ),
+    "start_live_canary_runtime": (
+        "runtime.experiments.wiring",
+        "start_live_canary_runtime",
     ),
     "explain_experiment_result": (
         "core.experiments.explainers.experiment_result_explainer",

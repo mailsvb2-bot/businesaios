@@ -48,6 +48,7 @@ class LiveCanaryPolicy:
     min_outcomes_per_arm: int = 10
     min_duration_seconds: int = 72 * 60 * 60
     outcome_window_seconds: int = 72 * 60 * 60
+    outcome_poll_seconds: float = 5.0
 
     @property
     def candidate_fraction(self) -> float:
@@ -95,6 +96,8 @@ class LiveCanaryPolicy:
             issues.append("min_outcomes_per_arm_must_be_positive")
         if self.min_duration_seconds < 0 or self.outcome_window_seconds < 1:
             issues.append("invalid_time_window")
+        if self.outcome_poll_seconds < 1:
+            issues.append("outcome_poll_seconds_must_be_at_least_one")
         return tuple(issues)
 
     def assert_valid(self) -> None:
@@ -160,6 +163,9 @@ class LiveCanaryPolicy:
                 os.getenv("LIVE_CANARY_MIN_DURATION_SECONDS", str(outcome_window))
             ),
             outcome_window_seconds=outcome_window,
+            outcome_poll_seconds=float(
+                os.getenv("LIVE_CANARY_OUTCOME_POLL_SECONDS", "5")
+            ),
         )
 
 

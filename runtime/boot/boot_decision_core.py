@@ -9,7 +9,10 @@ from config.live_canary_policy import DEFAULT_LIVE_CANARY_POLICY
 from core.ai import set_decision_core_singleton
 from core.ai.decision_core import DecisionCore
 from core.policies.shadow import ShadowDecisionLedger, ShadowEvaluator
-from runtime.experiments.wiring import attach_live_canary
+from runtime.experiments.wiring import (
+    attach_live_canary,
+    start_live_canary_runtime,
+)
 
 CANON_BOOT_WIRING_ONLY = True
 CANON_BOOT_REGISTERS_DECISION_CORE_SINGLETON = True
@@ -38,6 +41,7 @@ def _attach_configured_live_canary(core: DecisionCore, policy_selector: Any) -> 
         candidate_policy_id=candidate,
         policy=policy,
     )
+    start_live_canary_runtime(core)
 
 
 def build_decision_core(

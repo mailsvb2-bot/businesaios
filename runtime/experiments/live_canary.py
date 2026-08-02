@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 import time
 from dataclasses import asdict, replace
+from collections.abc import Mapping
 from threading import Lock
 from typing import Any
 
@@ -44,6 +47,22 @@ def _finite(value: object, default: float = 0.0) -> float:
     return number if math.isfinite(number) else default
 
 
+def source_event_evidence_ref(event: Any) -> str:
+    data = _event_data(event)
+    payload = _event_payload(event)
+    for source in (data, payload):
+        for key in ("event_id", "id", "external_id"):
+            value = source.get(key) if isinstance(source, Mapping) else None
+            if value is not None and str(value).strip():
+                return f"event:{str(value).strip()}"
+    digest = hashlib.sha256(
+        json.dumps(
+            data, sort_keys=True, separators=(",", ":"), default=str
+        ).encode("utf-8")
+    ).hexdigest()
+    return f"event-sha256:{digest}"
+
+
 class LiveCanaryCoordinator:
     """Own assignment evidence and pure guard evaluation.
 
@@ -82,14 +101,15 @@ class LiveCanaryCoordinator:
         getter = getattr(self.policy_registry, "rollout_config", None)
         if callable(getter):
             candidate_policy_id, rollout_pct = getter()
-            if str(candidate_policy_id or "") == self.candidate_policy_id:
-                return max(0.0, min(100.0, _finite(rollout_pct)))
+            if str(candidate_policy_id or "") != self.candidate_policy_id:
+                return 0.0
+            return max(0.0, min(100.0, _finite(rollout_pct)))
         return max(0.0, min(100.0, float(self.policy.candidate_pct)))
 
     def _effective_policy(self) -> LiveCanaryPolicy:
         current_pct = self.live_rollout_pct()
         if current_pct <= 0:
-            current_pct = float(self.policy.candidate_pct)
+            raise RuntimeError("LIVE_CANARY_ROLLOUT_INACTIVE")
         return replace(
             self.policy,
             candidate_pct=current_pct,
@@ -100,6 +120,12 @@ class LiveCanaryCoordinator:
         )
 
     def _guard_result(self) -> GuardrailResult:
+        if self.live_rollout_pct() <= 0:
+            return GuardrailResult(
+                CanaryDecision.CONTINUE,
+                ("rollout_inactive",),
+                {},
+            )
         try:
             return self.evaluate()
         except Exception as exc:
@@ -212,6 +238,7 @@ class LiveCanaryCoordinator:
         decision_id: str,
         event_type: str,
         success: bool,
+        evidence_ref: str | None = None,
     ) -> dict[str, Any]:
         events = self.ledger.events_for_decision(decision_id, event_type)
         for event in reversed(events):
@@ -225,8 +252,11 @@ class LiveCanaryCoordinator:
             observed = payload.get("ok")
             if observed is None:
                 observed = payload.get("success")
-            if observed is bool(success):
-                return payload
+            if observed is not bool(success):
+                continue
+            if evidence_ref and source_event_evidence_ref(event) != evidence_ref:
+                continue
+            return payload
         raise RuntimeError("LIVE_CANARY_VERIFIED_SOURCE_EVENT_REQUIRED")
 
     def record_execution(self, **kwargs: Any) -> dict[str, Any]:
@@ -285,10 +315,14 @@ class LiveCanaryCoordinator:
         if outcome_type not in self.policy.outcome_event_types:
             raise RuntimeError("LIVE_CANARY_OUTCOME_NOT_ALLOWED")
         success = bool(kwargs.get("success"))
+        evidence_ref = str(kwargs.get("evidence_ref") or "")
+        if not evidence_ref.startswith(("event:", "event-sha256:")):
+            raise RuntimeError("LIVE_CANARY_CANONICAL_EVIDENCE_REF_REQUIRED")
         source_payload = self._verified_source_event(
             decision_id=decision_id,
             event_type=outcome_type,
             success=success,
+            evidence_ref=evidence_ref,
         )
         observed_at_ms = int(
             kwargs.get("observed_at_ms") or time.time() * 1000
@@ -393,4 +427,4 @@ class LiveCanaryCoordinator:
         }
 
 
-__all__ = ["LiveCanaryCoordinator"]
+__all__ = ["LiveCanaryCoordinator", "source_event_evidence_ref"]

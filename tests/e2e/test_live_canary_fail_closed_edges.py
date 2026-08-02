@@ -7,7 +7,10 @@ import pytest
 from config.live_canary_policy import LiveCanaryPolicy
 from core.experiments.assignment import ExperimentArm
 from core.experiments.guardrails import CanaryDecision, LiveCanaryGuard
-from runtime.experiments.live_canary import LiveCanaryCoordinator
+from runtime.experiments.live_canary import (
+    LiveCanaryCoordinator,
+    source_event_evidence_ref,
+)
 
 
 class Registry:
@@ -184,11 +187,11 @@ def test_outcome_requires_assignment_arm_source_proof_and_window() -> None:
             arm=ExperimentArm.CANDIDATE,
             outcome_type="booking_confirmed@v1",
             success=True,
-            evidence_ref="booking:1",
+            evidence_ref="event:missing",
             observed_at_ms=assigned + 1,
         )
 
-    events.emit(
+    source_outcome = events.emit(
         event_type="booking_confirmed@v1",
         source="booking_webhook",
         user_id="customer-1",
@@ -203,6 +206,6 @@ def test_outcome_requires_assignment_arm_source_proof_and_window() -> None:
             arm=ExperimentArm.CANDIDATE,
             outcome_type="booking_confirmed@v1",
             success=True,
-            evidence_ref="booking:1",
+            evidence_ref=source_event_evidence_ref(source_outcome),
             observed_at_ms=assigned + 61_000,
         )

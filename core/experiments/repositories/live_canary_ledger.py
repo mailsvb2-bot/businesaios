@@ -319,6 +319,7 @@ class LiveCanaryLedger:
     def metrics(self, *, candidate_pct: float | None = None) -> dict[str, float | int]:
         rows = self._experiment_rows()
         assignments = self._assignments(rows, candidate_pct)
+        all_assignments = self._assignments(rows, None)
         now_ms = int(time.time() * 1000)
         maturity_cutoff_ms = now_ms - self.outcome_window_seconds * 1000
         rolling_cutoff_ms = now_ms - 24 * 60 * 60 * 1000
@@ -379,30 +380,47 @@ class LiveCanaryLedger:
                 int(metrics["last_event_ms"]),
                 assigned_at,
             )
-            if prefix == "candidate" and assigned_at >= rolling_cutoff_ms:
-                metrics["candidate_actions_24h"] = int(
-                    metrics["candidate_actions_24h"]
-                ) + 1
-                metrics["candidate_expected_cost_24h"] = float(
-                    metrics["candidate_expected_cost_24h"]
-                ) + _finite(assignment.get("expected_cost"))
-                subject_assignments[str(assignment.get("subject_hash") or "")] += 1
+
+        for assignment in all_assignments.values():
+            if str(assignment.get("arm") or "") != ExperimentArm.CANDIDATE.value:
+                continue
+            assigned_at = int(assignment.get("assigned_at_ms") or 0)
+            if assigned_at < rolling_cutoff_ms:
+                continue
+            metrics["candidate_actions_24h"] = int(
+                metrics["candidate_actions_24h"]
+            ) + 1
+            metrics["candidate_expected_cost_24h"] = float(
+                metrics["candidate_expected_cost_24h"]
+            ) + _finite(assignment.get("expected_cost"))
+            subject_assignments[str(assignment.get("subject_hash") or "")] += 1
 
         execution_keys: set[tuple[str, str]] = set()
         outcome_keys: set[tuple[str, str]] = set()
         for data, payload in rows:
             decision_id = str(data.get("decision_id") or "")
-            assignment = assignments.get(decision_id)
-            if assignment is None:
-                continue
             kind = str(data.get("event_type") or "")
-            arm = str(assignment.get("arm") or "")
-            prefix = "candidate" if arm == ExperimentArm.CANDIDATE.value else "control"
+            all_assignment = all_assignments.get(decision_id)
             timestamp = int(
                 payload.get("executed_at_ms")
                 or payload.get("observed_at_ms")
                 or 0
             )
+            if (
+                kind in {CONTROL_ACTION_EXECUTED, CANDIDATE_ACTION_EXECUTED}
+                and all_assignment is not None
+                and str(all_assignment.get("arm") or "")
+                == ExperimentArm.CANDIDATE.value
+                and timestamp >= rolling_cutoff_ms
+            ):
+                metrics["candidate_actual_cost_24h"] = float(
+                    metrics["candidate_actual_cost_24h"]
+                ) + _finite(payload.get("cost"))
+            assignment = assignments.get(decision_id)
+            if assignment is None:
+                continue
+            arm = str(assignment.get("arm") or "")
+            prefix = "candidate" if arm == ExperimentArm.CANDIDATE.value else "control"
             if timestamp:
                 metrics["last_event_ms"] = max(
                     int(metrics["last_event_ms"]),
@@ -439,10 +457,6 @@ class LiveCanaryLedger:
                     metrics["critical_violations"] = int(
                         metrics["critical_violations"]
                     ) + 1
-                if prefix == "candidate" and timestamp >= rolling_cutoff_ms:
-                    metrics["candidate_actual_cost_24h"] = float(
-                        metrics["candidate_actual_cost_24h"]
-                    ) + cost
             elif kind == BUSINESS_OUTCOME_OBSERVED:
                 outcome_type = str(payload.get("outcome_type") or "")
                 key = (decision_id, outcome_type)

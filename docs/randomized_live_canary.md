@@ -19,6 +19,7 @@ LIVE_CANARY_ELIGIBILITY_STATE_KEY=live_canary_eligible
 LIVE_CANARY_ALLOWED_ACTIONS=send_message@v1
 LIVE_CANARY_OUTCOME_EVENTS=booking_confirmed@v1,payment_succeeded
 LIVE_CANARY_OUTCOME_WINDOW_SECONDS=259200
+LIVE_CANARY_OUTCOME_POLL_SECONDS=5
 LIVE_CANARY_MIN_DURATION_SECONDS=259200
 LIVE_CANARY_MAX_ACTIONS_PER_SUBJECT_24H=1
 ```
@@ -72,7 +73,7 @@ For operational clarity, a new experiment ID per stage is still recommended.
 
 ## Integration contract
 
-Canonical boot attaches `LiveCanaryCoordinator` when the feature is enabled.
+Canonical boot attaches `LiveCanaryCoordinator` and starts the supervised `LiveCanaryOutcomeObserver` when the feature is enabled. The observer polls the shared event ledger at `LIVE_CANARY_OUTCOME_POLL_SECONDS`, and its lifecycle is owned by the live-canary wiring.
 The decision boundary verifies purpose, eligibility, tenant and the stable
 assignment bucket. After the provider emits an execution proof, call
 `record_execution`. After a booking, payment or other governed source event is

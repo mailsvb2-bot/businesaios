@@ -7,7 +7,10 @@ import pytest
 from config.live_canary_policy import LiveCanaryPolicy
 from core.experiments.assignment import StableExperimentAssigner
 from core.experiments.ledger import LiveCanaryLedger
-from runtime.experiments.live_canary import LiveCanaryCoordinator
+from runtime.experiments.live_canary import (
+    LiveCanaryCoordinator,
+    source_event_evidence_ref,
+)
 
 
 class MemoryEvents:
@@ -34,6 +37,11 @@ class MemoryEvents:
             "payload": dict(payload),
             "decision_id": decision_id,
             "correlation_id": correlation_id,
+            **{
+                key: value
+                for key, value in _kwargs.items()
+                if key in {"event_id", "id", "external_id"}
+            },
         }
         self.rows.append(row)
         return row
@@ -172,7 +180,7 @@ def test_execution_and_revenue_require_non_stub_source_events() -> None:
     )
     assert execution["payload"]["cost"] == 2.0
 
-    events.emit(
+    source_outcome = events.emit(
         event_type="booking_confirmed@v1",
         source="booking_webhook",
         user_id="customer-1",
@@ -187,7 +195,7 @@ def test_execution_and_revenue_require_non_stub_source_events() -> None:
         outcome_type="booking_confirmed@v1",
         success=True,
         revenue=999_999.0,
-        evidence_ref="booking:1",
+        evidence_ref=source_event_evidence_ref(source_outcome),
         observed_at_ms=assigned_at + 2,
     )
     assert outcome["payload"]["revenue"] == 3500.0
@@ -282,3 +290,55 @@ def test_conflicting_replay_for_one_decision_is_rejected() -> None:
             action="noop@v1",
             candidate_pct=100.0,
         )
+
+
+def test_outcome_values_come_from_exact_evidence_reference() -> None:
+    events = MemoryEvents()
+    coordinator = LiveCanaryCoordinator(
+        event_log=events,
+        policy_registry=Registry(),
+        candidate_policy_id="candidate@v2",
+        policy=policy(),
+    )
+    assignment = coordinator.assign(
+        tenant_id="tenant-a",
+        subject_id="customer-2",
+        decision_id="d-exact",
+        correlation_id="c-exact",
+        production_policy_id="active@v1",
+        action="send_message@v1",
+        purpose="live_canary",
+        eligible=True,
+    )
+    assigned_at = events.get_events(
+        "d-exact", "experiment_assignment@v1"
+    )[-1]["payload"]["assigned_at_ms"]
+    older = events.emit(
+        event_type="booking_confirmed@v1",
+        source="booking_webhook",
+        user_id="customer-2",
+        decision_id="d-exact",
+        correlation_id="c-exact",
+        payload={"success": True, "amount": 100.0},
+        event_id="booking-old",
+    )
+    events.emit(
+        event_type="booking_confirmed@v1",
+        source="booking_webhook",
+        user_id="customer-2",
+        decision_id="d-exact",
+        correlation_id="c-exact",
+        payload={"success": True, "amount": 900.0},
+        event_id="booking-new",
+    )
+    outcome = coordinator.record_outcome(
+        decision_id="d-exact",
+        correlation_id="c-exact",
+        arm=assignment.arm,
+        outcome_type="booking_confirmed@v1",
+        success=True,
+        evidence_ref=source_event_evidence_ref(older),
+        observed_at_ms=assigned_at + 1,
+    )
+    assert outcome["payload"]["revenue"] == 100.0
+    assert outcome["payload"]["evidence_ref"] == "event:booking-old"

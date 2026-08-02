@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 import time
 from collections.abc import Mapping
+from threading import Event, Lock, Thread
 from typing import Any
 
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import BUSINESS_OUTCOME_OBSERVED
-from runtime.experiments.live_canary import LiveCanaryCoordinator
+from runtime.experiments.live_canary import (
+    LiveCanaryCoordinator,
+    source_event_evidence_ref,
+)
 
 log = logging.getLogger(__name__)
 
@@ -49,19 +51,6 @@ def _observed_at_ms(event: Any, payload: Mapping[str, Any]) -> int:
     return int(time.time() * 1000)
 
 
-def _evidence_ref(event: Any) -> str:
-    data = _data(event)
-    for key in ("event_id", "id", "external_id"):
-        value = data.get(key)
-        if value is not None and str(value).strip():
-            return f"event:{str(value).strip()}"
-    digest = hashlib.sha256(
-        json.dumps(data, sort_keys=True, separators=(",", ":"), default=str).encode(
-            "utf-8"
-        )
-    ).hexdigest()
-    return f"event-sha256:{digest}"
-
 
 class LiveCanaryOutcomeObserver:
     """Bind real source events to canary assignments from the shared ledger."""
@@ -91,7 +80,7 @@ class LiveCanaryOutcomeObserver:
             success = _success(payload)
             if success is None:
                 continue
-            evidence_ref = _evidence_ref(event)
+            evidence_ref = source_event_evidence_ref(event)
             already_attributed = any(
                 _payload(existing).get("outcome_type") == event_type
                 and _payload(existing).get("evidence_ref") == evidence_ref
@@ -141,4 +130,69 @@ class LiveCanaryOutcomeObserver:
         return recorded
 
 
-__all__ = ["LiveCanaryOutcomeObserver"]
+class LiveCanaryOutcomeSupervisor:
+    """Own the lifecycle of automatic outcome attribution."""
+
+    def __init__(
+        self,
+        observer: LiveCanaryOutcomeObserver,
+        *,
+        interval_seconds: float,
+    ) -> None:
+        if interval_seconds < 1:
+            raise ValueError("interval_seconds must be at least one")
+        self.observer = observer
+        self.interval_seconds = float(interval_seconds)
+        self._stop = Event()
+        self._lock = Lock()
+        self._thread: Thread | None = None
+
+    def start(self) -> None:
+        with self._lock:
+            if self._thread is not None:
+                raise RuntimeError("live canary outcome supervisor already started")
+            self._thread = Thread(
+                target=self._run,
+                name="live-canary-outcome-observer",
+                daemon=True,
+            )
+            self._thread.start()
+
+    def request_stop(self) -> None:
+        self._stop.set()
+
+    def join(self, *, timeout_seconds: float = 10.0) -> None:
+        with self._lock:
+            thread = self._thread
+        if thread is not None:
+            thread.join(timeout=max(0.0, float(timeout_seconds)))
+
+    def pulse_once(self) -> int:
+        return self.observer.poll_once()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                self.observer.poll_once()
+            except Exception as exc:
+                result = GuardrailResult(
+                    CanaryDecision.ROLLBACK,
+                    (f"outcome_observer_error:{type(exc).__name__}",),
+                    {},
+                )
+                self.observer.coordinator._open_local_circuit(
+                    result,
+                    decision_id="outcome-observer-supervisor",
+                    correlation_id=(
+                        "live-canary:"
+                        + self.observer.coordinator.policy.experiment_id
+                    ),
+                    tenant_id=(
+                        self.observer.coordinator.policy.allowed_tenant_ids[0]
+                    ),
+                )
+                return
+            self._stop.wait(self.interval_seconds)
+
+
+__all__ = ["LiveCanaryOutcomeObserver", "LiveCanaryOutcomeSupervisor"]

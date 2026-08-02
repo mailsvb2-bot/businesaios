@@ -53,9 +53,12 @@ def _state_value(state: Any, *names: str) -> str:
 
 def _canonical_tenant_id(state: Any) -> str:
     product_metadata = _mapping_attr(state, "product_metadata")
-    return normalize_tenant_id(
-        product_metadata.get("tenant_id") or _state_value(state, "tenant_id")
+    top_level = (
+        state.get("tenant_id")
+        if isinstance(state, Mapping)
+        else getattr(state, "tenant_id", None)
     )
+    return normalize_tenant_id(product_metadata.get("tenant_id") or top_level)
 
 
 def _canonical_actor_id(state: Any) -> str:
