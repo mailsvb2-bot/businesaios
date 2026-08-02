@@ -11,7 +11,9 @@ def _event_value(event: Any, name: str) -> Any:
     return getattr(event, name, None)
 
 
-def _event_timestamp_ms(event: Any) -> int:
+def event_timestamp_ms(event: Any) -> int:
+    """Return the timestamp domain used by event-store range queries."""
+
     direct = _event_value(event, "timestamp_ms")
     if direct is not None:
         try:
@@ -63,7 +65,7 @@ def _filtered_events(
         event_tenant = str(_event_value(event, "tenant_id") or "").strip()
         if event_tenant and event_tenant != tenant_id:
             continue
-        timestamp_ms = _event_timestamp_ms(event)
+        timestamp_ms = event_timestamp_ms(event)
         if timestamp_ms < start_ms or timestamp_ms >= end_ms:
             continue
         if user_id is not None and str(_event_value(event, "user_id")) != user_id:
@@ -169,3 +171,6 @@ def get_events(event_log: Any, decision_id: str, event_type: str) -> list[dict]:
     except Exception:
         return []
     return out
+
+
+__all__ = ["event_timestamp_ms", "get_events", "has_event", "iter_events"]
