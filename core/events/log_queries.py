@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 
@@ -9,6 +9,30 @@ def _event_value(event: Any, name: str) -> Any:
     if isinstance(event, dict):
         return event.get(name)
     return getattr(event, name, None)
+
+
+def _event_timestamp_ms(event: Any) -> int:
+    direct = _event_value(event, "timestamp_ms")
+    if direct is not None:
+        try:
+            return int(direct)
+        except (TypeError, ValueError):
+            return 0
+    payload = _event_value(event, "payload")
+    if not isinstance(payload, Mapping):
+        return 0
+    for name in (
+        "observed_at_ms",
+        "event_time_ms",
+        "emitted_at_ms",
+        "created_at_ms",
+    ):
+        try:
+            if payload.get(name) is not None:
+                return int(payload[name])
+        except (TypeError, ValueError):
+            continue
+    return 0
 
 
 def _supports_keyword(callable_obj: Any, name: str) -> bool:
@@ -39,7 +63,7 @@ def _filtered_events(
         event_tenant = str(_event_value(event, "tenant_id") or "").strip()
         if event_tenant and event_tenant != tenant_id:
             continue
-        timestamp_ms = int(_event_value(event, "timestamp_ms") or 0)
+        timestamp_ms = _event_timestamp_ms(event)
         if timestamp_ms < start_ms or timestamp_ms >= end_ms:
             continue
         if user_id is not None and str(_event_value(event, "user_id")) != user_id:
