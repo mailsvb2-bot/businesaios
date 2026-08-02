@@ -13,8 +13,9 @@ def test_policy_routing_and_evidence_assignment_use_the_same_bucket() -> None:
         experiment_id="metro-followup-2026-08",
         assignment_secret="b" * 32,
         candidate_pct=1.0,
+        max_candidate_pct=1.0,
         allowed_tenant_ids=("tenant-a",),
-        allowed_actions=("send_preapproved_message@v1",),
+        allowed_actions=("send_message@v1",),
     )
     active = SimpleNamespace(policy_id="active@v1")
     candidate = SimpleNamespace(policy_id="candidate@v2")
@@ -27,12 +28,19 @@ def test_policy_routing_and_evidence_assignment_use_the_same_bucket() -> None:
 
     for index in range(10_000):
         subject_id = f"customer-{index}"
-        selected = resolver.resolve_policy(subject_id, tenant_id="tenant-a")
+        selected = resolver.resolve_policy(
+            subject_id,
+            tenant_id="tenant-a",
+            purpose="live_canary",
+            eligible=True,
+        )
         assignment = assigner.assign(
             tenant_id="tenant-a",
             subject_id=subject_id,
             candidate_policy_id="candidate@v2",
-            action="send_preapproved_message@v1",
+            action="send_message@v1",
+            purpose="live_canary",
+            eligible=True,
         )
         assert (selected.policy_id == "candidate@v2") is (
             assignment.arm is ExperimentArm.CANDIDATE
