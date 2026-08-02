@@ -81,8 +81,6 @@ class LiveCanaryPolicy:
             issues.append("min_outcomes_per_arm_must_be_positive")
         if self.min_duration_seconds < 0 or self.outcome_window_seconds < 1:
             issues.append("invalid_time_window")
-        if self.min_duration_seconds < self.outcome_window_seconds:
-            issues.append("minimum_duration_must_cover_outcome_window")
         return tuple(issues)
 
     def assert_valid(self) -> None:
