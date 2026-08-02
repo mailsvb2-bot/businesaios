@@ -81,15 +81,56 @@ class LiveCanaryStatistics:
     conversion_difference_lower_bound: float
 
 
+def _metric(
+    metrics: dict[str, object],
+    mature_key: str,
+    fallback_key: str,
+) -> object:
+    return metrics[mature_key] if mature_key in metrics else metrics.get(fallback_key, 0)
+
+
 def _arm(metrics: dict[str, object], prefix: str) -> ArmStatistics:
-    assignments = int(metrics.get(f"{prefix}_assignments", 0) or 0)
-    outcomes = int(metrics.get(f"{prefix}_outcomes", 0) or 0)
-    successes = int(metrics.get(f"{prefix}_successes", 0) or 0)
+    assignments = int(
+        _metric(
+            metrics,
+            f"mature_{prefix}_assignments",
+            f"{prefix}_assignments",
+        )
+        or 0
+    )
+    outcomes = int(
+        _metric(
+            metrics,
+            f"mature_{prefix}_outcomes",
+            f"{prefix}_outcomes",
+        )
+        or 0
+    )
+    successes = int(
+        _metric(
+            metrics,
+            f"mature_{prefix}_successes",
+            f"{prefix}_successes",
+        )
+        or 0
+    )
     executions = int(metrics.get(f"{prefix}_executions", 0) or 0)
     errors = int(metrics.get(f"{prefix}_errors", 0) or 0)
     complaints = int(metrics.get(f"{prefix}_complaints", 0) or 0)
-    revenue = _finite(metrics.get(f"{prefix}_revenue"))
-    cost = _finite(metrics.get(f"{prefix}_cost"))
+    revenue = _finite(
+        _metric(
+            metrics,
+            f"mature_{prefix}_revenue",
+            f"{prefix}_revenue",
+        )
+    )
+    cost = _finite(
+        _metric(
+            metrics,
+            f"mature_{prefix}_cost",
+            f"{prefix}_cost",
+        )
+    )
     return ArmStatistics(
         assignments=assignments,
         outcomes=outcomes,
@@ -113,13 +154,14 @@ def summarize(
 ) -> LiveCanaryStatistics:
     control = _arm(metrics, "control")
     candidate = _arm(metrics, "candidate")
-    total = control.assignments + candidate.assignments
+    control_all = int(metrics.get("control_assignments", 0) or 0)
+    candidate_all = int(metrics.get("candidate_assignments", 0) or 0)
     return LiveCanaryStatistics(
         control=control,
         candidate=candidate,
         sample_ratio_z=sample_ratio_z(
-            candidate.assignments,
-            total,
+            candidate_all,
+            control_all + candidate_all,
             expected_candidate_fraction,
         ),
         conversion_difference_lower_bound=difference_lower_bound(
