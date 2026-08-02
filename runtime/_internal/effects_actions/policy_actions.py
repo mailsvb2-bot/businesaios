@@ -39,17 +39,18 @@ class PolicyEffectsMixin:
         candidate_policy_id: str,
         rollout_pct: int,
         experiment_id: str | None,
-    ) -> None:
+    ) -> str:
         target_pct = int(rollout_pct)
         if target_pct <= 0:
-            return
+            return ""
 
         policy = DEFAULT_LIVE_CANARY_POLICY
-        experiment = str(experiment_id or "").strip()
+        configured_experiment = policy.experiment_id if policy.enabled else ""
+        experiment = str(experiment_id or configured_experiment).strip()
         if policy.enabled and not experiment:
             raise RuntimeError("LIVE_CANARY_EXPERIMENT_REQUIRED")
         if not experiment:
-            return
+            return ""
         if not policy.enabled or policy.experiment_id != experiment:
             raise RuntimeError("LIVE_CANARY_CONFIG_BLOCKED")
         policy.assert_valid()
@@ -92,6 +93,7 @@ class PolicyEffectsMixin:
             candidate_pct=float(target_pct),
             allowed_actions=policy.allowed_actions,
         )
+        return experiment
 
     def deploy_policy(
         self,
@@ -114,21 +116,21 @@ class PolicyEffectsMixin:
             "candidate_policy_id": str(candidate_policy_id),
             "rollout_pct": int(rollout_pct),
         }
-        if experiment_id:
-            payload["experiment_id"] = str(experiment_id)
         if int(rollout_pct) > 0:
             metrics = ShadowDecisionLedger(self.event_log).metrics(
                 str(candidate_policy_id)
             )
             if not RolloutGuard.allow_promotion(metrics):
                 raise RuntimeError("SHADOW_PROMOTION_BLOCKED")
-            self._require_live_canary_evidence(
+            resolved_experiment = self._require_live_canary_evidence(
                 decision_id=decision_id,
                 correlation_id=correlation_id,
                 candidate_policy_id=candidate_policy_id,
                 rollout_pct=rollout_pct,
                 experiment_id=experiment_id,
             )
+            if resolved_experiment:
+                payload["experiment_id"] = resolved_experiment
         snapshot = self.policy_registry.snapshot_runtime_state()
         try:
             self.policy_registry.set_rollout(
