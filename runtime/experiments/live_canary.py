@@ -13,16 +13,16 @@ from core.experiments.assignment import (
     ExperimentAssignment,
     StableExperimentAssigner,
 )
-from core.experiments.events import (
-    CANARY_AUTO_ROLLED_BACK,
-    CANARY_GUARDRAIL_BREACHED,
-)
 from core.experiments.guardrails import (
     CanaryDecision,
     GuardrailResult,
     LiveCanaryGuard,
 )
 from core.experiments.ledger import LiveCanaryLedger
+from core.experiments.live_canary_events import (
+    CANARY_AUTO_ROLLED_BACK,
+    CANARY_GUARDRAIL_BREACHED,
+)
 
 
 class LiveCanaryCoordinator:
