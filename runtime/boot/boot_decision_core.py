@@ -31,8 +31,10 @@ def _attach_configured_live_canary(core: DecisionCore, policy_selector: Any) -> 
     rollout_config = getattr(registry, "rollout_config", None)
     if not callable(rollout_config):
         raise RuntimeError("LIVE_CANARY_POLICY_REGISTRY_REQUIRED")
-    candidate_policy_id, _rollout_pct = rollout_config()
-    candidate = str(candidate_policy_id or "").strip()
+    rollout_candidate, _rollout_pct = rollout_config()
+    candidate = str(
+        rollout_candidate or policy.candidate_policy_id or ""
+    ).strip()
     if not candidate:
         raise RuntimeError("LIVE_CANARY_CANDIDATE_REQUIRED")
     attach_live_canary(
