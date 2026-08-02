@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from config.live_canary_policy import LiveCanaryPolicy
+from runtime._internal.effects_actions import policy_actions
 from runtime.boot import boot_decision_core
 
 
@@ -17,9 +18,37 @@ class BootRegistry:
     def rollout_config(self):
         return self.candidate, self.rollout_pct
 
+    def snapshot_runtime_state(self):
+        return self.candidate, self.rollout_pct, tuple(self.mutations)
+
+    def restore_runtime_state(self, snapshot):
+        self.candidate, self.rollout_pct, mutations = snapshot
+        self.mutations = list(mutations)
+
     def set_rollout(self, **kwargs):
         self.mutations.append(dict(kwargs))
-        raise AssertionError("boot must not enable candidate traffic")
+        raise AssertionError("unexpected rollout mutation")
+
+
+class MemoryEvents:
+    tenant_id = "tenant-a"
+
+    def __init__(self) -> None:
+        self.rows: list[dict] = []
+
+    def emit(self, **kwargs):
+        row = dict(kwargs)
+        self.rows.append(row)
+        return row
+
+    def iter_events(self):
+        return iter(self.rows)
+
+
+class PolicyEffects(policy_actions.PolicyEffectsMixin):
+    def __init__(self, registry: BootRegistry) -> None:
+        self.event_log = MemoryEvents()
+        self.policy_registry = registry
 
 
 def configured_policy(candidate_policy_id: str) -> LiveCanaryPolicy:
@@ -101,7 +130,7 @@ def test_restart_after_full_promotion_uses_persisted_candidate_at_zero_pct(
     assert registry.mutations == []
 
 
-def test_active_rollout_identity_overrides_persisted_boot_identity(
+def test_boot_rejects_runtime_candidate_different_from_persisted_identity(
     monkeypatch,
 ) -> None:
     registry = BootRegistry(candidate="runtime-candidate@v4", rollout_pct=5)
@@ -111,11 +140,15 @@ def test_active_rollout_identity_overrides_persisted_boot_identity(
         registry,
     )
 
-    boot_decision_core._attach_configured_live_canary(
-        SimpleNamespace(), selector
-    )
+    with pytest.raises(
+        RuntimeError,
+        match="LIVE_CANARY_CANDIDATE_ID_MISMATCH",
+    ):
+        boot_decision_core._attach_configured_live_canary(
+            SimpleNamespace(), selector
+        )
 
-    assert calls[0] == ("attach", "runtime-candidate@v4")
+    assert calls == []
     assert registry.mutations == []
 
 
@@ -135,4 +168,41 @@ def test_enabled_canary_without_any_candidate_identity_fails_closed(
         )
 
     assert calls == []
+    assert registry.mutations == []
+
+
+def test_deploy_rejects_candidate_different_from_attached_identity(
+    monkeypatch,
+) -> None:
+    registry = BootRegistry(candidate=None, rollout_pct=0)
+    effects = PolicyEffects(registry)
+    monkeypatch.setattr(policy_actions, "assert_called_from_executor", lambda: None)
+    monkeypatch.setattr(
+        policy_actions,
+        "assert_event_log_tenant",
+        lambda _event_log, *, tenant_id, operation: tenant_id,
+    )
+    monkeypatch.setattr(
+        policy_actions.RolloutGuard,
+        "allow_promotion",
+        lambda _metrics: True,
+    )
+    monkeypatch.setattr(
+        policy_actions,
+        "DEFAULT_LIVE_CANARY_POLICY",
+        configured_policy("attached-candidate@v2"),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="LIVE_CANARY_CANDIDATE_ID_MISMATCH",
+    ):
+        effects.deploy_policy(
+            decision_id="deploy-drift",
+            correlation_id="deploy-drift-correlation",
+            tenant_id="tenant-a",
+            candidate_policy_id="different-candidate@v3",
+            rollout_pct=1,
+        )
+
     assert registry.mutations == []
