@@ -147,7 +147,16 @@ class CursorCoordinator:
         return kwargs
 
 
-def source_event(decision_id: str, timestamp_ms: int, event_id: str):
+def source_event(
+    decision_id: str,
+    timestamp_ms: int,
+    event_id: str,
+    *,
+    observed_at_ms: int | None = None,
+):
+    payload = {"success": True, "amount": 3500.0}
+    if observed_at_ms is not None:
+        payload["observed_at_ms"] = observed_at_ms
     return {
         "event_id": event_id,
         "tenant_id": "tenant-a",
@@ -157,7 +166,7 @@ def source_event(decision_id: str, timestamp_ms: int, event_id: str):
         "decision_id": decision_id,
         "correlation_id": f"correlation-{decision_id}",
         "timestamp_ms": timestamp_ms,
-        "payload": {"success": True, "amount": 3500.0},
+        "payload": payload,
     }
 
 
@@ -175,4 +184,27 @@ def test_outcome_observer_advances_an_inclusive_incremental_cursor() -> None:
     assert len(coordinator.recorded) == 2
     assert events.start_ms_calls[1] == now_ms
     assert events.start_ms_calls[2] == now_ms
+    assert observer._cursor_ms == now_ms + 1
+
+
+def test_payload_time_cannot_move_the_event_log_read_cursor() -> None:
+    now_ms = int(time.time() * 1000)
+    future_payload_time = now_ms + 30_000
+    events = CursorEvents(
+        [
+            source_event(
+                "decision-1",
+                now_ms,
+                "event-1",
+                observed_at_ms=future_payload_time,
+            )
+        ]
+    )
+    coordinator = CursorCoordinator(events)
+    observer = LiveCanaryOutcomeObserver(coordinator)
+
+    assert observer.poll_once() == 1
+    assert observer._cursor_ms == now_ms
+    events.rows.append(source_event("decision-2", now_ms + 1, "event-2"))
+    assert observer.poll_once() == 1
     assert observer._cursor_ms == now_ms + 1
