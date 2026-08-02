@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from core.experiments.assignment import ExperimentArm, ExperimentAssignment
-from core.experiments.events import (
+from core.experiments.live_canary_events import (
     BUSINESS_OUTCOME_OBSERVED,
     CANDIDATE_ACTION_EXECUTED,
     CONTROL_ACTION_EXECUTED,
@@ -32,7 +32,7 @@ def _finite(value: object, default: float = 0.0) -> float:
 
 
 class LiveCanaryLedger:
-    """Tenant-scoped evidence ledger for actual randomized canary traffic."""
+    """Tenant-scoped evidence ledger for randomized live traffic."""
 
     def __init__(
         self,
@@ -61,6 +61,18 @@ class LiveCanaryLedger:
             if str(_data(event).get("decision_id") or "") == str(decision_id)
             and str(_data(event).get("event_type") or "") == event_type
         ]
+
+    def _belongs(self, event: Any) -> bool:
+        payload = _payload(event)
+        return (
+            payload.get("experiment_id") == self.experiment_id
+            and payload.get("candidate_policy_id") == self.candidate_policy_id
+        )
+
+    def assignment_for_decision(self, decision_id: str) -> dict[str, Any] | None:
+        events = self._decision_events(decision_id, EXPERIMENT_ASSIGNMENT)
+        matching = [event for event in events if self._belongs(event)]
+        return _payload(matching[-1]) if matching else None
 
     def _emit(
         self,
@@ -92,7 +104,11 @@ class LiveCanaryLedger:
         candidate_pct: float,
         allowed_actions: tuple[str, ...],
     ) -> dict[str, Any]:
-        existing = self._decision_events(decision_id, EXPERIMENT_CREATED)
+        existing = [
+            event
+            for event in self._decision_events(decision_id, EXPERIMENT_CREATED)
+            if self._belongs(event)
+        ]
         if existing:
             return _payload(existing[-1])
         return self._emit(
@@ -117,9 +133,9 @@ class LiveCanaryLedger:
         expected_cost: float = 0.0,
         assigned_at_ms: int | None = None,
     ) -> dict[str, Any]:
-        existing = self._decision_events(decision_id, EXPERIMENT_ASSIGNMENT)
-        if existing:
-            return _payload(existing[-1])
+        existing = self.assignment_for_decision(decision_id)
+        if existing is not None:
+            return existing
         return self._emit(
             event_type=EXPERIMENT_ASSIGNMENT,
             decision_id=decision_id,
@@ -159,7 +175,11 @@ class LiveCanaryLedger:
             if normalized_arm is ExperimentArm.CANDIDATE
             else CONTROL_ACTION_EXECUTED
         )
-        existing = self._decision_events(decision_id, event_type)
+        existing = [
+            event
+            for event in self._decision_events(decision_id, event_type)
+            if self._belongs(event)
+        ]
         if existing:
             return _payload(existing[-1])
         if not str(proof_event_type).strip() or not str(evidence_ref).strip():
@@ -205,7 +225,8 @@ class LiveCanaryLedger:
                 decision_id,
                 BUSINESS_OUTCOME_OBSERVED,
             )
-            if _payload(event).get("outcome_type") == str(outcome_type)
+            if self._belongs(event)
+            and _payload(event).get("outcome_type") == str(outcome_type)
         ]
         if existing:
             return _payload(existing[-1])
@@ -226,15 +247,11 @@ class LiveCanaryLedger:
         )
 
     def metrics(self) -> dict[str, float | int]:
-        rows = []
-        for event in self._events():
-            payload = _payload(event)
-            if payload.get("experiment_id") != self.experiment_id:
-                continue
-            if payload.get("candidate_policy_id") != self.candidate_policy_id:
-                continue
-            rows.append((_data(event), payload))
-
+        rows = [
+            (_data(event), _payload(event))
+            for event in self._events()
+            if self._belongs(event)
+        ]
         metrics: dict[str, float | int] = {
             "control_assignments": 0,
             "candidate_assignments": 0,
@@ -255,9 +272,13 @@ class LiveCanaryLedger:
             "critical_violations": 0,
             "first_assignment_ms": 0,
             "last_event_ms": 0,
+            "candidate_actions_24h": 0,
+            "candidate_cost_24h": 0.0,
         }
         assignment_decisions: set[str] = set()
+        execution_keys: set[tuple[str, str]] = set()
         outcome_keys: set[tuple[str, str]] = set()
+        cutoff_ms = int(time.time() * 1000) - 24 * 60 * 60 * 1000
 
         for data, payload in rows:
             kind = str(data.get("event_type") or "")
@@ -285,60 +306,74 @@ class LiveCanaryLedger:
                 if decision_id in assignment_decisions:
                     continue
                 assignment_decisions.add(decision_id)
-                metrics[f"{prefix}_assignments"] = int(
-                    metrics[f"{prefix}_assignments"]
-                ) + 1
+                metrics[f"{prefix}_assignments"] = (
+                    int(metrics[f"{prefix}_assignments"]) + 1
+                )
                 assigned = int(payload.get("assigned_at_ms") or 0)
-                if assigned and (
-                    int(metrics["first_assignment_ms"]) == 0
-                    or assigned < int(metrics["first_assignment_ms"])
-                ):
+                first = int(metrics["first_assignment_ms"])
+                if assigned and (not first or assigned < first):
                     metrics["first_assignment_ms"] = assigned
             elif kind in {CONTROL_ACTION_EXECUTED, CANDIDATE_ACTION_EXECUTED}:
-                metrics[f"{prefix}_executions"] = int(
-                    metrics[f"{prefix}_executions"]
-                ) + 1
-                metrics[f"{prefix}_cost"] = float(
-                    metrics[f"{prefix}_cost"]
-                ) + _finite(payload.get("cost"))
+                key = (decision_id, kind)
+                if key in execution_keys:
+                    continue
+                execution_keys.add(key)
+                cost = _finite(payload.get("cost"))
+                metrics[f"{prefix}_executions"] = (
+                    int(metrics[f"{prefix}_executions"]) + 1
+                )
+                metrics[f"{prefix}_cost"] = (
+                    float(metrics[f"{prefix}_cost"]) + cost
+                )
                 if payload.get("ok") is not True:
-                    metrics[f"{prefix}_errors"] = int(
-                        metrics[f"{prefix}_errors"]
-                    ) + 1
+                    metrics[f"{prefix}_errors"] = (
+                        int(metrics[f"{prefix}_errors"]) + 1
+                    )
                 if bool(payload.get("complaint")):
-                    metrics[f"{prefix}_complaints"] = int(
-                        metrics[f"{prefix}_complaints"]
-                    ) + 1
+                    metrics[f"{prefix}_complaints"] = (
+                        int(metrics[f"{prefix}_complaints"]) + 1
+                    )
                 if bool(payload.get("critical_violation")):
-                    metrics["critical_violations"] = int(
-                        metrics["critical_violations"]
-                    ) + 1
+                    metrics["critical_violations"] = (
+                        int(metrics["critical_violations"]) + 1
+                    )
+                executed = int(payload.get("executed_at_ms") or 0)
+                if prefix == "candidate" and executed >= cutoff_ms:
+                    metrics["candidate_actions_24h"] = (
+                        int(metrics["candidate_actions_24h"]) + 1
+                    )
+                    metrics["candidate_cost_24h"] = (
+                        float(metrics["candidate_cost_24h"]) + cost
+                    )
             elif kind == BUSINESS_OUTCOME_OBSERVED:
                 key = (decision_id, str(payload.get("outcome_type") or ""))
                 if key in outcome_keys:
                     continue
                 outcome_keys.add(key)
-                metrics[f"{prefix}_outcomes"] = int(
-                    metrics[f"{prefix}_outcomes"]
-                ) + 1
+                metrics[f"{prefix}_outcomes"] = (
+                    int(metrics[f"{prefix}_outcomes"]) + 1
+                )
                 if bool(payload.get("success")):
-                    metrics[f"{prefix}_successes"] = int(
-                        metrics[f"{prefix}_successes"]
-                    ) + 1
-                metrics[f"{prefix}_revenue"] = float(
-                    metrics[f"{prefix}_revenue"]
-                ) + _finite(payload.get("revenue"))
+                    metrics[f"{prefix}_successes"] = (
+                        int(metrics[f"{prefix}_successes"]) + 1
+                    )
+                metrics[f"{prefix}_revenue"] = (
+                    float(metrics[f"{prefix}_revenue"])
+                    + _finite(payload.get("revenue"))
+                )
 
         first = int(metrics["first_assignment_ms"])
         last = int(metrics["last_event_ms"])
         metrics["duration_seconds"] = (
             max(0.0, (last - first) / 1000.0) if first else 0.0
         )
-        metrics["assignment_count"] = int(
-            metrics["control_assignments"]
-        ) + int(metrics["candidate_assignments"])
-        metrics["outcome_count"] = int(metrics["control_outcomes"]) + int(
-            metrics["candidate_outcomes"]
+        metrics["assignment_count"] = (
+            int(metrics["control_assignments"])
+            + int(metrics["candidate_assignments"])
+        )
+        metrics["outcome_count"] = (
+            int(metrics["control_outcomes"])
+            + int(metrics["candidate_outcomes"])
         )
         return metrics
 
