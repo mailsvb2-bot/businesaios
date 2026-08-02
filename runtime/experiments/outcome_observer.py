@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from threading import Event, Lock, Thread
 from typing import Any
 
+from core.events.log_queries import iter_events as iter_event_window
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import BUSINESS_OUTCOME_OBSERVED
 from runtime.experiments.live_canary import (
@@ -51,82 +52,132 @@ def _observed_at_ms(event: Any, payload: Mapping[str, Any]) -> int:
     return int(time.time() * 1000)
 
 
-
 class LiveCanaryOutcomeObserver:
-    """Bind real source events to canary assignments from the shared ledger."""
+    """Bind new real source events to canary assignments incrementally."""
 
     def __init__(self, coordinator: LiveCanaryCoordinator) -> None:
         self.coordinator = coordinator
+        now_ms = int(time.time() * 1000)
+        window_ms = int(coordinator.policy.outcome_window_seconds) * 1000
+        self._cursor_ms = max(0, now_ms - window_ms)
+        self._seen_refs_at_cursor: set[str] = set()
 
-    def poll_once(self) -> int:
-        iterator = getattr(self.coordinator.event_log, "iter_events", None)
-        if not callable(iterator):
-            raise RuntimeError("LIVE_CANARY_EVENT_LEDGER_UNAVAILABLE")
-        recorded = 0
-        for event in list(iterator()):
-            data = _data(event)
-            event_type = str(data.get("event_type") or "")
-            if event_type not in self.coordinator.policy.outcome_event_types:
-                continue
-            if str(data.get("source") or "") == "live_canary":
-                continue
-            decision_id = str(data.get("decision_id") or "").strip()
-            if not decision_id:
-                continue
-            assignment = self.coordinator.ledger.assignment_for_decision(decision_id)
-            if assignment is None or assignment.get("eligible") is not True:
-                continue
-            payload = _payload(event)
-            success = _success(payload)
-            if success is None:
-                continue
-            evidence_ref = source_event_evidence_ref(event)
-            already_attributed = any(
-                _payload(existing).get("outcome_type") == event_type
-                and _payload(existing).get("evidence_ref") == evidence_ref
-                for existing in self.coordinator.ledger.events_for_decision(
-                    decision_id, BUSINESS_OUTCOME_OBSERVED
-                )
+    def _new_events(self) -> list[Any]:
+        events = list(
+            iter_event_window(
+                self.coordinator.event_log,
+                start_ms=self._cursor_ms,
+                event_types=self.coordinator.policy.outcome_event_types,
             )
-            if already_attributed:
-                continue
-            try:
-                self.coordinator.record_outcome(
-                    decision_id=decision_id,
+        )
+        events.sort(
+            key=lambda event: (
+                _observed_at_ms(event, _payload(event)),
+                source_event_evidence_ref(event),
+            )
+        )
+        return events
+
+    def _already_attributed(
+        self,
+        *,
+        decision_id: str,
+        event_type: str,
+        evidence_ref: str,
+    ) -> bool:
+        return any(
+            _payload(existing).get("outcome_type") == event_type
+            and _payload(existing).get("evidence_ref") == evidence_ref
+            for existing in self.coordinator.ledger.events_for_decision(
+                decision_id, BUSINESS_OUTCOME_OBSERVED
+            )
+        )
+
+    def _attribute_event(self, event: Any, evidence_ref: str) -> tuple[bool, int]:
+        data = _data(event)
+        event_type = str(data.get("event_type") or "")
+        if str(data.get("source") or "") == "live_canary":
+            return True, 0
+        decision_id = str(data.get("decision_id") or "").strip()
+        if not decision_id:
+            return True, 0
+        assignment = self.coordinator.ledger.assignment_for_decision(decision_id)
+        if assignment is None or assignment.get("eligible") is not True:
+            return True, 0
+        payload = _payload(event)
+        success = _success(payload)
+        if success is None:
+            return True, 0
+        if self._already_attributed(
+            decision_id=decision_id,
+            event_type=event_type,
+            evidence_ref=evidence_ref,
+        ):
+            return True, 0
+        try:
+            self.coordinator.record_outcome(
+                decision_id=decision_id,
+                correlation_id=(
+                    str(data.get("correlation_id") or "").strip() or None
+                ),
+                arm=str(assignment.get("arm") or ""),
+                outcome_type=event_type,
+                success=success,
+                evidence_ref=evidence_ref,
+                observed_at_ms=_observed_at_ms(event, payload),
+            )
+            return True, 1
+        except RuntimeError as exc:
+            if str(exc).startswith("LIVE_CANARY_IDEMPOTENCY_CONFLICT"):
+                result = GuardrailResult(
+                    CanaryDecision.ROLLBACK,
+                    ("outcome_idempotency_conflict",),
+                    {},
+                )
+                self.coordinator._open_local_circuit(
+                    result,
+                    decision_id=f"outcome-observer:{decision_id}",
                     correlation_id=(
                         str(data.get("correlation_id") or "").strip() or None
                     ),
-                    arm=str(assignment.get("arm") or ""),
-                    outcome_type=event_type,
-                    success=success,
-                    evidence_ref=evidence_ref,
-                    observed_at_ms=_observed_at_ms(event, payload),
+                    tenant_id=str(assignment.get("tenant_id") or ""),
                 )
-                recorded += 1
-            except RuntimeError as exc:
-                if str(exc).startswith("LIVE_CANARY_IDEMPOTENCY_CONFLICT"):
-                    result = GuardrailResult(
-                        CanaryDecision.ROLLBACK,
-                        ("outcome_idempotency_conflict",),
-                        {},
-                    )
-                    self.coordinator._open_local_circuit(
-                        result,
-                        decision_id=f"outcome-observer:{decision_id}",
-                        correlation_id=(
-                            str(data.get("correlation_id") or "").strip() or None
-                        ),
-                        tenant_id=str(assignment.get("tenant_id") or ""),
-                    )
-                elif str(exc) not in {
-                    "LIVE_CANARY_OUTCOME_WINDOW_EXPIRED",
-                    "LIVE_CANARY_OUTCOME_PRECEDES_ASSIGNMENT",
-                }:
-                    log.warning(
-                        "live_canary_outcome_observer_rejected event=%s error=%s",
-                        event_type,
-                        exc,
-                    )
+                return True, 0
+            if str(exc) in {
+                "LIVE_CANARY_OUTCOME_WINDOW_EXPIRED",
+                "LIVE_CANARY_OUTCOME_PRECEDES_ASSIGNMENT",
+            }:
+                return True, 0
+            log.warning(
+                "live_canary_outcome_observer_rejected event=%s error=%s",
+                event_type,
+                exc,
+            )
+            return False, 0
+
+    def poll_once(self) -> int:
+        recorded = 0
+        cursor = self._cursor_ms
+        seen = set(self._seen_refs_at_cursor)
+        for event in self._new_events():
+            payload = _payload(event)
+            observed_at_ms = _observed_at_ms(event, payload)
+            evidence_ref = source_event_evidence_ref(event)
+            if observed_at_ms < cursor:
+                continue
+            if observed_at_ms == cursor and evidence_ref in seen:
+                continue
+            consumed, increment = self._attribute_event(event, evidence_ref)
+            if not consumed:
+                break
+            recorded += increment
+            if observed_at_ms > cursor:
+                cursor = observed_at_ms
+                seen = {evidence_ref}
+            else:
+                seen.add(evidence_ref)
+        self._cursor_ms = cursor
+        self._seen_refs_at_cursor = seen
         return recorded
 
 
