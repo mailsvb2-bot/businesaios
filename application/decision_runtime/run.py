@@ -119,6 +119,7 @@ def run_decision(
         )
         _record_live_canary_assignment(
             core=core,
+            state=state,
             policy=policy,
             out=out,
             built=built,
@@ -203,9 +204,25 @@ def _active_policy_id(core: Any) -> str:
     return ""
 
 
+def _state_field(state: Any, name: str) -> Any:
+    value = state.get(name) if isinstance(state, dict) else getattr(state, name, None)
+    if value is not None:
+        return value
+    meta = state.get("meta") if isinstance(state, dict) else getattr(state, "meta", None)
+    return meta.get(name) if isinstance(meta, dict) else None
+
+
+def _state_flag(state: Any, name: str) -> bool:
+    value = _state_field(state, name)
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _record_live_canary_assignment(
     *,
     core: Any,
+    state: Any,
     policy: Any,
     out: Any,
     built: Any,
@@ -214,11 +231,12 @@ def _record_live_canary_assignment(
     expected_cost: float,
 ) -> None:
     coordinator = getattr(core, "_live_canary", None)
-    if coordinator is None:
+    if coordinator is None or coordinator.live_rollout_pct() <= 0:
         return
 
     selected_policy_id = _policy_id(policy)
     action = str(getattr(out, "action", ""))
+    purpose = str(_state_field(state, "purpose") or "").strip()
     assignment = coordinator.assign(
         tenant_id=tenant_id,
         subject_id=subject_id,
@@ -226,6 +244,11 @@ def _record_live_canary_assignment(
         correlation_id=str(built.decision.correlation_id),
         production_policy_id=_active_policy_id(core),
         action=action,
+        purpose=purpose,
+        eligible=_state_flag(
+            state,
+            coordinator.policy.eligibility_state_key,
+        ),
         expected_cost=expected_cost,
     )
     selected_candidate = selected_policy_id == coordinator.candidate_policy_id
