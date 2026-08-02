@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from config.live_canary_policy import DEFAULT_LIVE_CANARY_POLICY
@@ -39,31 +40,56 @@ class PolicyEffectsMixin:
         rollout_pct: int,
         experiment_id: str | None,
     ) -> None:
-        experiment = str(experiment_id or "").strip()
-        if not experiment or int(rollout_pct) <= 0:
+        target_pct = int(rollout_pct)
+        if target_pct <= 0:
             return
 
         policy = DEFAULT_LIVE_CANARY_POLICY
+        experiment = str(experiment_id or "").strip()
+        if policy.enabled and not experiment:
+            raise RuntimeError("LIVE_CANARY_EXPERIMENT_REQUIRED")
+        if not experiment:
+            return
         if not policy.enabled or policy.experiment_id != experiment:
             raise RuntimeError("LIVE_CANARY_CONFIG_BLOCKED")
         policy.assert_valid()
-        if float(rollout_pct) > float(policy.candidate_pct):
+        if float(target_pct) > float(policy.max_candidate_pct):
             raise RuntimeError("LIVE_CANARY_ROLLOUT_EXCEEDS_CONFIG")
 
         ledger = LiveCanaryLedger(
             self.event_log,
             experiment_id=experiment,
             candidate_policy_id=str(candidate_policy_id),
+            outcome_window_seconds=policy.outcome_window_seconds,
         )
-        if int(rollout_pct) > int(policy.initial_canary_pct):
-            result = LiveCanaryGuard.evaluate(ledger.metrics(), policy)
+        current_candidate, current_pct_raw = self.policy_registry.rollout_config()
+        current_pct = int(current_pct_raw or 0)
+        if target_pct > int(policy.initial_canary_pct):
+            if (
+                str(current_candidate or "") != str(candidate_policy_id)
+                or current_pct <= 0
+                or target_pct <= current_pct
+            ):
+                raise RuntimeError("LIVE_CANARY_STAGE_TRANSITION_BLOCKED")
+            evidence_policy = replace(
+                policy,
+                candidate_pct=float(current_pct),
+                max_candidate_pct=max(
+                    float(policy.max_candidate_pct),
+                    float(current_pct),
+                ),
+            )
+            result = LiveCanaryGuard.evaluate(
+                ledger.metrics(candidate_pct=float(current_pct)),
+                evidence_policy,
+            )
             if result.decision is not CanaryDecision.PROMOTE:
                 raise RuntimeError("LIVE_CANARY_PROMOTION_BLOCKED")
 
         ledger.record_experiment_created(
             decision_id=str(decision_id),
             correlation_id=str(correlation_id),
-            candidate_pct=float(rollout_pct),
+            candidate_pct=float(target_pct),
             allowed_actions=policy.allowed_actions,
         )
 
