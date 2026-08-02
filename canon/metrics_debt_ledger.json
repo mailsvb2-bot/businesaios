@@ -3,9 +3,9 @@
   "baseline_total_python_lines": 324009,
   "reconciled_clean_head_total_python_lines": 361624,
   "pre_existing_head_total_python_lines_debt": 37615,
-  "current_iteration_total_python_lines_budget": 3635,
-  "current_iteration_scope": "reviewed randomized live-canary closure: stable assignment, canonical actor and tenant routing parity, restart-safe immutable governed candidate identity retained across zero rollout, full promotion and rollback, rejection of already-active candidate re-canary, verified exact-source execution and outcome proof, cross-stage rolling safety budgets, supervised incremental outcome attribution, staged promotion, executor-governed rollback, and regression coverage",
+  "current_iteration_total_python_lines_budget": 3656,
+  "current_iteration_scope": "reviewed randomized live-canary closure: stable assignment, canonical actor and tenant routing parity, revoked in-flight candidate rejection, restart-safe immutable governed candidate identity retained across zero rollout, full promotion and rollback, rejection of already-active candidate re-canary, verified exact-source execution and outcome proof, persistent local-circuit rollback propagation, cross-stage rolling safety budgets, supervised incremental outcome attribution in the event-log timestamp domain, staged promotion, executor-governed rollback, and regression coverage",
   "policy": "Do not raise canon/metrics_baseline.json. The ledger records the exact pre-existing PR-head line debt separately from reviewed closure work.",
-  "current_iteration_current_total_python_lines": 365259,
+  "current_iteration_current_total_python_lines": 365280,
   "closure_condition": "Burn down pre-existing debt over subsequent canonical collapse work; this closure may not exceed its exact reviewed line delta."
 }
