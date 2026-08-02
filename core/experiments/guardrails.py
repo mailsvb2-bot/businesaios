@@ -69,6 +69,17 @@ class LiveCanaryGuard:
         ):
             immediate.append("candidate_action_frequency")
         if (
+            int(
+                metrics.get(
+                    "candidate_max_actions_per_subject_24h",
+                    0,
+                )
+                or 0
+            )
+            > policy.max_candidate_actions_per_subject_24h
+        ):
+            immediate.append("candidate_subject_frequency")
+        if (
             int(metrics.get("assignment_count", 0) or 0)
             >= policy.min_assignments
             and abs(stats.sample_ratio_z) > policy.max_sample_ratio_z
@@ -84,7 +95,13 @@ class LiveCanaryGuard:
 
         enough_data = all(
             (
-                int(metrics.get("assignment_count", 0) or 0)
+                int(
+                    metrics.get(
+                        "mature_assignment_count",
+                        metrics.get("assignment_count", 0),
+                    )
+                    or 0
+                )
                 >= policy.min_assignments,
                 stats.candidate.assignments >= policy.min_candidate_assignments,
                 stats.control.outcomes >= policy.min_outcomes_per_arm,
@@ -96,7 +113,7 @@ class LiveCanaryGuard:
         if not enough_data:
             return GuardrailResult(
                 CanaryDecision.CONTINUE,
-                ("insufficient_evidence",),
+                ("insufficient_mature_evidence",),
                 dict(metrics),
                 stats,
             )
