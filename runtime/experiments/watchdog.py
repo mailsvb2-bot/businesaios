@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import time
 from threading import Event
 
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
