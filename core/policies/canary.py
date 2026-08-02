@@ -46,7 +46,14 @@ class CanaryPolicyResolver:
         bucket = int.from_bytes(digest[:8], "big") % 10_000
         return bucket / 10_000.0
 
-    def resolve_policy(self, user_id: str, *, tenant_id: str = "") -> PolicyRef:
+    def resolve_policy(
+        self,
+        user_id: str,
+        *,
+        tenant_id: str = "",
+        purpose: str = "",
+        eligible: bool = False,
+    ) -> PolicyRef:
         active = self.registry.active()
         if not active:
             raise RuntimeError("No active policy")
@@ -62,7 +69,12 @@ class CanaryPolicyResolver:
         if self.live_policy.enabled:
             self.live_policy.assert_valid()
             tenant = str(tenant_id or "").strip()
+            purpose_name = str(purpose or "").strip()
             if tenant not in self.live_policy.allowed_tenant_ids:
+                return active
+            if purpose_name not in self.live_policy.allowed_purposes:
+                return active
+            if not bool(eligible):
                 return active
             bucket = self._live_bucket(tenant_id=tenant, subject_id=subject)
         else:
@@ -70,5 +82,17 @@ class CanaryPolicyResolver:
 
         return canary if bucket < self.cfg.canary_pct else active
 
-    def select_policy(self, user_id: str, *, tenant_id: str = "") -> PolicyRef:
-        return self.resolve_policy(user_id, tenant_id=tenant_id)
+    def select_policy(
+        self,
+        user_id: str,
+        *,
+        tenant_id: str = "",
+        purpose: str = "",
+        eligible: bool = False,
+    ) -> PolicyRef:
+        return self.resolve_policy(
+            user_id,
+            tenant_id=tenant_id,
+            purpose=purpose,
+            eligible=eligible,
+        )
