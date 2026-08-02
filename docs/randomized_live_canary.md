@@ -10,6 +10,7 @@ actions.
 ```text
 LIVE_CANARY_ENABLED=true
 LIVE_CANARY_EXPERIMENT_ID=metro-followup-2026-08-stage-1
+LIVE_CANARY_CANDIDATE_POLICY_ID=<registered candidate policy id>
 LIVE_CANARY_ASSIGNMENT_SECRET=<at least 32 random bytes>
 LIVE_CANARY_CANDIDATE_PCT=1
 LIVE_CANARY_MAX_CANDIDATE_PCT=1
@@ -23,6 +24,14 @@ LIVE_CANARY_OUTCOME_POLL_SECONDS=5
 LIVE_CANARY_MIN_DURATION_SECONDS=259200
 LIVE_CANARY_MAX_ACTIONS_PER_SUBJECT_24H=1
 ```
+
+`LIVE_CANARY_CANDIDATE_POLICY_ID` is the restart-safe identity of the candidate.
+It lets canonical boot attach the coordinator before the first governed rollout
+and after a completed promotion has cleared the in-memory rollout fields. Boot
+does not call `set_rollout` and does not enable candidate traffic: when the
+registry has no active rollout, the coordinator remains attached but inactive
+at 0%. A separate governed `deploy_policy@v1` decision is still required before
+any request can enter the candidate arm.
 
 Only states with an allowed `purpose` and an explicit
 `live_canary_eligible=true` flag enter the experiment. The business adapter is
@@ -73,11 +82,14 @@ For operational clarity, a new experiment ID per stage is still recommended.
 
 ## Integration contract
 
-Canonical boot attaches `LiveCanaryCoordinator` and starts the supervised `LiveCanaryOutcomeObserver` when the feature is enabled. The observer polls the shared event ledger at `LIVE_CANARY_OUTCOME_POLL_SECONDS`, and its lifecycle is owned by the live-canary wiring.
-The decision boundary verifies purpose, eligibility, tenant and the stable
-assignment bucket. After the provider emits an execution proof, call
-`record_execution`. After a booking, payment or other governed source event is
-stored, call `record_outcome` with the same `decision_id`.
+Canonical boot attaches `LiveCanaryCoordinator` and starts the supervised
+`LiveCanaryOutcomeObserver` when the feature is enabled. The observer polls the
+shared event ledger at `LIVE_CANARY_OUTCOME_POLL_SECONDS`, and its lifecycle is
+owned by the live-canary wiring. The decision boundary verifies purpose,
+eligibility, tenant and the stable assignment bucket. After the provider emits
+an execution proof, call `record_execution`. After a booking, payment or other
+governed source event is stored, call `record_outcome` with the same
+`decision_id`.
 
 Promotion uses sample-ratio validation, mature conversion, a confidence-bound
 non-inferiority check, cost per outcome, complaint rate, error rate and critical
