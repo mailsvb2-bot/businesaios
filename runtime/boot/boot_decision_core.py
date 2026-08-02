@@ -33,14 +33,19 @@ def _attach_configured_live_canary(core: DecisionCore, policy_selector: Any) -> 
         raise RuntimeError("LIVE_CANARY_POLICY_REGISTRY_REQUIRED")
     rollout_candidate, _rollout_pct = rollout_config()
     runtime_candidate = str(rollout_candidate or "").strip()
+    governed_identity = getattr(registry, "governed_candidate_identity", None)
+    governed_candidate = str(
+        governed_identity() if callable(governed_identity) else ""
+    ).strip()
+    bound_candidate = governed_candidate or runtime_candidate
     configured_candidate = str(policy.candidate_policy_id or "").strip()
     if (
-        runtime_candidate
+        bound_candidate
         and configured_candidate
-        and runtime_candidate != configured_candidate
+        and bound_candidate != configured_candidate
     ):
         raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
-    candidate = runtime_candidate or configured_candidate
+    candidate = bound_candidate or configured_candidate
     if not candidate:
         raise RuntimeError("LIVE_CANARY_CANDIDATE_REQUIRED")
     attach_live_canary(
