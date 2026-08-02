@@ -7,6 +7,7 @@ state. This module must not compute actions or execute effects.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 from config.decision_safety_policy import (
@@ -16,6 +17,7 @@ from config.decision_safety_policy import (
 from core.observability.errors import log_exception_throttled
 from core.policies.canary import CanaryPolicyResolver
 from core.policies.types import RolloutConfig
+from core.tenancy.normalization import normalize_tenant_id
 
 log = logging.getLogger(__name__)
 
@@ -31,25 +33,50 @@ _PURPOSE_POLICY = {
 _POLICY_DEPLOYMENT_ID = "policy_deployment" + _V1
 
 
+def _mapping_attr(state: Any, name: str) -> dict[str, Any]:
+    value = state.get(name) if isinstance(state, Mapping) else getattr(state, name, None)
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
 def _state_value(state: Any, *names: str) -> str:
     for name in names:
-        value = state.get(name) if isinstance(state, dict) else getattr(state, name, None)
+        value = state.get(name) if isinstance(state, Mapping) else getattr(state, name, None)
         if value is not None and str(value).strip():
             return str(value).strip()
-    meta = state.get("meta") if isinstance(state, dict) else getattr(state, "meta", None)
-    if isinstance(meta, dict):
-        for name in names:
-            value = meta.get(name)
-            if value is not None and str(value).strip():
-                return str(value).strip()
+    meta = _mapping_attr(state, "meta")
+    for name in names:
+        value = meta.get(name)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
+
+
+def _canonical_tenant_id(state: Any) -> str:
+    product_metadata = _mapping_attr(state, "product_metadata")
+    return normalize_tenant_id(
+        product_metadata.get("tenant_id") or _state_value(state, "tenant_id")
+    )
+
+
+def _canonical_actor_id(state: Any) -> str:
+    user = _mapping_attr(state, "user")
+    for candidate in (
+        _state_value(state, "user_id"),
+        user.get("actor_id"),
+        user.get("user_id"),
+        user.get("id"),
+        user.get("account_id"),
+    ):
+        actor_id = str(candidate or "").strip()
+        if actor_id and actor_id.casefold() not in {"unknown", "none", "null"}:
+            return actor_id
     return ""
 
 
 def _state_bool(state: Any, name: str) -> bool:
-    value = state.get(name) if isinstance(state, dict) else getattr(state, name, None)
+    value = state.get(name) if isinstance(state, Mapping) else getattr(state, name, None)
     if value is None:
-        meta = state.get("meta") if isinstance(state, dict) else getattr(state, "meta", None)
-        value = meta.get(name) if isinstance(meta, dict) else None
+        value = _mapping_attr(state, "meta").get(name)
     if isinstance(value, bool):
         return value
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
@@ -106,7 +133,7 @@ class PolicySelector:
             if selected is not None:
                 return selected
 
-        safe_mode = state.get("safe_mode", False) if isinstance(state, dict) else getattr(state, "safe_mode", False)
+        safe_mode = state.get("safe_mode", False) if isinstance(state, Mapping) else getattr(state, "safe_mode", False)
         if safe_mode and self._safe:
             return self._registry.get(self._safe)
 
@@ -120,11 +147,9 @@ class PolicySelector:
         )
 
         if cand and pct_i > self._policy.rollout_pct_floor:
-            uid = _state_value(state, "user_id", "actor_id", "customer_id")
-            tenant_id = _state_value(state, "tenant_id")
             ref = self._resolver.select_policy(
-                uid,
-                tenant_id=tenant_id,
+                _canonical_actor_id(state),
+                tenant_id=_canonical_tenant_id(state),
                 purpose=purpose,
                 eligible=live_eligible,
             )
