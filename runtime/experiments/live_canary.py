@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import asdict
 from typing import Any
 
@@ -85,13 +86,47 @@ class LiveCanaryCoordinator:
         if str(action) not in self.policy.allowed_actions:
             raise RuntimeError("LIVE_CANARY_ACTION_BLOCKED")
 
+    def _assignment_payload(self, decision_id: str) -> dict[str, Any]:
+        payload = self.ledger.assignment_for_decision(str(decision_id))
+        if payload is None or payload.get("eligible") is not True:
+            raise RuntimeError("LIVE_CANARY_ASSIGNMENT_REQUIRED")
+        return payload
+
     def record_execution(self, **kwargs: Any) -> dict[str, Any]:
+        decision_id = str(kwargs.get("decision_id") or "")
+        assignment = self._assignment_payload(decision_id)
+        arm = str(getattr(kwargs.get("arm"), "value", kwargs.get("arm")))
+        if arm != str(assignment.get("arm") or ""):
+            raise RuntimeError("LIVE_CANARY_EXECUTION_ARM_MISMATCH")
+        action = str(kwargs.get("action") or "")
+        if action != str(assignment.get("action") or ""):
+            raise RuntimeError("LIVE_CANARY_EXECUTION_ACTION_MISMATCH")
+        if (
+            arm == ExperimentArm.CANDIDATE.value
+            and action not in self.policy.allowed_actions
+        ):
+            raise RuntimeError("LIVE_CANARY_ACTION_BLOCKED")
         return self.ledger.record_execution(**kwargs)
 
     def record_outcome(self, **kwargs: Any) -> dict[str, Any]:
+        decision_id = str(kwargs.get("decision_id") or "")
+        assignment = self._assignment_payload(decision_id)
+        arm = str(getattr(kwargs.get("arm"), "value", kwargs.get("arm")))
+        if arm != str(assignment.get("arm") or ""):
+            raise RuntimeError("LIVE_CANARY_OUTCOME_ARM_MISMATCH")
         outcome_type = str(kwargs.get("outcome_type") or "")
         if outcome_type not in self.policy.outcome_event_types:
             raise RuntimeError("LIVE_CANARY_OUTCOME_NOT_ALLOWED")
+        observed_at_ms = int(
+            kwargs.get("observed_at_ms") or time.time() * 1000
+        )
+        assigned_at_ms = int(assignment.get("assigned_at_ms") or 0)
+        deadline_ms = (
+            assigned_at_ms + self.policy.outcome_window_seconds * 1000
+        )
+        if not assigned_at_ms or observed_at_ms > deadline_ms:
+            raise RuntimeError("LIVE_CANARY_OUTCOME_WINDOW_EXPIRED")
+        kwargs["observed_at_ms"] = observed_at_ms
         return self.ledger.record_outcome(**kwargs)
 
     def evaluate(self) -> GuardrailResult:
@@ -122,6 +157,16 @@ class LiveCanaryCoordinator:
             "reasons": list(result.reasons),
             "metrics": dict(result.metrics),
         }
+        snapshot = self.policy_registry.snapshot_runtime_state()
+        try:
+            self.policy_registry.set_rollout(
+                candidate_policy_id=self.candidate_policy_id,
+                rollout_pct=0,
+            )
+        except Exception:
+            self.policy_registry.restore_runtime_state(snapshot)
+            raise
+
         self.event_log.emit(
             event_type=CANARY_GUARDRAIL_BREACHED,
             source="live_canary",
@@ -130,27 +175,18 @@ class LiveCanaryCoordinator:
             correlation_id=correlation_id,
             payload=payload,
         )
-        snapshot = self.policy_registry.snapshot_runtime_state()
-        try:
-            self.policy_registry.set_rollout(
-                candidate_policy_id=self.candidate_policy_id,
-                rollout_pct=0,
-            )
-            self.event_log.emit(
-                event_type=CANARY_AUTO_ROLLED_BACK,
-                source="live_canary",
-                user_id="system",
-                decision_id=str(decision_id),
-                correlation_id=correlation_id,
-                payload={
-                    **payload,
-                    "from_pct": self.policy.candidate_pct,
-                    "to_pct": 0,
-                },
-            )
-        except Exception:
-            self.policy_registry.restore_runtime_state(snapshot)
-            raise
+        self.event_log.emit(
+            event_type=CANARY_AUTO_ROLLED_BACK,
+            source="live_canary",
+            user_id="system",
+            decision_id=str(decision_id),
+            correlation_id=correlation_id,
+            payload={
+                **payload,
+                "from_pct": self.policy.candidate_pct,
+                "to_pct": 0,
+            },
+        )
         return result
 
     def evidence(self) -> dict[str, Any]:
