@@ -45,6 +45,14 @@ class PolicyEffectsMixin:
             return ""
 
         policy = DEFAULT_LIVE_CANARY_POLICY
+        requested_candidate = str(candidate_policy_id or "").strip()
+        configured_candidate = str(policy.candidate_policy_id or "").strip()
+        if (
+            policy.enabled
+            and configured_candidate
+            and requested_candidate != configured_candidate
+        ):
+            raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
         configured_experiment = policy.experiment_id if policy.enabled else ""
         experiment = str(experiment_id or configured_experiment).strip()
         if policy.enabled and not experiment:
@@ -60,14 +68,14 @@ class PolicyEffectsMixin:
         ledger = LiveCanaryLedger(
             self.event_log,
             experiment_id=experiment,
-            candidate_policy_id=str(candidate_policy_id),
+            candidate_policy_id=requested_candidate,
             outcome_window_seconds=policy.outcome_window_seconds,
         )
         current_candidate, current_pct_raw = self.policy_registry.rollout_config()
         current_pct = int(current_pct_raw or 0)
         if target_pct > int(policy.initial_canary_pct):
             if (
-                str(current_candidate or "") != str(candidate_policy_id)
+                str(current_candidate or "") != requested_candidate
                 or current_pct <= 0
                 or target_pct <= current_pct
             ):
