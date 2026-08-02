@@ -25,6 +25,8 @@ class LiveCanaryPolicy:
     candidate_pct: float = 0.0
     initial_canary_pct: int = 1
     allowed_tenant_ids: tuple[str, ...] = ()
+    allowed_purposes: tuple[str, ...] = ("live_canary",)
+    eligibility_state_key: str = "live_canary_eligible"
     allowed_actions: tuple[str, ...] = ("send_message@v1",)
     outcome_event_types: tuple[str, ...] = (
         "booking_confirmed@v1",
@@ -32,6 +34,7 @@ class LiveCanaryPolicy:
         "purchase_success",
     )
     max_candidate_actions_per_day: int = 50
+    max_candidate_actions_per_subject_24h: int = 1
     max_daily_cost: float = 100.0
     max_error_rate: float = 0.05
     max_critical_violations: int = 0
@@ -61,10 +64,16 @@ class LiveCanaryPolicy:
             issues.append("candidate_pct_out_of_range")
         if not self.allowed_tenant_ids:
             issues.append("allowed_tenant_ids_required")
+        if not self.allowed_purposes:
+            issues.append("allowed_purposes_required")
+        if not self.eligibility_state_key.strip():
+            issues.append("eligibility_state_key_required")
         if not self.allowed_actions:
             issues.append("allowed_actions_required")
         if self.max_candidate_actions_per_day < 1:
             issues.append("max_candidate_actions_per_day_must_be_positive")
+        if self.max_candidate_actions_per_subject_24h < 1:
+            issues.append("max_candidate_actions_per_subject_24h_must_be_positive")
         if self.max_daily_cost < 0:
             issues.append("max_daily_cost_must_be_non_negative")
         if not 0 <= self.max_error_rate <= 1:
@@ -100,12 +109,19 @@ class LiveCanaryPolicy:
             candidate_pct=float(os.getenv("LIVE_CANARY_CANDIDATE_PCT", "0")),
             initial_canary_pct=int(os.getenv("LIVE_CANARY_INITIAL_PCT", "1")),
             allowed_tenant_ids=_csv("LIVE_CANARY_TENANTS"),
+            allowed_purposes=_csv("LIVE_CANARY_PURPOSES") or ("live_canary",),
+            eligibility_state_key=os.getenv(
+                "LIVE_CANARY_ELIGIBILITY_STATE_KEY", "live_canary_eligible"
+            ).strip(),
             allowed_actions=_csv("LIVE_CANARY_ALLOWED_ACTIONS")
             or ("send_message@v1",),
             outcome_event_types=_csv("LIVE_CANARY_OUTCOME_EVENTS")
             or ("booking_confirmed@v1", "payment_succeeded", "purchase_success"),
             max_candidate_actions_per_day=int(
                 os.getenv("LIVE_CANARY_MAX_ACTIONS_PER_DAY", "50")
+            ),
+            max_candidate_actions_per_subject_24h=int(
+                os.getenv("LIVE_CANARY_MAX_ACTIONS_PER_SUBJECT_24H", "1")
             ),
             max_daily_cost=float(os.getenv("LIVE_CANARY_MAX_DAILY_COST", "100")),
             max_error_rate=float(os.getenv("LIVE_CANARY_MAX_ERROR_RATE", "0.05")),
