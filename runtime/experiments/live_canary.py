@@ -45,7 +45,12 @@ def _finite(value: object, default: float = 0.0) -> float:
 
 
 class LiveCanaryCoordinator:
-    """Owns assignment evidence, real outcomes, guardrails, and rollback."""
+    """Own assignment evidence and pure guard evaluation.
+
+    Registry mutation is intentionally confined to `evaluate_and_maybe_rollback`,
+    which is called from the RuntimeExecutor execution stack. Decision-time and
+    webhook-time checks only open the local circuit and emit evidence.
+    """
 
     def __init__(
         self,
@@ -67,6 +72,11 @@ class LiveCanaryCoordinator:
             outcome_window_seconds=policy.outcome_window_seconds,
         )
         self._assignment_lock = Lock()
+        self._rollback_required = False
+
+    @property
+    def rollback_required(self) -> bool:
+        return bool(self._rollback_required)
 
     def live_rollout_pct(self) -> float:
         getter = getattr(self.policy_registry, "rollout_config", None)
@@ -88,6 +98,44 @@ class LiveCanaryCoordinator:
                 current_pct,
             ),
         )
+
+    def _guard_result(self) -> GuardrailResult:
+        try:
+            return self.evaluate()
+        except Exception as exc:
+            return GuardrailResult(
+                CanaryDecision.ROLLBACK,
+                (f"evaluation_error:{exc.__class__.__name__}",),
+                {},
+            )
+
+    def _open_local_circuit(
+        self,
+        result: GuardrailResult,
+        *,
+        decision_id: str,
+        correlation_id: str | None,
+        tenant_id: str,
+    ) -> None:
+        self._rollback_required = True
+        try:
+            self.event_log.emit(
+                event_type=CANARY_GUARDRAIL_BREACHED,
+                source="live_canary",
+                user_id="system",
+                decision_id=str(decision_id),
+                correlation_id=correlation_id,
+                payload={
+                    "tenant_id": str(tenant_id),
+                    "experiment_id": self.policy.experiment_id,
+                    "candidate_policy_id": self.candidate_policy_id,
+                    "reasons": list(result.reasons),
+                    "metrics": dict(result.metrics),
+                    "rollback_required": True,
+                },
+            )
+        except Exception:
+            return
 
     def assign(
         self,
@@ -112,6 +160,11 @@ class LiveCanaryCoordinator:
                 purpose=purpose,
                 eligible=eligible,
             )
+            if (
+                assignment.arm is ExperimentArm.CANDIDATE
+                and self._rollback_required
+            ):
+                raise RuntimeError("LIVE_CANARY_ROLLBACK_PENDING")
             self.ledger.record_assignment(
                 assignment,
                 decision_id=decision_id,
@@ -122,16 +175,16 @@ class LiveCanaryCoordinator:
                 expected_cost=expected_cost,
             )
             if assignment.eligible:
-                guard = self.evaluate_and_maybe_rollback(
-                    decision_id=f"assignment-guard:{decision_id}",
-                    correlation_id=correlation_id,
-                    tenant_id=assignment.tenant_id,
-                )
-                if (
-                    assignment.arm is ExperimentArm.CANDIDATE
-                    and guard.decision is CanaryDecision.ROLLBACK
-                ):
-                    raise RuntimeError("LIVE_CANARY_ASSIGNMENT_GUARD_BLOCKED")
+                guard = self._guard_result()
+                if guard.decision is CanaryDecision.ROLLBACK:
+                    self._open_local_circuit(
+                        guard,
+                        decision_id=f"assignment-guard:{decision_id}",
+                        correlation_id=correlation_id,
+                        tenant_id=assignment.tenant_id,
+                    )
+                    if assignment.arm is ExperimentArm.CANDIDATE:
+                        raise RuntimeError("LIVE_CANARY_ASSIGNMENT_GUARD_BLOCKED")
             return assignment
 
     def assert_candidate_action_allowed(
@@ -142,6 +195,8 @@ class LiveCanaryCoordinator:
     ) -> None:
         if assignment.arm is not ExperimentArm.CANDIDATE:
             return
+        if self._rollback_required:
+            raise RuntimeError("LIVE_CANARY_ROLLBACK_PENDING")
         if str(action) not in self.policy.allowed_actions:
             raise RuntimeError("LIVE_CANARY_ACTION_BLOCKED")
 
@@ -176,7 +231,6 @@ class LiveCanaryCoordinator:
 
     def record_execution(self, **kwargs: Any) -> dict[str, Any]:
         decision_id = str(kwargs.get("decision_id") or "")
-        correlation_id = kwargs.get("correlation_id")
         assignment = self._assignment_payload(decision_id)
         arm = str(getattr(kwargs.get("arm"), "value", kwargs.get("arm")))
         if arm != str(assignment.get("arm") or ""):
@@ -218,13 +272,7 @@ class LiveCanaryCoordinator:
         kwargs["complaint"] = bool(
             kwargs.get("complaint") or proof_payload.get("complaint")
         )
-        recorded = self.ledger.record_execution(**kwargs)
-        self.evaluate_and_maybe_rollback(
-            decision_id=f"execution-guard:{decision_id}",
-            correlation_id=correlation_id,
-            tenant_id=str(assignment.get("tenant_id") or ""),
-        )
-        return recorded
+        return self.ledger.record_execution(**kwargs)
 
     def record_outcome(self, **kwargs: Any) -> dict[str, Any]:
         decision_id = str(kwargs.get("decision_id") or "")
@@ -264,11 +312,14 @@ class LiveCanaryCoordinator:
             )
         )
         recorded = self.ledger.record_outcome(**kwargs)
-        self.evaluate_and_maybe_rollback(
-            decision_id=f"outcome-guard:{decision_id}",
-            correlation_id=correlation_id,
-            tenant_id=str(assignment.get("tenant_id") or ""),
-        )
+        guard = self._guard_result()
+        if guard.decision is CanaryDecision.ROLLBACK:
+            self._open_local_circuit(
+                guard,
+                decision_id=f"outcome-guard:{decision_id}",
+                correlation_id=correlation_id,
+                tenant_id=str(assignment.get("tenant_id") or ""),
+            )
         return recorded
 
     def evaluate(self) -> GuardrailResult:
@@ -283,15 +334,10 @@ class LiveCanaryCoordinator:
         correlation_id: str | None,
         tenant_id: str,
     ) -> GuardrailResult:
+        """Executor-side emergency rollback path."""
+
         from_pct = self.live_rollout_pct()
-        try:
-            result = self.evaluate()
-        except Exception as exc:
-            result = GuardrailResult(
-                CanaryDecision.ROLLBACK,
-                (f"evaluation_error:{exc.__class__.__name__}",),
-                {},
-            )
+        result = self._guard_result()
         if result.decision is not CanaryDecision.ROLLBACK:
             return result
 
@@ -311,6 +357,7 @@ class LiveCanaryCoordinator:
         except Exception:
             self.policy_registry.restore_runtime_state(snapshot)
             raise
+        self._rollback_required = False
 
         self.event_log.emit(
             event_type=CANARY_GUARDRAIL_BREACHED,
@@ -331,11 +378,12 @@ class LiveCanaryCoordinator:
         return result
 
     def evidence(self) -> dict[str, Any]:
-        result = self.evaluate()
+        result = self._guard_result()
         return {
             "experiment_id": self.policy.experiment_id,
             "candidate_policy_id": self.candidate_policy_id,
             "rollout_pct": self.live_rollout_pct(),
+            "rollback_required": self.rollback_required,
             "decision": result.decision.value,
             "reasons": list(result.reasons),
             "metrics": dict(result.metrics),
