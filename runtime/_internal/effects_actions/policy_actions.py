@@ -60,6 +60,23 @@ class PolicyEffectsMixin:
         if effective and requested != effective:
             raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
 
+    def _assert_live_canary_candidate_not_active(
+        self,
+        candidate_policy_id: str,
+        rollout_pct: int,
+    ) -> None:
+        policy = DEFAULT_LIVE_CANARY_POLICY
+        if not policy.enabled or int(rollout_pct) <= 0:
+            return
+        active_ref = getattr(self.policy_registry, "active_ref", None)
+        if not callable(active_ref):
+            raise RuntimeError("LIVE_CANARY_POLICY_REGISTRY_REQUIRED")
+        active = active_ref()
+        active_id = str(getattr(active, "policy_id", "") or "").strip()
+        requested = str(candidate_policy_id or "").strip()
+        if active_id and active_id == requested:
+            raise RuntimeError("LIVE_CANARY_ALREADY_PROMOTED")
+
     def _require_live_canary_evidence(
         self,
         *,
@@ -70,6 +87,10 @@ class PolicyEffectsMixin:
         experiment_id: str | None,
     ) -> str:
         self._assert_live_canary_candidate_identity(candidate_policy_id)
+        self._assert_live_canary_candidate_not_active(
+            candidate_policy_id,
+            rollout_pct,
+        )
         target_pct = int(rollout_pct)
         if target_pct <= 0:
             return ""
@@ -138,6 +159,10 @@ class PolicyEffectsMixin:
     ) -> dict[str, Any]:
         assert_called_from_executor()
         self._assert_live_canary_candidate_identity(candidate_policy_id)
+        self._assert_live_canary_candidate_not_active(
+            candidate_policy_id,
+            rollout_pct,
+        )
         tenant = assert_event_log_tenant(
             self.event_log,
             tenant_id=str(tenant_id),
