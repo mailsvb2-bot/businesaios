@@ -18,6 +18,7 @@ class ExperimentArm(str, Enum):
 class ExperimentAssignment:
     experiment_id: str
     tenant_id: str
+    purpose: str
     subject_hash: str
     arm: ExperimentArm
     bucket: int
@@ -58,26 +59,32 @@ class StableExperimentAssigner:
         subject_id: str,
         candidate_policy_id: str,
         action: str,
+        purpose: str = "live_canary",
+        eligible: bool = True,
     ) -> ExperimentAssignment:
         tenant = str(tenant_id or "").strip()
         subject = str(subject_id or "").strip()
         candidate = str(candidate_policy_id or "").strip()
         action_name = str(action or "").strip()
+        purpose_name = str(purpose or "").strip()
 
         reason = ""
         if tenant not in self.policy.allowed_tenant_ids:
             reason = "tenant_not_allowed"
+        elif purpose_name not in self.policy.allowed_purposes:
+            reason = "purpose_not_allowed"
+        elif not bool(eligible):
+            reason = "eligibility_not_proven"
         elif not subject:
             reason = "subject_id_required"
         elif not candidate:
             reason = "candidate_policy_id_required"
-        elif action_name not in self.policy.allowed_actions:
-            reason = "action_not_allowed"
 
         if reason:
             return ExperimentAssignment(
                 experiment_id=self.policy.experiment_id,
                 tenant_id=tenant,
+                purpose=purpose_name,
                 subject_hash="",
                 arm=ExperimentArm.INELIGIBLE,
                 bucket=-1,
@@ -92,9 +99,24 @@ class StableExperimentAssigner:
             if bucket < candidate_buckets
             else ExperimentArm.CONTROL
         )
+        if arm is ExperimentArm.CANDIDATE and action_name not in self.policy.allowed_actions:
+            return ExperimentAssignment(
+                experiment_id=self.policy.experiment_id,
+                tenant_id=tenant,
+                purpose=purpose_name,
+                subject_hash=self.subject_hash(
+                    tenant_id=tenant,
+                    subject_id=subject,
+                ),
+                arm=ExperimentArm.INELIGIBLE,
+                bucket=bucket,
+                candidate_policy_id=candidate,
+                reason="candidate_action_not_allowed",
+            )
         return ExperimentAssignment(
             experiment_id=self.policy.experiment_id,
             tenant_id=tenant,
+            purpose=purpose_name,
             subject_hash=self.subject_hash(tenant_id=tenant, subject_id=subject),
             arm=arm,
             bucket=bucket,
