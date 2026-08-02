@@ -46,18 +46,15 @@ class LiveCanaryLedger:
         self.candidate_policy_id = str(candidate_policy_id)
 
     def _events(self) -> Iterable[Any]:
-        try:
-            return self.event_log.iter_events()
-        except Exception:
-            return ()
+        iterator = getattr(self.event_log, "iter_events", None)
+        if not callable(iterator):
+            raise RuntimeError("LIVE_CANARY_EVENT_LEDGER_UNAVAILABLE")
+        return iterator()
 
     def _decision_events(self, decision_id: str, event_type: str) -> list[Any]:
         get_events = getattr(self.event_log, "get_events", None)
         if callable(get_events):
-            try:
-                return list(get_events(str(decision_id), event_type))
-            except Exception:
-                return []
+            return list(get_events(str(decision_id), event_type))
         return [
             event
             for event in self._events()
