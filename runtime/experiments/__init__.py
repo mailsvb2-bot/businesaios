@@ -17,9 +17,17 @@ _PUBLIC_ATTRS = {
         "runtime.experiments.watchdog",
         "LiveCanaryWatchdog",
     ),
+    "attach_live_canary": (
+        "runtime.experiments.wiring",
+        "attach_live_canary",
+    ),
     "build_experiment": (
         "core.experiments.builders.experiment_plan_builder",
         "build_experiment",
+    ),
+    "detach_live_canary": (
+        "runtime.experiments.wiring",
+        "detach_live_canary",
     ),
     "explain_experiment_result": (
         "core.experiments.explainers.experiment_result_explainer",
