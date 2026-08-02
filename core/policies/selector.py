@@ -7,6 +7,7 @@ state. This module must not compute actions or execute effects.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from config.decision_safety_policy import (
     DEFAULT_POLICY_SELECTOR_POLICY,
@@ -28,6 +29,20 @@ _PURPOSE_POLICY = {
     "offer_outcome_emit": "offer_outcome_emit" + _V1,
 }
 _POLICY_DEPLOYMENT_ID = "policy_deployment" + _V1
+
+
+def _state_value(state: Any, *names: str) -> str:
+    for name in names:
+        value = state.get(name) if isinstance(state, dict) else getattr(state, name, None)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    meta = state.get("meta") if isinstance(state, dict) else getattr(state, "meta", None)
+    if isinstance(meta, dict):
+        for name in names:
+            value = meta.get(name)
+            if value is not None and str(value).strip():
+                return str(value).strip()
+    return ""
 
 
 class PolicySelector:
@@ -69,6 +84,8 @@ class PolicySelector:
             ) or self._registry.active()
 
         meta = getattr(state, "meta", None) or {}
+        if isinstance(state, dict):
+            meta = state.get("meta") or meta
         if isinstance(meta, dict):
             purpose = str(meta.get("purpose") or "").strip()
             policy_id = _PURPOSE_POLICY.get(purpose)
@@ -80,7 +97,8 @@ class PolicySelector:
                 if selected is not None:
                     return selected
 
-        if getattr(state, "safe_mode", False) and self._safe:
+        safe_mode = state.get("safe_mode", False) if isinstance(state, dict) else getattr(state, "safe_mode", False)
+        if safe_mode and self._safe:
             return self._registry.get(self._safe)
 
         cand, pct = self._registry.rollout_config()
@@ -93,22 +111,36 @@ class PolicySelector:
         )
 
         if cand and pct_i > self._policy.rollout_pct_floor:
-            uid = str(getattr(state, "user_id", ""))
-            ref = self._resolver.select_policy(uid)
+            uid = _state_value(state, "user_id", "actor_id", "customer_id")
+            tenant_id = _state_value(state, "tenant_id")
+            ref = self._resolver.select_policy(uid, tenant_id=tenant_id)
             return self._registry.get(ref.policy_id)
 
         return self._registry.active()
 
     def resolve_shadow_policy(self, state, *, production_policy_id: str):
         candidate_id, pct = self._registry.rollout_config()
-        if not candidate_id or int(pct or 0) != 0 or str(candidate_id) == str(production_policy_id):
+        if (
+            not candidate_id
+            or int(pct or 0) != 0
+            or str(candidate_id) == str(production_policy_id)
+        ):
             return None
         candidate = self._registry.maybe_get(candidate_id)
         module = str(getattr(type(candidate), "__module__", ""))
-        return candidate if candidate is not None and module.startswith("core.policies.") else None
+        return (
+            candidate
+            if candidate is not None and module.startswith("core.policies.")
+            else None
+        )
 
     def is_registered_shadow_candidate(self, candidate_policy_id: str) -> bool:
-        configured, pct = self._registry.rollout_config(); return bool(configured and str(configured) == str(candidate_policy_id) and int(pct or 0) == 0)
+        configured, pct = self._registry.rollout_config()
+        return bool(
+            configured
+            and str(configured) == str(candidate_policy_id)
+            and int(pct or 0) == 0
+        )
 
     select = resolve_policy
 
