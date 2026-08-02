@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import math
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import Any
 
 from config.live_canary_policy import (
     DEFAULT_LIVE_CANARY_POLICY,
     LiveCanaryPolicy,
 )
+from core.actions.proof_registry import ACTION_PROOF_EVENT
 from core.experiments.assignment import (
     ExperimentArm,
     ExperimentAssignment,
@@ -23,6 +25,22 @@ from core.experiments.live_canary_events import (
     CANARY_AUTO_ROLLED_BACK,
     CANARY_GUARDRAIL_BREACHED,
 )
+
+
+def _event_data(event: Any) -> dict[str, Any]:
+    return event if isinstance(event, dict) else vars(event)
+
+
+def _event_payload(event: Any) -> dict[str, Any]:
+    return dict(_event_data(event).get("payload") or {})
+
+
+def _finite(value: object, default: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if math.isfinite(number) else default
 
 
 class LiveCanaryCoordinator:
@@ -41,11 +59,32 @@ class LiveCanaryCoordinator:
         self.event_log = event_log
         self.policy_registry = policy_registry
         self.candidate_policy_id = str(candidate_policy_id)
-        self.assigner = StableExperimentAssigner(policy)
         self.ledger = LiveCanaryLedger(
             event_log,
             experiment_id=policy.experiment_id,
             candidate_policy_id=self.candidate_policy_id,
+            outcome_window_seconds=policy.outcome_window_seconds,
+        )
+
+    def live_rollout_pct(self) -> float:
+        getter = getattr(self.policy_registry, "rollout_config", None)
+        if callable(getter):
+            candidate_policy_id, rollout_pct = getter()
+            if str(candidate_policy_id or "") == self.candidate_policy_id:
+                return max(0.0, min(100.0, _finite(rollout_pct)))
+        return max(0.0, min(100.0, float(self.policy.candidate_pct)))
+
+    def _effective_policy(self) -> LiveCanaryPolicy:
+        current_pct = self.live_rollout_pct()
+        if current_pct <= 0:
+            current_pct = float(self.policy.candidate_pct)
+        return replace(
+            self.policy,
+            candidate_pct=current_pct,
+            max_candidate_pct=max(
+                float(self.policy.max_candidate_pct),
+                current_pct,
+            ),
         )
 
     def assign(
@@ -57,13 +96,18 @@ class LiveCanaryCoordinator:
         correlation_id: str | None,
         production_policy_id: str,
         action: str,
+        purpose: str,
+        eligible: bool,
         expected_cost: float = 0.0,
     ) -> ExperimentAssignment:
-        assignment = self.assigner.assign(
+        effective = self._effective_policy()
+        assignment = StableExperimentAssigner(effective).assign(
             tenant_id=tenant_id,
             subject_id=subject_id,
             candidate_policy_id=self.candidate_policy_id,
             action=action,
+            purpose=purpose,
+            eligible=eligible,
         )
         self.ledger.record_assignment(
             assignment,
@@ -71,6 +115,7 @@ class LiveCanaryCoordinator:
             correlation_id=correlation_id,
             production_policy_id=production_policy_id,
             action=action,
+            candidate_pct=effective.candidate_pct,
             expected_cost=expected_cost,
         )
         return assignment
@@ -92,6 +137,29 @@ class LiveCanaryCoordinator:
             raise RuntimeError("LIVE_CANARY_ASSIGNMENT_REQUIRED")
         return payload
 
+    def _verified_source_event(
+        self,
+        *,
+        decision_id: str,
+        event_type: str,
+        success: bool,
+    ) -> dict[str, Any]:
+        events = self.ledger.events_for_decision(decision_id, event_type)
+        for event in reversed(events):
+            data = _event_data(event)
+            if str(data.get("source") or "") == "live_canary":
+                continue
+            payload = _event_payload(event)
+            meta = payload.get("meta")
+            if isinstance(meta, dict) and str(meta.get("mode") or "") == "stub":
+                continue
+            observed = payload.get("ok")
+            if observed is None:
+                observed = payload.get("success")
+            if observed is bool(success):
+                return payload
+        raise RuntimeError("LIVE_CANARY_VERIFIED_SOURCE_EVENT_REQUIRED")
+
     def record_execution(self, **kwargs: Any) -> dict[str, Any]:
         decision_id = str(kwargs.get("decision_id") or "")
         assignment = self._assignment_payload(decision_id)
@@ -106,6 +174,35 @@ class LiveCanaryCoordinator:
             and action not in self.policy.allowed_actions
         ):
             raise RuntimeError("LIVE_CANARY_ACTION_BLOCKED")
+
+        ok = bool(kwargs.get("ok"))
+        proof_event_type = str(kwargs.get("proof_event_type") or "")
+        expected_proof = ACTION_PROOF_EVENT.get(action)
+        if ok and (not expected_proof or proof_event_type != expected_proof):
+            raise RuntimeError("LIVE_CANARY_ACTION_PROOF_TYPE_MISMATCH")
+        proof_payload = self._verified_source_event(
+            decision_id=decision_id,
+            event_type=proof_event_type,
+            success=ok,
+        )
+        assigned_at_ms = int(assignment.get("assigned_at_ms") or 0)
+        executed_at_ms = int(
+            kwargs.get("executed_at_ms") or time.time() * 1000
+        )
+        if not assigned_at_ms or executed_at_ms < assigned_at_ms:
+            raise RuntimeError("LIVE_CANARY_EXECUTION_PRECEDES_ASSIGNMENT")
+        kwargs["executed_at_ms"] = executed_at_ms
+        kwargs["cost"] = max(
+            _finite(kwargs.get("cost")),
+            _finite(proof_payload.get("cost")),
+        )
+        kwargs["critical_violation"] = bool(
+            kwargs.get("critical_violation")
+            or proof_payload.get("critical_violation")
+        )
+        kwargs["complaint"] = bool(
+            kwargs.get("complaint") or proof_payload.get("complaint")
+        )
         return self.ledger.record_execution(**kwargs)
 
     def record_outcome(self, **kwargs: Any) -> dict[str, Any]:
@@ -117,6 +214,12 @@ class LiveCanaryCoordinator:
         outcome_type = str(kwargs.get("outcome_type") or "")
         if outcome_type not in self.policy.outcome_event_types:
             raise RuntimeError("LIVE_CANARY_OUTCOME_NOT_ALLOWED")
+        success = bool(kwargs.get("success"))
+        source_payload = self._verified_source_event(
+            decision_id=decision_id,
+            event_type=outcome_type,
+            success=success,
+        )
         observed_at_ms = int(
             kwargs.get("observed_at_ms") or time.time() * 1000
         )
@@ -124,13 +227,26 @@ class LiveCanaryCoordinator:
         deadline_ms = (
             assigned_at_ms + self.policy.outcome_window_seconds * 1000
         )
-        if not assigned_at_ms or observed_at_ms > deadline_ms:
+        if not assigned_at_ms or observed_at_ms < assigned_at_ms:
+            raise RuntimeError("LIVE_CANARY_OUTCOME_PRECEDES_ASSIGNMENT")
+        if observed_at_ms > deadline_ms:
             raise RuntimeError("LIVE_CANARY_OUTCOME_WINDOW_EXPIRED")
         kwargs["observed_at_ms"] = observed_at_ms
+        kwargs["value"] = _finite(
+            source_payload.get("value", source_payload.get("amount", 0.0))
+        )
+        kwargs["revenue"] = _finite(
+            source_payload.get(
+                "revenue",
+                source_payload.get("amount", source_payload.get("value", 0.0)),
+            )
+        )
         return self.ledger.record_outcome(**kwargs)
 
     def evaluate(self) -> GuardrailResult:
-        return LiveCanaryGuard.evaluate(self.ledger.metrics(), self.policy)
+        effective = self._effective_policy()
+        metrics = self.ledger.metrics(candidate_pct=effective.candidate_pct)
+        return LiveCanaryGuard.evaluate(metrics, effective)
 
     def evaluate_and_maybe_rollback(
         self,
@@ -139,6 +255,7 @@ class LiveCanaryCoordinator:
         correlation_id: str | None,
         tenant_id: str,
     ) -> GuardrailResult:
+        from_pct = self.live_rollout_pct()
         try:
             result = self.evaluate()
         except Exception as exc:
@@ -181,11 +298,7 @@ class LiveCanaryCoordinator:
             user_id="system",
             decision_id=str(decision_id),
             correlation_id=correlation_id,
-            payload={
-                **payload,
-                "from_pct": self.policy.candidate_pct,
-                "to_pct": 0,
-            },
+            payload={**payload, "from_pct": from_pct, "to_pct": 0},
         )
         return result
 
@@ -194,6 +307,7 @@ class LiveCanaryCoordinator:
         return {
             "experiment_id": self.policy.experiment_id,
             "candidate_policy_id": self.candidate_policy_id,
+            "rollout_pct": self.live_rollout_pct(),
             "decision": result.decision.value,
             "reasons": list(result.reasons),
             "metrics": dict(result.metrics),
