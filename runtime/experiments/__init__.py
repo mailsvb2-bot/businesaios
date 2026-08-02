@@ -33,6 +33,14 @@ _PUBLIC_ATTRS = {
         "core.experiments.explainers.experiment_result_explainer",
         "explain_experiment_result",
     ),
+    "record_live_canary_business_outcome": (
+        "runtime.experiments.hooks",
+        "record_live_canary_business_outcome",
+    ),
+    "record_live_canary_executor_result": (
+        "runtime.experiments.hooks",
+        "record_live_canary_executor_result",
+    ),
 }
 
 __getattr__, __dir__, __all__ = build_package_alias_namespace(
