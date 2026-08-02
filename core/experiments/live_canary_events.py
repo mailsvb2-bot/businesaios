@@ -23,8 +23,17 @@ LIVE_CANARY_EVENT_TYPES = frozenset(
 )
 
 
+def _register_canonical_event_types() -> None:
+    from core.events.event_types import KNOWN_EVENT_TYPES
+
+    KNOWN_EVENT_TYPES.update(LIVE_CANARY_EVENT_TYPES)
+
+
 def is_live_canary_event(event_type: str) -> bool:
     return str(event_type or "").strip() in LIVE_CANARY_EVENT_TYPES
+
+
+_register_canonical_event_types()
 
 
 __all__ = [
