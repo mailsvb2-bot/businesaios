@@ -14,6 +14,7 @@ from runtime.execution.executor_result import ExecutionResult
 from runtime.execution.executor_stages import preflight_and_verify
 from runtime.execution.governance_runtime import GovernanceExecutionBlocked
 from runtime.execution.operational_budget_runtime import OperationalBudgetBlocked
+from runtime.experiments.hooks import record_live_canary_executor_result
 from runtime.safety_controls import record_execution_outcome
 
 
@@ -90,6 +91,11 @@ def execute_with_trace(*, executor, env: DecisionEnvelope) -> ExecutionResult:
                 executor_context_cm=executor_context,
             )
             result = entrypoint_bundle.run(executor=executor, env=env)
+            record_live_canary_executor_result(
+                executor=executor,
+                env=env,
+                result=result,
+            )
             executor._record_action_audit(
                 env=env,
                 trace_id=trace_id,
