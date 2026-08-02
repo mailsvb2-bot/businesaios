@@ -5,24 +5,44 @@ from types import SimpleNamespace
 import pytest
 
 from config.live_canary_policy import LiveCanaryPolicy
+from core.ai import policy_registry as policy_registry_module
 from runtime._internal.effects_actions import policy_actions
 from runtime.boot import boot_decision_core
 
 
 class BootRegistry:
-    def __init__(self, candidate=None, rollout_pct: int = 0) -> None:
+    def __init__(
+        self,
+        candidate=None,
+        rollout_pct: int = 0,
+        governed_candidate=None,
+    ) -> None:
         self.candidate = candidate
         self.rollout_pct = rollout_pct
+        self.governed_candidate = governed_candidate
         self.mutations: list[dict] = []
 
     def rollout_config(self):
         return self.candidate, self.rollout_pct
 
+    def governed_candidate_identity(self):
+        return self.governed_candidate or self.candidate
+
     def snapshot_runtime_state(self):
-        return self.candidate, self.rollout_pct, tuple(self.mutations)
+        return (
+            self.candidate,
+            self.rollout_pct,
+            self.governed_candidate,
+            tuple(self.mutations),
+        )
 
     def restore_runtime_state(self, snapshot):
-        self.candidate, self.rollout_pct, mutations = snapshot
+        (
+            self.candidate,
+            self.rollout_pct,
+            self.governed_candidate,
+            mutations,
+        ) = snapshot
         self.mutations = list(mutations)
 
     def set_rollout(self, **kwargs):
@@ -261,3 +281,57 @@ def test_zero_percent_registration_cannot_change_governed_candidate_identity(
 
     assert registry.rollout_config() == ("attached-candidate@v2", 0)
     assert registry.mutations == []
+
+
+def test_programmatic_identity_survives_cleared_rollout_after_promotion(
+    monkeypatch,
+) -> None:
+    registry = BootRegistry(
+        candidate=None,
+        rollout_pct=0,
+        governed_candidate="promoted-candidate@v2",
+    )
+    effects = PolicyEffects(registry)
+    install_deploy_spies(monkeypatch, configured_policy(""))
+
+    with pytest.raises(
+        RuntimeError,
+        match="LIVE_CANARY_CANDIDATE_ID_MISMATCH",
+    ):
+        effects.deploy_policy(
+            decision_id="post-promotion-drift",
+            correlation_id="post-promotion-drift-correlation",
+            tenant_id="tenant-a",
+            candidate_policy_id="different-candidate@v3",
+            rollout_pct=1,
+        )
+
+    assert registry.governed_candidate_identity() == "promoted-candidate@v2"
+    assert registry.mutations == []
+
+
+def test_policy_registry_retains_governed_identity_after_full_promotion(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        policy_registry_module,
+        "assert_called_from_bootstrap",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        policy_registry_module,
+        "assert_called_from_runtime_executor",
+        lambda: None,
+    )
+    registry = policy_registry_module.PolicyRegistry()
+    registry.register(SimpleNamespace(id="active@v1"))
+    registry.register(SimpleNamespace(id="candidate@v2"))
+
+    registry.set_rollout(
+        candidate_policy_id="candidate@v2",
+        rollout_pct=100,
+    )
+
+    assert registry.rollout_config() == (None, 0)
+    assert registry.active_ref().policy_id == "candidate@v2"
+    assert registry.governed_candidate_identity() == "candidate@v2"
