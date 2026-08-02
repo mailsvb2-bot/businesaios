@@ -21,6 +21,7 @@ class LiveCanaryPolicy:
 
     enabled: bool = False
     experiment_id: str = ""
+    candidate_policy_id: str = ""
     assignment_secret: str = ""
     candidate_pct: float = 0.0
     max_candidate_pct: float = 1.0
@@ -60,6 +61,8 @@ class LiveCanaryPolicy:
             return ()
         if not self.experiment_id.strip():
             issues.append("experiment_id_required")
+        if not self.candidate_policy_id.strip():
+            issues.append("candidate_policy_id_required")
         if len(self.assignment_secret.encode("utf-8")) < 32:
             issues.append("assignment_secret_must_be_at_least_32_bytes")
         if not 0.0 < float(self.candidate_pct) <= 100.0:
@@ -114,6 +117,9 @@ class LiveCanaryPolicy:
         return cls(
             enabled=_bool("LIVE_CANARY_ENABLED", False),
             experiment_id=os.getenv("LIVE_CANARY_EXPERIMENT_ID", "").strip(),
+            candidate_policy_id=os.getenv(
+                "LIVE_CANARY_CANDIDATE_POLICY_ID", ""
+            ).strip(),
             assignment_secret=os.getenv("LIVE_CANARY_ASSIGNMENT_SECRET", ""),
             candidate_pct=candidate_pct,
             max_candidate_pct=float(
