@@ -12,9 +12,15 @@ LIVE_CANARY_EXPERIMENT_ID=metro-followup-2026-08
 LIVE_CANARY_ASSIGNMENT_SECRET=<at least 32 random bytes>
 LIVE_CANARY_CANDIDATE_PCT=1
 LIVE_CANARY_TENANTS=<one tenant id>
-LIVE_CANARY_ALLOWED_ACTIONS=send_preapproved_message@v1
+LIVE_CANARY_ALLOWED_ACTIONS=send_message@v1
 LIVE_CANARY_OUTCOME_EVENTS=booking_confirmed@v1,payment_succeeded
+LIVE_CANARY_OUTCOME_WINDOW_SECONDS=259200
+LIVE_CANARY_MIN_DURATION_SECONDS=259200
 ```
+
+The initial candidate policy must itself be restricted to approved message
+content. Free-form generation, payment capture, refunds, price changes,
+deletions and permission changes are not suitable for the first canary.
 
 Assignment is HMAC-based over experiment, tenant and subject. The raw subject
 identifier is never written to experiment evidence. Every assignment, actual
@@ -31,17 +37,15 @@ execution proof and actual business outcome is linked by `decision_id`.
 5. Expand beyond 1% only after `LiveCanaryGuard` returns `promote` from actual,
    non-counterfactual business outcomes.
 
-Payments, refunds, price changes, deletion and permission changes must not be
-placed in the first canary allowlist.
-
 ## Integration contract
 
-At the decision boundary call `LiveCanaryCoordinator.assign`. Execute either
-the control or candidate policy according to the returned arm. Before a
-candidate action reaches an executor, call `assert_candidate_action_allowed`.
-After execution, call `record_execution` with the provider proof event and
-external evidence reference. When a booking, payment or other governed outcome
-arrives, call `record_outcome` with the same `decision_id`.
+Canonical boot attaches `LiveCanaryCoordinator` when the feature is enabled.
+The decision boundary records the stable assignment and verifies that the
+selected policy matches the evidence bucket. Before a candidate action reaches
+an executor, call `assert_candidate_action_allowed`. After execution, call
+`record_execution` with the provider proof event and external evidence
+reference. When a booking, payment or other governed outcome arrives, call
+`record_outcome` with the same `decision_id`.
 
 Promotion uses sample-ratio validation, actual conversion, a confidence-bound
 non-inferiority check, cost per outcome, complaint rate, error rate and critical
