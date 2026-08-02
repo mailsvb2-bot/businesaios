@@ -90,6 +90,13 @@ class LiveCanaryLedger:
             and payload.get("candidate_policy_id") == self.candidate_policy_id
         )
 
+    def _experiment_rows(self) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+        return [
+            (_data(event), _payload(event))
+            for event in self._events()
+            if self._belongs(event)
+        ]
+
     def assignment_for_decision(self, decision_id: str) -> dict[str, Any] | None:
         matching = [
             event
@@ -289,16 +296,11 @@ class LiveCanaryLedger:
             },
         )
 
-    def metrics(self, *, candidate_pct: float | None = None) -> dict[str, float | int]:
-        rows = [
-            (_data(event), _payload(event))
-            for event in self._events()
-            if self._belongs(event)
-        ]
-        now_ms = int(time.time() * 1000)
-        maturity_cutoff_ms = now_ms - self.outcome_window_seconds * 1000
-        rolling_cutoff_ms = now_ms - 24 * 60 * 60 * 1000
-
+    def _assignments(
+        self,
+        rows: list[tuple[dict[str, Any], dict[str, Any]]],
+        candidate_pct: float | None,
+    ) -> dict[str, dict[str, Any]]:
         assignments: dict[str, dict[str, Any]] = {}
         for data, payload in rows:
             if str(data.get("event_type") or "") != EXPERIMENT_ASSIGNMENT:
@@ -312,7 +314,14 @@ class LiveCanaryLedger:
             if existing is not None and existing != payload:
                 raise RuntimeError("LIVE_CANARY_DUPLICATE_ASSIGNMENT_CONFLICT")
             assignments[decision_id] = payload
+        return assignments
 
+    def metrics(self, *, candidate_pct: float | None = None) -> dict[str, float | int]:
+        rows = self._experiment_rows()
+        assignments = self._assignments(rows, candidate_pct)
+        now_ms = int(time.time() * 1000)
+        maturity_cutoff_ms = now_ms - self.outcome_window_seconds * 1000
+        rolling_cutoff_ms = now_ms - 24 * 60 * 60 * 1000
         metrics: dict[str, float | int] = {
             "control_assignments": 0,
             "candidate_assignments": 0,
@@ -326,6 +335,8 @@ class LiveCanaryLedger:
             "candidate_complaints": 0,
             "control_cost": 0.0,
             "candidate_cost": 0.0,
+            "mature_control_cost": 0.0,
+            "mature_candidate_cost": 0.0,
             "control_outcomes": 0,
             "candidate_outcomes": 0,
             "control_successes": 0,
@@ -342,10 +353,13 @@ class LiveCanaryLedger:
             "first_assignment_ms": 0,
             "last_event_ms": 0,
             "candidate_actions_24h": 0,
+            "candidate_expected_cost_24h": 0.0,
+            "candidate_actual_cost_24h": 0.0,
             "candidate_cost_24h": 0.0,
             "candidate_max_actions_per_subject_24h": 0,
         }
         mature_decisions: set[str] = set()
+        subject_assignments: Counter[str] = Counter()
         for decision_id, assignment in assignments.items():
             arm = str(assignment.get("arm") or "")
             prefix = "candidate" if arm == ExperimentArm.CANDIDATE.value else "control"
@@ -361,10 +375,21 @@ class LiveCanaryLedger:
             first = int(metrics["first_assignment_ms"])
             if assigned_at and (not first or assigned_at < first):
                 metrics["first_assignment_ms"] = assigned_at
+            metrics["last_event_ms"] = max(
+                int(metrics["last_event_ms"]),
+                assigned_at,
+            )
+            if prefix == "candidate" and assigned_at >= rolling_cutoff_ms:
+                metrics["candidate_actions_24h"] = int(
+                    metrics["candidate_actions_24h"]
+                ) + 1
+                metrics["candidate_expected_cost_24h"] = float(
+                    metrics["candidate_expected_cost_24h"]
+                ) + _finite(assignment.get("expected_cost"))
+                subject_assignments[str(assignment.get("subject_hash") or "")] += 1
 
         execution_keys: set[tuple[str, str]] = set()
         outcome_keys: set[tuple[str, str]] = set()
-        subject_actions: Counter[str] = Counter()
         for data, payload in rows:
             decision_id = str(data.get("decision_id") or "")
             assignment = assignments.get(decision_id)
@@ -398,6 +423,10 @@ class LiveCanaryLedger:
                 metrics[f"{prefix}_cost"] = float(
                     metrics[f"{prefix}_cost"]
                 ) + cost
+                if decision_id in mature_decisions:
+                    metrics[f"mature_{prefix}_cost"] = float(
+                        metrics[f"mature_{prefix}_cost"]
+                    ) + cost
                 if payload.get("ok") is not True:
                     metrics[f"{prefix}_errors"] = int(
                         metrics[f"{prefix}_errors"]
@@ -411,13 +440,9 @@ class LiveCanaryLedger:
                         metrics["critical_violations"]
                     ) + 1
                 if prefix == "candidate" and timestamp >= rolling_cutoff_ms:
-                    metrics["candidate_actions_24h"] = int(
-                        metrics["candidate_actions_24h"]
-                    ) + 1
-                    metrics["candidate_cost_24h"] = float(
-                        metrics["candidate_cost_24h"]
+                    metrics["candidate_actual_cost_24h"] = float(
+                        metrics["candidate_actual_cost_24h"]
                     ) + cost
-                    subject_actions[str(assignment.get("subject_hash") or "")] += 1
             elif kind == BUSINESS_OUTCOME_OBSERVED:
                 outcome_type = str(payload.get("outcome_type") or "")
                 key = (decision_id, outcome_type)
@@ -449,8 +474,12 @@ class LiveCanaryLedger:
                         metrics[f"mature_{prefix}_revenue"]
                     ) + revenue
 
+        metrics["candidate_cost_24h"] = max(
+            float(metrics["candidate_expected_cost_24h"]),
+            float(metrics["candidate_actual_cost_24h"]),
+        )
         metrics["candidate_max_actions_per_subject_24h"] = max(
-            subject_actions.values(),
+            subject_assignments.values(),
             default=0,
         )
         first = int(metrics["first_assignment_ms"])
