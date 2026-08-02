@@ -31,6 +31,26 @@ def _policy_evidence(
 
 
 class PolicyEffectsMixin:
+    def _assert_live_canary_candidate_identity(
+        self,
+        candidate_policy_id: str,
+    ) -> None:
+        policy = DEFAULT_LIVE_CANARY_POLICY
+        if not policy.enabled:
+            return
+        requested = str(candidate_policy_id or "").strip()
+        configured = str(policy.candidate_policy_id or "").strip()
+        rollout_config = getattr(self.policy_registry, "rollout_config", None)
+        if not callable(rollout_config):
+            raise RuntimeError("LIVE_CANARY_POLICY_REGISTRY_REQUIRED")
+        runtime_candidate, _runtime_pct = rollout_config()
+        runtime = str(runtime_candidate or "").strip()
+        if configured and runtime and configured != runtime:
+            raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
+        effective = configured or runtime
+        if effective and requested != effective:
+            raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
+
     def _require_live_canary_evidence(
         self,
         *,
@@ -40,19 +60,13 @@ class PolicyEffectsMixin:
         rollout_pct: int,
         experiment_id: str | None,
     ) -> str:
+        self._assert_live_canary_candidate_identity(candidate_policy_id)
         target_pct = int(rollout_pct)
         if target_pct <= 0:
             return ""
 
         policy = DEFAULT_LIVE_CANARY_POLICY
         requested_candidate = str(candidate_policy_id or "").strip()
-        configured_candidate = str(policy.candidate_policy_id or "").strip()
-        if (
-            policy.enabled
-            and configured_candidate
-            and requested_candidate != configured_candidate
-        ):
-            raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
         configured_experiment = policy.experiment_id if policy.enabled else ""
         experiment = str(experiment_id or configured_experiment).strip()
         if policy.enabled and not experiment:
@@ -114,6 +128,7 @@ class PolicyEffectsMixin:
         experiment_id: str | None = None,
     ) -> dict[str, Any]:
         assert_called_from_executor()
+        self._assert_live_canary_candidate_identity(candidate_policy_id)
         tenant = assert_event_log_tenant(
             self.event_log,
             tenant_id=str(tenant_id),
