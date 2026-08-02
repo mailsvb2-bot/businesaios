@@ -23,6 +23,7 @@ class LiveCanaryPolicy:
     experiment_id: str = ""
     assignment_secret: str = ""
     candidate_pct: float = 0.0
+    max_candidate_pct: float = 1.0
     initial_canary_pct: int = 1
     allowed_tenant_ids: tuple[str, ...] = ()
     allowed_purposes: tuple[str, ...] = ("live_canary",)
@@ -62,6 +63,10 @@ class LiveCanaryPolicy:
             issues.append("assignment_secret_must_be_at_least_32_bytes")
         if not 0.0 < float(self.candidate_pct) <= 100.0:
             issues.append("candidate_pct_out_of_range")
+        if not 0.0 < float(self.max_candidate_pct) <= 100.0:
+            issues.append("max_candidate_pct_out_of_range")
+        if float(self.candidate_pct) > float(self.max_candidate_pct):
+            issues.append("candidate_pct_exceeds_maximum")
         if not self.allowed_tenant_ids:
             issues.append("allowed_tenant_ids_required")
         if not self.allowed_purposes:
@@ -102,11 +107,15 @@ class LiveCanaryPolicy:
         outcome_window = int(
             os.getenv("LIVE_CANARY_OUTCOME_WINDOW_SECONDS", str(72 * 60 * 60))
         )
+        candidate_pct = float(os.getenv("LIVE_CANARY_CANDIDATE_PCT", "0"))
         return cls(
             enabled=_bool("LIVE_CANARY_ENABLED", False),
             experiment_id=os.getenv("LIVE_CANARY_EXPERIMENT_ID", "").strip(),
             assignment_secret=os.getenv("LIVE_CANARY_ASSIGNMENT_SECRET", ""),
-            candidate_pct=float(os.getenv("LIVE_CANARY_CANDIDATE_PCT", "0")),
+            candidate_pct=candidate_pct,
+            max_candidate_pct=float(
+                os.getenv("LIVE_CANARY_MAX_CANDIDATE_PCT", str(candidate_pct or 1.0))
+            ),
             initial_canary_pct=int(os.getenv("LIVE_CANARY_INITIAL_PCT", "1")),
             allowed_tenant_ids=_csv("LIVE_CANARY_TENANTS"),
             allowed_purposes=_csv("LIVE_CANARY_PURPOSES") or ("live_canary",),
