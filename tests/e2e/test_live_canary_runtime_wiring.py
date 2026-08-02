@@ -59,17 +59,25 @@ class BrokenEvents(MemoryEvents):
 
 
 class Registry:
-    def __init__(self) -> None:
+    def __init__(self, *, rollout_pct: int = 0) -> None:
         self.calls: list[dict] = []
+        self.candidate_policy_id = "candidate@v2"
+        self.rollout_pct = rollout_pct
 
     def snapshot_runtime_state(self):
-        return tuple(self.calls)
+        return (tuple(self.calls), self.rollout_pct)
 
     def restore_runtime_state(self, snapshot):
-        self.calls = list(snapshot)
+        calls, self.rollout_pct = snapshot
+        self.calls = list(calls)
 
     def set_rollout(self, **kwargs):
         self.calls.append(dict(kwargs))
+        self.candidate_policy_id = str(kwargs["candidate_policy_id"])
+        self.rollout_pct = int(kwargs["rollout_pct"])
+
+    def rollout_config(self):
+        return self.candidate_policy_id, self.rollout_pct
 
 
 def live_policy(*, candidate_pct: float = 1.0) -> LiveCanaryPolicy:
@@ -78,19 +86,21 @@ def live_policy(*, candidate_pct: float = 1.0) -> LiveCanaryPolicy:
         experiment_id="metro-followup-2026-08",
         assignment_secret="x" * 32,
         candidate_pct=candidate_pct,
+        max_candidate_pct=100.0,
         initial_canary_pct=1,
         allowed_tenant_ids=("tenant-a",),
-        allowed_actions=("send_preapproved_message@v1",),
+        allowed_actions=("send_message@v1",),
         outcome_event_types=("booking_confirmed@v1",),
         min_assignments=1000,
         min_candidate_assignments=10,
         min_outcomes_per_arm=10,
         min_duration_seconds=86_400,
+        outcome_window_seconds=86_400,
     )
 
 
 def test_unavailable_evidence_ledger_forces_rollback() -> None:
-    registry = Registry()
+    registry = Registry(rollout_pct=1)
     coordinator = LiveCanaryCoordinator(
         event_log=BrokenEvents(),
         policy_registry=registry,
@@ -116,18 +126,38 @@ def test_secret_bucket_is_stable_and_tenant_allowlisted() -> None:
         SimpleNamespace(canary_pct=0.5),
         live_policy(candidate_pct=50.0),
     )
-    first = resolver.resolve_policy("customer-1", tenant_id="tenant-a")
-    second = resolver.resolve_policy("customer-1", tenant_id="tenant-a")
-    foreign = resolver.resolve_policy("customer-1", tenant_id="tenant-b")
+    kwargs = {"purpose": "live_canary", "eligible": True}
+    first = resolver.resolve_policy(
+        "customer-1",
+        tenant_id="tenant-a",
+        **kwargs,
+    )
+    second = resolver.resolve_policy(
+        "customer-1",
+        tenant_id="tenant-a",
+        **kwargs,
+    )
+    foreign = resolver.resolve_policy(
+        "customer-1",
+        tenant_id="tenant-b",
+        **kwargs,
+    )
+    ineligible = resolver.resolve_policy(
+        "customer-1",
+        tenant_id="tenant-a",
+        purpose="live_canary",
+        eligible=False,
+    )
     assert first.policy_id == second.policy_id
     assert foreign.policy_id == active.policy_id
+    assert ineligible.policy_id == active.policy_id
 
 
 def test_decision_runtime_records_selected_arm_and_blocks_mismatch() -> None:
     events = MemoryEvents()
     coordinator = LiveCanaryCoordinator(
         event_log=events,
-        policy_registry=Registry(),
+        policy_registry=Registry(rollout_pct=100),
         candidate_policy_id="candidate@v2",
         policy=live_policy(candidate_pct=100.0),
     )
@@ -139,13 +169,20 @@ def test_decision_runtime_records_selected_arm_and_blocks_mismatch() -> None:
             )
         ),
     )
+    state = {
+        "meta": {
+            "purpose": "live_canary",
+            "live_canary_eligible": True,
+        }
+    }
     built = SimpleNamespace(
         decision=SimpleNamespace(decision_id="d-1", correlation_id="c-1")
     )
     _record_live_canary_assignment(
         core=core,
+        state=state,
         policy=SimpleNamespace(id="candidate@v2"),
-        out=SimpleNamespace(action="send_preapproved_message@v1"),
+        out=SimpleNamespace(action="send_message@v1"),
         built=built,
         tenant_id="tenant-a",
         subject_id="customer-1",
@@ -156,8 +193,9 @@ def test_decision_runtime_records_selected_arm_and_blocks_mismatch() -> None:
     with pytest.raises(RuntimeError, match="LIVE_CANARY_ASSIGNMENT_MISMATCH"):
         _record_live_canary_assignment(
             core=core,
+            state=state,
             policy=SimpleNamespace(id="active@v1"),
-            out=SimpleNamespace(action="send_preapproved_message@v1"),
+            out=SimpleNamespace(action="send_message@v1"),
             built=SimpleNamespace(
                 decision=SimpleNamespace(
                     decision_id="d-2",
@@ -193,7 +231,7 @@ def test_policy_effect_allows_one_percent_but_blocks_expansion_without_outcomes(
     monkeypatch.setattr(
         policy_actions,
         "DEFAULT_LIVE_CANARY_POLICY",
-        live_policy(candidate_pct=5.0),
+        live_policy(candidate_pct=1.0),
     )
     effects = PolicyEffects()
     effects.deploy_policy(
