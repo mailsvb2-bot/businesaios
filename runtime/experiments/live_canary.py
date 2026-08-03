@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import time
+from contextlib import nullcontext
 from dataclasses import asdict, replace
 from collections.abc import Mapping
 from threading import Lock
@@ -25,6 +26,9 @@ from core.experiments.guardrails import (
     LiveCanaryGuard,
 )
 from core.experiments.ledger import LiveCanaryLedger
+from core.experiments.repositories.live_canary_assignment_safety import (
+    LiveCanaryAssignmentSafety,
+)
 from core.experiments.live_canary_events import (
     CANARY_AUTO_ROLLED_BACK,
     CANARY_GUARDRAIL_BREACHED,
@@ -89,6 +93,11 @@ class LiveCanaryCoordinator:
             experiment_id=policy.experiment_id,
             candidate_policy_id=self.candidate_policy_id,
             outcome_window_seconds=policy.outcome_window_seconds,
+        )
+        self._assignment_safety = LiveCanaryAssignmentSafety(
+            event_log,
+            experiment_id=policy.experiment_id,
+            candidate_policy_id=self.candidate_policy_id,
         )
         self._assignment_lock = Lock()
         self._rollback_required = False
@@ -172,6 +181,37 @@ class LiveCanaryCoordinator:
         except Exception:
             return
 
+    def _assignment_window(self):
+        window = getattr(
+            self.policy_registry,
+            "live_canary_assignment_window",
+            None,
+        )
+        return window() if callable(window) else nullcontext()
+
+    def _candidate_is_active(self) -> bool:
+        active_ref = getattr(self.policy_registry, "active_ref", None)
+        if not callable(active_ref):
+            return False
+        try:
+            active = active_ref()
+        except Exception:
+            return False
+        return (
+            str(getattr(active, "policy_id", "") or "").strip()
+            == self.candidate_policy_id
+        )
+
+    def _assert_assignment_still_live(
+        self,
+        assignment: ExperimentAssignment,
+    ) -> None:
+        if assignment.arm is not ExperimentArm.CANDIDATE:
+            return
+        if self.live_rollout_pct() > 0 or self._candidate_is_active():
+            return
+        raise RuntimeError("LIVE_CANARY_IN_FLIGHT_CANDIDATE_REVOKED")
+
     def assign(
         self,
         *,
@@ -185,42 +225,62 @@ class LiveCanaryCoordinator:
         eligible: bool,
         expected_cost: float = 0.0,
     ) -> ExperimentAssignment:
-        with self._assignment_lock:
-            effective = self._effective_policy()
-            assignment = StableExperimentAssigner(effective).assign(
-                tenant_id=tenant_id,
-                subject_id=subject_id,
-                candidate_policy_id=self.candidate_policy_id,
-                action=action,
-                purpose=purpose,
-                eligible=eligible,
-            )
-            if (
-                assignment.arm is ExperimentArm.CANDIDATE
-                and self._rollback_required
-            ):
-                raise RuntimeError("LIVE_CANARY_ROLLBACK_PENDING")
-            self.ledger.record_assignment(
-                assignment,
-                decision_id=decision_id,
-                correlation_id=correlation_id,
-                production_policy_id=production_policy_id,
-                action=action,
-                candidate_pct=effective.candidate_pct,
-                expected_cost=expected_cost,
-            )
-            if assignment.eligible:
-                guard = self._guard_result()
-                if guard.decision is CanaryDecision.ROLLBACK:
-                    self._open_local_circuit(
-                        guard,
-                        decision_id=f"assignment-guard:{decision_id}",
-                        correlation_id=correlation_id,
-                        tenant_id=assignment.tenant_id,
+        with self._assignment_window():
+            with self._assignment_lock:
+                effective = self._effective_policy()
+                assignment = StableExperimentAssigner(effective).assign(
+                    tenant_id=tenant_id,
+                    subject_id=subject_id,
+                    candidate_policy_id=self.candidate_policy_id,
+                    action=action,
+                    purpose=purpose,
+                    eligible=eligible,
+                )
+                if (
+                    assignment.arm is ExperimentArm.CANDIDATE
+                    and self._rollback_required
+                ):
+                    raise RuntimeError("LIVE_CANARY_ROLLBACK_PENDING")
+                self._assert_assignment_still_live(assignment)
+                self._assignment_safety.ensure_loaded()
+                assigned_at_ms = int(time.time() * 1000)
+                self.ledger.record_assignment(
+                    assignment,
+                    decision_id=decision_id,
+                    correlation_id=correlation_id,
+                    production_policy_id=production_policy_id,
+                    action=action,
+                    candidate_pct=effective.candidate_pct,
+                    expected_cost=expected_cost,
+                    assigned_at_ms=assigned_at_ms,
+                )
+                self._assignment_safety.observe(
+                    assignment,
+                    decision_id=decision_id,
+                    candidate_pct=effective.candidate_pct,
+                    expected_cost=expected_cost,
+                    assigned_at_ms=assigned_at_ms,
+                )
+                if assignment.eligible:
+                    guard = LiveCanaryGuard.evaluate(
+                        self._assignment_safety.metrics(
+                            candidate_pct=effective.candidate_pct,
+                        ),
+                        effective,
                     )
-                    if assignment.arm is ExperimentArm.CANDIDATE:
-                        raise RuntimeError("LIVE_CANARY_ASSIGNMENT_GUARD_BLOCKED")
-            return assignment
+                    if guard.decision is CanaryDecision.ROLLBACK:
+                        self._open_local_circuit(
+                            guard,
+                            decision_id=f"assignment-guard:{decision_id}",
+                            correlation_id=correlation_id,
+                            tenant_id=assignment.tenant_id,
+                        )
+                        if assignment.arm is ExperimentArm.CANDIDATE:
+                            raise RuntimeError(
+                                "LIVE_CANARY_ASSIGNMENT_GUARD_BLOCKED"
+                            )
+                self._assert_assignment_still_live(assignment)
+                return assignment
 
     def assert_candidate_action_allowed(
         self,
@@ -311,7 +371,16 @@ class LiveCanaryCoordinator:
         kwargs["complaint"] = bool(
             kwargs.get("complaint") or proof_payload.get("complaint")
         )
-        return self.ledger.record_execution(**kwargs)
+        recorded = self.ledger.record_execution(**kwargs)
+        guard = self._guard_result()
+        if guard.decision is CanaryDecision.ROLLBACK:
+            self._open_local_circuit(
+                guard,
+                decision_id=f"execution-guard:{decision_id}",
+                correlation_id=kwargs.get("correlation_id"),
+                tenant_id=str(assignment.get("tenant_id") or ""),
+            )
+        return recorded
 
     def record_outcome(self, **kwargs: Any) -> dict[str, Any]:
         decision_id = str(kwargs.get("decision_id") or "")
