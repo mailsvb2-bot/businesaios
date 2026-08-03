@@ -12,11 +12,13 @@ from core.events.log_queries import (
     iter_events as iter_event_window,
 )
 from core.experiments.assignment import ExperimentArm, ExperimentAssignment
+from core.experiments.builders.live_canary_cost_semantics import (
+    validate_reservation_cost,
+)
 from core.experiments.live_canary_events import (
     CANDIDATE_ACTION_EXECUTED,
     EXPERIMENT_ASSIGNMENT,
 )
-from runtime.experiments.cost_semantics import validate_reservation_cost
 
 
 def _data(event: Any) -> dict[str, Any]:
