@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager, nullcontext
 from typing import Any
 
 from application.decision_runtime.emission import (
@@ -232,6 +233,46 @@ def _snapshot_value(snapshot: Any, name: str, default: Any = None) -> Any:
     return getattr(snapshot, name, default) if snapshot is not None else default
 
 
+@contextmanager
+def _validated_routing_window(
+    *,
+    core: Any,
+    coordinator: Any,
+    routing_snapshot: Any,
+):
+    registry = getattr(getattr(core, "_selector", None), "_registry", None)
+    window_factory = getattr(registry, "live_canary_assignment_window", None)
+    window = window_factory() if callable(window_factory) else nullcontext()
+    with window:
+        if routing_snapshot is not None:
+            candidate_getter = getattr(registry, "rollout_config", None)
+            generation_getter = getattr(registry, "rollout_generation", None)
+            if not callable(candidate_getter) or not callable(generation_getter):
+                raise RuntimeError("LIVE_CANARY_ROLLOUT_SNAPSHOT_UNAVAILABLE")
+            candidate_policy_id, rollout_pct = candidate_getter()
+            expected_candidate = str(
+                _snapshot_value(
+                    routing_snapshot,
+                    "candidate_policy_id",
+                    "",
+                )
+                or ""
+            )
+            if expected_candidate != coordinator.candidate_policy_id:
+                raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
+            if str(candidate_policy_id or "") != expected_candidate:
+                raise RuntimeError("LIVE_CANARY_ROLLOUT_CHANGED_DURING_DECISION")
+            if int(rollout_pct or 0) != int(
+                _snapshot_value(routing_snapshot, "rollout_pct", 0) or 0
+            ):
+                raise RuntimeError("LIVE_CANARY_ROLLOUT_CHANGED_DURING_DECISION")
+            if int(generation_getter()) != int(
+                _snapshot_value(routing_snapshot, "rollout_generation", -1)
+            ):
+                raise RuntimeError("LIVE_CANARY_ROLLOUT_CHANGED_DURING_DECISION")
+        yield
+
+
 def _record_live_canary_assignment(
     *,
     core: Any,
@@ -283,32 +324,25 @@ def _record_live_canary_assignment(
 
     action = str(getattr(out, "action", ""))
     purpose = str(_state_field(state, "purpose") or "").strip()
-    assignment = coordinator.assign(
-        tenant_id=tenant_id,
-        subject_id=subject_id,
-        decision_id=str(built.decision.decision_id),
-        correlation_id=str(built.decision.correlation_id),
-        production_policy_id=control_policy_id,
-        action=action,
-        purpose=purpose,
-        eligible=_state_flag(
-            state,
-            coordinator.policy.eligibility_state_key,
-        ),
-        expected_cost=expected_cost,
-        expected_candidate_policy_id=_snapshot_value(
-            routing_snapshot,
-            "candidate_policy_id",
-        ),
-        expected_rollout_pct=_snapshot_value(
-            routing_snapshot,
-            "rollout_pct",
-        ),
-        expected_rollout_generation=_snapshot_value(
-            routing_snapshot,
-            "rollout_generation",
-        ),
-    )
+    with _validated_routing_window(
+        core=core,
+        coordinator=coordinator,
+        routing_snapshot=routing_snapshot,
+    ):
+        assignment = coordinator.assign(
+            tenant_id=tenant_id,
+            subject_id=subject_id,
+            decision_id=str(built.decision.decision_id),
+            correlation_id=str(built.decision.correlation_id),
+            production_policy_id=control_policy_id,
+            action=action,
+            purpose=purpose,
+            eligible=_state_flag(
+                state,
+                coordinator.policy.eligibility_state_key,
+            ),
+            expected_cost=expected_cost,
+        )
     if not assignment.eligible:
         if selected_candidate:
             raise RuntimeError("LIVE_CANARY_INELIGIBLE_CANDIDATE_SELECTED")
