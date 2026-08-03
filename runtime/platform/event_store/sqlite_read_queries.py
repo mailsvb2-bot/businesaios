@@ -14,7 +14,8 @@ from typing import Any
 from .sqlite_helpers import _exclusive_end_ms, _row_to_event
 
 EVENT_COLUMNS = (
-    "event_id,tenant_id,user_id,source,event_type,timestamp_ms,decision_id,correlation_id,payload_json"
+    "rowid AS append_seq,event_id,tenant_id,user_id,source,event_type,"
+    "timestamp_ms,decision_id,correlation_id,payload_json"
 )
 
 
@@ -49,14 +50,18 @@ def _iter_rows(
     tenant_id: str,
     start_ms: int = 0,
     end_ms: int | None = None,
+    after_append_seq: int | None = None,
     event_type: str | None = None,
     event_types: Sequence[str] | None = None,
     user_id: str | None = None,
-    order_by: str = "timestamp_ms ASC, rowid ASC",
+    order_by: str | None = None,
     limit: int | None = None,
 ) -> Sequence[sqlite3.Row | tuple]:
     sql = [f"SELECT {EVENT_COLUMNS} FROM events WHERE tenant_id=? AND timestamp_ms>=? AND timestamp_ms<?"]
     params: list[object] = [str(tenant_id), int(start_ms), _exclusive_end_ms(end_ms)]
+    if after_append_seq is not None:
+        sql.append("AND rowid>?")
+        params.append(max(0, int(after_append_seq)))
     types = _normalized_event_types(event_type=event_type, event_types=event_types)
     if len(types) == 1:
         sql.append("AND event_type=?")
@@ -68,7 +73,10 @@ def _iter_rows(
     if user_id is not None:
         sql.append("AND user_id=?")
         params.append(str(user_id))
-    sql.append(f"ORDER BY {order_by}")
+    ordering = order_by or (
+        "rowid ASC" if after_append_seq is not None else "timestamp_ms ASC, rowid ASC"
+    )
+    sql.append(f"ORDER BY {ordering}")
     if limit is not None:
         sql.append("LIMIT ?")
         params.append(max(1, int(limit)))
@@ -82,6 +90,7 @@ def iter_events(
     tenant_id: str,
     start_ms: int = 0,
     end_ms: int | None = None,
+    after_append_seq: int | None = None,
     event_type: str | None = None,
     event_types: Sequence[str] | None = None,
     user_id: str | None = None,
@@ -92,6 +101,7 @@ def iter_events(
         tenant_id=tenant_id,
         start_ms=start_ms,
         end_ms=end_ms,
+        after_append_seq=after_append_seq,
         event_type=event_type,
         event_types=event_types,
         user_id=user_id,
