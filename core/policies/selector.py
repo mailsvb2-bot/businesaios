@@ -226,6 +226,16 @@ class PolicySelector:
                 )
                 return selected
 
+            if live_policy.enabled:
+                _LIVE_CANARY_ROUTING_SNAPSHOT.set(
+                    LiveCanaryRoutingSnapshot(
+                        candidate_policy_id=str(cand or ""),
+                        rollout_pct=pct_i,
+                        rollout_generation=generation,
+                        active_policy_id=active_policy_id,
+                        selected_policy_id=active_policy_id,
+                    )
+                )
             return active
 
     def resolve_shadow_policy(self, state, *, production_policy_id: str):
