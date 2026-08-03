@@ -12,6 +12,7 @@ from core.experiments.events.live_canary_events import (
     EXPERIMENT_ASSIGNMENT,
     EXPERIMENT_CREATED,
     LIVE_CANARY_EVENT_TYPES,
+    LIVE_CANARY_EXECUTION_FAILED_SOURCE,
     is_live_canary_event,
 )
 
@@ -28,6 +29,7 @@ __all__ = [
     "ExperimentEvaluated",
     "ExperimentRegistered",
     "LIVE_CANARY_EVENT_TYPES",
+    "LIVE_CANARY_EXECUTION_FAILED_SOURCE",
     "RolloutBlocked",
     "is_live_canary_event",
 ]
