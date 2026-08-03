@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import replace
 from typing import Any
 
@@ -32,6 +33,16 @@ def _policy_evidence(
         "confidence": 1.0,
         "payload": dict(payload),
     }
+
+
+def _rollout_generation(registry: Any) -> int | None:
+    getter = getattr(registry, "rollout_generation", None)
+    return int(getter()) if callable(getter) else None
+
+
+def _rollout_mutation_window(registry: Any):
+    window = getattr(registry, "live_canary_assignment_window", None)
+    return window() if callable(window) else nullcontext()
 
 
 class PolicyEffectsMixin:
@@ -162,6 +173,7 @@ class PolicyEffectsMixin:
         experiment_id: str | None = None,
     ) -> dict[str, Any]:
         assert_called_from_executor()
+        admitted_generation = _rollout_generation(self.policy_registry)
         self._assert_live_canary_candidate_identity(candidate_policy_id)
         self._assert_live_canary_candidate_not_active(
             candidate_policy_id,
@@ -192,23 +204,30 @@ class PolicyEffectsMixin:
             )
             if resolved_experiment:
                 payload["experiment_id"] = resolved_experiment
-        snapshot = self.policy_registry.snapshot_runtime_state()
-        try:
-            self.policy_registry.set_rollout(
-                candidate_policy_id=str(candidate_policy_id),
-                rollout_pct=int(rollout_pct),
-            )
-            self.event_log.emit(
-                event_type="policy_deployed",
-                source="policy_registry",
-                user_id="system",
-                decision_id=str(decision_id),
-                correlation_id=str(correlation_id),
-                payload=payload,
-            )
-        except Exception:
-            self.policy_registry.restore_runtime_state(snapshot)
-            raise
+        with _rollout_mutation_window(self.policy_registry):
+            current_generation = _rollout_generation(self.policy_registry)
+            if (
+                admitted_generation is not None
+                and current_generation != admitted_generation
+            ):
+                raise RuntimeError("LIVE_CANARY_ROLLOUT_GENERATION_CHANGED")
+            snapshot = self.policy_registry.snapshot_runtime_state()
+            try:
+                self.policy_registry.set_rollout(
+                    candidate_policy_id=str(candidate_policy_id),
+                    rollout_pct=int(rollout_pct),
+                )
+                self.event_log.emit(
+                    event_type="policy_deployed",
+                    source="policy_registry",
+                    user_id="system",
+                    decision_id=str(decision_id),
+                    correlation_id=str(correlation_id),
+                    payload=payload,
+                )
+            except Exception:
+                self.policy_registry.restore_runtime_state(snapshot)
+                raise
         return {
             "ok": True,
             "status": "verified",
@@ -238,20 +257,21 @@ class PolicyEffectsMixin:
             operation="rollback_policy",
         )
         payload = {"tenant_id": tenant, "reason": str(reason)}
-        snapshot = self.policy_registry.snapshot_runtime_state()
-        try:
-            self.policy_registry.rollback()
-            self.event_log.emit(
-                event_type="policy_rolled_back",
-                source="policy_registry",
-                user_id="system",
-                decision_id=str(decision_id),
-                correlation_id=str(correlation_id),
-                payload=payload,
-            )
-        except Exception:
-            self.policy_registry.restore_runtime_state(snapshot)
-            raise
+        with _rollout_mutation_window(self.policy_registry):
+            snapshot = self.policy_registry.snapshot_runtime_state()
+            try:
+                self.policy_registry.rollback()
+                self.event_log.emit(
+                    event_type="policy_rolled_back",
+                    source="policy_registry",
+                    user_id="system",
+                    decision_id=str(decision_id),
+                    correlation_id=str(correlation_id),
+                    payload=payload,
+                )
+            except Exception:
+                self.policy_registry.restore_runtime_state(snapshot)
+                raise
         return {
             "ok": True,
             "status": "verified",
