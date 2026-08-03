@@ -12,10 +12,10 @@ IMPORTANT:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from threading import RLock
-from typing import Iterator
 
 from core.ai._policy_registry_store import PolicyRegistryStore
 from core.policies.registry import PolicyRegistry as _MetaPolicyRegistry
