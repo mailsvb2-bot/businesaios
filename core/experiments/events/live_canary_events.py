@@ -8,6 +8,7 @@ BUSINESS_OUTCOME_OBSERVED = "business_outcome_observed@v1"
 CANARY_GUARDRAIL_BREACHED = "canary_guardrail_breached@v1"
 CANARY_AUTO_ROLLED_BACK = "canary_auto_rolled_back@v1"
 CANARY_PROMOTED = "canary_promoted@v1"
+LIVE_CANARY_EXECUTION_FAILED_SOURCE = "live_canary_execution_failed_source@v1"
 
 LIVE_CANARY_EVENT_TYPES = frozenset(
     {
@@ -19,6 +20,7 @@ LIVE_CANARY_EVENT_TYPES = frozenset(
         CANARY_GUARDRAIL_BREACHED,
         CANARY_AUTO_ROLLED_BACK,
         CANARY_PROMOTED,
+        LIVE_CANARY_EXECUTION_FAILED_SOURCE,
     }
 )
 
@@ -46,5 +48,6 @@ __all__ = [
     "EXPERIMENT_ASSIGNMENT",
     "EXPERIMENT_CREATED",
     "LIVE_CANARY_EVENT_TYPES",
+    "LIVE_CANARY_EXECUTION_FAILED_SOURCE",
     "is_live_canary_event",
 ]
