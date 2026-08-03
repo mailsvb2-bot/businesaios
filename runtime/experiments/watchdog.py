@@ -62,8 +62,14 @@ class LiveCanaryWatchdog:
     def run_forever(self, stop: Event) -> CanaryDecision:
         last = CanaryDecision.CONTINUE
         while not stop.is_set():
-            result = self.run_once()
-            last = result.decision
+            try:
+                result = self.run_once()
+            except Exception:
+                log.exception("live_canary_watchdog_pulse_failed")
+                self.coordinator._rollback_required = True
+                last = CanaryDecision.ROLLBACK
+            else:
+                last = result.decision
             stop.wait(self.interval_seconds)
         return last
 
