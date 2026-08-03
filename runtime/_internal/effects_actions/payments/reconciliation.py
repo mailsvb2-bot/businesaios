@@ -126,18 +126,23 @@ def _emit_payment_status_event(
     status: str,
     business_metadata: dict[str, Any] | None = None,
 ) -> str:
+    original = str(original_decision_id or "").strip()
+    reconciliation = str(reconciliation_decision_id or "").strip()
     return _emit_terminal_event_once(
         effects,
         event_type=str(event_type),
         source="payments",
         user_id=str(user_id),
-        decision_id=str(reconciliation_decision_id),
+        decision_id=original or reconciliation,
         correlation_id=str(reconciliation_correlation_id),
-        original_decision_id=str(original_decision_id),
+        original_decision_id=original,
         external_id=str(external_id),
         payload={
             "external_id": str(external_id),
             "status": str(status),
+            "original_decision_id": original,
+            "reconciled_by_decision_id": reconciliation,
+            "reconciliation_correlation_id": str(reconciliation_correlation_id),
             "metadata": _metadata(business_metadata),
         },
     )
