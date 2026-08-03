@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
+
+
+class _MemoryStoredEvent(dict):
+    def __init__(self, event: dict, *, append_seq: int) -> None:
+        super().__init__(event)
+        self.append_seq = int(append_seq)
+
 
 class MemoryEventStore(list):
     """Append-only in-memory event store for dev/tests.
@@ -7,7 +15,26 @@ class MemoryEventStore(list):
     Strict tenant contract:
     - caller must pass tenant_id explicitly
     - events are filtered by tenant_id
+    - append sequences never move backwards after retention
     """
+
+    def __init__(self, rows: Iterable[dict] = ()) -> None:
+        super().__init__()
+        self._next_append_seq = 0
+        self.extend(rows)
+
+    def append(self, event: dict) -> None:
+        self._next_append_seq += 1
+        super().append(
+            _MemoryStoredEvent(
+                dict(event or {}),
+                append_seq=self._next_append_seq,
+            )
+        )
+
+    def extend(self, rows: Iterable[dict]) -> None:
+        for row in rows:
+            self.append(row)
 
     def append_event(self, event: dict):
         e = dict(event or {})
@@ -22,8 +49,8 @@ class MemoryEventStore(list):
             raise ValueError("tenant_id is required (strict)")
         return max(
             (
-                append_seq
-                for append_seq, event in enumerate(self, start=1)
+                int(getattr(event, "append_seq", 0))
+                for event in self
                 if str(event.get("tenant_id") or "") == tid
             ),
             default=0,
@@ -50,7 +77,8 @@ class MemoryEventStore(list):
         after = max(0, int(after_append_seq or 0))
         allowed = {str(item) for item in (event_types or ()) if str(item)}
         emitted = 0
-        for append_seq, event in enumerate(list(self), start=1):
+        for event in list(self):
+            append_seq = int(getattr(event, "append_seq", 0))
             if append_seq <= after:
                 continue
             e = dict(event)
@@ -106,7 +134,7 @@ class MemoryEventStore(list):
         return int(total)
 
     def delete_user_events(self, *, tenant_id: str, user_id: str) -> int:
-        """Delete all events for a user within a tenant (in-memory)."""
+        """Delete all events for a user without renumbering retained rows."""
         tid = str(tenant_id or "").strip()
         uid = str(user_id or "").strip()
         if not tid:
@@ -122,8 +150,8 @@ class MemoryEventStore(list):
             if str(e.get("user_id") or "") == uid:
                 continue
             kept.append(e)
-        self.clear()
-        self.extend(kept)
+        super().clear()
+        super().extend(kept)
         return int(before - len(self))
 
     def get_setting(self, *, tenant_id: str, key: str):
