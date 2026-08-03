@@ -12,7 +12,10 @@ from core.events.log_queries import (
     iter_events as iter_event_window,
 )
 from core.experiments.assignment import ExperimentArm, ExperimentAssignment
-from core.experiments.live_canary_events import EXPERIMENT_ASSIGNMENT
+from core.experiments.live_canary_events import (
+    CANDIDATE_ACTION_EXECUTED,
+    EXPERIMENT_ASSIGNMENT,
+)
 
 
 def _data(event: Any) -> dict[str, Any]:
@@ -32,7 +35,7 @@ def _finite(value: object, default: float = 0.0) -> float:
 
 
 class LiveCanaryAssignmentSafety:
-    """Materialized assignment guard state refreshed from shared evidence."""
+    """Materialized shared guard state used before admitting assignments."""
 
     def __init__(
         self,
@@ -47,11 +50,13 @@ class LiveCanaryAssignmentSafety:
         self._lock = Lock()
         self._loaded = False
         self._append_cursor = 0
-        self._decision_ids: set[str] = set()
+        self._assignment_ids: set[str] = set()
+        self._execution_ids: set[str] = set()
         self._stage_counts: dict[float, Counter[str]] = {}
         self._stage_first_assignment_ms: dict[float, int] = {}
-        self._candidate_window: deque[tuple[int, str, float]] = deque()
-        self._candidate_expected_cost = 0.0
+        self._candidate_window: deque[tuple[int, str, str, float]] = deque()
+        self._candidate_assignments: dict[str, tuple[int, str, float]] = {}
+        self._candidate_actual_costs: dict[str, float] = {}
         self._candidate_subject_counts: Counter[str] = Counter()
         self._candidate_max_subject_count = 0
 
@@ -62,7 +67,7 @@ class LiveCanaryAssignmentSafety:
             and payload.get("candidate_policy_id") == self.candidate_policy_id
         )
 
-    def _track(
+    def _track_assignment(
         self,
         *,
         decision_id: str,
@@ -71,9 +76,9 @@ class LiveCanaryAssignmentSafety:
         if payload.get("eligible") is not True:
             return
         did = str(decision_id)
-        if not did or did in self._decision_ids:
+        if not did or did in self._assignment_ids:
             return
-        self._decision_ids.add(did)
+        self._assignment_ids.add(did)
         stage = float(payload.get("candidate_pct") or 0.0)
         arm = str(payload.get("arm") or "")
         self._stage_counts.setdefault(stage, Counter())[arm] += 1
@@ -85,16 +90,39 @@ class LiveCanaryAssignmentSafety:
             return
         subject_hash = str(payload.get("subject_hash") or "")
         expected_cost = _finite(payload.get("expected_cost"))
-        self._candidate_window.append((assigned_at_ms, subject_hash, expected_cost))
-        self._candidate_expected_cost += expected_cost
+        assignment = (assigned_at_ms, subject_hash, expected_cost)
+        self._candidate_assignments[did] = assignment
+        self._candidate_window.append((assigned_at_ms, did, subject_hash, expected_cost))
         self._candidate_subject_counts[subject_hash] += 1
         self._candidate_max_subject_count = max(
             self._candidate_max_subject_count,
             self._candidate_subject_counts[subject_hash],
         )
 
+    def _track_execution(
+        self,
+        *,
+        decision_id: str,
+        payload: Mapping[str, Any],
+    ) -> None:
+        did = str(decision_id)
+        if not did or did in self._execution_ids:
+            return
+        self._execution_ids.add(did)
+        self._candidate_actual_costs[did] = _finite(payload.get("cost"))
+
+    def _track_event(self, event: Any) -> None:
+        data = _data(event)
+        event_type = str(data.get("event_type") or "")
+        decision_id = str(data.get("decision_id") or "")
+        payload = _payload(event)
+        if event_type == EXPERIMENT_ASSIGNMENT:
+            self._track_assignment(decision_id=decision_id, payload=payload)
+        elif event_type == CANDIDATE_ACTION_EXECUTED:
+            self._track_execution(decision_id=decision_id, payload=payload)
+
     def refresh(self) -> None:
-        """Consume new shared assignments in append order."""
+        """Consume new shared assignments and executions in append order."""
 
         direct_tail = direct_latest_append_seq(self.event_log)
         with self._lock:
@@ -107,7 +135,7 @@ class LiveCanaryAssignmentSafety:
                 self.event_log,
                 start_ms=0,
                 after_append_seq=after_append_seq,
-                event_types=(EXPERIMENT_ASSIGNMENT,),
+                event_types=(EXPERIMENT_ASSIGNMENT, CANDIDATE_ACTION_EXECUTED),
             )
         )
         rows.sort(
@@ -122,10 +150,7 @@ class LiveCanaryAssignmentSafety:
                 if append_seq <= self._append_cursor:
                     continue
                 if self._belongs(event):
-                    self._track(
-                        decision_id=str(_data(event).get("decision_id") or ""),
-                        payload=_payload(event),
-                    )
+                    self._track_event(event)
                 self._append_cursor = append_seq
             if direct_tail is not None:
                 self._append_cursor = max(self._append_cursor, direct_tail)
@@ -153,17 +178,17 @@ class LiveCanaryAssignmentSafety:
             "expected_cost": _finite(expected_cost),
         }
         with self._lock:
-            self._track(decision_id=str(decision_id), payload=payload)
+            self._track_assignment(decision_id=str(decision_id), payload=payload)
         self.refresh()
 
     def _purge_expired(self, *, cutoff_ms: int) -> None:
         max_dirty = False
         while self._candidate_window and self._candidate_window[0][0] < cutoff_ms:
-            _assigned_at, subject_hash, expected_cost = self._candidate_window.popleft()
-            self._candidate_expected_cost = max(
-                0.0,
-                self._candidate_expected_cost - expected_cost,
+            _assigned_at, decision_id, subject_hash, _expected_cost = (
+                self._candidate_window.popleft()
             )
+            self._candidate_assignments.pop(decision_id, None)
+            self._candidate_actual_costs.pop(decision_id, None)
             previous = self._candidate_subject_counts[subject_hash]
             if previous >= self._candidate_max_subject_count:
                 max_dirty = True
@@ -177,6 +202,20 @@ class LiveCanaryAssignmentSafety:
                 default=0,
             )
 
+    def _cost_exposure(self) -> tuple[float, float, float]:
+        expected = sum(row[2] for row in self._candidate_assignments.values())
+        actual = sum(
+            cost
+            for decision_id, cost in self._candidate_actual_costs.items()
+            if decision_id in self._candidate_assignments
+        )
+        pending = sum(
+            row[2]
+            for decision_id, row in self._candidate_assignments.items()
+            if decision_id not in self._candidate_actual_costs
+        )
+        return expected, actual, actual + pending
+
     def metrics(self, *, candidate_pct: float) -> dict[str, float | int]:
         self.refresh()
         now_ms = int(time.time() * 1000)
@@ -186,6 +225,7 @@ class LiveCanaryAssignmentSafety:
             control = int(counts.get(ExperimentArm.CONTROL.value, 0))
             candidate = int(counts.get(ExperimentArm.CANDIDATE.value, 0))
             first = self._stage_first_assignment_ms.get(float(candidate_pct), 0)
+            expected_cost, actual_cost, exposure = self._cost_exposure()
             return {
                 "control_assignments": control,
                 "candidate_assignments": candidate,
@@ -205,9 +245,9 @@ class LiveCanaryAssignmentSafety:
                 "candidate_successes": 0,
                 "critical_violations": 0,
                 "candidate_actions_24h": len(self._candidate_window),
-                "candidate_expected_cost_24h": self._candidate_expected_cost,
-                "candidate_actual_cost_24h": 0.0,
-                "candidate_cost_24h": self._candidate_expected_cost,
+                "candidate_expected_cost_24h": expected_cost,
+                "candidate_actual_cost_24h": actual_cost,
+                "candidate_cost_24h": exposure,
                 "candidate_max_actions_per_subject_24h": self._candidate_max_subject_count,
                 "duration_seconds": (
                     max(0.0, (now_ms - first) / 1000.0) if first else 0.0
