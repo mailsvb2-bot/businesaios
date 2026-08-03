@@ -33,6 +33,7 @@ class PolicyRuntimeStateSnapshot:
     candidate_policy_id: str | None
     rollout_pct: int
     governed_candidate_policy_id: str | None
+    rollout_generation: int
 
 
 class PolicyRegistry:
@@ -47,6 +48,7 @@ class PolicyRegistry:
         # Identity survives full promotion/rollback so a governed experiment
         # cannot silently switch candidates after rollout fields are cleared.
         self._governed_candidate: str | None = None
+        self._rollout_generation: int = 0
         self._rollout_lock = RLock()
 
     def register(self, policy) -> None:
@@ -99,7 +101,7 @@ class PolicyRegistry:
 
     @contextmanager
     def live_canary_assignment_window(self) -> Iterator[None]:
-        """Serialize one assignment with rollout mutation, not with peer reads."""
+        """Serialize assignment/deployment admission with rollout mutation."""
 
         with self._rollout_lock:
             yield
@@ -107,6 +109,10 @@ class PolicyRegistry:
     def rollout_config(self) -> tuple[str | None, int]:
         with self._rollout_lock:
             return self._candidate, int(self._rollout_pct)
+
+    def rollout_generation(self) -> int:
+        with self._rollout_lock:
+            return int(self._rollout_generation)
 
     def governed_candidate_identity(self) -> str | None:
         """Return the immutable candidate bound to the current governed epoch."""
@@ -122,6 +128,7 @@ class PolicyRegistry:
             candidate_policy_id=self._candidate,
             rollout_pct=int(self._rollout_pct),
             governed_candidate_policy_id=self._governed_candidate,
+            rollout_generation=int(self._rollout_generation),
         )
 
     def restore_runtime_state(self, snapshot: PolicyRuntimeStateSnapshot) -> None:
@@ -134,6 +141,7 @@ class PolicyRegistry:
             self._candidate = snapshot.candidate_policy_id
             self._rollout_pct = int(snapshot.rollout_pct)
             self._governed_candidate = snapshot.governed_candidate_policy_id
+            self._rollout_generation = int(snapshot.rollout_generation)
 
     # --- SIDE-EFFECT API (must be called only by runtime/_effects_impl through executor) ---
 
@@ -156,12 +164,14 @@ class PolicyRegistry:
                 self._meta.promote(PolicyRef(policy_id=pid, version="v1"))
                 self._candidate = None
                 self._rollout_pct = 0
+                self._rollout_generation += 1
                 return
             self._meta.register_candidate(PolicyRef(policy_id=pid, version="v1"))
             if pct > 0:
                 self._meta.start_canary(PolicyRef(policy_id=pid, version="v1"))
             self._candidate = pid
             self._rollout_pct = pct
+            self._rollout_generation += 1
 
     def rollback(self) -> None:
         # SIDE-EFFECT: must be executed ONLY through runtime/executor effect window.
@@ -171,6 +181,7 @@ class PolicyRegistry:
             self._candidate = None
             self._rollout_pct = 0
             self._meta.rollback()
+            self._rollout_generation += 1
             if self._previous is None:
                 return
             self._meta.promote(PolicyRef(policy_id=self._previous, version="v1"))
