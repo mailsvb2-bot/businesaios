@@ -64,8 +64,6 @@ class LiveCanaryWatchdog:
         while not stop.is_set():
             result = self.run_once()
             last = result.decision
-            if last is CanaryDecision.ROLLBACK:
-                return last
             stop.wait(self.interval_seconds)
         return last
 
