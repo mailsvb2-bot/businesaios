@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass
 
@@ -13,6 +14,10 @@ def _bool(name: str, default: bool = False) -> bool:
     if raw is None:
         return default
     return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _finite(value: float) -> bool:
+    return math.isfinite(float(value))
 
 
 @dataclass(frozen=True)
@@ -63,15 +68,15 @@ class LiveCanaryPolicy:
             issues.append("experiment_id_required")
         if len(self.assignment_secret.encode("utf-8")) < 32:
             issues.append("assignment_secret_must_be_at_least_32_bytes")
-        if not 0.0 < float(self.candidate_pct) <= 100.0:
+        if not _finite(self.candidate_pct) or not 0.0 < float(self.candidate_pct) <= 100.0:
             issues.append("candidate_pct_out_of_range")
-        if not 0.0 < float(self.max_candidate_pct) <= 100.0:
+        if not _finite(self.max_candidate_pct) or not 0.0 < float(self.max_candidate_pct) <= 100.0:
             issues.append("max_candidate_pct_out_of_range")
-        if float(self.candidate_pct) > float(self.max_candidate_pct):
+        if _finite(self.candidate_pct) and _finite(self.max_candidate_pct) and float(self.candidate_pct) > float(self.max_candidate_pct):
             issues.append("candidate_pct_exceeds_maximum")
         if not 0 < int(self.initial_canary_pct) <= 100:
             issues.append("initial_canary_pct_out_of_range")
-        elif float(self.initial_canary_pct) > float(self.max_candidate_pct):
+        elif _finite(self.max_candidate_pct) and float(self.initial_canary_pct) > float(self.max_candidate_pct):
             issues.append("initial_canary_pct_exceeds_maximum")
         if not self.allowed_tenant_ids:
             issues.append("allowed_tenant_ids_required")
@@ -85,23 +90,25 @@ class LiveCanaryPolicy:
             issues.append("max_candidate_actions_per_day_must_be_positive")
         if self.max_candidate_actions_per_subject_24h < 1:
             issues.append("max_candidate_actions_per_subject_24h_must_be_positive")
-        if self.max_daily_cost < 0:
+        if not _finite(self.max_daily_cost) or self.max_daily_cost < 0:
             issues.append("max_daily_cost_must_be_non_negative")
-        if not 0 <= self.max_error_rate <= 1:
+        if not _finite(self.max_error_rate) or not 0 <= self.max_error_rate <= 1:
             issues.append("max_error_rate_out_of_range")
-        if not 0 <= self.max_complaint_rate <= 1:
+        if not _finite(self.max_complaint_rate) or not 0 <= self.max_complaint_rate <= 1:
             issues.append("max_complaint_rate_out_of_range")
-        if self.max_cost_per_outcome_ratio < 1:
+        if not _finite(self.max_cost_per_outcome_ratio) or self.max_cost_per_outcome_ratio < 1:
             issues.append("max_cost_per_outcome_ratio_must_be_at_least_one")
-        if not 0 <= self.max_relative_conversion_drop < 1:
+        if not _finite(self.max_relative_conversion_drop) or not 0 <= self.max_relative_conversion_drop < 1:
             issues.append("max_relative_conversion_drop_out_of_range")
+        if not _finite(self.max_sample_ratio_z) or self.max_sample_ratio_z <= 0:
+            issues.append("max_sample_ratio_z_must_be_positive")
         if self.min_assignments < 1 or self.min_candidate_assignments < 1:
             issues.append("minimum_assignment_counts_must_be_positive")
         if self.min_outcomes_per_arm < 1:
             issues.append("min_outcomes_per_arm_must_be_positive")
         if self.min_duration_seconds < 0 or self.outcome_window_seconds < 1:
             issues.append("invalid_time_window")
-        if self.outcome_poll_seconds < 1:
+        if not _finite(self.outcome_poll_seconds) or self.outcome_poll_seconds < 1:
             issues.append("outcome_poll_seconds_must_be_at_least_one")
         return tuple(issues)
 
