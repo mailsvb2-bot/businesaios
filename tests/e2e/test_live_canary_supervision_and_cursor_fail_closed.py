@@ -65,6 +65,41 @@ def test_watchdog_keeps_polling_after_successful_rollback() -> None:
     assert last is CanaryDecision.CONTINUE
 
 
+def test_watchdog_retries_after_transient_rollback_submission_failure() -> None:
+    watchdog = LiveCanaryWatchdog.__new__(LiveCanaryWatchdog)
+    watchdog.interval_seconds = 1.0
+    attempts = 0
+
+    class Coordinator:
+        _rollback_required = False
+
+    watchdog.coordinator = Coordinator()
+
+    def run_once() -> GuardrailResult:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("runtime executor temporarily unavailable")
+        return GuardrailResult(CanaryDecision.CONTINUE, ("healthy",), {})
+
+    class StopAfterTwoPulses:
+        def __init__(self) -> None:
+            self.pulses = 0
+
+        def is_set(self) -> bool:
+            return self.pulses >= 2
+
+        def wait(self, _seconds: float) -> None:
+            self.pulses += 1
+
+    watchdog.run_once = run_once
+    last = watchdog.run_forever(StopAfterTwoPulses())
+
+    assert attempts == 2
+    assert watchdog.coordinator._rollback_required is True
+    assert last is CanaryDecision.CONTINUE
+
+
 def test_decision_lookup_outage_is_not_converted_to_missing_evidence() -> None:
     class BrokenStore:
         def get_events_for_decision(self, **_kwargs):
