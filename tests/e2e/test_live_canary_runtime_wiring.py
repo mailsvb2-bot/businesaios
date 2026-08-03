@@ -64,6 +64,9 @@ class Registry:
         self.candidate_policy_id = "candidate@v2"
         self.rollout_pct = rollout_pct
 
+    def active_ref(self):
+        return SimpleNamespace(policy_id="active@v1")
+
     def snapshot_runtime_state(self):
         return (tuple(self.calls), self.rollout_pct)
 
