@@ -18,6 +18,10 @@ CANON_BOOT_WIRING_ONLY = True
 CANON_BOOT_REGISTERS_DECISION_CORE_SINGLETON = True
 
 
+def _normalized_policy_id(value: object) -> str:
+    return "" if value is None else str(value).strip()
+
+
 def build_world_model(*, event_log: Any) -> object:
     return build_and_verify_default_world_model(event_log=event_log)
 
@@ -32,13 +36,13 @@ def _attach_configured_live_canary(core: DecisionCore, policy_selector: Any) -> 
     if not callable(rollout_config):
         raise RuntimeError("LIVE_CANARY_POLICY_REGISTRY_REQUIRED")
     rollout_candidate, _rollout_pct = rollout_config()
-    runtime_candidate = str(rollout_candidate or "").strip()
+    runtime_candidate = _normalized_policy_id(rollout_candidate)
     governed_identity = getattr(registry, "governed_candidate_identity", None)
-    governed_candidate = str(
-        governed_identity() if callable(governed_identity) else ""
-    ).strip()
+    governed_candidate = _normalized_policy_id(
+        governed_identity() if callable(governed_identity) else None
+    )
     bound_candidate = governed_candidate or runtime_candidate
-    configured_candidate = str(policy.candidate_policy_id or "").strip()
+    configured_candidate = _normalized_policy_id(policy.candidate_policy_id)
     if (
         bound_candidate
         and configured_candidate
