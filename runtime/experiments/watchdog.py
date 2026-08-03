@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from threading import Event
+from threading import Event, Lock, Thread
 
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from runtime.experiments.live_canary import LiveCanaryCoordinator
@@ -70,4 +70,48 @@ class LiveCanaryWatchdog:
         return last
 
 
-__all__ = ["LiveCanaryWatchdog", "RollbackSubmitter"]
+class LiveCanaryWatchdogSupervisor:
+    """Own the lifecycle of the executor-backed rollback watchdog."""
+
+    def __init__(self, watchdog: LiveCanaryWatchdog) -> None:
+        self.watchdog = watchdog
+        self._stop = Event()
+        self._lock = Lock()
+        self._thread: Thread | None = None
+
+    def start(self) -> None:
+        with self._lock:
+            if self._thread is not None:
+                raise RuntimeError("live canary watchdog supervisor already started")
+            self._thread = Thread(
+                target=self._run,
+                name="live-canary-rollback-watchdog",
+                daemon=True,
+            )
+            self._thread.start()
+
+    def request_stop(self) -> None:
+        self._stop.set()
+
+    def join(self, *, timeout_seconds: float = 10.0) -> None:
+        with self._lock:
+            thread = self._thread
+        if thread is not None:
+            thread.join(timeout=max(0.0, float(timeout_seconds)))
+
+    def pulse_once(self) -> GuardrailResult:
+        return self.watchdog.run_once()
+
+    def _run(self) -> None:
+        try:
+            self.watchdog.run_forever(self._stop)
+        except Exception:
+            log.exception("live_canary_watchdog_supervisor_failed")
+            self.watchdog.coordinator._rollback_required = True
+
+
+__all__ = [
+    "LiveCanaryWatchdog",
+    "LiveCanaryWatchdogSupervisor",
+    "RollbackSubmitter",
+]
