@@ -37,6 +37,7 @@ class MemoryEventStore(list):
         end_ms: int | None = None,
         after_append_seq: int | None = None,
         user_id: str | None = None,
+        decision_id: str | None = None,
         event_type: str | None = None,
         event_types=None,
         limit: int | None = None,
@@ -59,6 +60,8 @@ class MemoryEventStore(list):
             if ts < start_ms or ts >= end_ms:
                 continue
             if user_id is not None and str(e.get("user_id") or "") != str(user_id):
+                continue
+            if decision_id is not None and str(e.get("decision_id") or "") != str(decision_id):
                 continue
             et = e.get("event_type") or e.get("type")
             if event_type and et != event_type:
