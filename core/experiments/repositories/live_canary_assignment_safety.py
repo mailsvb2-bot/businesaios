@@ -6,7 +6,10 @@ from collections.abc import Mapping
 from threading import Lock
 from typing import Any
 
-from core.events.log_queries import iter_events as iter_event_window
+from core.events.log_queries import (
+    event_timestamp_ms,
+    iter_events as iter_event_window,
+)
 from core.experiments.assignment import ExperimentArm, ExperimentAssignment
 from core.experiments.live_canary_events import EXPERIMENT_ASSIGNMENT
 
@@ -28,7 +31,7 @@ def _finite(value: object, default: float = 0.0) -> float:
 
 
 class LiveCanaryAssignmentSafety:
-    """Materialized assignment guard state with one bounded evidence load."""
+    """Materialized assignment guard state refreshed from shared evidence."""
 
     def __init__(
         self,
@@ -42,6 +45,8 @@ class LiveCanaryAssignmentSafety:
         self.candidate_policy_id = str(candidate_policy_id)
         self._lock = Lock()
         self._loaded = False
+        self._cursor_ms = 0
+        self._seen_decisions_at_cursor: set[str] = set()
         self._decision_ids: set[str] = set()
         self._stage_counts: dict[float, Counter[str]] = {}
         self._stage_first_assignment_ms: dict[float, int] = {}
@@ -90,32 +95,55 @@ class LiveCanaryAssignmentSafety:
             self._candidate_subject_counts[subject_hash],
         )
 
-    def ensure_loaded(self) -> None:
-        if self._loaded:
-            return
+    def refresh(self) -> None:
+        """Consume newly appended shared assignment rows before guard checks."""
+
         with self._lock:
-            if self._loaded:
-                return
-            rows = [
-                event
-                for event in iter_event_window(
-                    self.event_log,
-                    event_types=(EXPERIMENT_ASSIGNMENT,),
-                )
-                if self._belongs(event)
-            ]
-            rows.sort(
-                key=lambda event: int(
-                    _payload(event).get("assigned_at_ms") or 0
-                )
+            cursor_ms = self._cursor_ms
+            seen_at_cursor = set(self._seen_decisions_at_cursor)
+        rows = [
+            event
+            for event in iter_event_window(
+                self.event_log,
+                start_ms=cursor_ms,
+                event_types=(EXPERIMENT_ASSIGNMENT,),
             )
+            if self._belongs(event)
+        ]
+        rows.sort(
+            key=lambda event: (
+                event_timestamp_ms(event),
+                str(_data(event).get("decision_id") or ""),
+            )
+        )
+        with self._lock:
             for event in rows:
                 data = _data(event)
+                decision_id = str(data.get("decision_id") or "")
+                timestamp_ms = event_timestamp_ms(event)
+                if timestamp_ms < self._cursor_ms:
+                    continue
+                if (
+                    timestamp_ms == self._cursor_ms
+                    and decision_id in self._seen_decisions_at_cursor
+                ):
+                    continue
                 self._track(
-                    decision_id=str(data.get("decision_id") or ""),
+                    decision_id=decision_id,
                     payload=_payload(event),
                 )
+                if timestamp_ms > self._cursor_ms:
+                    self._cursor_ms = timestamp_ms
+                    self._seen_decisions_at_cursor = {decision_id}
+                else:
+                    self._seen_decisions_at_cursor.add(decision_id)
+            if self._cursor_ms == cursor_ms:
+                self._seen_decisions_at_cursor.update(seen_at_cursor)
             self._loaded = True
+
+    def ensure_loaded(self) -> None:
+        if not self._loaded:
+            self.refresh()
 
     def observe(
         self,
@@ -137,6 +165,7 @@ class LiveCanaryAssignmentSafety:
         }
         with self._lock:
             self._track(decision_id=str(decision_id), payload=payload)
+        self.refresh()
 
     def _purge_expired(self, *, cutoff_ms: int) -> None:
         max_dirty = False
@@ -162,7 +191,7 @@ class LiveCanaryAssignmentSafety:
             )
 
     def metrics(self, *, candidate_pct: float) -> dict[str, float | int]:
-        self.ensure_loaded()
+        self.refresh()
         now_ms = int(time.time() * 1000)
         with self._lock:
             self._purge_expired(
