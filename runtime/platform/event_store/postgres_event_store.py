@@ -20,6 +20,11 @@ from runtime.platform.event_store.append_contract import AppendEvent, normalize_
 from runtime.platform.postgres_port import PostgresPort
 
 CANON_POSTGRES_EVENT_STORE = True
+BASE_COLUMNS = (
+    "event_id, tenant_id, user_id, source, event_type, timestamp_ms, "
+    "decision_id, correlation_id, payload_json"
+)
+APPEND_COLUMNS = f"append_seq, {BASE_COLUMNS}"
 
 
 def describe_declared_absence() -> dict[str, object]:
@@ -267,18 +272,16 @@ class PostgresEventStore:
         if limit is not None:
             limit_sql = " LIMIT %s"
             query_params.append(max(1, int(limit)))
+        include_append_seq = after_append_seq is not None
         order_by = (
             "append_seq ASC"
-            if after_append_seq is not None
-            else "timestamp_ms ASC, append_seq ASC"
+            if include_append_seq
+            else "timestamp_ms ASC, event_id ASC"
         )
+        columns = APPEND_COLUMNS if include_append_seq else BASE_COLUMNS
         rows = self._db.fetchall(
-            f"""
-            SELECT append_seq, event_id, tenant_id, user_id, source, event_type,
-                   timestamp_ms, decision_id, correlation_id, payload_json
-            FROM events{where}
-            ORDER BY {order_by}{limit_sql};
-            """,
+            f"SELECT {columns} FROM events{where} "
+            f"ORDER BY {order_by}{limit_sql};",
             tuple(query_params),
         )
         for row in rows:
@@ -324,13 +327,8 @@ class PostgresEventStore:
         )
         bounded_limit = max(1, int(limit))
         rows = self._db.fetchall(
-            f"""
-            SELECT append_seq, event_id, tenant_id, user_id, source, event_type,
-                   timestamp_ms, decision_id, correlation_id, payload_json
-            FROM events{where}
-            ORDER BY timestamp_ms DESC, append_seq DESC
-            LIMIT %s;
-            """,
+            f"SELECT {BASE_COLUMNS} FROM events{where} "
+            "ORDER BY timestamp_ms DESC, event_id DESC LIMIT %s;",
             (*params, bounded_limit),
         )
         return [_row_to_event(tuple(row)) for row in rows]
