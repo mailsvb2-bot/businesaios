@@ -9,7 +9,6 @@ from typing import Any
 
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import LIVE_CANARY_EXECUTION_FAILED_SOURCE
-from runtime.execution.context import executor_context
 from runtime.proofs import ACTION_PROOF_EVENT
 
 log = logging.getLogger(__name__)
@@ -51,6 +50,14 @@ def _force_rollback(
         correlation_id=correlation_id,
         tenant_id=str(tenant_id),
     )
+    kwargs = {
+        "decision_id": str(decision_id),
+        "correlation_id": correlation_id,
+        "tenant_id": str(tenant_id),
+        "candidate_policy_id": coordinator.candidate_policy_id,
+        "experiment_id": coordinator.policy.experiment_id,
+        "reasons": result.reasons,
+    }
     submitter = getattr(executor, "_live_canary_rollback_submitter", None)
     if not callable(submitter):
         submitter = getattr(
@@ -58,22 +65,16 @@ def _force_rollback(
             "_live_canary_rollback_submitter",
             None,
         )
+    if not callable(submitter):
+        submitter = getattr(executor, "submit_live_canary_rollback", None)
     if callable(submitter):
-        submitter(
-            decision_id=str(decision_id),
-            correlation_id=correlation_id,
-            tenant_id=str(tenant_id),
-            candidate_policy_id=coordinator.candidate_policy_id,
-            experiment_id=coordinator.policy.experiment_id,
-            reasons=result.reasons,
-        )
+        submitter(**kwargs)
         return
-    with executor_context("live_canary_executor_integrity_rollback"):
-        applied = coordinator.evaluate_and_maybe_rollback(
-            decision_id=str(decision_id),
-            correlation_id=correlation_id,
-            tenant_id=str(tenant_id),
-        )
+    applied = coordinator.evaluate_and_maybe_rollback(
+        decision_id=str(decision_id),
+        correlation_id=correlation_id,
+        tenant_id=str(tenant_id),
+    )
     if applied.decision is not CanaryDecision.ROLLBACK:
         raise RuntimeError("LIVE_CANARY_ROLLBACK_NOT_APPLIED")
 
