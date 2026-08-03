@@ -44,6 +44,7 @@ def attach_live_canary(
     core._live_canary_outcome_supervisor = supervisor
     core._live_canary_watchdog = None
     core._live_canary_watchdog_supervisor = None
+    core._live_canary_rollback_submitter = None
     return coordinator
 
 
@@ -98,8 +99,10 @@ def bind_live_canary_executor(core: Any, executor: Any) -> None:
     supervisor = LiveCanaryWatchdogSupervisor(watchdog)
     core._live_canary_watchdog = watchdog
     core._live_canary_watchdog_supervisor = supervisor
+    core._live_canary_rollback_submitter = rollback_submitter
     executor._live_canary_watchdog = watchdog
     executor._live_canary_watchdog_supervisor = supervisor
+    executor._live_canary_rollback_submitter = rollback_submitter
     supervisor.start()
 
 
@@ -121,6 +124,7 @@ def detach_live_canary(core: Any) -> None:
     core._live_canary_outcome_supervisor = None
     core._live_canary_watchdog = None
     core._live_canary_watchdog_supervisor = None
+    core._live_canary_rollback_submitter = None
 
 
 __all__ = [
