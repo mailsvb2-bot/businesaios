@@ -221,6 +221,7 @@ class LiveCanaryOutcomeSupervisor:
             try:
                 self.observer.poll_once()
             except Exception as exc:
+                log.exception("live_canary_outcome_observer_poll_failed")
                 result = GuardrailResult(
                     CanaryDecision.ROLLBACK,
                     (f"outcome_observer_error:{type(exc).__name__}",),
@@ -237,7 +238,6 @@ class LiveCanaryOutcomeSupervisor:
                         self.observer.coordinator.policy.allowed_tenant_ids[0]
                     ),
                 )
-                return
             self._stop.wait(self.interval_seconds)
 
 
