@@ -7,6 +7,7 @@ from threading import Lock
 from typing import Any
 
 from core.events.log_queries import (
+    direct_latest_append_seq,
     event_append_seq,
     iter_events as iter_event_window,
 )
@@ -48,8 +49,11 @@ class LiveCanaryLedger(_BaseLiveCanaryLedger):
         self._materialized_rows: list[tuple[dict[str, Any], dict[str, Any]]] = []
 
     def _refresh_materialized_rows(self) -> None:
+        tail = direct_latest_append_seq(self.event_log)
         with self._evidence_lock:
             after_append_seq = self._append_cursor
+        if tail is not None and tail <= after_append_seq:
+            return
         events = list(
             iter_event_window(
                 self.event_log,
@@ -71,6 +75,8 @@ class LiveCanaryLedger(_BaseLiveCanaryLedger):
                         (_data(event), _payload(event))
                     )
                 self._append_cursor = append_seq
+            if tail is not None:
+                self._append_cursor = max(self._append_cursor, tail)
 
     def _experiment_rows(self) -> list[tuple[dict[str, Any], dict[str, Any]]]:
         self._refresh_materialized_rows()
