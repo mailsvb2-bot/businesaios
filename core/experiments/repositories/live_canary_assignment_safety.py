@@ -85,9 +85,7 @@ class LiveCanaryAssignmentSafety:
             return
         subject_hash = str(payload.get("subject_hash") or "")
         expected_cost = _finite(payload.get("expected_cost"))
-        self._candidate_window.append(
-            (assigned_at_ms, subject_hash, expected_cost)
-        )
+        self._candidate_window.append((assigned_at_ms, subject_hash, expected_cost))
         self._candidate_expected_cost += expected_cost
         self._candidate_subject_counts[subject_hash] += 1
         self._candidate_max_subject_count = max(
@@ -96,14 +94,11 @@ class LiveCanaryAssignmentSafety:
         )
 
     def refresh(self) -> None:
-        """Consume new shared assignments only when the durable tail advances."""
+        """Consume new shared assignments in append order."""
 
         direct_tail = direct_latest_append_seq(self.event_log)
         with self._lock:
-            loaded = self._loaded
             after_append_seq = self._append_cursor
-        if loaded and direct_tail is None:
-            return
         if direct_tail is not None and direct_tail <= after_append_seq:
             return
 
@@ -159,15 +154,12 @@ class LiveCanaryAssignmentSafety:
         }
         with self._lock:
             self._track(decision_id=str(decision_id), payload=payload)
-        if direct_latest_append_seq(self.event_log) is not None:
-            self.refresh()
+        self.refresh()
 
     def _purge_expired(self, *, cutoff_ms: int) -> None:
         max_dirty = False
         while self._candidate_window and self._candidate_window[0][0] < cutoff_ms:
-            _assigned_at, subject_hash, expected_cost = (
-                self._candidate_window.popleft()
-            )
+            _assigned_at, subject_hash, expected_cost = self._candidate_window.popleft()
             self._candidate_expected_cost = max(
                 0.0,
                 self._candidate_expected_cost - expected_cost,
@@ -189,9 +181,7 @@ class LiveCanaryAssignmentSafety:
         self.refresh()
         now_ms = int(time.time() * 1000)
         with self._lock:
-            self._purge_expired(
-                cutoff_ms=now_ms - 24 * 60 * 60 * 1000,
-            )
+            self._purge_expired(cutoff_ms=now_ms - 24 * 60 * 60 * 1000)
             counts = self._stage_counts.get(float(candidate_pct), Counter())
             control = int(counts.get(ExperimentArm.CONTROL.value, 0))
             candidate = int(counts.get(ExperimentArm.CANDIDATE.value, 0))
@@ -218,9 +208,7 @@ class LiveCanaryAssignmentSafety:
                 "candidate_expected_cost_24h": self._candidate_expected_cost,
                 "candidate_actual_cost_24h": 0.0,
                 "candidate_cost_24h": self._candidate_expected_cost,
-                "candidate_max_actions_per_subject_24h": (
-                    self._candidate_max_subject_count
-                ),
+                "candidate_max_actions_per_subject_24h": self._candidate_max_subject_count,
                 "duration_seconds": (
                     max(0.0, (now_ms - first) / 1000.0) if first else 0.0
                 ),
