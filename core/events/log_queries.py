@@ -98,6 +98,8 @@ def _filtered_events(
             continue
         if allowed_types and observed_type not in allowed_types:
             continue
+        if event_append_seq(event) <= 0 and isinstance(event, dict):
+            event = {**event, "append_seq": append_seq}
         yield event
         emitted += 1
         if limit is not None and emitted >= limit:
