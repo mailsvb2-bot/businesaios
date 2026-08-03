@@ -52,7 +52,8 @@ class MemoryEventStore(list):
                 continue
             if allowed and str(et or "") not in allowed:
                 continue
-            e["append_seq"] = append_seq
+            if after_append_seq is not None:
+                e["append_seq"] = append_seq
             yield e
             emitted += 1
             if limit is not None and emitted >= max(1, int(limit)):
