@@ -319,14 +319,12 @@ class LiveCanaryCoordinator:
             meta = payload.get("meta")
             if isinstance(meta, dict) and str(meta.get("mode") or "") == "stub":
                 continue
-            observed = payload.get("ok")
-            if observed is None:
-                observed = payload.get("success")
-            if (
-                observed is None
-                and event_type in self.policy.outcome_event_types
-            ):
+            if event_type in self.policy.outcome_event_types:
                 observed = resolve_outcome_success(event_type, payload)
+            else:
+                observed = payload.get("ok")
+                if observed is None:
+                    observed = payload.get("success")
             if observed is not bool(success):
                 continue
             if evidence_ref and source_event_evidence_ref(event) != evidence_ref:
