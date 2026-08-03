@@ -14,9 +14,10 @@ from typing import Any
 from .sqlite_helpers import _exclusive_end_ms, _row_to_event
 
 EVENT_COLUMNS = (
-    "rowid AS append_seq,event_id,tenant_id,user_id,source,event_type,"
-    "timestamp_ms,decision_id,correlation_id,payload_json"
+    "event_id,tenant_id,user_id,source,event_type,timestamp_ms,"
+    "decision_id,correlation_id,payload_json"
 )
+APPEND_EVENT_COLUMNS = f"rowid AS append_seq,{EVENT_COLUMNS}"
 
 
 def _literal_like_pattern(value: object) -> str:
@@ -57,7 +58,8 @@ def _iter_rows(
     order_by: str | None = None,
     limit: int | None = None,
 ) -> Sequence[sqlite3.Row | tuple]:
-    sql = [f"SELECT {EVENT_COLUMNS} FROM events WHERE tenant_id=? AND timestamp_ms>=? AND timestamp_ms<?"]
+    columns = APPEND_EVENT_COLUMNS if after_append_seq is not None else EVENT_COLUMNS
+    sql = [f"SELECT {columns} FROM events WHERE tenant_id=? AND timestamp_ms>=? AND timestamp_ms<?"]
     params: list[object] = [str(tenant_id), int(start_ms), _exclusive_end_ms(end_ms)]
     if after_append_seq is not None:
         sql.append("AND rowid>?")
