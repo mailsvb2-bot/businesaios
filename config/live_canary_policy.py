@@ -74,7 +74,7 @@ class LiveCanaryPolicy:
             issues.append("max_candidate_pct_out_of_range")
         if _finite(self.candidate_pct) and _finite(self.max_candidate_pct) and float(self.candidate_pct) > float(self.max_candidate_pct):
             issues.append("candidate_pct_exceeds_maximum")
-        if not 0 < int(self.initial_canary_pct) <= 100:
+        if not 0 < int(self.initial_canary_pct) < 100:
             issues.append("initial_canary_pct_out_of_range")
         elif _finite(self.max_candidate_pct) and float(self.initial_canary_pct) > float(self.max_candidate_pct):
             issues.append("initial_canary_pct_exceeds_maximum")
