@@ -26,7 +26,7 @@ from core.experiments.guardrails import (
     LiveCanaryGuard,
 )
 from core.experiments.ledger import LiveCanaryLedger
-from core.experiments.outcome_semantics import resolve_outcome_success
+from core.experiments.builders.outcome_semantics import resolve_outcome_success
 from core.experiments.repositories.live_canary_assignment_safety import (
     LiveCanaryAssignmentSafety,
 )
