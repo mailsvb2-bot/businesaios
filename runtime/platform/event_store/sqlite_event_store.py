@@ -68,7 +68,7 @@ class SqliteEventStore(
         rows = self._db.execute(
             f"SELECT {_rq.EVENT_COLUMNS} FROM events "
             "WHERE tenant_id=? AND decision_id=? AND event_type=? "
-            "ORDER BY timestamp_ms ASC, rowid ASC",
+            "ORDER BY timestamp_ms ASC, append_seq ASC",
             (str(tenant_id), str(decision_id), str(event_type)),
         ).fetchall()
         return [_rq._row_to_event(row) for row in rows]
