@@ -8,9 +8,9 @@ from typing import Any
 
 from core.events.log_queries import direct_latest_append_seq, event_append_seq
 from core.events.log_queries import iter_events as iter_event_window
+from core.experiments.builders.outcome_semantics import resolve_outcome_success
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import BUSINESS_OUTCOME_OBSERVED
-from core.experiments.outcome_semantics import resolve_outcome_success
 from runtime.experiments.live_canary import (
     LiveCanaryCoordinator,
     source_event_evidence_ref,
