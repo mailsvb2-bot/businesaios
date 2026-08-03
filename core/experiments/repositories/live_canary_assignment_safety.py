@@ -7,6 +7,7 @@ from threading import Lock
 from typing import Any
 
 from core.events.log_queries import (
+    direct_latest_append_seq,
     event_append_seq,
     iter_events as iter_event_window,
 )
@@ -95,10 +96,17 @@ class LiveCanaryAssignmentSafety:
         )
 
     def refresh(self) -> None:
-        """Consume all new assignment rows in durable append order."""
+        """Consume new shared assignments only when the durable tail advances."""
 
+        direct_tail = direct_latest_append_seq(self.event_log)
         with self._lock:
+            loaded = self._loaded
             after_append_seq = self._append_cursor
+        if loaded and direct_tail is None:
+            return
+        if direct_tail is not None and direct_tail <= after_append_seq:
+            return
+
         rows = list(
             iter_event_window(
                 self.event_log,
@@ -124,11 +132,12 @@ class LiveCanaryAssignmentSafety:
                         payload=_payload(event),
                     )
                 self._append_cursor = append_seq
+            if direct_tail is not None:
+                self._append_cursor = max(self._append_cursor, direct_tail)
             self._loaded = True
 
     def ensure_loaded(self) -> None:
-        if not self._loaded:
-            self.refresh()
+        self.refresh()
 
     def observe(
         self,
@@ -150,7 +159,8 @@ class LiveCanaryAssignmentSafety:
         }
         with self._lock:
             self._track(decision_id=str(decision_id), payload=payload)
-        self.refresh()
+        if direct_latest_append_seq(self.event_log) is not None:
+            self.refresh()
 
     def _purge_expired(self, *, cutoff_ms: int) -> None:
         max_dirty = False
