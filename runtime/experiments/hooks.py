@@ -10,6 +10,7 @@ from typing import Any
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import LIVE_CANARY_EXECUTION_FAILED_SOURCE
 from runtime.experiments.live_canary import source_event_evidence_ref
+from runtime.experiments.proof_semantics import resolve_action_proof_success
 from runtime.proofs import ACTION_PROOF_EVENT
 
 log = logging.getLogger(__name__)
@@ -53,9 +54,7 @@ def _source_proof_event(
         if str(data.get("source") or "") == "live_canary":
             continue
         payload = _safe_mapping(data.get("payload"))
-        observed = payload.get("ok")
-        if observed is None:
-            observed = payload.get("success")
+        observed = resolve_action_proof_success(proof_event_type, payload)
         if observed is bool(ok):
             return event
     raise RuntimeError("LIVE_CANARY_VERIFIED_SOURCE_EVENT_REQUIRED")
