@@ -9,13 +9,10 @@ import sqlite3
 
 from observability.platform.observability.silent import swallow
 
-# ---------------------------------------------------------------------------
-# DDL
-# ---------------------------------------------------------------------------
-
 _DDL_EVENTS = (
     "CREATE TABLE IF NOT EXISTS events ("
     "event_id TEXT PRIMARY KEY, "
+    "append_seq INTEGER, "
     "tenant_id TEXT NOT NULL DEFAULT 'legacy', "
     "user_id TEXT, "
     "source TEXT NOT NULL, "
@@ -24,6 +21,12 @@ _DDL_EVENTS = (
     "decision_id TEXT, "
     "correlation_id TEXT, "
     "payload_json TEXT NOT NULL)"
+)
+
+_DDL_EVENT_APPEND_SEQUENCE = (
+    "CREATE TABLE IF NOT EXISTS event_append_sequence ("
+    "singleton INTEGER PRIMARY KEY CHECK(singleton=1), "
+    "last_seq INTEGER NOT NULL)"
 )
 
 _DDL_EVENT_COUNTERS = (
@@ -82,14 +85,25 @@ _DDL_SETTINGS = (
 )
 
 
-# ---------------------------------------------------------------------------
-# Schema init
-# ---------------------------------------------------------------------------
-
 def init_schema(db: sqlite3.Connection) -> None:
     """Create all tables and indexes. Safe to call on every open."""
     db.execute(_DDL_EVENTS)
     _maybe_add_tenant_id_column(db)
+    _maybe_add_append_seq_column(db)
+    db.execute(_DDL_EVENT_APPEND_SEQUENCE)
+    db.execute(
+        "INSERT OR IGNORE INTO event_append_sequence(singleton,last_seq) "
+        "VALUES (1,0)"
+    )
+    _backfill_append_sequences(db)
+    db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_events_append_seq "
+        "ON events(append_seq)"
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_events_tenant_append_seq "
+        "ON events(tenant_id,append_seq)"
+    )
     db.execute("CREATE INDEX IF NOT EXISTS idx_events_ts ON events(timestamp_ms)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_events_type_ts ON events(event_type, timestamp_ms)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, timestamp_ms)")
@@ -113,14 +127,52 @@ def init_schema(db: sqlite3.Connection) -> None:
     db.commit()
 
 
+def _event_columns(db: sqlite3.Connection) -> set[str]:
+    return {
+        str(row[1]).lower()
+        for row in db.execute("PRAGMA table_info(events)").fetchall()
+    }
+
+
 def _maybe_add_tenant_id_column(db: sqlite3.Connection) -> None:
     """Migration: add tenant_id column to older schemas that lack it."""
     try:
-        cols = [str(r[1]) for r in db.execute("PRAGMA table_info(events)").fetchall()]
-        if "tenant_id" not in {c.lower() for c in cols}:
+        if "tenant_id" not in _event_columns(db):
             db.execute("ALTER TABLE events ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'legacy'")
     except Exception:
         swallow(__name__, "sqlite_schema.migrate_tenant_id")
+
+
+def _maybe_add_append_seq_column(db: sqlite3.Connection) -> None:
+    try:
+        if "append_seq" not in _event_columns(db):
+            db.execute("ALTER TABLE events ADD COLUMN append_seq INTEGER")
+    except Exception:
+        swallow(__name__, "sqlite_schema.migrate_append_seq")
+
+
+def _backfill_append_sequences(db: sqlite3.Connection) -> None:
+    row = db.execute(
+        "SELECT last_seq FROM event_append_sequence WHERE singleton=1"
+    ).fetchone()
+    current = int(row[0] or 0) if row else 0
+    existing_max = db.execute(
+        "SELECT COALESCE(MAX(append_seq),0) FROM events"
+    ).fetchone()
+    current = max(current, int(existing_max[0] or 0) if existing_max else 0)
+    missing = db.execute(
+        "SELECT event_id FROM events WHERE append_seq IS NULL ORDER BY rowid"
+    ).fetchall()
+    for event_row in missing:
+        current += 1
+        db.execute(
+            "UPDATE events SET append_seq=? WHERE event_id=?",
+            (current, str(event_row[0])),
+        )
+    db.execute(
+        "UPDATE event_append_sequence SET last_seq=? WHERE singleton=1",
+        (current,),
+    )
 
 
 def backfill_legacy_tenant_ids(db: sqlite3.Connection) -> None:
