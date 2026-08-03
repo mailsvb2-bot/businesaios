@@ -200,22 +200,20 @@ def iter_events(
     )
 
 
-def has_event(event_log: Any, decision_id: str, event_type: str) -> bool:
-    try:
-        return any(
-            True
-            for _ in iter_events(
-                event_log,
-                event_type=str(event_type),
-                decision_id=str(decision_id),
-                limit=1,
-            )
-        )
-    except Exception:
-        return False
-
-
 def get_events(event_log: Any, decision_id: str, event_type: str) -> list[dict]:
+    store = getattr(event_log, "_store", None)
+    getter = getattr(store, "get_events_for_decision", None)
+    if callable(getter):
+        try:
+            return list(
+                getter(
+                    tenant_id=_tenant_id(event_log),
+                    decision_id=str(decision_id),
+                    event_type=str(event_type),
+                )
+            )
+        except Exception:
+            return []
     out: list[dict] = []
     try:
         for event in iter_events(
@@ -230,6 +228,10 @@ def get_events(event_log: Any, decision_id: str, event_type: str) -> list[dict]:
     except Exception:
         return []
     return out
+
+
+def has_event(event_log: Any, decision_id: str, event_type: str) -> bool:
+    return bool(get_events(event_log, decision_id, event_type))
 
 
 __all__ = [
