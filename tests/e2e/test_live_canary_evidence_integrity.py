@@ -131,11 +131,11 @@ def test_execution_and_revenue_require_non_stub_source_events() -> None:
             ok=True,
             cost=1.0,
             proof_event_type="message_sent",
-            evidence_ref="telegram:1",
+            evidence_ref="event:missing-proof",
             executed_at_ms=assigned_at + 1,
         )
 
-    events.emit(
+    stub_proof = events.emit(
         event_type="message_sent",
         source="telegram",
         user_id="customer-1",
@@ -155,11 +155,11 @@ def test_execution_and_revenue_require_non_stub_source_events() -> None:
             ok=True,
             cost=1.0,
             proof_event_type="message_sent",
-            evidence_ref="telegram:1",
+            evidence_ref=source_event_evidence_ref(stub_proof),
             executed_at_ms=assigned_at + 1,
         )
 
-    events.emit(
+    real_proof = events.emit(
         event_type="message_sent",
         source="telegram",
         user_id="customer-1",
@@ -167,6 +167,21 @@ def test_execution_and_revenue_require_non_stub_source_events() -> None:
         correlation_id="c-1",
         payload={"ok": True, "cost": 2.0},
     )
+    with pytest.raises(
+        RuntimeError,
+        match="LIVE_CANARY_VERIFIED_SOURCE_EVENT_REQUIRED",
+    ):
+        coordinator.record_execution(
+            decision_id="d-1",
+            correlation_id="c-1",
+            arm=assignment.arm,
+            action="send_message@v1",
+            ok=True,
+            cost=1.0,
+            proof_event_type="message_sent",
+            evidence_ref="event:does-not-exist",
+            executed_at_ms=assigned_at + 1,
+        )
     execution = coordinator.record_execution(
         decision_id="d-1",
         correlation_id="c-1",
@@ -175,10 +190,13 @@ def test_execution_and_revenue_require_non_stub_source_events() -> None:
         ok=True,
         cost=1.0,
         proof_event_type="message_sent",
-        evidence_ref="telegram:1",
+        evidence_ref=source_event_evidence_ref(real_proof),
         executed_at_ms=assigned_at + 1,
     )
     assert execution["payload"]["cost"] == 2.0
+    assert execution["payload"]["evidence_ref"] == source_event_evidence_ref(
+        real_proof
+    )
 
     source_outcome = events.emit(
         event_type="booking_confirmed@v1",
