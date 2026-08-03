@@ -22,15 +22,24 @@ class MemoryEventStore(list):
         tenant_id: str,
         start_ms: int = 0,
         end_ms: int | None = None,
+        after_append_seq: int | None = None,
         user_id: str | None = None,
         event_type: str | None = None,
+        event_types=None,
+        limit: int | None = None,
     ):
         tid = str(tenant_id or "").strip()
         if not tid:
             raise ValueError("tenant_id is required (strict)")
         end_ms = int(end_ms) if end_ms is not None else 2**63 - 1
         start_ms = int(start_ms)
-        for e in list(self):
+        after = max(0, int(after_append_seq or 0))
+        allowed = {str(item) for item in (event_types or ()) if str(item)}
+        emitted = 0
+        for append_seq, event in enumerate(list(self), start=1):
+            if append_seq <= after:
+                continue
+            e = dict(event)
             if str(e.get("tenant_id") or "") != tid:
                 continue
             ts = int(e.get("timestamp_ms") or 0)
@@ -41,7 +50,13 @@ class MemoryEventStore(list):
             et = e.get("event_type") or e.get("type")
             if event_type and et != event_type:
                 continue
+            if allowed and str(et or "") not in allowed:
+                continue
+            e["append_seq"] = append_seq
             yield e
+            emitted += 1
+            if limit is not None and emitted >= max(1, int(limit)):
+                return
 
     def count_events(
         self,
@@ -73,8 +88,6 @@ class MemoryEventStore(list):
                 continue
         return int(total)
 
-
-
     def delete_user_events(self, *, tenant_id: str, user_id: str) -> int:
         """Delete all events for a user within a tenant (in-memory)."""
         tid = str(tenant_id or "").strip()
@@ -95,7 +108,6 @@ class MemoryEventStore(list):
         self.clear()
         self.extend(kept)
         return int(before - len(self))
-
 
     def get_setting(self, *, tenant_id: str, key: str):
         store = getattr(self, "_settings", None)
