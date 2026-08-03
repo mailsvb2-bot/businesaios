@@ -9,6 +9,7 @@ from typing import Any
 
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import LIVE_CANARY_EXECUTION_FAILED_SOURCE
+from runtime.experiments.live_canary import source_event_evidence_ref
 from runtime.proofs import ACTION_PROOF_EVENT
 
 log = logging.getLogger(__name__)
@@ -22,12 +23,42 @@ def _safe_mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
 
 
+def _event_data(event: Any) -> dict[str, Any]:
+    if isinstance(event, Mapping):
+        return dict(event)
+    return dict(getattr(event, "__dict__", {}))
+
+
 def _finite(value: object, default: float = 0.0) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError):
         return default
     return number if math.isfinite(number) else default
+
+
+def _source_proof_event(
+    coordinator: Any,
+    *,
+    decision_id: str,
+    proof_event_type: str,
+    ok: bool,
+) -> Any:
+    events = coordinator.ledger.events_for_decision(
+        str(decision_id),
+        str(proof_event_type),
+    )
+    for event in reversed(events):
+        data = _event_data(event)
+        if str(data.get("source") or "") == "live_canary":
+            continue
+        payload = _safe_mapping(data.get("payload"))
+        observed = payload.get("ok")
+        if observed is None:
+            observed = payload.get("success")
+        if observed is bool(ok):
+            return event
+    raise RuntimeError("LIVE_CANARY_VERIFIED_SOURCE_EVENT_REQUIRED")
 
 
 def _force_rollback(
@@ -143,6 +174,12 @@ def record_live_canary_executor_result(
                 )
                 return
 
+        proof_event = _source_proof_event(
+            coordinator,
+            decision_id=decision_id,
+            proof_event_type=proof_event_type,
+            ok=ok,
+        )
         payload = _safe_mapping(getattr(decision, "payload", None))
         coordinator.record_execution(
             decision_id=decision_id,
@@ -155,7 +192,7 @@ def record_live_canary_executor_result(
                 _finite(output.get("cost", output.get("actual_cost"))),
             ),
             proof_event_type=proof_event_type,
-            evidence_ref=f"runtime-execution:{decision_id}",
+            evidence_ref=source_event_evidence_ref(proof_event),
             critical_violation=bool(output.get("critical_violation")),
             complaint=bool(output.get("complaint")),
             executed_at_ms=int(time.time() * 1000),
