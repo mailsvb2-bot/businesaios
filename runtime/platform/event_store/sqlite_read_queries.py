@@ -12,7 +12,16 @@ EVENT_COLUMNS = (
     "event_id,tenant_id,user_id,source,event_type,timestamp_ms,"
     "decision_id,correlation_id,payload_json"
 )
-APPEND_EVENT_COLUMNS = f"append_seq,{EVENT_COLUMNS}"
+
+
+def _sequence_expression(db: sqlite3.Connection) -> str:
+    """Use durable append_seq when migrated; support legacy direct connections."""
+
+    columns = {
+        str(row[1]).strip().lower()
+        for row in db.execute("PRAGMA table_info(events)").fetchall()
+    }
+    return "append_seq" if "append_seq" in columns else "rowid"
 
 
 def _literal_like_pattern(value: object) -> str:
@@ -49,7 +58,12 @@ def _iter_rows(
     order_by: str | None = None,
     limit: int | None = None,
 ) -> Sequence[sqlite3.Row | tuple]:
-    columns = APPEND_EVENT_COLUMNS if after_append_seq is not None else EVENT_COLUMNS
+    sequence = _sequence_expression(db)
+    columns = (
+        f"{sequence} AS append_seq,{EVENT_COLUMNS}"
+        if after_append_seq is not None
+        else EVENT_COLUMNS
+    )
     sql = [
         f"SELECT {columns} FROM events "
         "WHERE tenant_id=? AND timestamp_ms>=? AND timestamp_ms<?"
@@ -60,7 +74,7 @@ def _iter_rows(
         _exclusive_end_ms(end_ms),
     ]
     if after_append_seq is not None:
-        sql.append("AND append_seq>?")
+        sql.append(f"AND {sequence}>?")
         params.append(max(0, int(after_append_seq)))
     types = _normalized_event_types(
         event_type=event_type,
@@ -77,9 +91,9 @@ def _iter_rows(
         sql.append("AND user_id=?")
         params.append(str(user_id))
     ordering = order_by or (
-        "append_seq ASC"
+        f"{sequence} ASC"
         if after_append_seq is not None
-        else "timestamp_ms ASC, append_seq ASC"
+        else f"timestamp_ms ASC, {sequence} ASC"
     )
     sql.append(f"ORDER BY {ordering}")
     if limit is not None:
@@ -122,6 +136,7 @@ def latest_event(
     user_id: str | None = None,
     event_types: Sequence[str] | None = None,
 ) -> dict[str, Any] | None:
+    sequence = _sequence_expression(db)
     if event_types:
         placeholders = ",".join("?" for _ in event_types)
         sql = (
@@ -135,14 +150,14 @@ def latest_event(
         if user_id is not None:
             sql += " AND user_id=?"
             params.append(str(user_id))
-        sql += " ORDER BY timestamp_ms DESC, append_seq DESC LIMIT 1"
+        sql += f" ORDER BY timestamp_ms DESC, {sequence} DESC LIMIT 1"
         row = db.execute(sql, tuple(params)).fetchone()
     else:
         rows = _iter_rows(
             db,
             tenant_id=tenant_id,
             user_id=user_id,
-            order_by="timestamp_ms DESC, append_seq DESC",
+            order_by=f"timestamp_ms DESC, {sequence} DESC",
             limit=1,
         )
         row = rows[0] if rows else None
@@ -158,13 +173,14 @@ def latest_events(
     event_types: Sequence[str] | None = None,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
+    sequence = _sequence_expression(db)
     rows = _iter_rows(
         db,
         tenant_id=tenant_id,
         user_id=user_id,
         event_type=event_type,
         event_types=event_types,
-        order_by="timestamp_ms DESC, append_seq DESC",
+        order_by=f"timestamp_ms DESC, {sequence} DESC",
         limit=limit,
     )
     return [_row_to_event(row) for row in rows]
