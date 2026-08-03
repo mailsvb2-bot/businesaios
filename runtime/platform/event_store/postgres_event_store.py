@@ -102,6 +102,7 @@ def _where_clause(
     end_ms: int | None,
     after_append_seq: int | None = None,
     user_id: str | None = None,
+    decision_id: str | None = None,
     event_type: str | None = None,
     event_types: Iterable[str] | None = None,
 ) -> tuple[str, tuple[Any, ...]]:
@@ -122,6 +123,9 @@ def _where_clause(
     if user_id is not None:
         clauses.append("user_id = %s")
         params.append(str(user_id))
+    if decision_id is not None:
+        clauses.append("decision_id = %s")
+        params.append(str(decision_id))
 
     types = _normalized_event_types(
         event_type=event_type,
@@ -193,6 +197,10 @@ class PostgresEventStore:
             "CREATE INDEX IF NOT EXISTS idx_events_tenant_append_seq "
             "ON events (tenant_id, append_seq);"
         )
+        self._db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_events_tenant_decision_type "
+            "ON events (tenant_id, decision_id, event_type);"
+        )
 
     def append_event(
         self,
@@ -224,6 +232,10 @@ class PostgresEventStore:
             )
         )
         self._db.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s));",
+            (f"event-append:{normalized.tenant_id}",),
+        )
+        self._db.execute(
             """
             INSERT INTO events (
               event_id, tenant_id, user_id, source, event_type, timestamp_ms,
@@ -246,6 +258,14 @@ class PostgresEventStore:
         if commit:
             self._db.commit()
 
+    def latest_append_seq(self, *, tenant_id: str) -> int:
+        row = self._db.fetchone(
+            "SELECT COALESCE(MAX(append_seq), 0) FROM events "
+            "WHERE tenant_id = %s;",
+            (str(tenant_id),),
+        )
+        return int(row[0] or 0) if row else 0
+
     def iter_events(
         self,
         *,
@@ -254,6 +274,7 @@ class PostgresEventStore:
         end_ms: int | None = None,
         after_append_seq: int | None = None,
         user_id: str | None = None,
+        decision_id: str | None = None,
         event_type: str | None = None,
         event_types: Iterable[str] | None = None,
         limit: int | None = None,
@@ -264,6 +285,7 @@ class PostgresEventStore:
             end_ms=end_ms,
             after_append_seq=after_append_seq,
             user_id=user_id,
+            decision_id=decision_id,
             event_type=event_type,
             event_types=event_types,
         )
@@ -313,6 +335,7 @@ class PostgresEventStore:
         event_type: str | None = None,
         event_types: Iterable[str] | None = None,
         user_id: str | None = None,
+        decision_id: str | None = None,
         start_ms: int | None = None,
         end_ms: int | None = None,
         limit: int = 100,
@@ -322,6 +345,7 @@ class PostgresEventStore:
             start_ms=start_ms,
             end_ms=end_ms,
             user_id=user_id,
+            decision_id=decision_id,
             event_type=event_type,
             event_types=event_types,
         )
