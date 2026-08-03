@@ -6,8 +6,9 @@ import pytest
 
 from config.live_canary_policy import LiveCanaryPolicy
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
+from core.security.call_origin import assert_called_from_runtime_executor
 from runtime.execution import executor_trace_runtime
-from runtime.execution.context import is_executor_context_active
+from runtime.executor import RuntimeExecutor
 from runtime.experiments import wiring
 from runtime.experiments.live_canary import LiveCanaryCoordinator
 
@@ -136,7 +137,37 @@ def test_shared_safety_refresh_blocks_second_coordinator_assignment() -> None:
     assert second.rollback_required is True
 
 
-def test_wiring_submits_watchdog_rollback_inside_executor_context(
+def test_runtime_executor_gateway_satisfies_sovereign_call_origin() -> None:
+    rollback = GuardrailResult(
+        CanaryDecision.ROLLBACK,
+        ("candidate_error_rate",),
+        {},
+    )
+
+    class Coordinator:
+        candidate_policy_id = "candidate@v2"
+        policy = SimpleNamespace(experiment_id="watchdog-runtime")
+
+        def evaluate_and_maybe_rollback(self, **_kwargs):
+            assert_called_from_runtime_executor()
+            return rollback
+
+    executor = RuntimeExecutor.__new__(RuntimeExecutor)
+    executor._decision_core = SimpleNamespace(_live_canary=Coordinator())
+
+    result = executor.submit_live_canary_rollback(
+        decision_id="watchdog-1",
+        correlation_id="watchdog-c-1",
+        tenant_id="tenant-a",
+        candidate_policy_id="candidate@v2",
+        experiment_id="watchdog-runtime",
+        reasons=("candidate_error_rate",),
+    )
+
+    assert result is rollback
+
+
+def test_wiring_submits_watchdog_rollback_through_runtime_executor(
     monkeypatch,
 ) -> None:
     rollback = GuardrailResult(
@@ -144,7 +175,7 @@ def test_wiring_submits_watchdog_rollback_inside_executor_context(
         ("candidate_error_rate",),
         {},
     )
-    calls: list[tuple[str, bool]] = []
+    calls: list[str] = []
 
     class Coordinator:
         candidate_policy_id = "candidate@v2"
@@ -158,11 +189,7 @@ def test_wiring_submits_watchdog_rollback_inside_executor_context(
             return rollback
 
         def _open_local_circuit(self, *_args, **_kwargs):
-            calls.append(("circuit", is_executor_context_active()))
-
-        def evaluate_and_maybe_rollback(self, **_kwargs):
-            calls.append(("rollback", is_executor_context_active()))
-            return rollback
+            calls.append("circuit")
 
     supervisors = []
 
@@ -172,17 +199,23 @@ def test_wiring_submits_watchdog_rollback_inside_executor_context(
             supervisors.append(self)
 
         def start(self):
-            calls.append(("start", is_executor_context_active()))
+            calls.append("start")
 
     monkeypatch.setattr(wiring, "LiveCanaryWatchdogSupervisor", Supervisor)
     core = SimpleNamespace(_live_canary=Coordinator())
-    executor = SimpleNamespace(_decision_core=core)
 
+    class Executor:
+        _decision_core = core
+
+        def submit_live_canary_rollback(self, **_kwargs):
+            calls.append("executor-rollback")
+            return rollback
+
+    executor = Executor()
     wiring.bind_live_canary_executor(core, executor)
     supervisors[0].watchdog.run_once()
 
-    assert ("start", False) in calls
-    assert ("rollback", True) in calls
+    assert calls == ["start", "circuit", "executor-rollback"]
     assert executor._live_canary_watchdog is supervisors[0].watchdog
 
 
