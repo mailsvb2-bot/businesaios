@@ -17,6 +17,35 @@ from runtime.experiments.live_canary import (
 
 log = logging.getLogger(__name__)
 
+_SUCCESS_STATUSES = frozenset(
+    {
+        "captured",
+        "completed",
+        "confirmed",
+        "paid",
+        "succeeded",
+        "success",
+    }
+)
+_FAILURE_STATUSES = frozenset(
+    {
+        "canceled",
+        "cancelled",
+        "declined",
+        "failed",
+        "failure",
+        "refunded",
+    }
+)
+_SEMANTIC_SUCCESS_EVENT_TYPES = frozenset(
+    {
+        "booking_confirmed@v1",
+        "payment_captured",
+        "payment_succeeded",
+        "purchase_success",
+    }
+)
+
 
 def _data(event: Any) -> dict[str, Any]:
     return dict(event) if isinstance(event, Mapping) else vars(event)
@@ -26,11 +55,20 @@ def _payload(event: Any) -> dict[str, Any]:
     return dict(_data(event).get("payload") or {})
 
 
-def _success(payload: Mapping[str, Any]) -> bool | None:
+def _success(event_type: str, payload: Mapping[str, Any]) -> bool | None:
+    """Resolve outcome success without treating arbitrary event types as wins."""
+
     for key in ("success", "ok"):
         value = payload.get(key)
         if isinstance(value, bool):
             return value
+    status = str(payload.get("status") or "").strip().lower()
+    if status in _SUCCESS_STATUSES:
+        return True
+    if status in _FAILURE_STATUSES:
+        return False
+    if str(event_type) in _SEMANTIC_SUCCESS_EVENT_TYPES:
+        return True
     return None
 
 
@@ -108,7 +146,7 @@ class LiveCanaryOutcomeObserver:
         if assignment is None or assignment.get("eligible") is not True:
             return True, 0
         payload = _payload(event)
-        success = _success(payload)
+        success = _success(event_type, payload)
         if success is None:
             return True, 0
         if self._already_attributed(
@@ -161,7 +199,7 @@ class LiveCanaryOutcomeObserver:
     def poll_once(self) -> int:
         recorded = 0
         initial_tail = (
-            direct_latest_append_seq(self.coordinator.event_log) or 0
+            (direct_latest_append_seq(self.coordinator.event_log) or 0)
             if not self._hydrated
             else self._append_cursor
         )
