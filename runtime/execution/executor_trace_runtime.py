@@ -94,11 +94,6 @@ def execute_with_trace(*, executor, env: DecisionEnvelope) -> ExecutionResult:
                 executor_context_cm=executor_context,
             )
             result = entrypoint_bundle.run(executor=executor, env=env)
-            record_live_canary_executor_result(
-                executor=executor,
-                env=env,
-                result=result,
-            )
             executor._record_action_audit(
                 env=env,
                 trace_id=trace_id,
@@ -118,6 +113,11 @@ def execute_with_trace(*, executor, env: DecisionEnvelope) -> ExecutionResult:
                 stage='succeeded' if getattr(result, 'ok', False) else 'failed',
                 trace_id=str(trace_id or ''),
                 ok=1 if getattr(result, 'ok', False) else 0,
+            )
+            record_live_canary_executor_result(
+                executor=executor,
+                env=env,
+                result=result,
             )
             return result
         except (OperationalBudgetBlocked, GovernanceExecutionBlocked) as exc:
