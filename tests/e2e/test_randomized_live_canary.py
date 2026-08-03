@@ -14,7 +14,10 @@ from core.experiments.events import (
 )
 from core.experiments.guardrails import CanaryDecision, LiveCanaryGuard
 from core.experiments.ledger import LiveCanaryLedger
-from runtime.experiments.live_canary import LiveCanaryCoordinator
+from runtime.experiments.live_canary import (
+    LiveCanaryCoordinator,
+    source_event_evidence_ref,
+)
 
 
 class MemoryEvents:
@@ -232,7 +235,7 @@ def test_guard_is_fail_closed_and_rolls_back_on_critical_violation() -> None:
         purpose="live_canary",
         eligible=True,
     )
-    events.emit(
+    failure_proof = events.emit(
         event_type="message_failed",
         source="telegram",
         user_id="customer-1",
@@ -248,7 +251,7 @@ def test_guard_is_fail_closed_and_rolls_back_on_critical_violation() -> None:
         ok=False,
         cost=0.0,
         proof_event_type="message_failed",
-        evidence_ref="telegram:error:1",
+        evidence_ref=source_event_evidence_ref(failure_proof),
         critical_violation=True,
     )
     result = coordinator.evaluate_and_maybe_rollback(
