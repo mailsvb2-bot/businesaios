@@ -73,6 +73,14 @@ def run_decision(
                 state=state,
                 trace=trace,
             )
+            snapshot_getter = getattr(
+                core._selector,
+                "consume_live_canary_routing_snapshot",
+                None,
+            )
+            routing_snapshot = (
+                snapshot_getter() if callable(snapshot_getter) else None
+            )
         span_router.extra = {"policy_id": getattr(policy, "id", "")}
         _emit_router_sla(
             core=core,
@@ -126,6 +134,7 @@ def run_decision(
             tenant_id=str(tenant_id),
             subject_id=str(actor_id or ""),
             expected_cost=float(payload.get("expected_cost") or 0.0),
+            routing_snapshot=routing_snapshot,
         )
         core._snapshots.put(built.decision.snapshot_id, built.state_bytes)
         archive_env = build_archive_envelope(
@@ -219,6 +228,10 @@ def _state_flag(state: Any, name: str) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _snapshot_value(snapshot: Any, name: str, default: Any = None) -> Any:
+    return getattr(snapshot, name, default) if snapshot is not None else default
+
+
 def _record_live_canary_assignment(
     *,
     core: Any,
@@ -229,6 +242,7 @@ def _record_live_canary_assignment(
     tenant_id: str,
     subject_id: str,
     expected_cost: float,
+    routing_snapshot: Any = None,
 ) -> None:
     coordinator = getattr(core, "_live_canary", None)
     if coordinator is None:
@@ -236,9 +250,34 @@ def _record_live_canary_assignment(
 
     selected_policy_id = _policy_id(policy)
     selected_candidate = selected_policy_id == coordinator.candidate_policy_id
-    active_policy_id = _active_policy_id(core)
+    if _state_flag(state, "safe_mode"):
+        if selected_candidate:
+            raise RuntimeError("LIVE_CANARY_SAFE_MODE_CANDIDATE_SELECTED")
+        return
+
+    snapshot_selected = str(
+        _snapshot_value(routing_snapshot, "selected_policy_id", "") or ""
+    )
+    if snapshot_selected and snapshot_selected != selected_policy_id:
+        raise RuntimeError("LIVE_CANARY_ROUTING_SNAPSHOT_MISMATCH")
+
+    current_active_policy_id = _active_policy_id(core)
+    control_policy_id = str(
+        _snapshot_value(
+            routing_snapshot,
+            "active_policy_id",
+            current_active_policy_id,
+        )
+        or current_active_policy_id
+    )
+    if selected_policy_id not in {
+        coordinator.candidate_policy_id,
+        control_policy_id,
+    }:
+        return
+
     if coordinator.live_rollout_pct() <= 0:
-        if selected_candidate and active_policy_id != selected_policy_id:
+        if selected_candidate and current_active_policy_id != selected_policy_id:
             raise RuntimeError("LIVE_CANARY_IN_FLIGHT_CANDIDATE_REVOKED")
         return
 
@@ -249,7 +288,7 @@ def _record_live_canary_assignment(
         subject_id=subject_id,
         decision_id=str(built.decision.decision_id),
         correlation_id=str(built.decision.correlation_id),
-        production_policy_id=active_policy_id,
+        production_policy_id=control_policy_id,
         action=action,
         purpose=purpose,
         eligible=_state_flag(
@@ -257,6 +296,18 @@ def _record_live_canary_assignment(
             coordinator.policy.eligibility_state_key,
         ),
         expected_cost=expected_cost,
+        expected_candidate_policy_id=_snapshot_value(
+            routing_snapshot,
+            "candidate_policy_id",
+        ),
+        expected_rollout_pct=_snapshot_value(
+            routing_snapshot,
+            "rollout_pct",
+        ),
+        expected_rollout_generation=_snapshot_value(
+            routing_snapshot,
+            "rollout_generation",
+        ),
     )
     if not assignment.eligible:
         if selected_candidate:
