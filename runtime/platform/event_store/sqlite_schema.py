@@ -104,6 +104,10 @@ def init_schema(db: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_events_tenant_append_seq "
         "ON events(tenant_id,append_seq)"
     )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_events_tenant_decision_type "
+        "ON events(tenant_id,decision_id,event_type)"
+    )
     db.execute("CREATE INDEX IF NOT EXISTS idx_events_ts ON events(timestamp_ms)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_events_type_ts ON events(event_type, timestamp_ms)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_events_user_ts ON events(user_id, timestamp_ms)")
