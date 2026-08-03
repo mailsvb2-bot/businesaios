@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import time
 from collections.abc import Mapping
 from threading import Lock
 from typing import Any
 
 from core.events.log_queries import (
-    event_timestamp_ms,
+    event_append_seq,
     iter_events as iter_event_window,
 )
 from core.experiments.events.live_canary_events import LIVE_CANARY_EVENT_TYPES
@@ -39,69 +38,39 @@ def _event_key(event: Any) -> str:
 
 
 class LiveCanaryLedger(_BaseLiveCanaryLedger):
-    """Live-canary ledger with incremental reads and late-row reconciliation."""
+    """Live-canary ledger materialized by durable store append order."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        reconcile_interval = float(
-            kwargs.pop("reconcile_interval_seconds", 60 * 60)
-        )
-        if reconcile_interval < 1:
-            raise ValueError("reconcile_interval_seconds must be at least one")
         super().__init__(*args, **kwargs)
         self._evidence_lock = Lock()
-        self._evidence_cursor_ms = 0
-        self._seen_keys_at_cursor: set[str] = set()
+        self._append_cursor = 0
         self._materialized_keys: set[str] = set()
         self._materialized_rows: list[tuple[dict[str, Any], dict[str, Any]]] = []
-        self._reconcile_interval_seconds = reconcile_interval
-        self._last_reconcile_monotonic = 0.0
 
     def _refresh_materialized_rows(self) -> None:
-        now = time.monotonic()
         with self._evidence_lock:
-            full_reconcile = (
-                self._last_reconcile_monotonic <= 0
-                or now - self._last_reconcile_monotonic
-                >= self._reconcile_interval_seconds
-            )
-            cursor_ms = 0 if full_reconcile else self._evidence_cursor_ms
+            after_append_seq = self._append_cursor
         events = list(
             iter_event_window(
                 self.event_log,
-                start_ms=cursor_ms,
+                start_ms=0,
+                after_append_seq=after_append_seq,
                 event_types=LIVE_CANARY_EVENT_TYPES,
             )
         )
-        events.sort(
-            key=lambda event: (
-                event_timestamp_ms(event),
-                _event_key(event),
-            )
-        )
+        events.sort(key=lambda event: (event_append_seq(event), _event_key(event)))
         with self._evidence_lock:
             for event in events:
-                timestamp_ms = event_timestamp_ms(event)
+                append_seq = event_append_seq(event)
+                if append_seq <= self._append_cursor:
+                    continue
                 key = _event_key(event)
-                if not full_reconcile:
-                    if timestamp_ms < self._evidence_cursor_ms:
-                        continue
-                    if (
-                        timestamp_ms == self._evidence_cursor_ms
-                        and key in self._seen_keys_at_cursor
-                    ):
-                        continue
                 if self._belongs(event) and key not in self._materialized_keys:
                     self._materialized_keys.add(key)
                     self._materialized_rows.append(
                         (_data(event), _payload(event))
                     )
-                if timestamp_ms > self._evidence_cursor_ms:
-                    self._evidence_cursor_ms = timestamp_ms
-                    self._seen_keys_at_cursor = {key}
-                elif timestamp_ms == self._evidence_cursor_ms:
-                    self._seen_keys_at_cursor.add(key)
-            if full_reconcile:
-                self._last_reconcile_monotonic = now
+                self._append_cursor = append_seq
 
     def _experiment_rows(self) -> list[tuple[dict[str, Any], dict[str, Any]]]:
         self._refresh_materialized_rows()
