@@ -34,6 +34,10 @@ from core.experiments.live_canary_events import (
     CANARY_AUTO_ROLLED_BACK,
     CANARY_GUARDRAIL_BREACHED,
 )
+from runtime.experiments.cost_semantics import (
+    resolve_execution_cost,
+    validate_reservation_cost,
+)
 from runtime.experiments.proof_semantics import resolve_action_proof_success
 
 
@@ -239,6 +243,7 @@ class LiveCanaryCoordinator:
     ) -> ExperimentAssignment:
         with self._assignment_window():
             with self._assignment_lock:
+                expected_cost = validate_reservation_cost(expected_cost)
                 effective = self._effective_policy()
                 assignment = StableExperimentAssigner(effective).assign(
                     tenant_id=tenant_id,
@@ -375,9 +380,10 @@ class LiveCanaryCoordinator:
         if not assigned_at_ms or executed_at_ms < assigned_at_ms:
             raise RuntimeError("LIVE_CANARY_EXECUTION_PRECEDES_ASSIGNMENT")
         kwargs["executed_at_ms"] = executed_at_ms
-        kwargs["cost"] = max(
-            _finite(kwargs.get("cost")),
-            _finite(proof_payload.get("cost")),
+        kwargs["cost"] = resolve_execution_cost(
+            result_output={"cost": kwargs.get("cost")},
+            proof_payload=proof_payload,
+            expected_cost=assignment.get("expected_cost"),
         )
         kwargs["critical_violation"] = bool(
             kwargs.get("critical_violation")
