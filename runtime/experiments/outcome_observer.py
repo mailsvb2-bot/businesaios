@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from threading import Event, Lock, Thread
 from typing import Any
 
-from core.events.log_queries import event_timestamp_ms
+from core.events.log_queries import event_append_seq, latest_append_seq
 from core.events.log_queries import iter_events as iter_event_window
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import BUSINESS_OUTCOME_OBSERVED
@@ -54,26 +54,28 @@ def _observed_at_ms(event: Any, payload: Mapping[str, Any]) -> int:
 
 
 class LiveCanaryOutcomeObserver:
-    """Bind new real source events to canary assignments incrementally."""
+    """Bind source outcomes once, then follow durable append order."""
 
     def __init__(self, coordinator: LiveCanaryCoordinator) -> None:
         self.coordinator = coordinator
         now_ms = int(time.time() * 1000)
         window_ms = int(coordinator.policy.outcome_window_seconds) * 1000
-        self._cursor_ms = max(0, now_ms - window_ms)
-        self._seen_refs_at_cursor: set[str] = set()
+        self._window_start_ms = max(0, now_ms - window_ms)
+        self._append_cursor = 0
+        self._hydrated = False
 
     def _new_events(self) -> list[Any]:
         events = list(
             iter_event_window(
                 self.coordinator.event_log,
-                start_ms=self._cursor_ms,
+                start_ms=0 if self._hydrated else self._window_start_ms,
+                after_append_seq=self._append_cursor,
                 event_types=self.coordinator.policy.outcome_event_types,
             )
         )
         events.sort(
             key=lambda event: (
-                event_timestamp_ms(event),
+                event_append_seq(event),
                 source_event_evidence_ref(event),
             )
         )
@@ -158,26 +160,26 @@ class LiveCanaryOutcomeObserver:
 
     def poll_once(self) -> int:
         recorded = 0
-        cursor = self._cursor_ms
-        seen = set(self._seen_refs_at_cursor)
+        initial_tail = (
+            latest_append_seq(self.coordinator.event_log)
+            if not self._hydrated
+            else self._append_cursor
+        )
+        completed = True
         for event in self._new_events():
-            log_timestamp_ms = event_timestamp_ms(event)
+            append_seq = event_append_seq(event)
+            if append_seq <= self._append_cursor:
+                continue
             evidence_ref = source_event_evidence_ref(event)
-            if log_timestamp_ms < cursor:
-                continue
-            if log_timestamp_ms == cursor and evidence_ref in seen:
-                continue
             consumed, increment = self._attribute_event(event, evidence_ref)
             if not consumed:
+                completed = False
                 break
             recorded += increment
-            if log_timestamp_ms > cursor:
-                cursor = log_timestamp_ms
-                seen = {evidence_ref}
-            else:
-                seen.add(evidence_ref)
-        self._cursor_ms = cursor
-        self._seen_refs_at_cursor = seen
+            self._append_cursor = append_seq
+        if not self._hydrated and completed:
+            self._append_cursor = max(self._append_cursor, initial_tail)
+            self._hydrated = True
         return recorded
 
 
