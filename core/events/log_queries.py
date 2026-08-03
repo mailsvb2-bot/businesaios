@@ -207,7 +207,10 @@ def iter_events(
     elif store is not None and hasattr(store, "_events"):
         events = iter(store._events)
     elif store is not None:
-        events = iter(store)
+        try:
+            events = iter(store)
+        except TypeError:
+            events = iter(())
     else:
         events = iter(())
 
