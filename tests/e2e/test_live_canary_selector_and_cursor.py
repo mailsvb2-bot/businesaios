@@ -98,23 +98,31 @@ class CursorEvents:
 
     def __init__(self, rows):
         self.rows = list(rows)
+        self.after_append_seq_calls: list[int] = []
         self.start_ms_calls: list[int] = []
+
+    def latest_append_seq(self, *, tenant_id: str) -> int:
+        assert tenant_id == self.tenant_id
+        return len(self.rows)
 
     def iter_events(
         self,
         *,
         start_ms=0,
         end_ms=None,
+        after_append_seq=0,
         event_types=None,
         **_kwargs,
     ):
         self.start_ms_calls.append(int(start_ms))
+        self.after_append_seq_calls.append(int(after_append_seq or 0))
         allowed = set(event_types or ())
         end = int(end_ms) if end_ms is not None else 2**63 - 1
         return iter(
-            row
-            for row in self.rows
-            if int(row["timestamp_ms"]) >= int(start_ms)
+            {**row, "append_seq": append_seq}
+            for append_seq, row in enumerate(self.rows, start=1)
+            if append_seq > int(after_append_seq or 0)
+            and int(row["timestamp_ms"]) >= int(start_ms)
             and int(row["timestamp_ms"]) < end
             and (not allowed or row["event_type"] in allowed)
         )
@@ -170,7 +178,7 @@ def source_event(
     }
 
 
-def test_outcome_observer_advances_an_inclusive_incremental_cursor() -> None:
+def test_outcome_observer_advances_by_append_order() -> None:
     now_ms = int(time.time() * 1000)
     events = CursorEvents([source_event("decision-1", now_ms, "event-1")])
     coordinator = CursorCoordinator(events)
@@ -178,16 +186,18 @@ def test_outcome_observer_advances_an_inclusive_incremental_cursor() -> None:
 
     assert observer.poll_once() == 1
     assert observer.poll_once() == 0
-    events.rows.append(source_event("decision-2", now_ms + 1, "event-2"))
+    events.rows.append(source_event("decision-2", now_ms - 1, "event-2"))
     assert observer.poll_once() == 1
 
     assert len(coordinator.recorded) == 2
-    assert events.start_ms_calls[1] == now_ms
-    assert events.start_ms_calls[2] == now_ms
-    assert observer._cursor_ms == now_ms + 1
+    assert events.after_append_seq_calls == [0, 1, 1]
+    assert events.start_ms_calls[0] > 0
+    assert events.start_ms_calls[1:] == [0, 0]
+    assert observer._append_cursor == 2
+    assert observer._hydrated is True
 
 
-def test_payload_time_cannot_move_the_event_log_read_cursor() -> None:
+def test_payload_time_cannot_move_the_append_cursor() -> None:
     now_ms = int(time.time() * 1000)
     future_payload_time = now_ms + 30_000
     events = CursorEvents(
@@ -204,7 +214,24 @@ def test_payload_time_cannot_move_the_event_log_read_cursor() -> None:
     observer = LiveCanaryOutcomeObserver(coordinator)
 
     assert observer.poll_once() == 1
-    assert observer._cursor_ms == now_ms
+    assert observer._append_cursor == 1
     events.rows.append(source_event("decision-2", now_ms + 1, "event-2"))
     assert observer.poll_once() == 1
-    assert observer._cursor_ms == now_ms + 1
+    assert observer._append_cursor == 2
+
+
+def test_new_observer_backfills_recent_outcomes_before_following_tail() -> None:
+    now_ms = int(time.time() * 1000)
+    events = CursorEvents(
+        [
+            source_event("decision-1", now_ms - 2, "event-1"),
+            source_event("decision-2", now_ms - 1, "event-2"),
+        ]
+    )
+    coordinator = CursorCoordinator(events)
+    observer = LiveCanaryOutcomeObserver(coordinator)
+
+    assert observer.poll_once() == 2
+    assert observer._append_cursor == 2
+    assert observer._hydrated is True
+    assert len(coordinator.recorded) == 2
