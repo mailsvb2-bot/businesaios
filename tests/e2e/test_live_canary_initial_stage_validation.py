@@ -25,7 +25,10 @@ def test_initial_stage_must_be_positive_and_bounded() -> None:
         policy, initial_canary_pct=0
     ).validate()
     assert "initial_canary_pct_out_of_range" in replace(
-        policy, initial_canary_pct=101
+        policy, initial_canary_pct=100, max_candidate_pct=100.0
+    ).validate()
+    assert "initial_canary_pct_out_of_range" in replace(
+        policy, initial_canary_pct=101, max_candidate_pct=100.0
     ).validate()
 
 
