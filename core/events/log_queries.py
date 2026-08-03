@@ -5,9 +5,19 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 
+class _SequencedEvent(dict):
+    """Dict-compatible event carrying transport cursor outside serialized data."""
+
+    def __init__(self, event: Mapping[str, Any], append_seq: int) -> None:
+        super().__init__(event)
+        self.append_seq = int(append_seq)
+
+
 def _event_value(event: Any, name: str) -> Any:
     if isinstance(event, dict):
-        return event.get(name)
+        value = event.get(name)
+        if value is not None:
+            return value
     return getattr(event, name, None)
 
 
@@ -137,8 +147,8 @@ def _filtered_events(
             continue
         if allowed_types and observed_type not in allowed_types:
             continue
-        if event_append_seq(event) <= 0 and isinstance(event, dict):
-            event = {**event, "append_seq": append_seq}
+        if event_append_seq(event) <= 0 and isinstance(event, Mapping):
+            event = _SequencedEvent(event, append_seq)
         yield event
         emitted += 1
         if limit is not None and emitted >= limit:
