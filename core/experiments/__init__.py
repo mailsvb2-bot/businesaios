@@ -6,7 +6,7 @@ import sys
 _COMPAT_MODULES = {
     "assignment": "core.experiments.builders.live_canary_assignment",
     "guardrails": "core.experiments.guards.live_canary_guardrails",
-    "ledger": "core.experiments.repositories.live_canary_ledger",
+    "ledger": "core.experiments.repositories.incremental_live_canary_ledger",
     "live_canary_events": "core.experiments.events.live_canary_events",
     "statistics": "core.experiments.evaluators.live_canary_statistics",
 }
@@ -28,7 +28,9 @@ from core.experiments.guards.live_canary_guardrails import (  # noqa: E402
     GuardrailResult,
     LiveCanaryGuard,
 )
-from core.experiments.repositories.live_canary_ledger import LiveCanaryLedger  # noqa: E402
+from core.experiments.repositories.incremental_live_canary_ledger import (  # noqa: E402
+    LiveCanaryLedger,
+)
 from core.experiments.service import ExperimentsService, build_empty_result  # noqa: E402
 
 __all__ = [
