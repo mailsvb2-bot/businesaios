@@ -6,8 +6,6 @@ from config.live_canary_policy import (
     DEFAULT_LIVE_CANARY_POLICY,
     LiveCanaryPolicy,
 )
-from core.experiments.guardrails import CanaryDecision
-from runtime.execution.context import executor_context
 from runtime.experiments.live_canary import LiveCanaryCoordinator
 from runtime.experiments.outcome_observer import (
     LiveCanaryOutcomeObserver,
@@ -56,39 +54,22 @@ def start_live_canary_runtime(core: Any) -> None:
 
 
 def bind_live_canary_executor(core: Any, executor: Any) -> None:
-    """Start immediate rollback supervision through executor governance."""
+    """Start immediate rollback supervision through RuntimeExecutor."""
 
     coordinator = getattr(core, "_live_canary", None)
     if coordinator is None:
         return
     if getattr(executor, "_decision_core", None) is not core:
         raise RuntimeError("LIVE_CANARY_EXECUTOR_CORE_MISMATCH")
+    submit = getattr(executor, "submit_live_canary_rollback", None)
+    if not callable(submit):
+        raise RuntimeError("LIVE_CANARY_EXECUTOR_ROLLBACK_GATEWAY_REQUIRED")
     tenant_ids = tuple(coordinator.policy.allowed_tenant_ids)
     if len(tenant_ids) != 1:
         raise RuntimeError("LIVE_CANARY_SINGLE_TENANT_REQUIRED")
 
-    def rollback_submitter(
-        *,
-        decision_id: str,
-        correlation_id: str | None,
-        tenant_id: str,
-        candidate_policy_id: str,
-        experiment_id: str,
-        reasons: tuple[str, ...],
-    ) -> None:
-        _ = reasons
-        if str(candidate_policy_id) != coordinator.candidate_policy_id:
-            raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
-        if str(experiment_id) != coordinator.policy.experiment_id:
-            raise RuntimeError("LIVE_CANARY_EXPERIMENT_ID_MISMATCH")
-        with executor_context("live_canary_rollback_watchdog"):
-            result = coordinator.evaluate_and_maybe_rollback(
-                decision_id=str(decision_id),
-                correlation_id=correlation_id,
-                tenant_id=str(tenant_id),
-            )
-        if result.decision is not CanaryDecision.ROLLBACK:
-            raise RuntimeError("LIVE_CANARY_ROLLBACK_NOT_APPLIED")
+    def rollback_submitter(**kwargs: Any) -> None:
+        submit(**kwargs)
 
     watchdog = LiveCanaryWatchdog(
         coordinator,
