@@ -92,7 +92,12 @@ def policy() -> LiveCanaryPolicy:
     )
 
 
-def build_assignment(*, with_proof: bool):
+def build_assignment(
+    *,
+    with_proof: bool,
+    proof_cost: float = 2.0,
+    result_cost: float = 2.0,
+):
     events = MemoryEvents()
     registry = Registry()
     coordinator = LiveCanaryCoordinator(
@@ -120,7 +125,7 @@ def build_assignment(*, with_proof: bool):
             user_id="customer-1",
             decision_id="d-1",
             correlation_id="c-1",
-            payload={"ok": True, "cost": 2.0},
+            payload={"ok": True, "cost": proof_cost},
         )
     executor = SimpleNamespace(
         _decision_core=SimpleNamespace(_live_canary=coordinator)
@@ -133,13 +138,15 @@ def build_assignment(*, with_proof: bool):
             payload={"expected_cost": 1.0},
         )
     )
-    result = SimpleNamespace(ok=True, output={"cost": 1.5}, error=None)
+    result = SimpleNamespace(ok=True, output={"cost": result_cost}, error=None)
     return events, registry, coordinator, executor, env, result
 
 
 def test_executor_hook_records_real_provider_proof() -> None:
     events, registry, coordinator, executor, env, result = build_assignment(
-        with_proof=True
+        with_proof=True,
+        proof_cost=2.0,
+        result_cost=2.0,
     )
     record_live_canary_executor_result(
         executor=executor,
@@ -153,6 +160,26 @@ def test_executor_hook_records_real_provider_proof() -> None:
         "candidate_executions"
     ] == 1
     assert registry.rollout_pct == 100
+
+
+def test_provider_and_result_cost_mismatch_rolls_back() -> None:
+    events, registry, _coordinator, executor, env, result = build_assignment(
+        with_proof=True,
+        proof_cost=2.0,
+        result_cost=1.5,
+    )
+    record_live_canary_executor_result(
+        executor=executor,
+        env=env,
+        result=result,
+    )
+
+    assert events.get_events("d-1", "candidate_action_executed@v1") == []
+    assert registry.rollout_pct == 0
+    assert events.get_events(
+        "execution-integrity:d-1",
+        "canary_auto_rolled_back@v1",
+    )
 
 
 def test_missing_provider_proof_rolls_back_without_raising() -> None:
