@@ -23,9 +23,10 @@ class SqliteEventStoreWriteApi:
             raise RuntimeError("SQLITE_EVENT_APPEND_SEQUENCE_UNAVAILABLE")
         append_seq = int(sequence_row[0])
         self._db.execute(
-            "INSERT INTO events(event_id,append_seq,tenant_id,user_id,source,event_type,timestamp_ms,decision_id,correlation_id,payload_json) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO events(rowid,event_id,append_seq,tenant_id,user_id,source,event_type,timestamp_ms,decision_id,correlation_id,payload_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (
+                append_seq,
                 append.event_id,
                 append_seq,
                 append.tenant_id,
