@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 from core.events.log import EventLog
 from core.experiments.live_canary_events import EXPERIMENT_ASSIGNMENT
@@ -41,6 +42,10 @@ def event(
             "assigned_at_ms": timestamp_ms,
         },
     }
+
+
+def tenant_context():
+    return SimpleNamespace(tenant_id="tenant-a", actor_id="system")
 
 
 def test_sqlite_retention_cannot_reuse_consumed_append_cursor(tmp_path: Path) -> None:
@@ -106,20 +111,21 @@ def test_shared_assignment_safety_consumes_late_timestamp_by_append_order(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "shared.sqlite3"
+    now_ms = int(time.time() * 1000)
     with SqliteEventStore(str(path)) as store:
-        log = EventLog(store, tenant="tenant-a")
+        log = EventLog(store, tenant=tenant_context())
         safety = LiveCanaryAssignmentSafety(
             log,
             experiment_id="storage-cursor",
             candidate_policy_id="candidate@v2",
         )
         store.append_event(
-            event("event-a", decision_id="decision-a", timestamp_ms=1_001)
+            event("event-a", decision_id="decision-a", timestamp_ms=now_ms)
         )
         assert safety.metrics(candidate_pct=1.0)["candidate_actions_24h"] == 1
 
         store.append_event(
-            event("event-b", decision_id="decision-b", timestamp_ms=900)
+            event("event-b", decision_id="decision-b", timestamp_ms=now_ms - 1)
         )
         metrics = safety.metrics(candidate_pct=1.0)
 
@@ -149,7 +155,7 @@ def test_event_log_decision_lookup_uses_indexed_sqlite_query(tmp_path: Path) -> 
         statements: list[str] = []
         assert store._db is not None
         store._db.set_trace_callback(statements.append)
-        rows = EventLog(store, tenant="tenant-a").get_events(
+        rows = EventLog(store, tenant=tenant_context()).get_events(
             "target-decision",
             EXPERIMENT_ASSIGNMENT,
         )
