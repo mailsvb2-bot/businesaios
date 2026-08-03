@@ -16,6 +16,7 @@ from core.experiments.live_canary_events import (
     CANDIDATE_ACTION_EXECUTED,
     EXPERIMENT_ASSIGNMENT,
 )
+from runtime.experiments.cost_semantics import validate_reservation_cost
 
 
 def _data(event: Any) -> dict[str, Any]:
@@ -24,14 +25,6 @@ def _data(event: Any) -> dict[str, Any]:
 
 def _payload(event: Any) -> dict[str, Any]:
     return dict(_data(event).get("payload") or {})
-
-
-def _finite(value: object, default: float = 0.0) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    return number if number == number and abs(number) != float("inf") else default
 
 
 class LiveCanaryAssignmentSafety:
@@ -78,9 +71,10 @@ class LiveCanaryAssignmentSafety:
         did = str(decision_id)
         if not did or did in self._assignment_ids:
             return
-        self._assignment_ids.add(did)
         stage = float(payload.get("candidate_pct") or 0.0)
         arm = str(payload.get("arm") or "")
+        expected_cost = validate_reservation_cost(payload.get("expected_cost"))
+        self._assignment_ids.add(did)
         self._stage_counts.setdefault(stage, Counter())[arm] += 1
         assigned_at_ms = int(payload.get("assigned_at_ms") or 0)
         first = self._stage_first_assignment_ms.get(stage, 0)
@@ -89,7 +83,6 @@ class LiveCanaryAssignmentSafety:
         if arm != ExperimentArm.CANDIDATE.value:
             return
         subject_hash = str(payload.get("subject_hash") or "")
-        expected_cost = _finite(payload.get("expected_cost"))
         assignment = (assigned_at_ms, subject_hash, expected_cost)
         self._candidate_assignments[did] = assignment
         self._candidate_window.append((assigned_at_ms, did, subject_hash, expected_cost))
@@ -108,8 +101,9 @@ class LiveCanaryAssignmentSafety:
         did = str(decision_id)
         if not did or did in self._execution_ids:
             return
+        actual_cost = validate_reservation_cost(payload.get("cost"))
         self._execution_ids.add(did)
-        self._candidate_actual_costs[did] = _finite(payload.get("cost"))
+        self._candidate_actual_costs[did] = actual_cost
 
     def _track_event(self, event: Any) -> None:
         data = _data(event)
@@ -175,7 +169,7 @@ class LiveCanaryAssignmentSafety:
             "candidate_pct": float(candidate_pct),
             "assigned_at_ms": int(assigned_at_ms),
             "subject_hash": assignment.subject_hash,
-            "expected_cost": _finite(expected_cost),
+            "expected_cost": validate_reservation_cost(expected_cost),
         }
         with self._lock:
             self._track_assignment(decision_id=str(decision_id), payload=payload)
