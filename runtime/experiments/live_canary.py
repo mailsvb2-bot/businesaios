@@ -53,6 +53,13 @@ def _finite(value: object, default: float = 0.0) -> float:
     return number if math.isfinite(number) else default
 
 
+def _evidence_identity_data(event: Any) -> dict[str, Any]:
+    data = dict(_event_data(event))
+    for key in ("append_seq", "event_sequence", "sequence_id"):
+        data.pop(key, None)
+    return data
+
+
 def source_event_evidence_ref(event: Any) -> str:
     data = _event_data(event)
     payload = _event_payload(event)
@@ -63,7 +70,10 @@ def source_event_evidence_ref(event: Any) -> str:
                 return f"event:{str(value).strip()}"
     digest = hashlib.sha256(
         json.dumps(
-            data, sort_keys=True, separators=(",", ":"), default=str
+            _evidence_identity_data(event),
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
         ).encode("utf-8")
     ).hexdigest()
     return f"event-sha256:{digest}"
