@@ -34,6 +34,7 @@ from core.experiments.live_canary_events import (
     CANARY_AUTO_ROLLED_BACK,
     CANARY_GUARDRAIL_BREACHED,
 )
+from runtime.experiments.proof_semantics import resolve_action_proof_success
 
 
 def _event_data(event: Any) -> dict[str, Any]:
@@ -322,9 +323,7 @@ class LiveCanaryCoordinator:
             if event_type in self.policy.outcome_event_types:
                 observed = resolve_outcome_success(event_type, payload)
             else:
-                observed = payload.get("ok")
-                if observed is None:
-                    observed = payload.get("success")
+                observed = resolve_action_proof_success(event_type, payload)
             if observed is not bool(success):
                 continue
             if evidence_ref and source_event_evidence_ref(event) != evidence_ref:
