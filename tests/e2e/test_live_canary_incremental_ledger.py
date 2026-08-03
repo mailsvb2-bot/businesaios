@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import json
+import sqlite3
+
 from core.experiments.ledger import LiveCanaryLedger
 from core.experiments.live_canary_events import EXPERIMENT_ASSIGNMENT
+from runtime.platform.event_store import sqlite_read_queries
+from runtime.platform.event_store.sqlite_schema import init_schema
 
 
 class CountingEvents:
@@ -9,23 +14,25 @@ class CountingEvents:
 
     def __init__(self) -> None:
         self.rows: list[dict] = []
-        self.start_ms_calls: list[int] = []
+        self.after_append_seq_calls: list[int] = []
 
     def iter_events(
         self,
         *,
         start_ms=0,
         end_ms=None,
+        after_append_seq=0,
         event_types=None,
         **_kwargs,
     ):
-        self.start_ms_calls.append(int(start_ms))
+        self.after_append_seq_calls.append(int(after_append_seq or 0))
         allowed = set(event_types or ())
         end = int(end_ms) if end_ms is not None else 2**63 - 1
         return iter(
-            row
-            for row in self.rows
-            if int(row["timestamp_ms"]) >= int(start_ms)
+            {**row, "append_seq": append_seq}
+            for append_seq, row in enumerate(self.rows, start=1)
+            if append_seq > int(after_append_seq or 0)
+            and int(row["timestamp_ms"]) >= int(start_ms)
             and int(row["timestamp_ms"]) < end
             and (not allowed or row["event_type"] in allowed)
         )
@@ -73,7 +80,7 @@ def ledger_for(events: CountingEvents) -> LiveCanaryLedger:
     )
 
 
-def test_materialized_ledger_only_queries_from_last_event_cursor() -> None:
+def test_materialized_ledger_queries_from_last_append_sequence() -> None:
     events = CountingEvents()
     events.rows.append(assignment("decision-1", 1_001))
     ledger = ledger_for(events)
@@ -86,24 +93,24 @@ def test_materialized_ledger_only_queries_from_last_event_cursor() -> None:
     assert first["candidate_assignments"] == 1
     assert second["candidate_assignments"] == 1
     assert third["candidate_assignments"] == 2
-    assert events.start_ms_calls == [0, 1_001, 1_001]
+    assert events.after_append_seq_calls == [0, 1, 1]
 
 
-def test_periodic_reconciliation_recovers_late_lower_timestamp_event() -> None:
+def test_lower_timestamp_event_is_consumed_immediately_by_append_order() -> None:
     events = CountingEvents()
     events.rows.append(assignment("decision-1", 1_001))
     ledger = ledger_for(events)
     assert ledger.metrics(candidate_pct=1.0)["candidate_assignments"] == 1
 
     events.rows.append(assignment("decision-late", 900))
-    ledger._last_reconcile_monotonic -= 60 * 60 + 1
     metrics = ledger.metrics(candidate_pct=1.0)
 
     assert metrics["candidate_assignments"] == 2
-    assert events.start_ms_calls[-1] == 0
+    assert events.after_append_seq_calls[-1] == 1
+    assert ledger._append_cursor == 2
 
 
-def test_foreign_canary_tail_advances_shared_scan_cursor() -> None:
+def test_foreign_canary_tail_advances_shared_append_cursor() -> None:
     events = CountingEvents()
     events.rows.append(assignment("decision-1", 1_001))
     ledger = ledger_for(events)
@@ -121,5 +128,48 @@ def test_foreign_canary_tail_advances_shared_scan_cursor() -> None:
     ledger.metrics(candidate_pct=1.0)
 
     assert unchanged["candidate_assignments"] == 1
-    assert ledger._evidence_cursor_ms == 2_000
-    assert events.start_ms_calls[-1] == 2_000
+    assert ledger._append_cursor == 2
+    assert events.after_append_seq_calls[-1] == 2
+
+
+def test_sqlite_rowid_cursor_includes_late_timestamp_append() -> None:
+    db = sqlite3.connect(":memory:")
+    init_schema(db)
+    rows = (
+        ("event-1", 1_001),
+        ("event-late", 900),
+    )
+    for event_id, timestamp_ms in rows:
+        db.execute(
+            """
+            INSERT INTO events (
+              event_id, tenant_id, user_id, source, event_type, timestamp_ms,
+              decision_id, correlation_id, payload_json
+            ) VALUES (?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                event_id,
+                "tenant-a",
+                "system",
+                "live_canary",
+                EXPERIMENT_ASSIGNMENT,
+                timestamp_ms,
+                event_id,
+                f"correlation-{event_id}",
+                json.dumps({"ok": True}),
+            ),
+        )
+    db.commit()
+
+    events = list(
+        sqlite_read_queries.iter_events(
+            db,
+            tenant_id="tenant-a",
+            start_ms=0,
+            after_append_seq=1,
+            event_types=(EXPERIMENT_ASSIGNMENT,),
+        )
+    )
+
+    assert [event["event_id"] for event in events] == ["event-late"]
+    assert events[0]["append_seq"] == 2
