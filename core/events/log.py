@@ -65,9 +65,13 @@ def _emit_legacy_warning(*, tenant_id: str, event_type: str, source: str) -> Non
 
 class EventLog:
 
-    def __init__(self, store, *, tenant: TenantScope | str):
+    def __init__(self, store, *, tenant: TenantScope | str | Any):
         self._store = store
-        scope = tenant if isinstance(tenant, TenantScope) else TenantScope(str(tenant))
+        if isinstance(tenant, TenantScope):
+            scope = tenant
+        else:
+            tenant_id = getattr(tenant, "tenant_id", tenant)
+            scope = TenantScope(str(tenant_id))
         self._tenant = scope
         self._batch_depth = 0
         self._metrics = EventLogMetrics()
