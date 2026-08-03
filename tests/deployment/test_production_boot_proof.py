@@ -34,6 +34,15 @@ class _SQLiteCursorWrapper:
         if upper.startswith('SET ') or upper in {'BEGIN;', 'BEGIN'}:
             self.description = None
             return self
+        if upper.startswith('SELECT PG_ADVISORY_XACT_LOCK'):
+            self.description = None
+            return self
+        if (
+            upper.startswith('ALTER TABLE EVENTS ADD COLUMN IF NOT EXISTS')
+            and 'APPEND_SEQ' in upper
+        ):
+            self.description = None
+            return self
         sql2 = statement.replace('%s', '?').replace('BIGSERIAL', 'INTEGER')
         if params is None:
             self._cursor.execute(sql2)
