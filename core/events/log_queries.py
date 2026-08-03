@@ -259,8 +259,8 @@ def get_events(event_log: Any, decision_id: str, event_type: str) -> list[dict]:
                 out.append(event)
             else:
                 out.append(dict(getattr(event, "__dict__", {})))
-    except Exception:
-        return []
+    except Exception as exc:
+        raise RuntimeError("EVENT_DECISION_LOOKUP_UNAVAILABLE") from exc
     return out
 
 
