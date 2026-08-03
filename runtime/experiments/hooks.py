@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import math
 import time
 from collections.abc import Mapping
 from types import SimpleNamespace
@@ -9,6 +8,7 @@ from typing import Any
 
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import LIVE_CANARY_EXECUTION_FAILED_SOURCE
+from runtime.experiments.cost_semantics import resolve_execution_cost
 from runtime.experiments.live_canary import source_event_evidence_ref
 from runtime.experiments.proof_semantics import resolve_action_proof_success
 from runtime.proofs import ACTION_PROOF_EVENT
@@ -28,27 +28,6 @@ def _event_data(event: Any) -> dict[str, Any]:
     if isinstance(event, Mapping):
         return dict(event)
     return dict(getattr(event, "__dict__", {}))
-
-
-def _verified_cost(value: object, *, default: float = 0.0) -> float:
-    if value is None or value == "":
-        return float(default)
-    try:
-        number = float(value)
-    except (TypeError, ValueError) as exc:
-        raise RuntimeError("LIVE_CANARY_EXECUTION_COST_INVALID") from exc
-    if not math.isfinite(number):
-        raise RuntimeError("LIVE_CANARY_EXECUTION_COST_NON_FINITE")
-    if number < 0:
-        raise RuntimeError("LIVE_CANARY_EXECUTION_COST_NEGATIVE")
-    return number
-
-
-def _actual_cost(output: Mapping[str, Any]) -> float:
-    value = output.get("cost")
-    if value is None:
-        value = output.get("actual_cost")
-    return _verified_cost(value)
 
 
 def _source_proof_event(
@@ -192,6 +171,7 @@ def record_live_canary_executor_result(
             proof_event_type=proof_event_type,
             ok=ok,
         )
+        proof_payload = _safe_mapping(_event_data(proof_event).get("payload"))
         payload = _safe_mapping(getattr(decision, "payload", None))
         coordinator.record_execution(
             decision_id=decision_id,
@@ -199,9 +179,10 @@ def record_live_canary_executor_result(
             arm=str(assignment.get("arm") or ""),
             action=action,
             ok=ok,
-            cost=max(
-                _verified_cost(payload.get("expected_cost")),
-                _actual_cost(output),
+            cost=resolve_execution_cost(
+                result_output=output,
+                proof_payload=proof_payload,
+                expected_cost=payload.get("expected_cost"),
             ),
             proof_event_type=proof_event_type,
             evidence_ref=source_event_evidence_ref(proof_event),
