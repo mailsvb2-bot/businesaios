@@ -37,6 +37,19 @@ def event_timestamp_ms(event: Any) -> int:
     return 0
 
 
+def event_append_seq(event: Any) -> int:
+    """Return the durable store append sequence when exposed by the backend."""
+
+    for name in ("append_seq", "event_sequence", "sequence_id"):
+        value = _event_value(event, name)
+        try:
+            if value is not None:
+                return max(0, int(value))
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
 def _supports_keyword(callable_obj: Any, name: str) -> bool:
     try:
         parameters = inspect.signature(callable_obj).parameters
@@ -54,6 +67,7 @@ def _filtered_events(
     tenant_id: str,
     start_ms: int,
     end_ms: int,
+    after_append_seq: int | None,
     event_type: str | None,
     event_types: tuple[str, ...],
     user_id: str | None,
@@ -61,9 +75,14 @@ def _filtered_events(
 ):
     allowed_types = set(event_types)
     emitted = 0
+    fallback_sequence = 0
     for event in events:
+        fallback_sequence += 1
         event_tenant = str(_event_value(event, "tenant_id") or "").strip()
         if event_tenant and event_tenant != tenant_id:
+            continue
+        append_seq = event_append_seq(event) or fallback_sequence
+        if after_append_seq is not None and append_seq <= after_append_seq:
             continue
         timestamp_ms = event_timestamp_ms(event)
         if timestamp_ms < start_ms or timestamp_ms >= end_ms:
@@ -90,6 +109,7 @@ def iter_events(
     *,
     start_ms: int = 0,
     end_ms: int | None = None,
+    after_append_seq: int | None = None,
     event_type: str | None = None,
     event_types: Iterable[str] | None = None,
     user_id: str | None = None,
@@ -102,6 +122,11 @@ def iter_events(
     )
     start = max(0, int(start_ms))
     end = int(end_ms) if end_ms is not None else 2**63 - 1
+    after_sequence = (
+        max(0, int(after_append_seq))
+        if after_append_seq is not None
+        else None
+    )
     allowed_types = tuple(str(item) for item in (event_types or ()) if str(item))
     normalized_type = str(event_type) if event_type is not None else None
     normalized_user = str(user_id) if user_id is not None else None
@@ -116,6 +141,7 @@ def iter_events(
             "tenant_id": tenant_id,
             "start_ms": start,
             "end_ms": end,
+            "after_append_seq": after_sequence,
         }
         optional = {
             "event_type": normalized_type,
@@ -139,6 +165,7 @@ def iter_events(
         tenant_id=tenant_id,
         start_ms=start,
         end_ms=end,
+        after_append_seq=after_sequence,
         event_type=normalized_type,
         event_types=allowed_types,
         user_id=normalized_user,
@@ -173,4 +200,10 @@ def get_events(event_log: Any, decision_id: str, event_type: str) -> list[dict]:
     return out
 
 
-__all__ = ["event_timestamp_ms", "get_events", "has_event", "iter_events"]
+__all__ = [
+    "event_append_seq",
+    "event_timestamp_ms",
+    "get_events",
+    "has_event",
+    "iter_events",
+]
