@@ -255,6 +255,7 @@ def get_events(event_log: Any, decision_id: str, event_type: str) -> list[dict]:
     try:
         for event in iter_events(
             event_log,
+            after_append_seq=0,
             event_type=str(event_type),
             decision_id=str(decision_id),
         ):
