@@ -7,12 +7,10 @@ from collections.abc import Mapping
 from types import SimpleNamespace
 from typing import Any
 
+from core.experiments.guardrails import CanaryDecision, GuardrailResult
+from core.experiments.live_canary_events import LIVE_CANARY_EXECUTION_FAILED_SOURCE
+from runtime.execution.context import executor_context
 from runtime.proofs import ACTION_PROOF_EVENT
-from core.experiments.live_canary_events import (
-    CANARY_AUTO_ROLLED_BACK,
-    CANARY_GUARDRAIL_BREACHED,
-    LIVE_CANARY_EXECUTION_FAILED_SOURCE,
-)
 
 log = logging.getLogger(__name__)
 
@@ -36,48 +34,48 @@ def _finite(value: object, default: float = 0.0) -> float:
 def _force_rollback(
     coordinator: Any,
     *,
+    executor: Any,
     decision_id: str,
     correlation_id: str | None,
     tenant_id: str,
     reason: str,
 ) -> None:
-    from_pct = coordinator.live_rollout_pct()
-    payload = {
-        "tenant_id": str(tenant_id),
-        "experiment_id": coordinator.policy.experiment_id,
-        "candidate_policy_id": coordinator.candidate_policy_id,
-        "reasons": [str(reason)],
-        "metrics": {},
-    }
-    snapshot = coordinator.policy_registry.snapshot_runtime_state()
-    try:
-        coordinator.policy_registry.set_rollout(
+    result = GuardrailResult(
+        CanaryDecision.ROLLBACK,
+        (str(reason),),
+        {},
+    )
+    coordinator._open_local_circuit(
+        result,
+        decision_id=str(decision_id),
+        correlation_id=correlation_id,
+        tenant_id=str(tenant_id),
+    )
+    submitter = getattr(executor, "_live_canary_rollback_submitter", None)
+    if not callable(submitter):
+        submitter = getattr(
+            getattr(executor, "_decision_core", None),
+            "_live_canary_rollback_submitter",
+            None,
+        )
+    if callable(submitter):
+        submitter(
+            decision_id=str(decision_id),
+            correlation_id=correlation_id,
+            tenant_id=str(tenant_id),
             candidate_policy_id=coordinator.candidate_policy_id,
-            rollout_pct=0,
+            experiment_id=coordinator.policy.experiment_id,
+            reasons=result.reasons,
         )
-    except Exception:
-        coordinator.policy_registry.restore_runtime_state(snapshot)
-        raise
-    coordinator._rollback_required = False
-    try:
-        coordinator.event_log.emit(
-            event_type=CANARY_GUARDRAIL_BREACHED,
-            source="live_canary",
-            user_id="system",
+        return
+    with executor_context("live_canary_executor_integrity_rollback"):
+        applied = coordinator.evaluate_and_maybe_rollback(
             decision_id=str(decision_id),
             correlation_id=correlation_id,
-            payload=payload,
+            tenant_id=str(tenant_id),
         )
-        coordinator.event_log.emit(
-            event_type=CANARY_AUTO_ROLLED_BACK,
-            source="live_canary",
-            user_id="system",
-            decision_id=str(decision_id),
-            correlation_id=correlation_id,
-            payload={**payload, "from_pct": from_pct, "to_pct": 0},
-        )
-    except Exception:
-        log.exception("live_canary_rollback_audit_failed")
+    if applied.decision is not CanaryDecision.ROLLBACK:
+        raise RuntimeError("LIVE_CANARY_ROLLBACK_NOT_APPLIED")
 
 
 def record_live_canary_executor_result(
@@ -111,6 +109,7 @@ def record_live_canary_executor_result(
         if not proof_event_type:
             _force_rollback(
                 coordinator,
+                executor=executor,
                 decision_id=f"execution-integrity:{decision_id}",
                 correlation_id=correlation_id,
                 tenant_id=tenant_id,
@@ -135,6 +134,7 @@ def record_live_canary_executor_result(
             except Exception:
                 _force_rollback(
                     coordinator,
+                    executor=executor,
                     decision_id=f"execution-integrity:{decision_id}",
                     correlation_id=correlation_id,
                     tenant_id=tenant_id,
@@ -186,6 +186,7 @@ def record_live_canary_executor_result(
             )
             _force_rollback(
                 coordinator,
+                executor=executor,
                 decision_id=f"execution-integrity:{decision_id}",
                 correlation_id=correlation_id,
                 tenant_id=tenant_id,
