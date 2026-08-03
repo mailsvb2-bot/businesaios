@@ -61,6 +61,9 @@ class Registry:
         self.rollout_pct = rollout_pct
         self.calls: list[dict] = []
 
+    def active_ref(self):
+        return SimpleNamespace(policy_id="active@v1")
+
     def rollout_config(self):
         return self.candidate_policy_id, self.rollout_pct
 
