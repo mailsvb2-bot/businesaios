@@ -16,6 +16,19 @@ class MemoryEventStore(list):
             raise ValueError("tenant_id is required (strict)")
         self.append(e)
 
+    def latest_append_seq(self, *, tenant_id: str) -> int:
+        tid = str(tenant_id or "").strip()
+        if not tid:
+            raise ValueError("tenant_id is required (strict)")
+        return max(
+            (
+                append_seq
+                for append_seq, event in enumerate(self, start=1)
+                if str(event.get("tenant_id") or "") == tid
+            ),
+            default=0,
+        )
+
     def iter_events(
         self,
         *,
