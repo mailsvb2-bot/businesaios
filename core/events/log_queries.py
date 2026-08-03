@@ -61,6 +61,27 @@ def _supports_keyword(callable_obj: Any, name: str) -> bool:
     )
 
 
+def _tenant_id(event_log: Any) -> str:
+    return str(
+        getattr(event_log, "tenant_id", "")
+        or getattr(getattr(event_log, "_tenant", None), "tenant_id", "")
+    )
+
+
+def latest_append_seq(event_log: Any) -> int:
+    """Return the tenant event-store tail without exposing backend details."""
+
+    store = getattr(event_log, "_store", None)
+    getter = getattr(store, "latest_append_seq", None)
+    if callable(getter):
+        kwargs = {"tenant_id": _tenant_id(event_log)} if _supports_keyword(getter, "tenant_id") else {}
+        return max(0, int(getter(**kwargs) or 0))
+    maximum = 0
+    for fallback_sequence, event in enumerate(iter_events(event_log), start=1):
+        maximum = max(maximum, event_append_seq(event) or fallback_sequence)
+    return maximum
+
+
 def _filtered_events(
     events: Iterable[Any],
     *,
@@ -118,10 +139,7 @@ def iter_events(
     limit: int | None = None,
 ):
     store = getattr(event_log, "_store", None)
-    tenant_id = str(
-        getattr(event_log, "tenant_id", "")
-        or getattr(getattr(event_log, "_tenant", None), "tenant_id", "")
-    )
+    tenant_id = _tenant_id(event_log)
     start = max(0, int(start_ms))
     end = int(end_ms) if end_ms is not None else 2**63 - 1
     after_sequence = (
@@ -208,4 +226,5 @@ __all__ = [
     "get_events",
     "has_event",
     "iter_events",
+    "latest_append_seq",
 ]
