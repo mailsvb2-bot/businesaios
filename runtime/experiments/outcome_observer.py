@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from threading import Event, Lock, Thread
 from typing import Any
 
-from core.events.log_queries import event_append_seq, latest_append_seq
+from core.events.log_queries import direct_latest_append_seq, event_append_seq
 from core.events.log_queries import iter_events as iter_event_window
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import BUSINESS_OUTCOME_OBSERVED
@@ -161,7 +161,7 @@ class LiveCanaryOutcomeObserver:
     def poll_once(self) -> int:
         recorded = 0
         initial_tail = (
-            latest_append_seq(self.coordinator.event_log)
+            direct_latest_append_seq(self.coordinator.event_log) or 0
             if not self._hydrated
             else self._append_cursor
         )
