@@ -26,6 +26,7 @@ from core.experiments.guardrails import (
     LiveCanaryGuard,
 )
 from core.experiments.ledger import LiveCanaryLedger
+from core.experiments.outcome_semantics import resolve_outcome_success
 from core.experiments.repositories.live_canary_assignment_safety import (
     LiveCanaryAssignmentSafety,
 )
@@ -321,6 +322,11 @@ class LiveCanaryCoordinator:
             observed = payload.get("ok")
             if observed is None:
                 observed = payload.get("success")
+            if (
+                observed is None
+                and event_type in self.policy.outcome_event_types
+            ):
+                observed = resolve_outcome_success(event_type, payload)
             if observed is not bool(success):
                 continue
             if evidence_ref and source_event_evidence_ref(event) != evidence_ref:
