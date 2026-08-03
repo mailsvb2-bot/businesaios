@@ -13,6 +13,10 @@ from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.security.runtime_asserts import assert_called_from_executor
 
 
+def _normalized_policy_id(value: object) -> str:
+    return "" if value is None else str(value).strip()
+
+
 def _policy_evidence(
     *,
     code: str,
@@ -38,21 +42,21 @@ class PolicyEffectsMixin:
         policy = DEFAULT_LIVE_CANARY_POLICY
         if not policy.enabled:
             return
-        requested = str(candidate_policy_id or "").strip()
-        configured = str(policy.candidate_policy_id or "").strip()
+        requested = _normalized_policy_id(candidate_policy_id)
+        configured = _normalized_policy_id(policy.candidate_policy_id)
         rollout_config = getattr(self.policy_registry, "rollout_config", None)
         if not callable(rollout_config):
             raise RuntimeError("LIVE_CANARY_POLICY_REGISTRY_REQUIRED")
         runtime_candidate, _runtime_pct = rollout_config()
-        runtime = str(runtime_candidate or "").strip()
+        runtime = _normalized_policy_id(runtime_candidate)
         governed_identity = getattr(
             self.policy_registry,
             "governed_candidate_identity",
             None,
         )
-        governed = str(
-            governed_identity() if callable(governed_identity) else ""
-        ).strip()
+        governed = _normalized_policy_id(
+            governed_identity() if callable(governed_identity) else None
+        )
         bound = governed or runtime
         if configured and bound and configured != bound:
             raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
@@ -72,8 +76,8 @@ class PolicyEffectsMixin:
         if not callable(active_ref):
             raise RuntimeError("LIVE_CANARY_POLICY_REGISTRY_REQUIRED")
         active = active_ref()
-        active_id = str(getattr(active, "policy_id", "") or "").strip()
-        requested = str(candidate_policy_id or "").strip()
+        active_id = _normalized_policy_id(getattr(active, "policy_id", None))
+        requested = _normalized_policy_id(candidate_policy_id)
         if active_id and active_id == requested:
             raise RuntimeError("LIVE_CANARY_ALREADY_PROMOTED")
 
@@ -96,7 +100,7 @@ class PolicyEffectsMixin:
             return ""
 
         policy = DEFAULT_LIVE_CANARY_POLICY
-        requested_candidate = str(candidate_policy_id or "").strip()
+        requested_candidate = _normalized_policy_id(candidate_policy_id)
         configured_experiment = policy.experiment_id if policy.enabled else ""
         experiment = str(experiment_id or configured_experiment).strip()
         if policy.enabled and not experiment:
