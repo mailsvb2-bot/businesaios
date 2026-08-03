@@ -23,15 +23,21 @@ def _exclusive_end_ms(end_ms: int | None) -> int:
 
 
 def _row_to_event(row) -> dict[str, Any]:
-    payload = json.loads(row[8]) if row[8] else {}
-    return {
-        "event_id": row[0],
-        "tenant_id": row[1],
-        "user_id": row[2],
-        "source": row[3],
-        "event_type": row[4],
-        "timestamp_ms": int(row[5]),
-        "decision_id": row[6],
-        "correlation_id": row[7],
+    has_append_seq = len(row) >= 10
+    offset = 1 if has_append_seq else 0
+    payload_index = 8 + offset
+    payload = json.loads(row[payload_index]) if row[payload_index] else {}
+    event = {
+        "event_id": row[offset],
+        "tenant_id": row[1 + offset],
+        "user_id": row[2 + offset],
+        "source": row[3 + offset],
+        "event_type": row[4 + offset],
+        "timestamp_ms": int(row[5 + offset]),
+        "decision_id": row[6 + offset],
+        "correlation_id": row[7 + offset],
         "payload": payload,
     }
+    if has_append_seq:
+        event["append_seq"] = int(row[0])
+    return event
