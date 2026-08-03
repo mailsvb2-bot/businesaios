@@ -101,8 +101,8 @@ def _where_clause(
     start_ms: int | None,
     end_ms: int | None,
     after_append_seq: int | None = None,
-    user_id: str | None,
-    event_type: str | None,
+    user_id: str | None = None,
+    event_type: str | None = None,
     event_types: Iterable[str] | None = None,
 ) -> tuple[str, tuple[Any, ...]]:
     clauses: list[str] = []
