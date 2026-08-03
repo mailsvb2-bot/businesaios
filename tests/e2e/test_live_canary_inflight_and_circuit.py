@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
@@ -140,3 +141,101 @@ def test_open_local_circuit_remains_a_rollback_decision() -> None:
 
     assert coordinator.rollback_required is True
     assert coordinator._guard_result() == opened
+
+
+class RevalidationEvents(CircuitEvents):
+    def get_events(self, decision_id, event_type):
+        return [
+            row
+            for row in self.rows
+            if row.get("decision_id") == decision_id
+            and row.get("event_type") == event_type
+        ]
+
+
+class RevalidationRegistry:
+    def __init__(self) -> None:
+        self.reads = 0
+
+    def rollout_config(self):
+        self.reads += 1
+        return "candidate@v2", (100 if self.reads < 3 else 0)
+
+    def active_ref(self):
+        return SimpleNamespace(policy_id="active@v1")
+
+
+def test_assignment_revalidates_rollout_immediately_before_return() -> None:
+    coordinator = LiveCanaryCoordinator(
+        event_log=RevalidationEvents(),
+        policy_registry=RevalidationRegistry(),
+        candidate_policy_id="candidate@v2",
+        policy=replace(
+            circuit_policy(),
+            candidate_pct=100.0,
+            max_candidate_pct=100.0,
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="LIVE_CANARY_IN_FLIGHT_CANDIDATE_REVOKED",
+    ):
+        coordinator.assign(
+            tenant_id="tenant-a",
+            subject_id="customer-race",
+            decision_id="race-revalidation",
+            correlation_id="race-correlation",
+            production_policy_id="active@v1",
+            action="send_message@v1",
+            purpose="live_canary",
+            eligible=True,
+        )
+
+
+class CountingEvents(RevalidationEvents):
+    def __init__(self) -> None:
+        super().__init__()
+        self.iter_calls = 0
+
+    def iter_events(self):
+        self.iter_calls += 1
+        return iter(self.rows)
+
+
+class StableRegistry:
+    def rollout_config(self):
+        return "candidate@v2", 100
+
+    def active_ref(self):
+        return SimpleNamespace(policy_id="active@v1")
+
+
+def test_assignment_guard_loads_evidence_once_not_per_request() -> None:
+    events = CountingEvents()
+    coordinator = LiveCanaryCoordinator(
+        event_log=events,
+        policy_registry=StableRegistry(),
+        candidate_policy_id="candidate@v2",
+        policy=replace(
+            circuit_policy(),
+            candidate_pct=100.0,
+            max_candidate_pct=100.0,
+            max_candidate_actions_per_day=1000,
+            max_candidate_actions_per_subject_24h=1000,
+        ),
+    )
+
+    for index in range(3):
+        coordinator.assign(
+            tenant_id="tenant-a",
+            subject_id=f"customer-{index}",
+            decision_id=f"bounded-{index}",
+            correlation_id=f"bounded-correlation-{index}",
+            production_policy_id="active@v1",
+            action="send_message@v1",
+            purpose="live_canary",
+            eligible=True,
+        )
+
+    assert events.iter_calls == 1
