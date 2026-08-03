@@ -351,6 +351,7 @@ class LiveCanaryCoordinator:
 
         ok = bool(kwargs.get("ok"))
         proof_event_type = str(kwargs.get("proof_event_type") or "")
+        evidence_ref = str(kwargs.get("evidence_ref") or "")
         expected_proof = ACTION_PROOF_EVENT.get(action)
         if ok and (not expected_proof or proof_event_type != expected_proof):
             raise RuntimeError("LIVE_CANARY_ACTION_PROOF_TYPE_MISMATCH")
@@ -358,6 +359,7 @@ class LiveCanaryCoordinator:
             decision_id=decision_id,
             event_type=proof_event_type,
             success=ok,
+            evidence_ref=evidence_ref,
         )
         assigned_at_ms = int(assignment.get("assigned_at_ms") or 0)
         executed_at_ms = int(
