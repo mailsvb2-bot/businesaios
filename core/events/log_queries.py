@@ -92,6 +92,7 @@ def _filtered_events(
     event_type: str | None,
     event_types: tuple[str, ...],
     user_id: str | None,
+    decision_id: str | None,
     limit: int | None,
 ):
     allowed_types = set(event_types)
@@ -109,6 +110,8 @@ def _filtered_events(
         if timestamp_ms < start_ms or timestamp_ms >= end_ms:
             continue
         if user_id is not None and str(_event_value(event, "user_id")) != user_id:
+            continue
+        if decision_id is not None and str(_event_value(event, "decision_id")) != decision_id:
             continue
         observed_type = str(
             _event_value(event, "event_type")
@@ -136,6 +139,7 @@ def iter_events(
     event_type: str | None = None,
     event_types: Iterable[str] | None = None,
     user_id: str | None = None,
+    decision_id: str | None = None,
     limit: int | None = None,
 ):
     store = getattr(event_log, "_store", None)
@@ -150,6 +154,7 @@ def iter_events(
     allowed_types = tuple(str(item) for item in (event_types or ()) if str(item))
     normalized_type = str(event_type) if event_type is not None else None
     normalized_user = str(user_id) if user_id is not None else None
+    normalized_decision = str(decision_id) if decision_id is not None else None
     normalized_limit = max(1, int(limit)) if limit is not None else None
 
     iterator = getattr(store, "iter_events", None)
@@ -167,6 +172,7 @@ def iter_events(
             "event_type": normalized_type,
             "event_types": allowed_types or None,
             "user_id": normalized_user,
+            "decision_id": normalized_decision,
             "limit": normalized_limit,
         }
         for name, value in {**required, **optional}.items():
@@ -189,28 +195,34 @@ def iter_events(
         event_type=normalized_type,
         event_types=allowed_types,
         user_id=normalized_user,
+        decision_id=normalized_decision,
         limit=normalized_limit,
     )
 
 
 def has_event(event_log: Any, decision_id: str, event_type: str) -> bool:
-    did = str(decision_id)
     try:
         return any(
-            str(_event_value(event, "decision_id")) == did
-            for event in iter_events(event_log, event_type=str(event_type))
+            True
+            for _ in iter_events(
+                event_log,
+                event_type=str(event_type),
+                decision_id=str(decision_id),
+                limit=1,
+            )
         )
     except Exception:
         return False
 
 
 def get_events(event_log: Any, decision_id: str, event_type: str) -> list[dict]:
-    did = str(decision_id)
     out: list[dict] = []
     try:
-        for event in iter_events(event_log, event_type=str(event_type)):
-            if str(_event_value(event, "decision_id")) != did:
-                continue
+        for event in iter_events(
+            event_log,
+            event_type=str(event_type),
+            decision_id=str(decision_id),
+        ):
             if isinstance(event, dict):
                 out.append(event)
             else:
