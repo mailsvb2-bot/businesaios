@@ -6,10 +6,16 @@ from config.live_canary_policy import (
     DEFAULT_LIVE_CANARY_POLICY,
     LiveCanaryPolicy,
 )
+from core.experiments.guardrails import CanaryDecision
+from runtime.execution.context import executor_context
 from runtime.experiments.live_canary import LiveCanaryCoordinator
 from runtime.experiments.outcome_observer import (
     LiveCanaryOutcomeObserver,
     LiveCanaryOutcomeSupervisor,
+)
+from runtime.experiments.watchdog import (
+    LiveCanaryWatchdog,
+    LiveCanaryWatchdogSupervisor,
 )
 
 
@@ -36,6 +42,8 @@ def attach_live_canary(
     core._live_canary = coordinator
     core._live_canary_outcome_observer = observer
     core._live_canary_outcome_supervisor = supervisor
+    core._live_canary_watchdog = None
+    core._live_canary_watchdog_supervisor = None
     return coordinator
 
 
@@ -46,18 +54,78 @@ def start_live_canary_runtime(core: Any) -> None:
     supervisor.start()
 
 
+def bind_live_canary_executor(core: Any, executor: Any) -> None:
+    """Start immediate rollback supervision through executor governance."""
+
+    coordinator = getattr(core, "_live_canary", None)
+    if coordinator is None:
+        return
+    if getattr(executor, "_decision_core", None) is not core:
+        raise RuntimeError("LIVE_CANARY_EXECUTOR_CORE_MISMATCH")
+    tenant_ids = tuple(coordinator.policy.allowed_tenant_ids)
+    if len(tenant_ids) != 1:
+        raise RuntimeError("LIVE_CANARY_SINGLE_TENANT_REQUIRED")
+
+    def rollback_submitter(
+        *,
+        decision_id: str,
+        correlation_id: str | None,
+        tenant_id: str,
+        candidate_policy_id: str,
+        experiment_id: str,
+        reasons: tuple[str, ...],
+    ) -> None:
+        _ = reasons
+        if str(candidate_policy_id) != coordinator.candidate_policy_id:
+            raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
+        if str(experiment_id) != coordinator.policy.experiment_id:
+            raise RuntimeError("LIVE_CANARY_EXPERIMENT_ID_MISMATCH")
+        with executor_context("live_canary_rollback_watchdog"):
+            result = coordinator.evaluate_and_maybe_rollback(
+                decision_id=str(decision_id),
+                correlation_id=correlation_id,
+                tenant_id=str(tenant_id),
+            )
+        if result.decision is not CanaryDecision.ROLLBACK:
+            raise RuntimeError("LIVE_CANARY_ROLLBACK_NOT_APPLIED")
+
+    watchdog = LiveCanaryWatchdog(
+        coordinator,
+        tenant_id=tenant_ids[0],
+        rollback_submitter=rollback_submitter,
+        interval_seconds=max(1.0, coordinator.policy.outcome_poll_seconds),
+    )
+    supervisor = LiveCanaryWatchdogSupervisor(watchdog)
+    core._live_canary_watchdog = watchdog
+    core._live_canary_watchdog_supervisor = supervisor
+    executor._live_canary_watchdog = watchdog
+    executor._live_canary_watchdog_supervisor = supervisor
+    supervisor.start()
+
+
 def detach_live_canary(core: Any) -> None:
-    supervisor = getattr(core, "_live_canary_outcome_supervisor", None)
-    if supervisor is not None:
-        supervisor.request_stop()
-        supervisor.join()
+    watchdog_supervisor = getattr(
+        core,
+        "_live_canary_watchdog_supervisor",
+        None,
+    )
+    if watchdog_supervisor is not None:
+        watchdog_supervisor.request_stop()
+        watchdog_supervisor.join()
+    outcome_supervisor = getattr(core, "_live_canary_outcome_supervisor", None)
+    if outcome_supervisor is not None:
+        outcome_supervisor.request_stop()
+        outcome_supervisor.join()
     core._live_canary = None
     core._live_canary_outcome_observer = None
     core._live_canary_outcome_supervisor = None
+    core._live_canary_watchdog = None
+    core._live_canary_watchdog_supervisor = None
 
 
 __all__ = [
     "attach_live_canary",
+    "bind_live_canary_executor",
     "detach_live_canary",
     "start_live_canary_runtime",
 ]
