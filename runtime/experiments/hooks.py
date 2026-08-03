@@ -30,12 +30,25 @@ def _event_data(event: Any) -> dict[str, Any]:
     return dict(getattr(event, "__dict__", {}))
 
 
-def _finite(value: object, default: float = 0.0) -> float:
+def _verified_cost(value: object, *, default: float = 0.0) -> float:
+    if value is None or value == "":
+        return float(default)
     try:
         number = float(value)
-    except (TypeError, ValueError):
-        return default
-    return number if math.isfinite(number) else default
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("LIVE_CANARY_EXECUTION_COST_INVALID") from exc
+    if not math.isfinite(number):
+        raise RuntimeError("LIVE_CANARY_EXECUTION_COST_NON_FINITE")
+    if number < 0:
+        raise RuntimeError("LIVE_CANARY_EXECUTION_COST_NEGATIVE")
+    return number
+
+
+def _actual_cost(output: Mapping[str, Any]) -> float:
+    value = output.get("cost")
+    if value is None:
+        value = output.get("actual_cost")
+    return _verified_cost(value)
 
 
 def _source_proof_event(
@@ -187,8 +200,8 @@ def record_live_canary_executor_result(
             action=action,
             ok=ok,
             cost=max(
-                _finite(payload.get("expected_cost")),
-                _finite(output.get("cost", output.get("actual_cost"))),
+                _verified_cost(payload.get("expected_cost")),
+                _actual_cost(output),
             ),
             proof_event_type=proof_event_type,
             evidence_ref=source_event_evidence_ref(proof_event),
