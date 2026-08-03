@@ -10,41 +10,13 @@ from core.events.log_queries import direct_latest_append_seq, event_append_seq
 from core.events.log_queries import iter_events as iter_event_window
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import BUSINESS_OUTCOME_OBSERVED
+from core.experiments.outcome_semantics import resolve_outcome_success
 from runtime.experiments.live_canary import (
     LiveCanaryCoordinator,
     source_event_evidence_ref,
 )
 
 log = logging.getLogger(__name__)
-
-_SUCCESS_STATUSES = frozenset(
-    {
-        "captured",
-        "completed",
-        "confirmed",
-        "paid",
-        "succeeded",
-        "success",
-    }
-)
-_FAILURE_STATUSES = frozenset(
-    {
-        "canceled",
-        "cancelled",
-        "declined",
-        "failed",
-        "failure",
-        "refunded",
-    }
-)
-_SEMANTIC_SUCCESS_EVENT_TYPES = frozenset(
-    {
-        "booking_confirmed@v1",
-        "payment_captured",
-        "payment_succeeded",
-        "purchase_success",
-    }
-)
 
 
 def _data(event: Any) -> dict[str, Any]:
@@ -53,23 +25,6 @@ def _data(event: Any) -> dict[str, Any]:
 
 def _payload(event: Any) -> dict[str, Any]:
     return dict(_data(event).get("payload") or {})
-
-
-def _success(event_type: str, payload: Mapping[str, Any]) -> bool | None:
-    """Resolve outcome success without treating arbitrary event types as wins."""
-
-    for key in ("success", "ok"):
-        value = payload.get(key)
-        if isinstance(value, bool):
-            return value
-    status = str(payload.get("status") or "").strip().lower()
-    if status in _SUCCESS_STATUSES:
-        return True
-    if status in _FAILURE_STATUSES:
-        return False
-    if str(event_type) in _SEMANTIC_SUCCESS_EVENT_TYPES:
-        return True
-    return None
 
 
 def _observed_at_ms(event: Any, payload: Mapping[str, Any]) -> int:
@@ -146,7 +101,7 @@ class LiveCanaryOutcomeObserver:
         if assignment is None or assignment.get("eligible") is not True:
             return True, 0
         payload = _payload(event)
-        success = _success(event_type, payload)
+        success = resolve_outcome_success(event_type, payload)
         if success is None:
             return True, 0
         if self._already_attributed(
