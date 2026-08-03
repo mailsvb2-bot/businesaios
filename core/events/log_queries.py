@@ -19,7 +19,7 @@ def event_timestamp_ms(event: Any) -> int:
         try:
             return int(direct)
         except (TypeError, ValueError):
-            return 0
+            pass
     payload = _event_value(event, "payload")
     if not isinstance(payload, Mapping):
         return 0
@@ -28,6 +28,7 @@ def event_timestamp_ms(event: Any) -> int:
         "event_time_ms",
         "emitted_at_ms",
         "created_at_ms",
+        "assigned_at_ms",
     ):
         try:
             if payload.get(name) is not None:
@@ -68,14 +69,28 @@ def _tenant_id(event_log: Any) -> str:
     )
 
 
+def direct_latest_append_seq(event_log: Any) -> int | None:
+    """Return a cheap backend tail, or None when the backend has no cursor API."""
+
+    store = getattr(event_log, "_store", None)
+    owner = store if store is not None else event_log
+    getter = getattr(owner, "latest_append_seq", None)
+    if not callable(getter):
+        return None
+    kwargs = (
+        {"tenant_id": _tenant_id(event_log)}
+        if _supports_keyword(getter, "tenant_id")
+        else {}
+    )
+    return max(0, int(getter(**kwargs) or 0))
+
+
 def latest_append_seq(event_log: Any) -> int:
     """Return the tenant event-store tail without exposing backend details."""
 
-    store = getattr(event_log, "_store", None)
-    getter = getattr(store, "latest_append_seq", None)
-    if callable(getter):
-        kwargs = {"tenant_id": _tenant_id(event_log)} if _supports_keyword(getter, "tenant_id") else {}
-        return max(0, int(getter(**kwargs) or 0))
+    direct = direct_latest_append_seq(event_log)
+    if direct is not None:
+        return direct
     maximum = 0
     for fallback_sequence, event in enumerate(iter_events(event_log), start=1):
         maximum = max(maximum, event_append_seq(event) or fallback_sequence)
@@ -202,6 +217,14 @@ def iter_events(
 
 def get_events(event_log: Any, decision_id: str, event_type: str) -> list[dict]:
     store = getattr(event_log, "_store", None)
+    if store is None:
+        direct_getter = getattr(event_log, "get_events", None)
+        if callable(direct_getter):
+            try:
+                return list(direct_getter(str(decision_id), str(event_type)))
+            except Exception:
+                pass
+
     getter = getattr(store, "get_events_for_decision", None)
     if callable(getter):
         try:
@@ -213,7 +236,8 @@ def get_events(event_log: Any, decision_id: str, event_type: str) -> list[dict]:
                 )
             )
         except Exception:
-            return []
+            pass
+
     out: list[dict] = []
     try:
         for event in iter_events(
@@ -235,6 +259,7 @@ def has_event(event_log: Any, decision_id: str, event_type: str) -> bool:
 
 
 __all__ = [
+    "direct_latest_append_seq",
     "event_append_seq",
     "event_timestamp_ms",
     "get_events",
