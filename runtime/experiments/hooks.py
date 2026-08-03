@@ -159,11 +159,16 @@ def record_live_canary_executor_result(
             complaint=bool(output.get("complaint")),
             executed_at_ms=int(time.time() * 1000),
         )
-        coordinator.evaluate_and_maybe_rollback(
-            decision_id=f"execution-guard:{decision_id}",
-            correlation_id=correlation_id,
-            tenant_id=tenant_id,
-        )
+        guard = coordinator._guard_result()
+        if guard.decision is CanaryDecision.ROLLBACK:
+            _force_rollback(
+                coordinator,
+                executor=executor,
+                decision_id=f"execution-guard:{decision_id}",
+                correlation_id=correlation_id,
+                tenant_id=tenant_id,
+                reason="execution_guard:" + ",".join(guard.reasons),
+            )
     except Exception as exc:
         try:
             assignment = coordinator.ledger.assignment_for_decision(
