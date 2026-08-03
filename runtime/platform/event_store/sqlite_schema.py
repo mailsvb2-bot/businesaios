@@ -157,9 +157,10 @@ def _backfill_append_sequences(db: sqlite3.Connection) -> None:
     ).fetchone()
     current = int(row[0] or 0) if row else 0
     existing_max = db.execute(
-        "SELECT COALESCE(MAX(append_seq),0) FROM events"
+        "SELECT COALESCE(MAX(append_seq),0), COALESCE(MAX(rowid),0) FROM events"
     ).fetchone()
-    current = max(current, int(existing_max[0] or 0) if existing_max else 0)
+    if existing_max:
+        current = max(current, int(existing_max[0] or 0), int(existing_max[1] or 0))
     missing = db.execute(
         "SELECT event_id FROM events WHERE append_seq IS NULL ORDER BY rowid"
     ).fetchall()
