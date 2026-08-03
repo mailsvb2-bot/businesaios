@@ -7,7 +7,7 @@ from threading import Lock
 from typing import Any
 
 from core.events.log_queries import (
-    event_timestamp_ms,
+    event_append_seq,
     iter_events as iter_event_window,
 )
 from core.experiments.assignment import ExperimentArm, ExperimentAssignment
@@ -45,8 +45,7 @@ class LiveCanaryAssignmentSafety:
         self.candidate_policy_id = str(candidate_policy_id)
         self._lock = Lock()
         self._loaded = False
-        self._cursor_ms = 0
-        self._seen_decisions_at_cursor: set[str] = set()
+        self._append_cursor = 0
         self._decision_ids: set[str] = set()
         self._stage_counts: dict[float, Counter[str]] = {}
         self._stage_first_assignment_ms: dict[float, int] = {}
@@ -96,49 +95,35 @@ class LiveCanaryAssignmentSafety:
         )
 
     def refresh(self) -> None:
-        """Consume newly appended shared assignment rows before guard checks."""
+        """Consume all new assignment rows in durable append order."""
 
         with self._lock:
-            cursor_ms = self._cursor_ms
-            seen_at_cursor = set(self._seen_decisions_at_cursor)
-        rows = [
-            event
-            for event in iter_event_window(
+            after_append_seq = self._append_cursor
+        rows = list(
+            iter_event_window(
                 self.event_log,
-                start_ms=cursor_ms,
+                start_ms=0,
+                after_append_seq=after_append_seq,
                 event_types=(EXPERIMENT_ASSIGNMENT,),
             )
-            if self._belongs(event)
-        ]
+        )
         rows.sort(
             key=lambda event: (
-                event_timestamp_ms(event),
+                event_append_seq(event),
                 str(_data(event).get("decision_id") or ""),
             )
         )
         with self._lock:
             for event in rows:
-                data = _data(event)
-                decision_id = str(data.get("decision_id") or "")
-                timestamp_ms = event_timestamp_ms(event)
-                if timestamp_ms < self._cursor_ms:
+                append_seq = event_append_seq(event)
+                if append_seq <= self._append_cursor:
                     continue
-                if (
-                    timestamp_ms == self._cursor_ms
-                    and decision_id in self._seen_decisions_at_cursor
-                ):
-                    continue
-                self._track(
-                    decision_id=decision_id,
-                    payload=_payload(event),
-                )
-                if timestamp_ms > self._cursor_ms:
-                    self._cursor_ms = timestamp_ms
-                    self._seen_decisions_at_cursor = {decision_id}
-                else:
-                    self._seen_decisions_at_cursor.add(decision_id)
-            if self._cursor_ms == cursor_ms:
-                self._seen_decisions_at_cursor.update(seen_at_cursor)
+                if self._belongs(event):
+                    self._track(
+                        decision_id=str(_data(event).get("decision_id") or ""),
+                        payload=_payload(event),
+                    )
+                self._append_cursor = append_seq
             self._loaded = True
 
     def ensure_loaded(self) -> None:
