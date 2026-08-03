@@ -51,13 +51,35 @@ def _built():
     )
 
 
-def test_generation_change_aborts_before_assignment_reservation() -> None:
-    registry = FakeRegistry(generation=2)
-    coordinator = FakeCoordinator()
+def _record(
+    *,
+    registry: FakeRegistry,
+    coordinator: FakeCoordinator,
+    snapshot: LiveCanaryRoutingSnapshot,
+) -> None:
     core = SimpleNamespace(
         _live_canary=coordinator,
         _selector=SimpleNamespace(_registry=registry),
     )
+    _record_live_canary_assignment(
+        core=core,
+        state={
+            "purpose": "live_canary",
+            "live_canary_eligible": True,
+        },
+        policy=SimpleNamespace(id="active@v1"),
+        out=SimpleNamespace(action="send_message@v1"),
+        built=_built(),
+        tenant_id="tenant-a",
+        subject_id="customer-1",
+        expected_cost=1.0,
+        routing_snapshot=snapshot,
+    )
+
+
+def test_generation_change_aborts_before_assignment_reservation() -> None:
+    registry = FakeRegistry(generation=2)
+    coordinator = FakeCoordinator()
     snapshot = LiveCanaryRoutingSnapshot(
         candidate_policy_id="candidate@v2",
         rollout_pct=1,
@@ -70,20 +92,27 @@ def test_generation_change_aborts_before_assignment_reservation() -> None:
         RuntimeError,
         match="LIVE_CANARY_ROLLOUT_CHANGED_DURING_DECISION",
     ):
-        _record_live_canary_assignment(
-            core=core,
-            state={
-                "purpose": "live_canary",
-                "live_canary_eligible": True,
-            },
-            policy=SimpleNamespace(id="active@v1"),
-            out=SimpleNamespace(action="send_message@v1"),
-            built=_built(),
-            tenant_id="tenant-a",
-            subject_id="customer-1",
-            expected_cost=1.0,
-            routing_snapshot=snapshot,
-        )
+        _record(registry=registry, coordinator=coordinator, snapshot=snapshot)
+
+    assert coordinator.assign_calls == 0
+
+
+def test_zero_to_live_transition_aborts_pre_rollout_selection() -> None:
+    registry = FakeRegistry(generation=1)
+    coordinator = FakeCoordinator()
+    snapshot = LiveCanaryRoutingSnapshot(
+        candidate_policy_id="",
+        rollout_pct=0,
+        rollout_generation=0,
+        active_policy_id="active@v1",
+        selected_policy_id="active@v1",
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="LIVE_CANARY_CANDIDATE_ID_MISMATCH",
+    ):
+        _record(registry=registry, coordinator=coordinator, snapshot=snapshot)
 
     assert coordinator.assign_calls == 0
 
