@@ -4,16 +4,17 @@ import logging
 import math
 import time
 from collections.abc import Mapping
+from types import SimpleNamespace
 from typing import Any
 
 from runtime.proofs import ACTION_PROOF_EVENT
 from core.experiments.live_canary_events import (
     CANARY_AUTO_ROLLED_BACK,
     CANARY_GUARDRAIL_BREACHED,
+    LIVE_CANARY_EXECUTION_FAILED_SOURCE,
 )
 
 log = logging.getLogger(__name__)
-_EXECUTION_FAILURE_SOURCE = "live_canary_execution_failed_source@v1"
 
 
 def _coordinator(decision_core: Any) -> Any | None:
@@ -103,7 +104,9 @@ def record_live_canary_executor_result(
         ok = bool(getattr(result, "ok", False))
         output = _safe_mapping(getattr(result, "output", None))
         proof_event_type = (
-            ACTION_PROOF_EVENT.get(action) if ok else _EXECUTION_FAILURE_SOURCE
+            ACTION_PROOF_EVENT.get(action)
+            if ok
+            else LIVE_CANARY_EXECUTION_FAILED_SOURCE
         )
         if not proof_event_type:
             _force_rollback(
@@ -192,6 +195,31 @@ def record_live_canary_executor_result(
             log.exception("live_canary_executor_evidence_rollback_failed")
 
 
+def record_live_canary_executor_exception(
+    *,
+    executor: Any,
+    env: Any,
+    exc: BaseException,
+) -> None:
+    """Record fail-closed canary evidence while preserving the original exception."""
+
+    result = SimpleNamespace(
+        ok=False,
+        output={
+            "exception_type": type(exc).__name__,
+            "message": str(exc),
+            "critical_violation": False,
+            "complaint": False,
+        },
+        error=f"{type(exc).__name__}: {exc}",
+    )
+    record_live_canary_executor_result(
+        executor=executor,
+        env=env,
+        result=result,
+    )
+
+
 def record_live_canary_business_outcome(
     *,
     decision_core: Any,
@@ -223,5 +251,6 @@ def record_live_canary_business_outcome(
 
 __all__ = [
     "record_live_canary_business_outcome",
+    "record_live_canary_executor_exception",
     "record_live_canary_executor_result",
 ]
