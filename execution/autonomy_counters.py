@@ -87,8 +87,14 @@ class FileAutonomyCounterStore:
         if not path.exists():
             return {'records': []}
         try:
-            data = json.loads(path.read_text(encoding='utf-8'))
-        except Exception:
+            raw_payload = path.read_text(encoding='utf-8')
+        except FileNotFoundError:
+            return {'records': []}
+        except UnicodeDecodeError:
+            return {'records': []}
+        try:
+            data = json.loads(raw_payload)
+        except json.JSONDecodeError:
             return {'records': []}
         payload = _safe_dict(data)
         records = payload.get('records')
@@ -232,11 +238,15 @@ class AutonomyCounterResolver:
         day_events = 0
         count_recent = getattr(event_log, 'count_recent', None)
         if callable(count_recent):
+            raw_hour_events = count_recent(tenant_id=str(tenant_id), action='*', period='hour')
+            raw_day_events = count_recent(tenant_id=str(tenant_id), action='*', period='day')
             try:
-                hour_events = max(0, int(count_recent(tenant_id=str(tenant_id), action='*', period='hour')))
-                day_events = max(0, int(count_recent(tenant_id=str(tenant_id), action='*', period='day')))
-            except Exception:
+                hour_events = max(0, int(raw_hour_events))
+            except (TypeError, ValueError, OverflowError):
                 hour_events = 0
+            try:
+                day_events = max(0, int(raw_day_events))
+            except (TypeError, ValueError, OverflowError):
                 day_events = 0
         return PersistentAutonomyCounters(
             actions_hour=max(from_recent.actions_hour, persisted.actions_hour, hour_events),
