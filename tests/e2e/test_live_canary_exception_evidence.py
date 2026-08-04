@@ -141,6 +141,7 @@ def test_executor_exception_records_fail_closed_canary_evidence() -> None:
     )
     assert len(executions) == 1
     assert executions[0]["payload"]["ok"] is False
+    assert executions[0]["payload"]["cost"] == 1.0
     assert registry.rollout_pct == 0
 
 
