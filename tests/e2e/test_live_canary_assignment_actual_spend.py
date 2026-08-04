@@ -5,6 +5,7 @@ import time
 from config.live_canary_policy import LiveCanaryPolicy
 from core.events.log import EventLog
 from core.experiments.guardrails import CanaryDecision, LiveCanaryGuard
+from core.experiments.ledger import LiveCanaryLedger
 from core.experiments.live_canary_events import (
     CANDIDATE_ACTION_EXECUTED,
     EXPERIMENT_ASSIGNMENT,
@@ -86,3 +87,63 @@ def test_assignment_admission_replaces_executed_reservation_with_actual_cost() -
 
     assert result.decision is CanaryDecision.ROLLBACK
     assert "candidate_cost_budget" in result.reasons
+
+
+def test_recent_execution_cost_survives_expired_assignment_reservation() -> None:
+    now_ms = int(time.time() * 1000)
+    old_assignment_ms = now_ms - 25 * 60 * 60 * 1000
+    log = EventLog(MemoryEventStore(), tenant="tenant-a")
+    common = {
+        "experiment_id": "recent-spend",
+        "candidate_policy_id": "candidate@v2",
+        "tenant_id": "tenant-a",
+        "purpose": "live_canary",
+        "arm": "candidate",
+        "candidate_pct": 1.0,
+        "eligible": True,
+    }
+    log.emit(
+        event_type=EXPERIMENT_ASSIGNMENT,
+        source="live_canary",
+        user_id="experiment",
+        decision_id="old-assignment",
+        correlation_id="old-correlation",
+        payload={
+            **common,
+            "subject_hash": "old-subject",
+            "expected_cost": 10.0,
+            "assigned_at_ms": old_assignment_ms,
+        },
+    )
+    log.emit(
+        event_type=CANDIDATE_ACTION_EXECUTED,
+        source="live_canary",
+        user_id="experiment",
+        decision_id="old-assignment",
+        correlation_id="old-correlation",
+        payload={
+            "experiment_id": "recent-spend",
+            "candidate_policy_id": "candidate@v2",
+            "arm": "candidate",
+            "cost": 40.0,
+            "ok": True,
+            "executed_at_ms": now_ms,
+        },
+    )
+
+    safety = LiveCanaryAssignmentSafety(
+        log,
+        experiment_id="recent-spend",
+        candidate_policy_id="candidate@v2",
+    ).metrics(candidate_pct=1.0)
+    ledger = LiveCanaryLedger(
+        log,
+        experiment_id="recent-spend",
+        candidate_policy_id="candidate@v2",
+    ).metrics(candidate_pct=1.0)
+
+    for metrics in (safety, ledger):
+        assert metrics["candidate_actions_24h"] == 0
+        assert metrics["candidate_expected_cost_24h"] == 0.0
+        assert metrics["candidate_actual_cost_24h"] == 40.0
+        assert metrics["candidate_cost_24h"] == 40.0
