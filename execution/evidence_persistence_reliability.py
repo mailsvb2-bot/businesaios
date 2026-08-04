@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Mapping
@@ -55,11 +56,10 @@ class EvidencePersistenceReliabilitySupport:
     def checkpoint(self, *, tenant_id: str, run_id: str, stage: str, checkpoint_id: str, idempotency_key: str, payload: Mapping[str, Any] | None = None, outbox_message_id: str | None = None, action_id: str | None = None) -> None:
         if self.checkpoint_store is None:
             return
-        latest = None
-        try:
-            latest = self.checkpoint_store.latest(tenant_id=self.tenant_id(tenant_id=tenant_id), run_id=str(run_id))
-        except Exception:
-            latest = None
+        latest = self.checkpoint_store.latest(
+            tenant_id=self.tenant_id(tenant_id=tenant_id),
+            run_id=str(run_id),
+        )
         next_sequence = 0 if latest is None else int(getattr(latest, 'sequence_no', -1)) + 1
         self.checkpoint_store.append(
             ExecutionCheckpoint(
@@ -131,15 +131,22 @@ class EvidencePersistenceReliabilitySupport:
     def replay_detected(self, *, tenant_id: str, run_id: str, persistence_key: str) -> bool:
         if self.replay_guard is None or not hasattr(self.replay_guard, 'is_replay'):
             return False
-        try:
-            return bool(self.replay_guard.is_replay(tenant_id=self.tenant_id(tenant_id=tenant_id), run_id=str(run_id), persistence_key=str(persistence_key)))
-        except TypeError:
-            try:
-                return bool(self.replay_guard.is_replay(str(persistence_key)))
-            except Exception:
-                return False
-        except Exception:
-            return False
+        is_replay = self.replay_guard.is_replay
+        parameters = inspect.signature(is_replay).parameters.values()
+        names = {parameter.name for parameter in parameters}
+        supports_keywords = any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters
+        ) or {'tenant_id', 'run_id', 'persistence_key'} <= names
+        if supports_keywords:
+            return bool(
+                is_replay(
+                    tenant_id=self.tenant_id(tenant_id=tenant_id),
+                    run_id=str(run_id),
+                    persistence_key=str(persistence_key),
+                )
+            )
+        return bool(is_replay(str(persistence_key)))
 
     def reconciliation_summary(self, *, tenant_id: str, run_id: str, idempotency_key: IdempotencyKey, outbox_message_id: str) -> dict[str, Any] | None:
         if self.reconciliation_service is None:
