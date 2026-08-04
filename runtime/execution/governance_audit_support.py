@@ -38,19 +38,16 @@ def _append_governance_audit(
     event_type: str | None = None,
     payload: Mapping[str, object] | None = None,
 ) -> None:
-    """Append best-effort governance evidence without creating decision authority."""
+    """Append governance evidence and fail closed when persistence is unavailable."""
 
-    try:
-        audit_event = event
-        if audit_event is None:
-            audit_event = GovernanceAuditEvent(
-                event_type=str(event_type or "").strip(),
-                tenant_id=str(tenant_id or "").strip() or "unknown",
-                payload=dict(payload or {}),
-            )
-        _governance_audit_log(executor, guard=guard).append(audit_event)
-    except Exception:
-        return
+    audit_event = event
+    if audit_event is None:
+        audit_event = GovernanceAuditEvent(
+            event_type=str(event_type or "").strip(),
+            tenant_id=str(tenant_id or "").strip() or "unknown",
+            payload=dict(payload or {}),
+        )
+    _governance_audit_log(executor, guard=guard).append(audit_event)
 
 
 __all__ = ["_append_governance_audit", "_governance_audit_log"]
