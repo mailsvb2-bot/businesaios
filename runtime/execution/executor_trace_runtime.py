@@ -29,7 +29,7 @@ def _generated_at_ms(env: DecisionEnvelope) -> int:
             try:
                 if value is not None:
                     return int(value)
-            except Exception:
+            except (TypeError, ValueError, OverflowError):
                 continue
     return 0
 
@@ -73,7 +73,7 @@ def trace_context_for_env(*, env: DecisionEnvelope, safe_dict) -> object | None:
             executor_name='RuntimeExecutor',
             component='runtime.executor',
         )
-    except Exception:
+    except (TypeError, ValueError):
         return None
 
 
