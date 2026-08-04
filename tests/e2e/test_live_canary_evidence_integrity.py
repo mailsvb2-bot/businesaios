@@ -182,13 +182,28 @@ def test_execution_and_revenue_require_non_stub_source_events() -> None:
             evidence_ref="event:does-not-exist",
             executed_at_ms=assigned_at + 1,
         )
+    with pytest.raises(
+        RuntimeError,
+        match="LIVE_CANARY_EXECUTION_COST_MISMATCH",
+    ):
+        coordinator.record_execution(
+            decision_id="d-1",
+            correlation_id="c-1",
+            arm=assignment.arm,
+            action="send_message@v1",
+            ok=True,
+            cost=1.0,
+            proof_event_type="message_sent",
+            evidence_ref=source_event_evidence_ref(real_proof),
+            executed_at_ms=assigned_at + 1,
+        )
     execution = coordinator.record_execution(
         decision_id="d-1",
         correlation_id="c-1",
         arm=assignment.arm,
         action="send_message@v1",
         ok=True,
-        cost=1.0,
+        cost=2.0,
         proof_event_type="message_sent",
         evidence_ref=source_event_evidence_ref(real_proof),
         executed_at_ms=assigned_at + 1,
