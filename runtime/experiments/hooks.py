@@ -173,6 +173,8 @@ def record_live_canary_executor_result(
         )
         proof_payload = _safe_mapping(_event_data(proof_event).get("payload"))
         payload = _safe_mapping(getattr(decision, "payload", None))
+        if output.get("_live_canary_actual_cost_missing") is True:
+            raise RuntimeError("LIVE_CANARY_EXECUTION_COST_EVIDENCE_REQUIRED")
         coordinator.record_execution(
             decision_id=decision_id,
             correlation_id=correlation_id,
@@ -247,6 +249,7 @@ def record_live_canary_executor_exception(
             "message": str(exc),
             "critical_violation": False,
             "complaint": False,
+            "_live_canary_actual_cost_missing": True,
         },
         error=f"{type(exc).__name__}: {exc}",
     )
