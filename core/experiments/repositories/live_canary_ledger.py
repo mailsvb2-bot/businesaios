@@ -402,8 +402,8 @@ class LiveCanaryLedger:
             ) + _finite(assignment.get("expected_cost"))
             subject_assignments[str(assignment.get("subject_hash") or "")] += 1
 
-        rolling_execution_keys: set[tuple[str, str]] = set()
-        executed_candidate_decisions: set[str] = set()
+        execution_identity_keys: set[tuple[str, str]] = set()
+        all_executed_candidate_decisions: set[str] = set()
         for data, payload in rows:
             kind = str(data.get("event_type") or "")
             if kind not in {CONTROL_ACTION_EXECUTED, CANDIDATE_ACTION_EXECUTED}:
@@ -411,14 +411,14 @@ class LiveCanaryLedger:
             decision_id = str(data.get("decision_id") or "")
             if decision_id not in candidate_assignment_ids:
                 continue
+            key = (decision_id, kind)
+            if key in execution_identity_keys:
+                continue
+            execution_identity_keys.add(key)
+            all_executed_candidate_decisions.add(decision_id)
             timestamp = int(payload.get("executed_at_ms") or 0)
             if timestamp < rolling_cutoff_ms:
                 continue
-            key = (decision_id, kind)
-            if key in rolling_execution_keys:
-                continue
-            rolling_execution_keys.add(key)
-            executed_candidate_decisions.add(decision_id)
             metrics["candidate_actual_cost_24h"] = float(
                 metrics["candidate_actual_cost_24h"]
             ) + _finite(payload.get("cost"))
@@ -508,7 +508,7 @@ class LiveCanaryLedger:
         pending_expected_cost = sum(
             _finite(assignment.get("expected_cost"))
             for decision_id, assignment in rolling_candidate_assignments.items()
-            if decision_id not in executed_candidate_decisions
+            if decision_id not in all_executed_candidate_decisions
         )
         metrics["candidate_cost_24h"] = float(
             metrics["candidate_actual_cost_24h"]
