@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import time
 from collections.abc import Mapping
 from threading import Lock
 from typing import Any
@@ -12,14 +11,9 @@ from core.events.log_queries import (
     event_append_seq,
     iter_events as iter_event_window,
 )
-from core.experiments.builders.live_canary_assignment import ExperimentArm
-from core.experiments.events.live_canary_events import (
-    CANDIDATE_ACTION_EXECUTED,
-    LIVE_CANARY_EVENT_TYPES,
-)
+from core.experiments.events.live_canary_events import LIVE_CANARY_EVENT_TYPES
 from core.experiments.repositories.live_canary_ledger import (
     LiveCanaryLedger as _BaseLiveCanaryLedger,
-    _finite,
 )
 
 
@@ -88,52 +82,6 @@ class LiveCanaryLedger(_BaseLiveCanaryLedger):
         self._refresh_materialized_rows()
         with self._evidence_lock:
             return list(self._materialized_rows)
-
-    def metrics(
-        self,
-        *,
-        candidate_pct: float | None = None,
-    ) -> dict[str, float | int]:
-        metrics = super().metrics(candidate_pct=candidate_pct)
-        rows = self._experiment_rows()
-        assignments = self._assignments(rows, None)
-        cutoff_ms = int(time.time() * 1000) - 24 * 60 * 60 * 1000
-        executed_decisions: set[str] = set()
-        execution_keys: set[tuple[str, str]] = set()
-        actual_cost = 0.0
-        for data, payload in rows:
-            kind = str(data.get("event_type") or "")
-            if kind != CANDIDATE_ACTION_EXECUTED:
-                continue
-            decision_id = str(data.get("decision_id") or "")
-            assignment = assignments.get(decision_id)
-            if (
-                assignment is None
-                or str(assignment.get("arm") or "")
-                != ExperimentArm.CANDIDATE.value
-            ):
-                continue
-            executed_at_ms = int(payload.get("executed_at_ms") or 0)
-            if executed_at_ms < cutoff_ms:
-                continue
-            key = (decision_id, kind)
-            if key in execution_keys:
-                continue
-            execution_keys.add(key)
-            executed_decisions.add(decision_id)
-            actual_cost += _finite(payload.get("cost"))
-
-        pending_cost = sum(
-            _finite(assignment.get("expected_cost"))
-            for decision_id, assignment in assignments.items()
-            if str(assignment.get("arm") or "")
-            == ExperimentArm.CANDIDATE.value
-            and int(assignment.get("assigned_at_ms") or 0) >= cutoff_ms
-            and decision_id not in executed_decisions
-        )
-        metrics["candidate_actual_cost_24h"] = actual_cost
-        metrics["candidate_cost_24h"] = actual_cost + pending_cost
-        return metrics
 
 
 __all__ = ["LiveCanaryLedger"]
