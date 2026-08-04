@@ -261,7 +261,7 @@ class LiveCanaryAssignmentSafety:
         pending = sum(
             row[2]
             for decision_id, row in self._candidate_assignments.items()
-            if decision_id not in self._candidate_actual_costs
+            if decision_id not in self._execution_ids
         )
         return expected, actual, actual + pending
 
