@@ -9,7 +9,7 @@ from runtime.execution.governance_audit_support import _append_governance_audit
 
 
 class _FailingAuditLog:
-    def append(self, event) -> None:
+    def append(self, _event) -> None:
         raise OSError("audit storage unavailable")
 
 
@@ -18,7 +18,7 @@ class _SnapshotStore:
         self._value = value
         self._error = error
 
-    def get(self, snapshot_id: str):
+    def get(self, _snapshot_id: str):
         if self._error is not None:
             raise self._error
         return self._value
@@ -34,6 +34,12 @@ def test_governance_audit_persistence_failure_is_visible() -> None:
             event_type="governance_execution_approval_satisfied",
             payload={"decision_id": "decision-1"},
         )
+
+
+def test_correlation_key_is_read_from_valid_snapshot() -> None:
+    store = _SnapshotStore(b'{"meta":{"correlation_key":"corr-1"}}')
+
+    assert extract_correlation_key(store, "snapshot-1") == "corr-1"
 
 
 def test_correlation_parser_tolerates_malformed_snapshot_only() -> None:
