@@ -7,6 +7,11 @@ state. This module must not compute actions or execute effects.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
+from contextlib import nullcontext
+from contextvars import ContextVar
+from dataclasses import dataclass
+from typing import Any
 
 from config.decision_safety_policy import (
     DEFAULT_POLICY_SELECTOR_POLICY,
@@ -15,6 +20,7 @@ from config.decision_safety_policy import (
 from core.observability.errors import log_exception_throttled
 from core.policies.canary import CanaryPolicyResolver
 from core.policies.types import RolloutConfig
+from core.tenancy.normalization import normalize_tenant_id
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +34,82 @@ _PURPOSE_POLICY = {
     "offer_outcome_emit": "offer_outcome_emit" + _V1,
 }
 _POLICY_DEPLOYMENT_ID = "policy_deployment" + _V1
+
+
+@dataclass(frozen=True)
+class LiveCanaryRoutingSnapshot:
+    candidate_policy_id: str
+    rollout_pct: int
+    rollout_generation: int
+    active_policy_id: str
+    selected_policy_id: str
+
+
+_LIVE_CANARY_ROUTING_SNAPSHOT: ContextVar[LiveCanaryRoutingSnapshot | None] = (
+    ContextVar("live_canary_routing_snapshot", default=None)
+)
+
+
+def _mapping_attr(state: Any, name: str) -> dict[str, Any]:
+    value = state.get(name) if isinstance(state, Mapping) else getattr(state, name, None)
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _top_level_value(state: Any, name: str) -> Any:
+    return state.get(name) if isinstance(state, Mapping) else getattr(state, name, None)
+
+
+def _state_value(state: Any, *names: str) -> str:
+    for name in names:
+        value = _top_level_value(state, name)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    meta = _mapping_attr(state, "meta")
+    for name in names:
+        value = meta.get(name)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
+
+
+def _canonical_tenant_id(state: Any) -> str:
+    product_metadata = _mapping_attr(state, "product_metadata")
+    return normalize_tenant_id(
+        product_metadata.get("tenant_id")
+        or _top_level_value(state, "tenant_id")
+    )
+
+
+def _canonical_actor_id(state: Any) -> str:
+    user = _mapping_attr(state, "user")
+    for candidate in (
+        _top_level_value(state, "user_id"),
+        user.get("actor_id"),
+        user.get("user_id"),
+        user.get("id"),
+        user.get("account_id"),
+    ):
+        actor_id = str(candidate or "").strip()
+        if actor_id and actor_id.casefold() not in {"unknown", "none", "null"}:
+            return actor_id
+    return ""
+
+
+def _state_bool(state: Any, name: str) -> bool:
+    value = _top_level_value(state, name)
+    if value is None:
+        value = _mapping_attr(state, "meta").get(name)
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _policy_id(value: Any) -> str:
+    return str(
+        getattr(value, "policy_id", None)
+        or getattr(value, "id", None)
+        or ""
+    )
 
 
 class PolicySelector:
@@ -60,7 +142,15 @@ class PolicySelector:
 
         self._resolver = CanaryPolicyResolver(_MetaAdapter(registry), cfg)
 
+    def consume_live_canary_routing_snapshot(
+        self,
+    ) -> LiveCanaryRoutingSnapshot | None:
+        snapshot = _LIVE_CANARY_ROUTING_SNAPSHOT.get()
+        _LIVE_CANARY_ROUTING_SNAPSHOT.set(None)
+        return snapshot
+
     def resolve_policy(self, state):
+        _LIVE_CANARY_ROUTING_SNAPSHOT.set(None)
         proposal = getattr(state, "deployment_proposal", None)
         if proposal:
             return self._get_optional(
@@ -68,47 +158,109 @@ class PolicySelector:
                 miss_key="deployment",
             ) or self._registry.active()
 
-        meta = getattr(state, "meta", None) or {}
-        if isinstance(meta, dict):
-            purpose = str(meta.get("purpose") or "").strip()
-            policy_id = _PURPOSE_POLICY.get(purpose)
-            if policy_id:
-                selected = self._get_optional(
-                    policy_id,
-                    miss_key=purpose,
-                )
-                if selected is not None:
-                    return selected
+        purpose = _state_value(state, "purpose")
+        tenant_id = _canonical_tenant_id(state)
+        live_policy = self._resolver.live_policy
+        live_eligible = bool(
+            live_policy.enabled
+            and tenant_id in live_policy.allowed_tenant_ids
+            and purpose in live_policy.allowed_purposes
+            and _state_bool(state, live_policy.eligibility_state_key)
+        )
+        policy_id = _PURPOSE_POLICY.get(purpose)
+        if policy_id and not live_eligible:
+            selected = self._get_optional(policy_id, miss_key=purpose)
+            if selected is not None:
+                return selected
 
-        if getattr(state, "safe_mode", False) and self._safe:
+        safe_mode = (
+            state.get("safe_mode", False)
+            if isinstance(state, Mapping)
+            else getattr(state, "safe_mode", False)
+        )
+        if safe_mode and self._safe:
             return self._registry.get(self._safe)
 
-        cand, pct = self._registry.rollout_config()
-        pct_i = self._normalize_rollout_pct(pct)
-        self._resolver.cfg = RolloutConfig(
-            canary_pct=float(pct_i) / self._policy.rollout_pct_divisor,
-            min_decisions=self._policy.default_min_decisions,
-            max_error_rate=self._policy.default_max_error_rate,
-            auto_promote=self._policy.default_auto_promote,
+        window_factory = getattr(
+            self._registry,
+            "live_canary_assignment_window",
+            None,
         )
+        window = window_factory() if callable(window_factory) else nullcontext()
+        with window:
+            cand, pct = self._registry.rollout_config()
+            pct_i = self._normalize_rollout_pct(pct)
+            generation_getter = getattr(
+                self._registry,
+                "rollout_generation",
+                None,
+            )
+            generation = (
+                int(generation_getter()) if callable(generation_getter) else 0
+            )
+            active = self._registry.active()
+            active_policy_id = _policy_id(active)
+            self._resolver.cfg = RolloutConfig(
+                canary_pct=float(pct_i) / self._policy.rollout_pct_divisor,
+                min_decisions=self._policy.default_min_decisions,
+                max_error_rate=self._policy.default_max_error_rate,
+                auto_promote=self._policy.default_auto_promote,
+            )
 
-        if cand and pct_i > self._policy.rollout_pct_floor:
-            uid = str(getattr(state, "user_id", ""))
-            ref = self._resolver.select_policy(uid)
-            return self._registry.get(ref.policy_id)
+            if cand and pct_i > self._policy.rollout_pct_floor:
+                ref = self._resolver.select_policy(
+                    _canonical_actor_id(state),
+                    tenant_id=tenant_id,
+                    purpose=purpose,
+                    eligible=live_eligible,
+                )
+                selected = self._registry.get(ref.policy_id)
+                _LIVE_CANARY_ROUTING_SNAPSHOT.set(
+                    LiveCanaryRoutingSnapshot(
+                        candidate_policy_id=str(cand),
+                        rollout_pct=pct_i,
+                        rollout_generation=generation,
+                        active_policy_id=active_policy_id,
+                        selected_policy_id=_policy_id(selected),
+                    )
+                )
+                return selected
 
-        return self._registry.active()
+            if live_policy.enabled:
+                _LIVE_CANARY_ROUTING_SNAPSHOT.set(
+                    LiveCanaryRoutingSnapshot(
+                        candidate_policy_id=str(cand or ""),
+                        rollout_pct=pct_i,
+                        rollout_generation=generation,
+                        active_policy_id=active_policy_id,
+                        selected_policy_id=active_policy_id,
+                    )
+                )
+            return active
 
     def resolve_shadow_policy(self, state, *, production_policy_id: str):
         candidate_id, pct = self._registry.rollout_config()
-        if not candidate_id or int(pct or 0) != 0 or str(candidate_id) == str(production_policy_id):
+        if (
+            not candidate_id
+            or int(pct or 0) != 0
+            or str(candidate_id) == str(production_policy_id)
+        ):
             return None
         candidate = self._registry.maybe_get(candidate_id)
         module = str(getattr(type(candidate), "__module__", ""))
-        return candidate if candidate is not None and module.startswith("core.policies.") else None
+        return (
+            candidate
+            if candidate is not None and module.startswith("core.policies.")
+            else None
+        )
 
     def is_registered_shadow_candidate(self, candidate_policy_id: str) -> bool:
-        configured, pct = self._registry.rollout_config(); return bool(configured and str(configured) == str(candidate_policy_id) and int(pct or 0) == 0)
+        configured, pct = self._registry.rollout_config()
+        return bool(
+            configured
+            and str(configured) == str(candidate_policy_id)
+            and int(pct or 0) == 0
+        )
 
     select = resolve_policy
 
@@ -139,3 +291,6 @@ class PolicySelector:
                 msg="policy_selector: bad rollout pct",
             )
             return self._policy.rollout_pct_floor
+
+
+__all__ = ["LiveCanaryRoutingSnapshot", "PolicySelector"]

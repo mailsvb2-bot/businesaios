@@ -15,11 +15,20 @@ class SqliteEventStoreWriteApi:
     def append_event(self, event: dict, *, commit: bool = True) -> None:
         assert self._db is not None
         append = normalize_append_event(event)
+        sequence_row = self._db.execute(
+            "UPDATE event_append_sequence SET last_seq=last_seq+1 "
+            "WHERE singleton=1 RETURNING last_seq"
+        ).fetchone()
+        if sequence_row is None:
+            raise RuntimeError("SQLITE_EVENT_APPEND_SEQUENCE_UNAVAILABLE")
+        append_seq = int(sequence_row[0])
         self._db.execute(
-            "INSERT INTO events(event_id,tenant_id,user_id,source,event_type,timestamp_ms,decision_id,correlation_id,payload_json) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO events(rowid,event_id,append_seq,tenant_id,user_id,source,event_type,timestamp_ms,decision_id,correlation_id,payload_json) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
             (
+                append_seq,
                 append.event_id,
+                append_seq,
                 append.tenant_id,
                 append.user_id,
                 append.source,

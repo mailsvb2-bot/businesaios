@@ -14,6 +14,10 @@ from runtime.execution.executor_result import ExecutionResult
 from runtime.execution.executor_stages import preflight_and_verify
 from runtime.execution.governance_runtime import GovernanceExecutionBlocked
 from runtime.execution.operational_budget_runtime import OperationalBudgetBlocked
+from runtime.experiments.hooks import (
+    record_live_canary_executor_exception,
+    record_live_canary_executor_result,
+)
 from runtime.safety_controls import record_execution_outcome
 
 
@@ -110,6 +114,11 @@ def execute_with_trace(*, executor, env: DecisionEnvelope) -> ExecutionResult:
                 trace_id=str(trace_id or ''),
                 ok=1 if getattr(result, 'ok', False) else 0,
             )
+            record_live_canary_executor_result(
+                executor=executor,
+                env=env,
+                result=result,
+            )
             return result
         except (OperationalBudgetBlocked, GovernanceExecutionBlocked) as exc:
             executor._record_action_audit(env=env, trace_id=trace_id, stage='runtime.execute', status='blocked', payload=dict(exc.output))
@@ -125,6 +134,11 @@ def execute_with_trace(*, executor, env: DecisionEnvelope) -> ExecutionResult:
                 correlation_id=str(env.decision.correlation_id),
             )
         except Exception as exc:
+            record_live_canary_executor_exception(
+                executor=executor,
+                env=env,
+                exc=exc,
+            )
             executor._record_action_audit(
                 env=env,
                 trace_id=trace_id,

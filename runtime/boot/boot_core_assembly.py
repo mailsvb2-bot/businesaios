@@ -4,16 +4,24 @@ from dataclasses import dataclass
 
 from bootstrap.decision_core_contract import RuntimeDecisionCorePort
 from governance.economic_layer import EconomicAutonomyLayer
-from runtime.boot import CapitalAllocationEngine, EconomicBrain, LearningSystem, RewardEngine, StrategicHorizonEngine
+from runtime.boot import (
+    CapitalAllocationEngine,
+    EconomicBrain,
+    LearningSystem,
+    RewardEngine,
+    StrategicHorizonEngine,
+)
 from runtime.boot.boot_decision_core import build_decision_core
 from runtime.boot.boot_executor import build_executor, build_runtime_infra
 from runtime.boot.boot_guard import build_guard
 from runtime.boot.boot_reward_learning import build_reward_learning
 from runtime.boot.core_assembly_args import CoreAssemblyArgs
+from runtime.experiments.wiring import bind_live_canary_executor
 from survival.controller import SurvivalController
 from survival.metrics import StaticSurvivalMetricsProvider
 
 CANON_BOOT_WIRING_ONLY = True
+
 
 @dataclass
 class CoreAssembly:
@@ -38,7 +46,12 @@ def build_survival_and_economics() -> tuple[SurvivalController, EconomicAutonomy
     return survival, economic_layer
 
 
-def build_reward_and_learning_components(*, snapshot_store, event_log, model_registry=None):
+def build_reward_and_learning_components(
+    *,
+    snapshot_store,
+    event_log,
+    model_registry=None,
+):
     """Compatibility alias retained for tests/boot hooks during the split."""
     return build_reward_learning(
         snapshot_store=snapshot_store,
@@ -75,7 +88,11 @@ def build_core_assembly(*, args: CoreAssemblyArgs) -> CoreAssembly:
     executor_runtime_infra = build_runtime_infra(
         runtime_infra=runtime_infra,
         delivery_state=args.delivery_state,
-        telegram_outbound_queue=getattr(args.runtime_infra, "telegram_outbound_queue", None),
+        telegram_outbound_queue=getattr(
+            args.runtime_infra,
+            "telegram_outbound_queue",
+            None,
+        ),
     )
     executor = build_executor(
         guard=guard,
@@ -89,6 +106,7 @@ def build_core_assembly(*, args: CoreAssemblyArgs) -> CoreAssembly:
         economic_layer=economic_layer,
         runtime_infra=executor_runtime_infra,
     )
+    bind_live_canary_executor(core, executor)
     return CoreAssembly(
         survival=survival,
         economic_layer=economic_layer,

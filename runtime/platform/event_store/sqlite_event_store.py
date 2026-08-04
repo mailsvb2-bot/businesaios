@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 
+from runtime.platform.event_store import sqlite_read_queries as _rq
 from runtime.platform.event_store.sqlite_event_store_query_api import SqliteEventStoreQueryApi
 from runtime.platform.event_store.sqlite_event_store_retention_api import SqliteEventStoreRetentionApi
 from runtime.platform.event_store.sqlite_event_store_settings_api import SqliteEventStoreSettingsApi
@@ -55,5 +56,22 @@ class SqliteEventStore(
     def commit(self) -> None:
         assert self._db is not None
         self._db.commit()
+
+    def get_events_for_decision(
+        self,
+        *,
+        tenant_id: str,
+        decision_id: str,
+        event_type: str,
+    ) -> list[dict]:
+        assert self._db is not None
+        rows = self._db.execute(
+            f"SELECT {_rq.EVENT_COLUMNS} FROM events "
+            "WHERE tenant_id=? AND decision_id=? AND event_type=? "
+            "ORDER BY timestamp_ms ASC, append_seq ASC",
+            (str(tenant_id), str(decision_id), str(event_type)),
+        ).fetchall()
+        return [_rq._row_to_event(row) for row in rows]
+
 
 __all__ = ["SqliteEventStore"]

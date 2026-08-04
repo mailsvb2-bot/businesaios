@@ -361,6 +361,36 @@ class RuntimeExecutor:
     def execute(self, env: DecisionEnvelope) -> ExecutionResult:
         return executor_execute_with_trace(executor=self, env=env)
 
+    def submit_live_canary_rollback(
+        self,
+        *,
+        decision_id: str,
+        correlation_id: str | None,
+        tenant_id: str,
+        candidate_policy_id: str,
+        experiment_id: str,
+        reasons: tuple[str, ...] = (),
+    ):
+        """Apply a live-canary rollback from the sovereign executor surface."""
+
+        _ = reasons
+        coordinator = getattr(self._decision_core, "_live_canary", None)
+        if coordinator is None:
+            raise RuntimeError("LIVE_CANARY_COORDINATOR_REQUIRED")
+        if str(candidate_policy_id) != coordinator.candidate_policy_id:
+            raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
+        if str(experiment_id) != coordinator.policy.experiment_id:
+            raise RuntimeError("LIVE_CANARY_EXPERIMENT_ID_MISMATCH")
+        result = coordinator.evaluate_and_maybe_rollback(
+            decision_id=str(decision_id),
+            correlation_id=correlation_id,
+            tenant_id=str(tenant_id),
+        )
+        decision = str(getattr(getattr(result, "decision", None), "value", ""))
+        if decision != "rollback":
+            raise RuntimeError("LIVE_CANARY_ROLLBACK_NOT_APPLIED")
+        return result
+
     def _extract_ck(self, snapshot_id: str):
         return extract_correlation_key(self._snapshot_store, str(snapshot_id))
 

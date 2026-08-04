@@ -18,6 +18,7 @@ class SqliteEventStoreQueryApi:
         tenant_id: str,
         start_ms: int = 0,
         end_ms=None,
+        after_append_seq: int | None = None,
         event_type=None,
         event_types=None,
         user_id=None,
@@ -29,11 +30,20 @@ class SqliteEventStoreQueryApi:
             tenant_id=tenant_id,
             start_ms=start_ms,
             end_ms=end_ms,
+            after_append_seq=after_append_seq,
             event_type=event_type,
             event_types=event_types,
             user_id=user_id,
             limit=limit,
         )
+
+    def latest_append_seq(self, *, tenant_id: str) -> int:
+        assert self._db is not None
+        row = self._db.execute(
+            "SELECT COALESCE(MAX(append_seq), 0) FROM events WHERE tenant_id=?",
+            (str(tenant_id),),
+        ).fetchone()
+        return int(row[0] or 0) if row else 0
 
     def latest_event(
         self,

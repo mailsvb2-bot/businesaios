@@ -5,16 +5,60 @@ from __future__ import annotations
 from typing import Any
 
 from bootstrap.world_model_boot_check import build_and_verify_default_world_model
+from config.live_canary_policy import DEFAULT_LIVE_CANARY_POLICY
 from core.ai import set_decision_core_singleton
 from core.ai.decision_core import DecisionCore
 from core.policies.shadow import ShadowDecisionLedger, ShadowEvaluator
+from runtime.experiments.wiring import (
+    attach_live_canary,
+    start_live_canary_runtime,
+)
 
 CANON_BOOT_WIRING_ONLY = True
 CANON_BOOT_REGISTERS_DECISION_CORE_SINGLETON = True
 
 
+def _normalized_policy_id(value: object) -> str:
+    return "" if value is None else str(value).strip()
+
+
 def build_world_model(*, event_log: Any) -> object:
     return build_and_verify_default_world_model(event_log=event_log)
+
+
+def _attach_configured_live_canary(core: DecisionCore, policy_selector: Any) -> None:
+    policy = DEFAULT_LIVE_CANARY_POLICY
+    if not policy.enabled:
+        return
+    policy.assert_valid()
+    registry = getattr(policy_selector, "_registry", None)
+    rollout_config = getattr(registry, "rollout_config", None)
+    if not callable(rollout_config):
+        raise RuntimeError("LIVE_CANARY_POLICY_REGISTRY_REQUIRED")
+    rollout_candidate, _rollout_pct = rollout_config()
+    runtime_candidate = _normalized_policy_id(rollout_candidate)
+    governed_identity = getattr(registry, "governed_candidate_identity", None)
+    governed_candidate = _normalized_policy_id(
+        governed_identity() if callable(governed_identity) else None
+    )
+    bound_candidate = governed_candidate or runtime_candidate
+    configured_candidate = _normalized_policy_id(policy.candidate_policy_id)
+    if (
+        bound_candidate
+        and configured_candidate
+        and bound_candidate != configured_candidate
+    ):
+        raise RuntimeError("LIVE_CANARY_CANDIDATE_ID_MISMATCH")
+    candidate = bound_candidate or configured_candidate
+    if not candidate:
+        raise RuntimeError("LIVE_CANARY_CANDIDATE_REQUIRED")
+    attach_live_canary(
+        core,
+        policy_registry=registry,
+        candidate_policy_id=candidate,
+        policy=policy,
+    )
+    start_live_canary_runtime(core)
 
 
 def build_decision_core(
@@ -41,6 +85,7 @@ def build_decision_core(
         issuer_id=issuer_id,
         shadow_observer=ShadowEvaluator(ShadowDecisionLedger(event_log), schemas),
     )
+    _attach_configured_live_canary(core, policy_selector)
     set_decision_core_singleton(core)
     return world_model, core
 

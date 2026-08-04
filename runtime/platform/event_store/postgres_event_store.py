@@ -20,6 +20,11 @@ from runtime.platform.event_store.append_contract import AppendEvent, normalize_
 from runtime.platform.postgres_port import PostgresPort
 
 CANON_POSTGRES_EVENT_STORE = True
+BASE_COLUMNS = (
+    "event_id, tenant_id, user_id, source, event_type, timestamp_ms, "
+    "decision_id, correlation_id, payload_json"
+)
+APPEND_COLUMNS = f"append_seq, {BASE_COLUMNS}"
 
 
 def describe_declared_absence() -> dict[str, object]:
@@ -36,17 +41,22 @@ def raise_if_used() -> None:
 
 
 def _row_to_event(row: tuple[Any, ...]) -> dict[str, Any]:
-    return {
-        "event_id": row[0],
-        "tenant_id": row[1],
-        "user_id": row[2],
-        "source": row[3],
-        "event_type": row[4],
-        "timestamp_ms": int(row[5] or 0),
-        "decision_id": row[6],
-        "correlation_id": row[7],
-        "payload": json.loads(row[8] or "{}"),
+    has_append_seq = len(row) >= 10
+    offset = 1 if has_append_seq else 0
+    event = {
+        "event_id": row[offset],
+        "tenant_id": row[1 + offset],
+        "user_id": row[2 + offset],
+        "source": row[3 + offset],
+        "event_type": row[4 + offset],
+        "timestamp_ms": int(row[5 + offset] or 0),
+        "decision_id": row[6 + offset],
+        "correlation_id": row[7 + offset],
+        "payload": json.loads(row[8 + offset] or "{}"),
     }
+    if has_append_seq:
+        event["append_seq"] = int(row[0])
+    return event
 
 
 def _ensure_psycopg_available() -> None:
@@ -90,8 +100,10 @@ def _where_clause(
     tenant_id: str | None,
     start_ms: int | None,
     end_ms: int | None,
-    user_id: str | None,
-    event_type: str | None,
+    after_append_seq: int | None = None,
+    user_id: str | None = None,
+    decision_id: str | None = None,
+    event_type: str | None = None,
     event_types: Iterable[str] | None = None,
 ) -> tuple[str, tuple[Any, ...]]:
     clauses: list[str] = []
@@ -105,9 +117,15 @@ def _where_clause(
     if end_ms is not None:
         clauses.append("timestamp_ms < %s")
         params.append(int(end_ms))
+    if after_append_seq is not None:
+        clauses.append("append_seq > %s")
+        params.append(max(0, int(after_append_seq)))
     if user_id is not None:
         clauses.append("user_id = %s")
         params.append(str(user_id))
+    if decision_id is not None:
+        clauses.append("decision_id = %s")
+        params.append(str(decision_id))
 
     types = _normalized_event_types(
         event_type=event_type,
@@ -153,6 +171,7 @@ class PostgresEventStore:
         self._db.execute(
             """
             CREATE TABLE IF NOT EXISTS events (
+              append_seq BIGSERIAL UNIQUE,
               event_id TEXT PRIMARY KEY,
               tenant_id TEXT NOT NULL,
               user_id TEXT,
@@ -165,8 +184,23 @@ class PostgresEventStore:
             );
             """
         )
+        self._db.execute(
+            "ALTER TABLE events ADD COLUMN IF NOT EXISTS append_seq BIGSERIAL;"
+        )
+        self._db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_events_append_seq "
+            "ON events (append_seq);"
+        )
         self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_tenant_ts ON events (tenant_id, timestamp_ms DESC);")
         self._db.execute("CREATE INDEX IF NOT EXISTS idx_events_tenant_type_ts ON events (tenant_id, event_type, timestamp_ms DESC);")
+        self._db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_events_tenant_append_seq "
+            "ON events (tenant_id, append_seq);"
+        )
+        self._db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_events_tenant_decision_type "
+            "ON events (tenant_id, decision_id, event_type);"
+        )
 
     def append_event(
         self,
@@ -198,6 +232,10 @@ class PostgresEventStore:
             )
         )
         self._db.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s));",
+            (f"event-append:{normalized.tenant_id}",),
+        )
+        self._db.execute(
             """
             INSERT INTO events (
               event_id, tenant_id, user_id, source, event_type, timestamp_ms,
@@ -220,13 +258,23 @@ class PostgresEventStore:
         if commit:
             self._db.commit()
 
+    def latest_append_seq(self, *, tenant_id: str) -> int:
+        row = self._db.fetchone(
+            "SELECT COALESCE(MAX(append_seq), 0) FROM events "
+            "WHERE tenant_id = %s;",
+            (str(tenant_id),),
+        )
+        return int(row[0] or 0) if row else 0
+
     def iter_events(
         self,
         *,
         tenant_id: str,
         start_ms: int = 0,
         end_ms: int | None = None,
+        after_append_seq: int | None = None,
         user_id: str | None = None,
+        decision_id: str | None = None,
         event_type: str | None = None,
         event_types: Iterable[str] | None = None,
         limit: int | None = None,
@@ -235,7 +283,9 @@ class PostgresEventStore:
             tenant_id=tenant_id,
             start_ms=start_ms,
             end_ms=end_ms,
+            after_append_seq=after_append_seq,
             user_id=user_id,
+            decision_id=decision_id,
             event_type=event_type,
             event_types=event_types,
         )
@@ -244,13 +294,16 @@ class PostgresEventStore:
         if limit is not None:
             limit_sql = " LIMIT %s"
             query_params.append(max(1, int(limit)))
+        include_append_seq = after_append_seq is not None
+        order_by = (
+            "append_seq ASC"
+            if include_append_seq
+            else "timestamp_ms ASC, event_id ASC"
+        )
+        columns = APPEND_COLUMNS if include_append_seq else BASE_COLUMNS
         rows = self._db.fetchall(
-            f"""
-            SELECT event_id, tenant_id, user_id, source, event_type, timestamp_ms,
-                   decision_id, correlation_id, payload_json
-            FROM events{where}
-            ORDER BY timestamp_ms ASC, event_id ASC{limit_sql};
-            """,
+            f"SELECT {columns} FROM events{where} "
+            f"ORDER BY {order_by}{limit_sql};",
             tuple(query_params),
         )
         for row in rows:
@@ -282,6 +335,7 @@ class PostgresEventStore:
         event_type: str | None = None,
         event_types: Iterable[str] | None = None,
         user_id: str | None = None,
+        decision_id: str | None = None,
         start_ms: int | None = None,
         end_ms: int | None = None,
         limit: int = 100,
@@ -291,18 +345,14 @@ class PostgresEventStore:
             start_ms=start_ms,
             end_ms=end_ms,
             user_id=user_id,
+            decision_id=decision_id,
             event_type=event_type,
             event_types=event_types,
         )
         bounded_limit = max(1, int(limit))
         rows = self._db.fetchall(
-            f"""
-            SELECT event_id, tenant_id, user_id, source, event_type, timestamp_ms,
-                   decision_id, correlation_id, payload_json
-            FROM events{where}
-            ORDER BY timestamp_ms DESC, event_id DESC
-            LIMIT %s;
-            """,
+            f"SELECT {BASE_COLUMNS} FROM events{where} "
+            "ORDER BY timestamp_ms DESC, event_id DESC LIMIT %s;",
             (*params, bounded_limit),
         )
         return [_row_to_event(tuple(row)) for row in rows]
