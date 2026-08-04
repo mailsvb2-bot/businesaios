@@ -29,6 +29,25 @@ def _payload(event: Any) -> dict[str, Any]:
     return dict(_data(event).get("payload") or {})
 
 
+def _fallback_store_tail(event_log: Any) -> int | None:
+    """Cheap compatibility watermark for adapters without append-seq APIs."""
+
+    owners = (event_log, getattr(event_log, "_store", None))
+    for owner in owners:
+        if owner is None:
+            continue
+        for name in ("rows", "_events"):
+            rows = getattr(owner, name, None)
+            if rows is not None:
+                try:
+                    return max(0, len(rows))
+                except TypeError:
+                    pass
+        if isinstance(owner, list):
+            return len(owner)
+    return None
+
+
 class LiveCanaryAssignmentSafety:
     """Materialized shared guard state used before admitting assignments."""
 
@@ -45,13 +64,14 @@ class LiveCanaryAssignmentSafety:
         self._lock = Lock()
         self._loaded = False
         self._append_cursor = 0
+        self._fallback_tail = 0
         self._assignment_ids: set[str] = set()
         self._execution_ids: set[str] = set()
         self._stage_counts: dict[float, Counter[str]] = {}
         self._stage_first_assignment_ms: dict[float, int] = {}
         self._candidate_window: deque[tuple[int, str, str, float]] = deque()
         self._candidate_assignments: dict[str, tuple[int, str, float]] = {}
-        self._candidate_actual_costs: dict[str, float] = {}
+        self._candidate_actual_costs: dict[str, tuple[int, float]] = {}
         self._candidate_subject_counts: Counter[str] = Counter()
         self._candidate_max_subject_count = 0
 
@@ -104,8 +124,9 @@ class LiveCanaryAssignmentSafety:
         if not did or did in self._execution_ids:
             return
         actual_cost = validate_reservation_cost(payload.get("cost"))
+        executed_at_ms = int(payload.get("executed_at_ms") or 0)
         self._execution_ids.add(did)
-        self._candidate_actual_costs[did] = actual_cost
+        self._candidate_actual_costs[did] = (executed_at_ms, actual_cost)
 
     def _track_event(self, event: Any) -> None:
         data = _data(event)
@@ -121,8 +142,20 @@ class LiveCanaryAssignmentSafety:
         """Consume new shared assignments and executions in append order."""
 
         direct_tail = direct_latest_append_seq(self.event_log)
+        fallback_tail = (
+            _fallback_store_tail(self.event_log) if direct_tail is None else None
+        )
         with self._lock:
             after_append_seq = self._append_cursor
+            loaded = self._loaded
+            known_fallback_tail = self._fallback_tail
+        if (
+            direct_tail is None
+            and fallback_tail is not None
+            and loaded
+            and fallback_tail <= known_fallback_tail
+        ):
+            return
         if direct_tail is not None and direct_tail <= after_append_seq:
             return
 
@@ -150,6 +183,8 @@ class LiveCanaryAssignmentSafety:
                 self._append_cursor = append_seq
             if direct_tail is not None:
                 self._append_cursor = max(self._append_cursor, direct_tail)
+            if fallback_tail is not None:
+                self._fallback_tail = max(self._fallback_tail, fallback_tail)
             self._loaded = True
 
     def ensure_loaded(self) -> None:
@@ -164,7 +199,6 @@ class LiveCanaryAssignmentSafety:
         expected_cost: float,
         assigned_at_ms: int,
     ) -> None:
-        self.ensure_loaded()
         payload = {
             "eligible": assignment.eligible,
             "arm": assignment.arm.value,
@@ -173,8 +207,19 @@ class LiveCanaryAssignmentSafety:
             "subject_hash": assignment.subject_hash,
             "expected_cost": validate_reservation_cost(expected_cost),
         }
+        fallback_tail = _fallback_store_tail(self.event_log)
         with self._lock:
+            previous_fallback_tail = self._fallback_tail
+            loaded = self._loaded
             self._track_assignment(decision_id=str(decision_id), payload=payload)
+            if (
+                loaded
+                and fallback_tail is not None
+                and fallback_tail == previous_fallback_tail + 1
+            ):
+                # The sole new row is the assignment just recorded locally.
+                self._fallback_tail = fallback_tail
+                return
         self.refresh()
 
     def _purge_expired(self, *, cutoff_ms: int) -> None:
@@ -184,7 +229,6 @@ class LiveCanaryAssignmentSafety:
                 self._candidate_window.popleft()
             )
             self._candidate_assignments.pop(decision_id, None)
-            self._candidate_actual_costs.pop(decision_id, None)
             previous = self._candidate_subject_counts[subject_hash]
             if previous >= self._candidate_max_subject_count:
                 max_dirty = True
@@ -192,6 +236,16 @@ class LiveCanaryAssignmentSafety:
                 self._candidate_subject_counts.pop(subject_hash, None)
             else:
                 self._candidate_subject_counts[subject_hash] = previous - 1
+        expired_execution_ids = [
+            decision_id
+            for decision_id, (
+                executed_at_ms,
+                _cost,
+            ) in self._candidate_actual_costs.items()
+            if executed_at_ms < cutoff_ms
+        ]
+        for decision_id in expired_execution_ids:
+            self._candidate_actual_costs.pop(decision_id, None)
         if max_dirty:
             self._candidate_max_subject_count = max(
                 self._candidate_subject_counts.values(),
@@ -202,8 +256,7 @@ class LiveCanaryAssignmentSafety:
         expected = sum(row[2] for row in self._candidate_assignments.values())
         actual = sum(
             cost
-            for decision_id, cost in self._candidate_actual_costs.items()
-            if decision_id in self._candidate_assignments
+            for _executed_at_ms, cost in self._candidate_actual_costs.values()
         )
         pending = sum(
             row[2]
