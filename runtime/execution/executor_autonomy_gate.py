@@ -125,7 +125,7 @@ def enforce_runtime_budget_and_blast_radius(*, executor: Any, env: DecisionEnvel
     if tenant_registry is not None and hasattr(tenant_registry, 'assert_active'):
         try:
             tenant_registry.assert_active(tenant_id)
-        except Exception:
+        except (KeyError, PermissionError):
             deny_autonomy_execution(
                 executor=executor,
                 env=env,
