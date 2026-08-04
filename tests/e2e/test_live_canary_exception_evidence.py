@@ -139,9 +139,14 @@ def test_executor_exception_records_fail_closed_canary_evidence() -> None:
         "exception-d-1",
         "candidate_action_executed@v1",
     )
-    assert len(executions) == 1
-    assert executions[0]["payload"]["ok"] is False
-    assert executions[0]["payload"]["cost"] == 1.0
+    # The provider never supplied an actual cost. Do not invent one: keep the
+    # reservation pending and force the governed rollout closed instead.
+    assert executions == []
+    rollbacks = events.get_events(
+        "execution-integrity:exception-d-1",
+        "canary_auto_rolled_back@v1",
+    )
+    assert len(rollbacks) == 1
     assert registry.rollout_pct == 0
 
 
