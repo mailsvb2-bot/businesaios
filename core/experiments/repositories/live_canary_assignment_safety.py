@@ -211,9 +211,11 @@ class LiveCanaryAssignmentSafety:
         with self._lock:
             previous_fallback_tail = self._fallback_tail
             loaded = self._loaded
+            assignment_was_known = str(decision_id) in self._assignment_ids
             self._track_assignment(decision_id=str(decision_id), payload=payload)
             if (
                 loaded
+                and not assignment_was_known
                 and fallback_tail is not None
                 and fallback_tail == previous_fallback_tail + 1
             ):
