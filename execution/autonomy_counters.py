@@ -21,7 +21,7 @@ def _safe_dict(value: object) -> dict[str, Any]:
 def _safe_int(value: object, *, default: int = 0) -> int:
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return int(default)
 
 
@@ -88,7 +88,7 @@ class FileAutonomyCounterStore:
             return {'records': []}
         try:
             data = json.loads(path.read_text(encoding='utf-8'))
-        except Exception:
+        except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError):
             return {'records': []}
         payload = _safe_dict(data)
         records = payload.get('records')
@@ -232,12 +232,10 @@ class AutonomyCounterResolver:
         day_events = 0
         count_recent = getattr(event_log, 'count_recent', None)
         if callable(count_recent):
-            try:
-                hour_events = max(0, int(count_recent(tenant_id=str(tenant_id), action='*', period='hour')))
-                day_events = max(0, int(count_recent(tenant_id=str(tenant_id), action='*', period='day')))
-            except Exception:
-                hour_events = 0
-                day_events = 0
+            raw_hour_events = count_recent(tenant_id=str(tenant_id), action='*', period='hour')
+            raw_day_events = count_recent(tenant_id=str(tenant_id), action='*', period='day')
+            hour_events = max(0, _safe_int(raw_hour_events))
+            day_events = max(0, _safe_int(raw_day_events))
         return PersistentAutonomyCounters(
             actions_hour=max(from_recent.actions_hour, persisted.actions_hour, hour_events),
             actions_day=max(from_recent.actions_day, persisted.actions_day, day_events),
