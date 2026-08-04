@@ -8,10 +8,7 @@ from typing import Any
 
 from core.experiments.guardrails import CanaryDecision, GuardrailResult
 from core.experiments.live_canary_events import LIVE_CANARY_EXECUTION_FAILED_SOURCE
-from runtime.experiments.cost_semantics import (
-    resolve_execution_cost,
-    validate_reservation_cost,
-)
+from runtime.experiments.cost_semantics import resolve_execution_cost
 from runtime.experiments.live_canary import source_event_evidence_ref
 from runtime.experiments.proof_semantics import resolve_action_proof_success
 from runtime.proofs import ACTION_PROOF_EVENT
@@ -127,10 +124,6 @@ def record_live_canary_executor_result(
         action = str(getattr(decision, "action", "") or "")
         ok = bool(getattr(result, "ok", False))
         output = _safe_mapping(getattr(result, "output", None))
-        payload = _safe_mapping(getattr(decision, "payload", None))
-        expected_cost = assignment.get("expected_cost")
-        if expected_cost is None:
-            expected_cost = payload.get("expected_cost")
         proof_event_type = (
             ACTION_PROOF_EVENT.get(action)
             if ok
@@ -149,8 +142,6 @@ def record_live_canary_executor_result(
 
         if not ok:
             try:
-                failure_cost = validate_reservation_cost(expected_cost)
-                output.setdefault("cost", failure_cost)
                 coordinator.event_log.emit(
                     event_type=proof_event_type,
                     source="runtime_executor",
@@ -159,7 +150,6 @@ def record_live_canary_executor_result(
                     correlation_id=correlation_id,
                     payload={
                         "ok": False,
-                        "cost": failure_cost,
                         "error": str(getattr(result, "error", "") or ""),
                         "output": output,
                     },
@@ -182,6 +172,7 @@ def record_live_canary_executor_result(
             ok=ok,
         )
         proof_payload = _safe_mapping(_event_data(proof_event).get("payload"))
+        payload = _safe_mapping(getattr(decision, "payload", None))
         coordinator.record_execution(
             decision_id=decision_id,
             correlation_id=correlation_id,
@@ -191,7 +182,7 @@ def record_live_canary_executor_result(
             cost=resolve_execution_cost(
                 result_output=output,
                 proof_payload=proof_payload,
-                expected_cost=expected_cost,
+                expected_cost=payload.get("expected_cost"),
             ),
             proof_event_type=proof_event_type,
             evidence_ref=source_event_evidence_ref(proof_event),
