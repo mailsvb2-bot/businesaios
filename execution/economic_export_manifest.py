@@ -44,13 +44,10 @@ def _row_count(store: object) -> int | None:
     list_rows = getattr(store, 'list_rows', None)
     if list_rows is None:
         return None
-    try:
-        rows = list_rows()
-    except Exception:
-        return None
+    rows = list_rows()
     try:
         return len(tuple(rows))
-    except Exception:
+    except TypeError:
         return None
 
 

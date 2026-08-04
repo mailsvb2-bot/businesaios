@@ -29,7 +29,7 @@ class PersistentMarketIntelligenceCursorStore:
             return ProviderCursor(tenant_id=tenant_id, provider=provider, source_family=source_family, scope_key=scope_key)
         try:
             payload = json.loads(path.read_text(encoding='utf-8'))
-        except Exception:
+        except (UnicodeDecodeError, json.JSONDecodeError):
             return ProviderCursor(tenant_id=tenant_id, provider=provider, source_family=source_family, scope_key=scope_key)
         if not isinstance(payload, dict):
             return ProviderCursor(tenant_id=tenant_id, provider=provider, source_family=source_family, scope_key=scope_key)
@@ -46,7 +46,7 @@ class PersistentMarketIntelligenceCursorStore:
         }
         try:
             return ProviderCursor(**safe_payload)
-        except Exception:
+        except (TypeError, ValueError):
             return ProviderCursor(tenant_id=tenant_id, provider=provider, source_family=source_family, scope_key=scope_key)
 
     def save(self, cursor: ProviderCursor) -> ProviderCursor:
@@ -69,7 +69,7 @@ class PersistentMarketIntelligenceCursorStore:
         for path in sorted(self.root_dir.rglob('*.json')):
             try:
                 payload = json.loads(path.read_text(encoding='utf-8'))
-            except Exception:
+            except (UnicodeDecodeError, json.JSONDecodeError):
                 continue
             if isinstance(payload, dict):
                 rows.append(dict(payload))

@@ -18,7 +18,7 @@ def safe_dict(value: object) -> dict[str, Any]:
 def safe_int(value: object) -> int | None:
     try:
         parsed = int(value)  # type: ignore[arg-type]
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         return None
     return parsed if parsed > 0 else None
 
@@ -96,7 +96,7 @@ def apply_economic_history_to_state(*, world_state: Any, economic_feedback: Mapp
         try:
             setattr(world_state, 'meta', meta)
             return world_state
-        except Exception:
+        except AttributeError:
             pass
         dataclass_fields = getattr(world_state, '__dataclass_fields__', None)
         if dataclass_fields and 'meta' in dataclass_fields:
