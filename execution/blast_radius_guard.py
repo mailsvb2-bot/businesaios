@@ -117,16 +117,17 @@ class BlastRadiusGuard:
             return 0
         count_recent = getattr(event_log, "count_recent", None)
         if callable(count_recent):
+            raw_count = count_recent(tenant_id=str(tenant_id), action=str(action_type), period=str(period))
             try:
-                return max(0, int(count_recent(tenant_id=str(tenant_id), action=str(action_type), period=str(period))))
-            except Exception:
+                return max(0, int(raw_count))
+            except (TypeError, ValueError, OverflowError):
                 return 0
         query_recent = getattr(event_log, "query_recent", None)
         if callable(query_recent):
+            rows = query_recent(event_type="decision_executed", since_ms=0, filters={"tenant_id": str(tenant_id), "action": str(action_type), "period": str(period)})
             try:
-                rows = query_recent(event_type="decision_executed", since_ms=0, filters={"tenant_id": str(tenant_id), "action": str(action_type), "period": str(period)})
                 return len(list(rows or []))
-            except Exception:
+            except TypeError:
                 return 0
         return 0
 
