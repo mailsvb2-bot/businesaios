@@ -107,7 +107,7 @@ class ApprovalExecutionGate:
 
         try:
             execution_id = _require_execution_id(ctx)
-        except Exception as exc:
+        except (RuntimeError, ValueError) as exc:
             verdict = self._deny(
                 ctx=ctx,
                 execution_id='',
@@ -147,7 +147,7 @@ class ApprovalExecutionGate:
                 impact=impact,
                 external_confirmation_mode=external_confirmation_mode,
             )
-        except Exception as exc:
+        except (RuntimeError, ValueError) as exc:
             verdict = self._deny(
                 ctx=ctx,
                 execution_id=execution_id,
@@ -386,7 +386,7 @@ class ApprovalExecutionGate:
                 action_name=ctx.action_name,
                 subject_fingerprint=subject_fingerprint,
             )
-        except Exception as exc:
+        except (RuntimeError, ValueError) as exc:
             return self._deny(
                 ctx=ctx,
                 execution_id=execution_id,
