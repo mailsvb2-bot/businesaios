@@ -381,9 +381,14 @@ class LiveCanaryLedger:
                 assigned_at,
             )
 
+        candidate_assignment_ids = {
+            decision_id
+            for decision_id, assignment in all_assignments.items()
+            if str(assignment.get("arm") or "") == ExperimentArm.CANDIDATE.value
+        }
         rolling_candidate_assignments: dict[str, dict[str, Any]] = {}
         for decision_id, assignment in all_assignments.items():
-            if str(assignment.get("arm") or "") != ExperimentArm.CANDIDATE.value:
+            if decision_id not in candidate_assignment_ids:
                 continue
             assigned_at = int(assignment.get("assigned_at_ms") or 0)
             if assigned_at < rolling_cutoff_ms:
@@ -404,7 +409,7 @@ class LiveCanaryLedger:
             if kind not in {CONTROL_ACTION_EXECUTED, CANDIDATE_ACTION_EXECUTED}:
                 continue
             decision_id = str(data.get("decision_id") or "")
-            if decision_id not in rolling_candidate_assignments:
+            if decision_id not in candidate_assignment_ids:
                 continue
             timestamp = int(payload.get("executed_at_ms") or 0)
             if timestamp < rolling_cutoff_ms:
