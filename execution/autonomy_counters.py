@@ -87,12 +87,8 @@ class FileAutonomyCounterStore:
         if not path.exists():
             return {'records': []}
         try:
-            raw_payload = path.read_text(encoding='utf-8')
-        except (FileNotFoundError, UnicodeDecodeError):
-            return {'records': []}
-        try:
-            data = json.loads(raw_payload)
-        except json.JSONDecodeError:
+            data = json.loads(path.read_text(encoding='utf-8'))
+        except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError):
             return {'records': []}
         payload = _safe_dict(data)
         records = payload.get('records')
