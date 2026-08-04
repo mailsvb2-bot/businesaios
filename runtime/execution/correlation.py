@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Correlation helpers for runtime execution."""
+
+from __future__ import annotations
 
 import json
 
