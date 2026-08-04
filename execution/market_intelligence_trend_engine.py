@@ -46,12 +46,12 @@ class FileTrendStore:
                 continue
             try:
                 payload = json.loads(line)
-            except Exception:
+            except json.JSONDecodeError:
                 continue
             if isinstance(payload, dict):
                 try:
                     rows.append(TrendPoint(**payload))
-                except Exception:
+                except (TypeError, ValueError, OverflowError):
                     continue
         rows.sort(key=lambda point: _parse_dt(point.observed_at))
         return tuple(rows)
