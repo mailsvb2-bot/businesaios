@@ -4,8 +4,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from acquisition import AcquisitionFeasibilityRequest
-from acquisition import AcquisitionHeadlessEntrypoint, create_acquisition_headless_entrypoint
+from acquisition import (
+    AcquisitionFeasibilityRequest,
+    AcquisitionHeadlessEntrypoint,
+    create_acquisition_headless_entrypoint,
+)
 from presentation import AcquisitionViewModel, build_acquisition_view_model
 
 
