@@ -14,6 +14,7 @@ from scripts.ci.subprocess_io import run_command
 _CRITICAL_RUFF_SELECT = ("E9", "F63", "F7", "F82")
 _TARGETED_STRICT_DEBT_SELECT = ("E402", "F401", "UP035")
 _MAX_DEBT_SAMPLES = 50
+_RATCHETED_STRICT_DEBT = (("deployment", "UP035"),)
 
 
 def _iter_python_files(path: Path):
@@ -190,6 +191,12 @@ def _ruff_check() -> tuple[bool, str, dict[str, object]]:
     if not targeted_clean:
         payload.update(status="blocked", violations=["targeted_strict_debt_lock_failed"])
         return False, "targeted strict ruff debt lock failed", payload
+    for package, select in _RATCHETED_STRICT_DEBT:
+        ratchet = run_command([*_ruff_base_args(targets=(root / package,), config=config), "--select", select], env={"PYTHONNOUSERSITE": "1"}, timeout=180)
+        payload[f"{package}_{select.lower()}_passed"] = ratchet.returncode == 0
+        if ratchet.returncode != 0:
+            payload.update(status="blocked", violations=[f"{package}_{select.lower()}_ratchet_failed"])
+            return False, f"{package} {select} ruff ratchet failed", payload
     full_clean = int(payload.get("full_ruff_total") or 0) == 0
     payload.update(full_ruff_passed=full_clean, claims_full_ruff_clean=full_clean)
     if _strict_ruff_required():
