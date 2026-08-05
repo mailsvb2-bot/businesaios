@@ -5,6 +5,7 @@ from __future__ import annotations
 from leads.lead_capture_facade import LeadCaptureFacade, LeadRouter
 from shared.kinded_payloads import build_kinded_payload
 
+
 class LeadDeduplication:
     def deduplicate(self, payload: dict) -> dict:
         return build_kinded_payload('lead_deduplication', payload)
