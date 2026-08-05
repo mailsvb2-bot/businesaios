@@ -181,15 +181,15 @@ def _ruff_check() -> tuple[bool, str, dict[str, object]]:
         payload.update(status="blocked", violations=["ruff_critical_baseline_failed"])
         return False, "ruff critical baseline failed", payload
     payload.update(_targeted_debt_report(targets=targets, config=config))
+    payload.update(_full_debt_report(config=config))
+    if not payload.get("full_ruff_measured"):
+        payload.update(status="blocked", violations=["full_ruff_inventory_failed"])
+        return False, "full ruff inventory failed", payload
     targeted_clean = bool(payload.get("targeted_strict_debt_measured")) and int(payload.get("targeted_strict_debt_total") or 0) == 0
     payload["targeted_strict_debt_clean"] = targeted_clean
     if not targeted_clean:
         payload.update(status="blocked", violations=["targeted_strict_debt_lock_failed"])
         return False, "targeted strict ruff debt lock failed", payload
-    payload.update(_full_debt_report(config=config))
-    if not payload.get("full_ruff_measured"):
-        payload.update(status="blocked", violations=["full_ruff_inventory_failed"])
-        return False, "full ruff inventory failed", payload
     full_clean = int(payload.get("full_ruff_total") or 0) == 0
     payload.update(full_ruff_passed=full_clean, claims_full_ruff_clean=full_clean)
     if _strict_ruff_required():
