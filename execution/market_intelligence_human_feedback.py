@@ -35,7 +35,7 @@ class HumanFeedbackStore:
                 continue
             try:
                 payload = json.loads(line)
-            except Exception:
+            except json.JSONDecodeError:
                 continue
             if isinstance(payload, dict):
                 events.append(HumanFeedbackEvent(**payload))
