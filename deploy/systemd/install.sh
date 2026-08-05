@@ -5,13 +5,30 @@ APP_DIR="${APP_DIR:-/opt/businesaios}"
 SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
 STATE_DIR="${STATE_DIR:-${APP_DIR}/data/deployment}"
 STATE_FILE="${STATE_FILE:-${STATE_DIR}/release_state.json}"
-TELEGRAM_UNIT="businesaios-telegram.service"
-EVOLUTION_UNIT="businesaios-evolution.service"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 RELEASE_TAG="${RELEASE_TAG:-$(cat "${APP_DIR}/RELEASE_TAG" 2>/dev/null || echo unknown)}"
-DEPLOY_PROFILE="${DEPLOY_PROFILE:-systemd}"
+DEPLOY_PROFILE="${DEPLOY_PROFILE:-systemd-multichannel}"
 START_SERVICES="${START_SERVICES:-1}"
 HEALTH_STATUS="${HEALTH_STATUS:-pending}"
+ENABLE_TELEGRAM_CONNECTOR="${ENABLE_TELEGRAM_CONNECTOR:-0}"
+
+CORE_UNITS=(
+  businesaios-api.service
+  businesaios-worker.service
+)
+TELEGRAM_CONNECTOR_UNIT=businesaios-connector-telegram.service
+LEGACY_UNITS=(
+  businesaios-telegram.service
+  businesaios-evolution.service
+)
+OPTIONAL_UNITS=()
+
+if [[ "$ENABLE_TELEGRAM_CONNECTOR" == "1" ]]; then
+  OPTIONAL_UNITS+=("$TELEGRAM_CONNECTOR_UNIT")
+fi
+
+DEPLOY_UNITS=("${CORE_UNITS[@]}" "${OPTIONAL_UNITS[@]}")
+DEPLOY_UNITS_CSV="$(IFS=,; echo "${DEPLOY_UNITS[*]}")"
 
 require_file() {
   local path="$1"
@@ -23,14 +40,26 @@ require_file() {
 
 write_state() {
   mkdir -p "$STATE_DIR"
-  PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}" STATE_FILE="$STATE_FILE" RELEASE_TAG="$RELEASE_TAG" HEALTH_STATUS="$HEALTH_STATUS" DEPLOY_PROFILE="$DEPLOY_PROFILE" SYSTEMD_DIR="$SYSTEMD_DIR" APP_DIR="$APP_DIR" ACTIVATION_STATUS="$1" "$PYTHON_BIN" - <<'PY'
+  PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}" \
+    STATE_FILE="$STATE_FILE" \
+    RELEASE_TAG="$RELEASE_TAG" \
+    HEALTH_STATUS="$HEALTH_STATUS" \
+    DEPLOY_PROFILE="$DEPLOY_PROFILE" \
+    DEPLOY_UNITS="$DEPLOY_UNITS_CSV" \
+    SYSTEMD_DIR="$SYSTEMD_DIR" \
+    APP_DIR="$APP_DIR" \
+    ACTIVATION_STATUS="$1" \
+    "$PYTHON_BIN" - <<'PY'
 from __future__ import annotations
+
 import os
+
 from deployment.release_state_store import DeploymentStateStore
 
 store = DeploymentStateStore(os.environ['STATE_FILE'])
 current = store.load()
 release_tag = os.environ['RELEASE_TAG'].strip() or None
+units = tuple(item for item in os.environ['DEPLOY_UNITS'].split(',') if item)
 store.update(
     active_release=release_tag,
     previous_release=current.active_release,
@@ -42,30 +71,44 @@ store.update(
         **dict(current.metadata),
         'systemd_dir': os.environ['SYSTEMD_DIR'],
         'app_dir': os.environ['APP_DIR'],
+        'core_services': ['businesaios-api.service', 'businesaios-worker.service'],
+        'enabled_services': list(units),
+        'messaging_model': 'provider_connectors',
     },
 )
 PY
 }
 
-require_file "${APP_DIR}/deploy/systemd/${TELEGRAM_UNIT}"
-require_file "${APP_DIR}/deploy/systemd/${EVOLUTION_UNIT}"
+for unit in "${DEPLOY_UNITS[@]}"; do
+  require_file "${APP_DIR}/deploy/systemd/${unit}"
+done
 require_file "${APP_DIR}/RELEASE_TAG"
 
 write_state installing
 
-echo "[install] copying unit files..."
-sudo install -m 0644 "${APP_DIR}/deploy/systemd/${TELEGRAM_UNIT}" "${SYSTEMD_DIR}/${TELEGRAM_UNIT}"
-sudo install -m 0644 "${APP_DIR}/deploy/systemd/${EVOLUTION_UNIT}" "${SYSTEMD_DIR}/${EVOLUTION_UNIT}"
+echo "[install] installing core platform units: ${CORE_UNITS[*]}"
+for unit in "${DEPLOY_UNITS[@]}"; do
+  sudo install -m 0644 "${APP_DIR}/deploy/systemd/${unit}" "${SYSTEMD_DIR}/${unit}"
+done
 
-echo "[install] reloading systemd..."
+echo "[install] reloading systemd"
 sudo systemctl daemon-reload
 
-echo "[install] enabling services..."
-sudo systemctl enable "$TELEGRAM_UNIT" "$EVOLUTION_UNIT"
+echo "[install] enabling core platform services"
+sudo systemctl enable "${CORE_UNITS[@]}"
+if ((${#OPTIONAL_UNITS[@]})); then
+  echo "[install] enabling optional connector services: ${OPTIONAL_UNITS[*]}"
+  sudo systemctl enable "${OPTIONAL_UNITS[@]}"
+else
+  echo "[install] no polling/streaming connector units requested"
+fi
 
 if [[ "$START_SERVICES" == "1" ]]; then
-  echo "[install] restarting services..."
-  sudo systemctl restart "$TELEGRAM_UNIT" "$EVOLUTION_UNIT"
+  echo "[install] restarting core platform services"
+  sudo systemctl restart "${CORE_UNITS[@]}"
+  if ((${#OPTIONAL_UNITS[@]})); then
+    sudo systemctl restart "${OPTIONAL_UNITS[@]}"
+  fi
   HEALTH_STATUS="running"
   ACTIVATION_STATUS="active"
 else
@@ -74,7 +117,20 @@ else
   ACTIVATION_STATUS="installed"
 fi
 
+# Historical deployments treated Telegram and Evolution as the complete
+# platform. Disable those unit names only after the canonical services have
+# been installed (and, by default, restarted) successfully.
+for legacy_unit in "${LEGACY_UNITS[@]}"; do
+  sudo systemctl disable --now "$legacy_unit" >/dev/null 2>&1 || true
+  sudo rm -f "${SYSTEMD_DIR}/${legacy_unit}"
+done
+sudo systemctl daemon-reload
+
 write_state "$ACTIVATION_STATUS"
 
 echo "[install] deployment state written to ${STATE_FILE}"
-echo "[install] done."
+echo "[install] core runtime: ${CORE_UNITS[*]}"
+if ((${#OPTIONAL_UNITS[@]})); then
+  echo "[install] optional connectors: ${OPTIONAL_UNITS[*]}"
+fi
+echo "[install] done"

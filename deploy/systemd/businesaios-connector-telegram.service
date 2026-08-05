@@ -1,6 +1,6 @@
 [Unit]
-Description=businesaios API Runtime
-After=network-online.target
+Description=businesaios Telegram Connector (optional polling adapter)
+After=network-online.target businesaios-api.service
 Wants=network-online.target
 StartLimitIntervalSec=60
 StartLimitBurst=5
@@ -11,7 +11,8 @@ User=businesaios
 Group=businesaios
 WorkingDirectory=/opt/businesaios
 EnvironmentFile=/etc/businesaios/api.env
-Environment=APP_PROFILE=api
+EnvironmentFile=-/etc/businesaios/connectors/telegram.env
+Environment=APP_PROFILE=telegram
 Environment=LOG_LEVEL=INFO
 ExecStartPre=/opt/businesaios/.venv/bin/python -m scripts.server.migrate_before_start
 ExecStart=/opt/businesaios/.venv/bin/python -m scripts.server.run_profile
@@ -25,7 +26,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=businesaios-api
+SyslogIdentifier=businesaios-connector-telegram
 
 [Install]
 WantedBy=multi-user.target

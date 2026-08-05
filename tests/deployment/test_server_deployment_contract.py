@@ -15,12 +15,13 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_systemd_units_define_server_contract() -> None:
     expected = {
-        'deploy/systemd/businesaios-api.service',
-        'deploy/systemd/businesaios-telegram.service',
-        'deploy/systemd/businesaios-evolution.service',
+        'deploy/systemd/businesaios-api.service': 'APP_PROFILE=api',
+        'deploy/systemd/businesaios-worker.service': 'APP_PROFILE=worker',
+        'deploy/systemd/businesaios-connector-telegram.service': 'APP_PROFILE=telegram',
     }
-    for rel in expected:
+    for rel, profile in expected.items():
         text = (ROOT / rel).read_text(encoding='utf-8')
+        assert f'Environment={profile}' in text
         assert 'ExecStartPre=/opt/businesaios/.venv/bin/python -m scripts.server.migrate_before_start' in text
         assert 'ExecStart=/opt/businesaios/.venv/bin/python -m scripts.server.run_profile' in text
         assert 'Restart=on-failure' in text

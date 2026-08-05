@@ -38,8 +38,6 @@ def _run_telegram() -> int:
     return 0
 
 
-
-
 def _run_webhook() -> int:
     os.environ.setdefault('RUN_MODE', 'telegram')
     os.environ.setdefault('TELEGRAM_USE_WEBHOOK', '1')
@@ -49,14 +47,15 @@ def _run_webhook() -> int:
     telegram_main()
     return 0
 
+
 def _run_worker() -> int:
     os.environ.setdefault('RUN_MODE', 'evolution')
     os.environ.setdefault('EVOLUTION_ENABLED', '1')
     os.environ.setdefault('HEALTH_HOST', '0.0.0.0')
-    os.environ.setdefault('EVOLUTION_HEALTH_PORT', _env('EVOLUTION_HEALTH_PORT', '8087'))
-    from runtime.evolution.main import main as evolution_main
+    os.environ.setdefault('EVOLUTION_HEALTH_PORT', _env('WORKER_HEALTH_PORT', _env('EVOLUTION_HEALTH_PORT', '8087')))
+    from runtime.evolution.main import main as worker_main
 
-    evolution_main()
+    worker_main()
     return 0
 
 
