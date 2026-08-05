@@ -4,7 +4,6 @@ from __future__ import annotations
 class DemandDecisionAudit:
     def __init__(self) -> None:
         self._rows: list[dict[str, object]] = []
-
     def record(self, *, packet: dict[str, object], decision: object) -> None:
         self._rows.append({
             "request_id": packet["request_id"],
