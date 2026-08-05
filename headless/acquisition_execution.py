@@ -11,7 +11,6 @@ from acquisition import (
 )
 from presentation import AcquisitionViewModel, build_acquisition_view_model
 
-
 CANON_HEADLESS_ACQUISITION_EXECUTION = True
 
 
