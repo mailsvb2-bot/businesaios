@@ -1,5 +1,5 @@
 [Unit]
-Description=businesaios API Service
+Description=BusinesAIOS API Runtime
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=60
@@ -10,7 +10,7 @@ Type=simple
 User=businesaios
 Group=businesaios
 WorkingDirectory=/opt/businesaios
-EnvironmentFile=/opt/businesaios/.env
+EnvironmentFile=/etc/businesaios/api.env
 Environment=APP_PROFILE=api
 Environment=LOG_LEVEL=INFO
 ExecStartPre=/opt/businesaios/.venv/bin/python -m scripts.server.migrate_before_start
