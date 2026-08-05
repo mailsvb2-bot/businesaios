@@ -4,10 +4,6 @@ import os
 
 CANON_SERVER_PROFILE_RUNNER = True
 
-_PROFILE_ALIASES = {
-    'evolution': 'worker',
-}
-
 
 def _env(name: str, default: str) -> str:
     value = os.getenv(name, '').strip()
@@ -33,13 +29,6 @@ def _run_api() -> int:
 
 
 def _run_telegram() -> int:
-    """Run the optional Telegram polling connector.
-
-    Telegram is one provider adapter, not the platform runtime. Webhook-based
-    messaging providers enter through the API profile and outbound work is
-    executed by the worker profile.
-    """
-
     os.environ.setdefault('RUN_MODE', 'telegram')
     os.environ.setdefault('HEALTH_HOST', '0.0.0.0')
     os.environ.setdefault('TELEGRAM_HEALTH_PORT', _env('TELEGRAM_HEALTH_PORT', '8088'))
@@ -60,17 +49,10 @@ def _run_webhook() -> int:
 
 
 def _run_worker() -> int:
-    """Run the channel-agnostic background execution worker.
-
-    The implementation keeps the historical ``runtime.evolution`` module name
-    internally, while the public deployment profile is simply ``worker``.
-    """
-
     os.environ.setdefault('RUN_MODE', 'evolution')
     os.environ.setdefault('EVOLUTION_ENABLED', '1')
     os.environ.setdefault('HEALTH_HOST', '0.0.0.0')
-    worker_health_port = _env('WORKER_HEALTH_PORT', _env('EVOLUTION_HEALTH_PORT', '8087'))
-    os.environ.setdefault('EVOLUTION_HEALTH_PORT', worker_health_port)
+    os.environ.setdefault('EVOLUTION_HEALTH_PORT', _env('WORKER_HEALTH_PORT', _env('EVOLUTION_HEALTH_PORT', '8087')))
     from runtime.evolution.main import main as worker_main
 
     worker_main()
@@ -78,15 +60,14 @@ def _run_worker() -> int:
 
 
 def main() -> int:
-    requested_profile = _env('APP_PROFILE', _env('RUN_MODE', 'api')).lower()
-    profile = _PROFILE_ALIASES.get(requested_profile, requested_profile)
+    profile = _env('APP_PROFILE', _env('RUN_MODE', 'api')).lower()
     if profile == 'api':
         return _run_api()
     if profile == 'telegram':
         return _run_telegram()
     if profile == 'webhook':
         return _run_webhook()
-    if profile == 'worker':
+    if profile in {'worker', 'evolution'}:
         return _run_worker()
     raise SystemExit(f'unsupported_server_profile:{profile}')
 
