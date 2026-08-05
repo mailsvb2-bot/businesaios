@@ -29,18 +29,23 @@ ALLOWED = {
 }
 
 
+def _contains_broad_exception(node: ast.expr | None) -> bool:
+    if node is None:
+        return True
+    if isinstance(node, ast.Name):
+        return node.id in {'Exception', 'BaseException'}
+    if isinstance(node, ast.Tuple):
+        return any(_contains_broad_exception(item) for item in node.elts)
+    return False
+
+
 def _broad_handlers() -> dict[tuple[str, int], ast.ExceptHandler]:
     handlers: dict[tuple[str, int], ast.ExceptHandler] = {}
     for root in ROOTS:
         for path in root.rglob('*.py'):
             tree = ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
             for node in ast.walk(tree):
-                if not isinstance(node, ast.ExceptHandler):
-                    continue
-                broad = node.type is None or (
-                    isinstance(node.type, ast.Name) and node.type.id in {'Exception', 'BaseException'}
-                )
-                if broad:
+                if isinstance(node, ast.ExceptHandler) and _contains_broad_exception(node.type):
                     handlers[(path.as_posix(), node.lineno)] = node
     return handlers
 
@@ -50,6 +55,13 @@ def test_execution_zone_broad_handlers_match_reviewed_boundary_allowlist() -> No
 
     assert set(handlers) == set(ALLOWED)
     assert all(classification.strip() for classification in ALLOWED.values())
+
+
+def test_tuple_wrapped_broad_handlers_are_detected() -> None:
+    tree = ast.parse('try:\n    pass\nexcept (OSError, Exception):\n    pass\n')
+    handler = next(node for node in ast.walk(tree) if isinstance(node, ast.ExceptHandler))
+
+    assert _contains_broad_exception(handler.type)
 
 
 def test_fail_closed_boundaries_reraise() -> None:
