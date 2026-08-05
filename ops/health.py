@@ -1,9 +1,9 @@
-from __future__ import annotations
-
 """System healthcheck.
 
 This module is SIDE-EFFECT FREE and only probes dependencies via their ping() methods.
 """
+
+from __future__ import annotations
 
 from typing import Any
 
