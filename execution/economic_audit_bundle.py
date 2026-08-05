@@ -316,7 +316,7 @@ class EconomicAuditBundleService:
         target = Path(path)
         try:
             data = json.loads(target.read_text(encoding='utf-8'))
-        except Exception as exc:
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
             self._quarantine_sink.record(build_quarantine_record(
                 bundle_path=target,
                 reason='economic_bundle_parse_failed',
