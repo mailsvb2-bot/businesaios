@@ -56,7 +56,6 @@ def _scope_summary(scope: Mapping[str, Any] | None) -> dict[str, Any]:
     }
 
 
-
 def _collect_corruption_combinatorics_issues(
     *,
     manifest_validation: Mapping[str, Any],
@@ -316,7 +315,7 @@ class EconomicAuditBundleService:
         target = Path(path)
         try:
             data = json.loads(target.read_text(encoding='utf-8'))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        except (OSError, UnicodeError, json.JSONDecodeError, RecursionError) as exc:
             self._quarantine_sink.record(build_quarantine_record(
                 bundle_path=target,
                 reason='economic_bundle_parse_failed',
