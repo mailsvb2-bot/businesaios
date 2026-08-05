@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from security import SecretRecord, SecretRef, SecretSource, build_default_secret_vault
+
 from .env_provider import EnvSecretProvider
 
 _provider = EnvSecretProvider()
@@ -21,7 +22,6 @@ def _runtime_ref(key: str) -> SecretRef:
 
 def register_runtime_secret(key: str, value: str, *, source: SecretSource = SecretSource.ENV) -> SecretRecord:
     """Registers a runtime secret in the canonical vault surface.
-
     This is an infrastructure adapter only. It does not create any policy or
     decision layer and preserves the historical env-first runtime behavior.
     """
