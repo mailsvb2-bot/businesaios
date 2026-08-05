@@ -8,11 +8,9 @@ from shared.kinded_payloads import build_kinded_payload
 class LocalServicesProfile:
     def build(self, payload: dict) -> dict:
         return build_kinded_payload("local_services_profile", payload)
-
 class MetaGoogleLeadsMode:
     def build(self, payload: dict) -> dict:
         return build_kinded_payload("meta_google_leads_mode", payload)
-
 class MvpActivation:
     def activate(self, payload: dict) -> dict:
         return build_kinded_payload("mvp_activation", payload)
