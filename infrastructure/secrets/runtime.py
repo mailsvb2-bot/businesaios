@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from security import SecretRecord, SecretRef, SecretSource, build_default_secret_vault
+
 from .env_provider import EnvSecretProvider
 
 _provider = EnvSecretProvider()
