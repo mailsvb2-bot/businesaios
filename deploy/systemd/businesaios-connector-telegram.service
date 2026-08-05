@@ -1,5 +1,5 @@
 [Unit]
-Description=BusinesAIOS Telegram Connector (optional polling adapter)
+Description=businesaios Telegram Connector (optional polling adapter)
 After=network-online.target businesaios-api.service
 Wants=network-online.target
 StartLimitIntervalSec=60
