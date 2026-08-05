@@ -122,3 +122,20 @@ The complete tree runs without a hidden debt registry, wildcard exclusions, skip
 **Hard rule:** no side effects outside `runtime/executor.py` and the canonical internal effects boundary.
 
 Domain decisions belong in `core/`; execution/effects in `runtime/`; persistence in `platform_layer/`; external adapters in `interfaces/` and `connectors/`.
+
+<!-- SUPER_CANON_WORLD_MODEL_INTEGRITY:START -->
+Super Canon addendum
+
+The repository now treats world-model integrity as a constitutional rule.
+
+See:
+
+- `docs/SYSTEM_TZ_CANONICAL.md`
+- `docs/ARCHITECTURE_CANON_V20.md`
+
+The canonical decision-world-model path is:
+
+`WorldModelStore → build_default_world_model() → CanonicalDecisionWorldModel → DecisionCore → RuntimeExecutor`
+
+Any alternative world-model wiring path is non-canonical.
+<!-- SUPER_CANON_WORLD_MODEL_INTEGRITY:END -->
