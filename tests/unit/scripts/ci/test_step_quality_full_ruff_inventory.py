@@ -178,6 +178,32 @@ def test_infrastructure_import_ratchet_blocks_regressions(
     assert payload["violations"] == ["infrastructure_f401,i001,up035_ratchet_failed"]
 
 
+def test_leads_i001_ratchet_blocks_regressions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(quality, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(quality, "_quality_target_paths", lambda _root: (tmp_path / "runtime",))
+    monkeypatch.setattr(quality.importlib.util, "find_spec", lambda _name: object())
+    outcomes = iter((
+        _outcome(returncode=0),
+        _outcome(returncode=0),
+        _outcome(returncode=0),
+        _outcome(returncode=0),
+        _outcome(returncode=1),
+    ))
+    monkeypatch.setattr(quality, "run_command", lambda *_args, **_kwargs: next(outcomes))
+    monkeypatch.setattr(quality, "_targeted_debt_report", lambda **_kwargs: {"targeted_strict_debt_measured": True, "targeted_strict_debt_total": 0})
+    monkeypatch.setattr(quality, "_full_debt_report", lambda **_kwargs: {"full_ruff_measured": True, "full_ruff_total": 4867})
+
+    ok, message, payload = quality._ruff_check()
+
+    assert ok is False
+    assert message == "leads I001 ruff ratchet failed"
+    assert payload["leads_i001_passed"] is False
+    assert payload["violations"] == ["leads_i001_ratchet_failed"]
+
+
 def test_non_strict_quality_gate_requires_inventory_but_not_cleanliness(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -249,6 +275,7 @@ def test_ops_typing_ratchet_blocks_regressions(
     monkeypatch.setattr(quality, "_quality_target_paths", lambda _root: (tmp_path / "runtime",))
     monkeypatch.setattr(quality.importlib.util, "find_spec", lambda _name: object())
     outcomes = iter((
+        _outcome(returncode=0),
         _outcome(returncode=0),
         _outcome(returncode=0),
         _outcome(returncode=0),
