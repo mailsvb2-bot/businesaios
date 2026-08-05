@@ -6,6 +6,5 @@ class DemandDecisionInputBuilder:
         return {
             "request_id": request.request_id,
             "customer_id": request.customer_id,
-            "intent": intent,
-            "routing_preparation": routing_preparation,
+            "intent": intent, "routing_preparation": routing_preparation,
         }
