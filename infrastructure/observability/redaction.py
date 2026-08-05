@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 
 from security.audit_redaction_policy import AuditRedactionPolicy
 from security.payload_redaction import PayloadRedactor
