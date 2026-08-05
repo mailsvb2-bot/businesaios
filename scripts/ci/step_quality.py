@@ -24,18 +24,16 @@ def _iter_python_files(path: Path):
         return
     for candidate in path.rglob("*.py"):
         parts = set(candidate.parts)
-        if "__pycache__" in parts or ".venv" in parts or "venv" in parts:
-            continue
-        yield candidate
+        if "__pycache__" not in parts and ".venv" not in parts and "venv" not in parts:
+            yield candidate
 
 
 def _quality_target_paths(root: Path) -> tuple[Path, ...]:
-    cfg = project_shape_config(root)
-    return tuple(root / rel for rel in cfg.quality_targets)
+    return tuple(root / rel for rel in project_shape_config(root).quality_targets)
 
 
-def _artifact_path() -> Path:
-    path = repo_root() / "artifacts" / "ci" / "quality_check.json"
+def _artifact_path(name: str = "quality_check.json") -> Path:
+    path = repo_root() / "artifacts" / "ci" / name
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -47,10 +45,8 @@ def _write_artifact(payload: dict[str, object]) -> None:
 def _syntax_check_targets() -> tuple[bool, str, int]:
     root = repo_root()
     cfg = project_shape_config(root)
-
     if not cfg.quality_targets:
         return False, "quality target set is empty", 0
-
     failed: list[str] = []
     checked = 0
     for rel in cfg.quality_targets:
@@ -62,10 +58,8 @@ def _syntax_check_targets() -> tuple[bool, str, int]:
                 failed.append(f"{path.relative_to(root)}:{exc.lineno}:{exc.offset}: {exc.msg}")
             except UnicodeDecodeError as exc:
                 failed.append(f"{path.relative_to(root)}: unicode decode error: {exc}")
-
     if failed:
         return False, "syntax check failed: " + "; ".join(failed[:20]), checked
-
     return True, f"syntax check passed for {checked} Python files", checked
 
 
@@ -84,58 +78,83 @@ def _ruff_base_args(*, targets: tuple[Path, ...], config: Path) -> list[str]:
     return args
 
 
-def _targeted_debt_report(*, targets: tuple[Path, ...], config: Path) -> dict[str, object]:
-    args = [
-        *_ruff_base_args(targets=targets, config=config),
-        "--select",
-        ",".join(_TARGETED_STRICT_DEBT_SELECT),
-        "--output-format",
-        "json",
-    ]
-    outcome = run_command(args, env={"PYTHONNOUSERSITE": "1"}, timeout=180)
-    raw = outcome.stdout.strip() or "[]"
+def _ruff_json_findings(args: list[str], *, timeout: int) -> tuple[list[dict[str, object]] | None, dict[str, object]]:
+    outcome = run_command(args, env={"PYTHONNOUSERSITE": "1"}, timeout=timeout, echo_output=False)
+    if outcome.returncode not in {0, 1}:
+        return None, {"error": "ruff_command_failed", "returncode": outcome.returncode, "stderr": outcome.stderr[-2000:]}
     try:
-        findings = json.loads(raw)
+        findings = json.loads(outcome.stdout.strip() or "[]")
     except json.JSONDecodeError:
-        return {
-            "targeted_strict_debt_select": list(_TARGETED_STRICT_DEBT_SELECT),
-            "targeted_strict_debt_measured": False,
-            "targeted_strict_debt_counts": {},
-            "targeted_strict_debt_samples": [],
-            "targeted_strict_debt_error": "ruff_json_output_parse_failed",
-        }
+        return None, {"error": "ruff_json_output_parse_failed"}
+    if not isinstance(findings, list) or any(not isinstance(item, dict) for item in findings):
+        return None, {"error": "ruff_json_output_shape_invalid"}
+    root = repo_root()
+    normalized: list[dict[str, object]] = []
+    for raw_item in findings:
+        item = dict(raw_item)
+        filename = str(item.get("filename") or "")
+        try:
+            item["filename"] = Path(filename).resolve().relative_to(root).as_posix()
+        except ValueError:
+            item["filename"] = filename
+        normalized.append(item)
+    return normalized, {}
+
+
+def _targeted_debt_report(*, targets: tuple[Path, ...], config: Path) -> dict[str, object]:
+    args = [*_ruff_base_args(targets=targets, config=config), "--select", ",".join(_TARGETED_STRICT_DEBT_SELECT), "--output-format", "json"]
+    findings, error = _ruff_json_findings(args, timeout=180)
+    base: dict[str, object] = {
+        "targeted_strict_debt_select": list(_TARGETED_STRICT_DEBT_SELECT),
+        "targeted_strict_debt_measured": findings is not None,
+        "targeted_strict_debt_counts": {},
+        "targeted_strict_debt_samples": [],
+    }
+    if findings is None:
+        base.update({f"targeted_strict_debt_{key}": value for key, value in error.items()})
+        return base
     counts = {code: 0 for code in _TARGETED_STRICT_DEBT_SELECT}
     samples: list[dict[str, object]] = []
-    root = repo_root()
     for item in findings:
         code = str(item.get("code") or "")
         if code not in counts:
             continue
         counts[code] += 1
-        if len(samples) >= _MAX_DEBT_SAMPLES:
-            continue
-        filename = str(item.get("filename") or "")
-        try:
-            path = Path(filename).resolve().relative_to(root).as_posix()
-        except ValueError:
-            path = filename
-        location = item.get("location") or {}
-        samples.append(
-            {
-                "code": code,
-                "path": path,
-                "row": location.get("row"),
-                "column": location.get("column"),
-                "message": item.get("message"),
-            }
-        )
-    return {
-        "targeted_strict_debt_select": list(_TARGETED_STRICT_DEBT_SELECT),
-        "targeted_strict_debt_measured": True,
+        if len(samples) < _MAX_DEBT_SAMPLES:
+            location = item.get("location") or {}
+            samples.append({"code": code, "path": item.get("filename"), "row": location.get("row"), "column": location.get("column"), "message": item.get("message")})
+    base.update({
         "targeted_strict_debt_counts": counts,
         "targeted_strict_debt_total": sum(counts.values()),
         "targeted_strict_debt_samples": samples,
         "targeted_strict_debt_sample_limit": _MAX_DEBT_SAMPLES,
+    })
+    return base
+
+
+def _full_debt_report(*, config: Path) -> dict[str, object]:
+    args = [sys.executable, "-m", "ruff", "check", ".", "--output-format", "json"]
+    if config.exists():
+        args.extend(["--config", str(config)])
+    findings, error = _ruff_json_findings(args, timeout=300)
+    if findings is None:
+        return {"full_ruff_measured": False, **{f"full_ruff_{key}": value for key, value in error.items()}}
+    by_rule: dict[str, int] = {}
+    by_package: dict[str, int] = {}
+    for item in findings:
+        code = str(item.get("code") or "unknown")
+        path = str(item.get("filename") or "")
+        package = path.split("/", 1)[0] if "/" in path else "(root)"
+        by_rule[code] = by_rule.get(code, 0) + 1
+        by_package[package] = by_package.get(package, 0) + 1
+    report_path = _artifact_path("ruff_full.json")
+    report_path.write_text(json.dumps(findings, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    return {
+        "full_ruff_measured": True,
+        "full_ruff_total": len(findings),
+        "full_ruff_counts_by_rule": dict(sorted(by_rule.items())),
+        "full_ruff_counts_by_package": dict(sorted(by_package.items())),
+        "full_ruff_report_path": report_path.relative_to(repo_root()).as_posix(),
     }
 
 
@@ -144,82 +163,57 @@ def _ruff_check() -> tuple[bool, str, dict[str, object]]:
     targets = _quality_target_paths(root)
     config = root / "ruff.toml"
     payload: dict[str, object] = {
-        "artifact": "quality_check",
-        "ruff_available": False,
-        "ruff_critical_select": list(_CRITICAL_RUFF_SELECT),
-        "claims_full_ruff_clean": False,
-        "claims_production_ready": False,
-        "targeted_strict_debt_enforced": True,
+        "artifact": "quality_check", "ruff_available": False,
+        "ruff_critical_select": list(_CRITICAL_RUFF_SELECT), "claims_full_ruff_clean": False,
+        "claims_production_ready": False, "targeted_strict_debt_enforced": True,
     }
     if not targets:
-        payload["status"] = "blocked"
-        payload["violations"] = ["quality_targets_missing"]
+        payload.update(status="blocked", violations=["quality_targets_missing"])
         return False, "quality targets missing", payload
     if importlib.util.find_spec("ruff") is None:
-        payload["status"] = "blocked" if _quality_tools_required() else "advisory"
-        payload["violations"] = ["ruff_unavailable"] if _quality_tools_required() else []
-        if _quality_tools_required():
-            return False, "ruff unavailable while BAIOS_REQUIRE_QUALITY_TOOLS is enabled", payload
-        return True, "ruff unavailable in environment; skipped by non-release contract", payload
-
+        required = _quality_tools_required()
+        payload.update(status="blocked" if required else "advisory", violations=["ruff_unavailable"] if required else [])
+        return (False, "ruff unavailable while BAIOS_REQUIRE_QUALITY_TOOLS is enabled", payload) if required else (True, "ruff unavailable in environment; skipped by non-release contract", payload)
     payload["ruff_available"] = True
-    critical_args = [*_ruff_base_args(targets=targets, config=config), "--select", ",".join(_CRITICAL_RUFF_SELECT)]
-    critical = run_command(critical_args, env={"PYTHONNOUSERSITE": "1"}, timeout=180)
+    critical = run_command([*_ruff_base_args(targets=targets, config=config), "--select", ",".join(_CRITICAL_RUFF_SELECT)], env={"PYTHONNOUSERSITE": "1"}, timeout=180)
     payload["critical_ruff_passed"] = critical.returncode == 0
     if critical.returncode != 0:
-        payload["status"] = "blocked"
-        payload["violations"] = ["ruff_critical_baseline_failed"]
+        payload.update(status="blocked", violations=["ruff_critical_baseline_failed"])
         return False, "ruff critical baseline failed", payload
-
     payload.update(_targeted_debt_report(targets=targets, config=config))
-    targeted_measured = bool(payload.get("targeted_strict_debt_measured"))
-    targeted_total = int(payload.get("targeted_strict_debt_total") or 0)
-    targeted_clean = targeted_measured and targeted_total == 0
+    payload.update(_full_debt_report(config=config))
+    if not payload.get("full_ruff_measured"):
+        payload.update(status="blocked", violations=["full_ruff_inventory_failed"])
+        return False, "full ruff inventory failed", payload
+    targeted_clean = bool(payload.get("targeted_strict_debt_measured")) and int(payload.get("targeted_strict_debt_total") or 0) == 0
     payload["targeted_strict_debt_clean"] = targeted_clean
     if not targeted_clean:
-        payload["status"] = "blocked"
-        payload["violations"] = ["targeted_strict_debt_lock_failed"]
+        payload.update(status="blocked", violations=["targeted_strict_debt_lock_failed"])
         return False, "targeted strict ruff debt lock failed", payload
-
+    full_clean = int(payload.get("full_ruff_total") or 0) == 0
+    payload.update(full_ruff_passed=full_clean, claims_full_ruff_clean=full_clean)
     if _strict_ruff_required():
-        strict = run_command(_ruff_base_args(targets=targets, config=config), env={"PYTHONNOUSERSITE": "1"}, timeout=180)
-        payload["full_ruff_passed"] = strict.returncode == 0
-        payload["claims_full_ruff_clean"] = strict.returncode == 0
-        if strict.returncode != 0:
-            payload["status"] = "blocked"
-            payload["violations"] = ["full_ruff_strict_failed"]
+        if not full_clean:
+            payload.update(status="blocked", violations=["full_ruff_strict_failed"])
             return False, "full ruff strict check failed", payload
         payload["status"] = "ready"
         return True, "ruff critical baseline, targeted strict lock, and strict full check passed", payload
-
-    payload["status"] = "ready_with_unenforced_full_ruff"
-    payload["warnings"] = ["full_ruff_strict_not_enforced"]
-    return True, "ruff critical baseline passed; targeted strict debt lock passed; full ruff strict check is not enforced", payload
+    payload.update(status="ready_with_unenforced_full_ruff", warnings=["full_ruff_strict_not_enforced"])
+    return True, f"ruff critical baseline and targeted strict lock passed; inventoried {payload['full_ruff_total']} full ruff findings", payload
 
 
 def run() -> tuple[bool, str]:
     ok_syntax, msg_syntax, checked = _syntax_check_targets()
-    payload: dict[str, object] = {
-        "artifact": "quality_check",
-        "syntax_checked_files": checked,
-        "syntax_passed": ok_syntax,
-        "claims_production_ready": False,
-    }
+    payload: dict[str, object] = {"artifact": "quality_check", "syntax_checked_files": checked, "syntax_passed": ok_syntax, "claims_production_ready": False}
     if not ok_syntax:
-        payload["status"] = "blocked"
-        payload["violations"] = ["syntax_check_failed"]
+        payload.update(status="blocked", violations=["syntax_check_failed"])
         _write_artifact(payload)
         return False, msg_syntax
-
     ok_ruff, msg_ruff, ruff_payload = _ruff_check()
     payload.update(ruff_payload)
-    payload["syntax_checked_files"] = checked
-    payload["syntax_passed"] = True
+    payload.update(syntax_checked_files=checked, syntax_passed=True)
     _write_artifact(payload)
-    if not ok_ruff:
-        return False, msg_ruff
-
-    return True, f"{msg_syntax}; {msg_ruff}"
+    return (False, msg_ruff) if not ok_ruff else (True, f"{msg_syntax}; {msg_ruff}")
 
 
 __all__ = ["run"]
