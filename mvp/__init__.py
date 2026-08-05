@@ -1,7 +1,9 @@
 """MVP package."""
+
 from __future__ import annotations
 
 from shared.kinded_payloads import build_kinded_payload
+
 
 class LocalServicesProfile:
     def build(self, payload: dict) -> dict:
