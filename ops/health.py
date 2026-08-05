@@ -1,14 +1,14 @@
-from __future__ import annotations
-
 """System healthcheck.
 
 This module is SIDE-EFFECT FREE and only probes dependencies via their ping() methods.
 """
 
-from typing import Any, Dict
+from __future__ import annotations
+
+from typing import Any
 
 
-def system_health(*, ledger, event_store, snapshot_store, outbox=None, delivery_state=None) -> Dict[str, Any]:
+def system_health(*, ledger, event_store, snapshot_store, outbox=None, delivery_state=None) -> dict[str, Any]:
     import logging
     _log = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def health_check(*, ledger, db=None, survival=None):
     return {"ledger": ledger_ok, "db": db_ok, "survival_mode": survival_mode}
 
 
-def evolution_health(outbox) -> Dict[str, Any]:
+def evolution_health(outbox) -> dict[str, Any]:
     """Health probe for evolution outbox.
 
     Read-only: counts pending jobs.
