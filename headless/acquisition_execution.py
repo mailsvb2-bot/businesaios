@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
-from acquisition import AcquisitionHeadlessEntrypoint, create_acquisition_headless_entrypoint
-from acquisition import AcquisitionFeasibilityRequest
+from acquisition import (
+    AcquisitionFeasibilityRequest,
+    AcquisitionHeadlessEntrypoint,
+    create_acquisition_headless_entrypoint,
+)
 from presentation import AcquisitionViewModel, build_acquisition_view_model
-
 
 CANON_HEADLESS_ACQUISITION_EXECUTION = True
 
@@ -43,8 +46,6 @@ def execute_headless_acquisition(
 
 
 __all__ = [
-    'CANON_HEADLESS_ACQUISITION_EXECUTION',
-    'HeadlessAcquisitionExecution',
-    'create_headless_acquisition_execution',
-    'execute_headless_acquisition',
+    'CANON_HEADLESS_ACQUISITION_EXECUTION', 'HeadlessAcquisitionExecution',
+    'create_headless_acquisition_execution', 'execute_headless_acquisition',
 ]
