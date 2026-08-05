@@ -14,7 +14,7 @@ from scripts.ci.subprocess_io import run_command
 _CRITICAL_RUFF_SELECT = ("E9", "F63", "F7", "F82")
 _TARGETED_STRICT_DEBT_SELECT = ("E402", "F401", "UP035")
 _MAX_DEBT_SAMPLES = 50
-_RATCHETED_STRICT_DEBT = (("deployment", "UP035"), ("headless", "I001,UP035"), ("infrastructure", "F401,I001,UP035"), ("leads", "I001"), ("ops", "E402,UP006,UP035"))
+_RATCHETED_STRICT_DEBT = (("deployment", "UP035"), ("headless", "I001,UP035"), ("infrastructure", "F401,I001,UP035"), ("leads", "I001"), ("mvp", "I001"), ("ops", "E402,UP006,UP035"))
 
 
 def _iter_python_files(path: Path):
