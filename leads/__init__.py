@@ -39,8 +39,7 @@ class LeadTimeline:
         return build_kinded_payload('lead_timeline', payload)
 
 __all__ = [
-    'LeadCaptureFacade',
-    'LeadDeduplication',
+    'LeadCaptureFacade', 'LeadDeduplication',
     'LeadIngestion',
     'LeadOwnerNotifications',
     'LeadQualityScorer',
