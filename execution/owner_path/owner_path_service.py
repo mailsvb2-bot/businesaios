@@ -20,7 +20,7 @@ class FileOwnerPathStore:
             return {}
         try:
             return json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
+        except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError):
             return {}
     def save(self, *, tenant_id: str, business_id: str, payload: Mapping[str, Any]) -> None:
         path = self._path(tenant_id=tenant_id, business_id=business_id)
