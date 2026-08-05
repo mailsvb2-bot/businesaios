@@ -721,7 +721,7 @@ class ClosedLoopOrchestrator:
                     'lineage_lock': lineage_lock_verdict.to_dict(),
                     'immutability': immutability_verdict.to_dict(),
                 }
-            except Exception as exc:
+            except (OSError, UnicodeError, ValueError) as exc:
                 bundle_payloads = [bundle]
                 import_validation = {
                     'valid': False,
