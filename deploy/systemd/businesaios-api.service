@@ -1,5 +1,5 @@
 [Unit]
-Description=BusinesAIOS API Runtime
+Description=businesaios API Runtime
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=60
