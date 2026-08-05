@@ -83,7 +83,6 @@ def test_full_debt_report_rejects_invalid_json(
     }
 
 
-
 def test_targeted_debt_failure_still_captures_full_inventory(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -133,6 +132,7 @@ def test_deployment_up035_ratchet_blocks_regressions(
     assert payload["deployment_up035_passed"] is False
     assert payload["violations"] == ["deployment_up035_ratchet_failed"]
 
+
 def test_headless_import_ratchet_blocks_regressions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -153,7 +153,6 @@ def test_headless_import_ratchet_blocks_regressions(
     assert payload["violations"] == ["headless_i001,up035_ratchet_failed"]
 
 
-
 def test_infrastructure_import_ratchet_blocks_regressions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -169,14 +168,15 @@ def test_infrastructure_import_ratchet_blocks_regressions(
     ))
     monkeypatch.setattr(quality, "run_command", lambda *_args, **_kwargs: next(outcomes))
     monkeypatch.setattr(quality, "_targeted_debt_report", lambda **_kwargs: {"targeted_strict_debt_measured": True, "targeted_strict_debt_total": 0})
-    monkeypatch.setattr(quality, "_full_debt_report", lambda **_kwargs: {"full_ruff_measured": True, "full_ruff_total": 4873})
+    monkeypatch.setattr(quality, "_full_debt_report", lambda **_kwargs: {"full_ruff_measured": True, "full_ruff_total": 4868})
 
     ok, message, payload = quality._ruff_check()
 
     assert ok is False
-    assert message == "infrastructure F401,UP035 ruff ratchet failed"
-    assert payload["infrastructure_f401,up035_passed"] is False
-    assert payload["violations"] == ["infrastructure_f401,up035_ratchet_failed"]
+    assert message == "infrastructure F401,I001,UP035 ruff ratchet failed"
+    assert payload["infrastructure_f401,i001,up035_passed"] is False
+    assert payload["violations"] == ["infrastructure_f401,i001,up035_ratchet_failed"]
+
 
 def test_non_strict_quality_gate_requires_inventory_but_not_cleanliness(
     tmp_path: Path,
@@ -240,6 +240,7 @@ def test_strict_quality_gate_blocks_on_inventoried_debt(
     assert message == "full ruff strict check failed"
     assert payload["violations"] == ["full_ruff_strict_failed"]
 
+
 def test_ops_typing_ratchet_blocks_regressions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -264,4 +265,3 @@ def test_ops_typing_ratchet_blocks_regressions(
     assert message == "ops E402,UP006,UP035 ruff ratchet failed"
     assert payload["ops_e402,up006,up035_passed"] is False
     assert payload["violations"] == ["ops_e402,up006,up035_ratchet_failed"]
-
