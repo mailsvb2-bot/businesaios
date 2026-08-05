@@ -19,7 +19,7 @@ def _generated_at_ms_from_env(*, env: DecisionEnvelope, safe_dict) -> int:
         try:
             if value is not None:
                 return int(value)
-        except Exception:
+        except (TypeError, ValueError, OverflowError):
             continue
     return 0
 

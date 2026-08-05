@@ -126,7 +126,7 @@ def build_economic_bundle_reconciliation(*, economic_audit_bundle_service, econo
                 'lineage_lock': lineage_lock_verdict.to_dict(),
                 'immutability': immutability_verdict.to_dict(),
             }
-        except Exception as exc:
+        except (OSError, UnicodeError, ValueError) as exc:
             import_validation = {'valid': False, 'issues': [str(exc)], 'source': 'bundle_restore', 'status': 'invalid'}
     restored_payload = _safe_dict(_safe_dict(bundle_payloads[0]).get('payload')) or _safe_dict(bundle_payloads[0])
     local_payload = {
