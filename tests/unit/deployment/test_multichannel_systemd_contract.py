@@ -22,6 +22,7 @@ def test_core_systemd_runtime_is_api_plus_worker() -> None:
     assert "env_str('RUN_MODE', env_str('APP_PROFILE', ''))" in guard
     assert "'entrypoint_basenames': {'run_http.py', 'run_profile.py'}" in guard
     assert "'module_suffixes': {'main', 'runtime.boot.telegram_webhook_runner', 'scripts.server.run_profile'}" in guard
+    assert "profile not in {'telegram', 'webhook'}" in guard
 
 
 def test_all_runtime_units_use_systemd_managed_writable_state() -> None:
