@@ -32,6 +32,18 @@ fi
 DEPLOY_UNITS=("${CORE_UNITS[@]}" "${OPTIONAL_UNITS[@]}")
 DEPLOY_UNITS_CSV="$(IFS=,; echo "${DEPLOY_UNITS[*]}")"
 
+run_root() {
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+    return
+  fi
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "[install] root privileges are required and sudo is unavailable" >&2
+    exit 1
+  fi
+  sudo "$@"
+}
+
 require_file() {
   local path="$1"
   if [[ ! -f "$path" ]]; then
@@ -88,34 +100,34 @@ require_file "${APP_DIR}/deploy/systemd/businesaios.sysusers.conf"
 require_file "${APP_DIR}/RELEASE_TAG"
 
 echo "[install] provisioning system user"
-sudo install -d -m 0755 "$SYSUSERS_DIR"
-sudo install -m 0644 "${APP_DIR}/deploy/systemd/businesaios.sysusers.conf" "$SYSUSERS_FILE"
-sudo systemd-sysusers "$SYSUSERS_FILE"
+run_root install -d -m 0755 "$SYSUSERS_DIR"
+run_root install -m 0644 "${APP_DIR}/deploy/systemd/businesaios.sysusers.conf" "$SYSUSERS_FILE"
+run_root systemd-sysusers "$SYSUSERS_FILE"
 
 write_state installing
 
 echo "[install] installing core platform units: ${CORE_UNITS[*]}"
 for unit in "${DEPLOY_UNITS[@]}"; do
-  sudo install -m 0644 "${APP_DIR}/deploy/systemd/${unit}" "${SYSTEMD_DIR}/${unit}"
+  run_root install -m 0644 "${APP_DIR}/deploy/systemd/${unit}" "${SYSTEMD_DIR}/${unit}"
 done
 
 echo "[install] reloading systemd"
-sudo systemctl daemon-reload
+run_root systemctl daemon-reload
 
 echo "[install] enabling core platform services"
-sudo systemctl enable "${CORE_UNITS[@]}"
+run_root systemctl enable "${CORE_UNITS[@]}"
 if ((${#OPTIONAL_UNITS[@]})); then
   echo "[install] enabling optional connector services: ${OPTIONAL_UNITS[*]}"
-  sudo systemctl enable "${OPTIONAL_UNITS[@]}"
+  run_root systemctl enable "${OPTIONAL_UNITS[@]}"
 else
   echo "[install] no polling/streaming connector units requested"
 fi
 
 if [[ "$START_SERVICES" == "1" ]]; then
   echo "[install] restarting core platform services"
-  sudo systemctl restart "${CORE_UNITS[@]}"
+  run_root systemctl restart "${CORE_UNITS[@]}"
   if ((${#OPTIONAL_UNITS[@]})); then
-    sudo systemctl restart "${OPTIONAL_UNITS[@]}"
+    run_root systemctl restart "${OPTIONAL_UNITS[@]}"
   fi
   HEALTH_STATUS="running"
   ACTIVATION_STATUS="active"
@@ -129,10 +141,10 @@ fi
 # platform. Disable those unit names only after the canonical services have
 # been installed (and, by default, restarted) successfully.
 for legacy_unit in "${LEGACY_UNITS[@]}"; do
-  sudo systemctl disable --now "$legacy_unit" >/dev/null 2>&1 || true
-  sudo rm -f "${SYSTEMD_DIR}/${legacy_unit}"
+  run_root systemctl disable --now "$legacy_unit" >/dev/null 2>&1 || true
+  run_root rm -f "${SYSTEMD_DIR}/${legacy_unit}"
 done
-sudo systemctl daemon-reload
+run_root systemctl daemon-reload
 
 write_state "$ACTIVATION_STATUS"
 
