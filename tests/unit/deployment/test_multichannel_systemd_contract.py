@@ -45,9 +45,22 @@ def test_installer_provisions_service_user_before_units() -> None:
     assert 'u      businesaios' in sysusers
     assert '/var/lib/businesaios' in sysusers
     assert '/usr/sbin/nologin' in sysusers
-    assert 'systemd-sysusers "$SYSUSERS_FILE"' in installer
-    assert installer.index('systemd-sysusers "$SYSUSERS_FILE"') < installer.index('write_state installing')
-    assert installer.index('systemd-sysusers "$SYSUSERS_FILE"') < installer.index('systemctl enable "${CORE_UNITS[@]}"')
+    assert 'run_root systemd-sysusers "$SYSUSERS_FILE"' in installer
+    assert installer.index('run_root systemd-sysusers "$SYSUSERS_FILE"') < installer.index('write_state installing')
+    assert installer.index('run_root systemd-sysusers "$SYSUSERS_FILE"') < installer.index('run_root systemctl enable "${CORE_UNITS[@]}"')
+
+
+def test_installer_runs_directly_as_root_and_uses_sudo_only_as_fallback() -> None:
+    installer = _read('install.sh')
+
+    assert 'run_root() {' in installer
+    assert 'if [[ "$(id -u)" -eq 0 ]]; then' in installer
+    assert 'command -v sudo' in installer
+    assert 'sudo "$@"' in installer
+    assert '\nsudo install ' not in installer
+    assert '\nsudo systemctl ' not in installer
+    assert '\nsudo systemd-sysusers ' not in installer
+    assert '\nsudo rm ' not in installer
 
 
 def test_telegram_is_an_optional_connector_not_a_core_service() -> None:
