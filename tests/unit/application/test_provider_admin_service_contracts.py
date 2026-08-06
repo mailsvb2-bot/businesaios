@@ -15,7 +15,7 @@ from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import InMemorySecretVault
 
 
-def test_provider_admin_service_stores_secrets_and_onboards_business(tmp_path):
+def _service(tmp_path):
     documents = FileDistributedDocumentStore(tmp_path / 'docs')
     registry = DistributedBusinessRegistry(documents=documents)
     onboarding = ConnectorOnboardingService(
@@ -32,6 +32,11 @@ def test_provider_admin_service_stores_secrets_and_onboards_business(tmp_path):
         activation_store=FileProviderActivationStore(documents),
         route_state=FileRegionRouteState(documents),
     )
+    return service, registry
+
+
+def test_provider_admin_service_stores_secrets_and_onboards_business(tmp_path):
+    service, registry = _service(tmp_path)
     status = service.activate_provider(
         ProviderCredentialSubmission(
             tenant_id='tenant-a',
@@ -51,3 +56,23 @@ def test_provider_admin_service_stores_secrets_and_onboards_business(tmp_path):
     assert record is not None
     assert record.channel_kind == 'website'
     assert 'region:eu-west-1' in record.persistent_surfaces
+
+
+def test_platform_infra_activation_records_runtime_probe(tmp_path):
+    service, _registry = _service(tmp_path)
+    status = service.activate_provider(
+        ProviderCredentialSubmission(
+            tenant_id='tenant-a',
+            business_id='runtime-admin',
+            provider_key='postgres_runtime',
+            ownership_key='owner:runtime-admin',
+            requested_by='owner-user',
+            external_ref='postgres://cluster/runtime',
+            secrets={'dsn': 'postgres://user:pass@localhost:5432/db'},
+            metadata={'probe_mode': 'dry_run', 'activate_runtime': True},
+        )
+    )
+    runtime_activation = dict(status.metadata.get('runtime_activation') or {})
+    assert runtime_activation.get('runtime_kind') == 'postgres'
+    assert runtime_activation.get('health', {}).get('status') == 'ready_for_credentials'
+    assert 'runtime:postgres_runtime' in status.persistent_surfaces
