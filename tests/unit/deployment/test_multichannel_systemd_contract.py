@@ -33,10 +33,9 @@ def test_all_runtime_units_use_systemd_managed_writable_state() -> None:
         assert 'StateDirectory=businesaios/runtime' in unit
         assert 'StateDirectoryMode=0750' in unit
         assert 'Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime' in unit
-        assert 'Environment=BUSINESAIOS_DATA_DIR=/var/lib/businesaios/runtime' in unit
         assert 'Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime' in unit
         assert 'Environment=APP_RUNTIME_DATA_DIR=.runtime' not in unit
-        assert 'Environment=BUSINESAIOS_DATA_DIR=.runtime' not in unit
+        assert 'Environment=BAIOS_DATA_DIR=.runtime' not in unit
 
 
 def test_installer_provisions_service_user_before_units() -> None:
