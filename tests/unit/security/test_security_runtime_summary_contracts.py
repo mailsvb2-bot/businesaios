@@ -25,3 +25,11 @@ def test_security_runtime_summary_reports_core_operational_counts(tmp_path) -> N
     assert summary.active_reencryption_jobs == 1
     assert summary.paused_reencryption_jobs == 1
     assert summary.latest_drill_ok is True
+
+
+def test_security_runtime_summary_exposes_governance_events(tmp_path) -> None:
+    owner = build_security_governance_infrastructure(base_dir=tmp_path, shared_secret='secret')
+    owner.governance.quarantine_compromised_token(token_fingerprint='tok-2', actor='secops', reason='drill')
+    summary = owner.runtime_summary.build()
+    assert summary.revoked_or_quarantined_entities >= 1
+    assert len(summary.latest_governance_events) >= 1
