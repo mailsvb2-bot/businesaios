@@ -14,6 +14,11 @@ EnvironmentFile=/etc/businesaios/api.env
 EnvironmentFile=-/etc/businesaios/worker.env
 Environment=APP_PROFILE=worker
 Environment=LOG_LEVEL=INFO
+Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime
+Environment=BUSINESAIOS_DATA_DIR=/var/lib/businesaios/runtime
+Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime
+StateDirectory=businesaios/runtime
+StateDirectoryMode=0750
 ExecStartPre=/opt/businesaios/.venv/bin/python -m scripts.server.migrate_before_start
 ExecStart=/opt/businesaios/.venv/bin/python -m scripts.server.run_profile
 Restart=on-failure
