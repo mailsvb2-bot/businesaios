@@ -32,7 +32,7 @@ def test_systemd_units_define_server_contract() -> None:
         assert 'StateDirectory=businesaios/runtime' in text
         assert 'StateDirectoryMode=0750' in text
         assert 'Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime' in text
-        assert 'Environment=BUSINESAIOS_DATA_DIR=/var/lib/businesaios/runtime' in text
+        assert 'Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime' in text
 
 
 def test_env_example_covers_server_and_secret_contract() -> None:
