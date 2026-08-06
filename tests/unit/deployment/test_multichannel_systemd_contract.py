@@ -20,13 +20,13 @@ def _assert_writable_runtime_contract(unit: str) -> None:
     assert 'StateDirectory=businesaios' in content
     assert 'StateDirectoryMode=0750' in content
     assert f'Environment=APP_RUNTIME_DATA_DIR={RUNTIME_DIR}' in content
-    assert f'Environment=BUSINESAIOS_DATA_DIR={RUNTIME_DIR}' in content
     assert f'Environment=BAIOS_DATA_DIR={RUNTIME_DIR}' in content
     assert f'ExecStartPre=/usr/bin/install -d -m 0750 {RUNTIME_DIR}' in content
 
     # Runtime path assignments must follow EnvironmentFile so an incomplete or
     # legacy production env cannot send an unprivileged service back to
-    # /opt/businesaios/.runtime.
+    # /opt/businesaios/.runtime. APP_RUNTIME_DATA_DIR is the canonical key;
+    # BAIOS_DATA_DIR remains the supported compatibility key.
     assert content.index('EnvironmentFile=/etc/businesaios/api.env') < content.index(
         f'Environment=APP_RUNTIME_DATA_DIR={RUNTIME_DIR}'
     )
