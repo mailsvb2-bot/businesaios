@@ -14,6 +14,7 @@ EnvironmentFile=/etc/businesaios/api.env
 Environment=APP_PROFILE=api
 Environment=LOG_LEVEL=INFO
 Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime
+Environment=RUNTIME_DIR=/var/lib/businesaios/runtime
 Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime
 StateDirectory=businesaios/runtime
 StateDirectoryMode=0750
