@@ -21,18 +21,18 @@ def enforce_production_strict_mode() -> None:
 
     import os.path as osp
 
-    run_mode = env_str('RUN_MODE', '').lower().strip()
+    run_mode = env_str('RUN_MODE', env_str('APP_PROFILE', '')).lower().strip()
     if not run_mode:
         raise RuntimeError('PROD_STRICT_RUN_MODE:unset')
 
     allowed_profiles = {
         'api': {
-            'entrypoint_basenames': {'run_http.py'},
-            'module_suffixes': {'entrypoints.api.run_http'},
+            'entrypoint_basenames': {'run_http.py', 'run_profile.py'},
+            'module_suffixes': {'entrypoints.api.run_http', 'scripts.server.run_profile'},
         },
         'telegram': {
-            'entrypoint_basenames': {'main.py'},
-            'module_suffixes': {'main', 'runtime.boot.telegram_webhook_runner'},
+            'entrypoint_basenames': {'main.py', 'run_profile.py'},
+            'module_suffixes': {'main', 'runtime.boot.telegram_webhook_runner', 'scripts.server.run_profile'},
         },
         'worker': {
             'entrypoint_basenames': {'run_profile.py'},
