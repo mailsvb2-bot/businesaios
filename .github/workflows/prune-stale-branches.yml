@@ -13,6 +13,22 @@ jobs:
     if: contains(github.event.head_commit.message, '[prune-stale-branches]')
     runs-on: ubuntu-24.04
     steps:
+      - name: Check out exact main commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Run canonical doctor gate
+        shell: bash
+        run: python -m scripts.ci.cli --gate doctor
+
       - name: Delete every non-default branch
         env:
           GH_TOKEN: ${{ github.token }}
