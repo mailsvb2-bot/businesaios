@@ -1,0 +1,85 @@
+name: Prune stale branches
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  prune:
+    if: contains(github.event.head_commit.message, '[prune-stale-branches]')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact main commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Run canonical doctor gate
+        shell: bash
+        run: python -m scripts.ci.cli --gate doctor
+
+      - name: Delete every non-default branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          repository = os.environ["REPOSITORY"]
+          default_branch = os.environ["DEFAULT_BRANCH"]
+          token = os.environ["GH_TOKEN"]
+          api_root = f"https://api.github.com/repos/{repository}"
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+
+          def request(method: str, url: str):
+              req = urllib.request.Request(url, method=method, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  payload = response.read()
+                  return json.loads(payload) if payload else None
+
+          branches: list[str] = []
+          page = 1
+          while True:
+              payload = request("GET", f"{api_root}/branches?per_page=100&page={page}")
+              names = [str(item["name"]) for item in payload]
+              branches.extend(names)
+              if len(names) < 100:
+                  break
+              page += 1
+
+          stale = sorted(name for name in branches if name != default_branch)
+          print(f"default_branch={default_branch}")
+          print(f"stale_branch_count={len(stale)}")
+          for branch in stale:
+              encoded_ref = urllib.parse.quote(f"heads/{branch}", safe="")
+              try:
+                  request("DELETE", f"{api_root}/git/refs/{encoded_ref}")
+              except urllib.error.HTTPError as exc:
+                  detail = exc.read().decode("utf-8", errors="replace")
+                  raise RuntimeError(f"failed to delete {branch}: HTTP {exc.code}: {detail}") from exc
+              print(f"deleted={branch}")
+          PY
