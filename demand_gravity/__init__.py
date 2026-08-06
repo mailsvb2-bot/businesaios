@@ -1,1 +1,3 @@
 from demand_gravity.demand_gravity_model import DemandGravityModel
+
+__all__ = ["DemandGravityModel"]
