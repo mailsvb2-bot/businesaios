@@ -14,11 +14,14 @@ def _read(name: str) -> str:
 def test_core_systemd_runtime_is_api_plus_worker() -> None:
     api = _read('businesaios-api.service')
     worker = _read('businesaios-worker.service')
-
+    guard = (REPO_ROOT / 'bootstrap' / 'prod_guards.py').read_text(encoding='utf-8')
     assert 'Environment=APP_PROFILE=api' in api
     assert 'Environment=APP_PROFILE=worker' in worker
     assert 'EnvironmentFile=/etc/businesaios/api.env' in api
     assert 'EnvironmentFile=/etc/businesaios/api.env' in worker
+    assert "env_str('RUN_MODE', env_str('APP_PROFILE', ''))" in guard
+    assert "'entrypoint_basenames': {'run_http.py', 'run_profile.py'}" in guard
+    assert "'module_suffixes': {'main', 'runtime.boot.telegram_webhook_runner', 'scripts.server.run_profile'}" in guard
 
 
 def test_all_runtime_units_use_systemd_managed_writable_state() -> None:
@@ -41,7 +44,6 @@ def test_all_runtime_units_use_systemd_managed_writable_state() -> None:
 def test_installer_provisions_service_user_before_units() -> None:
     installer = _read('install.sh')
     sysusers = _read('businesaios.sysusers.conf')
-
     assert 'u      businesaios  -   "Runtime service"' in sysusers
     assert '/var/lib/businesaios' in sysusers
     assert '/usr/sbin/nologin' in sysusers
@@ -52,7 +54,6 @@ def test_installer_provisions_service_user_before_units() -> None:
 
 def test_installer_runs_directly_as_root_and_uses_sudo_only_as_fallback() -> None:
     installer = _read('install.sh')
-
     assert 'run_root() {' in installer
     assert 'if [[ "$(id -u)" -eq 0 ]]; then' in installer
     assert 'command -v sudo' in installer
@@ -66,7 +67,6 @@ def test_installer_runs_directly_as_root_and_uses_sudo_only_as_fallback() -> Non
 def test_telegram_is_an_optional_connector_not_a_core_service() -> None:
     installer = _read('install.sh')
     connector = _read('businesaios-connector-telegram.service')
-
     assert 'CORE_UNITS=(' in installer
     assert 'businesaios-api.service' in installer
     assert 'businesaios-worker.service' in installer
