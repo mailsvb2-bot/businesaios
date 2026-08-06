@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from crm.memory.crm_memory_projection import CrmMemoryProjection
-
 
 class CrmBusinessMemoryAdapter:
     MEMORY_KEY = 'crm'
