@@ -22,10 +22,10 @@ def test_core_systemd_runtime_is_api_plus_worker() -> None:
 
 
 def test_all_runtime_units_use_systemd_managed_writable_state() -> None:
-    for name in (
-        'businesaios-api.service',
-        'businesaios-worker.service',
-        'businesaios-connector-telegram.service',
+    for name, runtime_dir in (
+        ('businesaios-api.service', 'api'),
+        ('businesaios-worker.service', 'worker'),
+        ('businesaios-connector-telegram.service', 'connector-telegram'),
     ):
         unit = _read(name)
         assert 'User=businesaios' in unit
@@ -34,7 +34,7 @@ def test_all_runtime_units_use_systemd_managed_writable_state() -> None:
         assert 'StateDirectoryMode=0750' in unit
         assert 'Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime' in unit
         assert 'Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime' in unit
-        assert 'Environment=RUNTIME_DIR=/var/lib/businesaios/runtime' in unit
+        assert f'Environment=RUNTIME_DIR=/var/lib/businesaios/runtime/{runtime_dir}' in unit
         assert 'Environment=BAIOS_DATA_DIR=.runtime' not in unit
 
 
