@@ -1,13 +1,13 @@
 from .acquisition_input_schema import (
+    CANON_PRESENTATION_ACQUISITION_INPUT_SCHEMA,
     AcquisitionInputField,
     AcquisitionInputSchema,
-    CANON_PRESENTATION_ACQUISITION_INPUT_SCHEMA,
     acquisition_input_schema,
 )
 from .acquisition_view_model import (
+    CANON_PRESENTATION_ACQUISITION_VIEW_MODEL,
     AcquisitionRecommendationView,
     AcquisitionViewModel,
-    CANON_PRESENTATION_ACQUISITION_VIEW_MODEL,
     build_acquisition_view_model,
 )
 
