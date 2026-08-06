@@ -158,6 +158,8 @@ def test_headless_import_ratchet_blocks_regressions(
     [
         (3, "infrastructure F401,I001,UP035 ruff ratchet failed", "infrastructure_f401,i001,up035_passed", "infrastructure_f401,i001,up035_ratchet_failed", 4868),
         (4, "leads I001 ruff ratchet failed", "leads_i001_passed", "leads_i001_ratchet_failed", 4867),
+        (5, "mvp I001 ruff ratchet failed", "mvp_i001_passed", "mvp_i001_ratchet_failed", 4866),
+        (6, "demand_decision I001 ruff ratchet failed", "demand_decision_i001_passed", "demand_decision_i001_ratchet_failed", 4865),
     ],
 )
 def test_package_import_ratchets_block_regressions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, success_count: int, expected_message: str, payload_key: str, violation: str, full_total: int) -> None:
@@ -247,10 +249,10 @@ def test_ops_typing_ratchet_blocks_regressions(
     monkeypatch.setattr(quality, "repo_root", lambda: tmp_path)
     monkeypatch.setattr(quality, "_quality_target_paths", lambda _root: (tmp_path / "runtime",))
     monkeypatch.setattr(quality.importlib.util, "find_spec", lambda _name: object())
-    outcomes = iter([_outcome(returncode=0)] * 5 + [_outcome(returncode=1)])
+    outcomes = iter([_outcome(returncode=0)] * 7 + [_outcome(returncode=1)])
     monkeypatch.setattr(quality, "run_command", lambda *_args, **_kwargs: next(outcomes))
     monkeypatch.setattr(quality, "_targeted_debt_report", lambda **_kwargs: {"targeted_strict_debt_measured": True, "targeted_strict_debt_total": 0})
-    monkeypatch.setattr(quality, "_full_debt_report", lambda **_kwargs: {"full_ruff_measured": True, "full_ruff_total": 4867})
+    monkeypatch.setattr(quality, "_full_debt_report", lambda **_kwargs: {"full_ruff_measured": True, "full_ruff_total": 4865})
 
     ok, message, payload = quality._ruff_check()
 
