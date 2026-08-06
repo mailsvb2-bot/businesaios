@@ -26,7 +26,7 @@ def stable_transport_message_id(*, channel: str, payload: Mapping[str, Any]) -> 
         default=str,
     )
     digest = hashlib.sha256(
-        f"{str(channel).strip().lower()}\n{canonical_payload}".encode("utf-8")
+        f"{str(channel).strip().lower()}\n{canonical_payload}".encode()
     ).hexdigest()
     return f"synthetic-{str(channel).strip().lower()}-{digest[:32]}"
 
