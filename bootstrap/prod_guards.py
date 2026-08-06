@@ -20,7 +20,6 @@ def enforce_production_strict_mode() -> None:
         return
 
     import os.path as osp
-
     run_mode = env_str('RUN_MODE', env_str('APP_PROFILE', '')).lower().strip()
     if not run_mode:
         raise RuntimeError('PROD_STRICT_RUN_MODE:unset')
