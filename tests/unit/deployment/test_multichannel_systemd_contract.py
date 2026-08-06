@@ -21,6 +21,35 @@ def test_core_systemd_runtime_is_api_plus_worker() -> None:
     assert 'EnvironmentFile=/etc/businesaios/api.env' in worker
 
 
+def test_all_runtime_units_use_systemd_managed_writable_state() -> None:
+    for name in (
+        'businesaios-api.service',
+        'businesaios-worker.service',
+        'businesaios-connector-telegram.service',
+    ):
+        unit = _read(name)
+        assert 'User=businesaios' in unit
+        assert 'Group=businesaios' in unit
+        assert 'StateDirectory=businesaios/runtime' in unit
+        assert 'StateDirectoryMode=0750' in unit
+        assert 'Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime' in unit
+        assert 'Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime' in unit
+        assert 'Environment=APP_RUNTIME_DATA_DIR=.runtime' not in unit
+        assert 'Environment=BAIOS_DATA_DIR=.runtime' not in unit
+
+
+def test_installer_provisions_service_user_before_units() -> None:
+    installer = _read('install.sh')
+    sysusers = _read('businesaios.sysusers.conf')
+
+    assert 'u      businesaios' in sysusers
+    assert '/var/lib/businesaios' in sysusers
+    assert '/usr/sbin/nologin' in sysusers
+    assert 'systemd-sysusers "$SYSUSERS_FILE"' in installer
+    assert installer.index('systemd-sysusers "$SYSUSERS_FILE"') < installer.index('write_state installing')
+    assert installer.index('systemd-sysusers "$SYSUSERS_FILE"') < installer.index('systemctl enable "${CORE_UNITS[@]}"')
+
+
 def test_telegram_is_an_optional_connector_not_a_core_service() -> None:
     installer = _read('install.sh')
     connector = _read('businesaios-connector-telegram.service')

@@ -27,6 +27,12 @@ def test_systemd_units_define_server_contract() -> None:
         assert 'Restart=on-failure' in text
         assert 'StandardOutput=journal' in text
         assert 'WorkingDirectory=/opt/businesaios' in text
+        assert 'User=businesaios' in text
+        assert 'Group=businesaios' in text
+        assert 'StateDirectory=businesaios/runtime' in text
+        assert 'StateDirectoryMode=0750' in text
+        assert 'Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime' in text
+        assert 'Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime' in text
 
 
 def test_env_example_covers_server_and_secret_contract() -> None:

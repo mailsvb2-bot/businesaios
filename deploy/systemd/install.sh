@@ -3,6 +3,8 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/businesaios}"
 SYSTEMD_DIR="${SYSTEMD_DIR:-/etc/systemd/system}"
+SYSUSERS_DIR="${SYSUSERS_DIR:-/usr/lib/sysusers.d}"
+SYSUSERS_FILE="${SYSUSERS_FILE:-${SYSUSERS_DIR}/businesaios.conf}"
 STATE_DIR="${STATE_DIR:-${APP_DIR}/data/deployment}"
 STATE_FILE="${STATE_FILE:-${STATE_DIR}/release_state.json}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
@@ -82,7 +84,13 @@ PY
 for unit in "${DEPLOY_UNITS[@]}"; do
   require_file "${APP_DIR}/deploy/systemd/${unit}"
 done
+require_file "${APP_DIR}/deploy/systemd/businesaios.sysusers.conf"
 require_file "${APP_DIR}/RELEASE_TAG"
+
+echo "[install] provisioning system user"
+sudo install -d -m 0755 "$SYSUSERS_DIR"
+sudo install -m 0644 "${APP_DIR}/deploy/systemd/businesaios.sysusers.conf" "$SYSUSERS_FILE"
+sudo systemd-sysusers "$SYSUSERS_FILE"
 
 write_state installing
 
