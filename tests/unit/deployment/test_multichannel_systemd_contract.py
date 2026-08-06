@@ -42,7 +42,7 @@ def test_installer_provisions_service_user_before_units() -> None:
     installer = _read('install.sh')
     sysusers = _read('businesaios.sysusers.conf')
 
-    assert 'u      businesaios' in sysusers
+    assert 'u      businesaios  -   "Runtime service"' in sysusers
     assert '/var/lib/businesaios' in sysusers
     assert '/usr/sbin/nologin' in sysusers
     assert 'run_root systemd-sysusers "$SYSUSERS_FILE"' in installer
