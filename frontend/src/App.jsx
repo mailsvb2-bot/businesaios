@@ -1,37 +1,48 @@
 import { useEffect, useMemo, useState } from "react";
 
 const DEFAULT_API = "https://api.businessaios.ru";
-const DEFAULT_INTENT = "pilot";
 
-const FALLBACK_PROVIDERS = [
-  { provider_key: "telegram_bot", title: "Telegram", domain: "communications", description: "Бот, обращения и сообщения", secret_fields: [{ field_key: "bot_token", label: "Bot Token", placeholder: "123456:ABC...", required: true }] },
-  { provider_key: "whatsapp_cloud", title: "WhatsApp", domain: "communications", description: "WhatsApp Business Cloud", secret_fields: [{ field_key: "access_token", label: "Access Token", placeholder: "EAAB...", required: true }, { field_key: "phone_number_id", label: "Phone Number ID", placeholder: "1234567890", required: true }] },
-  { provider_key: "generic_website", title: "Сайт", domain: "website", description: "Формы, лиды и web-канал", secret_fields: [{ field_key: "webhook_secret", label: "Webhook Secret", placeholder: "site-webhook-secret", required: true }, { field_key: "admin_api_key", label: "Admin API Key", placeholder: "необязательно", required: false }] },
-  { provider_key: "wordpress", title: "WordPress", domain: "website", description: "Сайт и контент WordPress", secret_fields: [{ field_key: "application_password", label: "Application Password", placeholder: "xxxx xxxx xxxx", required: true }, { field_key: "webhook_secret", label: "Webhook Secret", placeholder: "необязательно", required: false }] },
-  { provider_key: "shopify", title: "Shopify", domain: "commerce", description: "Товары, заказы и магазин", secret_fields: [{ field_key: "admin_access_token", label: "Admin Access Token", placeholder: "shpat_...", required: true }, { field_key: "webhook_secret", label: "Webhook Secret", placeholder: "shopify-webhook-secret", required: true }] },
-  { provider_key: "woocommerce", title: "WooCommerce", domain: "commerce", description: "Каталог и заказы WooCommerce", secret_fields: [{ field_key: "consumer_key", label: "Consumer Key", placeholder: "ck_...", required: true }, { field_key: "consumer_secret", label: "Consumer Secret", placeholder: "cs_...", required: true }, { field_key: "store_url", label: "Адрес магазина", placeholder: "https://shop.example.com", required: true }] },
-  { provider_key: "hubspot", title: "HubSpot", domain: "crm", description: "CRM, контакты и сделки", secret_fields: [{ field_key: "private_app_token", label: "Private App Token", placeholder: "pat-...", required: true }] },
-  { provider_key: "google_ads", title: "Google Ads", domain: "ads", description: "Рекламные кампании и аналитика", secret_fields: [{ field_key: "developer_token", label: "Developer Token", placeholder: "developer-token", required: true }, { field_key: "refresh_token", label: "Refresh Token", placeholder: "1//...", required: true }, { field_key: "client_id", label: "Client ID", placeholder: "client-id.apps.googleusercontent.com", required: true }, { field_key: "client_secret", label: "Client Secret", placeholder: "client-secret", required: true }] },
-  { provider_key: "meta_ads", title: "Meta Ads", domain: "ads", description: "Реклама Meta — пока ограниченный режим", secret_fields: [{ field_key: "access_token", label: "Access Token", placeholder: "EAAB...", required: true }, { field_key: "account_id", label: "Ad Account ID", placeholder: "act_123456", required: true }] },
-  { provider_key: "ozon_marketplace", title: "Ozon", domain: "marketplace", description: "Маркетплейс Ozon", secret_fields: [{ field_key: "client_id", label: "Client ID", placeholder: "ozon-client-id", required: true }, { field_key: "api_key", label: "API Key", placeholder: "ozon-api-key", required: true }] },
-  { provider_key: "wildberries_marketplace", title: "Wildberries", domain: "marketplace", description: "Маркетплейс Wildberries", secret_fields: [{ field_key: "api_token", label: "API Token", placeholder: "wb-token", required: true }] }
+const GOALS = [
+  { value: "growth", title: "Больше клиентов", text: "Найти потери в воронке и точки роста продаж." },
+  { value: "retention", title: "Возвращать клиентов", text: "Находить клиентов, которых стоит реактивировать." },
+  { value: "ads_efficiency", title: "Эффективнее реклама", text: "Искать неэффективный расход и проблемы атрибуции." },
+  { value: "sales", title: "Сильнее продажи", text: "Показывать зависшие сделки и пропущенные follow-up." },
+  { value: "operations", title: "Меньше рутины", text: "Находить повторяющиеся операции и задержки исполнения." }
 ];
 
-const DOMAIN_LABELS = {
-  communications: "Общение с клиентами",
-  website: "Сайт",
-  commerce: "Интернет-магазин",
-  marketplace: "Маркетплейсы",
-  crm: "CRM",
-  ads: "Реклама"
-};
+const AUTONOMY = [
+  {
+    value: "advisor",
+    title: "Советник",
+    badge: "Самый безопасный старт",
+    text: "Анализирует бизнес и предлагает действия. Ничего сам не отправляет и не тратит."
+  },
+  {
+    value: "assistant",
+    title: "Помощник",
+    badge: "Рекомендуем после знакомства",
+    text: "Автоматизирует безопасные шаги, а важные действия отправляет вам на подтверждение."
+  },
+  {
+    value: "autopilot",
+    title: "Автопилот",
+    badge: "После проверки интеграций",
+    text: "Целевой режим автономной работы в заданных лимитах. Включается только после проверок безопасности."
+  }
+];
+
+const STEP_LABELS = ["О бизнесе", "Цель", "Интеграции", "Режим"];
 
 async function getJson(url) {
   const resp = await fetch(url);
   const text = await resp.text();
   let parsed;
-  try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { raw: text }; }
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${JSON.stringify(parsed)}`);
+  try {
+    parsed = text ? JSON.parse(text) : {};
+  } catch {
+    parsed = { raw: text };
+  }
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return parsed;
 }
 
@@ -43,268 +54,374 @@ async function postJson(url, payload) {
   });
   const text = await resp.text();
   let parsed;
-  try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { raw: text }; }
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${JSON.stringify(parsed)}`);
+  try {
+    parsed = text ? JSON.parse(text) : {};
+  } catch {
+    parsed = { raw: text };
+  }
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return parsed;
 }
 
 function initialIntakeId() {
-  try { return new URLSearchParams(window.location.search).get("intake_id") || ""; }
-  catch { return ""; }
-}
-
-function normalizeProviderCatalog(payload) {
-  const rows = Array.isArray(payload) ? payload : payload?.providers || payload?.rows || payload?.items || [];
-  if (!Array.isArray(rows) || !rows.length) return FALLBACK_PROVIDERS;
-  return rows
-    .filter((item) => item && item.provider_key && item.domain !== "platform_infra")
-    .map((item) => ({
-      ...item,
-      title: item.title || item.display_name || item.provider_key,
-      description: item.description || "Подключение источника данных",
-      secret_fields: Array.isArray(item.secret_fields) ? item.secret_fields : []
-    }));
-}
-
-function badgeForStatus(status) {
-  if (status?.connected) return { label: "Подключено", className: "badge good" };
-  if (status?.error) return { label: "Ошибка", className: "badge bad" };
-  return { label: "Не подключено", className: "badge neutral" };
-}
-
-export function App() {
-  const [apiBase, setApiBase] = useState(DEFAULT_API);
-  const [form, setForm] = useState({ email: "", business_name: "", website: "", intent: DEFAULT_INTENT });
-  const [ctaLoading, setCtaLoading] = useState(false);
-  const [ctaError, setCtaError] = useState("");
-  const [ctaResult, setCtaResult] = useState(null);
-  const [intakeId, setIntakeId] = useState(initialIntakeId());
-  const [providers, setProviders] = useState(FALLBACK_PROVIDERS);
-  const [providerStatuses, setProviderStatuses] = useState({});
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState(null);
-  const [providerSecrets, setProviderSecrets] = useState({});
-  const [providerExternalRef, setProviderExternalRef] = useState("");
-  const [connectLoading, setConnectLoading] = useState(false);
-  const [connectError, setConnectError] = useState("");
-  const [activeTab, setActiveTab] = useState("overview");
-  const [technicalOpen, setTechnicalOpen] = useState(false);
-
-  const endpoints = useMemo(() => {
-    const base = apiBase.replace(/\/$/, "");
-    return {
-      health: `${base}/health`,
-      readyz: `${base}/readyz`,
-      openapi: `${base}/openapi.json`,
-      ctaStart: `${base}/public-site/cta/start`,
-      ctaStatus: (id) => `${base}/public-site/cta/${encodeURIComponent(id)}`,
-      providerCatalog: `${base}/control-plane/provider-admin/catalog`,
-      providerActivate: `${base}/control-plane/provider-admin/activate`
-    };
-  }, [apiBase]);
-
-  useEffect(() => {
-    const id = initialIntakeId();
-    if (!id) return;
-    let cancelled = false;
-    getJson(endpoints.ctaStatus(id))
-      .then((data) => {
-        if (!cancelled && data?.found !== false) {
-          setCtaResult(data);
-          setIntakeId(id);
-        }
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [endpoints]);
-
-  useEffect(() => {
-    if (!ctaResult?.tenant_id || !ctaResult?.business_id) return;
-    let cancelled = false;
-    setCatalogLoading(true);
-    const url = new URL(endpoints.providerCatalog);
-    url.searchParams.set("tenant_id", ctaResult.tenant_id);
-    url.searchParams.set("business_id", ctaResult.business_id);
-    getJson(url.toString())
-      .then((data) => {
-        if (!cancelled) {
-          setProviders(normalizeProviderCatalog(data));
-          const statuses = data?.activation_statuses || data?.statuses || [];
-          if (Array.isArray(statuses)) {
-            setProviderStatuses(Object.fromEntries(statuses.map((item) => [item.provider_key, item])));
-          }
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setProviders(FALLBACK_PROVIDERS);
-      })
-      .finally(() => { if (!cancelled) setCatalogLoading(false); });
-    return () => { cancelled = true; };
-  }, [ctaResult, endpoints]);
-
-  const submitCta = async (event) => {
-    event.preventDefault();
-    setCtaLoading(true);
-    setCtaError("");
-    try {
-      const result = await postJson(endpoints.ctaStart, {
-        email: form.email.trim(),
-        business_name: form.business_name.trim(),
-        website: form.website.trim(),
-        source: "businessaios_product_onboarding",
-        intent: form.intent,
-        requested_surface: "self_service_business_workspace"
-      });
-      setCtaResult(result);
-      setIntakeId(result.intake_id || "");
-      if (result?.intake_id) window.history.replaceState(null, "", `?intake_id=${encodeURIComponent(result.intake_id)}`);
-      setActiveTab("integrations");
-    } catch (e) {
-      setCtaError(String(e?.message || e));
-    } finally {
-      setCtaLoading(false);
-    }
-  };
-
-  const openProvider = (provider) => {
-    setSelectedProvider(provider);
-    setProviderSecrets({});
-    setProviderExternalRef(form.website || "");
-    setConnectError("");
-  };
-
-  const connectProvider = async (event) => {
-    event.preventDefault();
-    if (!selectedProvider || !ctaResult) return;
-    setConnectLoading(true);
-    setConnectError("");
-    try {
-      const status = await postJson(endpoints.providerActivate, {
-        tenant_id: ctaResult.tenant_id,
-        business_id: ctaResult.business_id,
-        provider_key: selectedProvider.provider_key,
-        ownership_key: `owner:${ctaResult.business_id}`,
-        requested_by: ctaResult.user_id || form.email || "self_service_owner",
-        external_ref: providerExternalRef.trim() || form.website || selectedProvider.provider_key,
-        metadata: {
-          source: "self_service_workspace",
-          probe_mode: "dry_run",
-          verified_owner: true,
-          autonomy_tier: "supervised"
-        },
-        secrets: providerSecrets
-      });
-      setProviderStatuses((prev) => ({ ...prev, [selectedProvider.provider_key]: status }));
-      setSelectedProvider(null);
-    } catch (e) {
-      setConnectError(String(e?.message || e));
-    } finally {
-      setConnectLoading(false);
-    }
-  };
-
-  const connectedCount = Object.values(providerStatuses).filter((item) => item?.connected).length;
-  const businessName = form.business_name || ctaResult?.business_id?.replace(/^business-/, "") || "Ваш бизнес";
-
-  if (!ctaResult) {
-    return (
-      <main className="onboarding-shell">
-        <section className="onboarding-copy">
-          <div className="brand-mark">BA</div>
-          <p className="eyebrow">BusinessAIOS</p>
-          <h1>Подключите бизнес.<br />Остальное соберём вокруг него.</h1>
-          <p className="lead">Система начинает в безопасном режиме: собирает данные, показывает возможности и ничего не публикует и не тратит без разрешения.</p>
-          <div className="promise-list">
-            <span>✓ Подключение источников в одном месте</span>
-            <span>✓ Сначала анализ, затем действия</span>
-            <span>✓ Внешние записи только с контролем и доказательствами</span>
-          </div>
-        </section>
-        <section className="onboarding-card">
-          <div className="step-pill">Шаг 1 из 3 · Ваш бизнес</div>
-          <h2>Начнём с основы</h2>
-          <p className="muted">Этого достаточно, чтобы создать рабочее пространство. Интеграции подключим следующим шагом.</p>
-          <form className="product-form" onSubmit={submitCta}>
-            <label>Название бизнеса<input value={form.business_name} onChange={(e) => setForm({ ...form, business_name: e.target.value })} placeholder="Например, Северная кофейня" required /></label>
-            <label>Рабочий email<input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="owner@company.ru" required /></label>
-            <label>Сайт или основной канал<input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://company.ru или @telegram" /></label>
-            <label>Что нужно в первую очередь?
-              <select value={form.intent} onChange={(e) => setForm({ ...form, intent: e.target.value })}>
-                <option value="pilot">Увидеть возможности и точки роста</option>
-                <option value="connectors">Собрать данные из сервисов</option>
-                <option value="autopilot">Подготовить безопасную автоматизацию</option>
-              </select>
-            </label>
-            <button className="primary large" type="submit" disabled={ctaLoading}>{ctaLoading ? "Создаём пространство…" : "Создать рабочее пространство"}</button>
-          </form>
-          {ctaError ? <div className="inline-error">Не удалось создать пространство: {ctaError}</div> : null}
-          <p className="privacy-note">На старте включён режим «Советник»: никаких автоматических списаний, рассылок или публикаций.</p>
-        </section>
-      </main>
-    );
+  try {
+    return new URLSearchParams(window.location.search).get("intake_id") || "";
+  } catch {
+    return "";
   }
+}
+
+function providerInitial(title) {
+  return String(title || "?").trim().slice(0, 2).toUpperCase();
+}
+
+function statusClass(item) {
+  if (item.availability === "available_read_only") return "ready";
+  if (item.availability === "preparing") return "preparing";
+  return "roadmap";
+}
+
+function Workspace({ data, apiBase, onRestart }) {
+  const profile = data.business_profile || {};
+  const progress = data.onboarding_progress || {};
+  const firstValue = data.first_value_preview || {};
+  const integrations = data.integration_plan || [];
+  const secureConnectUrl = `${apiBase.replace(/\/$/, "")}/web/provider-tokens`;
 
   return (
     <main className="app-shell">
-      <aside className="sidebar">
-        <div className="brand"><div className="brand-mark small">BA</div><div><strong>BusinessAIOS</strong><span>{businessName}</span></div></div>
-        <nav>
-          <button className={activeTab === "overview" ? "nav-item active" : "nav-item"} onClick={() => setActiveTab("overview")}>Обзор</button>
-          <button className={activeTab === "integrations" ? "nav-item active" : "nav-item"} onClick={() => setActiveTab("integrations")}>Подключения <em>{connectedCount}</em></button>
-          <button className={activeTab === "automation" ? "nav-item active" : "nav-item"} onClick={() => setActiveTab("automation")}>Автоматизация</button>
-        </nav>
-        <div className="sidebar-foot"><span className="status-dot" /> Режим: Советник</div>
-      </aside>
+      <header className="topbar">
+        <a className="brand" href="/">
+          <span className="brand-mark">B</span>
+          <span>BusinessAIOS</span>
+        </a>
+        <div className="topbar-actions">
+          <span className="safe-chip">Read-only onboarding</span>
+          <button className="ghost small" onClick={onRestart}>Новый бизнес</button>
+        </div>
+      </header>
 
-      <section className="workspace">
-        <header className="topbar"><div><p className="eyebrow">Рабочее пространство</p><h1>{businessName}</h1></div><div className="safe-chip">Безопасный режим</div></header>
-
-        {activeTab === "overview" ? (
-          <>
-            <section className="welcome-panel"><div><p className="eyebrow">Следующий лучший шаг</p><h2>{connectedCount ? "Данные подключены — можно строить картину бизнеса" : "Подключите первый источник данных"}</h2><p>{connectedCount ? "BusinessAIOS будет собирать факты и показывать возможности без самостоятельных внешних действий." : "CRM, магазин, сайт или мессенджер — достаточно одного источника, чтобы начать получать полезную картину."}</p></div><button className="primary" onClick={() => setActiveTab("integrations")}>{connectedCount ? "Управлять подключениями" : "Выбрать источник"}</button></section>
-            <section className="metric-grid">
-              <article className="metric-card"><span>Подключено источников</span><strong>{connectedCount}</strong><small>{connectedCount ? "готовы к безопасному чтению" : "начните с одного"}</small></article>
-              <article className="metric-card"><span>Найдено возможностей</span><strong>—</strong><small>появятся после первого импорта</small></article>
-              <article className="metric-card"><span>Действий без подтверждения</span><strong>0</strong><small>контроль владельца сохранён</small></article>
-            </section>
-            <section className="section-card"><div className="section-heading"><div><p className="eyebrow">Первый результат</p><h2>Здесь будут не графики ради графиков</h2></div></div><div className="empty-insight"><div className="insight-icon">↗</div><div><strong>После синхронизации система покажет конкретные возможности</strong><p>Например: незавершённые обращения, потерянные клиенты, неэффективные расходы или операции, которые можно автоматизировать.</p></div></div></section>
-          </>
-        ) : null}
-
-        {activeTab === "integrations" ? (
-          <section>
-            <div className="section-heading"><div><p className="eyebrow">Шаг 2 из 3</p><h2>Подключите сервисы, которыми уже пользуетесь</h2><p className="muted">Сначала подключение и проверка. Внешние записи остаются заблокированы до явного разрешения.</p></div><span className="count-chip">{catalogLoading ? "Загружаем…" : `${providers.length} доступно`}</span></div>
-            <div className="provider-grid">
-              {providers.map((provider) => {
-                const status = providerStatuses[provider.provider_key];
-                const badge = badgeForStatus(status);
-                return <article className="provider-card" key={provider.provider_key}>
-                  <div className="provider-icon">{(provider.title || "?").slice(0, 2).toUpperCase()}</div>
-                  <div className="provider-body"><div className="provider-title"><h3>{provider.title}</h3><span className={badge.className}>{badge.label}</span></div><p>{provider.description}</p><small>{DOMAIN_LABELS[provider.domain] || provider.domain}</small></div>
-                  <button className={status?.connected ? "secondary" : "primary"} onClick={() => openProvider(provider)}>{status?.connected ? "Настроить" : "Подключить"}</button>
-                </article>;
-              })}
-            </div>
-          </section>
-        ) : null}
-
-        {activeTab === "automation" ? (
-          <section>
-            <div className="section-heading"><div><p className="eyebrow">Шаг 3 из 3</p><h2>Как BusinessAIOS может действовать</h2><p className="muted">Уровень автономии повышается только после подключения данных и проверки контуров.</p></div></div>
-            <div className="mode-grid">
-              <article className="mode-card selected"><div className="mode-radio">●</div><h3>Советник</h3><p>Анализирует бизнес и предлагает действия. Ничего не отправляет и не публикует самостоятельно.</p><span className="badge good">Включено</span></article>
-              <article className="mode-card"><div className="mode-radio">○</div><h3>Помощник</h3><p>Безопасные операции автоматизируются, важные действия ждут подтверждения владельца.</p><span className="badge neutral">После проверки</span></article>
-              <article className="mode-card"><div className="mode-radio">○</div><h3>Автопилот</h3><p>Работает в заданных лимитах, с бюджетными, риск- и evidence-ограничениями.</p><span className="badge neutral">Недоступно до готовности</span></article>
-            </div>
-          </section>
-        ) : null}
-
-        <details className="technical" open={technicalOpen} onToggle={(e) => setTechnicalOpen(e.currentTarget.open)}><summary>Техническая информация</summary><div className="technical-grid"><label>API<input value={apiBase} onChange={(e) => setApiBase(e.target.value)} /></label><div><span>Workspace ID</span><code>{intakeId}</code></div><div><span>Tenant</span><code>{ctaResult.tenant_id}</code></div><a href={endpoints.openapi} target="_blank" rel="noreferrer">OpenAPI</a></div></details>
+      <section className="workspace-hero">
+        <div>
+          <p className="eyebrow">Кабинет бизнеса</p>
+          <h1>{profile.name || "Ваш бизнес"}</h1>
+          <p className="lead">
+            База создана. Теперь подключите реальные источники данных — после первого sync BusinessAIOS покажет конкретные точки потерь и роста.
+          </p>
+        </div>
+        <div className="progress-card">
+          <div className="progress-head">
+            <span>Настройка</span>
+            <strong>{progress.percent ?? 0}%</strong>
+          </div>
+          <div className="progress-track"><span style={{ width: `${progress.percent ?? 0}%` }} /></div>
+          <small>Следующий шаг: безопасно подтвердить доступ к выбранным источникам.</small>
+        </div>
       </section>
 
-      {selectedProvider ? <div className="modal-backdrop" onMouseDown={() => !connectLoading && setSelectedProvider(null)}><section className="modal" onMouseDown={(e) => e.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">Подключение</p><h2>{selectedProvider.title}</h2></div><button className="icon-button" onClick={() => setSelectedProvider(null)}>×</button></div><p className="muted">Ключи сохраняются через существующий secret-vault. Сразу после подключения выполняется безопасная проверка без внешних write-действий.</p><form className="product-form" onSubmit={connectProvider}><label>Адрес / идентификатор аккаунта<input value={providerExternalRef} onChange={(e) => setProviderExternalRef(e.target.value)} placeholder={form.website || "URL, workspace или account ID"} required /></label>{(selectedProvider.secret_fields || []).map((field) => <label key={field.field_key || field.secret_name}>{field.label || field.field_key}<input type={String(field.secret_kind || "").includes("password") || String(field.field_key || "").includes("token") || String(field.field_key || "").includes("secret") || String(field.field_key || "").includes("key") ? "password" : "text"} value={providerSecrets[field.field_key] || ""} onChange={(e) => setProviderSecrets((prev) => ({ ...prev, [field.field_key]: e.target.value }))} placeholder={field.placeholder || ""} required={field.required !== false} /></label>)}{connectError ? <div className="inline-error">{connectError}</div> : null}<div className="modal-actions"><button type="button" className="secondary" onClick={() => setSelectedProvider(null)}>Отмена</button><button className="primary" type="submit" disabled={connectLoading}>{connectLoading ? "Проверяем…" : "Подключить и проверить"}</button></div></form></section></div> : null}
+      <section className="summary-grid">
+        <article className="summary-card">
+          <span className="summary-icon">◎</span>
+          <div><small>Цель</small><strong>{GOALS.find((goal) => goal.value === profile.goal)?.title || profile.goal || "Рост"}</strong></div>
+        </article>
+        <article className="summary-card">
+          <span className="summary-icon">⌁</span>
+          <div><small>Источники</small><strong>{integrations.length} выбрано</strong></div>
+        </article>
+        <article className="summary-card">
+          <span className="summary-icon">◇</span>
+          <div><small>Режим</small><strong>{data.user_functionality?.autonomy_mode_label || "Советник"}</strong></div>
+        </article>
+      </section>
+
+      <section className="workspace-grid">
+        <article className="panel primary-panel">
+          <div className="panel-title-row">
+            <div>
+              <p className="eyebrow">Следующий шаг</p>
+              <h2>Подключите данные</h2>
+            </div>
+            <span className="privacy-badge">Запись выключена</span>
+          </div>
+          <p className="muted-text">
+            Сначала BusinessAIOS только читает данные. Отправка сообщений, публикации и рекламные расходы остаются заблокированными.
+          </p>
+          <div className="connection-list">
+            {integrations.length ? integrations.map((item) => (
+              <div className="connection-row" key={item.provider_key}>
+                <div className="provider-logo">{providerInitial(item.title)}</div>
+                <div className="connection-copy">
+                  <strong>{item.title}</strong>
+                  <span>{item.status === "credentials_required" ? "Нужно подтвердить доступ" : "Пока недоступно"}</span>
+                </div>
+                <span className={`dot ${item.status === "credentials_required" ? "orange" : "gray"}`} />
+              </div>
+            )) : <p className="empty-state">Источники ещё не выбраны.</p>}
+          </div>
+          <a className="button primary wide-button" href={secureConnectUrl}>
+            Перейти к защищённому подключению
+          </a>
+          <small className="helper-text">Ключи и токены вводятся только в защищённом control-plane и не хранятся в браузере.</small>
+        </article>
+
+        <article className="panel value-panel">
+          <p className="eyebrow">Что получите первым</p>
+          <h2>{firstValue.title || "Первый полезный результат"}</h2>
+          <p className="muted-text">{firstValue.message}</p>
+          <div className="check-list">
+            {(firstValue.checks || []).map((item) => (
+              <div className="check-row" key={item}><span>✓</span><strong>{item}</strong></div>
+            ))}
+          </div>
+          <div className="truth-note">
+            Здесь нет придуманных цифр. Финансовые выводы появятся только после реального sync ваших данных.
+          </div>
+        </article>
+      </section>
+
+      <section className="panel business-card">
+        <div>
+          <p className="eyebrow">Профиль</p>
+          <h2>{profile.name || "Бизнес"}</h2>
+        </div>
+        <div className="business-meta">
+          {profile.industry ? <span>{profile.industry}</span> : null}
+          {profile.city ? <span>{profile.city}</span> : null}
+          {profile.website ? <a href={profile.website} target="_blank" rel="noreferrer">{profile.website}</a> : null}
+        </div>
+      </section>
+
+      <details className="diagnostics">
+        <summary>Техническая информация</summary>
+        <pre>{JSON.stringify({ intake_id: data.intake_id, tenant_id: data.tenant_id, business_id: data.business_id, status: data.onboarding_status }, null, 2)}</pre>
+      </details>
     </main>
   );
 }
 
-export { getJson, postJson, normalizeProviderCatalog };
+export function App() {
+  const [apiBase] = useState(DEFAULT_API);
+  const [step, setStep] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [marketLoading, setMarketLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [marketplace, setMarketplace] = useState([]);
+  const [selectedProviders, setSelectedProviders] = useState([]);
+  const [result, setResult] = useState(null);
+  const [form, setForm] = useState({
+    email: "",
+    business_name: "",
+    website: "",
+    industry: "",
+    city: "",
+    business_model: "services",
+    goal: "growth",
+    autonomy_mode: "advisor"
+  });
+
+  const endpoints = useMemo(() => {
+    const base = apiBase.replace(/\/$/, "");
+    return {
+      integrations: `${base}/public-site/integrations`,
+      ctaStart: `${base}/public-site/cta/start`,
+      ctaStatus: (id) => `${base}/public-site/cta/${encodeURIComponent(id)}`
+    };
+  }, [apiBase]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMarketLoading(true);
+    getJson(endpoints.integrations)
+      .then((payload) => {
+        if (!cancelled) setMarketplace(Array.isArray(payload.items) ? payload.items : []);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Не удалось загрузить каталог интеграций. Проверьте API и повторите попытку.");
+      })
+      .finally(() => {
+        if (!cancelled) setMarketLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [endpoints]);
+
+  useEffect(() => {
+    const intakeId = initialIntakeId();
+    if (!intakeId) return;
+    let cancelled = false;
+    setLoading(true);
+    getJson(endpoints.ctaStatus(intakeId))
+      .then((payload) => {
+        if (!cancelled && payload.ok) setResult(payload);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Не удалось открыть сохранённый кабинет бизнеса.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [endpoints]);
+
+  const updateForm = (key) => (event) => {
+    setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  };
+
+  const toggleProvider = (item) => {
+    if (!item.selectable) return;
+    setSelectedProviders((prev) => (
+      prev.includes(item.provider_key)
+        ? prev.filter((key) => key !== item.provider_key)
+        : [...prev, item.provider_key]
+    ));
+  };
+
+  const canContinue = () => {
+    if (step === 0) return Boolean(form.business_name.trim() && form.email.trim());
+    if (step === 1) return Boolean(form.goal);
+    if (step === 2) return selectedProviders.length > 0;
+    return Boolean(form.autonomy_mode);
+  };
+
+  const finishOnboarding = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const payload = await postJson(endpoints.ctaStart, {
+        ...form,
+        selected_providers: selectedProviders,
+        intent: form.goal,
+        source: "businessaios_product_onboarding",
+        requested_surface: "business_workspace"
+      });
+      setResult(payload);
+      if (payload.intake_id) {
+        window.history.replaceState(null, "", `?intake_id=${encodeURIComponent(payload.intake_id)}`);
+      }
+    } catch {
+      setError("Не удалось создать кабинет. Проверьте соединение и повторите попытку.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const restart = () => {
+    window.history.replaceState(null, "", window.location.pathname);
+    setResult(null);
+    setStep(0);
+    setSelectedProviders([]);
+    setError("");
+  };
+
+  if (result) return <Workspace data={result} apiBase={apiBase} onRestart={restart} />;
+
+  return (
+    <main className="onboarding-shell">
+      <header className="topbar onboarding-topbar">
+        <div className="brand"><span className="brand-mark">B</span><span>BusinessAIOS</span></div>
+        <span className="topbar-note">Настройка бизнеса</span>
+      </header>
+
+      <section className="onboarding-layout">
+        <aside className="intro-column">
+          <p className="eyebrow">Business Autopilot</p>
+          <h1>Подключите бизнес.<br />Остальное система разберёт сама.</h1>
+          <p className="lead">
+            Сначала только чтение и анализ. Никаких расходов, сообщений клиентам или публикаций без вашего разрешения.
+          </p>
+          <div className="trust-list">
+            <div><span>✓</span><p><strong>Безопасный старт</strong><small>Внешние write-действия выключены.</small></p></div>
+            <div><span>✓</span><p><strong>Честные статусы</strong><small>Показываем только реально доступные интеграции.</small></p></div>
+            <div><span>✓</span><p><strong>Первый результат на ваших данных</strong><small>Без выдуманных финансовых обещаний.</small></p></div>
+          </div>
+        </aside>
+
+        <section className="onboarding-card">
+          <div className="stepper">
+            {STEP_LABELS.map((label, index) => (
+              <div className={`step ${index === step ? "active" : ""} ${index < step ? "done" : ""}`} key={label}>
+                <span>{index < step ? "✓" : index + 1}</span><small>{label}</small>
+              </div>
+            ))}
+          </div>
+
+          {step === 0 ? (
+            <div className="step-content">
+              <div className="section-heading"><p className="eyebrow">Шаг 1</p><h2>Расскажите о бизнесе</h2><p>Этого достаточно, чтобы создать отдельный защищённый workspace.</p></div>
+              <div className="form-grid">
+                <label className="full">Название бизнеса<input value={form.business_name} onChange={updateForm("business_name")} placeholder="Например, Студия Линия" autoFocus /></label>
+                <label>Email владельца<input value={form.email} onChange={updateForm("email")} placeholder="you@company.ru" type="email" /></label>
+                <label>Сайт или страница<input value={form.website} onChange={updateForm("website")} placeholder="https://..." /></label>
+                <label>Сфера<input value={form.industry} onChange={updateForm("industry")} placeholder="Услуги, магазин, образование..." /></label>
+                <label>Город<input value={form.city} onChange={updateForm("city")} placeholder="Москва" /></label>
+                <label className="full">Модель бизнеса<select value={form.business_model} onChange={updateForm("business_model")}><option value="services">Услуги</option><option value="commerce">Товары / e-commerce</option><option value="marketplace">Маркетплейсы</option><option value="b2b">B2B</option><option value="mixed">Смешанная</option></select></label>
+              </div>
+            </div>
+          ) : null}
+
+          {step === 1 ? (
+            <div className="step-content">
+              <div className="section-heading"><p className="eyebrow">Шаг 2</p><h2>Что важнее прямо сейчас?</h2><p>BusinessAIOS начнёт анализ с выбранной бизнес-задачи.</p></div>
+              <div className="choice-grid">
+                {GOALS.map((goal) => (
+                  <button type="button" className={`choice-card ${form.goal === goal.value ? "selected" : ""}`} onClick={() => setForm((prev) => ({ ...prev, goal: goal.value }))} key={goal.value}>
+                    <span className="radio-dot" /><strong>{goal.title}</strong><small>{goal.text}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {step === 2 ? (
+            <div className="step-content integrations-step">
+              <div className="section-heading"><p className="eyebrow">Шаг 3</p><h2>Где уже живут данные бизнеса?</h2><p>Выберите хотя бы один источник. Подключение начнётся в read-only режиме.</p></div>
+              {marketLoading ? <div className="loading-box">Загружаем доступные интеграции…</div> : null}
+              <div className="integration-grid">
+                {marketplace.map((item) => {
+                  const selected = selectedProviders.includes(item.provider_key);
+                  return (
+                    <button type="button" disabled={!item.selectable} className={`integration-card ${selected ? "selected" : ""} ${!item.selectable ? "disabled" : ""}`} onClick={() => toggleProvider(item)} key={item.provider_key}>
+                      <div className="integration-card-head"><span className="provider-logo">{providerInitial(item.title)}</span>{item.recommended ? <span className="recommended">Рекомендуем</span> : null}</div>
+                      <strong>{item.title}</strong>
+                      <small>{item.description}</small>
+                      <span className={`status-pill ${statusClass(item)}`}>{selected ? "Выбрано ✓" : item.availability_label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="selection-count">Выбрано: <strong>{selectedProviders.length}</strong></p>
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className="step-content">
+              <div className="section-heading"><p className="eyebrow">Шаг 4</p><h2>Сколько свободы дать системе?</h2><p>На старте любое внешнее write-действие всё равно остаётся заблокированным до проверки.</p></div>
+              <div className="autonomy-grid">
+                {AUTONOMY.map((mode) => (
+                  <button type="button" className={`autonomy-card ${form.autonomy_mode === mode.value ? "selected" : ""}`} onClick={() => setForm((prev) => ({ ...prev, autonomy_mode: mode.value }))} key={mode.value}>
+                    <span className="mode-badge">{mode.badge}</span><strong>{mode.title}</strong><small>{mode.text}</small>
+                  </button>
+                ))}
+              </div>
+              <div className="launch-preview"><span>✓</span><div><strong>После создания кабинета</strong><p>Вы увидите выбранные источники, безопасный путь их авторизации и первый анализ, который появится после реального sync.</p></div></div>
+            </div>
+          ) : null}
+
+          {error ? <div className="error-box">{error}</div> : null}
+
+          <div className="navigation-row">
+            <button type="button" className="ghost" disabled={step === 0 || loading} onClick={() => setStep((value) => Math.max(0, value - 1))}>Назад</button>
+            {step < STEP_LABELS.length - 1 ? (
+              <button type="button" className="primary" disabled={!canContinue() || loading} onClick={() => setStep((value) => Math.min(STEP_LABELS.length - 1, value + 1))}>Продолжить →</button>
+            ) : (
+              <button type="button" className="primary launch" disabled={!canContinue() || loading} onClick={finishOnboarding}>{loading ? "Создаём кабинет…" : "Создать мой BusinessAIOS →"}</button>
+            )}
+          </div>
+        </section>
+      </section>
+
+      <footer className="product-footer">BusinessAIOS · безопасная автоматизация бизнеса · write-действия только после проверки</footer>
+    </main>
+  );
+}
+
+export { getJson, postJson };
