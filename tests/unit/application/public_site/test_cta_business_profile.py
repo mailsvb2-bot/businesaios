@@ -12,19 +12,20 @@ def test_cta_persists_user_facing_business_profile(tmp_path) -> None:
             "website": "https://coffee.example.test",
             "industry": "Кофейня",
             "city": "Казань",
+            "business_model": "services",
             "intent": "connectors",
         }
     )
 
-    assert created.business_profile == {
-        "name": "Северная кофейня",
-        "website": "https://coffee.example.test",
-        "industry": "Кофейня",
-        "city": "Казань",
-        "goal": "connectors",
-        "contact_email": "owner@example.test",
-        "profile_complete": True,
-    }
+    assert created.business_profile["name"] == "Северная кофейня"
+    assert created.business_profile["website"] == "https://coffee.example.test"
+    assert created.business_profile["industry"] == "Кофейня"
+    assert created.business_profile["city"] == "Казань"
+    assert created.business_profile["business_model"] == "services"
+    assert created.business_profile["goal"] == "connectors"
+    assert created.business_profile["email"] == "owner@example.test"
+    assert created.business_profile["contact_email"] == "owner@example.test"
+    assert created.business_profile["profile_complete"] is True
 
     restored = service.get_status(intake_id=created.intake_id)
     assert restored.found is True
@@ -39,4 +40,6 @@ def test_cta_restores_profile_for_legacy_rows_without_profile_field(tmp_path) ->
     status = service.get_status(intake_id=created.intake_id)
 
     assert status.business_profile["name"] == "Legacy"
+    assert status.business_profile["email"] == "owner@example.test"
     assert status.business_profile["contact_email"] == "owner@example.test"
+    assert status.business_profile["profile_complete"] is False
