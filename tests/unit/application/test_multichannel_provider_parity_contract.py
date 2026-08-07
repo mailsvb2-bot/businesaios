@@ -10,7 +10,7 @@ from application.business_autonomy.provider_catalog import (
     MESSAGING_INTERNAL_CHANNELS,
     provider_map,
 )
-from application.public_site.cta_intake import public_integration_marketplace
+from application.public_site.cta_intake import CTALandingIntakeService, public_integration_marketplace
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_webhook_messaging_bridge import resolve_provider_webhook_messaging_ingress
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
@@ -71,6 +71,24 @@ def test_bridge_providers_are_signed_read_capable_and_write_planned_but_not_publ
         assert marketplace[provider_key]['selectable'] is True
         assert marketplace[provider_key]['read_supported'] is True
         assert marketplace[provider_key]['write_supported'] is False
+        assert marketplace[provider_key]['connection_mode'] == 'provider_webhook_bridge'
+
+
+def test_marketplace_exposes_channel_specific_connection_modes() -> None:
+    marketplace = {row['provider_key']: row for row in public_integration_marketplace()}
+    assert marketplace['telegram_bot']['connection_mode'] == 'provider_native_api'
+    assert marketplace['whatsapp_cloud']['connection_mode'] == 'provider_webhook_and_cloud_api'
+    assert marketplace['email_connector']['connection_mode'] == 'mailbox_or_provider_api'
+    assert marketplace['sms_connector']['connection_mode'] == 'sms_gateway'
+    assert marketplace['generic_website']['connection_mode'] == 'web_ingress'
+
+
+def test_onboarding_can_select_every_external_messaging_channel(tmp_path) -> None:
+    provider_keys = tuple(MESSAGING_CHANNEL_PROVIDER_KEYS.values())
+    result = CTALandingIntakeService(storage_path=str(tmp_path / 'intakes.jsonl')).submit(payload={'business_name': 'Omnichannel', 'email': 'owner@example.com', 'selected_providers': list(provider_keys)})
+    assert len(provider_keys) == 15
+    assert result.selected_providers == provider_keys
+    assert len(result.integration_plan) == len(provider_keys)
 
 
 def test_bridge_shared_secret_is_verified_fail_closed() -> None:
