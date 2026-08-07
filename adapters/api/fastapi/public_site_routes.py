@@ -10,8 +10,7 @@ def _product_fields(value) -> dict:
     return {
         'business_profile': dict(getattr(value, 'business_profile', None) or {}), 'selected_providers': list(getattr(value, 'selected_providers', ()) or ()),
         'integration_plan': list(getattr(value, 'integration_plan', ()) or ()), 'autonomy_mode': str(getattr(value, 'autonomy_mode', 'advisor') or 'advisor'),
-        'first_value_preview': dict(getattr(value, 'first_value_preview', None) or {}), 'onboarding_progress': dict(getattr(value, 'onboarding_progress', None) or {}),
-    }
+        'first_value_preview': dict(getattr(value, 'first_value_preview', None) or {}), 'onboarding_progress': dict(getattr(value, 'onboarding_progress', None) or {})}
 
 
 def _base_response(value) -> dict:
@@ -19,8 +18,7 @@ def _base_response(value) -> dict:
         'ok': True, 'intake_id': value.intake_id, 'created_at': value.created_at, 'tenant_id': value.tenant_id, 'business_id': value.business_id,
         'user_id': value.user_id, 'onboarding_status': value.onboarding_status, 'next_actions': list(value.next_actions),
         'user_functionality': dict(value.user_functionality or {}), 'admin_visibility': dict(value.admin_visibility or {}), 'measurable_outcome': value.outcome,
-        'write_actions_enabled': False, 'approval_required_before_execution': True, **_product_fields(value),
-    }
+        'write_actions_enabled': False, 'approval_required_before_execution': True, **_product_fields(value)}
 
 
 def _cta_submit_response(result) -> dict:
@@ -28,17 +26,14 @@ def _cta_submit_response(result) -> dict:
 
 
 def _cta_status_response(status_payload) -> dict:
-    if not status_payload.found:
-        return {'ok': False, 'error': 'not_found', 'intake_id': status_payload.intake_id}
-    return {**_base_response(status_payload), 'found': True}
+    return {**_base_response(status_payload), 'found': True} if status_payload.found else {'ok': False, 'error': 'not_found', 'intake_id': status_payload.intake_id}
 
 
 def register_public_site_routes(*, router, enforce_public_security) -> None:
     service = CTALandingIntakeService()
 
     def secure(request: Request, route: str, body: dict) -> None:
-        context = RequestContext.from_http_request(request, metadata={'route': route})
-        enforce_public_security(route_path=route, request_context=context, body=body, http_request=request)
+        enforce_public_security(route_path=route, request_context=RequestContext.from_http_request(request, metadata={'route': route}), body=body, http_request=request)
 
     @router.get('/public-site/integrations', tags=['public-site'])
     async def public_site_integrations(http_request: Request) -> dict:
