@@ -10,6 +10,16 @@ def _token(label: str, secret_name: str, *, placeholder: str = "", kind: str = "
     return ProviderSecretField(field_key=secret_name, secret_name=secret_name, label=label, placeholder=placeholder, secret_kind=kind, required=required)
 
 
+_BRIDGE_MESSAGING_TITLES = {"vk": "VK", "max": "MAX", "instagram": "Instagram Direct", "messenger": "Facebook Messenger", "slack": "Slack", "discord": "Discord", "viber": "Viber", "line": "LINE", "wechat": "WeChat", "kakaotalk": "KakaoTalk"}
+MESSAGING_INTERNAL_CHANNELS = frozenset({"api"})
+MESSAGING_CHANNEL_PROVIDER_KEYS = {"telegram": "telegram_bot", "whatsapp": "whatsapp_cloud", "email": "email_connector", "sms": "sms_connector", "web_chat": "generic_website", **{channel: f"{channel}_messaging" for channel in _BRIDGE_MESSAGING_TITLES}}
+BRIDGE_MESSAGING_PROVIDER_KEYS = frozenset(MESSAGING_CHANNEL_PROVIDER_KEYS[channel] for channel in _BRIDGE_MESSAGING_TITLES)
+
+
+def _bridge_messaging_provider(channel: str, title: str) -> ProviderDefinition:
+    return ProviderDefinition(provider_key=f"{channel}_messaging", title=title, connector_id=f"messaging.{channel}", adapter_key="chatbot.default", channel_kind=ChannelKind.CHATBOT, domain="communications", description=f"{title} signed provider-webhook bridge through the canonical messaging runtime.", secret_fields=(_token("Webhook Secret", "webhook_secret", placeholder=f"{channel}-webhook-secret", kind="signing_secret"),), default_non_ai_mode="delegated", default_action_type="communications_write", messaging_channel=channel, messaging_capabilities={"plain_text": True}, messaging_live_probe_supported=False)
+
+
 PROVIDERS: tuple[ProviderDefinition, ...] = (
     ProviderDefinition(
         provider_key="telegram_bot",
@@ -80,6 +90,7 @@ PROVIDERS: tuple[ProviderDefinition, ...] = (
         messaging_capabilities={"plain_text": True},
         messaging_live_probe_supported=False,
     ),
+    *tuple(_bridge_messaging_provider(channel, title) for channel, title in _BRIDGE_MESSAGING_TITLES.items()),
     ProviderDefinition(
         provider_key="call_tracking",
         title="Call Tracking",
@@ -361,4 +372,4 @@ def provider_map() -> dict[str, ProviderDefinition]:
     return {item.provider_key: item for item in PROVIDERS}
 
 
-__all__ = ["CANON_PROVIDER_CATALOG", "PROVIDERS", "provider_map"]
+__all__ = ["BRIDGE_MESSAGING_PROVIDER_KEYS", "CANON_PROVIDER_CATALOG", "MESSAGING_CHANNEL_PROVIDER_KEYS", "MESSAGING_INTERNAL_CHANNELS", "PROVIDERS", "provider_map"]
