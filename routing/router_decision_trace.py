@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class RouterDecisionTrace:
     def build(self, *, ranked_candidates: tuple[object, ...]) -> dict[str, object]:
         return {
