@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
+from application.business_autonomy.provider_catalog import BRIDGE_MESSAGING_PROVIDER_KEYS
 from application.business_autonomy.provider_runtime_contract import ProviderOperationPlan
 
 CANON_PROVIDER_SYNC_RUNTIME = True
@@ -24,6 +25,7 @@ _READS = {
     'meta_ads': ('campaign_report_read',),
     'google_ads': ('campaign_report_read',),
     'tiktok_ads': ('campaign_report_read',),
+    **{key: ('message_read',) for key in BRIDGE_MESSAGING_PROVIDER_KEYS},
 }
 
 _WRITES = {
@@ -47,6 +49,7 @@ _WRITES = {
     'postgres_runtime': ('write_runtime_record',),
     'redis_runtime': ('write_runtime_key',),
     'clickhouse_export': ('export_analytics_batch',),
+    **{key: ('message_send',) for key in BRIDGE_MESSAGING_PROVIDER_KEYS},
 }
 
 
