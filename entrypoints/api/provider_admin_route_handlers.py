@@ -43,8 +43,8 @@ class ProviderAdminRouteHandlers:
                         }
                         for field in item.secret_fields
                     ],
-                    "connected": bool(statuses.get(item.provider_key) and statuses[item.provider_key].connected),
-                    "last_updated_utc": None if statuses.get(item.provider_key) is None else statuses[item.provider_key].last_updated_utc,
+                    "connected": bool(statuses.get(item.provider_key) and statuses[item.provider_key].connected), "onboarding_ready": bool(statuses.get(item.provider_key) and statuses[item.provider_key].onboarding_ready), "credential_state": "bound" if statuses.get(item.provider_key) and statuses[item.provider_key].secret_fields_bound else "missing", "health_probe": {} if statuses.get(item.provider_key) is None else dict(statuses[item.provider_key].metadata.get("health_probe") or {}), "runtime_plan": {} if statuses.get(item.provider_key) is None else dict(statuses[item.provider_key].metadata.get("runtime_plan") or {}), "write_actions_enabled": False,
+                    "last_updated_utc": None if statuses.get(item.provider_key) is None else statuses[item.provider_key].last_updated_utc, "actions": {"activate": "/control-plane/provider-admin/activate", "probe": "/control-plane/provider-runtime/live-probe", "read_sync": "/control-plane/provider-runtime/sync", "sync_history": "/control-plane/provider-runtime/sync-history"},
                 }
                 for item in providers
             ],
