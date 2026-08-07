@@ -7,7 +7,7 @@ from typing import Any
 
 from application.business_autonomy.integration_capability_catalog import CapabilityStatus, list_integration_capabilities
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
-from application.business_autonomy.provider_catalog import PROVIDERS
+from application.business_autonomy.provider_catalog import BRIDGE_MESSAGING_PROVIDER_KEYS, PROVIDERS
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 
@@ -122,6 +122,8 @@ def _capability_status_by_provider() -> dict[str, list[str]]:
 
 
 def _best_capability_status(provider_key: str, status_map: Mapping[str, list[str]]) -> str:
+    if provider_key in BRIDGE_MESSAGING_PROVIDER_KEYS:
+        return CapabilityStatus.PARTIAL.value
     return max(status_map.get(provider_key) or [CapabilityStatus.NOT_IMPLEMENTED.value], key=lambda value: _STATUS_RANK.get(value, 0))
 
 
@@ -163,7 +165,7 @@ def _truth_row(provider: ProviderDefinition, *, planner: ProviderSyncRuntimePlan
         approval_required=bool(write_capabilities) or provider.domain in _HIGH_RISK_DOMAINS,
         has_real_endpoint=has_real_endpoint, has_placeholder_endpoint=has_placeholder_endpoint,
         endpoint_source="runtime.business_autonomy.provider_transport_bindings", health_requirements=required_credentials,
-        admin_visible=True, owner=_PROVIDER_OWNERS.get(provider.provider_key, "application.business_autonomy.provider_catalog"),
+        admin_visible=True, owner=_PROVIDER_OWNERS.get(provider.provider_key, "interfaces.messaging_runtime.channel_loader" if provider.messaging_channel else "application.business_autonomy.provider_catalog"),
         risk_level=_risk_level(provider, write_capabilities),
         evidence=(f"capability_status={capability_status}", f"transport_binding_live_ready={bool(binding.get('live_ready'))}", "write_supported_requires_guarded_contract"),
     )
