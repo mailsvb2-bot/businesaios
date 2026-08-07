@@ -177,7 +177,7 @@ class CTALandingIntakeService:
             selected_providers=selected_providers,
             goal=str(safe_payload.get("goal") or safe_payload.get("intent") or "growth"),
         )
-        onboarding_status = "integration_plan_ready" if selected_providers else "business_profile_created"
+        onboarding_status = "advisory_intake_created"
         onboarding_progress = _onboarding_progress(
             business_profile=business_profile,
             selected_providers=selected_providers,
