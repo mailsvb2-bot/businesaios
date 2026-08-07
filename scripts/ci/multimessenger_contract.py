@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-
 # This is a certification baseline, not a runtime registry. Runtime code never
 # imports it and no delivery decision is made here. Changing or removing a
 # user-facing channel therefore requires an explicit lock update and review.
@@ -62,8 +61,8 @@ def verify_multimessenger_runtime_contract() -> tuple[bool, str]:
     from runtime.messaging.bootstrap import build_multichannel_dispatcher
     from runtime.messaging.channel_types import (
         ALL_CHANNELS,
-        CHANNELS,
         CHANNEL_TELEGRAM,
+        CHANNELS,
     )
 
     actual_channels = tuple(ALL_CHANNELS)
