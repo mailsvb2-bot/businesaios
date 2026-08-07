@@ -6,8 +6,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from contextlib import contextmanager
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
