@@ -23,6 +23,7 @@ class CTASubmitResult:
     next_actions: tuple[dict[str, object], ...] = ()
     user_functionality: dict[str, object] | None = None
     admin_visibility: dict[str, object] | None = None
+    business_profile: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class CTAIntakeStatus:
     next_actions: tuple[dict[str, object], ...] = ()
     user_functionality: dict[str, object] | None = None
     admin_visibility: dict[str, object] | None = None
+    business_profile: dict[str, object] | None = None
 
 
 class CTALandingIntakeService:
@@ -54,10 +56,20 @@ class CTALandingIntakeService:
         safe_payload = dict(payload or {})
         intake_id = f"cta-{uuid4().hex[:16]}"
         created_at = datetime.now(UTC).isoformat()
-        tenant_id = _stable_id(prefix="tenant", value=_first_non_empty(safe_payload, "tenant_id", "business_name", "company", "email") or intake_id)
-        business_id = _stable_id(prefix="business", value=_first_non_empty(safe_payload, "business_id", "business_name", "company", "website", "email") or intake_id)
-        user_id = _stable_id(prefix="user", value=_first_non_empty(safe_payload, "user_id", "email", "telegram", "phone") or intake_id)
+        tenant_id = _stable_id(
+            prefix="tenant",
+            value=_first_non_empty(safe_payload, "tenant_id", "business_name", "company", "email") or intake_id,
+        )
+        business_id = _stable_id(
+            prefix="business",
+            value=_first_non_empty(safe_payload, "business_id", "business_name", "company", "website", "email") or intake_id,
+        )
+        user_id = _stable_id(
+            prefix="user",
+            value=_first_non_empty(safe_payload, "user_id", "email", "telegram", "phone") or intake_id,
+        )
         onboarding_status = "advisory_intake_created"
+        business_profile = _business_profile(safe_payload)
         next_actions = _next_actions(intake_id=intake_id, tenant_id=tenant_id, business_id=business_id)
         user_functionality = _user_functionality(
             intake_id=intake_id,
@@ -83,6 +95,7 @@ class CTALandingIntakeService:
             "business_id": business_id,
             "user_id": user_id,
             "onboarding_status": onboarding_status,
+            "business_profile": business_profile,
             "next_actions": list(next_actions),
             "user_functionality": user_functionality,
             "admin_visibility": admin_visibility,
@@ -104,6 +117,7 @@ class CTALandingIntakeService:
             business_id=business_id,
             user_id=user_id,
             onboarding_status=onboarding_status,
+            business_profile=business_profile,
             next_actions=next_actions,
             user_functionality=user_functionality,
             admin_visibility=admin_visibility,
@@ -160,6 +174,7 @@ def _status_from_row(*, token: str, row: dict[str, object]) -> CTAIntakeStatus:
     next_actions = tuple(item for item in next_actions_raw if isinstance(item, dict)) if isinstance(next_actions_raw, list) else ()
     user_functionality = row.get("user_functionality") if isinstance(row.get("user_functionality"), dict) else None
     admin_visibility = row.get("admin_visibility") if isinstance(row.get("admin_visibility"), dict) else None
+    business_profile = row.get("business_profile") if isinstance(row.get("business_profile"), dict) else _business_profile(dict(row.get("payload") or {}))
     return CTAIntakeStatus(
         intake_id=token,
         found=True,
@@ -169,6 +184,7 @@ def _status_from_row(*, token: str, row: dict[str, object]) -> CTAIntakeStatus:
         business_id=str(row.get("business_id") or ""),
         user_id=str(row.get("user_id") or ""),
         onboarding_status=str(row.get("onboarding_status") or "advisory_intake_created"),
+        business_profile=dict(business_profile),
         next_actions=next_actions,
         user_functionality=dict(user_functionality) if user_functionality is not None else None,
         admin_visibility=dict(admin_visibility) if admin_visibility is not None else None,
@@ -176,16 +192,33 @@ def _status_from_row(*, token: str, row: dict[str, object]) -> CTAIntakeStatus:
 
 
 def _admin_row(row: dict[str, object]) -> dict[str, object]:
+    profile = row.get("business_profile") if isinstance(row.get("business_profile"), dict) else _business_profile(dict(row.get("payload") or {}))
     return {
         "intake_id": str(row.get("intake_id") or ""),
         "created_at": str(row.get("created_at") or ""),
         "tenant_id": str(row.get("tenant_id") or ""),
         "business_id": str(row.get("business_id") or ""),
         "user_id": str(row.get("user_id") or ""),
+        "business_name": str(profile.get("name") or ""),
+        "industry": str(profile.get("industry") or ""),
+        "city": str(profile.get("city") or ""),
         "outcome": str(row.get("outcome") or ""),
         "onboarding_status": str(row.get("onboarding_status") or ""),
         "admin_visibility": dict(row.get("admin_visibility") or {}) if isinstance(row.get("admin_visibility"), dict) else {},
         "read_only": True,
+    }
+
+
+def _business_profile(payload: dict[str, object]) -> dict[str, object]:
+    name = _first_non_empty(payload, "business_name", "company")
+    return {
+        "name": name,
+        "website": _first_non_empty(payload, "website", "channel"),
+        "industry": _first_non_empty(payload, "industry", "business_type"),
+        "city": _first_non_empty(payload, "city", "location"),
+        "goal": _first_non_empty(payload, "intent", "goal") or "pilot",
+        "contact_email": _first_non_empty(payload, "email"),
+        "profile_complete": bool(name and _first_non_empty(payload, "industry", "business_type")),
     }
 
 
