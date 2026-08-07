@@ -32,8 +32,8 @@ class ProviderTokensAdminPage:
                     'capabilities_endpoint': '/control-plane/provider-admin/capabilities',
                     'truth_matrix_path': '/web/provider-truth',
                     'truth_matrix_endpoint': '/control-plane/provider-admin/catalog',
-                    'activate_endpoint': '/control-plane/provider-admin/activate',
-                    'platform_admin_path': '/web/platform-admin',
+                    'activate_endpoint': '/control-plane/provider-admin/activate', 'probe_endpoint': '/control-plane/provider-runtime/live-probe',
+                    'sync_endpoint': '/control-plane/provider-runtime/sync', 'sync_history_endpoint': '/control-plane/provider-runtime/sync-history', 'platform_admin_path': '/web/platform-admin',
                 },
                 'truth_rules': {
                     'provider_in_catalog_is_not_implemented': True,
@@ -55,7 +55,7 @@ class ProviderTokensAdminPage:
                     'modal_behavior': {
                         'submit_label': 'Принять и подключить',
                         'success_toast': 'Данные приняты. Подключение и onboarding запущены.',
-                        'post_submit_refresh': True,
+                        'post_submit_refresh': True, 'connection_flow': ('credentials', 'probe', 'read_sync', 'results'),
                     },
                 },
                 'tenant_bound': True,
