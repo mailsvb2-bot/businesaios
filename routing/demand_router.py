@@ -3,13 +3,13 @@ from __future__ import annotations
 from config.execution_contract import CANONICAL_OPTIMIZATION_TARGET, DEFAULT_DELIVERY_CHANNEL
 from config.routing_limits import MAX_ROUTING_CANDIDATES
 from guardrails.demand_policies import DemandDecisionGuard
-from observability.demand import emit_routing_events as emit_routing_event
-from routing.router_policy_evaluator import RouterPolicyEvaluator
-from routing.router_decision_trace import RouterDecisionTrace
-from routing.router_publisher import RouterPublisher
-from routing.router_audit import RouterAudit
-from routing.router_fallback import RouterFallback
 from matching.routing_surface import RoutingCandidateBuilder, RoutingCandidateRanker
+from observability.demand import emit_routing_events as emit_routing_event
+from routing.router_audit import RouterAudit
+from routing.router_decision_trace import RouterDecisionTrace
+from routing.router_fallback import RouterFallback
+from routing.router_policy_evaluator import RouterPolicyEvaluator
+from routing.router_publisher import RouterPublisher
 from supply_directory.profile_lookup import get_profile
 from supply_state.live_state_snapshot import from_snapshot
 
