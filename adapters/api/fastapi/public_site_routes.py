@@ -8,23 +8,18 @@ from entrypoints.api.request_context import RequestContext
 
 def _product_fields(value) -> dict:
     return {
-        'business_profile': dict(getattr(value, 'business_profile', None) or {}),
-        'selected_providers': list(getattr(value, 'selected_providers', ()) or ()),
-        'integration_plan': list(getattr(value, 'integration_plan', ()) or ()),
-        'autonomy_mode': str(getattr(value, 'autonomy_mode', 'advisor') or 'advisor'),
-        'first_value_preview': dict(getattr(value, 'first_value_preview', None) or {}),
-        'onboarding_progress': dict(getattr(value, 'onboarding_progress', None) or {}),
+        'business_profile': dict(getattr(value, 'business_profile', None) or {}), 'selected_providers': list(getattr(value, 'selected_providers', ()) or ()),
+        'integration_plan': list(getattr(value, 'integration_plan', ()) or ()), 'autonomy_mode': str(getattr(value, 'autonomy_mode', 'advisor') or 'advisor'),
+        'first_value_preview': dict(getattr(value, 'first_value_preview', None) or {}), 'onboarding_progress': dict(getattr(value, 'onboarding_progress', None) or {}),
     }
 
 
 def _base_response(value) -> dict:
     return {
-        'ok': True, 'intake_id': value.intake_id, 'created_at': value.created_at,
-        'tenant_id': value.tenant_id, 'business_id': value.business_id, 'user_id': value.user_id,
-        'onboarding_status': value.onboarding_status, 'next_actions': list(value.next_actions),
-        'user_functionality': dict(value.user_functionality or {}), 'admin_visibility': dict(value.admin_visibility or {}),
-        'measurable_outcome': value.outcome, 'write_actions_enabled': False, 'approval_required_before_execution': True,
-        **_product_fields(value),
+        'ok': True, 'intake_id': value.intake_id, 'created_at': value.created_at, 'tenant_id': value.tenant_id, 'business_id': value.business_id,
+        'user_id': value.user_id, 'onboarding_status': value.onboarding_status, 'next_actions': list(value.next_actions),
+        'user_functionality': dict(value.user_functionality or {}), 'admin_visibility': dict(value.admin_visibility or {}), 'measurable_outcome': value.outcome,
+        'write_actions_enabled': False, 'approval_required_before_execution': True, **_product_fields(value),
     }
 
 
@@ -49,10 +44,7 @@ def register_public_site_routes(*, router, enforce_public_security) -> None:
     async def public_site_integrations(http_request: Request) -> dict:
         secure(http_request, '/public-site/integrations', {})
         rows = public_integration_marketplace()
-        return {'ok': True, 'items': list(rows), 'total': len(rows), 'policy': {
-            'initial_sync': 'read_only', 'write_actions_enabled': False,
-            'credential_activation_requires_authenticated_control_plane': True,
-        }}
+        return {'ok': True, 'items': list(rows), 'total': len(rows), 'policy': {'initial_sync': 'read_only', 'write_actions_enabled': False, 'credential_activation_requires_authenticated_control_plane': True}}
 
     @router.post('/public-site/cta/start', tags=['public-site'])
     async def public_site_cta_start(http_request: Request) -> dict:
