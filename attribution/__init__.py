@@ -10,7 +10,6 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
-
 CANON_ATTRIBUTION_OWNER_SURFACE = True
 CANON_ATTRIBUTION_COMPAT_SHIM = True
 CANON_ATTRIBUTION_PROVENANCE_NAMESPACE = True
