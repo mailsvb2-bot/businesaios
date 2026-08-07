@@ -20,6 +20,7 @@ _PUBLIC_PROVIDERS = (
     "ebay_marketplace", "etsy_marketplace", "google_ads", "meta_ads", "tiktok_ads", "call_tracking",
 )
 _RECOMMENDED = {"telegram_bot", "generic_website", "hubspot", "ozon_marketplace", "wildberries_marketplace"}
+_CONNECTION_MODES = {"telegram_bot": "provider_native_api", "whatsapp_cloud": "provider_webhook_and_cloud_api", "email_connector": "mailbox_or_provider_api", "sms_connector": "sms_gateway", "generic_website": "web_ingress"}
 _GOAL_CHECKS = {
     "growth": ("потерянные лиды", "каналы с лучшей конверсией", "точки роста повторных продаж"),
     "retention": ("клиенты без повторной покупки", "незавершённые диалоги", "сегменты для реактивации"),
@@ -85,7 +86,7 @@ def public_integration_marketplace() -> tuple[dict[str, object], ...]:
             "provider_key": key, "title": provider.title, "category": provider.domain, "description": provider.description,
             "status": state.status, "availability": availability, "availability_label": label, "selectable": selectable,
             "read_supported": selectable, "write_supported": False, "approval_required": bool(state.approval_required),
-            "risk_level": state.risk_level, "recommended": key in _RECOMMENDED, "connection_mode": "provider_webhook_bridge" if key in BRIDGE_MESSAGING_PROVIDER_KEYS else "provider_native_or_managed",
+            "risk_level": state.risk_level, "recommended": key in _RECOMMENDED, "connection_mode": "provider_webhook_bridge" if key in BRIDGE_MESSAGING_PROVIDER_KEYS else _CONNECTION_MODES.get(key, "provider_native_or_managed"),
             "credential_labels": [field.label for field in provider.secret_fields if field.required],
             "read_capabilities": list(state.read_capabilities),
             "note": "Внешние write-действия выключены до отдельного подтверждения и evidence guard.",
@@ -209,7 +210,7 @@ def _selected_providers(payload: dict[str, object]) -> tuple[str, ...]:
         key = str(item or "").strip()
         if key and key in known and key not in selected:
             selected.append(key)
-        if len(selected) == 12:
+        if len(selected) == 32:
             break
     return tuple(selected)
 
