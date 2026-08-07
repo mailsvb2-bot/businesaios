@@ -18,7 +18,6 @@ from runtime.messaging import CHANNEL_SPECS
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
 
-
 SAMPLES = {
     'telegram': {'message': {'from': {'id': 1}, 'chat': {'id': 1}, 'text': 'tg', 'message_id': 11}, 'update_id': 101},
     'whatsapp': {'entry': [{'changes': [{'value': {'messages': [{'from': 'wa1', 'id': 'wamid', 'text': {'body': 'wa'}}]}}]}]},
