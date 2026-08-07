@@ -1,40 +1,25 @@
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[3] / "frontend" / "src"
+
+
+def _read(name: str) -> str:
+    return (ROOT / name).read_text(encoding="utf-8")
 
 
 def test_frontend_is_self_service_product_workspace_not_staging_console() -> None:
-    app = (REPO_ROOT / "frontend" / "src" / "App.jsx").read_text(encoding="utf-8")
-
-    assert "BusinessAIOS Control UI" not in app
-    assert "Staging UI" not in app
-    assert "Подключите бизнес" in app
-    assert "Где уже живут данные бизнеса?" in app
-    assert "Первый полезный результат" in app
-    assert "Советник" in app
-    assert "Помощник" in app
-    assert "Автопилот" in app
+    app = _read("App.jsx")
+    assert all(token not in app for token in ("BusinessAIOS Control UI", "Staging UI"))
+    assert all(token in app for token in ("Подключите бизнес", "Где уже живут данные бизнеса?", "Первый полезный результат", "Советник", "Помощник", "Автопилот"))
 
 
 def test_public_frontend_uses_truth_marketplace_and_never_collects_provider_secrets() -> None:
-    app = (REPO_ROOT / "frontend" / "src" / "App.jsx").read_text(encoding="utf-8")
-
-    assert "/public-site/integrations" in app
-    assert "/public-site/cta/start" in app
-    assert "/web/provider-tokens" in app
-    assert "/control-plane/provider-admin/activate" not in app
-    assert "providerSecrets" not in app
-    assert "secret_fields" not in app
-    assert "Ключи и токены вводятся только в защищённом control-plane" in app
+    app = _read("App.jsx")
+    assert all(token in app for token in ("/public-site/integrations", "/public-site/cta/start", "/web/provider-tokens", "Ключи и токены вводятся только в защищённом control-plane"))
+    assert all(token not in app for token in ("/control-plane/provider-admin/activate", "providerSecrets", "secret_fields"))
 
 
 def test_frontend_styles_cover_onboarding_integrations_autonomy_and_workspace() -> None:
-    styles = (REPO_ROOT / "frontend" / "src" / "styles.css").read_text(encoding="utf-8")
-
-    assert ".onboarding-shell" in styles
-    assert ".stepper" in styles
-    assert ".integration-grid" in styles
-    assert ".autonomy-grid" in styles
-    assert ".workspace-grid" in styles
-    assert ".progress-card" in styles
+    styles = _read("styles.css")
+    assert all(selector in styles for selector in (".onboarding-shell", ".stepper", ".integration-grid", ".autonomy-grid", ".workspace-grid", ".progress-card"))
