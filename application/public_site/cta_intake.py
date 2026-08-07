@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from application.business_autonomy.provider_catalog import provider_map
+from application.business_autonomy.provider_catalog import BRIDGE_MESSAGING_PROVIDER_KEYS, provider_map
 from application.business_autonomy.provider_truth_matrix import provider_truth_map
 
 CANON_PUBLIC_SITE_CTA_INTAKE = True
@@ -15,9 +15,9 @@ CANON_PUBLIC_SITE_INTEGRATION_MARKETPLACE = True
 
 _AUTONOMY_LABELS = {"advisor": "Советник", "assistant": "Помощник", "autopilot": "Автопилот"}
 _PUBLIC_PROVIDERS = (
-    "telegram_bot", "whatsapp_cloud", "email_connector", "generic_website", "wordpress", "webflow",
+    "telegram_bot", "whatsapp_cloud", "email_connector", "sms_connector", *tuple(sorted(BRIDGE_MESSAGING_PROVIDER_KEYS)), "generic_website", "wordpress", "webflow",
     "shopify", "woocommerce", "hubspot", "ozon_marketplace", "wildberries_marketplace", "amazon_marketplace",
-    "ebay_marketplace", "etsy_marketplace", "google_ads", "meta_ads", "tiktok_ads", "sms_connector", "call_tracking",
+    "ebay_marketplace", "etsy_marketplace", "google_ads", "meta_ads", "tiktok_ads", "call_tracking",
 )
 _RECOMMENDED = {"telegram_bot", "generic_website", "hubspot", "ozon_marketplace", "wildberries_marketplace"}
 _GOAL_CHECKS = {
@@ -85,7 +85,7 @@ def public_integration_marketplace() -> tuple[dict[str, object], ...]:
             "provider_key": key, "title": provider.title, "category": provider.domain, "description": provider.description,
             "status": state.status, "availability": availability, "availability_label": label, "selectable": selectable,
             "read_supported": selectable, "write_supported": False, "approval_required": bool(state.approval_required),
-            "risk_level": state.risk_level, "recommended": key in _RECOMMENDED,
+            "risk_level": state.risk_level, "recommended": key in _RECOMMENDED, "connection_mode": "provider_webhook_bridge" if key in BRIDGE_MESSAGING_PROVIDER_KEYS else "provider_native_or_managed",
             "credential_labels": [field.label for field in provider.secret_fields if field.required],
             "read_capabilities": list(state.read_capabilities),
             "note": "Внешние write-действия выключены до отдельного подтверждения и evidence guard.",
