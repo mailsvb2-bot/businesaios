@@ -61,7 +61,7 @@ class ProviderResponseParsers:
 
     def _resource_count(self, *, provider_key: str, body: Any) -> int | None:
         if isinstance(body, dict):
-            for key in ('results', 'data', 'messages', 'orders', 'products'):
+            for key in ('results', 'result', 'data', 'messages', 'orders', 'products'):
                 value = body.get(key)
                 if isinstance(value, list):
                     return len(value)
@@ -86,11 +86,10 @@ class ProviderResponseParsers:
     def _next_cursor(self, *, provider_key: str, body: Any) -> str | None:
         if isinstance(body, dict):
             if isinstance(body.get('paging'), dict):
-                paging = body['paging']
-                for key in ('next', 'after'):
-                    value = paging.get(key)
-                    if value not in {None, ''}:
-                        return str(value)
+                paging, value = body['paging'], body['paging'].get('next')
+                if isinstance(value, dict):
+                    value = value.get('after')
+                return str(value or paging.get('after') or '') or None
             if isinstance(body.get('page_info'), dict):
                 value = body['page_info'].get('cursor') or body['page_info'].get('next_cursor')
                 if value not in {None, ''}:

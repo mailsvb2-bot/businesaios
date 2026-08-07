@@ -56,7 +56,7 @@ class TelegramVendorTransport(_PreparedOnlyTransport):
     vendor_family: str = 'telegram_bot_api'
 
     def _build_request(self, *, provider: ProviderDefinition, operation: str, payload: Mapping[str, Any], binding: Mapping[str, Any]) -> Mapping[str, Any]:
-        return {'method': 'POST', 'url_template': str(binding['base_url']) + str(binding['sync_path_family']).format(token='{bot_token}', operation=operation), 'json_body': dict(payload or {})}
+        return {'method': 'GET' if operation in {'message_read', 'contact_profile_read'} else 'POST', 'url_template': str(binding['base_url']) + '/bot{bot_token}/' + {'message_read': 'getUpdates', 'contact_profile_read': 'getMe'}.get(operation, operation), 'json_body': dict(payload or {})}
 
 
 @dataclass(frozen=True)
@@ -95,7 +95,7 @@ class HubSpotVendorTransport(_PreparedOnlyTransport):
     vendor_family: str = 'hubspot_crm_api'
 
     def _build_request(self, *, provider: ProviderDefinition, operation: str, payload: Mapping[str, Any], binding: Mapping[str, Any]) -> Mapping[str, Any]:
-        path = str(binding['sync_path_family']).format(operation=operation)
+        path = '/crm/objects/2026-03/' + {'contact_sync': 'contacts', 'deal_sync': 'deals'}.get(operation, operation)
         return {'method': 'GET' if operation.endswith('_sync') else 'POST', 'url_template': str(binding['base_url']) + path, 'headers': {'Authorization': 'Bearer {private_app_token}'}, 'json_body': dict(payload or {})}
 
 
@@ -126,7 +126,7 @@ class TikTokAdsVendorTransport(_PreparedOnlyTransport):
         return {'method': 'POST' if 'launch' in operation or 'update' in operation or 'pause' in operation else 'GET', 'url_template': str(binding['base_url']) + str(binding['sync_path_family']).format(operation=operation), 'headers': {'Access-Token': '{access_token}'}, 'json_body': dict(payload or {})}
 
 
-def build_provider_vendor_transports(secret_vault: SecretVault | None = None, *, bind_live_network: bool = False) -> dict[str, _PreparedOnlyTransport]:
+def build_provider_vendor_transports(secret_vault: SecretVault | None = None, *, bind_live_network: bool = True) -> dict[str, _PreparedOnlyTransport]:
     if secret_vault is not None:
         from runtime.business_autonomy.provider_http_live_clients import build_live_http_transports
         return build_live_http_transports(secret_vault, bind_live_network=bind_live_network)

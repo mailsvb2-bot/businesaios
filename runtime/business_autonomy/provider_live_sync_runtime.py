@@ -98,7 +98,7 @@ class ProviderLiveSyncRuntime:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_transport_unbound', accepted=False, metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata()})
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
         try:
-            response = dict(transport.execute(provider=provider, tenant_id=str(tenant_id), business_id=str(business_id), operation=normalized_operation, payload=dict(payload or {})) or {})
+            response = dict(transport.execute(provider=provider, tenant_id=str(tenant_id), business_id=str(business_id), operation=normalized_operation, payload={**dict(payload or {}), '_allow_network': True}) or {})
             parsed_response = dict(response.get('parsed_response') or {})
             if not parsed_response and not response.get('_prepared_only'):
                 parsed_response = self.response_parsers.parse(provider=provider, operation=normalized_operation, response=response)

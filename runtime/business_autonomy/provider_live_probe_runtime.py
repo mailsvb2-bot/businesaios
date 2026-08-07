@@ -30,7 +30,7 @@ class ProviderLiveProbeRuntime:
 
     def __post_init__(self) -> None:
         if not self.transports:
-            object.__setattr__(self, 'transports', build_live_http_transports(self.secret_vault, bind_live_network=False))
+            object.__setattr__(self, 'transports', build_live_http_transports(self.secret_vault, bind_live_network=True))
 
     def describe(self, *, provider: ProviderDefinition) -> dict[str, Any]:
         binding = ProviderTransportBindings().describe(provider)
@@ -39,7 +39,7 @@ class ProviderLiveProbeRuntime:
             'probe_supported': provider.provider_key in self.transports,
             'probe_path': binding.get('probe_path'),
             'base_url': binding.get('base_url'),
-            'live_network_default': False,
+            'live_network_default': bool(getattr(self.transports.get(provider.provider_key), 'bind_live_network', False)),
             'modes': ('dry_run', 'live'),
         }
 
