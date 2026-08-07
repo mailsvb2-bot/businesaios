@@ -5,7 +5,6 @@ from pathlib import Path
 
 from core.security.release_manifest import generate_manifest, load_manifest
 
-
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = ROOT / "release" / "manifest.json"
 
