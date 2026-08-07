@@ -44,17 +44,18 @@ class ProviderWebhookRuntime:
         contract = self.describe(provider)
         if not contract.enabled:
             return False
+        normalized_headers = {str(k).lower(): str(v) for k, v in dict(headers or {}).items()}
         secret_name = self._secret_field(provider)
         secret = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.{secret_name}')
         if not secret:
             return False
         if contract.verification_kind == 'hmac_sha256_base64':
             expected = base64.b64encode(hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii')
-            candidates = [str(headers.get(name) or '') for name in contract.header_names]
+            candidates = [normalized_headers.get(str(name).lower(), '') for name in contract.header_names]
             return any(candidate and hmac.compare_digest(expected, candidate) for candidate in candidates)
         if contract.verification_kind in {'bearer_or_shared_secret', 'shared_secret_header'}:
-            bearer = str(headers.get('Authorization') or '')
-            candidates = [bearer.removeprefix('Bearer ').strip()] + [str(headers.get(name) or '') for name in contract.header_names if name != 'Authorization']
+            bearer = normalized_headers.get('authorization', '')
+            candidates = [bearer.removeprefix('Bearer ').strip()] + [normalized_headers.get(str(name).lower(), '') for name in contract.header_names if str(name).lower() != 'authorization']
             return any(candidate and hmac.compare_digest(secret, candidate) for candidate in candidates)
         return False
 
