@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from application.public_site.cta_intake import CTALandingIntakeService, public_integration_marketplace
+from entrypoints.api.public_surface_route_specs import _ROUTE_SPECS
+from security.access_policy import SecurityAction
 
 
 def test_public_integration_marketplace_never_claims_live_write_support() -> None:
@@ -11,6 +13,14 @@ def test_public_integration_marketplace_never_claims_live_write_support() -> Non
     assert all(row["write_supported"] is False for row in rows)
     assert all("availability_label" in row for row in rows)
     assert all("credential_labels" in row for row in rows)
+
+
+def test_integration_marketplace_route_is_public_read_only() -> None:
+    spec = _ROUTE_SPECS["/public-site/integrations"]
+
+    assert spec.action is SecurityAction.READ
+    assert "public" in spec.tags
+    assert "internal" not in spec.tags
 
 
 def test_self_service_onboarding_persists_business_plan(tmp_path) -> None:
