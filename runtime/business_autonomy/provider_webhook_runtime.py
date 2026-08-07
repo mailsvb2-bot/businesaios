@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
+from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookContract
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
@@ -28,13 +29,9 @@ class ProviderWebhookRuntime:
                 metadata={'secret_field': self._secret_field(provider)},
             )
         if provider.provider_key in {'telegram_bot', 'whatsapp_cloud'}:
-            return ProviderWebhookContract(
-                provider_key=provider.provider_key,
-                verification_kind='bearer_or_shared_secret',
-                header_names=('Authorization', 'X-Telegram-Bot-Api-Secret-Token', 'X-Hub-Signature-256'),
-                enabled=True,
-                metadata={'secret_field': self._secret_field(provider)},
-            )
+            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='bearer_or_shared_secret', header_names=('Authorization', 'X-Telegram-Bot-Api-Secret-Token', 'X-Hub-Signature-256'), enabled=True, metadata={'secret_field': self._secret_field(provider)})
+        if describe_provider_messaging_binding(provider) is not None and any(field.secret_kind == 'signing_secret' for field in provider.secret_fields):
+            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='shared_secret_header', header_names=('Authorization', 'X-BusinessAIOS-Webhook-Secret'), enabled=True, metadata={'secret_field': self._secret_field(provider), 'integration_mode': 'provider_webhook_bridge'})
         return ProviderWebhookContract(
             provider_key=provider.provider_key,
             verification_kind='none',
@@ -47,17 +44,18 @@ class ProviderWebhookRuntime:
         contract = self.describe(provider)
         if not contract.enabled:
             return False
+        normalized_headers = {str(k).lower(): str(v) for k, v in dict(headers or {}).items()}
         secret_name = self._secret_field(provider)
         secret = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.{secret_name}')
         if not secret:
             return False
         if contract.verification_kind == 'hmac_sha256_base64':
             expected = base64.b64encode(hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii')
-            candidates = [str(headers.get(name) or '') for name in contract.header_names]
+            candidates = [normalized_headers.get(str(name).lower(), '') for name in contract.header_names]
             return any(candidate and hmac.compare_digest(expected, candidate) for candidate in candidates)
-        if contract.verification_kind == 'bearer_or_shared_secret':
-            bearer = str(headers.get('Authorization') or '')
-            candidates = [bearer.removeprefix('Bearer ').strip()] + [str(headers.get(name) or '') for name in contract.header_names if name != 'Authorization']
+        if contract.verification_kind in {'bearer_or_shared_secret', 'shared_secret_header'}:
+            bearer = normalized_headers.get('authorization', '')
+            candidates = [bearer.removeprefix('Bearer ').strip()] + [normalized_headers.get(str(name).lower(), '') for name in contract.header_names if str(name).lower() != 'authorization']
             return any(candidate and hmac.compare_digest(secret, candidate) for candidate in candidates)
         return False
 

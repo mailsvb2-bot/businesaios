@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -38,7 +39,7 @@ class ProviderWebhookRouteRegistry:
         normalized_headers = {str(k): str(v) for k, v in dict(headers or {}).items()}
         normalized_payload = self.normalizers.normalize_webhook_payload(provider=provider, headers=normalized_headers, body=body)
         raw_payload = self._try_parse_json(body)
-        event_key = self._first(normalized_headers, route['event_key_headers']) or str(normalized_payload.get('event_key_hint') or '') or f"{provider.provider_key}:{abs(hash(bytes(body))) % 1000000000}"
+        event_key = self._first(normalized_headers, route['event_key_headers']) or str(normalized_payload.get('event_key_hint') or '') or f"{provider.provider_key}:{hashlib.sha256(bytes(body)).hexdigest()[:24]}"
         topic = self._first(normalized_headers, route['topic_headers']) or str(normalized_payload.get('topic') or '')
         source_ref = self._first(normalized_headers, route.get('source_headers', ())) or str(normalized_payload.get('source_ref') or '')
         resource_id = str(normalized_payload.get('resource_id') or '')

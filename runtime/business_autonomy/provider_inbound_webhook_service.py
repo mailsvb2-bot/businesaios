@@ -43,6 +43,9 @@ class ProviderInboundWebhookService:
         owner_id: str | None = None,
     ) -> ProviderWebhookIngressResult:
         payload_digest = hashlib.sha256(bytes(body)).hexdigest()
+        event_key = str(event_key or '').strip()
+        if not event_key or event_key == 'payload-digest-fallback':
+            event_key = f'{provider.provider_key}:{payload_digest[:24]}'
         contract = self.webhook_runtime.describe(provider)
         if contract.enabled and not self.webhook_runtime.verify(provider=provider, tenant_id=tenant_id, business_id=business_id, headers=headers, body=body):
             refs = self.audit_recorder.record_webhook_event(
