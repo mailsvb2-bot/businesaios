@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService, StaticTrustOnboarding
 from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
@@ -13,6 +15,8 @@ from runtime.business_autonomy.distributed_state import FileDistributedDocumentS
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import InMemorySecretVault
+
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _service(tmp_path):
@@ -76,3 +80,29 @@ def test_platform_infra_activation_records_runtime_probe(tmp_path):
     assert runtime_activation.get('runtime_kind') == 'postgres'
     assert runtime_activation.get('health', {}).get('status') == 'ready_for_credentials'
     assert 'runtime:postgres_runtime' in status.persistent_surfaces
+
+
+def test_activation_status_includes_messaging_binding(tmp_path):
+    service, _registry = _service(tmp_path)
+    status = service.activate_provider(
+        ProviderCredentialSubmission(
+            tenant_id='tenant-a',
+            business_id='biz-a',
+            provider_key='telegram_bot',
+            ownership_key='owner:biz-a',
+            requested_by='owner-user',
+            external_ref='telegram://biz-a',
+            secrets={'bot_token': '123:abc'},
+            metadata={'probe_mode': 'dry_run', 'non_ai_mode': 'supervised'},
+        )
+    )
+    binding = dict(status.metadata.get('messaging_binding') or {})
+    assert binding.get('channel') == 'telegram'
+    assert dict(binding.get('required_capabilities') or {}).get('buttons') is True
+
+
+def test_provider_admin_service_uses_single_owner_messaging_metadata_builder():
+    path = ROOT / "application/business_autonomy/provider_admin_service.py"
+    text = path.read_text(encoding="utf-8")
+    assert "messaging_binding_to_metadata(messaging_binding)" in text
+    assert "'required_capabilities': dict(messaging_binding.required_capabilities)" not in text
