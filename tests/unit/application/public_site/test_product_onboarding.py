@@ -54,7 +54,7 @@ def test_self_service_onboarding_persists_business_plan(tmp_path) -> None:
     }
     assert created.selected_providers == ("hubspot", "telegram_bot")
     assert created.autonomy_mode == "assistant"
-    assert created.onboarding_status == "integration_plan_ready"
+    assert created.onboarding_status == "advisory_intake_created"
     assert created.onboarding_progress["percent"] == 67
     assert created.first_value_preview["requires_real_sync"] is True
     assert created.first_value_preview["contains_estimated_financial_claims"] is False
