@@ -71,7 +71,7 @@ def test_provider_health_requirements_cannot_drift_from_catalog() -> None:
         )
         assert health_required <= catalog_required, provider.provider_key
         cases += 1
-    assert cases == 22
+    assert cases == len(PROVIDERS)
 
 
 def test_every_provider_reaches_declared_dry_run_state_without_network(
@@ -90,6 +90,7 @@ def test_every_provider_reaches_declared_dry_run_state_without_network(
     )
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
 
+    transport_keys = set(build_live_http_transports(InMemorySecretVault(), bind_live_network=False))
     statuses: Counter[str] = Counter()
     cases = 0
     for provider in PROVIDERS:
@@ -103,10 +104,9 @@ def test_every_provider_reaches_declared_dry_run_state_without_network(
         )
         assert health.status == "ready_for_credentials", provider.provider_key
 
-        transports = build_live_http_transports(vault, bind_live_network=False)
         runtime = ProviderLiveProbeRuntime(
             secret_vault=vault,
-            transports=transports,
+            transports=build_live_http_transports(vault, bind_live_network=False),
             incident_registry=_MemoryIncidentRegistry(),
         )
         result = runtime.run(
@@ -117,7 +117,7 @@ def test_every_provider_reaches_declared_dry_run_state_without_network(
         )
         expected = (
             "probe_prepared_only"
-            if provider.provider_key in transports
+            if provider.provider_key in transport_keys
             else "probe_unsupported"
         )
         assert result.status == expected, provider.provider_key
@@ -125,8 +125,11 @@ def test_every_provider_reaches_declared_dry_run_state_without_network(
         statuses[result.status] += 1
         cases += 1
 
-    assert cases == 22
-    assert statuses == {"probe_prepared_only": 8, "probe_unsupported": 14}
+    assert cases == len(PROVIDERS)
+    assert statuses == {
+        "probe_prepared_only": len(transport_keys),
+        "probe_unsupported": len(PROVIDERS) - len(transport_keys),
+    }
     assert network_attempts == []
     assert not (tmp_path / "data").exists()
 
@@ -149,4 +152,4 @@ def test_every_provider_live_readiness_matches_transport_binding() -> None:
         assert health.status == expected, provider.provider_key
         assert bool(health.metadata.get("live_probe_supported")) is live_ready
         cases += 1
-    assert cases == 22
+    assert cases == len(PROVIDERS)
