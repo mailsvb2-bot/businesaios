@@ -31,7 +31,7 @@ class VendorHttpLiveTransport:
 
     def execute(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, operation: str, payload: Mapping[str, Any]) -> Mapping[str, Any]:
         binding = ProviderTransportBindings().describe(provider)
-        normalized_payload = self.normalizers.normalize_outbound(provider=provider, operation=operation, payload=payload)
+        normalized_payload = self.normalizers.normalize_outbound(provider=provider, operation=operation, payload={k: v for k, v in payload.items() if not str(k).startswith('_')})
         prepared = self._prepare_request(provider=provider, tenant_id=tenant_id, business_id=business_id, operation=operation, payload=normalized_payload, binding=binding)
         if not self.bind_live_network or not bool(payload.get('_allow_network', False)):
             return {
@@ -76,8 +76,8 @@ class VendorHttpLiveTransport:
         secrets = self._load_secrets(provider=provider, tenant_id=tenant_id, business_id=business_id)
         url = self._render_url(provider=provider, operation=operation, payload=payload, binding=binding, secrets=secrets)
         headers = self._build_headers(provider=provider, secrets=secrets)
-        method = 'GET' if operation.endswith('_sync') else 'POST'
-        return {'url': url, 'method': method, 'headers': headers, 'json_body': dict(payload or {})}
+        method = 'GET' if operation in {'health_probe', 'message_read', 'contact_profile_read'} or operation.endswith('_sync') else 'POST'
+        return {'url': url, 'method': method, 'headers': headers, 'json_body': None if method == 'GET' else dict(payload or {})}
 
     def _load_secrets(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str) -> dict[str, str]:
         values = {}
@@ -112,7 +112,7 @@ class VendorHttpLiveTransport:
         base_url = str(binding.get('base_url') or '')
         path_family = str(binding.get('sync_path_family') or '')
         if provider.provider_key == 'telegram_bot':
-            return f"{base_url}{path_family.format(token=secrets.get('bot_token','{bot_token}'), operation=operation)}"
+            return f"{base_url}/bot{secrets.get('bot_token','{bot_token}')}/{({'health_probe': 'getMe', 'message_read': 'getUpdates', 'contact_profile_read': 'getMe'}.get(operation, operation))}"
         if provider.provider_key == 'whatsapp_cloud':
             return f"{base_url}{path_family.format(phone_number_id=secrets.get('phone_number_id', payload.get('phone_number_id','{phone_number_id}')), operation=operation)}"
         if provider.provider_key == 'shopify':
@@ -122,7 +122,7 @@ class VendorHttpLiveTransport:
             store_url = str(secrets.get('store_url') or payload.get('store_url') or '{store_url}')
             return f"{store_url}{path_family.format(operation=operation)}"
         if provider.provider_key == 'hubspot':
-            return f"{base_url}{path_family.format(operation=operation)}"
+            return f"{base_url}/crm/objects/2026-03/{({'health_probe': 'contacts', 'contact_sync': 'contacts', 'deal_sync': 'deals'}.get(operation, operation))}"
         if provider.provider_key == 'meta_ads':
             account_id = str(secrets.get('account_id') or payload.get('account_id') or '{account_id}')
             return f"{base_url}{path_family.format(operation=operation).replace('{account_id}', account_id)}"
@@ -136,7 +136,7 @@ class VendorHttpLiveTransport:
 
 def build_live_http_transports(secret_vault: SecretVault, *, bind_live_network: bool = False) -> dict[str, VendorHttpLiveTransport]:
     providers = ('telegram_bot','whatsapp_cloud','shopify','woocommerce','hubspot','meta_ads','google_ads','tiktok_ads')
-    return {key: VendorHttpLiveTransport(secret_vault=secret_vault, provider_key=key, bind_live_network=bind_live_network) for key in providers}
+    return {key: VendorHttpLiveTransport(secret_vault=secret_vault, provider_key=key, bind_live_network=bind_live_network and key in {'telegram_bot','hubspot'}) for key in providers}
 
 
 __all__ = ['CANON_PROVIDER_HTTP_LIVE_CLIENTS', 'VendorHttpLiveTransport', 'build_live_http_transports']
