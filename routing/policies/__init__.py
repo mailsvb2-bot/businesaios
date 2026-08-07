@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from importlib import import_module
-from canon.public_api_alias import install_owner_alias_modules
 from typing import Any
+
+from canon.public_api_alias import install_owner_alias_modules
 
 CANON_ROUTING_POLICY_OWNER_SURFACE = True
 CANON_ROUTING_POLICY_COMPAT_SHIM = True
