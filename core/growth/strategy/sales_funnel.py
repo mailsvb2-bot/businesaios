@@ -8,7 +8,9 @@ from contracts.event_store import EventStoreReader, iter_events_strict
 
 from .contracts import SalesFunnelCountsV1, SalesFunnelSnapshotV1, SalesFunnelSourceV1
 from .sales_journey import (
+    SalesJourneyDisposition,
     SalesJourneyEvent,
+    SalesJourneyProjection,
     SalesJourneyState,
     reduce_sales_journey,
     sales_journey_rank,
@@ -87,17 +89,15 @@ def _signal_for(event_type: str, mapping: SalesFunnelEventMap) -> SalesJourneyEv
     return None
 
 
-def _counts(states: dict[str, SalesJourneyState]) -> SalesFunnelCountsV1:
+def _counts(states: dict[str, SalesJourneyProjection]) -> SalesFunnelCountsV1:
     engaged = qualified = checkout = won = lost = 0
-    for state in states.values():
-        if state == SalesJourneyState.LOST:
-            lost += 1
-            continue
-        rank = sales_journey_rank(state)
+    for projection in states.values():
+        rank = sales_journey_rank(projection.state)
         engaged += rank >= sales_journey_rank(SalesJourneyState.ENGAGED)
         qualified += rank >= sales_journey_rank(SalesJourneyState.QUALIFIED)
         checkout += rank >= sales_journey_rank(SalesJourneyState.CHECKOUT)
-        won += state == SalesJourneyState.WON
+        won += projection.disposition == SalesJourneyDisposition.WON
+        lost += projection.disposition == SalesJourneyDisposition.LOST
     return SalesFunnelCountsV1(
         discovered=len(states),
         engaged=int(engaged),
@@ -134,7 +134,7 @@ def read_sales_funnel(
     if end <= start:
         raise ValueError("end_ms must be greater than start_ms")
     mapping = event_map or SalesFunnelEventMap()
-    states: dict[str, SalesJourneyState] = {}
+    states: dict[str, SalesJourneyProjection] = {}
     sources: dict[str, str] = {}
 
     for event in iter_events_strict(store, tenant_id=tenant, start_ms=start, end_ms=end):
@@ -149,16 +149,16 @@ def read_sales_funnel(
             continue
         source = _source(row)
         if subject not in states:
-            states[subject] = SalesJourneyState.DISCOVERED
+            states[subject] = SalesJourneyProjection()
             sources[subject] = source
         elif sources.get(subject, "unknown") == "unknown" and source != "unknown":
             sources[subject] = source
         if signal is not None:
             states[subject] = reduce_sales_journey(states[subject], signal).current
 
-    by_source_states: dict[str, dict[str, SalesJourneyState]] = defaultdict(dict)
-    for subject, state in states.items():
-        by_source_states[sources.get(subject, "unknown")][subject] = state
+    by_source_states: dict[str, dict[str, SalesJourneyProjection]] = defaultdict(dict)
+    for subject, projection in states.items():
+        by_source_states[sources.get(subject, "unknown")][subject] = projection
 
     return SalesFunnelSnapshotV1(
         tenant_id=tenant,
