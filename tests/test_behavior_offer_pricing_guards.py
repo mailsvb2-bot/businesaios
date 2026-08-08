@@ -57,8 +57,10 @@ def test_commercial_candidates_use_canonical_catalog_and_pricing_selector() -> N
     ({"position": 0, "min_evidence_score": float("nan")}, "finite"),
     ({"position": 0, "min_evidence_score": -0.1}, "between 0 and 1"),
     ({"position": 0, "min_evidence_score": 1.1}, "between 0 and 1"),
+    ({"position": 0, "min_evidence_score": True}, "finite"),
     ({"position": 0, "requires_human_approval": 1}, "boolean"),
     ({"position": 0, "kind": "invented"}, "unsupported commercial kind"),
+    ({"position": 0, "kind": False}, "non-empty string"),
 ])
 def test_commercial_metadata_fails_closed(commercial: dict, match: str) -> None:
     catalog = _commercial_catalog({"offer_id": "audit", "base_price_rub": 60_000, "meta": {"commercial": commercial}})
@@ -87,12 +89,20 @@ def test_catalog_price_types_fail_closed_before_selection(price: object) -> None
             evidence={"candidate_scores": {"audit": 0.8}}, evidence_score=0.8)
 
 
-@pytest.mark.parametrize("evidence_score", [-0.01, 1.01])
-def test_catalog_evidence_score_range_fails_closed(evidence_score: float) -> None:
+@pytest.mark.parametrize("evidence_score", [-0.01, 1.01, True, "0.8"])
+def test_catalog_evidence_score_type_and_range_fails_closed(evidence_score: object) -> None:
     catalog = _commercial_catalog({"offer_id": "audit", "base_price_rub": 60_000})
-    with pytest.raises(ValueError, match="between 0 and 1"):
+    with pytest.raises(ValueError):
         PricingSelectionService().select_from_catalog(ctx=_pricing_ctx(), catalog=catalog,
             evidence={"candidate_scores": {"audit": 0.8}}, evidence_score=evidence_score)
+
+
+@pytest.mark.parametrize("candidate_score", [True, "0.8"])
+def test_catalog_candidate_score_type_fails_closed(candidate_score: object) -> None:
+    catalog = _commercial_catalog({"offer_id": "audit", "base_price_rub": 60_000})
+    with pytest.raises(ValueError, match="candidate score"):
+        PricingSelectionService().select_from_catalog(ctx=_pricing_ctx(), catalog=catalog,
+            evidence={"candidate_scores": {"audit": candidate_score}}, evidence_score=0.8)
 
 
 def test_explicit_zero_candidate_score_is_not_replaced_by_legacy_default() -> None:
