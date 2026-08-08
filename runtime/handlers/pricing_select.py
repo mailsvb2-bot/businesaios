@@ -32,7 +32,7 @@ def _delivery_evidence(delivery: object) -> dict[str, Any] | None:
 def _effective_delivery(payload: Mapping[str, Any]) -> dict[str, Any]:
     effective = delivery_kwargs(payload)
     policy = effective.get("channel_policy")
-    if isinstance(policy, Mapping):
+    if isinstance(policy, Mapping) and policy:
         effective["channel_policy"] = ensure_policy_input_disciplined(policy)
     return effective
 
