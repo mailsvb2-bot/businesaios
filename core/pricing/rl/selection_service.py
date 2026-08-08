@@ -29,6 +29,20 @@ def _unit_interval(value: object, name: str) -> float:
     return result
 
 
+def _strict_ids(values: Iterable[str] | None, name: str) -> set[str] | None:
+    if values is None:
+        return None
+    if isinstance(values, str | bytes | Mapping):
+        raise ValueError(f"{name} must be a collection of non-empty strings")
+    items = list(values)
+    if any(not isinstance(item, str) or not item.strip() for item in items):
+        raise ValueError(f"{name} must contain non-empty strings")
+    normalized = [item.strip() for item in items]
+    if len(set(normalized)) != len(normalized):
+        raise ValueError(f"{name} must not contain duplicates")
+    return set(normalized)
+
+
 class PricingSelectionService:
     """Pure candidate ranking; never emits actions or mutates policy."""
 
@@ -45,6 +59,7 @@ class PricingSelectionService:
         catalog: OfferCatalog,
         evidence: Json,
         evidence_score: float,
+        candidate_offer_ids: Iterable[str] | None = None,
         completed_offer_ids: Iterable[str] = (),
         min_price_rub: int = 0,
         max_price_rub: int | None = None,
@@ -58,10 +73,17 @@ class PricingSelectionService:
         raw_scores = evidence.get("candidate_scores")
         if not isinstance(raw_scores, Mapping):
             raise ValueError("candidate_scores evidence is required")
-        completed = {str(item).strip() for item in completed_offer_ids if str(item).strip()}
+        requested = _strict_ids(candidate_offer_ids, "candidate_offer_ids")
+        completed = _strict_ids(completed_offer_ids, "completed_offer_ids") or set()
+        offers = list(catalog.list_offers())
+        catalog_ids = {str(offer.offer_id).strip() for offer in offers}
+        if requested is not None and not requested.issubset(catalog_ids):
+            raise ValueError("candidate_offer_ids contain offers outside the canonical catalog")
         candidates: list[Json] = []
         seen_positions: set[int] = set()
-        for index, offer in enumerate(catalog.list_offers()):
+        for index, offer in enumerate(offers):
+            if requested is not None and offer.offer_id not in requested:
+                continue
             commercial = offer.meta.get("commercial", {}) if isinstance(offer.meta, Mapping) else {}
             if not isinstance(commercial, Mapping):
                 raise ValueError(f"commercial metadata must be a mapping for offer {offer.offer_id}")
