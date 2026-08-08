@@ -1,13 +1,24 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from .builders.escalation_case_builder import EscalationCaseBuilder
 from .builders.override_case_builder import OverrideCaseBuilder
 from .builders.review_case_builder import ReviewCaseBuilder
 from .contracts import HumanGovernanceDeps
 from .errors import ReviewNotFoundError
+from .evaluators.sales_handoff import evaluate_sales_handoff
 from .guards.stale_review_guard import StaleReviewGuard
 from .guards.unauthorized_override_guard import UnauthorizedOverrideGuard
-from .types import ApprovalDecision, ApprovalState, OverrideRecord, ReviewCase, ReviewItem
+from .types import (
+    ApprovalDecision,
+    ApprovalState,
+    OverrideRecord,
+    ReviewCase,
+    ReviewItem,
+    SalesHandoffSignal,
+)
 
 
 class HumanGovernanceService:
@@ -57,6 +68,34 @@ class HumanGovernanceService:
     def build_escalation_case(self, review_id: str) -> dict[str, object]:
         self._require_review(review_id)
         return self._escalation_case_builder.build(review_id)
+
+    def evaluate_sales_handoff(
+        self,
+        *,
+        tenant_id: str,
+        subject_id: str,
+        model_confidence: float,
+        explicit_human_request: bool = False,
+        sensitive_context: bool = False,
+        pricing_exception: bool = False,
+        negative_sentiment: bool = False,
+        failed_attempts: int = 0,
+        subject_closed: bool = False,
+        context: Mapping[str, Any] | None = None,
+    ) -> SalesHandoffSignal | None:
+        return evaluate_sales_handoff(
+            policy=self._policy,
+            tenant_id=tenant_id,
+            subject_id=subject_id,
+            model_confidence=model_confidence,
+            explicit_human_request=explicit_human_request,
+            sensitive_context=sensitive_context,
+            pricing_exception=pricing_exception,
+            negative_sentiment=negative_sentiment,
+            failed_attempts=failed_attempts,
+            subject_closed=subject_closed,
+            context=context,
+        )
 
     def approve(self, decision: ApprovalDecision) -> ApprovalState:
         decision = self._policy.validate_approval_decision(decision)
