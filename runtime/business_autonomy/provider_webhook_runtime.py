@@ -5,7 +5,6 @@ import hashlib
 import hmac
 from collections.abc import Mapping
 from dataclasses import dataclass
-
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookContract
@@ -14,33 +13,20 @@ from security.secret_vault import SecretVault
 
 CANON_PROVIDER_WEBHOOK_RUNTIME = True
 
-
 @dataclass(frozen=True)
 class ProviderWebhookRuntime:
     secret_vault: SecretVault
 
     def describe(self, provider: ProviderDefinition) -> ProviderWebhookContract:
         if provider.provider_key in {'shopify', 'generic_website', 'wordpress'}:
-            return ProviderWebhookContract(
-                provider_key=provider.provider_key,
-                verification_kind='hmac_sha256_base64',
-                header_names=('X-Signature', 'X-Shopify-Hmac-Sha256', 'X-Webhook-Signature'),
-                enabled=True,
-                metadata={'secret_field': self._secret_field(provider)},
-            )
+            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='hmac_sha256_base64', header_names=('X-Signature', 'X-Shopify-Hmac-Sha256', 'X-Webhook-Signature'), enabled=True, metadata={'secret_field': self._secret_field(provider)})
         if provider.provider_key == 'whatsapp_cloud':
             return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='hmac_sha256_hex', header_names=('X-Hub-Signature-256',), enabled=True, metadata={'secret_field': 'app_secret', 'challenge_secret_field': 'verify_token'})
         if provider.provider_key == 'telegram_bot':
             return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='bearer_or_shared_secret', header_names=('Authorization', 'X-Telegram-Bot-Api-Secret-Token'), enabled=True, metadata={'secret_field': self._secret_field(provider)})
         if describe_provider_messaging_binding(provider) is not None and any(field.secret_kind == 'signing_secret' for field in provider.secret_fields):
             return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='shared_secret_header', header_names=('Authorization', 'X-BusinessAIOS-Webhook-Secret'), enabled=True, metadata={'secret_field': self._secret_field(provider), 'integration_mode': 'provider_webhook_bridge'})
-        return ProviderWebhookContract(
-            provider_key=provider.provider_key,
-            verification_kind='none',
-            header_names=(),
-            enabled=False,
-            metadata={},
-        )
+        return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='none', header_names=(), enabled=False, metadata={})
 
     def verify(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, headers: Mapping[str, str], body: bytes) -> bool:
         contract = self.describe(provider)
@@ -56,8 +42,7 @@ class ProviderWebhookRuntime:
             return hmac.compare_digest(expected, normalized_headers.get('x-hub-signature-256', ''))
         if contract.verification_kind == 'hmac_sha256_base64':
             expected = base64.b64encode(hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii')
-            candidates = [normalized_headers.get(str(name).lower(), '') for name in contract.header_names]
-            return any(candidate and hmac.compare_digest(expected, candidate) for candidate in candidates)
+            return any(candidate and hmac.compare_digest(expected, candidate) for candidate in (normalized_headers.get(str(name).lower(), '') for name in contract.header_names))
         if contract.verification_kind in {'bearer_or_shared_secret', 'shared_secret_header'}:
             bearer = normalized_headers.get('authorization', '')
             candidates = [bearer.removeprefix('Bearer ').strip()] + [normalized_headers.get(str(name).lower(), '') for name in contract.header_names if str(name).lower() != 'authorization']
@@ -78,11 +63,9 @@ class ProviderWebhookRuntime:
         return provider.secret_fields[0].secret_name if provider.secret_fields else 'secret'
 
     def _read_secret(self, *, tenant_id: str, connector_id: str, business_id: str, secret_name: str) -> str:
-        ref = SecretRef(tenant_id=tenant_id, connector_id=connector_id, scope=business_id, secret_name=secret_name)
         try:
-            return self.secret_vault.get(ref).decode('utf-8').strip()
+            return self.secret_vault.get(SecretRef(tenant_id=tenant_id, connector_id=connector_id, scope=business_id, secret_name=secret_name)).decode('utf-8').strip()
         except Exception:
             return ''
-
 
 __all__ = ['CANON_PROVIDER_WEBHOOK_RUNTIME', 'ProviderWebhookRuntime']
