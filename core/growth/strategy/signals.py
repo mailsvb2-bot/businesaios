@@ -2,18 +2,30 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import defaultdict
 from collections.abc import Iterable
 from typing import Any
 
 from config.strategic_growth_policy import DEFAULT_GROWTH_SIGNALS_POLICY, GrowthSignalsPolicy
+from contracts.event_store import iter_events_strict
 from core.actions.names import ACTION_ADS_APPLY_EXECUTE_V1
 from core.growth.today_ledger import build_today_kpi
 from core.observability.errors import log_exception_throttled
 
 from .contracts import GrowthSignalV1
-from .sales_funnel import empty_sales_funnel, read_sales_funnel
 
 log = logging.getLogger(__name__)
+
+_SALES_EVENTS = {
+    **dict.fromkeys(("lead_created@v1", "sales_lead_discovered", "sales_opportunity_discovered"), (0, None)),
+    **dict.fromkeys(("sales_inbound_received", "sales_reply_received", "sales_contact_recorded"), (1, "open")),
+    "sales_need_captured": (2, "open"),
+    **dict.fromkeys(("sales_qualified", "sales_qualification_passed"), (3, "open")),
+    "sales_offer_presented": (4, "open"),
+    **dict.fromkeys(("sales_checkout_started", "payment_started"), (5, "open")),
+    **dict.fromkeys(("purchase_completed@v1", "sales_won", "payment_success", "payment_succeeded"), (6, "won")),
+    **dict.fromkeys(("sales_lost", "sales_declined", "sales_qualification_failed"), (-1, "lost")),
+}
 
 
 def _compute_retention(
@@ -48,21 +60,48 @@ def _compute_retention(
     return float(len(active & recent)) / float(len(active))
 
 
-def _sales_funnel(
-    event_store: Any,
-    *,
-    tenant_id: str,
-    now_ms: int,
-    policy: GrowthSignalsPolicy,
-) -> dict[str, Any]:
+def _sales_counts(states: dict[str, tuple[int, str, str]]) -> dict[str, int | float]:
+    ranks = [rank for rank, _disposition, _source in states.values()]
+    discovered, engaged = len(states), sum(rank >= 1 for rank in ranks)
+    qualified, checkout = sum(rank >= 3 for rank in ranks), sum(rank >= 5 for rank in ranks)
+    won = sum(disposition == "won" for _rank, disposition, _source in states.values())
+    lost = sum(disposition == "lost" for _rank, disposition, _source in states.values())
+    pct = lambda numerator, denominator: 0.0 if not denominator else round(numerator / denominator * 100.0, 1)
+    return {"discovered": discovered, "engaged": engaged, "qualified": qualified, "checkout": checkout, "won": won, "lost": lost,
+            "engagement_percent": pct(engaged, discovered), "qualification_percent": pct(qualified, engaged),
+            "checkout_percent": pct(checkout, qualified), "win_percent": pct(won, discovered)}
+
+
+def _sales_funnel(event_store: Any, *, tenant_id: str, now_ms: int, policy: GrowthSignalsPolicy) -> dict[str, Any]:
     start_ms = now_ms - max(1, int(policy.sales_funnel_window_days)) * int(policy.day_ms)
+    empty = {"schema_version": 1, "tenant_id": tenant_id, "start_ms": start_ms, "end_ms": now_ms, "total": _sales_counts({}), "by_source": []}
     if not callable(getattr(event_store, "iter_events", None)):
-        return empty_sales_funnel(tenant_id=tenant_id, start_ms=start_ms, end_ms=now_ms)
+        return empty
+    states: dict[str, tuple[int, str, str]] = {}
     try:
-        return read_sales_funnel(event_store, tenant_id=tenant_id, start_ms=start_ms, end_ms=now_ms)
+        for event in iter_events_strict(event_store, tenant_id=tenant_id, start_ms=start_ms, end_ms=now_ms):
+            row, event_type = dict(event or {}), str((event or {}).get("event_type") or "").strip()
+            transition = _SALES_EVENTS.get(event_type)
+            if transition is None:
+                continue
+            payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+            subject = str(payload.get("subject_id") or payload.get("customer_id") or payload.get("lead_id") or row.get("user_id") or "").strip()
+            if not subject:
+                continue
+            source = str(payload.get("source") or payload.get("utm_source") or row.get("source") or "unknown").strip()[:100] or "unknown"
+            rank, disposition, prior_source = states.get(subject, (0, "open", source))
+            next_rank, next_disposition = transition
+            if disposition != "won":
+                disposition = "lost" if next_rank < 0 else (next_disposition or disposition)
+                rank = rank if next_rank < 0 else max(rank, next_rank)
+            states[subject] = (rank, disposition, source if prior_source == "unknown" else prior_source)
     except Exception as exc:
         log_exception_throttled(log, "growth_sales_funnel_projection_failed", exc)
-        return empty_sales_funnel(tenant_id=tenant_id, start_ms=start_ms, end_ms=now_ms)
+        return empty
+    grouped: dict[str, dict[str, tuple[int, str, str]]] = defaultdict(dict)
+    for subject, state in states.items():
+        grouped[state[2]][subject] = state
+    return {**empty, "total": _sales_counts(states), "by_source": [{"source": source, "counts": _sales_counts(rows)} for source, rows in sorted(grouped.items())]}
 
 
 def build_signals(
