@@ -3,9 +3,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from core.offers.offer_catalog_resolver import OfferCatalogResolver
+from contracts.action_impact_contract import ActionCategory, ActionExecutionContext, ActionImpact
+from core.offers.offer_catalog_resolver import OfferCatalogKey, OfferCatalogResolver
 from runtime.actions import ACTION_PRICING_SELECT_V1
 from runtime.decisioning import DecisionRouteViolation, extract_strict_route_from_envelope
+from runtime.execution.governance_runtime_support import build_default_approval_execution_gate
 from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.handlers.route_failure_support import best_effort_route_ids, blocked_error_payload, safe_route_blocked_text
 from runtime.ports.effects import EffectsPort
@@ -57,9 +59,64 @@ def _legacy_shortlist(raw: object) -> tuple[list[str] | None, dict[str, object]]
     return offer_ids, scores
 
 
+def _approval_id(evidence: Mapping[str, object]) -> str | None:
+    raw = evidence.get("approval_id")
+    if raw is None:
+        return None
+    if not isinstance(raw, str) or not raw.strip():
+        raise PricingRouteViolation("evidence.approval_id must be a non-empty string")
+    return raw.strip()
+
+
+def _review_selected_offer(
+    *, selected_offer: Mapping[str, object], catalog_id: str, tenant_id: str, product_id: str,
+    user_id: str, environment: str, variant: str, route: Any, evidence: Mapping[str, object], approval_gate: Any | None,
+) -> dict[str, Any] | None:
+    commercial = selected_offer.get("commercial")
+    requires_approval = bool(isinstance(commercial, Mapping) and commercial.get("requires_human_approval") is True)
+    if not requires_approval:
+        return None
+    gate = approval_gate or build_default_approval_execution_gate()
+    approval_id = _approval_id(evidence)
+    subject = {
+        "product_id": product_id,
+        "catalog_id": catalog_id,
+        "offer_id": str(selected_offer.get("offer_id") or ""),
+        "price_rub": int(selected_offer.get("price_rub") or 0),
+        "environment": environment,
+        "variant": variant,
+    }
+    ctx = ActionExecutionContext(
+        tenant_id=tenant_id, user_id=user_id, action_name=ACTION_NAME, payload=subject,
+        metadata={"decision_id": route.decision_id, "correlation_id": route.correlation_id, "tags": ["pricing", "offer_approval"]},
+        execution_id=route.decision_id,
+    )
+    impact = ActionImpact(
+        action_name=ACTION_NAME, category=ActionCategory.OUTBOUND, outbound_count=1,
+        requires_human_approval=True, confidence=1.0,
+    )
+    verdict = gate.evaluate(
+        ctx=ctx, impact=impact, external_confirmation_mode="required",
+        approval_policy={"force_human_approval": True},
+        metadata={"decision_id": route.decision_id, "requires_manual_review": True, "tags": ["pricing", "offer_approval"]},
+        approval_id=approval_id, requested_by=user_id,
+    )
+    if verdict.allowed:
+        return None
+    return {
+        "ok": False,
+        "status": "approval_required",
+        "reason": str(verdict.reason),
+        "approval": verdict.to_dict(),
+        "selection": dict(selected_offer),
+        "delivery": None,
+        "router_evidence": None,
+    }
+
+
 def handle_pricing_select(
     payload: dict[str, Any], effects: EffectsPort, env: Any, *, selection_service: Any,
-    catalog_resolver: Any | None = None,
+    catalog_resolver: Any | None = None, approval_gate: Any | None = None,
 ) -> Any:
     body = dict(payload or {})
     try:
@@ -91,11 +148,11 @@ def handle_pricing_select(
         variant = evidence.get("variant", "a")
         if not isinstance(variant, str) or not variant.strip():
             raise PricingRouteViolation("evidence.variant must be a non-empty string")
+        variant = variant.strip()
         context = PricingSelectionContext(tenant_id=tenant_id, decision_id=route.decision_id,
             correlation_id=route.correlation_id, issuer_id=route.issuer_id, action=route.action)
         resolver = catalog_resolver or OfferCatalogResolver()
-        catalog = resolver.resolve_from_product(product={"product_id": product_id, "environment": environment},
-            tenant_id=tenant_id, context={"environment": environment})
+        catalog = resolver.resolve(key=OfferCatalogKey(tenant_id=tenant_id, product_id=product_id, environment=environment))
 
         requested_offer_ids, legacy_scores = _legacy_shortlist(body.get("candidates"))
         if "candidate_scores" not in evidence:
@@ -111,8 +168,15 @@ def handle_pricing_select(
         if not selected_offer:
             raise PricingRouteViolation("no selectable pricing candidate")
 
+        approval_result = _review_selected_offer(
+            selected_offer=selected_offer, catalog_id=str(catalog.id), tenant_id=tenant_id, product_id=product_id,
+            user_id=user_id, environment=environment, variant=variant, route=route, evidence=evidence, approval_gate=approval_gate,
+        )
+        if approval_result is not None:
+            return {**approval_result, "selection_result": {**dict(selection_result), "catalog_id": str(catalog.id)}}
+
         rendered = catalog.render(offer_id=str(selected_offer.get("offer_id") or ""), user_id=user_id,
-            price_rub=int(selected_offer.get("price_rub") or 0), variant=variant.strip(),
+            price_rub=int(selected_offer.get("price_rub") or 0), variant=variant,
             context={"tenant_id": tenant_id, "product_id": product_id, "environment": environment})
         text = str(rendered.text or selected_offer.get("title") or "💸 Pricing proposal selected")
         delivery = effects.send_message(
