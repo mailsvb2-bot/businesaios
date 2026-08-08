@@ -98,7 +98,7 @@ def test_explicit_missing_contact_basis_blocks_outbound_before_channel_selection
 def test_malformed_explicit_contact_basis_fails_closed(contact_basis: object) -> None:
     preference = ChannelPreference(primary="whatsapp", enabled=("whatsapp", "email"))
     with pytest.raises(ValueError, match="contact_basis"):
-        PolicyRequest(preference=preference, contact_basis=contact_basis)  # type: ignore[arg-type]
+        PolicyRequest(preference=preference, contact_basis=contact_basis)
 
 
 def test_terminal_contact_block_skips_capability_routing(monkeypatch):
