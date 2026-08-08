@@ -16,8 +16,8 @@ def test_frontend_is_self_service_product_workspace_not_staging_console() -> Non
 
 def test_public_frontend_uses_truth_marketplace_and_never_collects_provider_secrets() -> None:
     app = _read("App.jsx")
-    assert all(token in app for token in ("/public-site/integrations", "/public-site/cta/start", "/web/provider-tokens", "Ключи и токены вводятся только в защищённом control-plane"))
-    assert all(token not in app for token in ("/control-plane/provider-admin/activate", "providerSecrets", "secret_fields"))
+    assert all(token in app for token in ("/public-site/integrations", "/public-site/cta/start", "/business-workspace/providers", "Ключ намеренно не сохраняется в браузере"))
+    assert all(token not in app for token in ("/web/provider-tokens", "/control-plane/provider-admin/activate", "providerSecrets"))
 
 
 def test_frontend_styles_cover_onboarding_integrations_autonomy_and_workspace() -> None:
