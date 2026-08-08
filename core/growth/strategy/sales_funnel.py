@@ -24,8 +24,7 @@ def reduce_sales_evidence(stage: str, disposition: str, event_type: str) -> tupl
     if rank < 0:
         return stage, "lost"
     current = _STAGES.index(stage) if stage in _STAGES else 0
-    next_stage = _STAGES[max(current, rank)]
-    return next_stage, next_disposition or disposition
+    return _STAGES[max(current, rank)], next_disposition or disposition
 
 
 def _subject(row: dict[str, Any]) -> str:
@@ -38,15 +37,19 @@ def _source(row: dict[str, Any]) -> str:
     return str(payload.get("source") or payload.get("utm_source") or row.get("source") or "unknown").strip()[:100] or "unknown"
 
 
+def _pct(numerator: int, denominator: int) -> float:
+    return 0.0 if not denominator else round(numerator / denominator * 100.0, 1)
+
+
 def _counts(states: dict[str, tuple[str, str]]) -> dict[str, int | float]:
     ranks = [_STAGES.index(stage) for stage, _disposition in states.values()]
-    discovered, engaged, qualified, checkout = len(states), sum(r >= 1 for r in ranks), sum(r >= 3 for r in ranks), sum(r >= 5 for r in ranks)
+    discovered, engaged = len(states), sum(rank >= 1 for rank in ranks)
+    qualified, checkout = sum(rank >= 3 for rank in ranks), sum(rank >= 5 for rank in ranks)
     won = sum(disposition == "won" for _stage, disposition in states.values())
     lost = sum(disposition == "lost" for _stage, disposition in states.values())
-    pct = lambda n, d: 0.0 if not d else round(n / d * 100.0, 1)
     return {"discovered": discovered, "engaged": engaged, "qualified": qualified, "checkout": checkout, "won": won, "lost": lost,
-            "engagement_percent": pct(engaged, discovered), "qualification_percent": pct(qualified, engaged),
-            "checkout_percent": pct(checkout, qualified), "win_percent": pct(won, discovered)}
+            "engagement_percent": _pct(engaged, discovered), "qualification_percent": _pct(qualified, engaged),
+            "checkout_percent": _pct(checkout, qualified), "win_percent": _pct(won, discovered)}
 
 
 def empty_sales_funnel(*, tenant_id: str, start_ms: int, end_ms: int) -> dict[str, Any]:
