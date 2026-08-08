@@ -12,7 +12,12 @@ class SalesJourneyState(StrEnum):
     OFFER_PRESENTED = "offer_presented"
     CHECKOUT = "checkout"
     WON = "won"
+
+
+class SalesJourneyDisposition(StrEnum):
+    OPEN = "open"
     LOST = "lost"
+    WON = "won"
 
 
 class SalesJourneyEvent(StrEnum):
@@ -31,16 +36,24 @@ class SalesJourneyEvent(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class SalesJourneyProjection:
+    state: SalesJourneyState = SalesJourneyState.DISCOVERED
+    disposition: SalesJourneyDisposition = SalesJourneyDisposition.OPEN
+
+
+@dataclass(frozen=True, slots=True)
 class SalesJourneyTransition:
-    previous: SalesJourneyState
+    previous: SalesJourneyProjection
     event: SalesJourneyEvent
-    current: SalesJourneyState
+    current: SalesJourneyProjection
 
     def as_event_payload(self) -> dict[str, str]:
         return {
-            "from": self.previous.value,
+            "from": self.previous.state.value,
+            "from_disposition": self.previous.disposition.value,
             "event": self.event.value,
-            "to": self.current.value,
+            "to": self.current.state.value,
+            "to_disposition": self.current.disposition.value,
         }
 
 
@@ -74,56 +87,83 @@ _HANDOFF_EVENTS = frozenset(
 
 def sales_journey_rank(state: SalesJourneyState | str) -> int:
     normalized = state if isinstance(state, SalesJourneyState) else SalesJourneyState(str(state))
-    return _PROGRESS_RANK.get(normalized, -1)
+    return _PROGRESS_RANK[normalized]
+
+
+def _projection(value: SalesJourneyProjection | SalesJourneyState | str) -> SalesJourneyProjection:
+    if isinstance(value, SalesJourneyProjection):
+        return value
+    state = value if isinstance(value, SalesJourneyState) else SalesJourneyState(str(value))
+    disposition = (
+        SalesJourneyDisposition.WON
+        if state == SalesJourneyState.WON
+        else SalesJourneyDisposition.OPEN
+    )
+    return SalesJourneyProjection(state=state, disposition=disposition)
 
 
 def reduce_sales_journey(
-    state: SalesJourneyState | str,
+    projection: SalesJourneyProjection | SalesJourneyState | str,
     event: SalesJourneyEvent | str,
 ) -> SalesJourneyTransition:
     """Project hard sales evidence without choosing a business action.
 
-    The reducer is deliberately replay-safe. Handoff is orthogonal evidence and
-    therefore never becomes a competing funnel state. ``won`` is the strongest
-    terminal fact. ``lost`` may be reopened by newer positive evidence because a
-    declined lead can legitimately re-engage later.
+    Funnel progress and disposition are separate facts. This preserves milestones
+    after a decline, lets newer positive evidence reopen a lead, and keeps handoff
+    orthogonal to sales-stage truth. A confirmed payment is the strongest terminal
+    evidence and cannot be downgraded by later events.
     """
 
-    current = state if isinstance(state, SalesJourneyState) else SalesJourneyState(str(state))
+    current = _projection(projection)
     signal = event if isinstance(event, SalesJourneyEvent) else SalesJourneyEvent(str(event))
 
     if signal in _HANDOFF_EVENTS:
         return SalesJourneyTransition(current, signal, current)
     if signal == SalesJourneyEvent.PAYMENT_CONFIRMED:
-        return SalesJourneyTransition(current, signal, SalesJourneyState.WON)
-    if current == SalesJourneyState.WON:
+        won = SalesJourneyProjection(
+            state=SalesJourneyState.WON,
+            disposition=SalesJourneyDisposition.WON,
+        )
+        return SalesJourneyTransition(current, signal, won)
+    if current.disposition == SalesJourneyDisposition.WON:
         return SalesJourneyTransition(current, signal, current)
     if signal in {SalesJourneyEvent.DECLINED, SalesJourneyEvent.QUALIFICATION_FAILED}:
-        return SalesJourneyTransition(current, signal, SalesJourneyState.LOST)
+        lost = SalesJourneyProjection(
+            state=current.state,
+            disposition=SalesJourneyDisposition.LOST,
+        )
+        return SalesJourneyTransition(current, signal, lost)
 
     target = _TARGET_BY_EVENT.get(signal)
     if target is None:
         raise ValueError(f"sales_journey_event_not_supported:{signal.value}")
-    if current == SalesJourneyState.LOST:
-        return SalesJourneyTransition(current, signal, target)
-    if sales_journey_rank(current) >= sales_journey_rank(target):
-        return SalesJourneyTransition(current, signal, current)
-    return SalesJourneyTransition(current, signal, target)
+    next_state = (
+        current.state
+        if sales_journey_rank(current.state) >= sales_journey_rank(target)
+        else target
+    )
+    reopened = SalesJourneyProjection(
+        state=next_state,
+        disposition=SalesJourneyDisposition.OPEN,
+    )
+    return SalesJourneyTransition(current, signal, reopened)
 
 
 def replay_sales_journey(
     events: list[SalesJourneyEvent | str] | tuple[SalesJourneyEvent | str, ...],
     *,
-    initial: SalesJourneyState = SalesJourneyState.DISCOVERED,
-) -> SalesJourneyState:
-    state = initial
+    initial: SalesJourneyProjection | SalesJourneyState = SalesJourneyState.DISCOVERED,
+) -> SalesJourneyProjection:
+    projection = _projection(initial)
     for event in events:
-        state = reduce_sales_journey(state, event).current
-    return state
+        projection = reduce_sales_journey(projection, event).current
+    return projection
 
 
 __all__ = [
+    "SalesJourneyDisposition",
     "SalesJourneyEvent",
+    "SalesJourneyProjection",
     "SalesJourneyState",
     "SalesJourneyTransition",
     "reduce_sales_journey",
