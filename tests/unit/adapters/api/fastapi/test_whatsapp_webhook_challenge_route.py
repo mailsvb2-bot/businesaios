@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import APIRouter, HTTPException, Request
 
-from adapters.api.fastapi.provider_webhook_challenge_routes import register_provider_webhook_challenge_routes
+from adapters.api.fastapi import public_routes
 from application.business_autonomy.provider_catalog import provider_map
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
@@ -20,9 +20,12 @@ def _vault() -> InMemorySecretVault:
     return vault
 
 
-def _endpoint():
+def _endpoint(monkeypatch):
+    monkeypatch.setattr(public_routes, 'register_public_core_routes', lambda **_: None)
+    monkeypatch.setattr(public_routes, 'register_public_site_routes', lambda **_: None)
+    monkeypatch.setattr(public_routes, 'register_public_client_outcome_routes', lambda **_: None)
     router = APIRouter()
-    register_provider_webhook_challenge_routes(router=router, dependency_container=SimpleNamespace(secret_vault=_vault()))
+    public_routes.register_public_api_routes(router=router, dependency_container=SimpleNamespace(secret_vault=_vault()), health_handler=None, handlers=None, headless_handlers=None, governance_handlers=None, business_memory_handlers=None, governance_advanced_handlers=None, security_guard=object())
     return next(route.endpoint for route in router.routes if route.path.endswith('/whatsapp_cloud'))
 
 
@@ -31,13 +34,13 @@ def _request(token: str) -> Request:
     return Request({'type': 'http', 'method': 'GET', 'path': '/providers/webhook/tenant-a/business-a/whatsapp_cloud', 'query_string': query, 'headers': []})
 
 
-def test_whatsapp_http_challenge_returns_raw_text_plain() -> None:
-    response = asyncio.run(_endpoint()('tenant-a', 'business-a', _request('verify-me')))
+def test_whatsapp_http_challenge_returns_raw_text_plain(monkeypatch) -> None:
+    response = asyncio.run(_endpoint(monkeypatch)('tenant-a', 'business-a', _request('verify-me')))
     assert response.body == b'12345'
     assert response.media_type == 'text/plain'
 
 
-def test_whatsapp_http_challenge_fails_closed_on_token_mismatch() -> None:
+def test_whatsapp_http_challenge_fails_closed_on_token_mismatch(monkeypatch) -> None:
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(_endpoint()('tenant-a', 'business-a', _request('wrong')))
+        asyncio.run(_endpoint(monkeypatch)('tenant-a', 'business-a', _request('wrong')))
     assert exc.value.status_code == 403
