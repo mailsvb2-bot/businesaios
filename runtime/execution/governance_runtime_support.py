@@ -39,9 +39,12 @@ from runtime.execution.governance_runtime import (
     review_governance_execution,
 )
 
+build_default_approval_execution_gate = _build_default_approval_execution_gate
+
 __all__ = [
     "CANON_RUNTIME_GOVERNANCE_EXECUTION_GATE",
     "GovernanceExecutionBlocked",
+    "build_default_approval_execution_gate",
     "_append_governance_audit",
     "_governance_audit_log",
     "_apply_approval_workflow_resolution",
