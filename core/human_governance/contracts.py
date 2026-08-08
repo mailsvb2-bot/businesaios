@@ -5,7 +5,7 @@ from .contracts_policy import HumanGovernancePolicyContract
 from .contracts_readers import ApprovalStateReader, EscalationReader, ReviewQueueReader
 from .contracts_repositories import OverrideRepository, ReviewRepository
 from .contracts_writers import ApprovalWriter, OverrideWriter, PauseWriter, RejectionWriter
-from .types import ReviewCase
+from .types import ReviewCase, SalesHandoffSignal
 
 __all__ = [
     "ReviewQueueReader",
@@ -20,4 +20,5 @@ __all__ = [
     "HumanGovernancePolicyContract",
     "HumanGovernanceDeps",
     "ReviewCase",
+    "SalesHandoffSignal",
 ]
