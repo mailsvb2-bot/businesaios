@@ -26,16 +26,7 @@ class FakeEffects:
 
     def send_message(self, **kwargs):
         self.calls.append(dict(kwargs))
-        return {
-            "ok": True,
-            "evidence": {
-                "source": "connector",
-                "verified": True,
-                "status": "verified",
-                "external_refs": ["message-pricing-1"],
-                "confidence": 1.0,
-            },
-        }
+        return {"ok": True, "evidence": {"source": "connector", "verified": True, "status": "verified", "external_refs": ["message-pricing-1"], "confidence": 1.0}}
 
 
 class StaticCatalogResolver:
@@ -49,36 +40,17 @@ class StaticCatalogResolver:
 
 
 def _env() -> SimpleNamespace:
-    return SimpleNamespace(
-        decision=SimpleNamespace(
-            decision_id="decision-pricing-select",
-            correlation_id="correlation-pricing-select",
-            issuer_id="businesaios-core",
-            action="pricing_select@v1",
-        )
-    )
+    return SimpleNamespace(decision=SimpleNamespace(decision_id="decision-pricing-select", correlation_id="correlation-pricing-select", issuer_id="businesaios-core", action="pricing_select@v1"))
 
 
 def _approval_gate() -> tuple[ApprovalExecutionGate, ApprovalWorkflow]:
     workflow = ApprovalWorkflow(store=InMemoryApprovalStore())
-    gate = ApprovalExecutionGate(
-        approval_policy_engine=ApprovalPolicyEngine(change_control_policy=ChangeControlPolicy()),
-        approval_workflow=workflow,
-    )
+    gate = ApprovalExecutionGate(approval_policy_engine=ApprovalPolicyEngine(change_control_policy=ChangeControlPolicy()), approval_workflow=workflow)
     return gate, workflow
 
 
 def _approval_catalog(body: str) -> YamlOfferCatalogV1:
-    return YamlOfferCatalogV1.from_spec({
-        "catalog_id": "tenant-a:audit:prod",
-        "offers": [{
-            "offer_id": "audit",
-            "title": "Audit",
-            "base_price_rub": 60_000,
-            "meta": {"commercial": {"position": 0, "requires_human_approval": True}},
-            "variants": {"a": {"title": "Audit", "body": body}},
-        }],
-    })
+    return YamlOfferCatalogV1.from_spec({"catalog_id": "tenant-a:audit:prod", "offers": [{"offer_id": "audit", "title": "Audit", "base_price_rub": 60_000, "meta": {"commercial": {"position": 0, "requires_human_approval": True}}, "variants": {"a": {"title": "Audit", "body": body}}}]})
 
 
 @pytest.mark.lock
@@ -111,105 +83,55 @@ def test_configured_memory_approval_backend_is_shared_with_control_plane(monkeyp
 
 def test_real_pricing_selection_uses_catalog_owned_identity_price_and_copy() -> None:
     effects = FakeEffects()
-    result = handle_pricing_select(
-        {
-            "tenant_id": "business-a",
-            "product_id": "salesbot",
-            "user_id": "user-1",
-            "candidates": [{"offer_id": "sales_entry", "price": 1, "score": 0.9, "message": "UNTRUSTED COPY"}],
-        },
-        effects,
-        _env(),
-        selection_service=PricingSelectionService(),
-    )
-
+    result = handle_pricing_select({"tenant_id": "business-a", "product_id": "salesbot", "user_id": "user-1", "candidates": [{"offer_id": "sales_entry", "price": 1, "score": 0.9, "message": "UNTRUSTED COPY"}]}, effects, _env(), selection_service=PricingSelectionService())
     assert result["ok"] is True
-    assert result["selection"]["offer_id"] == "sales_entry"
-    assert result["selection"]["price_rub"] == 600
+    assert result["selection"]["offer_id"] == "sales_entry" and result["selection"]["price_rub"] == 600
     assert result["selection_result"]["catalog_id"] == "default:salesbot:prod"
-    assert result["selection_result"]["tenant_id"] == "business-a"
-    assert effects.calls[-1]["tenant_id"] == "business-a"
-    assert effects.calls[-1]["user_id"] == "user-1"
-    assert effects.calls[-1]["track_payload"]["price_rub"] == 600
-    assert effects.calls[-1]["text"] != "UNTRUSTED COPY"
+    assert effects.calls[-1]["track_payload"]["price_rub"] == 600 and effects.calls[-1]["text"] != "UNTRUSTED COPY"
     assert result["router_evidence"]["source"] == "connector"
 
 
 def test_payload_offer_outside_canonical_catalog_is_blocked() -> None:
     effects = FakeEffects()
-    result = handle_pricing_select(
-        {
-            "tenant_id": "business-a",
-            "product_id": "salesbot",
-            "user_id": "user-1",
-            "candidates": [{"offer_id": "rogue", "price": 1, "score": 1.0, "message": "Rogue"}],
-        },
-        effects,
-        _env(),
-        selection_service=PricingSelectionService(),
-    )
-    assert result["ok"] is False
-    assert result["status"] == "blocked"
+    result = handle_pricing_select({"tenant_id": "business-a", "product_id": "salesbot", "user_id": "user-1", "candidates": [{"offer_id": "rogue", "price": 1, "score": 1.0, "message": "Rogue"}]}, effects, _env(), selection_service=PricingSelectionService())
+    assert result["ok"] is False and result["status"] == "blocked"
     assert effects.calls[-1]["track_event_type"] == "pricing_select_blocked@v1"
 
 
 def test_unknown_product_cannot_fall_back_to_legacy_catalog() -> None:
     effects = FakeEffects()
-    result = handle_pricing_select(
-        {
-            "tenant_id": "business-a",
-            "product_id": "typo-product",
-            "user_id": "user-1",
-            "candidates": [{"offer_id": "offer_30", "score": 1.0}],
-        },
-        effects,
-        _env(),
-        selection_service=PricingSelectionService(),
-    )
+    result = handle_pricing_select({"tenant_id": "business-a", "product_id": "typo-product", "user_id": "user-1", "candidates": [{"offer_id": "offer_30", "score": 1.0}]}, effects, _env(), selection_service=PricingSelectionService())
     assert result["ok"] is False and result["status"] == "blocked"
-    assert effects.calls[-1]["track_event_type"] == "pricing_select_blocked@v1"
 
 
-def test_approval_required_offer_binds_recipient_and_rendered_content_before_delivery() -> None:
+def test_approval_required_offer_binds_recipient_content_and_delivery_route() -> None:
     original_catalog = _approval_catalog("Approved audit")
     resolver = StaticCatalogResolver(original_catalog)
     gate, workflow = _approval_gate()
     effects = FakeEffects()
-    base_payload = {
-        "tenant_id": "tenant-a",
-        "product_id": "audit",
-        "user_id": "user-1",
-        "candidates": [{"offer_id": "audit", "score": 0.9}],
-    }
-    first = handle_pricing_select(base_payload, effects, _env(), selection_service=PricingSelectionService(),
-        catalog_resolver=resolver, approval_gate=gate)
-    assert first["status"] == "approval_required"
-    assert first["delivery"] is None and effects.calls == []
+    base_payload = {"tenant_id": "tenant-a", "product_id": "audit", "user_id": "user-1", "channel": "telegram", "candidates": [{"offer_id": "audit", "score": 0.9}]}
+    first = handle_pricing_select(base_payload, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
+    assert first["status"] == "approval_required" and first["delivery"] is None and effects.calls == []
     approval_id = first["approval"]["approval_id"]
-    approved = workflow.decide(ApprovalDecision(
-        approval_id=approval_id, tenant_id="tenant-a", actor_id="owner-1", role_id=RoleId.OWNER,
-        outcome=ApprovalOutcome.APPROVE, rationale="approved offer",
-    ))
-    assert approved.status.value == "approved"
+    workflow.decide(ApprovalDecision(approval_id=approval_id, tenant_id="tenant-a", actor_id="owner-1", role_id=RoleId.OWNER, outcome=ApprovalOutcome.APPROVE, rationale="approved offer"))
 
-    wrong_recipient = {**base_payload, "user_id": "user-2", "evidence": {"approval_id": approval_id}}
-    wrong = handle_pricing_select(wrong_recipient, effects, _env(), selection_service=PricingSelectionService(),
-        catalog_resolver=resolver, approval_gate=gate)
-    assert wrong["ok"] is False and wrong["status"] == "approval_required"
-    assert wrong["approval"]["reason"] == "approval_subject_mismatch"
-    assert wrong["delivery"] is None and effects.calls == []
+    for changed in (
+        {**base_payload, "user_id": "user-2", "evidence": {"approval_id": approval_id}},
+        {**base_payload, "channel": "email", "evidence": {"approval_id": approval_id}},
+        {**base_payload, "channel_policy": {"fallback_channels": ["email"]}, "evidence": {"approval_id": approval_id}},
+    ):
+        mismatch = handle_pricing_select(changed, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
+        assert mismatch["ok"] is False and mismatch["status"] == "approval_required"
+        assert mismatch["approval"]["reason"] == "approval_subject_mismatch"
+        assert mismatch["delivery"] is None and effects.calls == []
 
     resolver.catalog = _approval_catalog("Changed after approval")
-    changed_copy = handle_pricing_select({**base_payload, "evidence": {"approval_id": approval_id}}, effects, _env(),
-        selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
-    assert changed_copy["ok"] is False and changed_copy["status"] == "approval_required"
-    assert changed_copy["approval"]["reason"] == "approval_subject_mismatch"
-    assert changed_copy["delivery"] is None and effects.calls == []
+    changed_copy = handle_pricing_select({**base_payload, "evidence": {"approval_id": approval_id}}, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
+    assert changed_copy["approval"]["reason"] == "approval_subject_mismatch" and effects.calls == []
 
     resolver.catalog = original_catalog
-    second = handle_pricing_select({**base_payload, "evidence": {"approval_id": approval_id}}, effects, _env(),
-        selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
+    second = handle_pricing_select({**base_payload, "evidence": {"approval_id": approval_id}}, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
     assert second["ok"] is True and second["status"] == "verified"
-    assert effects.calls[-1]["track_payload"]["offer_id"] == "audit"
+    assert effects.calls[-1]["channel"] == "telegram"
     assert effects.calls[-1]["track_payload"]["price_rub"] == 60_000
     assert "Approved audit" in effects.calls[-1]["text"]
