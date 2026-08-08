@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from adapters.api.fastapi.analytics_routes import register_analytics_routes
 from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
@@ -15,8 +15,10 @@ from adapters.api.fastapi.public_site_routes import (
     register_public_site_routes,
 )
 from adapters.api.fastapi.router_support import authorize_request
+from application.business_autonomy.provider_catalog import provider_map
 from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
+from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 
 
 CANON_FASTAPI_PUBLIC_ROUTES_FINAL_OWNER = True
@@ -128,6 +130,21 @@ def register_public_api_routes(
         governance_advanced_handlers=governance_advanced_handlers,
         enforce_public_security=enforce_public_security,
     )
+    if dependency_container is not None:
+        @router.get('/providers/webhook/{tenant_id}/{business_id}/whatsapp_cloud', tags=['provider-runtime'])
+        async def whatsapp_webhook_challenge(tenant_id: str, business_id: str, request: Request) -> Response:
+            query = request.query_params
+            challenge = ProviderWebhookRuntime(dependency_container.secret_vault).verify_challenge(
+                provider=provider_map()['whatsapp_cloud'],
+                tenant_id=tenant_id,
+                business_id=business_id,
+                mode=query.get('hub.mode', ''),
+                verify_token=query.get('hub.verify_token', ''),
+                challenge=query.get('hub.challenge', ''),
+            )
+            if challenge is None:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='whatsapp_webhook_challenge_denied')
+            return Response(content=challenge, media_type='text/plain')
     register_public_site_routes(router=router, enforce_public_security=enforce_public_security, auth_bundle=auth_bundle, tenant_registry=tenant_registry)
     if auth_bundle is not None:
         register_business_workspace_provider_routes(router=router, auth_bundle=auth_bundle)
