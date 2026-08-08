@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from infra.audit_log_service import AuditLogService
 from infra.authority_scopes import AuthorityScope
 from infra.compliance_boot_result import ComplianceBootResult
 from infra.constitutional_governance_boot_result import (
