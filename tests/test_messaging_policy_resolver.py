@@ -79,3 +79,11 @@ def test_resolver_verified_only_filters_non_verified():
         )
     )
     assert plan.ordered_channels == ("email",)
+
+
+def test_explicit_missing_contact_basis_blocks_outbound_before_channel_selection():
+    preference = ChannelPreference(primary="whatsapp", enabled=("whatsapp", "email"))
+    plan = MessagingPolicyResolver().resolve(PolicyRequest(preference=preference, contact_basis="none"))
+    assert plan.ordered_channels == ()
+    assert plan.terminal_reason == "outbound_forbidden"
+    assert "outbound_forbidden" in plan.reason_codes
