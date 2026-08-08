@@ -84,7 +84,10 @@ def handle_pricing_select(
             raise PricingRouteViolation("user_id is required")
 
         evidence = dict(body.get("evidence") or {})
-        environment = str(evidence.get("environment") or "prod").strip() or "prod"
+        raw_environment = evidence.get("environment", "prod")
+        if not isinstance(raw_environment, str) or not raw_environment.strip():
+            raise PricingRouteViolation("evidence.environment must be a non-empty string")
+        environment = raw_environment.strip()
         variant = evidence.get("variant", "a")
         if not isinstance(variant, str) or not variant.strip():
             raise PricingRouteViolation("evidence.variant must be a non-empty string")
