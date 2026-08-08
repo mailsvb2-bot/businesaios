@@ -179,6 +179,13 @@ def test_approval_required_offer_uses_canonical_gate_before_delivery() -> None:
     ))
     assert approved.status.value == "approved"
 
+    wrong_recipient = {**base_payload, "user_id": "user-2", "evidence": {"approval_id": approval_id}}
+    wrong = handle_pricing_select(wrong_recipient, effects, _env(), selection_service=PricingSelectionService(),
+        catalog_resolver=StaticCatalogResolver(catalog), approval_gate=gate)
+    assert wrong["ok"] is False and wrong["status"] == "approval_required"
+    assert wrong["approval"]["reason"] == "approval_subject_mismatch"
+    assert wrong["delivery"] is None and effects.calls == []
+
     second_payload = {**base_payload, "evidence": {"approval_id": approval_id}}
     second = handle_pricing_select(second_payload, effects, _env(), selection_service=PricingSelectionService(),
         catalog_resolver=StaticCatalogResolver(catalog), approval_gate=gate)
