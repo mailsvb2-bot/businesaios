@@ -74,6 +74,7 @@ def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
                 unanswered_threshold_s=int(disciplined_policy.get("unanswered_threshold_s") or 0),
                 delivery_snapshot=parse_delivery_snapshot(disciplined_policy.get("delivery_snapshot")),
                 unanswered_snapshot=parse_unanswered_snapshot(disciplined_policy.get("unanswered_snapshot")),
+                contact_basis=disciplined_policy.get("contact_basis"),
             )
         )
     )
