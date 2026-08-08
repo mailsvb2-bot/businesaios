@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from core.growth.strategy.service import GrowthStrategyService
+from core.growth.strategy.signals import build_signals
 from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
 
@@ -38,3 +40,19 @@ def test_accept_reject_updates_state(tmp_path: Path):
         backlog2 = svc.backlog(tenant_id="t1", limit=10)
         states2 = {h.hypothesis_id: st for (h, _, st) in backlog2}
         assert states2.get(hid) == "rejected"
+
+
+def test_sales_funnel_replays_hard_tenant_evidence(tmp_path: Path):
+    now = int(time.time() * 1000)
+    with SqliteEventStore(str(tmp_path / "sales.db")) as store:
+        rows = (
+            ("t1", "lead-1", "sales_qualified", {"source": "telegram"}),
+            ("t1", "lead-1", "sales_declined", {"source": "telegram"}),
+            ("t1", "lead-1", "purchase_completed@v1", {"source": "telegram"}),
+            ("t1", "operator", "sales_qualification_failed", {"subject_id": "lead-2", "source": "website"}),
+            ("t2", "other", "purchase_completed@v1", {"source": "telegram"}),
+        )
+        for index, (tenant, user, kind, payload) in enumerate(rows):
+            store.append_event({"tenant_id": tenant, "timestamp_ms": now - 5000 + index, "user_id": user, "event_type": kind, "payload": payload})
+        total = build_signals(store, tenant_id="t1").sales_funnel["total"]
+        assert total["discovered"] == 2 and total["qualified"] == 1 and total["won"] == 1 and total["lost"] == 1

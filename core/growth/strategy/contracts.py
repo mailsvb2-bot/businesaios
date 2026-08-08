@@ -6,28 +6,10 @@ from typing import Any, Literal
 from contracts.messaging_channels import ALL_CHANNELS
 
 FunnelStage = Literal["acquisition", "activation", "retention", "referral", "revenue"]
-
-GROWTH_NON_MESSAGING_CHANNELS = (
-    "organic",
-    "seo",
-    "content",
-    "referral",
-    "partnerships",
-)
+GROWTH_NON_MESSAGING_CHANNELS = ("organic", "seo", "content", "referral", "partnerships")
 GROWTH_MESSAGING_CHANNELS = (*ALL_CHANNELS, "push")
-GROWTH_PAID_CHANNELS = (
-    "meta_ads",
-    "google_ads",
-    "tiktok_ads",
-    "vk_ads",
-    "yandex_direct",
-    "other_paid",
-)
-Channel = Literal[
-    *GROWTH_NON_MESSAGING_CHANNELS,
-    *GROWTH_MESSAGING_CHANNELS,
-    *GROWTH_PAID_CHANNELS,
-]
+GROWTH_PAID_CHANNELS = ("meta_ads", "google_ads", "tiktok_ads", "vk_ads", "yandex_direct", "other_paid")
+Channel = Literal[*GROWTH_NON_MESSAGING_CHANNELS, *GROWTH_MESSAGING_CHANNELS, *GROWTH_PAID_CHANNELS]
 
 
 @dataclass(frozen=True)
@@ -45,18 +27,16 @@ class GrowthSignalV1:
     schema_version: int = 1
     ts_ms: int = 0
     tenant_id: str = ""
-
     leads_today: int = 0
     spend_today_minor: int = 0
     revenue_today_minor: int = 0
     profit_today_minor: int = 0
-
     retention_d1_pct: float = 0.0
     retention_d7_pct: float = 0.0
     conversion_lead_to_purchase_pct: float = 0.0
-
     top_channels: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
+    sales_funnel: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -65,21 +45,17 @@ class GrowthHypothesisV1:
     hypothesis_id: str = ""
     created_ms: int = 0
     tenant_id: str = ""
-
     stage: FunnelStage = "acquisition"
     channel: Channel = "organic"
-
     title: str = ""
     mechanism: str = ""
     expected_impact: str = ""
     effort: Literal["low", "medium", "high"] = "medium"
     risk: Literal["low", "medium", "high"] = "medium"
-
     metric: str = "profit_minor"
     baseline: float | None = None
     target: float | None = None
     horizon_days: int = 14
-
     action_hints: dict[str, Any] = field(default_factory=dict)
 
 
@@ -102,17 +78,13 @@ class ExperimentSpecV1:
     tenant_id: str = ""
     created_ms: int = 0
     hypothesis_id: str = ""
-
     name: str = ""
     stage: FunnelStage = "acquisition"
     channel: Channel = "organic"
-
     primary_metric: str = "profit_minor"
     guardrail_metrics: tuple[str, ...] = ("spend_minor",)
-
     steps: tuple[str, ...] = ()
     duration_days: int = 14
-
     payload: dict[str, Any] = field(default_factory=dict)
 
 
