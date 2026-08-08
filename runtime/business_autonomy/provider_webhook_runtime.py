@@ -28,8 +28,10 @@ class ProviderWebhookRuntime:
                 enabled=True,
                 metadata={'secret_field': self._secret_field(provider)},
             )
-        if provider.provider_key in {'telegram_bot', 'whatsapp_cloud'}:
-            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='bearer_or_shared_secret', header_names=('Authorization', 'X-Telegram-Bot-Api-Secret-Token', 'X-Hub-Signature-256'), enabled=True, metadata={'secret_field': self._secret_field(provider)})
+        if provider.provider_key == 'whatsapp_cloud':
+            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='hmac_sha256_hex', header_names=('X-Hub-Signature-256',), enabled=True, metadata={'secret_field': 'app_secret', 'challenge_secret_field': 'verify_token'})
+        if provider.provider_key == 'telegram_bot':
+            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='bearer_or_shared_secret', header_names=('Authorization', 'X-Telegram-Bot-Api-Secret-Token'), enabled=True, metadata={'secret_field': self._secret_field(provider)})
         if describe_provider_messaging_binding(provider) is not None and any(field.secret_kind == 'signing_secret' for field in provider.secret_fields):
             return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='shared_secret_header', header_names=('Authorization', 'X-BusinessAIOS-Webhook-Secret'), enabled=True, metadata={'secret_field': self._secret_field(provider), 'integration_mode': 'provider_webhook_bridge'})
         return ProviderWebhookContract(
@@ -45,10 +47,13 @@ class ProviderWebhookRuntime:
         if not contract.enabled:
             return False
         normalized_headers = {str(k).lower(): str(v) for k, v in dict(headers or {}).items()}
-        secret_name = self._secret_field(provider)
+        secret_name = str(contract.metadata.get('secret_field') or self._secret_field(provider))
         secret = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.{secret_name}')
         if not secret:
             return False
+        if contract.verification_kind == 'hmac_sha256_hex':
+            expected = 'sha256=' + hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).hexdigest()
+            return hmac.compare_digest(expected, normalized_headers.get('x-hub-signature-256', ''))
         if contract.verification_kind == 'hmac_sha256_base64':
             expected = base64.b64encode(hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii')
             candidates = [normalized_headers.get(str(name).lower(), '') for name in contract.header_names]
@@ -58,6 +63,12 @@ class ProviderWebhookRuntime:
             candidates = [bearer.removeprefix('Bearer ').strip()] + [normalized_headers.get(str(name).lower(), '') for name in contract.header_names if str(name).lower() != 'authorization']
             return any(candidate and hmac.compare_digest(secret, candidate) for candidate in candidates)
         return False
+
+    def verify_challenge(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, mode: str, verify_token: str, challenge: str) -> str | None:
+        if provider.provider_key != 'whatsapp_cloud' or str(mode) != 'subscribe':
+            return None
+        expected = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.verify_token')
+        return str(challenge) if expected and hmac.compare_digest(expected, str(verify_token)) else None
 
     def _secret_field(self, provider: ProviderDefinition) -> str:
         for preferred_kind in ('signing_secret', 'token', 'api_key', 'password'):

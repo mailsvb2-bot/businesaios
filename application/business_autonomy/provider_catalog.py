@@ -47,6 +47,8 @@ PROVIDERS: tuple[ProviderDefinition, ...] = (
         secret_fields=(
             _token("Access Token", "access_token", placeholder="EAAB..."),
             _token("Phone Number ID", "phone_number_id", placeholder="1234567890", kind="config"),
+            _token("App Secret", "app_secret", placeholder="meta-app-secret", kind="signing_secret"),
+            _token("Webhook Verify Token", "verify_token", placeholder="whatsapp-verify-token", kind="config"),
         ),
         default_non_ai_mode="delegated",
         default_action_type="communications_write",

@@ -12,6 +12,7 @@ class ProviderMessagingBinding:
     channel: str
     required_capabilities: Mapping[str, bool]
     live_probe_supported: bool
+    inbound_mode: str = 'provider_webhook'
 
 
 def describe_provider_messaging_binding(provider: ProviderDefinition) -> ProviderMessagingBinding | None:
@@ -31,4 +32,5 @@ def describe_provider_messaging_binding(provider: ProviderDefinition) -> Provide
             'subject_line': bool(capabilities.get('subject_line', False)),
         },
         live_probe_supported=bool(getattr(provider, 'messaging_live_probe_supported', False)),
+        inbound_mode={'telegram': 'poll_or_webhook', 'email': 'mailbox_or_provider_webhook', 'web_chat': 'direct_ingress'}.get(channel, 'provider_webhook'),
     )

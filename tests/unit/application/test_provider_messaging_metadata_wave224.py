@@ -14,6 +14,7 @@ def test_messaging_binding_to_metadata_is_canonical_and_lossless():
         "channel": "telegram",
         "required_capabilities": {"plain_text": True, "buttons": True},
         "live_probe_supported": True,
+        "inbound_mode": "provider_webhook",
     }
 
 

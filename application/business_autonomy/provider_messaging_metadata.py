@@ -14,6 +14,7 @@ def messaging_binding_to_metadata(binding: ProviderMessagingBinding | None) -> d
         "channel": str(binding.channel),
         "required_capabilities": dict(binding.required_capabilities),
         "live_probe_supported": bool(binding.live_probe_supported),
+        "inbound_mode": str(binding.inbound_mode),
     }
 
 
