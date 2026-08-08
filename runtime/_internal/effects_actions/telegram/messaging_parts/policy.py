@@ -78,9 +78,10 @@ def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
             )
         )
     )
-    plan = ensure_policy_plan_disciplined(
-        _apply_capability_routing(self, ordered_channels=plan.ordered_channels, disciplined_policy=disciplined_policy)
-    )
+    if plan.ordered_channels:
+        plan = ensure_policy_plan_disciplined(
+            _apply_capability_routing(self, ordered_channels=plan.ordered_channels, disciplined_policy=disciplined_policy)
+        )
     recorder = build_policy_event_recorder_from_runtime(self)
     return execute_policy_plan_with_events(
         plan=plan,
