@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import asdict, dataclass, field, is_dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, Mapping
+from typing import Any, Dict, Mapping
 import uuid
 
 
