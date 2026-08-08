@@ -55,10 +55,16 @@ class YamlOfferCatalogV1(OfferCatalog):
         for oid in sorted(self._offers):
             offer = self._offers.get(oid) or {}
             raw_price = offer["base_price_rub"] if "base_price_rub" in offer else offer.get("price_rub", 0)
-            if isinstance(raw_price, bool) or not isinstance(raw_price, int) or raw_price < 0:
+            if isinstance(raw_price, bool):
+                raise ValueError(f"base_price_rub must be a non-negative integer for offer {oid}")
+            if isinstance(raw_price, str) and raw_price.strip().isdigit():
+                price = int(raw_price.strip())
+            elif isinstance(raw_price, int) and raw_price >= 0:
+                price = raw_price
+            else:
                 raise ValueError(f"base_price_rub must be a non-negative integer for offer {oid}")
             out.append(OfferSummary(offer_id=oid, title=str(offer.get("title") or oid),
-                base_price_rub=raw_price, meta=dict(offer.get("meta") or {})))
+                base_price_rub=price, meta=dict(offer.get("meta") or {})))
         return out
 
     def eligible(self, *, user_id: str, entitlements: Mapping[str, Any], context: Mapping[str, Any]) -> OfferEligibility:
