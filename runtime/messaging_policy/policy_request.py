@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.messaging.channel_preference import ChannelPreference
 from runtime.messaging_policy.delivery_snapshot import DeliverySnapshot
+from runtime.messaging_policy.discipline import MessagingPolicyDisciplineViolation
 from runtime.messaging_policy.unanswered_snapshot import UnansweredSnapshot
 
 _CONTACT_BASES = frozenset({"inbound", "explicit_consent", "existing_customer", "requested_followup", "none"})
@@ -26,10 +27,10 @@ def _normalize_contact_basis(value: str | None) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ValueError("contact_basis must be a string when provided")
+        raise MessagingPolicyDisciplineViolation("contact_basis must be a string when provided")
     text = value.strip().lower()
     if not text or text not in _CONTACT_BASES:
-        raise ValueError(f"unsupported contact_basis:{text}")
+        raise MessagingPolicyDisciplineViolation(f"unsupported contact_basis:{text}")
     return text
 
 
