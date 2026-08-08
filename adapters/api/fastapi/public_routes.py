@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, status
 
 from adapters.api.fastapi.analytics_routes import register_analytics_routes
+from adapters.api.fastapi.provider_webhook_challenge_routes import register_provider_webhook_challenge_routes
 from adapters.api.fastapi.public_client_outcome_routes import register_public_client_outcome_routes
 from adapters.api.fastapi.public_core_routes import register_public_core_routes
 from adapters.api.fastapi.public_site_routes import (
@@ -124,6 +125,8 @@ def register_public_api_routes(
         governance_advanced_handlers=governance_advanced_handlers,
         enforce_public_security=enforce_public_security,
     )
+    if dependency_container is not None:
+        register_provider_webhook_challenge_routes(router=router, dependency_container=dependency_container)
     register_public_site_routes(router=router, enforce_public_security=enforce_public_security)
     register_public_client_outcome_routes(
         router=router,
