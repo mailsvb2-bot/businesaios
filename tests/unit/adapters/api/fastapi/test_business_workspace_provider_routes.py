@@ -55,8 +55,8 @@ def _truth_rows():
 
 def test_workspace_scope_requires_owner_and_provider_scope(monkeypatch) -> None:
     monkeypatch.setattr(workspace, 'authorize_request', lambda **_: (object(), _principal()))
-    _, tenant_id, business_id, requested_by = workspace._workspace_scope(request=object(), auth_bundle=object())
-    assert (tenant_id, business_id, requested_by) == ('tenant-session', 'business-session', 'owner-user')
+    _, tenant_id, business_id = workspace._workspace_scope(request=object(), auth_bundle=object())
+    assert (tenant_id, business_id) == ('tenant-session', 'business-session')
     for principal in (_principal(roles=()), _principal(scopes=())):
         monkeypatch.setattr(workspace, 'authorize_request', lambda **_: (object(), principal))
         with pytest.raises(HTTPException) as exc:
