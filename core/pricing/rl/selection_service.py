@@ -14,10 +14,9 @@ _ALLOWED_COMMERCIAL_KINDS = frozenset({"standard", "diagnostic", "audit", "imple
 
 
 def _finite(value: object, name: str) -> float:
-    try:
-        result = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{name} must be finite") from exc
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError(f"{name} must be finite")
+    result = float(value)
     if not math.isfinite(result):
         raise ValueError(f"{name} must be finite")
     return result
@@ -68,7 +67,10 @@ class PricingSelectionService:
                 raise ValueError(f"commercial metadata must be a mapping for offer {offer.offer_id}")
             position = commercial.get("position", index)
             approval = commercial.get("requires_human_approval", False)
-            kind = str(commercial.get("kind") or "standard").strip().lower()
+            raw_kind = commercial.get("kind", "standard")
+            if not isinstance(raw_kind, str) or not raw_kind.strip():
+                raise ValueError(f"commercial.kind must be a non-empty string for offer {offer.offer_id}")
+            kind = raw_kind.strip().lower()
             if kind not in _ALLOWED_COMMERCIAL_KINDS:
                 raise ValueError(f"unsupported commercial kind for offer {offer.offer_id}")
             if isinstance(position, bool) or not isinstance(position, int) or position < 0 or position in seen_positions:
