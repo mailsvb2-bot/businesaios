@@ -79,6 +79,7 @@ def _review_selected_offer(
     gate = approval_gate or build_default_approval_execution_gate()
     approval_id = _approval_id(evidence)
     subject = {
+        "user_id": user_id,
         "product_id": product_id,
         "catalog_id": catalog_id,
         "offer_id": str(selected_offer.get("offer_id") or ""),
