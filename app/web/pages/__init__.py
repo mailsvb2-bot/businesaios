@@ -20,7 +20,6 @@ from app.web.pages.inference_runtime_admin import InferenceRuntimeAdminPage
 from app.web.pages.policy_overrides import PolicyOverridesPage
 from app.web.pages.platform_control_center import PlatformControlCenterPage
 from app.web.pages.client_outcomes import ClientOutcomesPage
-from app.web.pages.provider_tokens_admin import ProviderTokensAdminPage
 from app.web.pages.queue_history import QueueHistoryPage
 from app.web.pages.queue_ops import QueueOpsPage
 from app.web.pages.runtime_alerts import RuntimeAlertsPage
@@ -59,7 +58,6 @@ ADMIN_PAGES = {
     'ApprovalsPage': ApprovalsPage,
     'AuditPage': AuditPage,
     'ConnectorAdminPage': ConnectorAdminPage,
-    'ProviderTokensAdminPage': ProviderTokensAdminPage,
     'PlatformControlCenterPage': PlatformControlCenterPage,
     'InferenceCapacityPage': InferenceCapacityPage,
     'InferenceRuntimeAdminPage': InferenceRuntimeAdminPage,
