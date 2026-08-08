@@ -7,7 +7,7 @@ remain thin adapters instead of growing their own duplicated comparison logic.
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Callable
 
 
 @dataclass(frozen=True)
