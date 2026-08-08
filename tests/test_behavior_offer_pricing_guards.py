@@ -53,6 +53,20 @@ def test_commercial_candidates_use_canonical_catalog_and_pricing_selector() -> N
             evidence={"candidate_scores": {"diagnostic": 1.0}}, evidence_score=0.8)
 
 
+def test_catalog_shortlist_cannot_invent_offer_identity_or_price() -> None:
+    catalog = _commercial_catalog(
+        {"offer_id": "basic", "base_price_rub": 100},
+        {"offer_id": "pro", "base_price_rub": 900},
+    )
+    service = PricingSelectionService()
+    result = service.select_from_catalog(ctx=_pricing_ctx(), catalog=catalog,
+        evidence={"candidate_scores": {"basic": 0.1}}, evidence_score=0.0, candidate_offer_ids=["basic"])
+    assert result["selected"]["offer_id"] == "basic" and result["selected"]["price_rub"] == 100
+    with pytest.raises(ValueError, match="outside the canonical catalog"):
+        service.select_from_catalog(ctx=_pricing_ctx(), catalog=catalog,
+            evidence={"candidate_scores": {"rogue": 1.0}}, evidence_score=0.0, candidate_offer_ids=["rogue"])
+
+
 @pytest.mark.parametrize("commercial,match", [
     ({"position": 0, "min_evidence_score": float("nan")}, "finite"),
     ({"position": 0, "min_evidence_score": -0.1}, "between 0 and 1"),
@@ -81,12 +95,19 @@ def test_commercial_positions_and_integer_price_bounds_fail_closed() -> None:
         PricingSelectionService().select_from_catalog(ctx=_pricing_ctx(), catalog=catalog, evidence=evidence, evidence_score=0.8, min_price_rub=1.5)
 
 
-@pytest.mark.parametrize("price", [True, 10.5, "100"])
-def test_catalog_price_types_fail_closed_before_selection(price: object) -> None:
+@pytest.mark.parametrize("price", [True, 10.5])
+def test_catalog_unsafe_price_types_fail_closed_before_selection(price: object) -> None:
     catalog = _commercial_catalog({"offer_id": "audit", "base_price_rub": price})
     with pytest.raises(ValueError, match="base_price_rub"):
         PricingSelectionService().select_from_catalog(ctx=_pricing_ctx(), catalog=catalog,
             evidence={"candidate_scores": {"audit": 0.8}}, evidence_score=0.8)
+
+
+def test_catalog_numeric_string_price_preserves_schema_compatibility() -> None:
+    catalog = _commercial_catalog({"offer_id": "audit", "base_price_rub": "100"})
+    result = PricingSelectionService().select_from_catalog(ctx=_pricing_ctx(), catalog=catalog,
+        evidence={"candidate_scores": {"audit": 0.8}}, evidence_score=0.8)
+    assert result["selected"]["price_rub"] == 100
 
 
 @pytest.mark.parametrize("evidence_score", [-0.01, 1.01, True, "0.8"])
