@@ -28,13 +28,7 @@ _SALES_EVENTS = {
 }
 
 
-def _compute_retention(
-    events: Iterable[dict[str, Any]],
-    *,
-    window_days: int | None = None,
-    return_days: int | None = None,
-    policy: GrowthSignalsPolicy = DEFAULT_GROWTH_SIGNALS_POLICY,
-) -> float:
+def _compute_retention(events: Iterable[dict[str, Any]], *, window_days: int | None = None, return_days: int | None = None, policy: GrowthSignalsPolicy = DEFAULT_GROWTH_SIGNALS_POLICY) -> float:
     """Simple retention ratio: returning / active within a window."""
     now_ms = int(time.time() * 1000)
     active_window_days = policy.retention_window_days if window_days is None else int(window_days)
@@ -104,13 +98,7 @@ def _sales_funnel(event_store: Any, *, tenant_id: str, now_ms: int, policy: Grow
     return {**empty, "total": _sales_counts(states), "by_source": [{"source": source, "counts": _sales_counts(rows)} for source, rows in sorted(grouped.items())]}
 
 
-def build_signals(
-    event_store: Any,
-    *,
-    tenant_id: str,
-    limit: int | None = None,
-    policy: GrowthSignalsPolicy = DEFAULT_GROWTH_SIGNALS_POLICY,
-) -> GrowthSignalV1:
+def build_signals(event_store: Any, *, tenant_id: str, limit: int | None = None, policy: GrowthSignalsPolicy = DEFAULT_GROWTH_SIGNALS_POLICY) -> GrowthSignalV1:
     now_ms = int(time.time() * 1000)
     kpi = build_today_kpi(event_store, tenant_id=tenant_id)
     scan_limit = policy.event_scan_limit if limit is None else int(limit)
@@ -136,13 +124,7 @@ def build_signals(
     )
 
 
-def _latest_any_events(
-    event_store: Any,
-    *,
-    tenant_id: str,
-    limit: int,
-    policy: GrowthSignalsPolicy = DEFAULT_GROWTH_SIGNALS_POLICY,
-) -> Iterable[dict[str, Any]]:
+def _latest_any_events(event_store: Any, *, tenant_id: str, limit: int, policy: GrowthSignalsPolicy = DEFAULT_GROWTH_SIGNALS_POLICY) -> Iterable[dict[str, Any]]:
     latest = getattr(event_store, "latest_events", None)
     if callable(latest):
         try:
