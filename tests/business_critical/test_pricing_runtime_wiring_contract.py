@@ -43,7 +43,6 @@ def _env() -> SimpleNamespace:
 @pytest.mark.lock
 def test_pricing_select_is_registered_as_confirmed_external_user_effect() -> None:
     spec = get_spec("pricing_select@v1")
-
     assert spec.execution_category == "external_effect"
     assert spec.external_confirmation_mode == "required"
 
@@ -51,7 +50,6 @@ def test_pricing_select_is_registered_as_confirmed_external_user_effect() -> Non
 @pytest.mark.lock
 def test_select_tariff_is_registered_as_confirmed_durable_business_write() -> None:
     spec = get_spec("select_tariff@v1")
-
     assert spec.execution_category == "external_effect"
     assert spec.external_confirmation_mode == "required"
 
@@ -59,23 +57,18 @@ def test_select_tariff_is_registered_as_confirmed_durable_business_write() -> No
 @pytest.mark.lock
 def test_boot_builds_the_existing_canonical_pricing_selection_service() -> None:
     source = inspect.getsource(build_runtime_services)
-
     assert "from runtime.pricing import PricingSelectionService" in source
     assert "ctx.set_value('pricing_selection_service', PricingSelectionService()" in source
 
 
-def test_real_pricing_selection_service_drives_tenant_aware_delivery() -> None:
+def test_real_pricing_selection_uses_catalog_owned_identity_price_and_copy() -> None:
     effects = FakeEffects()
-
     result = handle_pricing_select(
         {
             "tenant_id": "business-a",
-            "product_id": "crm-pro",
+            "product_id": "salesbot",
             "user_id": "user-1",
-            "candidates": [
-                {"offer_id": "basic", "price": 100, "score": 0.2, "message": "Basic"},
-                {"offer_id": "pro", "price": 900, "score": 0.9, "message": "CRM Pro"},
-            ],
+            "candidates": [{"offer_id": "sales_entry", "price": 1, "score": 0.9, "message": "UNTRUSTED COPY"}],
         },
         effects,
         _env(),
@@ -83,9 +76,30 @@ def test_real_pricing_selection_service_drives_tenant_aware_delivery() -> None:
     )
 
     assert result["ok"] is True
-    assert result["selection"]["offer_id"] == "pro"
+    assert result["selection"]["offer_id"] == "sales_entry"
+    assert result["selection"]["price_rub"] == 600
+    assert result["selection_result"]["catalog_id"] == "default:salesbot:prod"
     assert result["selection_result"]["tenant_id"] == "business-a"
     assert effects.calls[-1]["tenant_id"] == "business-a"
     assert effects.calls[-1]["user_id"] == "user-1"
-    assert effects.calls[-1]["text"] == "CRM Pro"
+    assert effects.calls[-1]["track_payload"]["price_rub"] == 600
+    assert effects.calls[-1]["text"] != "UNTRUSTED COPY"
     assert result["router_evidence"]["source"] == "connector"
+
+
+def test_payload_offer_outside_canonical_catalog_is_blocked() -> None:
+    effects = FakeEffects()
+    result = handle_pricing_select(
+        {
+            "tenant_id": "business-a",
+            "product_id": "salesbot",
+            "user_id": "user-1",
+            "candidates": [{"offer_id": "rogue", "price": 1, "score": 1.0, "message": "Rogue"}],
+        },
+        effects,
+        _env(),
+        selection_service=PricingSelectionService(),
+    )
+    assert result["ok"] is False
+    assert result["status"] == "blocked"
+    assert effects.calls[-1]["track_event_type"] == "pricing_select_blocked@v1"
