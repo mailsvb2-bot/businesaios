@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from runtime.messaging.channel_preference import ChannelPreference
 from runtime.messaging_policy.delivery_snapshot import DeliverySnapshot
 from runtime.messaging_policy.policy_plan import PolicyPlan
@@ -90,6 +92,13 @@ def test_explicit_missing_contact_basis_blocks_outbound_before_channel_selection
     assert plan.ordered_channels == ()
     assert plan.terminal_reason == "outbound_forbidden"
     assert "outbound_forbidden" in plan.reason_codes
+
+
+@pytest.mark.parametrize("contact_basis", [False, 0, ""])
+def test_malformed_explicit_contact_basis_fails_closed(contact_basis: object) -> None:
+    preference = ChannelPreference(primary="whatsapp", enabled=("whatsapp", "email"))
+    with pytest.raises(ValueError, match="contact_basis"):
+        PolicyRequest(preference=preference, contact_basis=contact_basis)  # type: ignore[arg-type]
 
 
 def test_terminal_contact_block_skips_capability_routing(monkeypatch):
