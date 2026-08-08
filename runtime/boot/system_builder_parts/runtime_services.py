@@ -28,6 +28,27 @@ from runtime.messaging_policy_readmodel.boot_runtime import boot_messaging_polic
 CANON_BOOT_WIRING_ONLY = True
 
 
+def _build_pricing_approval_gate():
+    from execution.approval_execution_gate import ApprovalExecutionGate
+    from execution.approval_policy_engine import ApprovalPolicyEngine
+    from governance.approval_store import build_default_approval_store
+    from governance.approval_workflow import ApprovalWorkflow
+    from governance.change_control_policy import ChangeControlPolicy
+    from governance.control_plane_audit_log import PersistentGovernanceAuditLog
+    from governance.tenant_policy_overrides import PersistentTenantPolicyOverrideRegistry
+
+    audit_log = PersistentGovernanceAuditLog()
+    tenant_overrides = PersistentTenantPolicyOverrideRegistry(audit_log=audit_log)
+    workflow = ApprovalWorkflow(store=build_default_approval_store(), audit_log=audit_log)
+    return ApprovalExecutionGate(
+        approval_policy_engine=ApprovalPolicyEngine(
+            change_control_policy=ChangeControlPolicy(tenant_overrides=tenant_overrides),
+        ),
+        approval_workflow=workflow,
+        audit_log=audit_log,
+    )
+
+
 def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_registry_ctx):
     ctx.enter(BootPhase.P30_STORES)
     event_store, ledger, snapshot_store, decision_archive, outbox, payment_outbox = boot_phase_30_durable_stores(stack, base=base, storage=storage)
@@ -75,6 +96,7 @@ def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_regist
 
     ctx.set_value('ai_ceo_planner', build_runtime_ai_ceo_planner(event_store=event_store), min_phase=BootPhase.P40_SETTINGS_FLAGS)
     ctx.set_value('pricing_selection_service', PricingSelectionService(), min_phase=BootPhase.P40_SETTINGS_FLAGS)
+    ctx.set_value('pricing_approval_execution_gate', _build_pricing_approval_gate(), min_phase=BootPhase.P40_SETTINGS_FLAGS)
     validate_payments_webhook_prod_strict(settings)
     for key, value in settings_services.items():
         ctx.set_value(key, value, min_phase=BootPhase.P40_SETTINGS_FLAGS)
@@ -127,6 +149,7 @@ def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_regist
             'marketing_llm': ctx.get_value('marketing_llm') is not None,
             'finance_runtime': finance_bundle['finance_runtime'] is not None,
             'pricing_selection_service': ctx.get_value('pricing_selection_service') is not None,
+            'pricing_approval_execution_gate': ctx.get_value('pricing_approval_execution_gate') is not None,
             'api_security_owner_bundle': security_surface.api_security_owner_bundle is not None,
         },
     )
