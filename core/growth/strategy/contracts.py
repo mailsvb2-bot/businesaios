@@ -41,6 +41,52 @@ class GrowthGoalV1:
 
 
 @dataclass(frozen=True)
+class SalesFunnelCountsV1:
+    discovered: int = 0
+    engaged: int = 0
+    qualified: int = 0
+    checkout: int = 0
+    won: int = 0
+    lost: int = 0
+
+    @staticmethod
+    def _pct(numerator: int, denominator: int) -> float:
+        return 0.0 if denominator <= 0 else round(numerator / denominator * 100.0, 1)
+
+    @property
+    def engagement_percent(self) -> float:
+        return self._pct(self.engaged, self.discovered)
+
+    @property
+    def qualification_percent(self) -> float:
+        return self._pct(self.qualified, self.engaged)
+
+    @property
+    def checkout_percent(self) -> float:
+        return self._pct(self.checkout, self.qualified)
+
+    @property
+    def win_percent(self) -> float:
+        return self._pct(self.won, self.discovered)
+
+
+@dataclass(frozen=True)
+class SalesFunnelSourceV1:
+    source: str = "unknown"
+    counts: SalesFunnelCountsV1 = field(default_factory=SalesFunnelCountsV1)
+
+
+@dataclass(frozen=True)
+class SalesFunnelSnapshotV1:
+    schema_version: int = 1
+    tenant_id: str = ""
+    start_ms: int = 0
+    end_ms: int = 0
+    total: SalesFunnelCountsV1 = field(default_factory=SalesFunnelCountsV1)
+    by_source: tuple[SalesFunnelSourceV1, ...] = ()
+
+
+@dataclass(frozen=True)
 class GrowthSignalV1:
     schema_version: int = 1
     ts_ms: int = 0
@@ -57,6 +103,7 @@ class GrowthSignalV1:
 
     top_channels: tuple[str, ...] = ()
     notes: tuple[str, ...] = ()
+    sales_funnel: SalesFunnelSnapshotV1 = field(default_factory=SalesFunnelSnapshotV1)
 
 
 @dataclass(frozen=True)
