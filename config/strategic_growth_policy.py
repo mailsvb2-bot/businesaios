@@ -44,6 +44,7 @@ class GrowthSignalsPolicy:
     retention_window_days: int = 30
     retention_d1_days: int = 1
     retention_d7_days: int = 7
+    sales_funnel_window_days: int = 30
     percentage_multiplier: float = 100.0
     zero_ratio: float = 0.0
     top_channels_limit: int = 5
