@@ -23,10 +23,12 @@ def _normalize_many(value) -> tuple[str, ...]:
 
 
 def _normalize_contact_basis(value: str | None) -> str | None:
-    text = str(value or "").strip().lower()
-    if not text:
+    if value is None:
         return None
-    if text not in _CONTACT_BASES:
+    if not isinstance(value, str):
+        raise ValueError("contact_basis must be a string when provided")
+    text = value.strip().lower()
+    if not text or text not in _CONTACT_BASES:
         raise ValueError(f"unsupported contact_basis:{text}")
     return text
 
