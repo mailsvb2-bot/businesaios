@@ -61,9 +61,9 @@ function statusClass(item) {
 }
 
 function isSuccessfulLiveEvidence(row) {
-  if (String(row?.mode || "").toLowerCase() !== "live") return false;
-  const status = String(row?.status || "").toLowerCase();
-  return !["failed", "error", "rejected", "blocked", "denied"].some((token) => status.includes(token));
+  return String(row?.mode || "").toLowerCase() === "live"
+    && row?.accepted === true
+    && String(row?.status || "").toLowerCase() === "live_executed";
 }
 
 function Workspace({ data, apiBase, onRestart }) {
@@ -137,7 +137,7 @@ function Workspace({ data, apiBase, onRestart }) {
   const verifiedCompleted = Math.min(6, baseCompleted + (connected ? 1 : 0) + (liveEvidence ? 1 : 0));
   const verifiedPercent = Math.round((verifiedCompleted / 6) * 100);
   const evidenceProvider = liveEvidence ? catalog.find((row) => row.provider_key === liveEvidence.provider_key) : null;
-  const resourceCount = liveEvidence?.resource_count ?? liveEvidence?.parsed?.resource_count ?? liveEvidence?.metadata?.resource_count;
+  const resourceCount = liveEvidence?.parsed_response?.resource_count ?? liveEvidence?.transport_response?.resource_count;
 
   const runWorkspaceAction = async (name, payload, providerKey = activeProvider?.provider_key) => {
     if (!providerKey) return null;
