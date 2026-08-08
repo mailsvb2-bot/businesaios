@@ -4,6 +4,7 @@ from fastapi import Request
 
 from application.public_site.cta_intake import CTALandingIntakeService, public_integration_marketplace
 from entrypoints.api.request_context import RequestContext
+from tenancy.tenant_registry import ensure_tenant_record
 
 
 def _product_fields(value) -> dict:
@@ -21,15 +22,16 @@ def _base_response(value) -> dict:
         'write_actions_enabled': False, 'approval_required_before_execution': True, **_product_fields(value)}
 
 
-def _cta_submit_response(result) -> dict:
-    return {**_base_response(result), 'next': {'ui_url': result.app_url}}
+def _cta_submit_response(result, owner_session: dict | None = None) -> dict:
+    payload = {**_base_response(result), 'next': {'ui_url': result.app_url}}
+    return {**payload, 'owner_session': owner_session} if owner_session else payload
 
 
 def _cta_status_response(status_payload) -> dict:
     return {**_base_response(status_payload), 'found': True} if status_payload.found else {'ok': False, 'error': 'not_found', 'intake_id': status_payload.intake_id}
 
 
-def register_public_site_routes(*, router, enforce_public_security) -> None:
+def register_public_site_routes(*, router, enforce_public_security, auth_bundle=None, tenant_registry=None) -> None:
     service = CTALandingIntakeService()
 
     def secure(request: Request, route: str, body: dict) -> None:
@@ -49,7 +51,14 @@ def register_public_site_routes(*, router, enforce_public_security) -> None:
             payload = {}
         payload = payload if isinstance(payload, dict) else {}
         secure(http_request, '/public-site/cta/start', payload)
-        return _cta_submit_response(service.submit(payload=payload))
+        result = service.submit(payload=payload)
+        owner_session = None
+        api_key_policy = getattr(getattr(auth_bundle, 'auth_policy', None), 'api_key_policy', None)
+        if tenant_registry is not None and api_key_policy is not None:
+            ensure_tenant_record(tenant_registry, result.tenant_id, display_name=str((result.business_profile or {}).get('name') or result.tenant_id))
+            record, raw_key = api_key_policy.issue_owner_session(tenant_id=result.tenant_id, business_id=result.business_id, subject=result.user_id, display_name=str((result.business_profile or {}).get('name') or '') or None)
+            owner_session = {'api_key': raw_key, 'tenant_id': result.tenant_id, 'business_id': result.business_id, 'expires_at': None if record.expires_at is None else record.expires_at.isoformat(), 'storage': 'session_only'}
+        return _cta_submit_response(result, owner_session)
 
     @router.get('/public-site/cta/{intake_id}', tags=['public-site'])
     async def public_site_cta_status(http_request: Request, intake_id: str) -> dict:
