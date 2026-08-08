@@ -44,6 +44,44 @@ def test_persistent_approval_store_roundtrip(tmp_path) -> None:
     assert record.decisions[0].actor_id == "owner-1"
 
 
+def test_long_lived_persistent_approval_owners_share_durable_state(tmp_path) -> None:
+    path = tmp_path / "shared_approvals.json"
+    runtime_store = PersistentApprovalStore(path)
+    operator_store = PersistentApprovalStore(path)
+    runtime_workflow = ApprovalWorkflow(store=runtime_store)
+    operator_workflow = ApprovalWorkflow(store=operator_store)
+
+    runtime_workflow.submit(
+        ApprovalRequest(
+            approval_id="ap-shared",
+            tenant_id="tenant-a",
+            subject_type="action_execution",
+            subject_id="pricing-offer-1",
+            requested_by="runtime",
+            reason="offer requires approval",
+            required_role_groups=((RoleId.OWNER,),),
+        )
+    )
+    visible_to_operator = operator_store.get("ap-shared")
+    assert visible_to_operator is not None
+    assert visible_to_operator.status is ApprovalStatus.REQUESTED
+
+    operator_workflow.decide(
+        ApprovalDecision(
+            approval_id="ap-shared",
+            tenant_id="tenant-a",
+            actor_id="owner-1",
+            role_id=RoleId.OWNER,
+            outcome=ApprovalOutcome.APPROVE,
+            rationale="approved in control plane",
+        )
+    )
+    visible_to_runtime = runtime_store.get("ap-shared")
+    assert visible_to_runtime is not None
+    assert visible_to_runtime.status is ApprovalStatus.APPROVED
+    assert visible_to_runtime.decisions[-1].actor_id == "owner-1"
+
+
 def test_persistent_kill_switch_registry_roundtrip(tmp_path) -> None:
     path = tmp_path / "kill_switches.json"
     registry = PersistentKillSwitchRegistry(path)
