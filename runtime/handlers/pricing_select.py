@@ -26,24 +26,14 @@ def _delivery_evidence(delivery: object) -> dict[str, Any] | None:
 
 
 def _blocked_message(
-    *,
-    payload: dict[str, Any],
-    effects: EffectsPort,
-    decision_id: str,
-    correlation_id: str,
-    text: str,
-    reason: str,
-    exc: Exception,
+    *, payload: dict[str, Any], effects: EffectsPort, decision_id: str, correlation_id: str,
+    text: str, reason: str, exc: Exception,
 ) -> dict[str, Any]:
     delivery = effects.send_message(
-        decision_id=decision_id,
-        correlation_id=correlation_id,
-        tenant_id=str(payload.get("tenant_id") or "").strip(),
-        user_id=str(payload.get("user_id") or ""),
-        text=text,
-        track_event_type="pricing_select_blocked@v1",
-        track_payload=blocked_error_payload(reason=reason, exc=exc),
-        **delivery_kwargs(payload),
+        decision_id=decision_id, correlation_id=correlation_id,
+        tenant_id=str(payload.get("tenant_id") or "").strip(), user_id=str(payload.get("user_id") or ""),
+        text=text, track_event_type="pricing_select_blocked@v1",
+        track_payload=blocked_error_payload(reason=reason, exc=exc), **delivery_kwargs(payload),
     )
     return {"ok": False, "status": "blocked", "reason": str(reason), "delivery": delivery, "router_evidence": None}
 
@@ -68,11 +58,7 @@ def _legacy_shortlist(raw: object) -> tuple[list[str] | None, dict[str, object]]
 
 
 def handle_pricing_select(
-    payload: dict[str, Any],
-    effects: EffectsPort,
-    env: Any,
-    *,
-    selection_service: Any,
+    payload: dict[str, Any], effects: EffectsPort, env: Any, *, selection_service: Any,
     catalog_resolver: Any | None = None,
 ) -> Any:
     body = dict(payload or {})
@@ -97,26 +83,25 @@ def handle_pricing_select(
         if not user_id:
             raise PricingRouteViolation("user_id is required")
 
+        evidence = dict(body.get("evidence") or {})
+        environment = str(evidence.get("environment") or "prod").strip() or "prod"
+        variant = evidence.get("variant", "a")
+        if not isinstance(variant, str) or not variant.strip():
+            raise PricingRouteViolation("evidence.variant must be a non-empty string")
         context = PricingSelectionContext(tenant_id=tenant_id, decision_id=route.decision_id,
             correlation_id=route.correlation_id, issuer_id=route.issuer_id, action=route.action)
-        environment = str(body.get("environment") or "prod").strip() or "prod"
         resolver = catalog_resolver or OfferCatalogResolver()
         catalog = resolver.resolve_from_product(product={"product_id": product_id, "environment": environment},
             tenant_id=tenant_id, context={"environment": environment})
 
         requested_offer_ids, legacy_scores = _legacy_shortlist(body.get("candidates"))
-        evidence = dict(body.get("evidence") or {})
         if "candidate_scores" not in evidence:
             evidence["candidate_scores"] = legacy_scores
         selection_result = selection_service.select_from_catalog(
-            ctx=context,
-            catalog=catalog,
-            evidence=evidence,
-            evidence_score=body.get("evidence_score", evidence.get("evidence_score", 0.0)),
-            candidate_offer_ids=requested_offer_ids,
-            completed_offer_ids=body.get("completed_offer_ids", evidence.get("completed_offer_ids", ())),
-            min_price_rub=body.get("min_price_rub", evidence.get("min_price_rub", 0)),
-            max_price_rub=body.get("max_price_rub", evidence.get("max_price_rub")),
+            ctx=context, catalog=catalog, evidence=evidence,
+            evidence_score=evidence.get("evidence_score", 0.0), candidate_offer_ids=requested_offer_ids,
+            completed_offer_ids=evidence.get("completed_offer_ids", ()),
+            min_price_rub=evidence.get("min_price_rub", 0), max_price_rub=evidence.get("max_price_rub"),
         )
         selected = selection_result.get("selected") if isinstance(selection_result, Mapping) else None
         selected_offer = dict(selected) if isinstance(selected, Mapping) else {}
@@ -124,18 +109,15 @@ def handle_pricing_select(
             raise PricingRouteViolation("no selectable pricing candidate")
 
         rendered = catalog.render(offer_id=str(selected_offer.get("offer_id") or ""), user_id=user_id,
-            price_rub=int(selected_offer.get("price_rub") or 0), variant=str(body.get("variant") or "a"),
+            price_rub=int(selected_offer.get("price_rub") or 0), variant=variant.strip(),
             context={"tenant_id": tenant_id, "product_id": product_id, "environment": environment})
         text = str(rendered.text or selected_offer.get("title") or "💸 Pricing proposal selected")
         delivery = effects.send_message(
-            decision_id=route.decision_id,
-            correlation_id=route.correlation_id,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            text=text,
-            track_event_type=ACTION_NAME,
+            decision_id=route.decision_id, correlation_id=route.correlation_id, tenant_id=tenant_id, user_id=user_id,
+            text=text, track_event_type=ACTION_NAME,
             track_payload={"tenant_id": tenant_id, "product_id": product_id, "catalog_id": str(catalog.id),
-                "offer_id": str(selected_offer.get("offer_id") or ""), "price_rub": int(selected_offer.get("price_rub") or 0), "selected": True},
+                "offer_id": str(selected_offer.get("offer_id") or ""),
+                "price_rub": int(selected_offer.get("price_rub") or 0), "selected": True},
             **delivery_kwargs(body),
         )
         router_evidence = _delivery_evidence(delivery)
