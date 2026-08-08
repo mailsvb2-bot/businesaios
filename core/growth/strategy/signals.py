@@ -10,7 +10,8 @@ from core.actions.names import ACTION_ADS_APPLY_EXECUTE_V1
 from core.growth.today_ledger import build_today_kpi
 from core.observability.errors import log_exception_throttled
 
-from .contracts import GrowthSignalV1
+from .contracts import GrowthSignalV1, SalesFunnelSnapshotV1
+from .sales_funnel import empty_sales_funnel, read_sales_funnel
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +48,29 @@ def _compute_retention(
     return float(len(active & recent)) / float(len(active))
 
 
+def _build_sales_funnel_signal(
+    event_store: Any,
+    *,
+    tenant_id: str,
+    now_ms: int,
+    policy: GrowthSignalsPolicy,
+) -> SalesFunnelSnapshotV1:
+    window_days = max(1, int(policy.sales_funnel_window_days))
+    start_ms = int(now_ms) - window_days * int(policy.day_ms)
+    if not callable(getattr(event_store, "iter_events", None)):
+        return empty_sales_funnel(tenant_id=tenant_id, start_ms=start_ms, end_ms=now_ms)
+    try:
+        return read_sales_funnel(
+            event_store,
+            tenant_id=tenant_id,
+            start_ms=start_ms,
+            end_ms=now_ms,
+        )
+    except Exception as exc:
+        log_exception_throttled(log, "growth_sales_funnel_projection_failed", exc)
+        return empty_sales_funnel(tenant_id=tenant_id, start_ms=start_ms, end_ms=now_ms)
+
+
 def build_signals(
     event_store: Any,
     *,
@@ -68,6 +92,12 @@ def build_signals(
 
     channels = tuple(_top_channels(events, top_n=policy.top_channels_limit))
     notes = tuple(_notes(events))
+    sales_funnel = _build_sales_funnel_signal(
+        event_store,
+        tenant_id=str(tenant_id),
+        now_ms=now_ms,
+        policy=policy,
+    )
 
     return GrowthSignalV1(
         ts_ms=now_ms,
@@ -81,6 +111,7 @@ def build_signals(
         conversion_lead_to_purchase_pct=float(round(conv, 2)),
         top_channels=channels,
         notes=notes,
+        sales_funnel=sales_funnel,
     )
 
 
@@ -122,33 +153,33 @@ def _latest_events(event_store: Any, *, tenant_id: str, event_type: str, limit: 
 def _count_events_today(events: Iterable[dict[str, Any]], *, event_type: str) -> int:
     now_ms = int(time.time() * 1000)
     day_start = now_ms - (now_ms % DEFAULT_GROWTH_SIGNALS_POLICY.day_ms)
-    c = 0
-    for e in events:
+    count = 0
+    for event in events:
         try:
-            if str(e.get("event_type") or "") != str(event_type):
+            if str(event.get("event_type") or "") != str(event_type):
                 continue
-            ts = int(e.get("timestamp_ms") or 0)
+            ts = int(event.get("timestamp_ms") or 0)
             if ts >= day_start:
-                c += 1
+                count += 1
         except Exception:
             continue
-    return int(c)
+    return int(count)
 
 
 def _top_channels(events: Iterable[dict[str, Any]], *, top_n: int) -> Iterable[str]:
     counts: dict[str, int] = {}
-    for e in events:
+    for event in events:
         try:
-            p = dict(e.get("payload") or {})
+            payload = dict(event.get("payload") or {})
         except Exception:
-            p = {}
-        ch = str(p.get("channel") or p.get("utm_source") or p.get("source") or "").strip().lower()
-        if not ch:
+            payload = {}
+        channel = str(payload.get("channel") or payload.get("utm_source") or payload.get("source") or "").strip().lower()
+        if not channel:
             continue
-        counts[ch] = counts.get(ch, 0) +1
-    items = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[: int(top_n)]
-    for k, _ in items:
-        yield k
+        counts[channel] = counts.get(channel, 0) + 1
+    items = sorted(counts.items(), key=lambda item: item[1], reverse=True)[: int(top_n)]
+    for channel, _count_value in items:
+        yield channel
 
 
 def _notes(events: Iterable[dict[str, Any]]) -> Iterable[str]:
@@ -163,8 +194,8 @@ def _notes(events: Iterable[dict[str, Any]]) -> Iterable[str]:
 
 
 def _count(events: Iterable[dict[str, Any]], event_type: str) -> int:
-    c = 0
-    for e in events:
-        if str(e.get("event_type") or "") == str(event_type):
-            c += 1
-    return int(c)
+    count = 0
+    for event in events:
+        if str(event.get("event_type") or "") == str(event_type):
+            count += 1
+    return int(count)
