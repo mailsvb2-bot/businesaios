@@ -150,7 +150,7 @@ def _truth_row(provider: ProviderDefinition, *, planner: ProviderSyncRuntimePlan
     required_credentials = _required_credentials(provider)
     has_placeholder_endpoint, has_real_endpoint = _has_placeholder_endpoint(binding), _has_real_endpoint(binding)
     capability_status = _best_capability_status(provider.provider_key, capability_statuses)
-    read_only_supported = bool(read_capabilities) and capability_status not in {CapabilityStatus.NOT_IMPLEMENTED.value, CapabilityStatus.NOT_FOUND.value}
+    read_only_supported = bool(read_capabilities) and capability_status not in {CapabilityStatus.CONTRACT_ONLY.value, CapabilityStatus.NOT_IMPLEMENTED.value, CapabilityStatus.NOT_FOUND.value}
     write_supported = provider.provider_key in _GUARDED_WRITE_SUPPORTED
     status = _truth_status(
         capability_status=capability_status, has_real_endpoint=has_real_endpoint,

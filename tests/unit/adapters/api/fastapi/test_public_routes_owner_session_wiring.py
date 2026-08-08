@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from fastapi import APIRouter
+
 from adapters.api.fastapi import public_routes
 
 
@@ -17,7 +19,7 @@ def _silence_unrelated_route_registration(monkeypatch) -> dict[str, object]:
 def _register(monkeypatch, *, dependency_container, tenant_registry=None) -> dict[str, object]:
     captured = _silence_unrelated_route_registration(monkeypatch)
     public_routes.register_public_api_routes(
-        router=object(),
+        router=APIRouter(),
         dependency_container=dependency_container,
         health_handler=None,
         handlers=None,
