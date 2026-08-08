@@ -11,6 +11,7 @@ from runtime.decisioning import DecisionRouteViolation, extract_strict_route_fro
 from runtime.execution.governance_runtime_support import build_default_approval_execution_gate
 from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.handlers.route_failure_support import best_effort_route_ids, blocked_error_payload, safe_route_blocked_text
+from runtime.messaging_policy.discipline import ensure_policy_input_disciplined
 from runtime.ports.effects import EffectsPort
 from runtime.pricing import PricingRouteViolation, PricingSelectionContext
 
@@ -26,6 +27,14 @@ def _delivery_evidence(delivery: object) -> dict[str, Any] | None:
         if isinstance(value, Mapping) and str(value.get("source") or "").strip():
             return dict(value)
     return None
+
+
+def _effective_delivery(payload: Mapping[str, Any]) -> dict[str, Any]:
+    effective = delivery_kwargs(payload)
+    policy = effective.get("channel_policy")
+    if isinstance(policy, Mapping):
+        effective["channel_policy"] = ensure_policy_input_disciplined(policy)
+    return effective
 
 
 def _blocked_message(
@@ -71,7 +80,7 @@ def _approval_id(evidence: Mapping[str, object]) -> str | None:
 
 def _review_selected_offer(
     *, selected_offer: Mapping[str, object], catalog_id: str, tenant_id: str, product_id: str,
-    user_id: str, environment: str, variant: str, content_sha256: str, route: Any,
+    user_id: str, environment: str, variant: str, content_sha256: str, effective_delivery: Mapping[str, Any], route: Any,
     evidence: Mapping[str, object], approval_gate: Any | None,
 ) -> dict[str, Any] | None:
     commercial = selected_offer.get("commercial")
@@ -89,6 +98,7 @@ def _review_selected_offer(
         "environment": environment,
         "variant": variant,
         "content_sha256": content_sha256,
+        "delivery": dict(effective_delivery),
     }
     ctx = ActionExecutionContext(
         tenant_id=tenant_id, user_id=user_id, action_name=ACTION_NAME, payload=subject,
@@ -153,6 +163,7 @@ def handle_pricing_select(
         if not isinstance(variant, str) or not variant.strip():
             raise PricingRouteViolation("evidence.variant must be a non-empty string")
         variant = variant.strip()
+        effective_delivery = _effective_delivery(body)
         context = PricingSelectionContext(tenant_id=tenant_id, decision_id=route.decision_id,
             correlation_id=route.correlation_id, issuer_id=route.issuer_id, action=route.action)
         resolver = catalog_resolver or OfferCatalogResolver()
@@ -179,8 +190,8 @@ def handle_pricing_select(
         approval_result = _review_selected_offer(
             selected_offer=selected_offer, catalog_id=str(catalog.id), tenant_id=tenant_id, product_id=product_id,
             user_id=user_id, environment=environment, variant=variant,
-            content_sha256=sha256(text.encode("utf-8")).hexdigest(), route=route, evidence=evidence,
-            approval_gate=approval_gate,
+            content_sha256=sha256(text.encode("utf-8")).hexdigest(), effective_delivery=effective_delivery,
+            route=route, evidence=evidence, approval_gate=approval_gate,
         )
         if approval_result is not None:
             return {**approval_result, "selection_result": {**dict(selection_result), "catalog_id": str(catalog.id)}}
@@ -191,7 +202,7 @@ def handle_pricing_select(
             track_payload={"tenant_id": tenant_id, "product_id": product_id, "catalog_id": str(catalog.id),
                 "offer_id": str(selected_offer.get("offer_id") or ""),
                 "price_rub": int(selected_offer.get("price_rub") or 0), "selected": True},
-            **delivery_kwargs(body),
+            **effective_delivery,
         )
         router_evidence = _delivery_evidence(delivery)
         delivery_ok = bool(delivery.get("ok")) if isinstance(delivery, Mapping) else bool(delivery)
