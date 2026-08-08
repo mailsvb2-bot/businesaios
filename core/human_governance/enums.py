@@ -23,12 +23,3 @@ class EscalationLevel(str, Enum):
     TEAM_LEAD = "team_lead"
     GOVERNANCE = "governance"
     EXECUTIVE = "executive"
-
-
-class SalesHandoffReason(str, Enum):
-    EXPLICIT_REQUEST = "explicit_request"
-    LOW_CONFIDENCE = "low_confidence"
-    SENSITIVE_CONTEXT = "sensitive_context"
-    PRICING_EXCEPTION = "pricing_exception"
-    NEGATIVE_SENTIMENT = "negative_sentiment"
-    REPEATED_FAILURE = "repeated_failure"
