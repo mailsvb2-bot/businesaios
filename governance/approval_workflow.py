@@ -71,7 +71,7 @@ class ApprovalWorkflow:
 
         if request.expires_at is not None and utc_now() > request.expires_at:
             expired = replace(record, status=ApprovalStatus.EXPIRED, final_reason="expired")
-            saved = self._store.save(expired)
+            saved = self._store.save(expired, expected=record)
             self._emit_audit({
                 "event_type": "approval_expired",
                 "tenant_id": request.tenant_id,
@@ -106,7 +106,7 @@ class ApprovalWorkflow:
                 status=ApprovalStatus.REJECTED,
                 final_reason="rejected_by_authorized_actor",
             )
-            saved = self._store.save(rejected)
+            saved = self._store.save(rejected, expected=record)
             self._emit_audit(build_approval_decision_audit(record=saved, decision=decision))
             return saved
 
@@ -122,12 +122,10 @@ class ApprovalWorkflow:
             status=next_status,
             final_reason=next_reason,
         )
-        saved = self._store.save(updated)
+        saved = self._store.save(updated, expected=record)
         self._emit_audit(build_approval_decision_audit(record=saved, decision=decision))
         return saved
 
-    # ``resolve`` is the canonical approval-lifecycle name. ``decide`` remains
-    # an identity alias for backward compatibility; it owns no separate logic.
     resolve = evaluate
     decide = resolve
 
