@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from hashlib import sha256
 from typing import Any
 
 from contracts.action_impact_contract import ActionCategory, ActionExecutionContext, ActionImpact
@@ -70,7 +71,8 @@ def _approval_id(evidence: Mapping[str, object]) -> str | None:
 
 def _review_selected_offer(
     *, selected_offer: Mapping[str, object], catalog_id: str, tenant_id: str, product_id: str,
-    user_id: str, environment: str, variant: str, route: Any, evidence: Mapping[str, object], approval_gate: Any | None,
+    user_id: str, environment: str, variant: str, content_sha256: str, route: Any,
+    evidence: Mapping[str, object], approval_gate: Any | None,
 ) -> dict[str, Any] | None:
     commercial = selected_offer.get("commercial")
     requires_approval = bool(isinstance(commercial, Mapping) and commercial.get("requires_human_approval") is True)
@@ -86,6 +88,7 @@ def _review_selected_offer(
         "price_rub": int(selected_offer.get("price_rub") or 0),
         "environment": environment,
         "variant": variant,
+        "content_sha256": content_sha256,
     }
     ctx = ActionExecutionContext(
         tenant_id=tenant_id, user_id=user_id, action_name=ACTION_NAME, payload=subject,
@@ -169,17 +172,19 @@ def handle_pricing_select(
         if not selected_offer:
             raise PricingRouteViolation("no selectable pricing candidate")
 
-        approval_result = _review_selected_offer(
-            selected_offer=selected_offer, catalog_id=str(catalog.id), tenant_id=tenant_id, product_id=product_id,
-            user_id=user_id, environment=environment, variant=variant, route=route, evidence=evidence, approval_gate=approval_gate,
-        )
-        if approval_result is not None:
-            return {**approval_result, "selection_result": {**dict(selection_result), "catalog_id": str(catalog.id)}}
-
         rendered = catalog.render(offer_id=str(selected_offer.get("offer_id") or ""), user_id=user_id,
             price_rub=int(selected_offer.get("price_rub") or 0), variant=variant,
             context={"tenant_id": tenant_id, "product_id": product_id, "environment": environment})
         text = str(rendered.text or selected_offer.get("title") or "💸 Pricing proposal selected")
+        approval_result = _review_selected_offer(
+            selected_offer=selected_offer, catalog_id=str(catalog.id), tenant_id=tenant_id, product_id=product_id,
+            user_id=user_id, environment=environment, variant=variant,
+            content_sha256=sha256(text.encode("utf-8")).hexdigest(), route=route, evidence=evidence,
+            approval_gate=approval_gate,
+        )
+        if approval_result is not None:
+            return {**approval_result, "selection_result": {**dict(selection_result), "catalog_id": str(catalog.id)}}
+
         delivery = effects.send_message(
             decision_id=route.decision_id, correlation_id=route.correlation_id, tenant_id=tenant_id, user_id=user_id,
             text=text, track_event_type=ACTION_NAME,
