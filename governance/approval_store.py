@@ -83,10 +83,7 @@ class InMemoryApprovalStore(ApprovalStoreContract):
 
 
 class PersistentApprovalStore(ApprovalStoreContract):
-    """Durable file-backed approval store.
-
-    Stores only approval state snapshots. It must not contain approval logic.
-    """
+    """Durable file-backed approval state shared by long-lived governance owners."""
 
     def __init__(self, path: str | Path | None = None) -> None:
         self._path = Path(path) if path is not None else approval_store_path()
@@ -108,19 +105,16 @@ class PersistentApprovalStore(ApprovalStoreContract):
 
     def create(self, request: ApprovalRequest) -> ApprovalRecord:
         request.validate()
+        self._load()
         if request.approval_id in self._items:
             raise ValueError(f"approval already exists: {request.approval_id}")
-        record = ApprovalRecord(
-            request=request,
-            status=ApprovalStatus.REQUESTED,
-            decisions=(),
-            final_reason=None,
-        )
+        record = ApprovalRecord(request=request, status=ApprovalStatus.REQUESTED, decisions=(), final_reason=None)
         self._items[request.approval_id] = record
         self._flush()
         return record
 
     def get(self, approval_id: str) -> ApprovalRecord | None:
+        self._load()
         key = str(approval_id or '').strip()
         record, changed = _expire_record_if_needed(self._items.get(key))
         if record is not None and changed:
@@ -130,6 +124,7 @@ class PersistentApprovalStore(ApprovalStoreContract):
 
     def save(self, record: ApprovalRecord) -> ApprovalRecord:
         record.request.validate()
+        self._load()
         self._items[record.request.approval_id] = replace(record)
         self._flush()
         return record
@@ -139,6 +134,7 @@ class PersistentApprovalStore(ApprovalStoreContract):
 
     def list_for_tenant(self, *, tenant_id: str, include_terminal: bool = True) -> tuple[ApprovalRecord, ...]:
         tid = require_tenant_id(tenant_id)
+        self._load()
         if self._normalize_items():
             self._flush()
         items = [
