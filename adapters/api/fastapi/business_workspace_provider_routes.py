@@ -35,62 +35,45 @@ def _truth(provider_key: str):
     return row
 
 
-def _catalog_for_customer(payload: Mapping[str, Any]) -> dict[str, Any]:
-    result, truth = dict(payload), provider_truth_map()
-    rows = []
-    for raw in list(result.get('providers') or []):
-        item, row = dict(raw), truth.get(str(raw.get('provider_key') or '').strip())
-        truth_status = 'not_implemented' if row is None else str(row.status)
-        selectable = bool(row and row.read_only_supported and truth_status in _READY)
-        rows.append({**item, 'truth_status': truth_status, 'customer_selectable': selectable, 'read_supported': selectable, 'write_actions_enabled': False})
-    return {**result, 'providers': rows, 'write_actions_enabled': False, 'scope_source': 'authenticated_owner_session'}
-
-
 def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundle, provider_admin_handlers: ProviderAdminRouteHandlers | None = None) -> None:
     handlers = provider_admin_handlers or ProviderAdminRouteHandlers()
 
     @router.get('/business-workspace/providers', tags=['business-workspace'])
-    async def catalog(request: Request) -> dict[str, Any]:
+    async def provider_workspace(request: Request, provider_key: str | None = None, limit: int = 50) -> dict[str, Any]:
         _, tenant_id, business_id, _ = _workspace_scope(request=request, auth_bundle=auth_bundle)
-        return _catalog_for_customer(handlers.list_provider_catalog(tenant_id=tenant_id, business_id=business_id))
+        if provider_key:
+            _truth(provider_key)
+            return handlers.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=max(1, min(int(limit), 100)))
+        payload, truth = handlers.list_provider_catalog(tenant_id=tenant_id, business_id=business_id), provider_truth_map()
+        rows = []
+        for raw in list(payload.get('providers') or []):
+            item, row = dict(raw), truth.get(str(raw.get('provider_key') or '').strip())
+            truth_status = 'not_implemented' if row is None else str(row.status)
+            selectable = bool(row and row.read_only_supported and truth_status in _READY)
+            rows.append({**item, 'truth_status': truth_status, 'customer_selectable': selectable, 'read_supported': selectable, 'write_actions_enabled': False})
+        return {**payload, 'providers': rows, 'write_actions_enabled': False, 'scope_source': 'authenticated_owner_session'}
 
-    @router.post('/business-workspace/providers/activate', tags=['business-workspace'])
-    async def activate(request: Request) -> dict[str, Any]:
+    @router.post('/business-workspace/providers', tags=['business-workspace'])
+    async def provider_action(request: Request) -> dict[str, Any]:
         principal, tenant_id, business_id, requested_by = _workspace_scope(request=request, auth_bundle=auth_bundle)
-        provider_key = str((body := await json_body(request)).get('provider_key') or '').strip()
-        _truth(provider_key)
-        external_ref = str(body.get('external_ref') or '').strip()
-        if not external_ref:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='external_ref_required')
-        secrets = body.get('secrets') if isinstance(body.get('secrets'), Mapping) else {}
-        return handlers.activate_provider(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'ownership_key': f'owner:{principal.subject}:{provider_key}', 'requested_by': requested_by, 'external_ref': external_ref, 'region': body.get('region'), 'metadata': dict(body.get('metadata') or {}) if isinstance(body.get('metadata'), Mapping) else {}, 'secrets': {str(k): str(v) for k, v in dict(secrets).items()}})
-
-    @router.post('/business-workspace/providers/{provider_key}/probe', tags=['business-workspace'])
-    async def probe(provider_key: str, request: Request) -> dict[str, Any]:
-        _, tenant_id, business_id, _ = _workspace_scope(request=request, auth_bundle=auth_bundle)
-        _truth(provider_key)
-        mode = str((body := await json_body(request)).get('mode') or 'live').strip() or 'live'
-        if mode not in _MODES:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='unsupported_probe_mode')
-        return handlers.probe_provider_live(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, mode=mode)
-
-    @router.post('/business-workspace/providers/{provider_key}/sync', tags=['business-workspace'])
-    async def sync(provider_key: str, request: Request) -> dict[str, Any]:
-        _, tenant_id, business_id, _ = _workspace_scope(request=request, auth_bundle=auth_bundle)
-        truth, body = _truth(provider_key), await json_body(request)
-        operation, mode = str(body.get('operation') or '').strip(), str(body.get('mode') or 'live').strip() or 'live'
-        if operation not in tuple(truth.read_capabilities):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='provider_write_or_unknown_operation_forbidden')
-        if mode not in _MODES:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='unsupported_sync_mode')
-        runtime_payload = body.get('payload') if isinstance(body.get('payload'), Mapping) else {}
-        return handlers.trigger_provider_sync(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'operation': operation, 'mode': mode, 'payload': dict(runtime_payload)})
-
-    @router.get('/business-workspace/providers/{provider_key}/history', tags=['business-workspace'])
-    async def history(provider_key: str, request: Request, limit: int = 50) -> dict[str, Any]:
-        _, tenant_id, business_id, _ = _workspace_scope(request=request, auth_bundle=auth_bundle)
-        _truth(provider_key)
-        return handlers.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=max(1, min(int(limit), 100)))
+        body = await json_body(request)
+        action, provider_key = str(body.get('action') or '').strip(), str(body.get('provider_key') or '').strip()
+        truth = _truth(provider_key)
+        if action == 'activate':
+            external_ref = str(body.get('external_ref') or '').strip()
+            if not external_ref:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='external_ref_required')
+            secrets = body.get('secrets') if isinstance(body.get('secrets'), Mapping) else {}
+            return handlers.activate_provider(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'ownership_key': f'owner:{principal.subject}:{provider_key}', 'requested_by': requested_by, 'external_ref': external_ref, 'region': body.get('region'), 'metadata': dict(body.get('metadata') or {}) if isinstance(body.get('metadata'), Mapping) else {}, 'secrets': {str(k): str(v) for k, v in dict(secrets).items()}})
+        if action == 'read':
+            operation, mode = str(body.get('operation') or '').strip(), str(body.get('mode') or 'live').strip() or 'live'
+            if mode not in _MODES or (operation and operation not in tuple(truth.read_capabilities)):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='provider_read_action_forbidden')
+            if not operation:
+                return handlers.probe_provider_live(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, mode=mode)
+            runtime_payload = body.get('payload') if isinstance(body.get('payload'), Mapping) else {}
+            return handlers.trigger_provider_sync(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'operation': operation, 'mode': mode, 'payload': dict(runtime_payload)})
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='unsupported_provider_workspace_action')
 
 
 __all__ = ['CANON_BUSINESS_WORKSPACE_PROVIDER_ROUTES', 'register_business_workspace_provider_routes']
