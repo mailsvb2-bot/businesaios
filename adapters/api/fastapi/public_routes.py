@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, status
 
 from adapters.api.fastapi.analytics_routes import register_analytics_routes
+from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
 from adapters.api.fastapi.public_client_outcome_routes import register_public_client_outcome_routes
 from adapters.api.fastapi.public_core_routes import register_public_core_routes
 from adapters.api.fastapi.public_site_routes import (
@@ -128,6 +129,8 @@ def register_public_api_routes(
         enforce_public_security=enforce_public_security,
     )
     register_public_site_routes(router=router, enforce_public_security=enforce_public_security, auth_bundle=auth_bundle, tenant_registry=tenant_registry)
+    if auth_bundle is not None:
+        register_business_workspace_provider_routes(router=router, auth_bundle=auth_bundle)
     register_public_client_outcome_routes(
         router=router,
         client_outcome_handlers=client_outcome_handlers,
