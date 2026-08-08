@@ -13,7 +13,7 @@ This module provides a small wrapper so DecisionCore does not hand-roll crypto.
 import base64
 import hashlib
 import hmac
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 from core.utils.canonical import canonical_json_bytes
 
