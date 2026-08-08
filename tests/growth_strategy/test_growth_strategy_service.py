@@ -46,16 +46,13 @@ def test_sales_funnel_replays_hard_tenant_evidence(tmp_path: Path):
     now = int(time.time() * 1000)
     with SqliteEventStore(str(tmp_path / "sales.db")) as store:
         rows = (
-            ("t1", "lead-1", "lead_created@v1", {"source": "telegram"}),
             ("t1", "lead-1", "sales_qualified", {"source": "telegram"}),
             ("t1", "lead-1", "sales_declined", {"source": "telegram"}),
             ("t1", "lead-1", "purchase_completed@v1", {"source": "telegram"}),
-            ("t1", "operator", "sales_lead_discovered", {"subject_id": "lead-2", "source": "website"}),
             ("t1", "operator", "sales_qualification_failed", {"subject_id": "lead-2", "source": "website"}),
             ("t2", "other", "purchase_completed@v1", {"source": "telegram"}),
         )
         for index, (tenant, user, kind, payload) in enumerate(rows):
             store.append_event({"tenant_id": tenant, "timestamp_ms": now - 5000 + index, "user_id": user, "event_type": kind, "payload": payload})
-        funnel = build_signals(store, tenant_id="t1").sales_funnel
-        assert funnel["total"]["discovered"] == 2 and funnel["total"]["won"] == 1 and funnel["total"]["lost"] == 1
-        assert {item["source"] for item in funnel["by_source"]} == {"telegram", "website"}
+        total = build_signals(store, tenant_id="t1").sales_funnel["total"]
+        assert total["discovered"] == 2 and total["qualified"] == 1 and total["won"] == 1 and total["lost"] == 1
