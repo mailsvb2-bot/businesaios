@@ -189,6 +189,9 @@ class ApiKeyPolicy:
     def __init__(self, *, store: InMemoryApiKeyStore) -> None:
         self._store = store
 
+    def issue_owner_session(self, *, tenant_id: str, business_id: str, subject: str, display_name: str | None = None, ttl_seconds: int = 3600) -> tuple[ApiKeyRecord, str]:
+        return self._store.issue(tenant_id=tenant_id, subject=subject, actor_id=subject, roles=(RoleId.OWNER,), scopes=('provider_control_plane',), display_name=display_name, ttl_seconds=ttl_seconds, metadata={'principal_kind': 'user', 'session_kind': 'owner_onboarding', 'business_id': business_id})
+
     def authenticate(self, request: RequestAuthentication) -> AuthVerdict:
         request.validate()
         token = str(request.api_key or '').strip()
