@@ -72,6 +72,8 @@ def register_public_api_routes(
     client_outcome_handlers=None,
     economic_handlers=None,
 ) -> None:
+    if tenant_registry is None and dependency_container is not None:
+        tenant_registry = getattr(dependency_container, 'tenant_registry', None)
 
     def enforce_public_security(
         *,
