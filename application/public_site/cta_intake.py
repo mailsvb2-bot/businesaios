@@ -101,9 +101,9 @@ class CTALandingIntakeService:
     def submit(self, *, payload: dict[str, object]) -> CTASubmitResult:
         data, intake_id = dict(payload or {}), f"cta-{uuid4().hex[:16]}"
         profile, selected, autonomy = _business_profile(data), _selected_providers(data), _autonomy_mode(data)
-        tenant_id = _stable_id("tenant", _first(data, "tenant_id", "business_name", "company", "email") or intake_id)
-        business_id = _stable_id("business", _first(data, "business_id", "business_name", "company", "website", "email") or intake_id)
-        user_id = _stable_id("user", _first(data, "user_id", "email", "telegram", "phone") or intake_id)
+        tenant_id = _stable_id("tenant", intake_id)
+        business_id = _stable_id("business", intake_id)
+        user_id = _stable_id("user", intake_id)
         result = CTASubmitResult(
             intake_id=intake_id, created_at=datetime.now(UTC).isoformat(), app_url=f"{self._app_base_url}/?intake_id={intake_id}",
             tenant_id=tenant_id, business_id=business_id, user_id=user_id, business_profile=profile,
