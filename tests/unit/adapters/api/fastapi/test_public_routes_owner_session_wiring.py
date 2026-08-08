@@ -9,6 +9,7 @@ def _silence_unrelated_route_registration(monkeypatch) -> dict[str, object]:
     captured: dict[str, object] = {}
     monkeypatch.setattr(public_routes, 'register_public_core_routes', lambda **_: None)
     monkeypatch.setattr(public_routes, 'register_public_client_outcome_routes', lambda **_: None)
+    monkeypatch.setattr(public_routes, 'register_business_workspace_provider_routes', lambda **_: None)
     monkeypatch.setattr(public_routes, 'register_public_site_routes', lambda **kwargs: captured.update(kwargs))
     return captured
 
