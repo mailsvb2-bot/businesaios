@@ -6,12 +6,14 @@ This module stores governance state as plain data only.
 It must never contain decision logic.
 """
 
+from contextlib import contextmanager
 import json
+import os
 from dataclasses import asdict, fields, is_dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, TypeVar, get_args, get_origin, get_type_hints
+from typing import Any, Callable, Iterator, TypeVar, get_args, get_origin, get_type_hints
 
 
 CANON_GOVERNANCE_PERSISTENCE_CODEC = True
@@ -23,6 +25,42 @@ def ensure_parent_dir(path: Path) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
+
+
+@contextmanager
+def exclusive_file_lock(path: Path) -> Iterator[None]:
+    """Serialize a governance read-modify-write section across processes."""
+    target = ensure_parent_dir(Path(path))
+    lock_path = target.with_suffix(target.suffix + ".lock")
+    handle = lock_path.open("a+b")
+    try:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
 
 
 def atomic_write_json(path: Path, payload: object) -> None:
@@ -115,6 +153,7 @@ __all__ = [
     "CANON_GOVERNANCE_PERSISTENCE_CODEC",
     "atomic_write_json",
     "ensure_parent_dir",
+    "exclusive_file_lock",
     "from_dataclass",
     "read_json_or_default",
     "to_jsonable",
