@@ -23,6 +23,13 @@ def _finite(value: object, name: str) -> float:
     return result
 
 
+def _unit_interval(value: object, name: str) -> float:
+    result = _finite(value, name)
+    if not 0.0 <= result <= 1.0:
+        raise ValueError(f"{name} must be between 0 and 1")
+    return result
+
+
 class PricingSelectionService:
     """Pure candidate ranking; never emits actions or mutates policy."""
 
@@ -44,7 +51,7 @@ class PricingSelectionService:
         max_price_rub: int | None = None,
     ) -> Json:
         """Constrain the one canonical offer catalog, then use the existing selector."""
-        score_gate = max(0.0, min(_finite(evidence_score, "evidence_score"), 1.0))
+        score_gate = _unit_interval(evidence_score, "evidence_score")
         if isinstance(min_price_rub, bool) or not isinstance(min_price_rub, int) or min_price_rub < 0:
             raise ValueError("min_price_rub must be a non-negative integer")
         if max_price_rub is not None and (isinstance(max_price_rub, bool) or not isinstance(max_price_rub, int) or max_price_rub < min_price_rub):
@@ -69,7 +76,7 @@ class PricingSelectionService:
             if not isinstance(approval, bool):
                 raise ValueError("commercial.requires_human_approval must be a boolean")
             seen_positions.add(position)
-            threshold = max(0.0, min(_finite(commercial.get("min_evidence_score", 0.0), "commercial.min_evidence_score"), 1.0))
+            threshold = _unit_interval(commercial.get("min_evidence_score", 0.0), "commercial.min_evidence_score")
             price = offer.base_price_rub
             if isinstance(price, bool) or not isinstance(price, int) or price < 0:
                 raise ValueError("base_price_rub must be a non-negative integer")
