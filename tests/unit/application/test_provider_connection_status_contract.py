@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.web.pages.provider_tokens_admin import ProviderTokensAdminPage
+from fastapi import APIRouter
+
+from adapters.api.fastapi.business_workspace_provider_routes import register_business_workspace_provider_routes
 from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
 
 
@@ -26,9 +28,10 @@ def test_provider_catalog_exposes_truthful_connection_status_and_safe_actions(mo
     assert row['actions'] == {'activate': '/control-plane/provider-admin/activate', 'probe': '/control-plane/provider-runtime/live-probe', 'read_sync': '/control-plane/provider-runtime/sync', 'sync_history': '/control-plane/provider-runtime/sync-history'}
 
 
-def test_provider_token_admin_declares_verify_sync_results_flow() -> None:
-    payload = ProviderTokensAdminPage().build({'tenant_id': 'tenant-a', 'business_id': 'shop-a', 'rows': ()})['payload']
-    assert payload['actions']['probe_endpoint'] == '/control-plane/provider-runtime/live-probe'
-    assert payload['actions']['sync_endpoint'] == '/control-plane/provider-runtime/sync'
-    assert payload['actions']['sync_history_endpoint'] == '/control-plane/provider-runtime/sync-history'
-    assert payload['ui_schema']['modal_behavior']['connection_flow'] == ('credentials', 'probe', 'read_sync', 'results')
+def test_owner_workspace_replaces_dead_provider_token_handoff() -> None:
+    router = APIRouter()
+    register_business_workspace_provider_routes(router=router, auth_bundle=object(), provider_admin_handlers=ProviderAdminRouteHandlers())
+    routes = {(route.path, tuple(sorted(route.methods))) for route in router.routes}
+    assert ('/business-workspace/providers', ('GET',)) in routes
+    assert ('/business-workspace/providers', ('POST',)) in routes
+    assert all(path != '/web/provider-tokens' for path, _ in routes)
