@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from entrypoints.api.approval_route_handlers import ApprovalRouteHandlers
 from execution.approval_execution_gate import ApprovalExecutionGate
 from execution.approval_policy_engine import ApprovalPolicyEngine
 from governance.approval_contract import ApprovalDecision, ApprovalOutcome
@@ -15,7 +16,7 @@ from governance.rbac_contract import RoleId
 from core.offers.catalogs.yaml_catalog import YamlOfferCatalogV1
 from runtime.pricing import PricingSelectionService
 from runtime.boot.actions_registry import get_spec
-from runtime.boot.system_builder_parts.runtime_services import build_runtime_services
+from runtime.boot.system_builder_parts.runtime_services import _build_pricing_approval_gate, build_runtime_services
 from runtime.handlers.pricing_select import handle_pricing_select
 
 
@@ -95,10 +96,17 @@ def test_select_tariff_is_registered_as_confirmed_durable_business_write() -> No
 
 
 @pytest.mark.lock
-def test_boot_builds_the_existing_canonical_pricing_selection_service() -> None:
+def test_boot_builds_the_existing_canonical_pricing_services() -> None:
     source = inspect.getsource(build_runtime_services)
-    assert "from runtime.pricing import PricingSelectionService" in source
     assert "ctx.set_value('pricing_selection_service', PricingSelectionService()" in source
+    assert "ctx.set_value('pricing_approval_execution_gate', _build_pricing_approval_gate()" in source
+
+
+def test_configured_memory_approval_backend_is_shared_with_control_plane(monkeypatch) -> None:
+    monkeypatch.setenv("BUSINESAIOS_APPROVAL_STORE_BACKEND", "memory")
+    control_plane = ApprovalRouteHandlers()
+    pricing_gate = _build_pricing_approval_gate()
+    assert pricing_gate._approval_workflow._store is control_plane.approval_store
 
 
 def test_real_pricing_selection_uses_catalog_owned_identity_price_and_copy() -> None:
