@@ -193,10 +193,13 @@ class PersistentApprovalStore(ApprovalStoreContract):
         )
 
 
+_DEFAULT_MEMORY_APPROVAL_STORE = InMemoryApprovalStore()
+
+
 def build_default_approval_store() -> ApprovalStoreContract:
     mode = os.getenv("BUSINESAIOS_APPROVAL_STORE_BACKEND", "file").strip().lower()
     if mode == "memory":
-        return InMemoryApprovalStore()
+        return _DEFAULT_MEMORY_APPROVAL_STORE
     return PersistentApprovalStore()
 
 
