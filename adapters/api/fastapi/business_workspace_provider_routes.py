@@ -11,26 +11,22 @@ from governance.rbac_contract import RoleId
 
 CANON_BUSINESS_WORKSPACE_PROVIDER_ROUTES = True
 _READY = frozenset({'live_ready', 'read_only_ready', 'implemented', 'partial'})
-_MODES = frozenset({'dry_run', 'live'})
 
 
-def _workspace_scope(*, request: Request, auth_bundle) -> tuple[object, str, str, str]:
+def _workspace_scope(*, request: Request, auth_bundle) -> tuple[object, str, str]:
     _, principal = authorize_request(request=request, auth_bundle=auth_bundle)
     if RoleId.OWNER not in tuple(principal.roles) or 'provider_control_plane' not in tuple(principal.scopes):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='owner_provider_scope_required')
     tenant_id = str(principal.tenant_id or '').strip()
     business_id = str(dict(principal.metadata or {}).get('business_id') or '').strip()
-    requested_by = str(principal.actor_id or principal.subject or '').strip()
-    if not tenant_id or not business_id or not requested_by:
+    if not tenant_id or not business_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='business_workspace_scope_missing')
-    return principal, tenant_id, business_id, requested_by
+    return principal, tenant_id, business_id
 
 
 def _truth(provider_key: str):
     row = provider_truth_map().get(str(provider_key or '').strip())
-    if row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='provider_not_found')
-    if not bool(row.read_only_supported) or str(row.status) not in _READY:
+    if row is None or not bool(row.read_only_supported) or str(row.status) not in _READY:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='provider_not_customer_read_ready')
     return row
 
@@ -40,22 +36,17 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
 
     @router.get('/business-workspace/providers', tags=['business-workspace'])
     async def provider_workspace(request: Request, provider_key: str | None = None, limit: int = 50) -> dict[str, Any]:
-        _, tenant_id, business_id, _ = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        _, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
         if provider_key:
             _truth(provider_key)
             return handlers.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=max(1, min(int(limit), 100)))
         payload, truth = handlers.list_provider_catalog(tenant_id=tenant_id, business_id=business_id), provider_truth_map()
-        rows = []
-        for raw in list(payload.get('providers') or []):
-            item, row = dict(raw), truth.get(str(raw.get('provider_key') or '').strip())
-            truth_status = 'not_implemented' if row is None else str(row.status)
-            selectable = bool(row and row.read_only_supported and truth_status in _READY)
-            rows.append({**item, 'truth_status': truth_status, 'customer_selectable': selectable, 'read_supported': selectable, 'write_actions_enabled': False})
+        rows = [{**dict(raw), 'truth_status': 'not_implemented' if (row := truth.get(str(raw.get('provider_key') or '').strip())) is None else str(row.status), 'customer_selectable': bool(row and row.read_only_supported and str(row.status) in _READY), 'read_supported': bool(row and row.read_only_supported and str(row.status) in _READY), 'write_actions_enabled': False} for raw in list(payload.get('providers') or [])]
         return {**payload, 'providers': rows, 'write_actions_enabled': False, 'scope_source': 'authenticated_owner_session'}
 
     @router.post('/business-workspace/providers', tags=['business-workspace'])
     async def provider_action(request: Request) -> dict[str, Any]:
-        principal, tenant_id, business_id, requested_by = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        principal, tenant_id, business_id = _workspace_scope(request=request, auth_bundle=auth_bundle)
         body = await json_body(request)
         action, provider_key = str(body.get('action') or '').strip(), str(body.get('provider_key') or '').strip()
         truth = _truth(provider_key)
@@ -64,10 +55,10 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
             if not external_ref:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='external_ref_required')
             secrets = body.get('secrets') if isinstance(body.get('secrets'), Mapping) else {}
-            return handlers.activate_provider(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'ownership_key': f'owner:{principal.subject}:{provider_key}', 'requested_by': requested_by, 'external_ref': external_ref, 'region': body.get('region'), 'metadata': dict(body.get('metadata') or {}) if isinstance(body.get('metadata'), Mapping) else {}, 'secrets': {str(k): str(v) for k, v in dict(secrets).items()}})
+            return handlers.activate_provider(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'ownership_key': f'owner:{principal.subject}:{provider_key}', 'requested_by': str(principal.actor_id or principal.subject), 'external_ref': external_ref, 'region': body.get('region'), 'metadata': dict(body.get('metadata') or {}) if isinstance(body.get('metadata'), Mapping) else {}, 'secrets': {str(k): str(v) for k, v in dict(secrets).items()}})
         if action == 'read':
             operation, mode = str(body.get('operation') or '').strip(), str(body.get('mode') or 'live').strip() or 'live'
-            if mode not in _MODES or (operation and operation not in tuple(truth.read_capabilities)):
+            if mode not in {'dry_run', 'live'} or (operation and operation not in tuple(truth.read_capabilities)):
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='provider_read_action_forbidden')
             if not operation:
                 return handlers.probe_provider_live(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, mode=mode)
