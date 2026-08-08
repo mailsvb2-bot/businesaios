@@ -1,5 +1,8 @@
+from types import SimpleNamespace
+
 from runtime.messaging.channel_preference import ChannelPreference
 from runtime.messaging_policy.delivery_snapshot import DeliverySnapshot
+from runtime.messaging_policy.policy_plan import PolicyPlan
 from runtime.messaging_policy.policy_request import PolicyRequest
 from runtime.messaging_policy.resolver import MessagingPolicyResolver
 from runtime.messaging_policy.unanswered_snapshot import UnansweredSnapshot
@@ -79,3 +82,27 @@ def test_resolver_verified_only_filters_non_verified():
         )
     )
     assert plan.ordered_channels == ("email",)
+
+
+def test_explicit_missing_contact_basis_blocks_outbound_before_channel_selection():
+    preference = ChannelPreference(primary="whatsapp", enabled=("whatsapp", "email"))
+    plan = MessagingPolicyResolver().resolve(PolicyRequest(preference=preference, contact_basis="none"))
+    assert plan.ordered_channels == ()
+    assert plan.terminal_reason == "outbound_forbidden"
+    assert "outbound_forbidden" in plan.reason_codes
+
+
+def test_terminal_contact_block_skips_capability_routing(monkeypatch):
+    from runtime._internal.effects_actions.telegram.messaging_parts import policy as delivery_policy
+
+    preference = ChannelPreference(primary="whatsapp", enabled=("whatsapp", "email"))
+    monkeypatch.setattr(delivery_policy, "load_channel_preference", lambda **_kwargs: preference)
+    monkeypatch.setattr(delivery_policy, "_apply_capability_routing", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("terminal plans must not be rerouted")))
+    monkeypatch.setattr(delivery_policy, "build_policy_event_recorder_from_runtime", lambda _runtime: None)
+    monkeypatch.setattr(delivery_policy, "_with_health_feedback", lambda _runtime, *, send_once: send_once)
+    monkeypatch.setattr(delivery_policy, "execute_policy_plan_with_events", lambda **kwargs: kwargs["plan"])
+    msg = SimpleNamespace(tenant_id="tenant-a", channel="whatsapp", critical=False)
+    plan = delivery_policy.execute_with_policy(SimpleNamespace(settings_gateway=None), msg=msg, channel_policy={"contact_basis": "none"}, send_once=lambda _msg: (True, {}))
+    assert isinstance(plan, PolicyPlan)
+    assert plan.ordered_channels == ()
+    assert plan.terminal_reason == "outbound_forbidden"
