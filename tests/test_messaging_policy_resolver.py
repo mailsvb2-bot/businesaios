@@ -40,10 +40,7 @@ def test_resolver_moves_current_channel_back_if_unanswered_threshold_reached():
             preferred_channel="telegram",
             fallback_channels=("whatsapp", "sms"),
             unanswered_threshold_s=3600,
-            unanswered_snapshot=UnansweredSnapshot(
-                current_channel="telegram",
-                seconds_since_last_user_reply=7200,
-            ),
+            unanswered_snapshot=UnansweredSnapshot(current_channel="telegram", seconds_since_last_user_reply=7200),
         )
     )
     assert plan.ordered_channels == ("whatsapp", "sms", "telegram")
@@ -53,17 +50,11 @@ def test_resolver_drops_failed_and_blocked():
     resolver = MessagingPolicyResolver()
     plan = resolver.resolve(
         PolicyRequest(
-            preference=ChannelPreference(
-                primary="telegram",
-                enabled=("telegram", "whatsapp", "sms", "email"),
-                verified=("telegram", "whatsapp", "sms", "email"),
-            ),
+            preference=ChannelPreference(primary="telegram", enabled=("telegram", "whatsapp", "sms", "email"),
+                verified=("telegram", "whatsapp", "sms", "email")),
             preferred_channel="telegram",
             fallback_channels=("whatsapp", "sms", "email"),
-            delivery_snapshot=DeliverySnapshot(
-                failed=("telegram", "whatsapp"),
-                blocked=("sms",),
-            ),
+            delivery_snapshot=DeliverySnapshot(failed=("telegram", "whatsapp"), blocked=("sms",)),
         )
     )
     assert plan.ordered_channels == ("email",)
@@ -73,14 +64,8 @@ def test_resolver_verified_only_filters_non_verified():
     resolver = MessagingPolicyResolver()
     plan = resolver.resolve(
         PolicyRequest(
-            preference=ChannelPreference(
-                primary="telegram",
-                enabled=("telegram", "whatsapp", "email"),
-                verified=("email",),
-            ),
-            preferred_channel="telegram",
-            fallback_channels=("whatsapp", "email"),
-            verified_only=True,
+            preference=ChannelPreference(primary="telegram", enabled=("telegram", "whatsapp", "email"), verified=("email",)),
+            preferred_channel="telegram", fallback_channels=("whatsapp", "email"), verified_only=True,
         )
     )
     assert plan.ordered_channels == ("email",)
@@ -101,6 +86,18 @@ def test_malformed_explicit_contact_basis_fails_closed(contact_basis: object) ->
         PolicyRequest(preference=preference, contact_basis=contact_basis)
 
 
+def test_malformed_contact_basis_returns_deterministic_delivery_block(monkeypatch):
+    from runtime._internal.effects_actions.telegram.messaging_parts import policy as delivery_policy
+
+    preference = ChannelPreference(primary="whatsapp", enabled=("whatsapp", "email"))
+    monkeypatch.setattr(delivery_policy, "load_channel_preference", lambda **_kwargs: preference)
+    msg = SimpleNamespace(tenant_id="tenant-a", channel="whatsapp", critical=False)
+    result = delivery_policy.execute_delivery_path(SimpleNamespace(settings_gateway=None), msg=msg,
+        channel_policy={"contact_basis": False}, send_once=lambda _msg: (_ for _ in ()).throw(AssertionError("must not send")))
+    assert result[0] is False
+    assert result[1]["policy"]["terminal_reason"] == "discipline_violation"
+
+
 def test_terminal_contact_block_skips_capability_routing(monkeypatch):
     from runtime._internal.effects_actions.telegram.messaging_parts import policy as delivery_policy
 
@@ -111,7 +108,8 @@ def test_terminal_contact_block_skips_capability_routing(monkeypatch):
     monkeypatch.setattr(delivery_policy, "_with_health_feedback", lambda _runtime, *, send_once: send_once)
     monkeypatch.setattr(delivery_policy, "execute_policy_plan_with_events", lambda **kwargs: kwargs["plan"])
     msg = SimpleNamespace(tenant_id="tenant-a", channel="whatsapp", critical=False)
-    plan = delivery_policy.execute_with_policy(SimpleNamespace(settings_gateway=None), msg=msg, channel_policy={"contact_basis": "none"}, send_once=lambda _msg: (True, {}))
+    plan = delivery_policy.execute_with_policy(SimpleNamespace(settings_gateway=None), msg=msg,
+        channel_policy={"contact_basis": "none"}, send_once=lambda _msg: (True, {}))
     assert isinstance(plan, PolicyPlan)
     assert plan.ordered_channels == ()
     assert plan.terminal_reason == "outbound_forbidden"
