@@ -57,7 +57,8 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
     @router.post('/business-workspace/providers/activate', tags=['business-workspace'])
     async def activate(request: Request) -> dict[str, Any]:
         principal, tenant_id, business_id, requested_by = _workspace_scope(request=request, auth_bundle=auth_bundle)
-        body = await json_body(request); provider_key = str(body.get('provider_key') or '').strip(); _truth(provider_key)
+        provider_key = str((body := await json_body(request)).get('provider_key') or '').strip()
+        _truth(provider_key)
         external_ref = str(body.get('external_ref') or '').strip()
         if not external_ref:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='external_ref_required')
@@ -66,15 +67,17 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
 
     @router.post('/business-workspace/providers/{provider_key}/probe', tags=['business-workspace'])
     async def probe(provider_key: str, request: Request) -> dict[str, Any]:
-        _, tenant_id, business_id, _ = _workspace_scope(request=request, auth_bundle=auth_bundle); _truth(provider_key); body = await json_body(request)
-        mode = str(body.get('mode') or 'live').strip() or 'live'
+        _, tenant_id, business_id, _ = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        _truth(provider_key)
+        mode = str((body := await json_body(request)).get('mode') or 'live').strip() or 'live'
         if mode not in _MODES:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='unsupported_probe_mode')
         return handlers.probe_provider_live(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, mode=mode)
 
     @router.post('/business-workspace/providers/{provider_key}/sync', tags=['business-workspace'])
     async def sync(provider_key: str, request: Request) -> dict[str, Any]:
-        _, tenant_id, business_id, _ = _workspace_scope(request=request, auth_bundle=auth_bundle); truth = _truth(provider_key); body = await json_body(request)
+        _, tenant_id, business_id, _ = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        truth, body = _truth(provider_key), await json_body(request)
         operation, mode = str(body.get('operation') or '').strip(), str(body.get('mode') or 'live').strip() or 'live'
         if operation not in tuple(truth.read_capabilities):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='provider_write_or_unknown_operation_forbidden')
@@ -85,7 +88,8 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
 
     @router.get('/business-workspace/providers/{provider_key}/history', tags=['business-workspace'])
     async def history(provider_key: str, request: Request, limit: int = 50) -> dict[str, Any]:
-        _, tenant_id, business_id, _ = _workspace_scope(request=request, auth_bundle=auth_bundle); _truth(provider_key)
+        _, tenant_id, business_id, _ = _workspace_scope(request=request, auth_bundle=auth_bundle)
+        _truth(provider_key)
         return handlers.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=max(1, min(int(limit), 100)))
 
 
