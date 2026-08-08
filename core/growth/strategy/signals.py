@@ -64,12 +64,12 @@ def _sales_counts(states: dict[str, tuple[int, str, str]]) -> dict[str, int | fl
     ranks = [rank for rank, _disposition, _source in states.values()]
     discovered, engaged = len(states), sum(rank >= 1 for rank in ranks)
     qualified, checkout = sum(rank >= 3 for rank in ranks), sum(rank >= 5 for rank in ranks)
-    won = sum(disposition == "won" for _rank, disposition, _source in states.values())
-    lost = sum(disposition == "lost" for _rank, disposition, _source in states.values())
-    pct = lambda numerator, denominator: 0.0 if not denominator else round(numerator / denominator * 100.0, 1)
+    won, lost = sum(d == "won" for _r, d, _s in states.values()), sum(d == "lost" for _r, d, _s in states.values())
     return {"discovered": discovered, "engaged": engaged, "qualified": qualified, "checkout": checkout, "won": won, "lost": lost,
-            "engagement_percent": pct(engaged, discovered), "qualification_percent": pct(qualified, engaged),
-            "checkout_percent": pct(checkout, qualified), "win_percent": pct(won, discovered)}
+            "engagement_percent": 0.0 if not discovered else round(engaged / discovered * 100.0, 1),
+            "qualification_percent": 0.0 if not engaged else round(qualified / engaged * 100.0, 1),
+            "checkout_percent": 0.0 if not qualified else round(checkout / qualified * 100.0, 1),
+            "win_percent": 0.0 if not discovered else round(won / discovered * 100.0, 1)}
 
 
 def _sales_funnel(event_store: Any, *, tenant_id: str, now_ms: int, policy: GrowthSignalsPolicy) -> dict[str, Any]:
