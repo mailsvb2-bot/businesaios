@@ -17,7 +17,7 @@ def enforce_safe_mode(*, action: str) -> None:
 
 
 def load_world(snapshot_store: Any, snapshot_id: str) -> Any:
-    from governance.economic_layer import load_world_or_degraded
+    from governance.economic_layer_world import load_world_or_degraded
 
     return load_world_or_degraded(snapshot_store, str(snapshot_id))
 
