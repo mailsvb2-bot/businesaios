@@ -6,7 +6,7 @@ from pathlib import Path
 
 WORKFLOW = Path(".github/workflows/prune-stale-branches.yml")
 AUDIT = Path(".github/branch-prune-audit.txt")
-EXPECTED_WORKFLOW_SHA256 = "0fd250027f4e84826a0151e503c39d7f7975a420af20c85ad720b4ba26d5ab00"
+EXPECTED_WORKFLOW_SHA256 = "63783a8daa7e63e139f22408502dc208e24a6dac0bb799cfe56583b9d1373d52"
 CHECKOUT_ACTION = "actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5"
 
 
@@ -21,6 +21,7 @@ def test_stale_branch_pruning_is_exactly_allowlisted() -> None:
     assert text.count(CHECKOUT_ACTION) == 1
     assert text.count("ref: ${{ github.event.pull_request.base.sha }}") == 1
     assert text.count("persist-credentials: false") == 1
+    assert text.count("Verify exact checkout") == 1
     assert "github.event.pull_request.base.ref == github.event.repository.default_branch" in text
     assert "github.event.pull_request.head.repo.full_name == github.repository" in text
     assert "startsWith(github.event.pull_request.head.ref, 'agent/')" in text
