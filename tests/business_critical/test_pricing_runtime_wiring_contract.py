@@ -39,6 +39,16 @@ class StaticCatalogResolver:
         return self.catalog
 
 
+class MutableSettingsGateway:
+    def __init__(self, value: dict) -> None:
+        self.value = dict(value)
+
+    def get_value(self, *, tenant_id: str, key: str):
+        assert tenant_id == "tenant-a"
+        assert key
+        return dict(self.value)
+
+
 def _env() -> SimpleNamespace:
     return SimpleNamespace(decision=SimpleNamespace(decision_id="decision-pricing-select", correlation_id="correlation-pricing-select", issuer_id="businesaios-core", action="pricing_select@v1"))
 
@@ -130,8 +140,36 @@ def test_approval_required_offer_binds_recipient_content_and_delivery_route() ->
     assert changed_copy["approval"]["reason"] == "approval_subject_mismatch" and effects.calls == []
 
     resolver.catalog = original_catalog
-    second = handle_pricing_select({**base_payload, "evidence": {"approval_id": approval_id}}, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
+    second = handle_pricing_select({**base_payload, "channel_policy": {}, "evidence": {"approval_id": approval_id}}, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
     assert second["ok"] is True and second["status"] == "verified"
     assert effects.calls[-1]["channel"] == "telegram"
+    assert effects.calls[-1]["channel_policy"] is None
     assert effects.calls[-1]["track_payload"]["price_rub"] == 60_000
     assert "Approved audit" in effects.calls[-1]["text"]
+
+
+def test_approval_required_offer_rejects_changed_tenant_preference() -> None:
+    resolver = StaticCatalogResolver(_approval_catalog("Approved audit"))
+    gate, workflow = _approval_gate()
+    effects = FakeEffects()
+    settings_gateway = MutableSettingsGateway({"primary": "telegram", "enabled": ["telegram"], "verified": ["telegram"]})
+    base_payload = {
+        "tenant_id": "tenant-a",
+        "product_id": "audit",
+        "user_id": "user-1",
+        "channel": "telegram",
+        "channel_policy": {"contact_basis": "existing_customer"},
+        "candidates": [{"offer_id": "audit", "score": 0.9}],
+    }
+    first = handle_pricing_select(base_payload, effects, _env(), selection_service=PricingSelectionService(),
+        catalog_resolver=resolver, approval_gate=gate, settings_gateway=settings_gateway)
+    approval_id = first["approval"]["approval_id"]
+    workflow.decide(ApprovalDecision(approval_id=approval_id, tenant_id="tenant-a", actor_id="owner-1", role_id=RoleId.OWNER,
+        outcome=ApprovalOutcome.APPROVE, rationale="approved preference snapshot"))
+
+    settings_gateway.value = {"primary": "telegram", "enabled": ["telegram", "email"], "verified": ["telegram", "email"]}
+    retry = handle_pricing_select({**base_payload, "evidence": {"approval_id": approval_id}}, effects, _env(),
+        selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate, settings_gateway=settings_gateway)
+    assert retry["ok"] is False and retry["status"] == "approval_required"
+    assert retry["approval"]["reason"] == "approval_subject_mismatch"
+    assert retry["delivery"] is None and effects.calls == []
