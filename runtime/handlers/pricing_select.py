@@ -30,18 +30,13 @@ def _delivery_evidence(delivery: object) -> dict[str, Any] | None:
     return None
 
 
-def _effective_delivery(
-    payload: Mapping[str, Any], *, settings_gateway: Any | None, tenant_id: str,
-) -> dict[str, Any]:
+def _effective_delivery(payload: Mapping[str, Any]) -> dict[str, Any]:
     effective = delivery_kwargs(payload)
     policy = effective.get("channel_policy")
     if not isinstance(policy, Mapping) or not policy:
         effective["channel_policy"] = None
         return effective
-    disciplined = ensure_policy_input_disciplined(policy)
-    preference = load_channel_preference(settings_gateway=settings_gateway, tenant_id=tenant_id)
-    disciplined["preference_snapshot"] = preference.to_mapping()
-    effective["channel_policy"] = disciplined
+    effective["channel_policy"] = ensure_policy_input_disciplined(policy)
     return effective
 
 
@@ -86,14 +81,17 @@ def _approval_id(evidence: Mapping[str, object]) -> str | None:
     return raw.strip()
 
 
+def _requires_human_approval(selected_offer: Mapping[str, object]) -> bool:
+    commercial = selected_offer.get("commercial")
+    return bool(isinstance(commercial, Mapping) and commercial.get("requires_human_approval") is True)
+
+
 def _review_selected_offer(
     *, selected_offer: Mapping[str, object], catalog_id: str, tenant_id: str, product_id: str,
-    user_id: str, environment: str, variant: str, content_sha256: str, effective_delivery: Mapping[str, Any], route: Any,
-    evidence: Mapping[str, object], approval_gate: Any | None,
+    user_id: str, environment: str, variant: str, content_sha256: str, effective_delivery: Mapping[str, Any],
+    preference_snapshot: Mapping[str, object] | None, route: Any, evidence: Mapping[str, object], approval_gate: Any | None,
 ) -> dict[str, Any] | None:
-    commercial = selected_offer.get("commercial")
-    requires_approval = bool(isinstance(commercial, Mapping) and commercial.get("requires_human_approval") is True)
-    if not requires_approval:
+    if not _requires_human_approval(selected_offer):
         return None
     gate = approval_gate or build_default_approval_execution_gate()
     approval_id = _approval_id(evidence)
@@ -107,6 +105,7 @@ def _review_selected_offer(
         "variant": variant,
         "content_sha256": content_sha256,
         "delivery": dict(effective_delivery),
+        "preference_snapshot": dict(preference_snapshot or {}),
     }
     ctx = ActionExecutionContext(
         tenant_id=tenant_id, user_id=user_id, action_name=ACTION_NAME, payload=subject,
@@ -134,6 +133,14 @@ def _review_selected_offer(
         "delivery": None,
         "router_evidence": None,
     }
+
+
+def _approval_transport_guard(*, settings_gateway: Any | None, tenant_id: str, approved_preference: Any):
+    def _guard(_msg) -> str:
+        current = load_channel_preference(settings_gateway=settings_gateway, tenant_id=tenant_id)
+        return "" if current == approved_preference else "preference_changed"
+
+    return _guard
 
 
 def handle_pricing_select(
@@ -171,7 +178,7 @@ def handle_pricing_select(
         if not isinstance(variant, str) or not variant.strip():
             raise PricingRouteViolation("evidence.variant must be a non-empty string")
         variant = variant.strip()
-        effective_delivery = _effective_delivery(body, settings_gateway=settings_gateway, tenant_id=tenant_id)
+        effective_delivery = _effective_delivery(body)
         context = PricingSelectionContext(tenant_id=tenant_id, decision_id=route.decision_id,
             correlation_id=route.correlation_id, issuer_id=route.issuer_id, action=route.action)
         resolver = catalog_resolver or OfferCatalogResolver()
@@ -195,22 +202,32 @@ def handle_pricing_select(
             price_rub=int(selected_offer.get("price_rub") or 0), variant=variant,
             context={"tenant_id": tenant_id, "product_id": product_id, "environment": environment})
         text = str(rendered.text or selected_offer.get("title") or "💸 Pricing proposal selected")
+        requires_approval = _requires_human_approval(selected_offer)
+        approved_preference = (
+            load_channel_preference(settings_gateway=settings_gateway, tenant_id=tenant_id)
+            if requires_approval else None
+        )
         approval_result = _review_selected_offer(
             selected_offer=selected_offer, catalog_id=str(catalog.id), tenant_id=tenant_id, product_id=product_id,
             user_id=user_id, environment=environment, variant=variant,
             content_sha256=sha256(text.encode("utf-8")).hexdigest(), effective_delivery=effective_delivery,
+            preference_snapshot=None if approved_preference is None else approved_preference.to_mapping(),
             route=route, evidence=evidence, approval_gate=approval_gate,
         )
         if approval_result is not None:
             return {**approval_result, "selection_result": {**dict(selection_result), "catalog_id": str(catalog.id)}}
 
+        transport_guard = (
+            _approval_transport_guard(settings_gateway=settings_gateway, tenant_id=tenant_id, approved_preference=approved_preference)
+            if approved_preference is not None else None
+        )
         delivery = effects.send_message(
             decision_id=route.decision_id, correlation_id=route.correlation_id, tenant_id=tenant_id, user_id=user_id,
             text=text, track_event_type=ACTION_NAME,
             track_payload={"tenant_id": tenant_id, "product_id": product_id, "catalog_id": str(catalog.id),
                 "offer_id": str(selected_offer.get("offer_id") or ""),
                 "price_rub": int(selected_offer.get("price_rub") or 0), "selected": True},
-            **effective_delivery,
+            transport_guard=transport_guard, **effective_delivery,
         )
         router_evidence = _delivery_evidence(delivery)
         delivery_ok = bool(delivery.get("ok")) if isinstance(delivery, Mapping) else bool(delivery)
