@@ -9,7 +9,7 @@ It must never contain decision logic.
 from contextlib import contextmanager
 import json
 import os
-from dataclasses import asdict, fields, is_dataclass
+from dataclasses import fields, is_dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -27,40 +27,28 @@ def ensure_parent_dir(path: Path) -> Path:
     return path
 
 
+def _file_lock(handle, *, acquire: bool) -> None:
+    handle.seek(0)
+    if os.name == "nt":
+        import msvcrt
+        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK if acquire else msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX if acquire else fcntl.LOCK_UN)
+
+
 @contextmanager
 def exclusive_file_lock(path: Path) -> Iterator[None]:
-    """Serialize a governance read-modify-write section across processes."""
-    target = ensure_parent_dir(Path(path))
-    lock_path = target.with_suffix(target.suffix + ".lock")
-    handle = lock_path.open("a+b")
-    try:
-        handle.seek(0, os.SEEK_END)
+    lock_path = ensure_parent_dir(Path(path)).with_suffix(Path(path).suffix + ".lock")
+    with lock_path.open("a+b") as handle:
         if handle.tell() == 0:
             handle.write(b"\0")
             handle.flush()
-        handle.seek(0)
-        if os.name == "nt":
-            import msvcrt
-
-            msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
-        else:
-            import fcntl
-
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        _file_lock(handle, acquire=True)
         try:
             yield
         finally:
-            handle.seek(0)
-            if os.name == "nt":
-                import msvcrt
-
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-    finally:
-        handle.close()
+            _file_lock(handle, acquire=False)
 
 
 def atomic_write_json(path: Path, payload: object) -> None:
