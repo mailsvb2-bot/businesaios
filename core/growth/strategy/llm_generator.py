@@ -29,10 +29,16 @@ def generate_hypotheses(llm: Any, *, tenant_id: str, goal: GrowthGoalV1, signals
         items = _parse_json_array(resp)
         out: list[GrowthHypothesisV1] = []
         now = int(time.time() * 1000)
+        partner_seen = False
         for it in items:
             h = _coerce_hypothesis(it, tenant_id=tenant_id, now_ms=now)
-            if h:
-                out.append(h)
+            if not h:
+                continue
+            if h.channel == "partnerships":
+                if partner_seen:
+                    continue
+                partner_seen = True
+            out.append(h)
         return tuple(out[: int(n)])
     except Exception:
         swallow(__name__, "core/growth/strategy/llm_generator.py")
