@@ -101,3 +101,29 @@ def test_smtp_coordinates_headers_and_transport_paths(
     assert failed["error"] == "SMTPException"
 
 
+def test_smtp_transport_guard_rechecks_after_handshake_before_send(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env = {"DEMO_STARTTLS": False}
+    monkeypatch.setattr(sender, "env_str", lambda _name, default="": default)
+    monkeypatch.setattr(sender, "env_bool", lambda name, default=False: bool(env.get(name, default)))
+    monkeypatch.setattr(sender, "env_float", lambda *_args, **_kwargs: 9.0)
+    _SMTP.instances.clear()
+    monkeypatch.setattr(sender.smtplib, "SMTP", _SMTP)
+    checks = iter(("", "", "preference_changed"))
+    result = sender._send_smtp(
+        cfg=_cfg(mode="smtp", endpoint="smtp://mail.example:2525"),
+        msg=_msg(transport_guard=lambda _msg: next(checks)),
+    )
+    assert result["mode"] == "blocked"
+    assert result["delivery_disposition"] == "suppressed"
+    assert [name for name, _args in _SMTP.instances[-1].calls] == ["ehlo", "quit"]
+
+
+def test_smtp_transport_guard_precedes_provider_validation() -> None:
+    result = sender._send_smtp(
+        cfg=_cfg(mode="smtp", endpoint="", sender_value=""),
+        msg=_msg(transport_guard=lambda _msg: "preference_changed"),
+    )
+    assert result["mode"] == "blocked"
+    assert result["delivery_disposition"] == "suppressed"
