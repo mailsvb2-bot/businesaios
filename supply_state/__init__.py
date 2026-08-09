@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """Canonical supply-state owner surface."""
 
-from dataclasses import asdict
 from contracts.supply import BusinessLiveState
 from registry.base_registry import BaseRegistry
 from registry.business_state_feed_registry import BusinessStateFeedRegistry
