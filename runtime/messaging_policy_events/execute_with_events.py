@@ -5,15 +5,8 @@ from dataclasses import replace
 from runtime.messaging.outbound_message import OutboundMessage
 
 
-def _terminal_guard_result(*, plan, attempts, reason: str) -> tuple[bool, dict]:
-    return False, {
-        'policy': {
-            'ordered_channels': list(plan.ordered_channels),
-            'reason_codes': list(plan.reason_codes),
-            'terminal_reason': str(reason),
-            'attempts': attempts,
-        }
-    }
+def _execution_blocked(meta: object) -> bool:
+    return isinstance(meta, dict) and str(meta.get("mode") or "").strip().casefold() == "blocked"
 
 
 def execute_policy_plan_with_events(
@@ -50,18 +43,12 @@ def execute_policy_plan_with_events(
 
     for channel in plan.ordered_channels:
         msg = replace(base_message, channel=channel, transport_guard=attempt_guard)
-        guard_reason = str(attempt_guard(msg) or '').strip() if attempt_guard is not None else ''
-        if guard_reason:
-            if recorder is not None:
-                recorder.record_finished(msg=base_message, plan=plan, selected_channel='', terminal_reason=guard_reason, attempts_count=len(attempts))
-            return _terminal_guard_result(plan=plan, attempts=attempts, reason=guard_reason)
+        if attempt_guard is not None and str(attempt_guard(msg) or '').strip():
+            return False, {}
         ok, meta = send_once(msg)
         meta = dict(meta or {})
-        provider_guard_reason = str(meta.get('transport_guard_reason') or '').strip()
-        if provider_guard_reason:
-            if recorder is not None:
-                recorder.record_finished(msg=base_message, plan=plan, selected_channel='', terminal_reason=provider_guard_reason, attempts_count=len(attempts))
-            return _terminal_guard_result(plan=plan, attempts=attempts, reason=provider_guard_reason)
+        if _execution_blocked(meta):
+            return False, {}
         attempts.append({'channel': channel, 'ok': bool(ok), 'meta': meta})
         last_meta = meta
 
