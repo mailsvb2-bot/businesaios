@@ -6,7 +6,7 @@ These helpers are pure and deterministic (given event inputs).
 """
 
 from dataclasses import dataclass
-from typing import Dict, Iterable
+from typing import Iterable
 
 from .event_store import Event
 
