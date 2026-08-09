@@ -52,9 +52,12 @@ class DistributedApprovalStore(ApprovalStoreContract):
             )
         return normalized
 
-    def save(self, record: ApprovalRecord) -> ApprovalRecord:
+    def save(self, record: ApprovalRecord, *, expected: ApprovalRecord | None = None) -> ApprovalRecord:
         record.request.validate()
         existing = self._backend.get(approval_id=record.request.approval_id)
+        current = None if existing is None else self._from_payload(existing)
+        if expected is not None and current != expected:
+            raise RuntimeError("approval_concurrent_update")
         version = 0 if existing is None else int(existing.get("version") or 0)
         self._backend.put(
             approval_id=record.request.approval_id,

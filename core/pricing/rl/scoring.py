@@ -39,7 +39,8 @@ def score_candidates(candidates: Sequence[dict[str, Any]], *, evidence: dict[str
     default_score = float(evidence.get("default_score", 0.0) or 0.0)
     for idx, candidate in enumerate(candidates):
         item = dict(candidate or {})
-        score = float(item.get("score", default_score) or default_score)
+        raw_score = item["score"] if "score" in item and item["score"] is not None else default_score
+        score = float(raw_score)
         scored.append({"candidate": item, "score": score, "rank": idx})
     scored.sort(key=lambda x: (float(x.get("score", 0.0)), -int(x.get("rank", 0))), reverse=True)
     return scored

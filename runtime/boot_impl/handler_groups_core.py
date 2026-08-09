@@ -91,9 +91,8 @@ def register_core_handlers(*, handlers: ActionHandlerRegistry, ctx) -> None:
             payload,
             effects,
             env,
-            selection_service=get_ctx_value(
-                ctx,
-                "pricing_selection_service",
-            ),
+            selection_service=get_ctx_value(ctx, "pricing_selection_service"),
+            approval_gate=get_ctx_value(ctx, "pricing_approval_execution_gate"),
+            settings_gateway=get_ctx_value(ctx, "settings_gateway"),
         ),
     )

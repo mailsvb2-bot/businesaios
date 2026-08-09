@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -25,6 +25,7 @@ class OfferSummary:
     offer_id: str
     title: str
     base_price_rub: int
+    meta: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,9 @@ class OfferCatalog:
     """Canonical catalog interface (Engine-level)."""
 
     id: str
+
+    def list_offers(self) -> list[OfferSummary]:  # pragma: no cover
+        raise NotImplementedError
 
     def eligible(self, *, user_id: str, entitlements: Mapping[str, Any], context: Mapping[str, Any]) -> OfferEligibility:  # pragma: no cover
         raise NotImplementedError

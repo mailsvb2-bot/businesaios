@@ -11,7 +11,7 @@ from urllib import error as urllib_error
 from urllib import request as urllib_request
 from urllib.parse import urlparse
 
-from runtime.messaging.outbound_message import OutboundMessage
+from runtime.messaging.outbound_message import OutboundMessage, transport_guard_blocks
 from runtime.messaging.provider_config import ProviderConfig
 from runtime.platform.config.env_flags import env_bool, env_float, env_str
 
@@ -62,6 +62,10 @@ def _failure_result(
         "execution_state": "failed",
         "delivery_disposition": "failed",
     }
+
+
+def _guard_blocked_result(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
+    return {**_failure_result(cfg=cfg, msg=msg, reason="transport_guard_blocked"), "mode": "blocked", "execution_state": "blocked", "delivery_disposition": "suppressed"}
 
 
 def _noop_result(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
@@ -123,7 +127,7 @@ def _nested_external_id(payload: Mapping[str, Any]) -> str:
         "id",
     ):
         value = payload.get(key)
-        if isinstance(value, (str, int)) and str(value).strip():
+        if isinstance(value, str | int) and str(value).strip():
             return str(value).strip()
 
     messages = payload.get("messages")
@@ -175,12 +179,14 @@ def _response_is_rejected(payload: Mapping[str, Any]) -> bool:
     error = payload.get("error")
     if isinstance(error, Mapping):
         return bool(error)
-    if isinstance(error, (str, list, tuple)):
+    if isinstance(error, str | list | tuple):
         return bool(error)
     return False
 
 
 def _send_webhook(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
+    if transport_guard_blocks(msg.transport_guard, msg):
+        return _guard_blocked_result(cfg=cfg, msg=msg)
     endpoint = str(cfg.endpoint or "").strip()
     try:
         parsed = urlparse(endpoint)
@@ -231,6 +237,8 @@ def _send_webhook(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any
             hi=120.0,
         )
     )
+    if transport_guard_blocks(msg.transport_guard, msg):
+        return _guard_blocked_result(cfg=cfg, msg=msg)
 
     try:
         with urllib_request.urlopen(request, timeout=timeout_s) as response:
@@ -330,6 +338,8 @@ def _safe_header(value: object) -> str:
 
 
 def _send_smtp(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
+    if transport_guard_blocks(msg.transport_guard, msg):
+        return _guard_blocked_result(cfg=cfg, msg=msg)
     host, port, secure = _smtp_coordinates(cfg)
     recipient = _safe_header(msg.user_id)
     username = env_str(f"{cfg.env_prefix}_USERNAME", "").strip()
@@ -375,6 +385,8 @@ def _send_smtp(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
             hi=120.0,
         )
     )
+    if transport_guard_blocks(msg.transport_guard, msg):
+        return _guard_blocked_result(cfg=cfg, msg=msg)
     try:
         if secure:
             client = smtplib.SMTP_SSL(host, port, timeout=timeout_s)
@@ -387,6 +399,8 @@ def _send_smtp(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
                 client.ehlo()
             if username and password:
                 client.login(username, password)
+            if transport_guard_blocks(msg.transport_guard, msg):
+                return _guard_blocked_result(cfg=cfg, msg=msg)
             refused = client.send_message(message)
         finally:
             with suppress(Exception):
@@ -419,17 +433,15 @@ def _send_smtp(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
 
 
 def send_outbound(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
+    if transport_guard_blocks(msg.transport_guard, msg):
+        return _guard_blocked_result(cfg=cfg, msg=msg)
     if cfg.mode == NOOP_MODE:
         return _noop_result(cfg=cfg, msg=msg)
     if cfg.mode == "webhook":
         return _send_webhook(cfg=cfg, msg=msg)
     if cfg.mode == "smtp":
         return _send_smtp(cfg=cfg, msg=msg)
-    return _failure_result(
-        cfg=cfg,
-        msg=msg,
-        reason="provider_mode_unsupported",
-    )
+    return _failure_result(cfg=cfg, msg=msg, reason="provider_mode_unsupported")
 
 
 __all__ = [

@@ -1,18 +1,19 @@
-from __future__ import annotations
-
 """Canonical JSON codec for governance persistence surfaces.
 
 This module stores governance state as plain data only.
 It must never contain decision logic.
 """
 
+from __future__ import annotations
+
 import json
-from dataclasses import asdict, fields, is_dataclass
+import os
+from contextlib import contextmanager
+from dataclasses import fields, is_dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, TypeVar, get_args, get_origin, get_type_hints
-
+from typing import Any, Callable, Iterator, TypeVar, get_args, get_origin, get_type_hints
 
 CANON_GOVERNANCE_PERSISTENCE_CODEC = True
 
@@ -23,6 +24,30 @@ def ensure_parent_dir(path: Path) -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _file_lock(handle, *, acquire: bool) -> None:
+    handle.seek(0)
+    if os.name == "nt":
+        import msvcrt
+        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK if acquire else msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX if acquire else fcntl.LOCK_UN)
+
+
+@contextmanager
+def exclusive_file_lock(path: Path) -> Iterator[None]:
+    lock_path = ensure_parent_dir(Path(path)).with_suffix(Path(path).suffix + ".lock")
+    with lock_path.open("a+b") as handle:
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        _file_lock(handle, acquire=True)
+        try:
+            yield
+        finally:
+            _file_lock(handle, acquire=False)
 
 
 def atomic_write_json(path: Path, payload: object) -> None:
@@ -115,6 +140,7 @@ __all__ = [
     "CANON_GOVERNANCE_PERSISTENCE_CODEC",
     "atomic_write_json",
     "ensure_parent_dir",
+    "exclusive_file_lock",
     "from_dataclass",
     "read_json_or_default",
     "to_jsonable",

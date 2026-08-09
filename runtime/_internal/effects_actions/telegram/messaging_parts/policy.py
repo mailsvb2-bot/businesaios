@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from runtime.messaging.outbound_message import transport_guard_blocks
 from runtime.messaging_capability import (
     MessagingCapabilityRouter,
     parse_capability_requirement,
@@ -39,16 +40,22 @@ def _apply_capability_routing(self, *, ordered_channels: tuple[str, ...], discip
     )
 
 
+def _execution_blocked(meta: object) -> bool:
+    return isinstance(meta, dict) and str(meta.get("mode") or "").strip().casefold() == "blocked"
+
+
 def _with_health_feedback(self, *, send_once):
     updater = resolve_capability_telemetry_updater(self)
 
     def _observed(selected_msg):
         ok, meta = send_once(selected_msg)
-        updater.record_delivery_outcome(
-            channel=str(selected_msg.channel),
-            ok=bool(ok),
-            meta=dict(meta or {}),
-        )
+        details = dict(meta or {})
+        if not _execution_blocked(details):
+            updater.record_delivery_outcome(
+                channel=str(selected_msg.channel),
+                ok=bool(ok),
+                meta=details,
+            )
         return ok, meta
 
     return _observed
@@ -56,9 +63,8 @@ def _with_health_feedback(self, *, send_once):
 
 def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
     disciplined_policy = ensure_policy_input_disciplined(channel_policy)
-    settings_gateway = getattr(self, "settings_gateway", None)
     preference = load_channel_preference(
-        settings_gateway=settings_gateway,
+        settings_gateway=getattr(self, "settings_gateway", None),
         tenant_id=msg.tenant_id,
     )
     resolver = MessagingPolicyResolver()
@@ -74,18 +80,22 @@ def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
                 unanswered_threshold_s=int(disciplined_policy.get("unanswered_threshold_s") or 0),
                 delivery_snapshot=parse_delivery_snapshot(disciplined_policy.get("delivery_snapshot")),
                 unanswered_snapshot=parse_unanswered_snapshot(disciplined_policy.get("unanswered_snapshot")),
+                contact_basis=disciplined_policy.get("contact_basis"),
             )
         )
     )
-    plan = ensure_policy_plan_disciplined(
-        _apply_capability_routing(self, ordered_channels=plan.ordered_channels, disciplined_policy=disciplined_policy)
-    )
+    if plan.ordered_channels:
+        plan = ensure_policy_plan_disciplined(
+            _apply_capability_routing(self, ordered_channels=plan.ordered_channels, disciplined_policy=disciplined_policy)
+        )
     recorder = build_policy_event_recorder_from_runtime(self)
+    guard = getattr(msg, "transport_guard", None)
     return execute_policy_plan_with_events(
         plan=plan,
         base_message=msg,
         send_once=_with_health_feedback(self, send_once=send_once),
         recorder=recorder,
+        attempt_guard=guard if callable(guard) else None,
     )
 
 
@@ -95,4 +105,7 @@ def execute_delivery_path(self, *, msg, channel_policy, send_once):
             return execute_with_policy(self, msg=msg, channel_policy=channel_policy, send_once=send_once)
         except MessagingPolicyDisciplineViolation as exc:
             return False, {"policy": {"ordered_channels": [], "reason_codes": ["discipline_violation"], "terminal_reason": "discipline_violation", "attempts": []}, "error": exc.__class__.__name__}
-    return send_once(msg)
+    if transport_guard_blocks(getattr(msg, "transport_guard", None), msg):
+        return False, {}
+    ok, meta = send_once(msg)
+    return (False, {}) if _execution_blocked(meta) else (ok, meta)

@@ -21,6 +21,7 @@ def send_message_transport_effect(
     reply_markup: dict[str, Any] | None = None,
     priority: Any = "normal",
     critical: bool = True,
+    transport_guard: Any = None,
 ) -> tuple[bool, dict[str, Any]]:
     return telegram_send_message_transport(
         effects,
@@ -29,6 +30,7 @@ def send_message_transport_effect(
         reply_markup=reply_markup,
         priority=priority,
         critical=bool(critical),
+        transport_guard=transport_guard,
     )
 
 def send_audio_transport_effect(

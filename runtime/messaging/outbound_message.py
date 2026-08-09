@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 
 def _stable_json(payload: dict[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def transport_guard_blocks(guard, message=None) -> bool:
+    if not callable(guard):
+        return False
+    try:
+        return bool(str((guard() if message is None else guard(message)) or "").strip())
+    except Exception:
+        return True
 
 
 @dataclass(frozen=True)
@@ -25,6 +35,7 @@ class OutboundMessage:
     priority: str = "normal"
     critical: bool = True
     payload: dict | None = None
+    transport_guard: Callable[[OutboundMessage], str] | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         base_payload = dict(self.payload or {})

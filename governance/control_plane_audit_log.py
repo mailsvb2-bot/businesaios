@@ -1,12 +1,13 @@
-from __future__ import annotations
-
 """Append-only audit log for governance control-plane events.
 
 This module stores immutable event records only.
 It must not contain decision logic or policy evaluation.
 """
 
+from __future__ import annotations
+
 import json
+import os
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -22,9 +23,8 @@ from governance.control_plane_audit_support import (
     text,
     utc_now,
 )
-from governance.persistence_codec import ensure_parent_dir
+from governance.persistence_codec import ensure_parent_dir, exclusive_file_lock
 from governance.persistence_paths import control_plane_audit_log_path
-
 
 CANON_GOVERNANCE_CONTROL_PLANE_AUDIT_LOG = True
 
@@ -87,11 +87,7 @@ class NullGovernanceAuditLog(GovernanceAuditLogContract):
 
 
 class PersistentGovernanceAuditLog(GovernanceAuditLogContract):
-    """Plain JSONL append-only audit log for governance events.
-
-    Each record includes a hash chain so tampering becomes detectable even
-    though the storage backend remains file-based JSONL.
-    """
+    """Plain JSONL append-only audit log with one serialized hash chain."""
 
     def __init__(self, path: str | Path | None = None) -> None:
         self._path = Path(path) if path is not None else control_plane_audit_log_path()
@@ -112,18 +108,22 @@ class PersistentGovernanceAuditLog(GovernanceAuditLogContract):
             emitted_at=event.emitted_at,
             payload=event.payload,
         )
-        previous_hash = self._last_chain_hash()
-        record_for_hash = dict(payload)
-        record_for_hash["previous_hash"] = previous_hash
-        record_hash = sha256_hex(json.dumps(record_for_hash, ensure_ascii=False, sort_keys=True))
-        payload["previous_hash"] = previous_hash
-        payload["record_hash"] = record_hash
-        with self._path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(payload, ensure_ascii=False, sort_keys=True))
-            fh.write("\n")
+        with exclusive_file_lock(self._path):
+            events = read_jsonl_events(self._path)
+            previous_hash = str(events[-1].get("record_hash") or "GENESIS") if events else "GENESIS"
+            record_for_hash = dict(payload)
+            record_for_hash["previous_hash"] = previous_hash
+            record_hash = sha256_hex(json.dumps(record_for_hash, ensure_ascii=False, sort_keys=True))
+            payload["previous_hash"] = previous_hash
+            payload["record_hash"] = record_hash
+            with self._path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n")
+                fh.flush()
+                os.fsync(fh.fileno())
 
     def read_events(self) -> tuple[dict[str, object], ...]:
-        return read_jsonl_events(self._path)
+        with exclusive_file_lock(self._path):
+            return read_jsonl_events(self._path)
 
     def read_tenant_events(self, tenant_id: str, *, limit: int | None = None) -> tuple[dict[str, object], ...]:
         normalized_tenant_id = text(tenant_id)
@@ -156,7 +156,7 @@ class PersistentGovernanceAuditLog(GovernanceAuditLogContract):
         events = self.read_events()
         chain_head = str(events[-1].get("record_hash") or "GENESIS") if events else "GENESIS"
         try:
-            self.validate_chain()
+            self._validate_events(events)
             return {
                 "checked": True,
                 "valid": True,
@@ -174,8 +174,12 @@ class PersistentGovernanceAuditLog(GovernanceAuditLogContract):
             }
 
     def validate_chain(self) -> None:
+        self._validate_events(self.read_events())
+
+    @staticmethod
+    def _validate_events(events: tuple[dict[str, object], ...]) -> None:
         previous_hash = "GENESIS"
-        for item in self.read_events():
+        for item in events:
             stored_previous = str(item.get("previous_hash") or "")
             stored_hash = str(item.get("record_hash") or "")
             if stored_previous != previous_hash:
@@ -186,12 +190,6 @@ class PersistentGovernanceAuditLog(GovernanceAuditLogContract):
             if stored_hash != expected_hash:
                 raise ValueError("governance audit chain record_hash mismatch")
             previous_hash = stored_hash
-
-    def _last_chain_hash(self) -> str:
-        events = self.read_events()
-        if not events:
-            return "GENESIS"
-        return str(events[-1].get("record_hash") or "GENESIS")
 
 
 __all__ = [

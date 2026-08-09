@@ -22,10 +22,14 @@ from runtime.boot.system_builder_parts.runtime_services_finance import build_fin
 from runtime.boot.system_builder_parts.runtime_services_result_builder import build_runtime_services_result
 from runtime.boot.system_builder_parts.runtime_services_tenant import build_tenant_runtime_services
 from runtime.boot.system_builder_steps import build_marketing_llm_components, wire_ads_stack_safely
+from runtime.execution.governance_runtime_support import _build_default_approval_execution_gate
 from runtime.messaging_policy_events.event_store_adapter import EventLogMessagingPolicyEventStore
 from runtime.messaging_policy_readmodel.boot_runtime import boot_messaging_policy_readmodel
 
 CANON_BOOT_WIRING_ONLY = True
+
+_build_pricing_approval_gate = _build_default_approval_execution_gate
+
 
 
 def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_registry_ctx):
@@ -70,11 +74,12 @@ def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_regist
     settings_services = {'settings': settings, 'FeatureFlags': FeatureFlags, 'composer': composer}
     ctx.set_value('marketing_llm_composer', composer, min_phase=BootPhase.P40_SETTINGS_FLAGS)
     ctx.set_value('marketing_llm', llm_components['marketing_llm'], min_phase=BootPhase.P40_SETTINGS_FLAGS)
-    from runtime.pricing import PricingSelectionService
     from runtime.boot.builders.ai_ceo_planner import build_runtime_ai_ceo_planner
+    from runtime.pricing import PricingSelectionService
 
     ctx.set_value('ai_ceo_planner', build_runtime_ai_ceo_planner(event_store=event_store), min_phase=BootPhase.P40_SETTINGS_FLAGS)
     ctx.set_value('pricing_selection_service', PricingSelectionService(), min_phase=BootPhase.P40_SETTINGS_FLAGS)
+    ctx.set_value('pricing_approval_execution_gate', _build_pricing_approval_gate(), min_phase=BootPhase.P40_SETTINGS_FLAGS)
     validate_payments_webhook_prod_strict(settings)
     for key, value in settings_services.items():
         ctx.set_value(key, value, min_phase=BootPhase.P40_SETTINGS_FLAGS)
@@ -127,6 +132,7 @@ def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_regist
             'marketing_llm': ctx.get_value('marketing_llm') is not None,
             'finance_runtime': finance_bundle['finance_runtime'] is not None,
             'pricing_selection_service': ctx.get_value('pricing_selection_service') is not None,
+            'pricing_approval_execution_gate': ctx.get_value('pricing_approval_execution_gate') is not None,
             'api_security_owner_bundle': security_surface.api_security_owner_bundle is not None,
         },
     )

@@ -13,6 +13,7 @@ _FORBIDDEN_POLICY_KEYS = {
     "decision_score",
     "world_model_score",
     "policy_override",
+    "preference_snapshot",
 }
 
 

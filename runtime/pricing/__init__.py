@@ -7,6 +7,8 @@ from runtime.package_alias_namespace import build_package_alias_namespace
 CANON_RUNTIME_PACKAGE_ALIAS_NAMESPACE = True
 
 _PUBLIC_ATTRS = {
+    "OfferCatalogKey": ("core.offers.offer_catalog_resolver", "OfferCatalogKey"),
+    "OfferCatalogResolver": ("core.offers.offer_catalog_resolver", "OfferCatalogResolver"),
     "PricingRouteViolation": ("core.pricing.rl.guard", "PricingRouteViolation"),
     "PricingSelectionContext": ("core.pricing.rl.guard", "PricingSelectionContext"),
     "PricingSelectionService": ("core.pricing.rl.selection_service", "PricingSelectionService"),

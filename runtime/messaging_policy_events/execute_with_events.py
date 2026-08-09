@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from runtime.messaging.outbound_message import OutboundMessage
+from runtime.messaging.outbound_message import OutboundMessage, transport_guard_blocks
+
+
+def _execution_blocked(meta: object) -> bool:
+    return isinstance(meta, dict) and str(meta.get("mode") or "").strip().casefold() == "blocked"
+
 
 
 def execute_policy_plan_with_events(
@@ -11,15 +16,14 @@ def execute_policy_plan_with_events(
     base_message: OutboundMessage,
     send_once,
     recorder=None,
+    attempt_guard=None,
 ):
     attempts = []
     last_meta = {}
 
-    if recorder is not None:
-        recorder.record_plan(msg=base_message, plan=plan)
-
     if not plan.ordered_channels:
         if recorder is not None:
+            recorder.record_plan(msg=base_message, plan=plan)
             recorder.record_finished(
                 msg=base_message,
                 plan=plan,
@@ -36,10 +40,18 @@ def execute_policy_plan_with_events(
             }
         }
 
+    plan_recorded = False
     for channel in plan.ordered_channels:
-        msg = replace(base_message, channel=channel)
+        msg = replace(base_message, channel=channel, transport_guard=attempt_guard)
+        if transport_guard_blocks(attempt_guard, msg):
+            return False, {}
+        if recorder is not None and not plan_recorded:
+            recorder.record_plan(msg=base_message, plan=plan)
+            plan_recorded = True
         ok, meta = send_once(msg)
         meta = dict(meta or {})
+        if _execution_blocked(meta):
+            return False, {}
         attempts.append({'channel': channel, 'ok': bool(ok), 'meta': meta})
         last_meta = meta
 

@@ -9,7 +9,7 @@ from execution.approval_execution_gate import ApprovalExecutionGate
 from execution.approval_policy_engine import ApprovalPolicyEngine
 from execution.operator_override_store import build_default_operator_override_store
 from governance.approval_contract import ApprovalDecision, ApprovalOutcome, ApprovalRequest
-from governance.approval_store import PersistentApprovalStore
+from governance.approval_store import build_default_approval_store
 from governance.approval_workflow import ApprovalWorkflow
 from governance.change_control_policy import ChangeControlPolicy
 from governance.control_plane_audit_log import PersistentGovernanceAuditLog
@@ -42,7 +42,7 @@ def _approval_gate_enabled(*, payload: dict[str, Any], meta: dict[str, Any], imp
 def _build_default_approval_execution_gate() -> ApprovalExecutionGate:
     audit_log = PersistentGovernanceAuditLog()
     tenant_overrides = PersistentTenantPolicyOverrideRegistry(audit_log=audit_log)
-    approval_workflow = ApprovalWorkflow(store=PersistentApprovalStore(), audit_log=audit_log)
+    approval_workflow = ApprovalWorkflow(store=build_default_approval_store(), audit_log=audit_log)
     return ApprovalExecutionGate(
         approval_policy_engine=ApprovalPolicyEngine(
             change_control_policy=ChangeControlPolicy(tenant_overrides=tenant_overrides),
@@ -506,7 +506,7 @@ def review_governance_execution(*, executor: Any, env: Any) -> None:
             actor=actor,
             event_type="governance_execution_resume_hint_emitted",
             resume=resume,
-                  extra={
+            extra={
                 "reason": verdict.reason,
                 "required_permission": verdict.required_permission.value if verdict.required_permission else None,
             },

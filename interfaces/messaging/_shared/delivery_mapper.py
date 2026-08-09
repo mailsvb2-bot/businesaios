@@ -6,22 +6,16 @@ from runtime.messaging.outbound_message import OutboundMessage
 
 def map_delivery_result(*, msg: OutboundMessage, raw: dict) -> DeliveryResult:
     payload = dict(raw or {})
+    mode = str(payload.get("mode") or "unknown")
+    if mode.strip().casefold() == "blocked":
+        return DeliveryResult(ok=False, channel=msg.channel, mode="blocked", external_id="", detail={})
+
     provider_ok = payload.get("ok") is True
     noop = bool(payload.get("noop", False))
     external_id = str(payload.get("external_id") or "").strip()
     external_receipt = bool(external_id) and external_id != msg.delivery_key
-    delivered = (
-        provider_ok
-        and bool(payload.get("delivered", False))
-        and not noop
-        and external_receipt
-    )
-    accepted = (
-        provider_ok
-        and bool(payload.get("accepted", False))
-        and not noop
-        and external_receipt
-    )
+    delivered = provider_ok and bool(payload.get("delivered", False)) and not noop and external_receipt
+    accepted = provider_ok and bool(payload.get("accepted", False)) and not noop and external_receipt
     reason = payload.get("reason")
     if external_id == msg.delivery_key:
         reason = "provider_receipt_not_external"
@@ -30,7 +24,7 @@ def map_delivery_result(*, msg: OutboundMessage, raw: dict) -> DeliveryResult:
     return DeliveryResult(
         ok=bool(delivered or accepted),
         channel=msg.channel,
-        mode=str(payload.get("mode") or "unknown"),
+        mode=mode,
         external_id=external_id if delivered or accepted else "",
         detail={
             "provider": payload.get("provider"),

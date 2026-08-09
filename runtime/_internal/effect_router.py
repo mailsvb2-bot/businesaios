@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,6 +24,32 @@ def _optional_text(value: Any) -> str | None:
         return None
     text = value.strip()
     return text or None
+
+
+def _reserved_internal_field(name: object) -> bool:
+    text = str(name)
+    return text == "transport_guard_reason" or text.startswith("_transport_guard")
+
+
+def _sanitize_internal_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {
+            key: _sanitize_internal_value(item)
+            for key, item in value.items()
+            if not _reserved_internal_field(key)
+        }
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        cleaned = [_sanitize_internal_value(item) for item in value]
+        return tuple(cleaned) if isinstance(value, tuple) else cleaned
+    return value
+
+
+def _sanitize_internal_result(key: EffectActionType, raw_result: object) -> dict[str, Any]:
+    result = dict(raw_result or {}) if isinstance(raw_result, dict) else {}
+    if key is EffectActionType.TELEGRAM_SEND_MESSAGE and str(result.get("mode") or "").strip().casefold() in {"blocked", "guarded_inflight"}:
+        return {"ok": False, "mode": "blocked"}
+    sanitized = _sanitize_internal_value(result)
+    return dict(sanitized) if isinstance(sanitized, Mapping) else {}
 
 
 @dataclass(slots=True)
@@ -67,7 +93,12 @@ class EffectRouter:
 
     async def execute(self, action_type: str | EffectActionType, payload: dict[str, Any]) -> dict[str, Any]:
         key = require_effect_action_type(action_type)
+        transport_guard = payload.get("_transport_guard") if isinstance(payload, dict) else None
+        if transport_guard is not None and (key is not EffectActionType.TELEGRAM_SEND_MESSAGE or not callable(transport_guard)):
+            raise RuntimeError(f"invalid_internal_transport_guard:{str(key)}")
         data = normalize_effect_payload(key, payload)
+        if transport_guard is not None:
+            data["_transport_guard"] = transport_guard
         handler = self._handlers.get(key)
         if handler is None:
             raise RuntimeError(f"unsupported_effect_action:{str(key)}")
@@ -77,6 +108,7 @@ class EffectRouter:
             raise
         except Exception as exc:
             raw_result = {"ok": False, "error": f"{exc.__class__.__name__}:{exc}", "status": "failure"}
+        raw_result = _sanitize_internal_result(key, raw_result)
         result = canonical_effect_result(key, raw_result)
         result["evidence"] = effect_result_to_evidence(key, result)
         return result
@@ -124,6 +156,7 @@ class EffectRouter:
             priority=payload.get("priority", "normal"),
             critical=bool(payload.get("critical", True)),
             timeout_s=int(payload.get("timeout_s") or 30),
+            transport_guard=payload.get("_transport_guard") if callable(payload.get("_transport_guard")) else None,
         )
         return {"ok": bool(ok), **dict(meta or {})}
 
@@ -148,10 +181,7 @@ class EffectRouter:
         return {"ok": True, "mode": "best_effort"}
 
     async def _handle_telegram_send_chat_action(self, payload: dict[str, Any]) -> dict[str, Any]:
-        self._telegram_client().send_chat_action(
-            chat_id=str(payload.get("chat_id") or ""),
-            action=str(payload.get("action") or "typing"),
-        )
+        self._telegram_client().send_chat_action(chat_id=str(payload.get("chat_id") or ""), action=str(payload.get("action") or "typing"))
         return {"ok": True, "mode": "best_effort"}
 
     async def _handle_yookassa_create_payment(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -168,33 +198,18 @@ class EffectRouter:
         return {"ok": bool(ok), **dict(meta or {})}
 
     async def _handle_yookassa_get_payment_status(self, payload: dict[str, Any]) -> dict[str, Any]:
-        status = await asyncio.to_thread(
-            get_payment_status,
-            external_payment_id=str(payload.get("external_payment_id") or ""),
-            timeout_s=int(payload.get("timeout_s") or 20),
-            transport=self.transport,
-        )
+        status = await asyncio.to_thread(get_payment_status, external_payment_id=str(payload.get("external_payment_id") or ""), timeout_s=int(payload.get("timeout_s") or 20), transport=self.transport)
         return {"ok": True, "status": str(status)}
 
     async def _handle_weather_current(self, payload: dict[str, Any]) -> dict[str, Any]:
         city = str(payload.get("city") or "").strip()
         if not city:
             raise RuntimeError("weather_city_required")
-        ok, text, meta = await asyncio.to_thread(
-            open_meteo_weather,
-            city,
-            transport=self.transport,
-        )
+        ok, text, meta = await asyncio.to_thread(open_meteo_weather, city, transport=self.transport)
         return {"ok": bool(ok), "text": str(text or ""), "meta": dict(meta or {})}
 
     async def _handle_marketing_llm_complete(self, payload: dict[str, Any]) -> dict[str, Any]:
-        result = await asyncio.to_thread(
-            call_marketing_llm,
-            provider=str(payload.get("provider") or ""),
-            system=str(payload.get("system") or "You write concise marketing copy."),
-            user=str(payload.get("user") or ""),
-            model=_optional_text(payload.get("model")),
-        )
+        result = await asyncio.to_thread(call_marketing_llm, provider=str(payload.get("provider") or ""), system=str(payload.get("system") or "You write concise marketing copy."), user=str(payload.get("user") or ""), model=_optional_text(payload.get("model")))
         return dict(result or {})
 
     async def _handle_telegram_self_check(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -205,11 +220,7 @@ class EffectRouter:
                 self._telegram_me = None
 
         runtime_view = _RuntimeView(self)
-        return await asyncio.to_thread(
-            telegram_self_check_effect,
-            runtime_view,
-            token=_optional_text(payload.get("token")),
-        )
+        return await asyncio.to_thread(telegram_self_check_effect, runtime_view, token=_optional_text(payload.get("token")))
 
     async def _handle_telegram_poll_updates(self, payload: dict[str, Any]) -> dict[str, Any]:
         class _RuntimeView:
@@ -219,13 +230,7 @@ class EffectRouter:
                 self._telegram_webhook_cleared = bool(payload.get("webhook_cleared", False))
 
         runtime_view = _RuntimeView(self)
-        return await asyncio.to_thread(
-            poll_telegram_updates_effect,
-            runtime_view,
-            offset=payload.get("offset"),
-            timeout_s=int(payload.get("timeout_s") or 30),
-            limit=int(payload.get("limit") or 50),
-        )
+        return await asyncio.to_thread(poll_telegram_updates_effect, runtime_view, offset=payload.get("offset"), timeout_s=int(payload.get("timeout_s") or 30), limit=int(payload.get("limit") or 50))
 
     async def _handle_generic_post_json(self, payload: dict[str, Any]) -> dict[str, Any]:
         url = _optional_text(payload.get("url")) or _optional_text(payload.get("endpoint"))
@@ -233,15 +238,5 @@ class EffectRouter:
             raise RuntimeError("effect_router_missing_endpoint")
         headers = payload.get("headers") if isinstance(payload.get("headers"), dict) else {}
         data = payload.get("data") if isinstance(payload.get("data"), dict) else dict(payload.get("payload") or payload)
-        response = await self.transport.post_json(
-            url=str(url),
-            headers={str(k): str(v) for k, v in dict(headers).items()},
-            data=dict(data or {}),
-            timeout_s=int(payload.get("timeout_s") or 30),
-        )
-        return {
-            "ok": 200 <= int(response.status) < 300,
-            "status_code": int(response.status),
-            "json": response.json,
-            "text": response.text,
-        }
+        response = await self.transport.post_json(url=str(url), headers={str(k): str(v) for k, v in dict(headers).items()}, data=dict(data or {}), timeout_s=int(payload.get("timeout_s") or 30))
+        return {"ok": 200 <= int(response.status) < 300, "status_code": int(response.status), "json": response.json, "text": response.text}
