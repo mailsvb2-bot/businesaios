@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from core.offers.catalogs.yaml_catalog import YamlOfferCatalogV1
 from entrypoints.api.approval_route_handlers import ApprovalRouteHandlers
 from execution.approval_execution_gate import ApprovalExecutionGate
 from execution.approval_policy_engine import ApprovalPolicyEngine
@@ -13,11 +14,10 @@ from governance.approval_store import InMemoryApprovalStore
 from governance.approval_workflow import ApprovalWorkflow
 from governance.change_control_policy import ChangeControlPolicy
 from governance.rbac_contract import RoleId
-from core.offers.catalogs.yaml_catalog import YamlOfferCatalogV1
-from runtime.pricing import PricingSelectionService
 from runtime.boot.actions_registry import get_spec
 from runtime.boot.system_builder_parts.runtime_services import _build_pricing_approval_gate, build_runtime_services
 from runtime.handlers.pricing_select import handle_pricing_select
+from runtime.pricing import PricingSelectionService
 
 
 class FakeEffects:
