@@ -64,6 +64,17 @@ def _mark_delivered(state: Any, *, delivery_key: str, msg, meta: Mapping[str, An
         return
 
 
+def _bound_transport_guard(msg):
+    guard = getattr(msg, "transport_guard", None)
+    if not callable(guard):
+        return None
+
+    def _guard() -> str:
+        return str(guard(msg) or "").strip()
+
+    return _guard
+
+
 def telegram_pre_send(self, *, msg) -> None:
     if isinstance(msg.callback_query_id, str) and msg.callback_query_id.strip():
         try:
@@ -99,9 +110,14 @@ def telegram_throttle(self, *, user_id: str, decision_id: str, correlation_id: s
 
 def telegram_delivery(self, *, msg) -> tuple[bool, dict]:
     delivery_key = msg.delivery_key
+    guard = _bound_transport_guard(msg)
     existing = _receipt(getattr(self, "delivery_state", None), delivery_key=delivery_key)
     if existing is not None:
         phase = str(existing.get("delivery_phase") or existing.get("metadata", {}).get("delivery_phase") or "finalized")
+        if guard is not None and phase != "finalized":
+            return False, {"channel": msg.channel, "delivery_key": delivery_key, "receipt": existing,
+                "payload_digest": getattr(msg, "payload_digest", None), "delivery_phase": phase,
+                "delivery_finalized": False, "transport_guard_reason": "guarded_delivery_inflight"}
         return True, {"channel": msg.channel, "dedup": True, "delivery_key": delivery_key, "receipt": existing, "payload_digest": getattr(msg, "payload_digest", None), "delivery_phase": phase, "delivery_finalized": phase == "finalized"}
     with telegram_api_span(event_log=self.event_log, user_id=str(msg.user_id), decision_id=str(msg.decision_id), correlation_id=str(msg.correlation_id)):
         ok, meta = self._telegram_send_message(
@@ -110,7 +126,7 @@ def telegram_delivery(self, *, msg) -> tuple[bool, dict]:
             reply_markup=msg.reply_markup,
             priority=msg.priority,
             critical=msg.critical,
-            transport_guard=getattr(msg, "transport_guard", None),
+            transport_guard=guard,
         )
     out = dict(meta or {})
     out["delivery_key"] = delivery_key
