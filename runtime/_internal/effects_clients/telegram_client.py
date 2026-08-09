@@ -57,6 +57,15 @@ def _delivery_key(*, method: str, chat_id: str, payload: Mapping[str, Any]) -> s
     return build_delivery_key(method=method, chat_id=chat_id, payload=payload)
 
 
+def _transport_guard_reason(transport_guard: Callable[[], str] | None) -> str:
+    if transport_guard is None:
+        return ""
+    try:
+        return str(transport_guard() or "").strip()
+    except Exception:
+        return "transport_guard_error"
+
+
 @dataclass
 class TelegramClient:
     outbound_queue: Any | None = None
@@ -263,6 +272,7 @@ class TelegramClient:
         priority: Any = "normal",
         critical: bool = True,
         timeout_s: int = 30,
+        transport_guard: Callable[[], str] | None = None,
     ) -> tuple[bool, dict[str, Any]]:
         token = _token()
         payload: dict[str, Any] = {
@@ -278,6 +288,17 @@ class TelegramClient:
         existing = existing_receipt(self.delivery_state, delivery_key=delivery_key)
         url = f"{telegram_api_base()}/bot{token}/sendMessage" if token else ""
         if existing is not None:
+            phase = receipt_phase(existing)
+            if transport_guard is not None and phase != FINALIZED_PHASE:
+                return False, {
+                    "mode": "guarded_inflight",
+                    "transport_guard_reason": "guarded_delivery_inflight",
+                    "delivery_key": delivery_key,
+                    "payload_digest": payload_digest,
+                    "receipt": existing,
+                    "delivery_phase": phase,
+                    "delivery_finalized": False,
+                }
             recovered = self._maybe_requeue_existing_receipt(
                 existing=existing,
                 method="sendMessage",
@@ -306,7 +327,7 @@ class TelegramClient:
                 return False, {"error": "TELEGRAM_BOT_TOKEN_MISSING", "delivery_key": delivery_key, "payload_digest": payload_digest}
             return True, {"mode": "noop", "reason": "TELEGRAM_BOT_TOKEN_MISSING", "delivery_key": delivery_key, "payload_digest": payload_digest}
 
-        if self.outbound_queue is not None:
+        if self.outbound_queue is not None and transport_guard is None:
             try:
                 accepted_metadata = delivery_metadata(
                     method="sendMessage",
@@ -359,6 +380,16 @@ class TelegramClient:
                     return True, {"mode": "queued", "delivery_key": delivery_key, "payload_digest": payload_digest, "delivery_finalized": phase == "finalized", "delivery_phase": phase, "receipt": receipt}
             except Exception:
                 swallow(__name__, "send_message.queue")
+
+        guard_reason = _transport_guard_reason(transport_guard)
+        if guard_reason:
+            return False, {
+                "mode": "blocked",
+                "transport_guard_reason": guard_reason,
+                "delivery_key": delivery_key,
+                "payload_digest": payload_digest,
+                "delivery_finalized": False,
+            }
         try:
             out = self._http_post(url=url, payload=payload, timeout_s=int(timeout_s or 30))
             ok = bool(out.get("ok")) if isinstance(out, dict) else True
