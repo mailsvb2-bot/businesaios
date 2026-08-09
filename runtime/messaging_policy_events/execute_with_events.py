@@ -11,6 +11,7 @@ def execute_policy_plan_with_events(
     base_message: OutboundMessage,
     send_once,
     recorder=None,
+    attempt_guard=None,
 ):
     attempts = []
     last_meta = {}
@@ -38,6 +39,24 @@ def execute_policy_plan_with_events(
 
     for channel in plan.ordered_channels:
         msg = replace(base_message, channel=channel)
+        guard_reason = str(attempt_guard(msg) or '').strip() if attempt_guard is not None else ''
+        if guard_reason:
+            if recorder is not None:
+                recorder.record_finished(
+                    msg=base_message,
+                    plan=plan,
+                    selected_channel='',
+                    terminal_reason=guard_reason,
+                    attempts_count=len(attempts),
+                )
+            return False, {
+                'policy': {
+                    'ordered_channels': list(plan.ordered_channels),
+                    'reason_codes': list(plan.reason_codes),
+                    'terminal_reason': guard_reason,
+                    'attempts': attempts,
+                }
+            }
         ok, meta = send_once(msg)
         meta = dict(meta or {})
         attempts.append({'channel': channel, 'ok': bool(ok), 'meta': meta})
