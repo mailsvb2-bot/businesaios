@@ -36,54 +36,18 @@ _GROWTH_ID_NAMESPACE = uuid.UUID("470d7825-fc2f-4ce9-bf89-f40954ecf226")
 
 
 class GrowthStrategyService:
-    def __init__(
-        self,
-        *,
-        event_store: Any,
-        llm: Any | None = None,
-        policy: GrowthStrategyServicePolicy | None = None,
-    ) -> None:
+    def __init__(self, *, event_store: Any, llm: Any | None = None, policy: GrowthStrategyServicePolicy | None = None) -> None:
         self._event_store = event_store
         self._llm = llm
         self._policy = policy or DEFAULT_GROWTH_STRATEGY_SERVICE_POLICY
 
-    def generate_backlog(
-        self,
-        *,
-        tenant_id: str,
-        user_id: str,
-        decision_id: str,
-        correlation_id: str,
-        goal: GrowthGoalV1 | None = None,
-        n: int | None = None,
-        model: str = "",
-    ) -> StrategyPlanV1:
-        plan, _proof_event_id = self.generate_backlog_with_proof(
-            tenant_id=tenant_id,
-            user_id=user_id,
-            decision_id=decision_id,
-            correlation_id=correlation_id,
-            goal=goal,
-            n=n,
-            model=model,
-        )
+    def generate_backlog(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, goal: GrowthGoalV1 | None = None, n: int | None = None, model: str = "") -> StrategyPlanV1:
+        plan, _proof_event_id = self.generate_backlog_with_proof(tenant_id=tenant_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, goal=goal, n=n, model=model)
         return plan
 
-    def generate_backlog_with_proof(
-        self,
-        *,
-        tenant_id: str,
-        user_id: str,
-        decision_id: str,
-        correlation_id: str,
-        goal: GrowthGoalV1 | None = None,
-        n: int | None = None,
-        model: str = "",
-    ) -> tuple[StrategyPlanV1, str]:
-        tenant = str(tenant_id).strip()
-        user = str(user_id).strip()
-        decision = str(decision_id).strip()
-        correlation = str(correlation_id).strip()
+    def generate_backlog_with_proof(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, goal: GrowthGoalV1 | None = None, n: int | None = None, model: str = "") -> tuple[StrategyPlanV1, str]:
+        tenant, user = str(tenant_id).strip(), str(user_id).strip()
+        decision, correlation = str(decision_id).strip(), str(correlation_id).strip()
         if not tenant:
             raise RuntimeError("TENANT_ID_REQUIRED")
         if not user:
@@ -93,52 +57,19 @@ class GrowthStrategyService:
         if not correlation:
             raise RuntimeError("CORRELATION_ID_REQUIRED")
 
-        completed = load_generated_plan_for_decision(
-            self._event_store,
-            tenant_id=tenant,
-            decision_id=decision,
-        )
+        completed = load_generated_plan_for_decision(self._event_store, tenant_id=tenant, decision_id=decision)
         if completed is not None:
-            manifest = load_plan_manifest(
-                self._event_store,
-                tenant_id=tenant,
-                decision_id=decision,
-            )
-            if manifest is not None:
-                return manifest[0], completed[1]
-            return completed
+            manifest = load_plan_manifest(self._event_store, tenant_id=tenant, decision_id=decision)
+            return (manifest[0], completed[1]) if manifest is not None else completed
 
-        manifest = load_plan_manifest(
-            self._event_store,
-            tenant_id=tenant,
-            decision_id=decision,
-        )
+        manifest = load_plan_manifest(self._event_store, tenant_id=tenant, decision_id=decision)
         if manifest is not None:
             plan = manifest[0]
         else:
-            plan = self._build_plan(
-                tenant_id=tenant,
-                decision_id=decision,
-                goal=goal or GrowthGoalV1(),
-                n=n,
-                model=model,
-            )
-            persist_plan_manifest(
-                self._event_store,
-                tenant_id=tenant,
-                user_id=user,
-                decision_id=decision,
-                correlation_id=correlation,
-                plan=plan,
-            )
+            plan = self._build_plan(tenant_id=tenant, decision_id=decision, goal=goal or GrowthGoalV1(), n=n, model=model)
+            persist_plan_manifest(self._event_store, tenant_id=tenant, user_id=user, decision_id=decision, correlation_id=correlation, plan=plan)
 
-        self._persist_plan_details(
-            plan=plan,
-            tenant_id=tenant,
-            user_id=user,
-            decision_id=decision,
-            correlation_id=correlation,
-        )
+        self._persist_plan_details(plan=plan, tenant_id=tenant, user_id=user, decision_id=decision, correlation_id=correlation)
         completion_event_id = append_strategy_generated(
             self._event_store,
             tenant_id=tenant,
@@ -146,199 +77,54 @@ class GrowthStrategyService:
             decision_id=decision,
             correlation_id=correlation,
             goal=plan.goal,
-            hypothesis_ids=tuple(
-                hypothesis.hypothesis_id
-                for hypothesis in plan.top_hypotheses
-            ),
+            hypothesis_ids=tuple(h.hypothesis_id for h in plan.top_hypotheses),
             created_ms=int(plan.created_ms),
             notes=tuple(plan.notes),
         )
-        durable = load_generated_plan_for_decision(
-            self._event_store,
-            tenant_id=tenant,
-            decision_id=decision,
-        )
+        durable = load_generated_plan_for_decision(self._event_store, tenant_id=tenant, decision_id=decision)
         if durable is not None:
-            normalized = load_plan_manifest(
-                self._event_store,
-                tenant_id=tenant,
-                decision_id=decision,
-            )
-            if normalized is not None:
-                return normalized[0], durable[1]
-            return durable
+            normalized = load_plan_manifest(self._event_store, tenant_id=tenant, decision_id=decision)
+            return (normalized[0], durable[1]) if normalized is not None else durable
         return plan, completion_event_id
 
-    def _build_plan(
-        self,
-        *,
-        tenant_id: str,
-        decision_id: str,
-        goal: GrowthGoalV1,
-        n: int | None,
-        model: str,
-    ) -> StrategyPlanV1:
+    def _build_plan(self, *, tenant_id: str, decision_id: str, goal: GrowthGoalV1, n: int | None, model: str) -> StrategyPlanV1:
         signals = build_signals(self._event_store, tenant_id=tenant_id)
-        hypothesis_count = (
-            self._policy.default_hypothesis_count
-            if n is None
-            else int(n)
-        )
+        hypothesis_count = self._policy.default_hypothesis_count if n is None else int(n)
         hypotheses: tuple[GrowthHypothesisV1, ...] = ()
         if self._llm is not None:
-            hypotheses = tuple(
-                generate_hypotheses(
-                    self._llm,
-                    tenant_id=tenant_id,
-                    goal=goal,
-                    signals=signals,
-                    n=hypothesis_count,
-                    model=str(model or ""),
-                )
-            )
+            hypotheses = tuple(generate_hypotheses(self._llm, tenant_id=tenant_id, goal=goal, signals=signals, n=hypothesis_count, model=str(model or "")))
         if not hypotheses:
-            hypotheses = _fallback_hypotheses(
-                tenant_id=tenant_id,
-                decision_id=decision_id,
-                signals=signals,
-                goal=goal,
-            )
-        hypotheses = _ensure_canonical_partnership_hypothesis(
-            hypotheses,
-            goal=goal,
-            policy=self._policy,
-        )
-        hypotheses = _stabilize_hypotheses(
-            hypotheses,
-            tenant_id=tenant_id,
-            decision_id=decision_id,
-        )
-        scored = rank_hypotheses(hypotheses)
-        score_by_id = {
-            item.hypothesis_id: item.score
-            for item in scored
-        }
-        ranked = tuple(
-            sorted(
-                hypotheses,
-                key=lambda hypothesis: score_by_id.get(
-                    hypothesis.hypothesis_id,
-                    self._policy.zero_rank_score,
-                ),
-                reverse=True,
-            )
-        )
+            hypotheses = _fallback_hypotheses(tenant_id=tenant_id, decision_id=decision_id, signals=signals, goal=goal)
+        hypotheses = _ensure_canonical_partnership_hypothesis(hypotheses, goal=goal, policy=self._policy)
+        hypotheses = _stabilize_hypotheses(hypotheses, tenant_id=tenant_id, decision_id=decision_id)
+        score_by_id = {item.hypothesis_id: item.score for item in rank_hypotheses(hypotheses)}
+        ranked = tuple(sorted(hypotheses, key=lambda h: score_by_id.get(h.hypothesis_id, self._policy.zero_rank_score), reverse=True))
         return StrategyPlanV1(
             tenant_id=tenant_id,
             created_ms=now_ms(),
             goal=goal,
             signals=signals,
             top_hypotheses=ranked,
-            notes=(
-                "llm" if self._llm is not None else "no_llm",
-                "advisory_ranking_only",
-                "decision_idempotent",
-                "manifest_sealed",
-            ),
+            notes=("llm" if self._llm is not None else "no_llm", "advisory_ranking_only", "decision_idempotent", "manifest_sealed"),
         )
 
-    def _persist_plan_details(
-        self,
-        *,
-        plan: StrategyPlanV1,
-        tenant_id: str,
-        user_id: str,
-        decision_id: str,
-        correlation_id: str,
-    ) -> None:
-        append_strategy_snapshot(
-            self._event_store,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            decision_id=decision_id,
-            correlation_id=correlation_id,
-            signals=plan.signals,
-            goal=plan.goal,
-        )
+    def _persist_plan_details(self, *, plan: StrategyPlanV1, tenant_id: str, user_id: str, decision_id: str, correlation_id: str) -> None:
+        append_strategy_snapshot(self._event_store, tenant_id=tenant_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, signals=plan.signals, goal=plan.goal)
         for hypothesis in plan.top_hypotheses:
-            append_hypothesis(
-                self._event_store,
-                tenant_id=tenant_id,
-                user_id=user_id,
-                decision_id=decision_id,
-                correlation_id=correlation_id,
-                h=hypothesis,
-            )
-            append_score(
-                self._event_store,
-                tenant_id=tenant_id,
-                user_id=user_id,
-                decision_id=decision_id,
-                correlation_id=correlation_id,
-                score=score_hypothesis(hypothesis),
-            )
+            append_hypothesis(self._event_store, tenant_id=tenant_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, h=hypothesis)
+            append_score(self._event_store, tenant_id=tenant_id, user_id=user_id, decision_id=decision_id, correlation_id=correlation_id, score=score_hypothesis(hypothesis))
 
     def backlog(self, *, tenant_id: str, limit: int | None = None):
-        backlog_limit = self._policy.default_backlog_limit if limit is None else int(limit)
-        return list_backlog(self._event_store, tenant_id=str(tenant_id), limit=backlog_limit)
+        return list_backlog(self._event_store, tenant_id=str(tenant_id), limit=self._policy.default_backlog_limit if limit is None else int(limit))
 
-    def accept_hypothesis(
-        self,
-        *,
-        tenant_id: str,
-        user_id: str,
-        decision_id: str,
-        correlation_id: str,
-        hypothesis_id: str,
-        note: str = "",
-    ) -> str:
-        return set_hypothesis_state(
-            self._event_store,
-            tenant_id=str(tenant_id),
-            user_id=str(user_id),
-            decision_id=str(decision_id),
-            correlation_id=str(correlation_id),
-            hypothesis_id=str(hypothesis_id),
-            state="accepted",
-            note=str(note or ""),
-        )
+    def accept_hypothesis(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, hypothesis_id: str, note: str = "") -> str:
+        return set_hypothesis_state(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), hypothesis_id=str(hypothesis_id), state="accepted", note=str(note or ""))
 
-    def reject_hypothesis(
-        self,
-        *,
-        tenant_id: str,
-        user_id: str,
-        decision_id: str,
-        correlation_id: str,
-        hypothesis_id: str,
-        note: str = "",
-    ) -> str:
-        return set_hypothesis_state(
-            self._event_store,
-            tenant_id=str(tenant_id),
-            user_id=str(user_id),
-            decision_id=str(decision_id),
-            correlation_id=str(correlation_id),
-            hypothesis_id=str(hypothesis_id),
-            state="rejected",
-            note=str(note or ""),
-        )
+    def reject_hypothesis(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, hypothesis_id: str, note: str = "") -> str:
+        return set_hypothesis_state(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), hypothesis_id=str(hypothesis_id), state="rejected", note=str(note or ""))
 
-    def create_experiment_from_hypothesis(
-        self,
-        *,
-        tenant_id: str,
-        user_id: str,
-        decision_id: str,
-        correlation_id: str,
-        h: GrowthHypothesisV1,
-    ) -> ExperimentSpecV1:
-        experiment_id = str(
-            uuid.uuid5(
-                _GROWTH_ID_NAMESPACE,
-                f"experiment:{tenant_id}:{decision_id}:{h.hypothesis_id}",
-            )
-        )
+    def create_experiment_from_hypothesis(self, *, tenant_id: str, user_id: str, decision_id: str, correlation_id: str, h: GrowthHypothesisV1) -> ExperimentSpecV1:
+        experiment_id = str(uuid.uuid5(_GROWTH_ID_NAMESPACE, f"experiment:{tenant_id}:{decision_id}:{h.hypothesis_id}"))
         experiment = ExperimentSpecV1(
             experiment_id=experiment_id,
             tenant_id=str(tenant_id),
@@ -352,53 +138,23 @@ class GrowthStrategyService:
             steps=_default_steps(h, policy=self._policy),
             payload=dict(h.action_hints or {}),
         )
-        append_experiment(
-            self._event_store,
-            tenant_id=str(tenant_id),
-            user_id=str(user_id),
-            decision_id=str(decision_id),
-            correlation_id=str(correlation_id),
-            exp=experiment,
-        )
+        append_experiment(self._event_store, tenant_id=str(tenant_id), user_id=str(user_id), decision_id=str(decision_id), correlation_id=str(correlation_id), exp=experiment)
         return experiment
 
 
 def _stable_hypothesis_id(*, tenant_id: str, decision_id: str, index: int) -> str:
-    return str(
-        uuid.uuid5(
-            _GROWTH_ID_NAMESPACE,
-            f"hypothesis:{tenant_id}:{decision_id}:{int(index)}",
-        )
-    )
+    return str(uuid.uuid5(_GROWTH_ID_NAMESPACE, f"hypothesis:{tenant_id}:{decision_id}:{int(index)}"))
 
 
-def _stabilize_hypotheses(
-    hypotheses: tuple[GrowthHypothesisV1, ...],
-    *,
-    tenant_id: str,
-    decision_id: str,
-) -> tuple[GrowthHypothesisV1, ...]:
+def _stabilize_hypotheses(hypotheses: tuple[GrowthHypothesisV1, ...], *, tenant_id: str, decision_id: str) -> tuple[GrowthHypothesisV1, ...]:
     created_ms = now_ms()
     return tuple(
-        replace(
-            hypothesis,
-            hypothesis_id=_stable_hypothesis_id(
-                tenant_id=str(tenant_id),
-                decision_id=str(decision_id),
-                index=index,
-            ),
-            tenant_id=str(tenant_id),
-            created_ms=int(hypothesis.created_ms or created_ms),
-        )
-        for index, hypothesis in enumerate(hypotheses)
+        replace(h, hypothesis_id=_stable_hypothesis_id(tenant_id=str(tenant_id), decision_id=str(decision_id), index=index), tenant_id=str(tenant_id), created_ms=int(h.created_ms or created_ms))
+        for index, h in enumerate(hypotheses)
     )
 
 
-def _default_steps(
-    h: GrowthHypothesisV1,
-    *,
-    policy: GrowthStrategyServicePolicy = DEFAULT_GROWTH_STRATEGY_SERVICE_POLICY,
-) -> tuple[str, ...]:
+def _default_steps(h: GrowthHypothesisV1, *, policy: GrowthStrategyServicePolicy = DEFAULT_GROWTH_STRATEGY_SERVICE_POLICY) -> tuple[str, ...]:
     steps = list(policy.base_steps)
     if h.channel in policy.paid_channels:
         steps.insert(1, policy.paid_channel_creative_step)
@@ -421,30 +177,12 @@ def _partnership_safety_hints() -> dict[str, Any]:
 
 
 def _partnership_relevant(goal: GrowthGoalV1, *, policy: GrowthStrategyServicePolicy) -> bool:
-    return goal.primary_stage == "referral" or (
-        goal.primary_stage == "acquisition" and policy.partnership_constraints_match(goal.constraints)
-    )
+    return goal.primary_stage == "referral" or (goal.primary_stage == "acquisition" and policy.partnership_constraints_match(goal.constraints))
 
 
-def _ensure_canonical_partnership_hypothesis(
-    hypotheses: tuple[GrowthHypothesisV1, ...],
-    *,
-    goal: GrowthGoalV1,
-    policy: GrowthStrategyServicePolicy,
-) -> tuple[GrowthHypothesisV1, ...]:
+def _ensure_canonical_partnership_hypothesis(hypotheses: tuple[GrowthHypothesisV1, ...], *, goal: GrowthGoalV1, policy: GrowthStrategyServicePolicy) -> tuple[GrowthHypothesisV1, ...]:
     safety = _partnership_safety_hints()
-    normalized = tuple(
-        replace(
-            h,
-            action_hints={
-                **{key: value for key, value in dict(h.action_hints or {}).items() if key not in {"type", "executable_actions"}},
-                **safety,
-            },
-        )
-        if h.channel == "partnerships"
-        else h
-        for h in tuple(hypotheses or ())
-    )
+    normalized = tuple(replace(h, action_hints=dict(safety)) if h.channel == "partnerships" else h for h in tuple(hypotheses or ()))
     if any(h.channel == "partnerships" for h in normalized) or not _partnership_relevant(goal, policy=policy):
         return normalized
     return (
@@ -453,11 +191,7 @@ def _ensure_canonical_partnership_hypothesis(
             stage="referral" if goal.primary_stage == "referral" else "acquisition",
             channel="partnerships",
             title="Проверить партнёрский канал через владельцев уже собранных целевых аудиторий",
-            mechanism=(
-                "Growth Strategy рассматривает партнёрства как обычную проверяемую гипотезу: "
-                "read-only evidence может подтвердить релевантные аудитории, но не даёт права на контакт. "
-                "Каждый внешний контакт остаётся отдельным решением DecisionCore и исполняется только RuntimeExecutor."
-            ),
+            mechanism="Проверить релевантных владельцев уже собранных аудиторий как read-only evidence; право на каждый внешний контакт остаётся только у DecisionCore и RuntimeExecutor.",
             expected_impact=f"Проверить партнёрский канал на горизонте {int(goal.horizon_days or policy.default_duration_days)} дней без обязательного paid spend",
             effort="medium",
             risk="low",
@@ -468,25 +202,11 @@ def _ensure_canonical_partnership_hypothesis(
     )
 
 
-def _fallback_hypotheses(
-    *,
-    tenant_id: str,
-    decision_id: str,
-    signals: GrowthSignalV1,
-    goal: GrowthGoalV1,
-) -> tuple[GrowthHypothesisV1, ...]:
+def _fallback_hypotheses(*, tenant_id: str, decision_id: str, signals: GrowthSignalV1, goal: GrowthGoalV1) -> tuple[GrowthHypothesisV1, ...]:
     now = int(time.time() * 1000)
     messaging_channel = _preferred_messaging_channel(signals)
-    flow_type = (
-        "telegram_flow"
-        if messaging_channel == "telegram"
-        else "messaging_flow"
-    )
-    followup_type = (
-        "telegram_followup"
-        if messaging_channel == "telegram"
-        else "messaging_followup"
-    )
+    flow_type = "telegram_flow" if messaging_channel == "telegram" else "messaging_flow"
+    followup_type = "telegram_followup" if messaging_channel == "telegram" else "messaging_followup"
     hypotheses: list[GrowthHypothesisV1] = [
         GrowthHypothesisV1(
             hypothesis_id=_stable_hypothesis_id(tenant_id=tenant_id, decision_id=decision_id, index=0),
