@@ -1,1 +1,1 @@
-from shared.registry import ModelRegistry
+from shared.registry import ModelRegistry as ModelRegistry
