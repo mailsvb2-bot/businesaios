@@ -79,7 +79,8 @@ def test_stale_branch_pruning_uses_one_revision_atomic_owner() -> None:
     assert "startsWith(github.event.pull_request.head.ref, 'agent/')" in text
     assert "EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}" in text
     assert text.count("contents: write") == 2
-    assert text.count('persist-credentials: true') == 2
+    assert text.count("persist-credentials: false") == 2
+    assert text.count("gh auth setup-git") == 2
     assert text.count('--force-with-lease="$ref:$expected_sha"') == 2
     assert text.count('git ls-remote origin "$ref"') == 2
     assert "branch-prune-audit.txt" in text
