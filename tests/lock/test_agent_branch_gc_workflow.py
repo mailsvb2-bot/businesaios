@@ -26,6 +26,11 @@ def test_stale_branch_pruning_keeps_only_revision_atomic_merged_pr_cleanup() -> 
     assert text.count("python -m scripts.ci.cli --gate doctor") == 1
     assert text.count("gh auth setup-git") == 1
     assert text.index("python -m scripts.ci.cli --gate doctor") < text.index("gh auth setup-git")
+    assert text.count("git push") == 1
+    assert text.count("git push origin") == 1
+    assert "--delete" not in text
+    assert "gh api" not in text
+    assert "curl " not in text
     assert text.count('--force-with-lease="$ref:$expected_sha"') == 1
     assert text.count('git ls-remote origin "$ref"') == 1
     assert "/git/refs/" not in text
