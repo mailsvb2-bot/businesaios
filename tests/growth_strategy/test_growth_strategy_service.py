@@ -65,6 +65,29 @@ class _UnsafePartnerLLM:
         )
 
 
+class _FullHighScoreLLM:
+    def generate_sync(self, _request):
+        return _LLMResponse(
+            json.dumps(
+                [
+                    {
+                        "stage": "revenue",
+                        "channel": "meta_ads",
+                        "title": f"High score hypothesis {index}",
+                        "mechanism": "Use data from a controlled A/B experiment and attribution evidence to validate the change before rollout.",
+                        "expected_impact": "+50% profit in 14 days",
+                        "effort": "low",
+                        "risk": "low",
+                        "metric": "profit_minor",
+                        "horizon_days": 14,
+                        "action_hints": {},
+                    }
+                    for index in range(8)
+                ]
+            )
+        )
+
+
 def test_generate_backlog_fallback_creates_hypotheses(tmp_path: Path):
     db = tmp_path / "events.db"
     with SqliteEventStore(str(db)) as store:
@@ -148,6 +171,22 @@ def test_llm_cannot_drop_relevant_partnership_hypothesis(tmp_path: Path):
         assert len(partners) == 1
         assert partners[0].stage == "referral"
         assert partners[0].action_hints["advisory_only"] is True
+
+
+def test_required_partnership_is_visible_without_dropping_ranked_hypotheses(tmp_path: Path):
+    with SqliteEventStore(str(tmp_path / "partner-visible.db")) as store:
+        svc = GrowthStrategyService(event_store=store, llm=_FullHighScoreLLM())
+        plan = svc.generate_backlog(
+            tenant_id="t1",
+            user_id="u1",
+            decision_id="partner-visible-d",
+            correlation_id="partner-visible-c",
+            goal=GrowthGoalV1(primary_stage="referral"),
+            n=8,
+        )
+        assert len(plan.top_hypotheses) == 9
+        assert sum(h.title.startswith("High score hypothesis") for h in plan.top_hypotheses) == 8
+        assert any(h.channel == "partnerships" for h in plan.top_hypotheses[:8])
 
 
 def test_llm_partnership_cannot_smuggle_executable_authority(tmp_path: Path):
