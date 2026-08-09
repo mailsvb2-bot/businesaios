@@ -67,7 +67,12 @@ class EffectRouter:
 
     async def execute(self, action_type: str | EffectActionType, payload: dict[str, Any]) -> dict[str, Any]:
         key = require_effect_action_type(action_type)
+        transport_guard = payload.get("_transport_guard") if isinstance(payload, dict) else None
+        if transport_guard is not None and (key is not EffectActionType.TELEGRAM_SEND_MESSAGE or not callable(transport_guard)):
+            raise RuntimeError(f"invalid_internal_transport_guard:{str(key)}")
         data = normalize_effect_payload(key, payload)
+        if transport_guard is not None:
+            data["_transport_guard"] = transport_guard
         handler = self._handlers.get(key)
         if handler is None:
             raise RuntimeError(f"unsupported_effect_action:{str(key)}")
@@ -124,6 +129,7 @@ class EffectRouter:
             priority=payload.get("priority", "normal"),
             critical=bool(payload.get("critical", True)),
             timeout_s=int(payload.get("timeout_s") or 30),
+            transport_guard=payload.get("_transport_guard") if callable(payload.get("_transport_guard")) else None,
         )
         return {"ok": bool(ok), **dict(meta or {})}
 
