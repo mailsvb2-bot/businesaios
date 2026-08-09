@@ -29,9 +29,9 @@ def _normalize_contact_basis(value: str | None) -> str | None:
     if not isinstance(value, str):
         raise MessagingPolicyDisciplineViolation("contact_basis must be a string when provided")
     text = value.strip().lower()
-    if not text or text not in _CONTACT_BASES:
-        raise MessagingPolicyDisciplineViolation(f"unsupported contact_basis:{text}")
-    return text
+    if text in _CONTACT_BASES:
+        return text
+    raise MessagingPolicyDisciplineViolation(f"unsupported contact_basis:{text}")
 
 
 @dataclass(frozen=True)
