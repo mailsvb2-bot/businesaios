@@ -38,7 +38,7 @@ def execute_policy_plan_with_events(
         }
 
     for channel in plan.ordered_channels:
-        msg = replace(base_message, channel=channel)
+        msg = replace(base_message, channel=channel, transport_guard=attempt_guard)
         guard_reason = str(attempt_guard(msg) or '').strip() if attempt_guard is not None else ''
         if guard_reason:
             if recorder is not None:
