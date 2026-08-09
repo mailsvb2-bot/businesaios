@@ -184,6 +184,8 @@ def _partnership_safety_hints() -> dict[str, Any]:
 
 
 def _partnership_relevant(goal: GrowthGoalV1, *, policy: GrowthStrategyServicePolicy) -> bool:
+    if policy.partnership_constraints_exclude(goal.constraints):
+        return False
     return goal.primary_stage == "referral" or (goal.primary_stage == "acquisition" and policy.partnership_constraints_match(goal.constraints))
 
 
