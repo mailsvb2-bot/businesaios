@@ -9,7 +9,7 @@ Inputs are aggregated observations (already privacy-filtered and tenant-scoped).
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Sequence
+from typing import Any, Dict, Sequence
 
 from core.economics.world_model.conversion import LogisticConversionModel
 from core.economics.world_model.demand_curves import IsoelasticDemandCurve, PiecewiseLinearDemandCurve

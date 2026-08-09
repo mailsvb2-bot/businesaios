@@ -14,7 +14,7 @@ This is intentionally minimal and deterministic.
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable
 
 
 @dataclass(frozen=True)
