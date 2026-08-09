@@ -152,6 +152,25 @@ def test_zero_budget_goal_adds_partnership_through_canonical_growth_owner(tmp_pa
         assert all(h.channel != "partnerships" for h in paid_plan.top_hypotheses)
 
 
+def test_explicit_partnership_exclusion_overrides_referral_and_zero_budget(tmp_path: Path):
+    with SqliteEventStore(str(tmp_path / "partner-excluded.db")) as store:
+        svc = GrowthStrategyService(event_store=store, llm=None)
+        goals = (
+            GrowthGoalV1(primary_stage="referral", constraints=("no partnerships",)),
+            GrowthGoalV1(primary_stage="acquisition", constraints=("budget 0", "без партнёров")),
+            GrowthGoalV1(primary_stage="acquisition", constraints=("zero paid", "не использовать партнерства")),
+        )
+        for index, goal in enumerate(goals):
+            plan = svc.generate_backlog(
+                tenant_id="t1",
+                user_id="u1",
+                decision_id=f"excluded-d{index}",
+                correlation_id=f"excluded-c{index}",
+                goal=goal,
+            )
+            assert all(h.channel != "partnerships" for h in plan.top_hypotheses)
+
+
 def test_llm_cannot_drop_relevant_partnership_hypothesis(tmp_path: Path):
     with SqliteEventStore(str(tmp_path / "partner-llm.db")) as store:
         svc = GrowthStrategyService(event_store=store, llm=_UnrelatedGrowthLLM())
