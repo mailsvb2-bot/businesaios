@@ -170,6 +170,15 @@ def test_explicit_partnership_exclusion_overrides_referral_and_zero_budget(tmp_p
             )
             assert all(h.channel != "partnerships" for h in plan.top_hypotheses)
 
+        llm_plan = GrowthStrategyService(event_store=store, llm=_UnsafePartnerLLM()).generate_backlog(
+            tenant_id="t1",
+            user_id="u1",
+            decision_id="excluded-llm-d",
+            correlation_id="excluded-llm-c",
+            goal=GrowthGoalV1(primary_stage="referral", constraints=("without partnerships",)),
+        )
+        assert all(h.channel != "partnerships" for h in llm_plan.top_hypotheses)
+
 
 def test_llm_cannot_drop_relevant_partnership_hypothesis(tmp_path: Path):
     with SqliteEventStore(str(tmp_path / "partner-llm.db")) as store:
