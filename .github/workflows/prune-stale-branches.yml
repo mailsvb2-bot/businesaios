@@ -22,15 +22,24 @@ jobs:
     permissions:
       contents: write
     env:
+      GH_TOKEN: ${{ github.token }}
       TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
       EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
-      - name: Check out trusted default branch for scoped Git credentials
+      - name: Check out exact merged head without persisted credentials
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ github.event.repository.default_branch }}
-          persist-credentials: true
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
           fetch-depth: 1
+
+      - name: Verify exact checkout
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+
+      - name: Configure scoped GitHub credentials
+        shell: bash
+        run: gh auth setup-git
 
       - name: Delete only the exact merged branch revision
         shell: bash
@@ -77,13 +86,14 @@ jobs:
     permissions:
       contents: write
     env:
+      GH_TOKEN: ${{ github.token }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
-      - name: Check out exact main commit
+      - name: Check out exact main commit without persisted credentials
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ github.sha }}
-          persist-credentials: true
+          persist-credentials: false
           fetch-depth: 1
 
       - name: Verify exact checkout
@@ -95,6 +105,10 @@ jobs:
       - name: Run canonical doctor gate
         shell: bash
         run: python -m scripts.ci.cli --gate doctor
+
+      - name: Configure scoped GitHub credentials
+        shell: bash
+        run: gh auth setup-git
 
       - name: Delete only audited stale agent revisions
         shell: bash
