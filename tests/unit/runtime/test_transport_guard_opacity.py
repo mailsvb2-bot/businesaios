@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from runtime._internal.effect_router import _sanitize_internal_result
 from runtime._internal.effect_types import EffectActionType
 from runtime.messaging.outbound_message import OutboundMessage
