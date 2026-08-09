@@ -190,14 +190,21 @@ def _partnership_relevant(goal: GrowthGoalV1, *, policy: GrowthStrategyServicePo
 
 
 def _ensure_canonical_partnership_hypothesis(hypotheses: tuple[GrowthHypothesisV1, ...], *, goal: GrowthGoalV1, policy: GrowthStrategyServicePolicy) -> tuple[GrowthHypothesisV1, ...]:
+    source = tuple(hypotheses or ())
     if policy.partnership_constraints_exclude(goal.constraints):
-        return tuple(h for h in tuple(hypotheses or ()) if h.channel != "partnerships")
-    safety = _partnership_safety_hints()
-    normalized = tuple(replace(h, action_hints=dict(safety)) if h.channel == "partnerships" else h for h in tuple(hypotheses or ()))
-    if any(h.channel == "partnerships" for h in normalized) or not _partnership_relevant(goal, policy=policy):
-        return normalized
+        return tuple(h for h in source if h.channel != "partnerships")
+    safety, normalized, partner_seen = _partnership_safety_hints(), [], False
+    for hypothesis in source:
+        if hypothesis.channel == "partnerships":
+            if partner_seen:
+                continue
+            partner_seen, hypothesis = True, replace(hypothesis, action_hints=dict(safety))
+        normalized.append(hypothesis)
+    normalized_tuple = tuple(normalized)
+    if partner_seen or not _partnership_relevant(goal, policy=policy):
+        return normalized_tuple
     return (
-        *normalized,
+        *normalized_tuple,
         GrowthHypothesisV1(
             stage="referral" if goal.primary_stage == "referral" else "acquisition",
             channel="partnerships",
