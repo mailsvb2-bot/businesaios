@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from hashlib import sha256
 from typing import Any
 
+import runtime.pricing as pricing
 from contracts.action_impact_contract import ActionCategory, ActionExecutionContext, ActionImpact
 from runtime.actions import ACTION_PRICING_SELECT_V1
 from runtime.decisioning import DecisionRouteViolation, extract_strict_route_from_envelope
@@ -15,7 +16,6 @@ from runtime.handlers.route_failure_support import best_effort_route_ids, blocke
 from runtime.messaging_policy.discipline import ensure_policy_input_disciplined
 from runtime.messaging_preferences.load_preference import load_channel_preference
 from runtime.ports.effects import EffectsPort
-from runtime.pricing import OfferCatalogKey, OfferCatalogResolver
 from runtime.pricing import PricingRouteViolation, PricingSelectionContext
 CANON_THIN_HANDLER = True
 ACTION_NAME = ACTION_PRICING_SELECT_V1
@@ -82,7 +82,7 @@ def handle_pricing_select(payload: dict[str, Any], effects: EffectsPort, env: An
         policy = effective.get("channel_policy")
         effective["channel_policy"] = ensure_policy_input_disciplined(policy) if isinstance(policy, Mapping) and policy else None
         context = PricingSelectionContext(tenant_id=tenant_id, decision_id=route.decision_id, correlation_id=route.correlation_id, issuer_id=route.issuer_id, action=route.action)
-        catalog = (catalog_resolver or OfferCatalogResolver()).resolve(key=OfferCatalogKey(tenant_id=tenant_id, product_id=product_id, environment=environment))
+        catalog = (catalog_resolver or pricing.OfferCatalogResolver()).resolve(key=pricing.OfferCatalogKey(tenant_id=tenant_id, product_id=product_id, environment=environment))
         requested, legacy_scores = _shortlist(body.get("candidates"))
         evidence.setdefault("candidate_scores", legacy_scores)
         result = selection_service.select_from_catalog(ctx=context, catalog=catalog, evidence=evidence, evidence_score=evidence.get("evidence_score", 0.0), candidate_offer_ids=requested, completed_offer_ids=evidence.get("completed_offer_ids", ()), min_price_rub=evidence.get("min_price_rub", 0), max_price_rub=evidence.get("max_price_rub"))
