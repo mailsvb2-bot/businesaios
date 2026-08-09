@@ -203,6 +203,11 @@ class GrowthStrategyService:
                 signals=signals,
                 goal=goal,
             )
+        hypotheses = _ensure_canonical_partnership_hypothesis(
+            hypotheses,
+            goal=goal,
+            policy=self._policy,
+        )
         hypotheses = _stabilize_hypotheses(
             hypotheses,
             tenant_id=tenant_id,
@@ -400,6 +405,67 @@ def _default_steps(
     if h.stage == "retention":
         steps.insert(1, policy.retention_segment_step)
     return tuple(steps)
+
+
+def _partnership_safety_hints() -> dict[str, Any]:
+    return {
+        "intent": "partnership_opportunity",
+        "advisory_only": True,
+        "discovery_mode": "read_only",
+        "decision_core_required": True,
+        "runtime_executor_required": True,
+        "separate_decision_per_external_contact": True,
+        "contact_policy_required": True,
+        "followup_requires_delivery_and_no_reply_evidence": True,
+    }
+
+
+def _partnership_relevant(goal: GrowthGoalV1, *, policy: GrowthStrategyServicePolicy) -> bool:
+    return goal.primary_stage == "referral" or (
+        goal.primary_stage == "acquisition" and policy.partnership_constraints_match(goal.constraints)
+    )
+
+
+def _ensure_canonical_partnership_hypothesis(
+    hypotheses: tuple[GrowthHypothesisV1, ...],
+    *,
+    goal: GrowthGoalV1,
+    policy: GrowthStrategyServicePolicy,
+) -> tuple[GrowthHypothesisV1, ...]:
+    safety = _partnership_safety_hints()
+    normalized = tuple(
+        replace(
+            h,
+            action_hints={
+                **{key: value for key, value in dict(h.action_hints or {}).items() if key not in {"type", "executable_actions"}},
+                **safety,
+            },
+        )
+        if h.channel == "partnerships"
+        else h
+        for h in tuple(hypotheses or ())
+    )
+    if any(h.channel == "partnerships" for h in normalized) or not _partnership_relevant(goal, policy=policy):
+        return normalized
+    return (
+        *normalized,
+        GrowthHypothesisV1(
+            stage="referral" if goal.primary_stage == "referral" else "acquisition",
+            channel="partnerships",
+            title="Проверить партнёрский канал через владельцев уже собранных целевых аудиторий",
+            mechanism=(
+                "Growth Strategy рассматривает партнёрства как обычную проверяемую гипотезу: "
+                "read-only evidence может подтвердить релевантные аудитории, но не даёт права на контакт. "
+                "Каждый внешний контакт остаётся отдельным решением DecisionCore и исполняется только RuntimeExecutor."
+            ),
+            expected_impact=f"Проверить партнёрский канал на горизонте {int(goal.horizon_days or policy.default_duration_days)} дней без обязательного paid spend",
+            effort="medium",
+            risk="low",
+            metric="leads",
+            horizon_days=int(goal.horizon_days or policy.default_duration_days),
+            action_hints=safety,
+        ),
+    )
 
 
 def _fallback_hypotheses(
