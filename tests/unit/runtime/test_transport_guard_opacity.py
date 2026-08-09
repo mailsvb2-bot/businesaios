@@ -46,7 +46,7 @@ def test_attempt_guard_exception_fails_closed_without_policy_events() -> None:
 
     assert ok is False
     assert meta == {}
-    assert events == ["plan"]
+    assert events == []
 
 
 def test_effect_router_strips_transport_guard_details_before_evidence() -> None:
@@ -61,8 +61,40 @@ def test_effect_router_strips_transport_guard_details_before_evidence() -> None:
     sanitized = _sanitize_internal_result(EffectActionType.TELEGRAM_SEND_MESSAGE, raw)
 
     assert sanitized == {"ok": False, "mode": "blocked"}
-    assert "transport_guard_reason" not in sanitized
-    assert all(not str(key).startswith("_transport_guard") for key in sanitized)
+
+
+def test_effect_router_recursively_strips_nested_guard_fields() -> None:
+    raw = {
+        "ok": True,
+        "mode": "direct",
+        "data": {
+            "safe": "kept",
+            "transport_guard_reason": "preference_changed",
+            "items": [
+                {"external_id": "msg-1", "_transport_guard_debug": "private"},
+                {"nested": {"transport_guard_reason": "private", "safe": 7}},
+            ],
+        },
+        "meta": {
+            "safe": "value",
+            "_transport_guard_trace": "private",
+        },
+    }
+
+    sanitized = _sanitize_internal_result(EffectActionType.TELEGRAM_SEND_MESSAGE, raw)
+
+    assert sanitized == {
+        "ok": True,
+        "mode": "direct",
+        "data": {
+            "safe": "kept",
+            "items": [
+                {"external_id": "msg-1"},
+                {"nested": {"safe": 7}},
+            ],
+        },
+        "meta": {"safe": "value"},
+    }
 
 
 def test_effect_router_sanitizer_does_not_rewrite_normal_provider_result() -> None:
