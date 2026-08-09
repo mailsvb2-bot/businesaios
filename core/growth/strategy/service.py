@@ -96,6 +96,8 @@ class GrowthStrategyService:
         if not hypotheses:
             hypotheses = _fallback_hypotheses(tenant_id=tenant_id, decision_id=decision_id, signals=signals, goal=goal)
         hypotheses = _ensure_canonical_partnership_hypothesis(hypotheses, goal=goal, policy=self._policy)
+        if not hypotheses:
+            hypotheses = _ensure_canonical_partnership_hypothesis(_fallback_hypotheses(tenant_id=tenant_id, decision_id=decision_id, signals=signals, goal=goal), goal=goal, policy=self._policy)
         hypotheses = _stabilize_hypotheses(hypotheses, tenant_id=tenant_id, decision_id=decision_id)
         score_by_id = {item.hypothesis_id: item.score for item in rank_hypotheses(hypotheses)}
         ranked = tuple(sorted(hypotheses, key=lambda h: score_by_id.get(h.hypothesis_id, self._policy.zero_rank_score), reverse=True))
