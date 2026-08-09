@@ -1,20 +1,19 @@
-from __future__ import annotations
-
 """Canonical JSON codec for governance persistence surfaces.
 
 This module stores governance state as plain data only.
 It must never contain decision logic.
 """
 
-from contextlib import contextmanager
+from __future__ import annotations
+
 import json
 import os
+from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Iterator, TypeVar, get_args, get_origin, get_type_hints
-
 
 CANON_GOVERNANCE_PERSISTENCE_CODEC = True
 

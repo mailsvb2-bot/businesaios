@@ -82,6 +82,6 @@ class PricingSelectionService:
             _require(offer.offer_id in scores, f"candidate score missing for offer {offer.offer_id}")
             candidates.append({"offer_id": offer.offer_id, "title": offer.title, "price_rub": price, "score": _finite(scores[offer.offer_id], f"candidate score for {offer.offer_id}"), "commercial": {"kind": kind, "position": position, "requires_human_approval": approval}})
         _require(bool(candidates), "no eligible commercial offer candidates")
-        return self.choose_candidate(ctx=ctx, candidates=candidates, evidence=evidence)
+        return self.choose_candidate(ctx=ctx, candidates=sorted(candidates, key=lambda item: item["commercial"]["position"]), evidence=evidence)
 
     select = choose_candidate

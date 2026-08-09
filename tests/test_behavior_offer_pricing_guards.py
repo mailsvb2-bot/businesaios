@@ -53,6 +53,16 @@ def test_commercial_candidates_use_canonical_catalog_and_pricing_selector() -> N
             evidence={"candidate_scores": {"diagnostic": 1.0}}, evidence_score=0.8)
 
 
+def test_equal_scores_use_commercial_position_not_catalog_order() -> None:
+    catalog = _commercial_catalog(
+        {"offer_id": "a_later", "base_price_rub": 20, "meta": {"commercial": {"position": 1}}},
+        {"offer_id": "z_first", "base_price_rub": 10, "meta": {"commercial": {"position": 0}}},
+    )
+    result = PricingSelectionService().select_from_catalog(ctx=_pricing_ctx(), catalog=catalog,
+        evidence={"candidate_scores": {"a_later": 0.5, "z_first": 0.5}}, evidence_score=0.5)
+    assert result["selected"]["offer_id"] == "z_first"
+
+
 def test_catalog_shortlist_cannot_invent_offer_identity_or_price() -> None:
     catalog = _commercial_catalog(
         {"offer_id": "basic", "base_price_rub": 100},

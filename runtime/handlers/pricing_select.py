@@ -56,8 +56,15 @@ def _approval_review(*, selected, catalog_id, tenant_id, product_id, user_id, en
     return None if verdict.allowed else {"ok": False, "status": "approval_required", "reason": str(verdict.reason), "approval": verdict.to_dict(), "selection": dict(selected), "delivery": None, "router_evidence": None}
 
 
+def _approval_preference(settings_gateway, tenant_id):
+    try:
+        return load_channel_preference(settings_gateway=settings_gateway, tenant_id=tenant_id)
+    except Exception as exc:
+        raise PricingRouteViolation("approval channel preference unavailable") from exc
+
+
 def _transport_guard(settings_gateway, tenant_id, approved):
-    return lambda _msg: "" if load_channel_preference(settings_gateway=settings_gateway, tenant_id=tenant_id) == approved else "preference_changed"
+    return lambda _msg: "" if _approval_preference(settings_gateway, tenant_id) == approved else "preference_changed"
 
 
 def handle_pricing_select(payload: dict[str, Any], effects: EffectsPort, env: Any, *, selection_service: Any, catalog_resolver: Any | None = None, approval_gate: Any | None = None, settings_gateway: Any | None = None) -> Any:
@@ -95,7 +102,7 @@ def handle_pricing_select(payload: dict[str, Any], effects: EffectsPort, env: An
         text = str(rendered.text or selected.get("title") or "💸 Pricing proposal selected")
         commercial = selected.get("commercial")
         needs_approval = isinstance(commercial, Mapping) and commercial.get("requires_human_approval") is True
-        preference = load_channel_preference(settings_gateway=settings_gateway, tenant_id=tenant_id) if needs_approval else None
+        preference = _approval_preference(settings_gateway, tenant_id) if needs_approval else None
         approval = _approval_review(selected=selected, catalog_id=str(catalog.id), tenant_id=tenant_id, product_id=product_id, user_id=user_id, environment=environment, variant=variant, text=text, delivery=effective, preference=preference, route=route, evidence=evidence, approval_gate=approval_gate) if preference is not None else None
         selection_result = {**dict(result), "catalog_id": str(catalog.id)}
         if approval is not None:

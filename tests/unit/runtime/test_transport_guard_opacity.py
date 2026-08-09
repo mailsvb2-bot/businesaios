@@ -68,6 +68,17 @@ def test_guarded_telegram_send_blocks_before_missing_token_validation(monkeypatc
     assert http_calls == []
 
 
+def test_provider_dispatch_guard_precedes_configured_noop() -> None:
+    from runtime._internal.effects_clients import provider_outbound_sender as sender
+    from runtime.messaging.provider_config import ProviderConfig
+
+    cfg = ProviderConfig(provider="demo", env_prefix="DEMO", mode=sender.NOOP_MODE, endpoint="", sender="", token_present=False)
+    msg = OutboundMessage(decision_id="d", correlation_id="c", tenant_id="tenant-a", user_id="user-1", channel="email", text="approved", transport_guard=lambda _msg: "preference_changed")
+    result = sender.send_outbound(cfg=cfg, msg=msg)
+    assert result["mode"] == "blocked"
+    assert result["delivery_disposition"] == "suppressed"
+
+
 def test_effect_router_strips_transport_guard_details_before_evidence() -> None:
     raw = {
         "ok": False,

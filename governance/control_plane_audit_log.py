@@ -1,10 +1,10 @@
-from __future__ import annotations
-
 """Append-only audit log for governance control-plane events.
 
 This module stores immutable event records only.
 It must not contain decision logic or policy evaluation.
 """
+
+from __future__ import annotations
 
 import json
 import os
@@ -25,7 +25,6 @@ from governance.control_plane_audit_support import (
 )
 from governance.persistence_codec import ensure_parent_dir, exclusive_file_lock
 from governance.persistence_paths import control_plane_audit_log_path
-
 
 CANON_GOVERNANCE_CONTROL_PLANE_AUDIT_LOG = True
 

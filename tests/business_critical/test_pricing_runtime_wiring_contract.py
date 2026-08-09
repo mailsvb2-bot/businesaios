@@ -51,7 +51,7 @@ class MutableSettingsGateway:
 
 class ExplodingSettingsGateway:
     def get_value(self, **_kwargs):
-        raise AssertionError("non-approved delivery must not bind approval preferences")
+        raise RuntimeError("settings backend unavailable")
 
 
 def _env() -> SimpleNamespace:
@@ -123,6 +123,17 @@ def test_non_approved_policy_send_keeps_policy_public_and_has_no_transport_guard
     assert call["transport_guard"] is None
     assert call["channel_policy"]["contact_basis"] == "existing_customer"
     assert "preference_snapshot" not in call["channel_policy"]
+
+
+def test_approval_preference_backend_failure_blocks_before_delivery() -> None:
+    effects = FakeEffects()
+    result = handle_pricing_select(
+        {"tenant_id": "tenant-a", "product_id": "audit", "user_id": "user-1", "candidates": [{"offer_id": "audit", "score": 0.9}]},
+        effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=StaticCatalogResolver(_approval_catalog("Audit")),
+        settings_gateway=ExplodingSettingsGateway(),
+    )
+    assert result["ok"] is False and result["status"] == "blocked"
+    assert effects.calls[-1]["track_event_type"] == "pricing_select_blocked@v1"
 
 
 def test_payload_offer_outside_canonical_catalog_is_blocked() -> None:

@@ -433,6 +433,8 @@ def _send_smtp(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
 
 
 def send_outbound(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
+    if transport_guard_blocks(msg.transport_guard, msg):
+        return _guard_blocked_result(cfg=cfg, msg=msg)
     if cfg.mode == NOOP_MODE:
         return _noop_result(cfg=cfg, msg=msg)
     if cfg.mode == "webhook":
