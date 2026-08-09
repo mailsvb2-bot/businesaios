@@ -18,7 +18,10 @@ from .contracts import (
     GrowthSignalV1,
 )
 
-_GROWTH_CHANNEL_OPTIONS = "|".join(str(value) for value in get_args(Channel))
+_GROWTH_CHANNEL_VALUES = tuple(str(value) for value in get_args(Channel))
+_GROWTH_CHANNEL_OPTIONS = "|".join(_GROWTH_CHANNEL_VALUES)
+_GROWTH_CHANNEL_SET = frozenset(_GROWTH_CHANNEL_VALUES)
+_GROWTH_CHANNEL_ALIASES = {"partnership": "partnerships"}
 _SUPPORTED_MESSAGING_CHANNELS = ", ".join(GROWTH_MESSAGING_CHANNELS)
 
 
@@ -140,8 +143,9 @@ def _coerce_hypothesis(d: dict[str, Any], *, tenant_id: str, now_ms: int) -> Gro
     try:
         stage = str(d.get("stage") or "acquisition").strip().lower()
         channel = str(d.get("channel") or "organic").strip().lower()
+        channel = _GROWTH_CHANNEL_ALIASES.get(channel, channel)
         title = str(d.get("title") or "").strip()
-        if not title:
+        if not title or channel not in _GROWTH_CHANNEL_SET:
             return None
         return GrowthHypothesisV1(
             hypothesis_id=str(uuid.uuid4()),
