@@ -11,10 +11,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: prune-stale-branches-${{ github.event_name }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.run_id }}
-  cancel-in-progress: false
-
 jobs:
   delete-merged-agent-head:
     if: >-
