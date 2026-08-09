@@ -25,17 +25,21 @@ def telegram_send_message_transport(
     reply_markup: dict[str, Any] | None = None,
     priority: Any = "normal",
     critical: bool = True,
+    transport_guard: Any = None,
 ) -> tuple[bool, dict[str, Any]]:
+    payload = {
+        "chat_id": str(chat_id),
+        "text": str(text),
+        "reply_markup": reply_markup if isinstance(reply_markup, dict) else None,
+        "priority": priority,
+        "critical": bool(critical),
+    }
+    if transport_guard is not None:
+        payload["_transport_guard"] = transport_guard
     out = execute_effect_action_sync(
         effects,
         EffectActionType.TELEGRAM_SEND_MESSAGE,
-        {
-            "chat_id": str(chat_id),
-            "text": str(text),
-            "reply_markup": reply_markup if isinstance(reply_markup, dict) else None,
-            "priority": priority,
-            "critical": bool(critical),
-        },
+        payload,
     )
     return bool(out.get("ok", False)), dict(out)
 
