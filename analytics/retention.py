@@ -5,8 +5,7 @@ from __future__ import annotations
 This module is pure: it works on a list/iterator of event dicts.
 """
 
-from collections import defaultdict
-from typing import Iterable, Dict, Any, Tuple
+from typing import Iterable, Dict, Any
 import time
 
 
