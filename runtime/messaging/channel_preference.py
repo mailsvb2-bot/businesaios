@@ -31,6 +31,13 @@ class ChannelPreference:
         object.__setattr__(self, "enabled", normalized_enabled)
         object.__setattr__(self, "verified", normalized_verified)
 
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "primary": self.primary,
+            "enabled": list(self.enabled),
+            "verified": list(self.verified),
+        }
+
     @classmethod
     def from_mapping(cls, value: dict[str, Any] | None) -> ChannelPreference:
         data = dict(value or {})
