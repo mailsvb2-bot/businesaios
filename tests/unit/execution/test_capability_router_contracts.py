@@ -17,7 +17,7 @@ class StubState:
 @dataclass(frozen=True)
 class StubRequest:
     tenant_id: str = 'tenant-1'
-    autonomy_tier: str = 'supervised'
+    autonomy_tier: str = 'full_autonomy'
     approval_policy: dict[str, Any] = field(default_factory=dict)
     constraints: dict[str, Any] = field(default_factory=dict)
     economy: dict[str, Any] = field(default_factory=dict)
@@ -31,6 +31,50 @@ def _warm_capability(registry: CapabilityHealthRegistry, action_type: str) -> No
             action_type=action_type,
             feedback={'executed': True, 'verified': True, 'finished_at': f'2026-03-30T1{idx}:00:00Z'},
         )
+
+
+def test_router_blocks_full_autonomy_on_insufficient_evidence(tmp_path) -> None:
+    matrix = CapabilityMatrix()
+    registry = CapabilityHealthRegistry(store=FileCapabilityHealthStore(root_dir=tmp_path / 'health'), matrix=matrix)
+    router = ExecutionCapabilityRouter(matrix=matrix, health_registry=registry)
+    routed = router.route(request=StubRequest(), state=StubState(), action_type='launch_campaign', payload={'estimated_cost': 10.0})
+    assert routed.allowed is False
+    assert routed.reason == 'insufficient_evidence_for_full_autonomy'
+
+
+def test_router_falls_back_on_stale_capability_evidence(tmp_path) -> None:
+    matrix = CapabilityMatrix()
+    registry = CapabilityHealthRegistry(store=FileCapabilityHealthStore(root_dir=tmp_path / 'health'), matrix=matrix)
+    for _ in range(4):
+        registry.update_after_feedback(
+            tenant_id='tenant-1',
+            action_type='reply_to_inquiry',
+            feedback={'executed': True, 'verified': True, 'finished_at': '2026-03-20T12:00:00Z'},
+        )
+    router = ExecutionCapabilityRouter(matrix=matrix, health_registry=registry)
+    routed = router.route(request=StubRequest(autonomy_tier='bounded_autonomy'), state=StubState(), action_type='reply_to_inquiry', payload={'estimated_cost': 1.0})
+    assert routed.allowed is True
+    assert routed.fallback_used is True
+    assert routed.action_type == 'notify_owner'
+    assert routed.payload_patch['capability_fallback_reason'] == 'stale_evidence'
+
+
+def test_router_allows_bounded_autonomy_bootstrap_without_verified_evidence(tmp_path) -> None:
+    matrix = CapabilityMatrix()
+    registry = CapabilityHealthRegistry(store=FileCapabilityHealthStore(root_dir=tmp_path / 'health'), matrix=matrix)
+    router = ExecutionCapabilityRouter(matrix=matrix, health_registry=registry)
+    routed = router.route(
+        request=StubRequest(autonomy_tier='bounded_autonomy'),
+        state=StubState(),
+        action_type='launch_campaign',
+        payload={'estimated_cost': 10.0},
+    )
+    assert routed.allowed is True
+    assert routed.reason == 'capability_ok'
+    assert routed.capability is not None
+    assert routed.capability['runtime']['evidence_state'] == 'insufficient'
+    assert routed.capability['runtime']['recommended_autonomy_tier'] == 'bounded_autonomy'
+    assert routed.capability['runtime']['metadata']['bootstrap_mode'] == 'first_run_enabled_without_verified_evidence'
 
 
 def test_router_surfaces_unified_approval_verdict(tmp_path) -> None:
@@ -50,6 +94,7 @@ def test_router_surfaces_unified_approval_verdict(tmp_path) -> None:
     assert verdict['allowed'] is False
     assert routed.capability['execution_verdict']['approval_required'] is True
     assert routed.capability['allowed'] is True
+
 
 def test_router_blocks_on_budget_verdict(tmp_path) -> None:
     matrix = CapabilityMatrix()
