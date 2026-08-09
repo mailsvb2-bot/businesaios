@@ -146,7 +146,7 @@ def _normalize_roles(value: object) -> tuple[RoleId, ...]:
     if value is None:
         return ()
     items: Iterable[object]
-    if isinstance(value, (str, RoleId)):
+    if isinstance(value, str | RoleId):
         items = (value,)
     elif isinstance(value, Iterable):
         items = value
