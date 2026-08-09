@@ -187,3 +187,10 @@ def test_webhook_transport_covers_success_and_fail_closed_paths(
     assert header_receipt["delivered"] is False
 
 
+def test_webhook_transport_guard_precedes_provider_validation() -> None:
+    result = sender._send_webhook(
+        cfg=_cfg(endpoint="not-a-url"),
+        msg=_msg(transport_guard=lambda _msg: "preference_changed"),
+    )
+    assert result["mode"] == "blocked"
+    assert result["delivery_disposition"] == "suppressed"
