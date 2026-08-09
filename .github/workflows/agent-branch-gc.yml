@@ -39,12 +39,13 @@ jobs:
             *) echo "refusing to delete non-agent branch: $BRANCH" >&2; exit 64 ;;
           esac
 
-          api="https://api.github.com/repos/$REPO/git/refs/heads/$BRANCH"
+          get_api="https://api.github.com/repos/$REPO/git/ref/heads/$BRANCH"
+          delete_api="https://api.github.com/repos/$REPO/git/refs/heads/$BRANCH"
           status="$(curl --silent --show-error --output /tmp/branch-ref.json --write-out '%{http_code}' \
             --header "Authorization: Bearer $GH_TOKEN" \
             --header 'Accept: application/vnd.github+json' \
             --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "$api")"
+            "$get_api")"
 
           if [ "$status" = 404 ]; then
             echo "branch already absent: $BRANCH"
@@ -61,7 +62,7 @@ jobs:
             --header "Authorization: Bearer $GH_TOKEN" \
             --header 'Accept: application/vnd.github+json' \
             --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "$api")"
+            "$delete_api")"
           if [ "$status" != 204 ]; then
             cat /tmp/branch-delete.json >&2 || true
             echo "failed to delete branch $BRANCH: HTTP $status" >&2
@@ -141,12 +142,13 @@ jobs:
               *) echo "invalid bootstrap ref outside agent namespace: $branch" >&2; exit 64 ;;
             esac
 
-            api="https://api.github.com/repos/$REPO/git/refs/heads/$branch"
+            get_api="https://api.github.com/repos/$REPO/git/ref/heads/$branch"
+            delete_api="https://api.github.com/repos/$REPO/git/refs/heads/$branch"
             status="$(curl --silent --show-error --output /tmp/branch-ref.json --write-out '%{http_code}' \
               --header "Authorization: Bearer $GH_TOKEN" \
               --header 'Accept: application/vnd.github+json' \
               --header 'X-GitHub-Api-Version: 2022-11-28' \
-              "$api")"
+              "$get_api")"
 
             if [ "$status" = 404 ]; then
               echo "already absent: $branch"
@@ -164,7 +166,7 @@ jobs:
               --header "Authorization: Bearer $GH_TOKEN" \
               --header 'Accept: application/vnd.github+json' \
               --header 'X-GitHub-Api-Version: 2022-11-28' \
-              "$api")"
+              "$delete_api")"
             if [ "$status" = 204 ]; then
               echo "deleted audited stale branch: $branch"
             else
