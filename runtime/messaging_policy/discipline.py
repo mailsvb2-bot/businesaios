@@ -4,7 +4,6 @@ from collections.abc import Mapping
 from typing import Any
 
 from runtime.messaging.channel_normalizer import normalize_channel
-from runtime.messaging.channel_preference import ChannelPreference
 from runtime.messaging_policy.policy_plan import PolicyPlan
 
 _FORBIDDEN_POLICY_KEYS = {
@@ -14,6 +13,7 @@ _FORBIDDEN_POLICY_KEYS = {
     "decision_score",
     "world_model_score",
     "policy_override",
+    "preference_snapshot",
 }
 
 
@@ -26,30 +26,6 @@ def _dedupe(items) -> tuple[str, ...]:
     for item in tuple(items or ()):
         out.append(normalize_channel(item))
     return tuple(dict.fromkeys(out))
-
-
-def _canonical_preference_snapshot(value: object) -> dict[str, object] | None:
-    if value is None:
-        return None
-    if not isinstance(value, Mapping):
-        raise MessagingPolicyDisciplineViolation("preference_snapshot must be an object")
-    unexpected = sorted(str(key) for key in value if str(key) not in {"primary", "enabled", "verified"})
-    if unexpected:
-        raise MessagingPolicyDisciplineViolation("preference_snapshot contains unsupported fields: " + ", ".join(unexpected))
-    primary = value.get("primary")
-    enabled = value.get("enabled")
-    verified = value.get("verified", ())
-    if not isinstance(primary, str) or not primary.strip():
-        raise MessagingPolicyDisciplineViolation("preference_snapshot.primary must be a non-empty string")
-    if not isinstance(enabled, list | tuple) or not enabled or any(not isinstance(item, str) or not item.strip() for item in enabled):
-        raise MessagingPolicyDisciplineViolation("preference_snapshot.enabled must contain non-empty strings")
-    if not isinstance(verified, list | tuple) or any(not isinstance(item, str) or not item.strip() for item in verified):
-        raise MessagingPolicyDisciplineViolation("preference_snapshot.verified must contain non-empty strings")
-    try:
-        preference = ChannelPreference(primary=primary.strip(), enabled=tuple(enabled), verified=tuple(verified))
-    except ValueError as exc:
-        raise MessagingPolicyDisciplineViolation("preference_snapshot contains an unsupported channel") from exc
-    return preference.to_mapping()
 
 
 def ensure_policy_input_disciplined(channel_policy: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -66,8 +42,6 @@ def ensure_policy_input_disciplined(channel_policy: Mapping[str, Any] | None) ->
     out["verified_only"] = bool(raw.get("verified_only", False))
     requirement = raw.get("required_capabilities")
     out["required_capabilities"] = dict(requirement) if isinstance(requirement, Mapping) else {}
-    if "preference_snapshot" in raw:
-        out["preference_snapshot"] = _canonical_preference_snapshot(raw.get("preference_snapshot"))
     return out
 
 
