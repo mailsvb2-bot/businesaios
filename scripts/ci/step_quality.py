@@ -14,7 +14,7 @@ from scripts.ci.subprocess_io import run_command
 _CRITICAL_RUFF_SELECT = ("E9", "F63", "F7", "F82")
 _TARGETED_STRICT_DEBT_SELECT = ("E402", "F401", "UP035")
 _MAX_DEBT_SAMPLES = 50
-_RATCHETED_STRICT_DEBT = (("deployment", "UP035"), ("headless", "I001,UP035"), ("infrastructure", "F401,I001,UP035"), ("leads", "I001"), ("mvp", "I001"), ("demand_decision", "I001"), ("ops", "E402,UP006,UP035"), ("crm", "F401"), ("contracts", "UP012"), ("demand_gravity", "F401"), ("ports", "E402"), ("presentation", "I001"), ("demand_learning", "I001"), ("demand_seo", "I001"), ("attribution", "I001"), ("release", "I001"), ("scripts", "I001"), ("routing", "I001"), ("config", "I001"), ("guardrails", "F401"), ("governance", "F401"), ("shared", "F401"), ("kernel", "F401"), ("infra", "F401"), ("tenancy", "F401"))
+_RATCHETED_STRICT_DEBT = (("deployment", "UP035"), ("headless", "I001,UP035"), ("infrastructure", "F401,I001,UP035"), ("leads", "I001"), ("mvp", "I001"), ("demand_decision", "I001"), ("ops", "E402,UP006,UP035"), ("crm", "F401"), ("contracts", "UP012"), ("demand_gravity", "F401"), ("ports", "E402"), ("presentation", "I001"), ("demand_learning", "I001"), ("demand_seo", "I001"), ("attribution", "I001"), ("release", "I001"), ("scripts", "I001"), ("routing", "I001"), ("config", "I001"), ("guardrails", "F401"), ("governance", "F401"), ("analytics", "F401"), ("shared", "F401"), ("kernel", "F401"), ("infra", "F401"), ("tenancy", "F401"))
 
 
 def _iter_python_files(path: Path):
