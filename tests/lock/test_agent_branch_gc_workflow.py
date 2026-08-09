@@ -73,13 +73,11 @@ def test_stale_branch_pruning_uses_one_revision_atomic_owner() -> None:
 
     assert not Path(".github/workflows/agent-branch-gc.yml").exists()
     assert "pull_request_target" not in text
+    assert "concurrency:" not in text
     assert "github.event.pull_request.merged == true" in text
     assert "github.event.pull_request.head.repo.full_name == github.repository" in text
     assert "startsWith(github.event.pull_request.head.ref, 'agent/')" in text
     assert "EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}" in text
-    assert "github.event.pull_request.head.repo.full_name || github.repository" in text
-    assert "github.event.pull_request.head.ref || github.run_id" in text
-    assert "cancel-in-progress: false" in text
     assert text.count("contents: write") == 2
     assert text.count('persist-credentials: true') == 2
     assert text.count('--force-with-lease="$ref:$expected_sha"') == 2
