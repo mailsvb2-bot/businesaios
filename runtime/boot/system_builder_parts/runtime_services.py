@@ -22,31 +22,14 @@ from runtime.boot.system_builder_parts.runtime_services_finance import build_fin
 from runtime.boot.system_builder_parts.runtime_services_result_builder import build_runtime_services_result
 from runtime.boot.system_builder_parts.runtime_services_tenant import build_tenant_runtime_services
 from runtime.boot.system_builder_steps import build_marketing_llm_components, wire_ads_stack_safely
+from runtime.execution.governance_runtime_support import _build_default_approval_execution_gate
 from runtime.messaging_policy_events.event_store_adapter import EventLogMessagingPolicyEventStore
 from runtime.messaging_policy_readmodel.boot_runtime import boot_messaging_policy_readmodel
 
 CANON_BOOT_WIRING_ONLY = True
 
+_build_pricing_approval_gate = _build_default_approval_execution_gate
 
-def _build_pricing_approval_gate():
-    from execution.approval_execution_gate import ApprovalExecutionGate
-    from execution.approval_policy_engine import ApprovalPolicyEngine
-    from governance.approval_store import build_default_approval_store
-    from governance.approval_workflow import ApprovalWorkflow
-    from governance.change_control_policy import ChangeControlPolicy
-    from governance.control_plane_audit_log import PersistentGovernanceAuditLog
-    from governance.tenant_policy_overrides import PersistentTenantPolicyOverrideRegistry
-
-    audit_log = PersistentGovernanceAuditLog()
-    tenant_overrides = PersistentTenantPolicyOverrideRegistry(audit_log=audit_log)
-    workflow = ApprovalWorkflow(store=build_default_approval_store(), audit_log=audit_log)
-    return ApprovalExecutionGate(
-        approval_policy_engine=ApprovalPolicyEngine(
-            change_control_policy=ChangeControlPolicy(tenant_overrides=tenant_overrides),
-        ),
-        approval_workflow=workflow,
-        audit_log=audit_log,
-    )
 
 
 def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_registry_ctx):
