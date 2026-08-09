@@ -127,7 +127,7 @@ def _nested_external_id(payload: Mapping[str, Any]) -> str:
         "id",
     ):
         value = payload.get(key)
-        if isinstance(value, (str, int)) and str(value).strip():
+        if isinstance(value, str | int) and str(value).strip():
             return str(value).strip()
 
     messages = payload.get("messages")
@@ -179,7 +179,7 @@ def _response_is_rejected(payload: Mapping[str, Any]) -> bool:
     error = payload.get("error")
     if isinstance(error, Mapping):
         return bool(error)
-    if isinstance(error, (str, list, tuple)):
+    if isinstance(error, str | list | tuple):
         return bool(error)
     return False
 

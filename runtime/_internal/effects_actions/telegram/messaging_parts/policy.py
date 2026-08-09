@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+from runtime.messaging.outbound_message import transport_guard_blocks
 from runtime.messaging_capability import (
     MessagingCapabilityRouter,
     parse_capability_requirement,
     resolve_capability_telemetry_updater,
     resolve_channel_health_registry,
 )
-from runtime.messaging.outbound_message import transport_guard_blocks
 from runtime.messaging_policy.discipline import (
     MessagingPolicyDisciplineViolation,
     ensure_policy_input_disciplined,
@@ -59,7 +59,6 @@ def _with_health_feedback(self, *, send_once):
         return ok, meta
 
     return _observed
-
 
 
 def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
