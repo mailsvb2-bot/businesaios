@@ -11,7 +11,7 @@ from urllib import error as urllib_error
 from urllib import request as urllib_request
 from urllib.parse import urlparse
 
-from runtime.messaging.outbound_message import OutboundMessage
+from runtime.messaging.outbound_message import OutboundMessage, transport_guard_blocks
 from runtime.messaging.provider_config import ProviderConfig
 from runtime.platform.config.env_flags import env_bool, env_float, env_str
 
@@ -64,30 +64,10 @@ def _failure_result(
     }
 
 
-def _transport_guard_reason(msg: OutboundMessage) -> str:
-    guard = getattr(msg, "transport_guard", None)
-    if not callable(guard):
-        return ""
-    try:
-        return str(guard(msg) or "").strip()
-    except Exception:
-        return "transport_guard_error"
-
-
-def _guard_blocked_result(*, cfg: ProviderConfig, msg: OutboundMessage, reason: str) -> dict[str, Any]:
-    return {
-        **_base_result(cfg=cfg, msg=msg),
-        "ok": False,
-        "accepted": False,
-        "delivered": False,
-        "noop": False,
-        "mode": "blocked",
-        "external_id": "",
-        "reason": "transport_guard_blocked",
-        "transport_guard_reason": str(reason),
-        "execution_state": "blocked",
-        "delivery_disposition": "suppressed",
-    }
+def _guard_blocked_result(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
+    result = _failure_result(cfg=cfg, msg=msg, reason="transport_guard_blocked")
+    result.update(mode="blocked", execution_state="blocked", delivery_disposition="suppressed")
+    return result
 
 
 def _noop_result(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
@@ -257,9 +237,8 @@ def _send_webhook(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any
             hi=120.0,
         )
     )
-    guard_reason = _transport_guard_reason(msg)
-    if guard_reason:
-        return _guard_blocked_result(cfg=cfg, msg=msg, reason=guard_reason)
+    if transport_guard_blocks(msg.transport_guard, msg):
+        return _guard_blocked_result(cfg=cfg, msg=msg)
 
     try:
         with urllib_request.urlopen(request, timeout=timeout_s) as response:
@@ -404,9 +383,8 @@ def _send_smtp(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
             hi=120.0,
         )
     )
-    guard_reason = _transport_guard_reason(msg)
-    if guard_reason:
-        return _guard_blocked_result(cfg=cfg, msg=msg, reason=guard_reason)
+    if transport_guard_blocks(msg.transport_guard, msg):
+        return _guard_blocked_result(cfg=cfg, msg=msg)
     try:
         if secure:
             client = smtplib.SMTP_SSL(host, port, timeout=timeout_s)
