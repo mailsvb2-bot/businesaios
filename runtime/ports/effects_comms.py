@@ -22,6 +22,7 @@ class EffectsCommsPort(Protocol):
         priority: Any = "normal",
         critical: bool = True,
         channel_policy: Optional[Dict[str, Any]] = None,
+        transport_guard: Any = None,
     ) -> Any: ...
 
     def send_audio(
