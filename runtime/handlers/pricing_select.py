@@ -12,6 +12,7 @@ from runtime.execution.governance_runtime_support import build_default_approval_
 from runtime.handlers.delivery_contract import delivery_kwargs
 from runtime.handlers.route_failure_support import best_effort_route_ids, blocked_error_payload, safe_route_blocked_text
 from runtime.messaging_policy.discipline import ensure_policy_input_disciplined
+from runtime.messaging_preferences.load_preference import load_channel_preference
 from runtime.ports.effects import EffectsPort
 from runtime.pricing import PricingRouteViolation, PricingSelectionContext
 
@@ -29,11 +30,18 @@ def _delivery_evidence(delivery: object) -> dict[str, Any] | None:
     return None
 
 
-def _effective_delivery(payload: Mapping[str, Any]) -> dict[str, Any]:
+def _effective_delivery(
+    payload: Mapping[str, Any], *, settings_gateway: Any | None, tenant_id: str,
+) -> dict[str, Any]:
     effective = delivery_kwargs(payload)
     policy = effective.get("channel_policy")
-    if isinstance(policy, Mapping) and policy:
-        effective["channel_policy"] = ensure_policy_input_disciplined(policy)
+    if not isinstance(policy, Mapping) or not policy:
+        effective["channel_policy"] = None
+        return effective
+    disciplined = ensure_policy_input_disciplined(policy)
+    preference = load_channel_preference(settings_gateway=settings_gateway, tenant_id=tenant_id)
+    disciplined["preference_snapshot"] = preference.to_mapping()
+    effective["channel_policy"] = disciplined
     return effective
 
 
@@ -130,7 +138,7 @@ def _review_selected_offer(
 
 def handle_pricing_select(
     payload: dict[str, Any], effects: EffectsPort, env: Any, *, selection_service: Any,
-    catalog_resolver: Any | None = None, approval_gate: Any | None = None,
+    catalog_resolver: Any | None = None, approval_gate: Any | None = None, settings_gateway: Any | None = None,
 ) -> Any:
     body = dict(payload or {})
     try:
@@ -163,7 +171,7 @@ def handle_pricing_select(
         if not isinstance(variant, str) or not variant.strip():
             raise PricingRouteViolation("evidence.variant must be a non-empty string")
         variant = variant.strip()
-        effective_delivery = _effective_delivery(body)
+        effective_delivery = _effective_delivery(body, settings_gateway=settings_gateway, tenant_id=tenant_id)
         context = PricingSelectionContext(tenant_id=tenant_id, decision_id=route.decision_id,
             correlation_id=route.correlation_id, issuer_id=route.issuer_id, action=route.action)
         resolver = catalog_resolver or OfferCatalogResolver()
