@@ -6,6 +6,7 @@ from runtime.messaging_capability import (
     resolve_capability_telemetry_updater,
     resolve_channel_health_registry,
 )
+from runtime.messaging.outbound_message import transport_guard_blocks
 from runtime.messaging_policy.discipline import (
     MessagingPolicyDisciplineViolation,
     ensure_policy_input_disciplined,
@@ -17,7 +18,6 @@ from runtime.messaging_policy.read_models import parse_delivery_snapshot, parse_
 from runtime.messaging_policy.resolver import MessagingPolicyResolver
 from runtime.messaging_policy_events.execute_with_events import execute_policy_plan_with_events
 from runtime.messaging_policy_events.runtime_bridge import build_policy_event_recorder_from_runtime
-from runtime.messaging.outbound_message import transport_guard_blocks
 from runtime.messaging_preferences.load_preference import load_channel_preference
 
 
