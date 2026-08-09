@@ -79,6 +79,20 @@ def _approved_preference(
     )
 
 
+def _preference_attempt_guard(self, *, approved: ChannelPreference | None):
+    if approved is None:
+        return None
+
+    def _guard(selected_msg) -> str:
+        current = load_channel_preference(
+            settings_gateway=getattr(self, "settings_gateway", None),
+            tenant_id=selected_msg.tenant_id,
+        )
+        return "" if current == approved else "preference_changed"
+
+    return _guard
+
+
 def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
     disciplined_policy = ensure_policy_input_disciplined(channel_policy)
     preference, terminal_plan = _approved_preference(
@@ -108,11 +122,13 @@ def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
             _apply_capability_routing(self, ordered_channels=plan.ordered_channels, disciplined_policy=disciplined_policy)
         )
     recorder = build_policy_event_recorder_from_runtime(self)
+    approved_snapshot = preference if disciplined_policy.get("preference_snapshot") is not None else None
     return execute_policy_plan_with_events(
         plan=plan,
         base_message=msg,
         send_once=_with_health_feedback(self, send_once=send_once),
         recorder=recorder,
+        attempt_guard=_preference_attempt_guard(self, approved=approved_snapshot),
     )
 
 
