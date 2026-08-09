@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: prune-stale-branches
+  group: prune-stale-branches-${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -29,8 +29,9 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       REPOSITORY: ${{ github.repository }}
       TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
-      - name: Delete merged same-repository agent branch
+      - name: Delete only the merged branch revision
         shell: bash
         run: |
           python - <<'PY'
@@ -44,9 +45,12 @@ jobs:
 
           repository = os.environ["REPOSITORY"]
           branch = os.environ["TARGET_BRANCH"]
+          expected_sha = os.environ["EXPECTED_SHA"]
           token = os.environ["GH_TOKEN"]
           if not branch.startswith("agent/"):
               raise RuntimeError(f"refusing to delete non-agent branch: {branch}")
+          if len(expected_sha) != 40:
+              raise RuntimeError("merged head SHA is missing or malformed")
 
           api_root = f"https://api.github.com/repos/{repository}"
           headers = {
@@ -63,7 +67,7 @@ jobs:
                   return json.loads(payload) if payload else None
 
           try:
-              request("GET", f"{api_root}/git/ref/{encoded_ref}")
+              payload = request("GET", f"{api_root}/git/ref/{encoded_ref}")
           except urllib.error.HTTPError as exc:
               if exc.code == 404:
                   print(f"already_absent={branch}")
@@ -73,14 +77,25 @@ jobs:
                   f"failed to verify {branch}: HTTP {exc.code}: {detail}"
               ) from exc
 
+          current_sha = str(payload["object"]["sha"])
+          if current_sha != expected_sha:
+              print(
+                  "preserved_changed_ref="
+                  f"{branch} expected={expected_sha} current={current_sha}"
+              )
+              raise SystemExit(0)
+
           try:
               request("DELETE", f"{api_root}/git/refs/{encoded_ref}")
           except urllib.error.HTTPError as exc:
+              if exc.code == 404:
+                  print(f"already_absent_after_verify={branch}")
+                  raise SystemExit(0) from None
               detail = exc.read().decode("utf-8", errors="replace")
               raise RuntimeError(
                   f"failed to delete {branch}: HTTP {exc.code}: {detail}"
               ) from exc
-          print(f"deleted={branch}")
+          print(f"deleted={branch} sha={expected_sha}")
           PY
 
   prune-audited-stale-branches:
@@ -220,6 +235,9 @@ jobs:
               try:
                   request("DELETE", f"{api_root}/git/refs/{encoded_ref}")
               except urllib.error.HTTPError as exc:
+                  if exc.code == 404:
+                      print(f"already_absent_after_verify={branch}")
+                      continue
                   detail = exc.read().decode("utf-8", errors="replace")
                   raise RuntimeError(
                       f"failed to delete {branch}: HTTP {exc.code}: {detail}"
