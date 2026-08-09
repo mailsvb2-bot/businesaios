@@ -113,3 +113,46 @@ def test_terminal_contact_block_skips_capability_routing(monkeypatch):
     assert isinstance(plan, PolicyPlan)
     assert plan.ordered_channels == ()
     assert plan.terminal_reason == "outbound_forbidden"
+
+
+def test_changed_preference_snapshot_blocks_before_capability_routing_or_send(monkeypatch):
+    from runtime._internal.effects_actions.telegram.messaging_parts import policy as delivery_policy
+
+    approved = ChannelPreference(primary="telegram", enabled=("telegram",), verified=("telegram",))
+    current = ChannelPreference(primary="telegram", enabled=("telegram", "email"), verified=("telegram", "email"))
+    monkeypatch.setattr(delivery_policy, "load_channel_preference", lambda **_kwargs: current)
+    monkeypatch.setattr(delivery_policy, "_apply_capability_routing", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("stale approval must not reach capability routing")))
+    monkeypatch.setattr(delivery_policy, "build_policy_event_recorder_from_runtime", lambda _runtime: None)
+    monkeypatch.setattr(delivery_policy, "_with_health_feedback", lambda _runtime, *, send_once: send_once)
+    monkeypatch.setattr(delivery_policy, "execute_policy_plan_with_events", lambda **kwargs: kwargs["plan"])
+    msg = SimpleNamespace(tenant_id="tenant-a", channel="telegram", critical=True)
+    plan = delivery_policy.execute_with_policy(
+        SimpleNamespace(settings_gateway=object()),
+        msg=msg,
+        channel_policy={"contact_basis": "existing_customer", "preference_snapshot": approved.to_mapping()},
+        send_once=lambda _msg: (_ for _ in ()).throw(AssertionError("stale approval must not send")),
+    )
+    assert isinstance(plan, PolicyPlan)
+    assert plan.ordered_channels == ()
+    assert plan.reason_codes == ("preference_changed",)
+    assert plan.terminal_reason == "preference_changed"
+
+
+def test_matching_preference_snapshot_is_used_by_the_existing_resolver(monkeypatch):
+    from runtime._internal.effects_actions.telegram.messaging_parts import policy as delivery_policy
+
+    preference = ChannelPreference(primary="telegram", enabled=("telegram", "email"), verified=("telegram", "email"))
+    monkeypatch.setattr(delivery_policy, "load_channel_preference", lambda **_kwargs: preference)
+    monkeypatch.setattr(delivery_policy, "_apply_capability_routing", lambda _runtime, *, ordered_channels, disciplined_policy: PolicyPlan(ordered_channels=ordered_channels, reason_codes=("capability_route_applied",)))
+    monkeypatch.setattr(delivery_policy, "build_policy_event_recorder_from_runtime", lambda _runtime: None)
+    monkeypatch.setattr(delivery_policy, "_with_health_feedback", lambda _runtime, *, send_once: send_once)
+    monkeypatch.setattr(delivery_policy, "execute_policy_plan_with_events", lambda **kwargs: kwargs["plan"])
+    msg = SimpleNamespace(tenant_id="tenant-a", channel="telegram", critical=False)
+    plan = delivery_policy.execute_with_policy(
+        SimpleNamespace(settings_gateway=object()),
+        msg=msg,
+        channel_policy={"contact_basis": "existing_customer", "preference_snapshot": preference.to_mapping()},
+        send_once=lambda _msg: (True, {}),
+    )
+    assert plan.ordered_channels == ("telegram", "email")
+    assert plan.terminal_reason == ""
