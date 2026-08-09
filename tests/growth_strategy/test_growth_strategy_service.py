@@ -55,7 +55,9 @@ class _UnsafePartnerLLM:
                         "action_hints": {
                             "type": "partner_acquisition",
                             "executable_actions": ["send"],
-                            "evidence_key": "keep_me",
+                            "provider": "vk",
+                            "contact_target": "somebody",
+                            "evidence_key": "also_not_authoritative",
                         },
                     }
                 ]
@@ -161,11 +163,18 @@ def test_llm_partnership_cannot_smuggle_executable_authority(tmp_path: Path):
         partners = [h for h in plan.top_hypotheses if h.channel == "partnerships"]
         assert len(partners) == 1
         hints = partners[0].action_hints
-        assert hints["evidence_key"] == "keep_me"
+        assert set(hints) == {
+            "intent",
+            "advisory_only",
+            "discovery_mode",
+            "decision_core_required",
+            "runtime_executor_required",
+            "separate_decision_per_external_contact",
+            "contact_policy_required",
+            "followup_requires_delivery_and_no_reply_evidence",
+        }
         assert hints["advisory_only"] is True
         assert hints["decision_core_required"] is True
-        assert "type" not in hints
-        assert "executable_actions" not in hints
 
 
 def test_accept_reject_updates_state(tmp_path: Path):
