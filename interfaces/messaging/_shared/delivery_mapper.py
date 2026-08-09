@@ -44,5 +44,6 @@ def map_delivery_result(*, msg: OutboundMessage, raw: dict) -> DeliveryResult:
             "noop": noop,
             "execution_state": payload.get("execution_state"),
             "observability_hint": payload.get("observability_hint"),
+            "transport_guard_reason": payload.get("transport_guard_reason"),
         },
     )
