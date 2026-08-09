@@ -27,8 +27,16 @@ class GrowthStrategyServicePolicy:
     paid_channel_creative_step: str = "Собери 2-3 креатива, 1 оффер, 1 посадочную/бот-цепочку"
     retention_segment_step: str = "Собери сегменты (new/active/churn-risk) и trigger-сообщения"
 
+    @staticmethod
+    def _constraint_text(constraints: tuple[str, ...]) -> str:
+        return " ".join(str(item or "").strip().casefold() for item in constraints)
+
+    def partnership_constraints_exclude(self, constraints: tuple[str, ...]) -> bool:
+        text = self._constraint_text(constraints)
+        return re.search(r"(?:\b(?:no|without|exclude)\s+(?:paid\s+)?partner\w*|(?:без|исключить)\s+(?:платн\w+\s+)?партн[её]р\w*|не\s+использовать\s+партн[её]р\w*|партн[её]р\w*\s+не\s+использовать)", text) is not None
+
     def partnership_constraints_match(self, constraints: tuple[str, ...]) -> bool:
-        text = " ".join(str(item or "").strip().casefold() for item in constraints)
+        text = self._constraint_text(constraints)
         zero_budget = re.search(r"(?<!\w)(?:budget|бюджет)\s*(?:(?:[:=])\s*)?0(?:[.,]0+)?(?![\d.,])", text) is not None
         return zero_budget or any(term in text for term in self.partnership_trigger_terms)
 
