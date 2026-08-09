@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from runtime.messaging.channel_preference import ChannelPreference
+from runtime.messaging.outbound_message import OutboundMessage
 from runtime.messaging_policy.delivery_snapshot import DeliverySnapshot
 from runtime.messaging_policy.policy_plan import PolicyPlan
 from runtime.messaging_policy.policy_request import PolicyRequest
@@ -156,3 +157,44 @@ def test_matching_preference_snapshot_is_used_by_the_existing_resolver(monkeypat
     )
     assert plan.ordered_channels == ("telegram", "email")
     assert plan.terminal_reason == ""
+
+
+def test_preference_snapshot_is_rechecked_before_every_transport_attempt(monkeypatch):
+    from runtime._internal.effects_actions.telegram.messaging_parts import policy as delivery_policy
+
+    approved = ChannelPreference(primary="telegram", enabled=("telegram", "email"), verified=("telegram", "email"))
+    changed = ChannelPreference(primary="telegram", enabled=("telegram",), verified=("telegram",))
+    reads = iter((approved, approved, changed))
+    monkeypatch.setattr(delivery_policy, "load_channel_preference", lambda **_kwargs: next(reads))
+    monkeypatch.setattr(delivery_policy, "_apply_capability_routing", lambda _runtime, *, ordered_channels, disciplined_policy: PolicyPlan(ordered_channels=ordered_channels, reason_codes=("capability_route_applied",)))
+    monkeypatch.setattr(delivery_policy, "build_policy_event_recorder_from_runtime", lambda _runtime: None)
+    monkeypatch.setattr(delivery_policy, "_with_health_feedback", lambda _runtime, *, send_once: send_once)
+    attempted: list[str] = []
+
+    def send_once(selected_msg):
+        attempted.append(selected_msg.channel)
+        return False, {}
+
+    msg = OutboundMessage(
+        decision_id="decision-1",
+        correlation_id="correlation-1",
+        tenant_id="tenant-a",
+        user_id="user-1",
+        channel="telegram",
+        text="approved",
+        critical=False,
+    )
+    ok, meta = delivery_policy.execute_with_policy(
+        SimpleNamespace(settings_gateway=object()),
+        msg=msg,
+        channel_policy={
+            "contact_basis": "existing_customer",
+            "fallback_channels": ["email"],
+            "preference_snapshot": approved.to_mapping(),
+        },
+        send_once=send_once,
+    )
+    assert ok is False
+    assert attempted == ["telegram"]
+    assert meta["policy"]["terminal_reason"] == "preference_changed"
+    assert [item["channel"] for item in meta["policy"]["attempts"]] == ["telegram"]
