@@ -32,8 +32,17 @@ class GrowthStrategyServicePolicy:
         return " ".join(str(item or "").strip().casefold() for item in constraints)
 
     def partnership_constraints_exclude(self, constraints: tuple[str, ...]) -> bool:
-        text = self._constraint_text(constraints)
-        return re.search(r"(?:\b(?:no|without|avoid(?:ing)?|do\s+not\s+use|don['’]?t\s+use|exclude(?:\s+all)?)\s+(?:paid\s+)?partner\w*|(?:без|избегать|не\s+использовать|исключить(?:\s+все)?)\s+(?:платн\w+\s+)?партн[её]р\w*|партн[её]р\w*\s+не\s+использовать)", text) is not None
+        for raw in constraints:
+            text = str(raw or "").strip().casefold()
+            if re.search(r"\b(?:no|without|avoid(?:\s+using)?|do\s+not\s+use|don['’]?t\s+use|must\s+not\s+use|exclude(?:\s+all)?)\s+(?:any\s+|paid\s+)?(?:partnerships?|partners?\b|partner\s+(?:channels?|acquisition|outreach|program|strategy))", text):
+                return True
+            if re.search(r"\b(?:partnerships?|partners?)\s+(?:are\s+)?(?:forbidden|prohibited|not\s+allowed)\b", text):
+                return True
+            if re.search(r"(?:без|никаких|избегать|не\s+использовать|нельзя\s+использовать|исключить(?:\s+все)?)\s+(?:платн\w+\s+)?(?:партн[её]рств\w*|партн[её]ров\b|партн[её]рск\w+\s+(?:канал\w*|программ\w*|стратег\w*|привлеч\w*))", text):
+                return True
+            if re.search(r"(?:партн[её]рств\w*|партн[её]ры?)\s+(?:запрещен\w*|не\s+допуска\w*|не\s+использовать)", text):
+                return True
+        return False
 
     def partnership_constraints_match(self, constraints: tuple[str, ...]) -> bool:
         text = self._constraint_text(constraints)
