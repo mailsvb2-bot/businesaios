@@ -1,8 +1,6 @@
 """Compatibility facade for the single canonical governance runtime."""
 from __future__ import annotations
 
-from governance.approval_store import build_default_approval_store
-from governance.approval_workflow import ApprovalWorkflow
 from runtime.execution import governance_runtime as _runtime
 from runtime.execution.governance_audit_support import _append_governance_audit, _governance_audit_log
 
@@ -16,12 +14,6 @@ _NAMES = (
 ).split()
 globals().update({name: getattr(_runtime, name) for name in _NAMES})
 
-
-def _build_default_approval_execution_gate():
-    gate = _runtime._build_default_approval_execution_gate()
-    gate._approval_workflow = ApprovalWorkflow(store=build_default_approval_store(), audit_log=gate._audit_log)
-    return gate
-
-
+_build_default_approval_execution_gate = _runtime._build_default_approval_execution_gate
 build_default_approval_execution_gate = _build_default_approval_execution_gate
 __all__ = [*_NAMES, "_append_governance_audit", "_governance_audit_log", "_build_default_approval_execution_gate", "build_default_approval_execution_gate"]
