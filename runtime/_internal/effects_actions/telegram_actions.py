@@ -77,6 +77,7 @@ class TelegramEffectsMixin:
         reply_markup: dict[str, Any] | None = None,
         priority: Any = "normal",
         critical: bool = True,
+        transport_guard: Any = None,
     ) -> tuple[bool, dict[str, Any]]:
         return send_message_transport_effect(
             self,
@@ -85,6 +86,7 @@ class TelegramEffectsMixin:
             reply_markup=reply_markup,
             priority=priority,
             critical=bool(critical),
+            transport_guard=transport_guard,
         )
 
     def _telegram_send_chat_action(self, *, chat_id: str, action: str = "typing") -> None:
