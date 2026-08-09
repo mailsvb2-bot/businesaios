@@ -172,6 +172,7 @@ def test_preference_snapshot_is_rechecked_before_every_transport_attempt(monkeyp
     attempted: list[str] = []
 
     def send_once(selected_msg):
+        assert callable(selected_msg.transport_guard)
         attempted.append(selected_msg.channel)
         return False, {}
 
@@ -198,3 +199,88 @@ def test_preference_snapshot_is_rechecked_before_every_transport_attempt(monkeyp
     assert attempted == ["telegram"]
     assert meta["policy"]["terminal_reason"] == "preference_changed"
     assert [item["channel"] for item in meta["policy"]["attempts"]] == ["telegram"]
+
+
+def test_provider_bound_guard_is_terminal_without_health_failure(monkeypatch):
+    from runtime._internal.effects_actions.telegram.messaging_parts import policy as delivery_policy
+    from runtime.messaging_policy_events.execute_with_events import execute_policy_plan_with_events
+
+    health_calls: list[dict] = []
+    monkeypatch.setattr(delivery_policy, "resolve_capability_telemetry_updater",
+        lambda _runtime: SimpleNamespace(record_delivery_outcome=lambda **kwargs: health_calls.append(kwargs)))
+    sender = delivery_policy._with_health_feedback(
+        SimpleNamespace(),
+        send_once=lambda _msg: (False, {"transport_guard_reason": "preference_changed"}),
+    )
+    plan = PolicyPlan(ordered_channels=("telegram", "email"), reason_codes=("preference_snapshot_bound",))
+    msg = OutboundMessage(decision_id="d", correlation_id="c", tenant_id="tenant-a", user_id="u", channel="telegram", text="x")
+    ok, meta = execute_policy_plan_with_events(plan=plan, base_message=msg, send_once=sender)
+    assert ok is False
+    assert meta["policy"]["terminal_reason"] == "preference_changed"
+    assert meta["policy"]["attempts"] == []
+    assert health_calls == []
+
+
+def test_guarded_telegram_send_bypasses_async_queue_and_checks_before_http(monkeypatch):
+    from runtime._internal.effects_clients.telegram_client import TelegramClient
+
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-token")
+
+    class Queue:
+        def __init__(self):
+            self.calls: list[dict] = []
+
+        def enqueue(self, **kwargs):
+            self.calls.append(dict(kwargs))
+            return True
+
+    queue = Queue()
+    client = TelegramClient(outbound_queue=queue)
+    http_calls: list[dict] = []
+    monkeypatch.setattr(client, "_http_post", lambda **kwargs: http_calls.append(dict(kwargs)) or {"ok": True, "result": {"message_id": 1}})
+
+    ok, meta = client.send_message(chat_id="123", text="approved", transport_guard=lambda: "preference_changed")
+    assert ok is False and meta["mode"] == "blocked"
+    assert meta["transport_guard_reason"] == "preference_changed"
+    assert queue.calls == [] and http_calls == []
+
+    ok, meta = client.send_message(chat_id="124", text="approved", transport_guard=lambda: "")
+    assert ok is True and meta["mode"] == "direct"
+    assert queue.calls == [] and len(http_calls) == 1
+
+    ok, meta = client.send_message(chat_id="125", text="ordinary")
+    assert ok is True and meta["mode"] == "queued"
+    assert len(queue.calls) == 1 and len(http_calls) == 1
+
+
+@pytest.mark.parametrize("mode", ["webhook", "smtp"])
+def test_multichannel_provider_guard_blocks_before_network(monkeypatch, mode: str):
+    from runtime._internal.effects_clients import provider_outbound_sender as sender
+    from runtime.messaging.provider_config import ProviderConfig
+
+    cfg = ProviderConfig(
+        provider="email" if mode == "smtp" else "whatsapp",
+        env_prefix="TEST_PROVIDER",
+        mode=mode,
+        endpoint="smtp://smtp.example:25" if mode == "smtp" else "https://provider.example/send",
+        sender="from@example.com",
+        token_present=False,
+    )
+    msg = OutboundMessage(
+        decision_id="decision-1",
+        correlation_id="correlation-1",
+        tenant_id="tenant-a",
+        user_id="to@example.com" if mode == "smtp" else "user-1",
+        channel="email" if mode == "smtp" else "whatsapp",
+        text="approved",
+        transport_guard=lambda _msg: "preference_changed",
+    )
+    monkeypatch.setattr(sender.urllib_request, "urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("webhook must not run")))
+    monkeypatch.setattr(sender.smtplib, "SMTP", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("smtp must not run")))
+    monkeypatch.setattr(sender.smtplib, "SMTP_SSL", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("smtp must not run")))
+
+    result = sender.send_outbound(cfg=cfg, msg=msg)
+    assert result["ok"] is False
+    assert result["mode"] == "blocked"
+    assert result["transport_guard_reason"] == "preference_changed"
+    assert result["delivery_disposition"] == "suppressed"
