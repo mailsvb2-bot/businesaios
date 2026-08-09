@@ -29,6 +29,7 @@ def send_message_effect(
     priority: Any = "normal",
     critical: bool = True,
     channel_policy: dict | None = None,
+    transport_guard: Any = None,
 ) -> Any:
     msg = build_outbound_message(
         decision_id=decision_id,
@@ -43,6 +44,7 @@ def send_message_effect(
         channel=channel,
         priority=priority,
         critical=critical,
+        transport_guard=transport_guard,
     )
     ok, meta = execute_delivery_path(
         self,
@@ -85,4 +87,3 @@ def send_message_effect(
 
 
 __all__ = ["send_message_effect"]
-
