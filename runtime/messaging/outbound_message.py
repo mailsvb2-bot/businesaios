@@ -11,6 +11,15 @@ def _stable_json(payload: dict[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
+def transport_guard_blocks(guard, message=None) -> bool:
+    if not callable(guard):
+        return False
+    try:
+        return bool(str((guard() if message is None else guard(message)) or "").strip())
+    except Exception:
+        return True
+
+
 @dataclass(frozen=True)
 class OutboundMessage:
     decision_id: str
