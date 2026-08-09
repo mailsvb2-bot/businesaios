@@ -47,11 +47,13 @@ def _with_health_feedback(self, *, send_once):
 
     def _observed(selected_msg):
         ok, meta = send_once(selected_msg)
-        updater.record_delivery_outcome(
-            channel=str(selected_msg.channel),
-            ok=bool(ok),
-            meta=dict(meta or {}),
-        )
+        details = dict(meta or {})
+        if not str(details.get("transport_guard_reason") or "").strip():
+            updater.record_delivery_outcome(
+                channel=str(selected_msg.channel),
+                ok=bool(ok),
+                meta=details,
+            )
         return ok, meta
 
     return _observed
