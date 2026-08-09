@@ -33,7 +33,7 @@ class GrowthStrategyServicePolicy:
 
     def partnership_constraints_exclude(self, constraints: tuple[str, ...]) -> bool:
         text = self._constraint_text(constraints)
-        return re.search(r"(?:\b(?:no|without|exclude)\s+(?:paid\s+)?partner\w*|(?:без|исключить)\s+(?:платн\w+\s+)?партн[её]р\w*|не\s+использовать\s+партн[её]р\w*|партн[её]р\w*\s+не\s+использовать)", text) is not None
+        return re.search(r"(?:\b(?:no|without|avoid(?:ing)?|do\s+not\s+use|don['’]?t\s+use|exclude(?:\s+all)?)\s+(?:paid\s+)?partner\w*|(?:без|избегать|не\s+использовать|исключить(?:\s+все)?)\s+(?:платн\w+\s+)?партн[её]р\w*|партн[её]р\w*\s+не\s+использовать)", text) is not None
 
     def partnership_constraints_match(self, constraints: tuple[str, ...]) -> bool:
         text = self._constraint_text(constraints)
