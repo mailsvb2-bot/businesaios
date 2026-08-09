@@ -322,6 +322,15 @@ class TelegramClient:
                 "delivery_phase": phase,
                 "delivery_finalized": phase == FINALIZED_PHASE,
             }
+        guard_reason = _transport_guard_reason(transport_guard)
+        if guard_reason:
+            return False, {
+                "mode": "blocked",
+                "transport_guard_reason": guard_reason,
+                "delivery_key": delivery_key,
+                "payload_digest": payload_digest,
+                "delivery_finalized": False,
+            }
         if not token:
             if _strict_token_required():
                 return False, {"error": "TELEGRAM_BOT_TOKEN_MISSING", "delivery_key": delivery_key, "payload_digest": payload_digest}

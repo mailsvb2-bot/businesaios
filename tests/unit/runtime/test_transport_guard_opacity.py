@@ -49,6 +49,25 @@ def test_attempt_guard_exception_fails_closed_without_policy_events() -> None:
     assert events == []
 
 
+def test_guarded_telegram_send_blocks_before_missing_token_validation(monkeypatch) -> None:
+    from runtime._internal.effects_clients import telegram_client as telegram
+
+    monkeypatch.setattr(telegram, "_token", lambda: "")
+    client = telegram.TelegramClient()
+    http_calls: list[dict] = []
+    monkeypatch.setattr(client, "_http_post", lambda **kwargs: http_calls.append(dict(kwargs)) or {"ok": True})
+
+    ok, meta = client.send_message(
+        chat_id="123",
+        text="approved",
+        transport_guard=lambda: "preference_changed",
+    )
+
+    assert ok is False
+    assert meta["mode"] == "blocked"
+    assert http_calls == []
+
+
 def test_effect_router_strips_transport_guard_details_before_evidence() -> None:
     raw = {
         "ok": False,
