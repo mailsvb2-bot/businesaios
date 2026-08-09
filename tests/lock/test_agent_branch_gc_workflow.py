@@ -20,8 +20,12 @@ def test_stale_branch_pruning_keeps_only_revision_atomic_merged_pr_cleanup() -> 
     assert "branch-prune-audit.txt" not in text
     assert "github.event.pull_request.merged == true" in text
     assert "github.event.pull_request.head.repo.full_name == github.repository" in text
+    assert "github.event.pull_request.base.ref == github.event.repository.default_branch" in text
     assert "startsWith(github.event.pull_request.head.ref, 'agent/')" in text
     assert "EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}" in text
+    assert "TRUSTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}" in text
+    assert text.count("ref: ${{ github.event.pull_request.base.sha }}") == 1
+    assert "ref: ${{ github.event.pull_request.head.sha }}" not in text
     assert text.count("contents: write") == 1
     assert text.count("persist-credentials: false") == 1
 
