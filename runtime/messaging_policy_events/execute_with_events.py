@@ -29,11 +29,9 @@ def execute_policy_plan_with_events(
     attempts = []
     last_meta = {}
 
-    if recorder is not None:
-        recorder.record_plan(msg=base_message, plan=plan)
-
     if not plan.ordered_channels:
         if recorder is not None:
+            recorder.record_plan(msg=base_message, plan=plan)
             recorder.record_finished(
                 msg=base_message,
                 plan=plan,
@@ -50,10 +48,14 @@ def execute_policy_plan_with_events(
             }
         }
 
+    plan_recorded = False
     for channel in plan.ordered_channels:
         msg = replace(base_message, channel=channel, transport_guard=attempt_guard)
         if _guard_blocks(attempt_guard, msg):
             return False, {}
+        if recorder is not None and not plan_recorded:
+            recorder.record_plan(msg=base_message, plan=plan)
+            plan_recorded = True
         ok, meta = send_once(msg)
         meta = dict(meta or {})
         if _execution_blocked(meta):
