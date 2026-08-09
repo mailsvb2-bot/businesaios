@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  delete-merged-agent-head:
+  validate-merged-agent-head:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.merged == true &&
@@ -18,10 +18,8 @@ jobs:
       startsWith(github.event.pull_request.head.ref, 'agent/')
     runs-on: ubuntu-24.04
     permissions:
-      contents: write
+      contents: read
     env:
-      TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
-      EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
       TRUSTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
     steps:
       - name: Check out trusted default-base revision without persisted credentials
@@ -39,13 +37,17 @@ jobs:
         shell: bash
         run: python -m scripts.ci.cli --gate doctor
 
-      - name: Configure scoped GitHub credentials
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: gh auth setup-git
-
-      - name: Delete only the exact merged branch revision
+  delete-merged-agent-head:
+    needs: validate-merged-agent-head
+    if: needs.validate-merged-agent-head.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Delete only the exact merged branch revision from isolated git state
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -61,6 +63,13 @@ jobs:
             echo "merged head SHA is missing or malformed" >&2
             exit 64
           fi
+
+          repo_dir="$RUNNER_TEMP/branch-gc"
+          rm -rf "$repo_dir"
+          git init --quiet "$repo_dir"
+          cd "$repo_dir"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          gh auth setup-git
 
           ref="refs/heads/$branch"
           if git push origin \
