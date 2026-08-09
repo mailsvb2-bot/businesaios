@@ -34,6 +34,10 @@ jobs:
         shell: bash
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
+      - name: Run canonical doctor gate
+        shell: bash
+        run: python -m scripts.ci.cli --gate doctor
+
       - name: Configure scoped GitHub credentials
         shell: bash
         run: gh auth setup-git
