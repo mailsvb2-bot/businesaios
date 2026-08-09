@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-
-from runtime.messaging.channel_preference import ChannelPreference
 from runtime.messaging_capability import (
     MessagingCapabilityRouter,
     parse_capability_requirement,
@@ -59,51 +56,24 @@ def _with_health_feedback(self, *, send_once):
     return _observed
 
 
-def _approved_preference(
-    self, *, tenant_id: str, disciplined_policy: Mapping[str, object],
-) -> tuple[ChannelPreference, PolicyPlan | None]:
-    current = load_channel_preference(
-        settings_gateway=getattr(self, "settings_gateway", None),
-        tenant_id=tenant_id,
-    )
-    snapshot = disciplined_policy.get("preference_snapshot")
-    if snapshot is None:
-        return current, None
-    approved = ChannelPreference.from_mapping(dict(snapshot) if isinstance(snapshot, Mapping) else None)
-    if approved == current:
-        return approved, None
-    return approved, ensure_policy_plan_disciplined(
-        PolicyPlan(
-            ordered_channels=(),
-            reason_codes=("preference_changed",),
-            terminal_reason="preference_changed",
-        )
-    )
-
-
-def _preference_attempt_guard(self, *, approved: ChannelPreference | None):
-    if approved is None:
-        return None
-
-    def _guard(selected_msg) -> str:
-        current = load_channel_preference(
-            settings_gateway=getattr(self, "settings_gateway", None),
-            tenant_id=selected_msg.tenant_id,
-        )
-        return "" if current == approved else "preference_changed"
-
-    return _guard
+def _message_guard_reason(msg) -> str:
+    guard = getattr(msg, "transport_guard", None)
+    if not callable(guard):
+        return ""
+    try:
+        return str(guard(msg) or "").strip()
+    except Exception:
+        return "transport_guard_error"
 
 
 def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
     disciplined_policy = ensure_policy_input_disciplined(channel_policy)
-    preference, terminal_plan = _approved_preference(
-        self,
+    preference = load_channel_preference(
+        settings_gateway=getattr(self, "settings_gateway", None),
         tenant_id=msg.tenant_id,
-        disciplined_policy=disciplined_policy,
     )
     resolver = MessagingPolicyResolver()
-    plan = terminal_plan or ensure_policy_plan_disciplined(
+    plan = ensure_policy_plan_disciplined(
         resolver.resolve(
             PolicyRequest(
                 preference=preference,
@@ -124,13 +94,13 @@ def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
             _apply_capability_routing(self, ordered_channels=plan.ordered_channels, disciplined_policy=disciplined_policy)
         )
     recorder = build_policy_event_recorder_from_runtime(self)
-    approved_snapshot = preference if disciplined_policy.get("preference_snapshot") is not None else None
+    guard = getattr(msg, "transport_guard", None)
     return execute_policy_plan_with_events(
         plan=plan,
         base_message=msg,
         send_once=_with_health_feedback(self, send_once=send_once),
         recorder=recorder,
-        attempt_guard=_preference_attempt_guard(self, approved=approved_snapshot),
+        attempt_guard=guard if callable(guard) else None,
     )
 
 
@@ -140,4 +110,7 @@ def execute_delivery_path(self, *, msg, channel_policy, send_once):
             return execute_with_policy(self, msg=msg, channel_policy=channel_policy, send_once=send_once)
         except MessagingPolicyDisciplineViolation as exc:
             return False, {"policy": {"ordered_channels": [], "reason_codes": ["discipline_violation"], "terminal_reason": "discipline_violation", "attempts": []}, "error": exc.__class__.__name__}
+    guard_reason = _message_guard_reason(msg)
+    if guard_reason:
+        return False, {"transport_guard_reason": guard_reason, "policy": {"ordered_channels": [], "reason_codes": [guard_reason], "terminal_reason": guard_reason, "attempts": []}}
     return send_once(msg)
