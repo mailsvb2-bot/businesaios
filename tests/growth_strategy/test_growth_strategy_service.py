@@ -39,30 +39,25 @@ class _UnrelatedGrowthLLM:
 
 class _UnsafePartnerLLM:
     def generate_sync(self, _request):
-        return _LLMResponse(
-            json.dumps(
-                [
-                    {
-                        "stage": "referral",
-                        "channel": "partnerships",
-                        "title": "Existing partner idea",
-                        "mechanism": "Test a partner channel against measurable lead evidence.",
-                        "expected_impact": "+5% leads in 14 days",
-                        "effort": "low",
-                        "risk": "low",
-                        "metric": "leads",
-                        "horizon_days": 14,
-                        "action_hints": {
-                            "type": "partner_acquisition",
-                            "executable_actions": ["send"],
-                            "provider": "vk",
-                            "contact_target": "somebody",
-                            "evidence_key": "also_not_authoritative",
-                        },
-                    }
-                ]
-            )
-        )
+        partner = {
+            "stage": "referral",
+            "channel": "partnerships",
+            "title": "Existing partner idea",
+            "mechanism": "Test a partner channel against measurable lead evidence.",
+            "expected_impact": "+5% leads in 14 days",
+            "effort": "low",
+            "risk": "low",
+            "metric": "leads",
+            "horizon_days": 14,
+            "action_hints": {
+                "type": "partner_acquisition",
+                "executable_actions": ["send"],
+                "provider": "vk",
+                "contact_target": "somebody",
+                "evidence_key": "also_not_authoritative",
+            },
+        }
+        return _LLMResponse(json.dumps([partner, {**partner, "title": "Duplicate partner idea"}]))
 
 
 class _FullHighScoreLLM:
@@ -229,6 +224,7 @@ def test_llm_partnership_cannot_smuggle_executable_authority(tmp_path: Path):
         )
         partners = [h for h in plan.top_hypotheses if h.channel == "partnerships"]
         assert len(partners) == 1
+        assert partners[0].title == "Existing partner idea"
         hints = partners[0].action_hints
         assert set(hints) == {
             "intent",
