@@ -92,7 +92,8 @@ class GrowthStrategyService:
         hypothesis_count = self._policy.default_hypothesis_count if n is None else int(n)
         hypotheses: tuple[GrowthHypothesisV1, ...] = ()
         if self._llm is not None:
-            hypotheses = tuple(generate_hypotheses(self._llm, tenant_id=tenant_id, goal=goal, signals=signals, n=hypothesis_count, model=str(model or "")))
+            excluded_channels = ("partnerships",) if self._policy.partnership_constraints_exclude(goal.constraints) else ()
+            hypotheses = tuple(generate_hypotheses(self._llm, tenant_id=tenant_id, goal=goal, signals=signals, n=hypothesis_count, model=str(model or ""), excluded_channels=excluded_channels))
         if not hypotheses:
             hypotheses = _fallback_hypotheses(tenant_id=tenant_id, decision_id=decision_id, signals=signals, goal=goal)
         hypotheses = _ensure_canonical_partnership_hypothesis(hypotheses, goal=goal, policy=self._policy)
