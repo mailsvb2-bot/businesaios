@@ -2,20 +2,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from runtime.messaging.outbound_message import OutboundMessage
+from runtime.messaging.outbound_message import OutboundMessage, transport_guard_blocks
 
 
 def _execution_blocked(meta: object) -> bool:
     return isinstance(meta, dict) and str(meta.get("mode") or "").strip().casefold() == "blocked"
 
-
-def _guard_blocks(attempt_guard, msg) -> bool:
-    if attempt_guard is None:
-        return False
-    try:
-        return bool(str(attempt_guard(msg) or '').strip())
-    except Exception:
-        return True
 
 
 def execute_policy_plan_with_events(
@@ -51,7 +43,7 @@ def execute_policy_plan_with_events(
     plan_recorded = False
     for channel in plan.ordered_channels:
         msg = replace(base_message, channel=channel, transport_guard=attempt_guard)
-        if _guard_blocks(attempt_guard, msg):
+        if transport_guard_blocks(attempt_guard, msg):
             return False, {}
         if recorder is not None and not plan_recorded:
             recorder.record_plan(msg=base_message, plan=plan)
