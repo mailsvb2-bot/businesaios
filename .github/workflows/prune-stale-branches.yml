@@ -4,14 +4,148 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    types:
+      - closed
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: prune-stale-branches
+  cancel-in-progress: false
 
 jobs:
-  prune:
-    if: contains(github.event.head_commit.message, '[prune-stale-branches]')
+  delete-merged-agent-head:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'agent/')
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - name: Delete merged same-repository agent branch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          repository = os.environ["REPOSITORY"]
+          branch = os.environ["TARGET_BRANCH"]
+          token = os.environ["GH_TOKEN"]
+          if not branch.startswith("agent/"):
+              raise RuntimeError(f"refusing to delete non-agent branch: {branch}")
+
+          api_root = f"https://api.github.com/repos/{repository}"
+          headers = {
+              "Accept": "application/vnd.github+json",
+              "Authorization": f"Bearer {token}",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+          encoded_ref = urllib.parse.quote(f"heads/{branch}", safe="")
+
+          def request(method: str, url: str):
+              req = urllib.request.Request(url, method=method, headers=headers)
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  payload = response.read()
+                  return json.loads(payload) if payload else None
+
+          try:
+              request("GET", f"{api_root}/git/ref/{encoded_ref}")
+          except urllib.error.HTTPError as exc:
+              if exc.code == 404:
+                  print(f"already_absent={branch}")
+                  raise SystemExit(0) from None
+              detail = exc.read().decode("utf-8", errors="replace")
+              raise RuntimeError(
+                  f"failed to verify {branch}: HTTP {exc.code}: {detail}"
+              ) from exc
+
+          try:
+              request("DELETE", f"{api_root}/git/refs/{encoded_ref}")
+          except urllib.error.HTTPError as exc:
+              detail = exc.read().decode("utf-8", errors="replace")
+              raise RuntimeError(
+                  f"failed to delete {branch}: HTTP {exc.code}: {detail}"
+              ) from exc
+          print(f"deleted={branch}")
+          PY
+
+  prune-audited-stale-branches:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      contains(github.event.head_commit.message, '[prune-stale-branches]')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      BOOTSTRAP_BRANCHES: |
+        agent/canonical-commercial-offer-candidates
+        agent/canonical-messaging-contact-basis
+        agent/canonical-sales-evidence-foundation
+        agent/canonical-sales-human-handoff
+        agent/canonical-sales-integration-final
+        agent/ci-actions-probe-219
+        agent/finish-product-onboarding-v2
+        agent/issue-171-attribution-i001-ratchet
+        agent/issue-171-config-i001-ratchet
+        agent/issue-171-config-i001-ratchet-v2
+        agent/issue-171-contracts-up012-ratchet
+        agent/issue-171-crm-f401-ratchet
+        agent/issue-171-demand-gravity-f401-ratchet
+        agent/issue-171-demand-learning-i001-ratchet
+        agent/issue-171-demand-seo-i001-ratchet
+        agent/issue-171-guardrails-f401-ratchet
+        agent/issue-171-guardrails-f401-ratchet-v2
+        agent/issue-171-infra-f401-ratchet
+        agent/issue-171-intent-i001-ratchet
+        agent/issue-171-kernel-f401-ratchet
+        agent/issue-171-ports-e402-ratchet
+        agent/issue-171-presentation-i001-ratchet
+        agent/issue-171-release-i001-ratchet
+        agent/issue-171-release-i001-ratchet-v2
+        agent/issue-171-routing-i001-ratchet
+        agent/issue-171-routing-i001-ratchet-v2
+        agent/issue-171-scripts-i001-ratchet
+        agent/issue-171-shared-f401-ratchet
+        agent/issue-173-capability-operator-view-consolidation
+        agent/issue-173-capability-operator-view-consolidation-clean
+        agent/issue-173-provider-admin-metadata-consolidation
+        agent/issue-173-provider-admin-test-consolidation
+        agent/issue-173-provider-admin-wave-consolidation-v2
+        agent/issue-173-security-runtime-summary-consolidation
+        agent/issue-236-live-read-telegram-hubspot
+        agent/issue-236-multichannel-webhook-hardening
+        agent/issue-236-owner-provider-workspace
+        agent/issue-236-owner-session-bootstrap
+        agent/issue-236-owner-workspace-frontend
+        agent/issue-236-owner-workspace-frontend-clean
+        agent/issue-236-owner-workspace-integrated
+        agent/issue-236-provider-connection-status
+        agent/issue-236-server-owned-onboarding-identity
+        agent/issue-239-multichannel-provider-parity
+        agent/issue-241-whatsapp-http-truth-certification
+        agent/issue-241-whatsapp-http-truth-clean
+        agent/product-onboarding-integration-marketplace
+        agent/product-self-service-workspace
+        agent/tenancy-f401-ratchet
+        agent/branch-gc-bootstrap
     steps:
       - name: Check out exact main commit
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -29,11 +163,7 @@ jobs:
         shell: bash
         run: python -m scripts.ci.cli --gate doctor
 
-      - name: Delete every non-default branch
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      - name: Delete only audited stale agent branches
         shell: bash
         run: |
           python - <<'PY'
@@ -48,6 +178,19 @@ jobs:
           repository = os.environ["REPOSITORY"]
           default_branch = os.environ["DEFAULT_BRANCH"]
           token = os.environ["GH_TOKEN"]
+          branches = [
+              line.strip()
+              for line in os.environ["BOOTSTRAP_BRANCHES"].splitlines()
+              if line.strip()
+          ]
+          if len(branches) != len(set(branches)):
+              raise RuntimeError("bootstrap branch allowlist contains duplicates")
+          if default_branch in branches:
+              raise RuntimeError("default branch must never be pruned")
+          invalid = [branch for branch in branches if not branch.startswith("agent/")]
+          if invalid:
+              raise RuntimeError(f"non-agent refs in bootstrap allowlist: {invalid}")
+
           api_root = f"https://api.github.com/repos/{repository}"
           headers = {
               "Accept": "application/vnd.github+json",
@@ -61,25 +204,25 @@ jobs:
                   payload = response.read()
                   return json.loads(payload) if payload else None
 
-          branches: list[str] = []
-          page = 1
-          while True:
-              payload = request("GET", f"{api_root}/branches?per_page=100&page={page}")
-              names = [str(item["name"]) for item in payload]
-              branches.extend(names)
-              if len(names) < 100:
-                  break
-              page += 1
-
-          stale = sorted(name for name in branches if name != default_branch)
-          print(f"default_branch={default_branch}")
-          print(f"stale_branch_count={len(stale)}")
-          for branch in stale:
+          for branch in branches:
               encoded_ref = urllib.parse.quote(f"heads/{branch}", safe="")
+              try:
+                  request("GET", f"{api_root}/git/ref/{encoded_ref}")
+              except urllib.error.HTTPError as exc:
+                  if exc.code == 404:
+                      print(f"already_absent={branch}")
+                      continue
+                  detail = exc.read().decode("utf-8", errors="replace")
+                  raise RuntimeError(
+                      f"failed to verify {branch}: HTTP {exc.code}: {detail}"
+                  ) from exc
+
               try:
                   request("DELETE", f"{api_root}/git/refs/{encoded_ref}")
               except urllib.error.HTTPError as exc:
                   detail = exc.read().decode("utf-8", errors="replace")
-                  raise RuntimeError(f"failed to delete {branch}: HTTP {exc.code}: {detail}") from exc
+                  raise RuntimeError(
+                      f"failed to delete {branch}: HTTP {exc.code}: {detail}"
+                  ) from exc
               print(f"deleted={branch}")
           PY
