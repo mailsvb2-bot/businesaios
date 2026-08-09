@@ -93,8 +93,8 @@ def telegram_pre_send(self, *, msg) -> None:
             emit_warning(self.event_log, user_id=msg.user_id, decision_id=msg.decision_id, correlation_id=msg.correlation_id, reason="chat_action_failed", error=exc)
 
 
-def telegram_throttle(self, *, user_id: str, decision_id: str, correlation_id: str) -> None:
-    if self.telegram_outbound_queue is not None:
+def telegram_throttle(self, *, user_id: str, decision_id: str, correlation_id: str, force_direct: bool = False) -> None:
+    if self.telegram_outbound_queue is not None and not force_direct:
         return
     min_interval = float(env_float("TELEGRAM_MIN_MSG_INTERVAL_S", 0.25, lo=0.0, hi=30.0))
     now = time.time()
@@ -199,6 +199,7 @@ def build_single_sender(self):
                 user_id=selected_msg.user_id,
                 decision_id=selected_msg.decision_id,
                 correlation_id=selected_msg.correlation_id,
+                force_direct=callable(getattr(selected_msg, "transport_guard", None)),
             )
             return telegram_delivery(self, msg=selected_msg)
         return multichannel_delivery(self, msg=selected_msg)
