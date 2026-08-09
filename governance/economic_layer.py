@@ -35,7 +35,6 @@ from core.strategic_horizon.engine import (
     UserDynamics,
 )
 from governance.economic_layer_env import is_strict_mode
-from governance.economic_layer_world import load_world_or_degraded
 from governance.economic import EconomicPolicyConfig, EconomicPolicyEngine, EconomicPolicyVerdict
 
 
