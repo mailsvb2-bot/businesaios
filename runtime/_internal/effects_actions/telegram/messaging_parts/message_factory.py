@@ -15,7 +15,7 @@ def resolve_tenant_id(*, tenant_id: str | None, track_payload: dict | None) -> s
     return "unknown_tenant"
 
 
-def build_outbound_message(*, decision_id: str, correlation_id: str, user_id: str, text: str, tenant_id: str, reply_markup: dict | None, callback_query_id: str | None, track_event_type: str | None, track_payload: dict | None, channel: str, priority, critical: bool) -> OutboundMessage:
+def build_outbound_message(*, decision_id: str, correlation_id: str, user_id: str, text: str, tenant_id: str, reply_markup: dict | None, callback_query_id: str | None, track_event_type: str | None, track_payload: dict | None, channel: str, priority, critical: bool, transport_guard=None) -> OutboundMessage:
     return OutboundMessage(
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
@@ -29,6 +29,7 @@ def build_outbound_message(*, decision_id: str, correlation_id: str, user_id: st
         track_payload=track_payload,
         priority=str(priority or "normal"),
         critical=bool(critical),
+        transport_guard=transport_guard,
         payload={
             "text": str(text or ""),
             "reply_markup": reply_markup,
