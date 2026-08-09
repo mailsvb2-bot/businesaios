@@ -74,8 +74,8 @@ def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_regist
     settings_services = {'settings': settings, 'FeatureFlags': FeatureFlags, 'composer': composer}
     ctx.set_value('marketing_llm_composer', composer, min_phase=BootPhase.P40_SETTINGS_FLAGS)
     ctx.set_value('marketing_llm', llm_components['marketing_llm'], min_phase=BootPhase.P40_SETTINGS_FLAGS)
-    from runtime.pricing import PricingSelectionService
     from runtime.boot.builders.ai_ceo_planner import build_runtime_ai_ceo_planner
+    from runtime.pricing import PricingSelectionService
 
     ctx.set_value('ai_ceo_planner', build_runtime_ai_ceo_planner(event_store=event_store), min_phase=BootPhase.P40_SETTINGS_FLAGS)
     ctx.set_value('pricing_selection_service', PricingSelectionService(), min_phase=BootPhase.P40_SETTINGS_FLAGS)
