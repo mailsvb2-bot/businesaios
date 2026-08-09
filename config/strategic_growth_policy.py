@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 CANON_COMPAT_SHIM = True
@@ -20,6 +21,9 @@ class GrowthStrategyServicePolicy:
     default_hypothesis_count: int = 8
     default_duration_days: int = 14
     max_experiment_name_length: int = 120
+    partnership_trigger_terms: tuple[str, ...] = (
+        "partner", "партнер", "партнёр", "referral", "реферал", "без платной рекламы", "zero paid",
+    )
     paid_channels: tuple[str, ...] = (
         "meta_ads",
         "google_ads",
@@ -36,6 +40,11 @@ class GrowthStrategyServicePolicy:
     )
     paid_channel_creative_step: str = "Собери 2-3 креатива, 1 оффер, 1 посадочную/бот-цепочку"
     retention_segment_step: str = "Собери сегменты (new/active/churn-risk) и trigger-сообщения"
+
+    def partnership_constraints_match(self, constraints: tuple[str, ...]) -> bool:
+        text = " ".join(str(item or "").strip().casefold() for item in constraints)
+        zero_budget = re.search(r"(?<!\w)(?:budget|бюджет)\s*(?:(?:[:=])\s*)?0(?:[.,]0+)?(?![\d.,])", text) is not None
+        return zero_budget or any(term in text for term in self.partnership_trigger_terms)
 
 
 @dataclass(frozen=True)
