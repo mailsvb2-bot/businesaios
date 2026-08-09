@@ -57,13 +57,7 @@ def _mark_delivered(state: Any, *, delivery_key: str, msg, meta: Mapping[str, An
 
 def _bound_transport_guard(msg):
     guard = getattr(msg, "transport_guard", None)
-    if not callable(guard):
-        return None
-
-    def _guard() -> str:
-        return str(guard(msg) or "").strip()
-
-    return _guard
+    return (lambda: guard(msg)) if callable(guard) else None
 
 
 def telegram_pre_send(self, *, msg) -> None:
