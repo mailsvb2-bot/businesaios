@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
+from runtime.messaging.channel_preference import ChannelPreference
 from runtime.messaging_capability import (
     MessagingCapabilityRouter,
     parse_capability_requirement,
@@ -54,15 +57,37 @@ def _with_health_feedback(self, *, send_once):
     return _observed
 
 
+def _approved_preference(
+    self, *, tenant_id: str, disciplined_policy: Mapping[str, object],
+) -> tuple[ChannelPreference, PolicyPlan | None]:
+    current = load_channel_preference(
+        settings_gateway=getattr(self, "settings_gateway", None),
+        tenant_id=tenant_id,
+    )
+    snapshot = disciplined_policy.get("preference_snapshot")
+    if snapshot is None:
+        return current, None
+    approved = ChannelPreference.from_mapping(dict(snapshot) if isinstance(snapshot, Mapping) else None)
+    if approved == current:
+        return approved, None
+    return approved, ensure_policy_plan_disciplined(
+        PolicyPlan(
+            ordered_channels=(),
+            reason_codes=("preference_changed",),
+            terminal_reason="preference_changed",
+        )
+    )
+
+
 def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
     disciplined_policy = ensure_policy_input_disciplined(channel_policy)
-    settings_gateway = getattr(self, "settings_gateway", None)
-    preference = load_channel_preference(
-        settings_gateway=settings_gateway,
+    preference, terminal_plan = _approved_preference(
+        self,
         tenant_id=msg.tenant_id,
+        disciplined_policy=disciplined_policy,
     )
     resolver = MessagingPolicyResolver()
-    plan = ensure_policy_plan_disciplined(
+    plan = terminal_plan or ensure_policy_plan_disciplined(
         resolver.resolve(
             PolicyRequest(
                 preference=preference,
