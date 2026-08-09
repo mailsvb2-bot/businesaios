@@ -51,6 +51,7 @@ class TelegramEffectsMixin:
         priority: Any = "normal",
         critical: bool = True,
         channel_policy: dict[str, Any] | None = None,
+        transport_guard: Any = None,
     ) -> Any:
         return send_message_effect(
             self,
@@ -67,6 +68,7 @@ class TelegramEffectsMixin:
             priority=priority,
             critical=critical,
             channel_policy=channel_policy,
+            transport_guard=transport_guard,
         )
 
     def _telegram_send_message(
