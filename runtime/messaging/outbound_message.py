@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -25,6 +26,7 @@ class OutboundMessage:
     priority: str = "normal"
     critical: bool = True
     payload: dict | None = None
+    transport_guard: Callable[[OutboundMessage], str] | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         base_payload = dict(self.payload or {})
