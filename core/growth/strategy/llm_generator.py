@@ -25,17 +25,18 @@ _GROWTH_CHANNEL_ALIASES = {"partnership": "partnerships"}
 _SUPPORTED_MESSAGING_CHANNELS = ", ".join(GROWTH_MESSAGING_CHANNELS)
 
 
-def generate_hypotheses(llm: Any, *, tenant_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int = 8, model: str = "") -> tuple[GrowthHypothesisV1, ...]:
+def generate_hypotheses(llm: Any, *, tenant_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int = 8, model: str = "", excluded_channels: tuple[str, ...] = ()) -> tuple[GrowthHypothesisV1, ...]:
     try:
         req = _build_request(tenant_id=tenant_id, goal=goal, signals=signals, n=int(n), model=str(model or ""))
         resp = _generate_sync(llm, req)
         items = _parse_json_array(resp)
+        blocked = frozenset(str(channel).strip().lower() for channel in excluded_channels)
         out: list[GrowthHypothesisV1] = []
         now = int(time.time() * 1000)
         partner_seen = False
         for it in items:
             h = _coerce_hypothesis(it, tenant_id=tenant_id, now_ms=now)
-            if not h:
+            if not h or h.channel in blocked:
                 continue
             if h.channel == "partnerships":
                 if partner_seen:
