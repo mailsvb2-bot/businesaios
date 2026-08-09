@@ -110,6 +110,7 @@ def telegram_delivery(self, *, msg) -> tuple[bool, dict]:
             reply_markup=msg.reply_markup,
             priority=msg.priority,
             critical=msg.critical,
+            transport_guard=getattr(msg, "transport_guard", None),
         )
     out = dict(meta or {})
     out["delivery_key"] = delivery_key
