@@ -49,6 +49,11 @@ class MutableSettingsGateway:
         return dict(self.value)
 
 
+class ExplodingSettingsGateway:
+    def get_value(self, **_kwargs):
+        raise AssertionError("non-approved delivery must not bind approval preferences")
+
+
 def _env() -> SimpleNamespace:
     return SimpleNamespace(decision=SimpleNamespace(decision_id="decision-pricing-select", correlation_id="correlation-pricing-select", issuer_id="businesaios-core", action="pricing_select@v1"))
 
@@ -98,7 +103,23 @@ def test_real_pricing_selection_uses_catalog_owned_identity_price_and_copy() -> 
     assert result["selection"]["offer_id"] == "sales_entry" and result["selection"]["price_rub"] == 600
     assert result["selection_result"]["catalog_id"] == "default:salesbot:prod"
     assert effects.calls[-1]["track_payload"]["price_rub"] == 600 and effects.calls[-1]["text"] != "UNTRUSTED COPY"
+    assert effects.calls[-1]["transport_guard"] is None
     assert result["router_evidence"]["source"] == "connector"
+
+
+def test_non_approved_policy_send_keeps_policy_public_and_has_no_transport_guard() -> None:
+    effects = FakeEffects()
+    result = handle_pricing_select(
+        {"tenant_id": "business-a", "product_id": "salesbot", "user_id": "user-1",
+         "channel_policy": {"contact_basis": "existing_customer"},
+         "candidates": [{"offer_id": "sales_entry", "score": 0.9}]},
+        effects, _env(), selection_service=PricingSelectionService(), settings_gateway=ExplodingSettingsGateway(),
+    )
+    assert result["ok"] is True
+    call = effects.calls[-1]
+    assert call["transport_guard"] is None
+    assert call["channel_policy"]["contact_basis"] == "existing_customer"
+    assert "preference_snapshot" not in call["channel_policy"]
 
 
 def test_payload_offer_outside_canonical_catalog_is_blocked() -> None:
@@ -114,13 +135,14 @@ def test_unknown_product_cannot_fall_back_to_legacy_catalog() -> None:
     assert result["ok"] is False and result["status"] == "blocked"
 
 
-def test_approval_required_offer_binds_recipient_content_and_delivery_route() -> None:
+def test_approval_required_offer_binds_recipient_content_delivery_and_preferences_without_policy() -> None:
     original_catalog = _approval_catalog("Approved audit")
     resolver = StaticCatalogResolver(original_catalog)
     gate, workflow = _approval_gate()
     effects = FakeEffects()
+    settings = MutableSettingsGateway({"primary": "telegram", "enabled": ["telegram"], "verified": ["telegram"]})
     base_payload = {"tenant_id": "tenant-a", "product_id": "audit", "user_id": "user-1", "channel": "telegram", "candidates": [{"offer_id": "audit", "score": 0.9}]}
-    first = handle_pricing_select(base_payload, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
+    first = handle_pricing_select(base_payload, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate, settings_gateway=settings)
     assert first["status"] == "approval_required" and first["delivery"] is None and effects.calls == []
     approval_id = first["approval"]["approval_id"]
     workflow.decide(ApprovalDecision(approval_id=approval_id, tenant_id="tenant-a", actor_id="owner-1", role_id=RoleId.OWNER, outcome=ApprovalOutcome.APPROVE, rationale="approved offer"))
@@ -130,25 +152,31 @@ def test_approval_required_offer_binds_recipient_content_and_delivery_route() ->
         {**base_payload, "channel": "email", "evidence": {"approval_id": approval_id}},
         {**base_payload, "channel_policy": {"fallback_channels": ["email"]}, "evidence": {"approval_id": approval_id}},
     ):
-        mismatch = handle_pricing_select(changed, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
+        mismatch = handle_pricing_select(changed, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate, settings_gateway=settings)
         assert mismatch["ok"] is False and mismatch["status"] == "approval_required"
         assert mismatch["approval"]["reason"] == "approval_subject_mismatch"
         assert mismatch["delivery"] is None and effects.calls == []
 
     resolver.catalog = _approval_catalog("Changed after approval")
-    changed_copy = handle_pricing_select({**base_payload, "evidence": {"approval_id": approval_id}}, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
+    changed_copy = handle_pricing_select({**base_payload, "evidence": {"approval_id": approval_id}}, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate, settings_gateway=settings)
     assert changed_copy["approval"]["reason"] == "approval_subject_mismatch" and effects.calls == []
 
     resolver.catalog = original_catalog
-    second = handle_pricing_select({**base_payload, "channel_policy": {}, "evidence": {"approval_id": approval_id}}, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate)
+    second = handle_pricing_select({**base_payload, "channel_policy": {}, "evidence": {"approval_id": approval_id}}, effects, _env(), selection_service=PricingSelectionService(), catalog_resolver=resolver, approval_gate=gate, settings_gateway=settings)
     assert second["ok"] is True and second["status"] == "verified"
-    assert effects.calls[-1]["channel"] == "telegram"
-    assert effects.calls[-1]["channel_policy"] is None
-    assert effects.calls[-1]["track_payload"]["price_rub"] == 60_000
-    assert "Approved audit" in effects.calls[-1]["text"]
+    call = effects.calls[-1]
+    assert call["channel"] == "telegram"
+    assert call["channel_policy"] is None
+    assert callable(call["transport_guard"])
+    assert call["transport_guard"](SimpleNamespace()) == ""
+    assert call["track_payload"]["price_rub"] == 60_000
+    assert "Approved audit" in call["text"]
+
+    settings.value = {"primary": "telegram", "enabled": ["telegram", "email"], "verified": ["telegram", "email"]}
+    assert call["transport_guard"](SimpleNamespace()) == "preference_changed"
 
 
-def test_approval_required_offer_rejects_changed_tenant_preference() -> None:
+def test_approval_required_offer_rejects_changed_tenant_preference_before_delivery() -> None:
     resolver = StaticCatalogResolver(_approval_catalog("Approved audit"))
     gate, workflow = _approval_gate()
     effects = FakeEffects()
