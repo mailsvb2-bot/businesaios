@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: prune-stale-branches-${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.run_id }}
+  group: prune-stale-branches-${{ github.event_name }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -26,77 +26,51 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ github.token }}
-      REPOSITORY: ${{ github.repository }}
       TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
       EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
-      - name: Delete only the merged branch revision
+      - name: Check out trusted default branch for scoped Git credentials
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: true
+          fetch-depth: 1
+
+      - name: Delete only the exact merged branch revision
         shell: bash
         run: |
-          python - <<'PY'
-          from __future__ import annotations
+          set -euo pipefail
+          branch="$TARGET_BRANCH"
+          expected_sha="$EXPECTED_SHA"
+          case "$branch" in
+            agent/*) ;;
+            *) echo "refusing to delete non-agent branch: $branch" >&2; exit 64 ;;
+          esac
+          if [ "${#expected_sha}" -ne 40 ] || [[ "$expected_sha" =~ [^0-9a-f] ]]; then
+            echo "merged head SHA is missing or malformed" >&2
+            exit 64
+          fi
 
-          import json
-          import os
-          import urllib.error
-          import urllib.parse
-          import urllib.request
+          ref="refs/heads/$branch"
+          if git push origin \
+            --force-with-lease="$ref:$expected_sha" \
+            ":$ref"; then
+            echo "deleted=$branch sha=$expected_sha"
+            exit 0
+          fi
 
-          repository = os.environ["REPOSITORY"]
-          branch = os.environ["TARGET_BRANCH"]
-          expected_sha = os.environ["EXPECTED_SHA"]
-          token = os.environ["GH_TOKEN"]
-          if not branch.startswith("agent/"):
-              raise RuntimeError(f"refusing to delete non-agent branch: {branch}")
-          if len(expected_sha) != 40:
-              raise RuntimeError("merged head SHA is missing or malformed")
+          current_sha="$(git ls-remote origin "$ref" | awk 'NR == 1 { print $1 }')"
+          if [ -z "$current_sha" ]; then
+            echo "already_absent=$branch"
+            exit 0
+          fi
+          if [ "$current_sha" != "$expected_sha" ]; then
+            echo "preserved_changed_ref=$branch expected=$expected_sha current=$current_sha"
+            exit 0
+          fi
 
-          api_root = f"https://api.github.com/repos/{repository}"
-          headers = {
-              "Accept": "application/vnd.github+json",
-              "Authorization": f"Bearer {token}",
-              "X-GitHub-Api-Version": "2022-11-28",
-          }
-          encoded_ref = urllib.parse.quote(f"heads/{branch}", safe="")
-
-          def request(method: str, url: str):
-              req = urllib.request.Request(url, method=method, headers=headers)
-              with urllib.request.urlopen(req, timeout=30) as response:
-                  payload = response.read()
-                  return json.loads(payload) if payload else None
-
-          try:
-              payload = request("GET", f"{api_root}/git/ref/{encoded_ref}")
-          except urllib.error.HTTPError as exc:
-              if exc.code == 404:
-                  print(f"already_absent={branch}")
-                  raise SystemExit(0) from None
-              detail = exc.read().decode("utf-8", errors="replace")
-              raise RuntimeError(
-                  f"failed to verify {branch}: HTTP {exc.code}: {detail}"
-              ) from exc
-
-          current_sha = str(payload["object"]["sha"])
-          if current_sha != expected_sha:
-              print(
-                  "preserved_changed_ref="
-                  f"{branch} expected={expected_sha} current={current_sha}"
-              )
-              raise SystemExit(0)
-
-          try:
-              request("DELETE", f"{api_root}/git/refs/{encoded_ref}")
-          except urllib.error.HTTPError as exc:
-              if exc.code == 404:
-                  print(f"already_absent_after_verify={branch}")
-                  raise SystemExit(0) from None
-              detail = exc.read().decode("utf-8", errors="replace")
-              raise RuntimeError(
-                  f"failed to delete {branch}: HTTP {exc.code}: {detail}"
-              ) from exc
-          print(f"deleted={branch} sha={expected_sha}")
-          PY
+          echo "atomic deletion failed while $branch still points to merged SHA $expected_sha" >&2
+          exit 1
 
   prune-audited-stale-branches:
     if: >-
@@ -107,66 +81,14 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ github.token }}
-      REPOSITORY: ${{ github.repository }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-      BOOTSTRAP_BRANCHES: |
-        agent/canonical-commercial-offer-candidates
-        agent/canonical-messaging-contact-basis
-        agent/canonical-sales-evidence-foundation
-        agent/canonical-sales-human-handoff
-        agent/canonical-sales-integration-final
-        agent/ci-actions-probe-219
-        agent/finish-product-onboarding-v2
-        agent/issue-171-attribution-i001-ratchet
-        agent/issue-171-config-i001-ratchet
-        agent/issue-171-config-i001-ratchet-v2
-        agent/issue-171-contracts-up012-ratchet
-        agent/issue-171-crm-f401-ratchet
-        agent/issue-171-demand-gravity-f401-ratchet
-        agent/issue-171-demand-learning-i001-ratchet
-        agent/issue-171-demand-seo-i001-ratchet
-        agent/issue-171-guardrails-f401-ratchet
-        agent/issue-171-guardrails-f401-ratchet-v2
-        agent/issue-171-infra-f401-ratchet
-        agent/issue-171-intent-i001-ratchet
-        agent/issue-171-kernel-f401-ratchet
-        agent/issue-171-ports-e402-ratchet
-        agent/issue-171-presentation-i001-ratchet
-        agent/issue-171-release-i001-ratchet
-        agent/issue-171-release-i001-ratchet-v2
-        agent/issue-171-routing-i001-ratchet
-        agent/issue-171-routing-i001-ratchet-v2
-        agent/issue-171-scripts-i001-ratchet
-        agent/issue-171-shared-f401-ratchet
-        agent/issue-173-capability-operator-view-consolidation
-        agent/issue-173-capability-operator-view-consolidation-clean
-        agent/issue-173-provider-admin-metadata-consolidation
-        agent/issue-173-provider-admin-test-consolidation
-        agent/issue-173-provider-admin-wave-consolidation-v2
-        agent/issue-173-security-runtime-summary-consolidation
-        agent/issue-236-live-read-telegram-hubspot
-        agent/issue-236-multichannel-webhook-hardening
-        agent/issue-236-owner-provider-workspace
-        agent/issue-236-owner-session-bootstrap
-        agent/issue-236-owner-workspace-frontend
-        agent/issue-236-owner-workspace-frontend-clean
-        agent/issue-236-owner-workspace-integrated
-        agent/issue-236-provider-connection-status
-        agent/issue-236-server-owned-onboarding-identity
-        agent/issue-239-multichannel-provider-parity
-        agent/issue-241-whatsapp-http-truth-certification
-        agent/issue-241-whatsapp-http-truth-clean
-        agent/product-onboarding-integration-marketplace
-        agent/product-self-service-workspace
-        agent/tenancy-f401-ratchet
-        agent/branch-gc-bootstrap
     steps:
       - name: Check out exact main commit
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ github.sha }}
-          persist-credentials: false
+          persist-credentials: true
+          fetch-depth: 1
 
       - name: Verify exact checkout
         env:
@@ -178,69 +100,70 @@ jobs:
         shell: bash
         run: python -m scripts.ci.cli --gate doctor
 
-      - name: Delete only audited stale agent branches
+      - name: Delete only audited stale agent revisions
         shell: bash
         run: |
-          python - <<'PY'
-          from __future__ import annotations
+          set -euo pipefail
+          manifest=".github/branch-prune-audit.txt"
+          [ -f "$manifest" ] || { echo "missing audited branch manifest" >&2; exit 64; }
 
-          import json
-          import os
-          import urllib.error
-          import urllib.parse
-          import urllib.request
+          delete_if_exact() {
+            local expected_sha="$1"
+            local branch="$2"
+            local ref current_sha
 
-          repository = os.environ["REPOSITORY"]
-          default_branch = os.environ["DEFAULT_BRANCH"]
-          token = os.environ["GH_TOKEN"]
-          branches = [
-              line.strip()
-              for line in os.environ["BOOTSTRAP_BRANCHES"].splitlines()
-              if line.strip()
-          ]
-          if len(branches) != len(set(branches)):
-              raise RuntimeError("bootstrap branch allowlist contains duplicates")
-          if default_branch in branches:
-              raise RuntimeError("default branch must never be pruned")
-          invalid = [branch for branch in branches if not branch.startswith("agent/")]
-          if invalid:
-              raise RuntimeError(f"non-agent refs in bootstrap allowlist: {invalid}")
+            case "$branch" in
+              agent/*) ;;
+              *) echo "invalid audited ref outside agent namespace: $branch" >&2; return 64 ;;
+            esac
+            if [ "$branch" = "$DEFAULT_BRANCH" ]; then
+              echo "default branch must never be pruned" >&2
+              return 64
+            fi
+            if [ "${#expected_sha}" -ne 40 ] || [[ "$expected_sha" =~ [^0-9a-f] ]]; then
+              echo "invalid audited SHA for $branch: $expected_sha" >&2
+              return 64
+            fi
 
-          api_root = f"https://api.github.com/repos/{repository}"
-          headers = {
-              "Accept": "application/vnd.github+json",
-              "Authorization": f"Bearer {token}",
-              "X-GitHub-Api-Version": "2022-11-28",
+            ref="refs/heads/$branch"
+            if git push origin \
+              --force-with-lease="$ref:$expected_sha" \
+              ":$ref"; then
+              echo "deleted=$branch sha=$expected_sha"
+              return 0
+            fi
+
+            current_sha="$(git ls-remote origin "$ref" | awk 'NR == 1 { print $1 }')"
+            if [ -z "$current_sha" ]; then
+              echo "already_absent=$branch"
+              return 0
+            fi
+            if [ "$current_sha" != "$expected_sha" ]; then
+              echo "preserved_changed_ref=$branch expected=$expected_sha current=$current_sha"
+              return 0
+            fi
+
+            echo "atomic deletion failed while $branch still points to audited SHA $expected_sha" >&2
+            return 1
           }
 
-          def request(method: str, url: str):
-              req = urllib.request.Request(url, method=method, headers=headers)
-              with urllib.request.urlopen(req, timeout=30) as response:
-                  payload = response.read()
-                  return json.loads(payload) if payload else None
+          seen=""
+          count=0
+          while read -r expected_sha branch extra; do
+            [ -n "$expected_sha" ] || continue
+            if [ -z "${branch:-}" ] || [ -n "${extra:-}" ]; then
+              echo "malformed audited branch entry" >&2
+              exit 64
+            fi
+            case " $seen " in
+              *" $branch "*) echo "duplicate audited branch: $branch" >&2; exit 64 ;;
+            esac
+            seen="$seen $branch"
+            count=$((count + 1))
+            delete_if_exact "$expected_sha" "$branch"
+          done < "$manifest"
 
-          for branch in branches:
-              encoded_ref = urllib.parse.quote(f"heads/{branch}", safe="")
-              try:
-                  request("GET", f"{api_root}/git/ref/{encoded_ref}")
-              except urllib.error.HTTPError as exc:
-                  if exc.code == 404:
-                      print(f"already_absent={branch}")
-                      continue
-                  detail = exc.read().decode("utf-8", errors="replace")
-                  raise RuntimeError(
-                      f"failed to verify {branch}: HTTP {exc.code}: {detail}"
-                  ) from exc
-
-              try:
-                  request("DELETE", f"{api_root}/git/refs/{encoded_ref}")
-              except urllib.error.HTTPError as exc:
-                  if exc.code == 404:
-                      print(f"already_absent_after_verify={branch}")
-                      continue
-                  detail = exc.read().decode("utf-8", errors="replace")
-                  raise RuntimeError(
-                      f"failed to delete {branch}: HTTP {exc.code}: {detail}"
-                  ) from exc
-              print(f"deleted={branch}")
-          PY
+          if [ "$count" -ne 49 ]; then
+            echo "audited branch manifest count changed: $count" >&2
+            exit 64
+          fi
