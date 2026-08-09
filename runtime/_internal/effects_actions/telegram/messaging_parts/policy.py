@@ -39,13 +39,17 @@ def _apply_capability_routing(self, *, ordered_channels: tuple[str, ...], discip
     )
 
 
+def _execution_blocked(meta: object) -> bool:
+    return isinstance(meta, dict) and str(meta.get("mode") or "").strip().casefold() == "blocked"
+
+
 def _with_health_feedback(self, *, send_once):
     updater = resolve_capability_telemetry_updater(self)
 
     def _observed(selected_msg):
         ok, meta = send_once(selected_msg)
         details = dict(meta or {})
-        if not str(details.get("transport_guard_reason") or "").strip():
+        if not _execution_blocked(details):
             updater.record_delivery_outcome(
                 channel=str(selected_msg.channel),
                 ok=bool(ok),
@@ -56,14 +60,14 @@ def _with_health_feedback(self, *, send_once):
     return _observed
 
 
-def _message_guard_reason(msg) -> str:
+def _message_guard_blocked(msg) -> bool:
     guard = getattr(msg, "transport_guard", None)
     if not callable(guard):
-        return ""
+        return False
     try:
-        return str(guard(msg) or "").strip()
+        return bool(str(guard(msg) or "").strip())
     except Exception:
-        return "transport_guard_error"
+        return True
 
 
 def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
@@ -110,7 +114,7 @@ def execute_delivery_path(self, *, msg, channel_policy, send_once):
             return execute_with_policy(self, msg=msg, channel_policy=channel_policy, send_once=send_once)
         except MessagingPolicyDisciplineViolation as exc:
             return False, {"policy": {"ordered_channels": [], "reason_codes": ["discipline_violation"], "terminal_reason": "discipline_violation", "attempts": []}, "error": exc.__class__.__name__}
-    guard_reason = _message_guard_reason(msg)
-    if guard_reason:
-        return False, {"transport_guard_reason": guard_reason, "policy": {"ordered_channels": [], "reason_codes": [guard_reason], "terminal_reason": guard_reason, "attempts": []}}
-    return send_once(msg)
+    if _message_guard_blocked(msg):
+        return False, {}
+    ok, meta = send_once(msg)
+    return (False, {}) if _execution_blocked(meta) else (ok, meta)
