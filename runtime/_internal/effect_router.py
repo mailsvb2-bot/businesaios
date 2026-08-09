@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -26,15 +26,30 @@ def _optional_text(value: Any) -> str | None:
     return text or None
 
 
+def _reserved_internal_field(name: object) -> bool:
+    text = str(name)
+    return text == "transport_guard_reason" or text.startswith("_transport_guard")
+
+
+def _sanitize_internal_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {
+            key: _sanitize_internal_value(item)
+            for key, item in value.items()
+            if not _reserved_internal_field(key)
+        }
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        cleaned = [_sanitize_internal_value(item) for item in value]
+        return tuple(cleaned) if isinstance(value, tuple) else cleaned
+    return value
+
+
 def _sanitize_internal_result(key: EffectActionType, raw_result: object) -> dict[str, Any]:
     result = dict(raw_result or {}) if isinstance(raw_result, dict) else {}
     if key is EffectActionType.TELEGRAM_SEND_MESSAGE and str(result.get("mode") or "").strip().casefold() in {"blocked", "guarded_inflight"}:
         return {"ok": False, "mode": "blocked"}
-    result.pop("transport_guard_reason", None)
-    for field_name in tuple(result):
-        if str(field_name).startswith("_transport_guard"):
-            result.pop(field_name, None)
-    return result
+    sanitized = _sanitize_internal_value(result)
+    return dict(sanitized) if isinstance(sanitized, Mapping) else {}
 
 
 @dataclass(slots=True)
