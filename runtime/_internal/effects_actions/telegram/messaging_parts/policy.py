@@ -17,6 +17,7 @@ from runtime.messaging_policy.read_models import parse_delivery_snapshot, parse_
 from runtime.messaging_policy.resolver import MessagingPolicyResolver
 from runtime.messaging_policy_events.execute_with_events import execute_policy_plan_with_events
 from runtime.messaging_policy_events.runtime_bridge import build_policy_event_recorder_from_runtime
+from runtime.messaging.outbound_message import transport_guard_blocks
 from runtime.messaging_preferences.load_preference import load_channel_preference
 
 
@@ -59,15 +60,6 @@ def _with_health_feedback(self, *, send_once):
 
     return _observed
 
-
-def _message_guard_blocked(msg) -> bool:
-    guard = getattr(msg, "transport_guard", None)
-    if not callable(guard):
-        return False
-    try:
-        return bool(str(guard(msg) or "").strip())
-    except Exception:
-        return True
 
 
 def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
@@ -114,7 +106,7 @@ def execute_delivery_path(self, *, msg, channel_policy, send_once):
             return execute_with_policy(self, msg=msg, channel_policy=channel_policy, send_once=send_once)
         except MessagingPolicyDisciplineViolation as exc:
             return False, {"policy": {"ordered_channels": [], "reason_codes": ["discipline_violation"], "terminal_reason": "discipline_violation", "attempts": []}, "error": exc.__class__.__name__}
-    if _message_guard_blocked(msg):
+    if transport_guard_blocks(getattr(msg, "transport_guard", None), msg):
         return False, {}
     ok, meta = send_once(msg)
     return (False, {}) if _execution_blocked(meta) else (ok, meta)
