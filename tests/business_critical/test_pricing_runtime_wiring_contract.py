@@ -89,8 +89,11 @@ def test_boot_builds_the_existing_canonical_pricing_services() -> None:
     assert "ctx.set_value('pricing_approval_execution_gate', _build_pricing_approval_gate()" in source
 
 
-def test_configured_memory_approval_backend_is_shared_with_control_plane(monkeypatch) -> None:
+def test_configured_memory_approval_backend_is_shared_with_control_plane(monkeypatch, tmp_path) -> None:
+    poisoned_store = tmp_path / "approvals.json"
+    poisoned_store.write_text("{not-json", encoding="utf-8")
     monkeypatch.setenv("BUSINESAIOS_APPROVAL_STORE_BACKEND", "memory")
+    monkeypatch.setenv("BUSINESAIOS_APPROVAL_STORE_PATH", str(poisoned_store))
     control_plane = ApprovalRouteHandlers()
     pricing_gate = _build_pricing_approval_gate()
     assert pricing_gate._approval_workflow._store is control_plane.approval_store
