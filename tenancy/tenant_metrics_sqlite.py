@@ -8,7 +8,7 @@ from threading import RLock
 from typing import Mapping
 
 from core.tenancy.normalization import require_tenant_id
-from runtime.platform.event_store.sqlite_platform import SQLITE_ROW_FACTORY, SQLiteConnection, SQLiteRow, connect_sqlite
+from runtime.platform.event_store.sqlite_platform import SQLITE_ROW_FACTORY, SQLiteConnection, connect_sqlite
 from tenancy.tenant_metrics_contract import (
     TenantMetricAggregate,
     TenantMetricPoint,
