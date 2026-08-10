@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from config.scoring_behavior_policy import AcquisitionFeasibilityPolicy, DEFAULT_ACQUISITION_FEASIBILITY_POLICY
 from acquisition.budget_optimizer import BudgetOptimizer, BudgetOptimizerInputs, BudgetRecommendation
