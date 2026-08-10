@@ -34,7 +34,7 @@ class GrowthStrategyServicePolicy:
     def partnership_constraints_exclude(self, constraints: tuple[str, ...]) -> bool:
         for raw in constraints:
             text = str(raw or "").strip().casefold()
-            if re.search(r"\b(?:no|without|avoid(?:\s+using)?|do\s+not\s+use|don['’]?t\s+use|must\s+not\s+use|exclude(?:\s+all)?)\s+(?:(?:any|all|paid)\s+){0,2}(?:partnerships?|partners?\b|partner\s+(?:channels?|acquisition|outreach|program|strategy))", text):
+            if re.search(r"\b(?:no|without|avoid(?:\s+using)?|do\s+not\s+use|don['’]?t\s+use|must\s+not\s+use|never\s+use|exclude(?:\s+all)?)\s+(?:(?:any|all|paid)\s+){0,2}(?:partnerships?|partners?\b|partner\s+(?:channels?|acquisition|outreach|program|strategy))", text):
                 return True
             if re.search(r"\b(?:partnerships?|partners?)\s+(?:are\s+)?(?:forbidden|prohibited|not\s+allowed)\b", text):
                 return True
