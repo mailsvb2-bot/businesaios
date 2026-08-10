@@ -124,4 +124,4 @@ def test_visual_actions_are_known_and_keep_canonical_execution_contracts() -> No
     assert runtime_generate.requires_idempotency_key is True
     assert runtime_poll.execution_category == "advisory"
     assert runtime_poll.external_confirmation_mode == "not_required"
-    assert runtime_poll.requires_idempotency_key is False
+    assert runtime_poll.requires_idempotency_key is True
