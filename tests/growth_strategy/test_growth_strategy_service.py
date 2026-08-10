@@ -153,6 +153,7 @@ def test_explicit_partnership_exclusion_overrides_referral_and_zero_budget(tmp_p
         svc = GrowthStrategyService(event_store=store, llm=None)
         goals = (
             GrowthGoalV1(primary_stage="referral", constraints=("no partnerships",)),
+            GrowthGoalV1(primary_stage="referral", constraints=("never use partnerships",)),
             GrowthGoalV1(primary_stage="acquisition", constraints=("budget 0", "без партнёров")),
             GrowthGoalV1(primary_stage="acquisition", constraints=("zero paid", "не использовать партнерства")),
         )
@@ -217,12 +218,27 @@ def test_required_partnership_visibility_is_a_render_projection_not_ranking_over
         visible = _visible_hypotheses(plan, limit=8)
         assert len(visible) == 8
         assert any(h.channel == "partnerships" for h in visible)
-        rendered = _render_plan(plan)
+        rendered = _render_plan(plan, limit=8)
         assert "[referral/partnerships]" in rendered
         assert "High score hypothesis 0" in rendered
         assert "High score hypothesis 7" not in rendered
         assert len(plan.top_hypotheses) == 9
         assert plan.top_hypotheses[8].channel == "partnerships"
+
+        limited = svc.generate_backlog(
+            tenant_id="t1",
+            user_id="u1",
+            decision_id="partner-visible-limited-d",
+            correlation_id="partner-visible-limited-c",
+            goal=GrowthGoalV1(primary_stage="referral"),
+            n=3,
+        )
+        assert len(limited.top_hypotheses) == 4
+        assert limited.top_hypotheses[3].channel == "partnerships"
+        limited_rendered = _render_plan(limited, limit=3)
+        assert limited_rendered.count("   id=") == 3
+        assert "[referral/partnerships]" in limited_rendered
+        assert len(limited.top_hypotheses) == 4
 
 
 def test_llm_partnership_cannot_smuggle_executable_authority(tmp_path: Path):
