@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from contracts.supply import BusinessSupplyProfile
+
 
 class BusinessStatusIndex:
     def lookup(self, profiles: tuple[BusinessSupplyProfile, ...], query: str) -> tuple[BusinessSupplyProfile, ...]:
