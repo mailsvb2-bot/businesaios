@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.ci import execution, reports as reports_module
+from scripts.ci import execution
+from scripts.ci import reports as reports_module
 from scripts.ci.contracts import ExecutionPlan, ExecutionReport, ExecutionRequest, StepResult
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.reports import release_verdict
