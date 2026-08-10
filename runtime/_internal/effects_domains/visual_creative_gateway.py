@@ -15,7 +15,7 @@ def visual_creative_idempotency_key(*, tenant_id: str, decision_id: str, kind: s
     visual_kind = str(kind or "").strip().lower()
     if not tenant or not decision or visual_kind not in {"image", "video"}:
         raise ValueError("visual_creative_idempotency_inputs_required")
-    digest = hashlib.sha256(f"{tenant}|{decision}|{visual_kind}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{tenant}|{decision}|{visual_kind}".encode()).hexdigest()
     return f"baios:{digest}"
 
 
