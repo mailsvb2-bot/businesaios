@@ -14,7 +14,7 @@ from scripts.ci.plan_registry import (
     requires_release_dependency_lock_environment,
     requires_release_proof_environment,
 )
-from scripts.ci.reports import write_release_verdict, write_report
+from scripts.ci.reports import release_verdict, write_release_verdict, write_report
 from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state
 from scripts.ci.step_registry import handler_for_step
 from scripts.ci.summary import write_failure_summary
@@ -97,19 +97,17 @@ def execute(request: ExecutionRequest) -> ExecutionReport:
             break
     _cleanup_after_gate(report)
 
-    if request.emit_report:
-        verdict_path = reports_dir() / "release-verdict.json"
-        verdict_status = write_release_verdict(verdict_path, report)
-        if request.gate == "release" and verdict_status != "PASS":
-            report.add(
-                StepResult(
-                    name="release-verdict",
-                    status="failed",
-                    message=f"release blocked by canonical verdict: {verdict_status}",
-                    duration_ms=0,
-                )
+    verdict_status = str(release_verdict(report)["status"])
+    if request.gate == "release" and verdict_status != "PASS":
+        report.add(
+            StepResult(
+                name="release-verdict", status="failed",
+                message=f"release blocked by canonical verdict: {verdict_status}", duration_ms=0,
             )
-            write_release_verdict(verdict_path, report)
+        )
+
+    if request.emit_report:
+        write_release_verdict(reports_dir() / "release-verdict.json", report)
         write_report(reports_dir() / f"{request.gate}.report.json", report)
         if request.emit_junit:
             write_junit_xml(junit_dir() / f"{request.gate}.xml", report)
