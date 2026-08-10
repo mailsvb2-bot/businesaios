@@ -11,6 +11,7 @@ from scripts.ci.subprocess_io import isolated_cargo_target, run_command
 from scripts.ci.user_scenario_targets import (
     USER_SCENARIO_EVIDENCE_NAME,
     USER_SCENARIO_MARK_EXPRESSION,
+    USER_SCENARIO_RUST_FIXTURE,
     USER_SCENARIOS,
 )
 
@@ -21,8 +22,7 @@ def _evidence(status: str, message: str, **details) -> dict:
 
 def _rust_evidence() -> dict:
     cargo, root = shutil.which("cargo"), repo_root()
-    crate = root / "rust" / "businessaios_safety_core"
-    fixture = root / "safety_fixtures" / "businessaios_user_scenario_matrix_golden.json"
+    crate, fixture = root / "rust" / "businessaios_safety_core", root / USER_SCENARIO_RUST_FIXTURE
     if cargo is None:
         return _evidence("NOT_PROVEN", "cargo is required for rust user scenario matrix", cases=[])
     missing = "rust safety core crate" if not crate.exists() else "rust user scenario fixture" if not fixture.exists() else None
