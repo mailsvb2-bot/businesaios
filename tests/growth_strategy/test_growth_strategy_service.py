@@ -7,7 +7,7 @@ from pathlib import Path
 from core.growth.strategy.contracts import GROWTH_PARTNERSHIP_VISIBILITY_NOTE, GrowthGoalV1
 from core.growth.strategy.service import GrowthStrategyService
 from core.growth.strategy.signals import build_signals
-from runtime.handler_impl.growth_strategy_generate import _visible_hypotheses
+from runtime.handler_impl.growth_strategy_generate import _render_plan, _visible_hypotheses
 from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
 
@@ -217,6 +217,10 @@ def test_required_partnership_visibility_is_a_render_projection_not_ranking_over
         visible = _visible_hypotheses(plan, limit=8)
         assert len(visible) == 8
         assert any(h.channel == "partnerships" for h in visible)
+        rendered = _render_plan(plan)
+        assert "[referral/partnerships]" in rendered
+        assert "High score hypothesis 0" in rendered
+        assert "High score hypothesis 7" not in rendered
         assert len(plan.top_hypotheses) == 9
         assert plan.top_hypotheses[8].channel == "partnerships"
 
