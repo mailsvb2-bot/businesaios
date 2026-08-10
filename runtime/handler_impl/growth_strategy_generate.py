@@ -93,7 +93,7 @@ def handle_growth_strategy_generate(
         correlation_id=correlation_id,
         tenant_id=tenant_id,
         user_id=user_id,
-        text=_render_plan(plan),
+        text=_render_plan(plan, limit=max(0, min(8, n))),
         reply_markup=_menu_markup(),
         callback_query_id=body.get("callback_query_id"),
         critical=False,
@@ -164,7 +164,7 @@ def _visible_hypotheses(plan, *, limit: int = 8):
     return tuple(visible)
 
 
-def _render_plan(plan) -> str:
+def _render_plan(plan, *, limit: int = 8) -> str:
     signals = plan.signals
     lines = [
         "🧠 AI Growth Strategy — backlog гипотез",
@@ -175,7 +175,7 @@ def _render_plan(plan) -> str:
     if signals.top_channels:
         lines.append("Топ-каналы: " + ", ".join(signals.top_channels))
     lines.append("")
-    for index, hypothesis in enumerate(_visible_hypotheses(plan), 1):
+    for index, hypothesis in enumerate(_visible_hypotheses(plan, limit=limit), 1):
         lines.append(f"{index}) [{hypothesis.stage}/{hypothesis.channel}] {hypothesis.title}")
         if hypothesis.expected_impact:
             lines.append(f"   эффект: {hypothesis.expected_impact}")
