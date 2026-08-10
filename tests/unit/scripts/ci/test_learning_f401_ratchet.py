@@ -3,7 +3,6 @@ from __future__ import annotations
 import learning
 from scripts.ci.step_quality import _RATCHETED_STRICT_DEBT
 
-
 _EXPECTED_PUBLIC_EXPORTS = [
     'registry',
     'ArtifactRegistry',
