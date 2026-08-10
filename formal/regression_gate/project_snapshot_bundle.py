@@ -6,10 +6,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Mapping
 
-from config.execution_contract import (
-    CANONICAL_DECISION_PATH,
-    CANONICAL_OPTIMIZATION_TARGET,
-)
 from core.actions.names import ACTION_ROUTE_LEAD_V1
 from core.ai import (
     _reset_decision_core_singleton_for_tests,
