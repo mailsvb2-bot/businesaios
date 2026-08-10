@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request_target' && format('pr-{0}-closed-unmerged', github.event.pull_request.number) || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -63,13 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/ci/check_requirements_lock.py
-          python -m pytest -q \
-            tests/security/test_no_secrets_committed.py \
-            tests/lock/test_tracked_files_fallback.py \
-            tests/lock/test_runtime_data_artifacts_not_tracked.py \
-            tests/lock/test_runtime_release_package_hygiene.py \
-            tests/business_critical/test_rust_safety_dependency_lock.py \
-            tests/unit/execution/test_evidence_identity_determinism.py
+          python -m pytest -q tests/security/test_no_secrets_committed.py tests/lock/test_tracked_files_fallback.py tests/lock/test_runtime_data_artifacts_not_tracked.py tests/lock/test_runtime_release_package_hygiene.py tests/business_critical/test_rust_safety_dependency_lock.py tests/unit/execution/test_evidence_identity_determinism.py
 
   test:
     if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
