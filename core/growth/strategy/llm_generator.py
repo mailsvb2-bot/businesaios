@@ -18,21 +18,31 @@ from .contracts import (
     GrowthSignalV1,
 )
 
-_GROWTH_CHANNEL_OPTIONS = "|".join(str(value) for value in get_args(Channel))
+_GROWTH_CHANNEL_VALUES = tuple(str(value) for value in get_args(Channel))
+_GROWTH_CHANNEL_OPTIONS = "|".join(_GROWTH_CHANNEL_VALUES)
+_GROWTH_CHANNEL_SET = frozenset(_GROWTH_CHANNEL_VALUES)
+_GROWTH_CHANNEL_ALIASES = {"partnership": "partnerships"}
 _SUPPORTED_MESSAGING_CHANNELS = ", ".join(GROWTH_MESSAGING_CHANNELS)
 
 
-def generate_hypotheses(llm: Any, *, tenant_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int = 8, model: str = "") -> tuple[GrowthHypothesisV1, ...]:
+def generate_hypotheses(llm: Any, *, tenant_id: str, goal: GrowthGoalV1, signals: GrowthSignalV1, n: int = 8, model: str = "", excluded_channels: tuple[str, ...] = ()) -> tuple[GrowthHypothesisV1, ...]:
     try:
         req = _build_request(tenant_id=tenant_id, goal=goal, signals=signals, n=int(n), model=str(model or ""))
         resp = _generate_sync(llm, req)
         items = _parse_json_array(resp)
+        blocked = frozenset(str(channel).strip().lower() for channel in excluded_channels)
         out: list[GrowthHypothesisV1] = []
         now = int(time.time() * 1000)
+        partner_seen = False
         for it in items:
             h = _coerce_hypothesis(it, tenant_id=tenant_id, now_ms=now)
-            if h:
-                out.append(h)
+            if not h or h.channel in blocked:
+                continue
+            if h.channel == "partnerships":
+                if partner_seen:
+                    continue
+                partner_seen = True
+            out.append(h)
         return tuple(out[: int(n)])
     except Exception:
         swallow(__name__, "core/growth/strategy/llm_generator.py")
@@ -134,8 +144,9 @@ def _coerce_hypothesis(d: dict[str, Any], *, tenant_id: str, now_ms: int) -> Gro
     try:
         stage = str(d.get("stage") or "acquisition").strip().lower()
         channel = str(d.get("channel") or "organic").strip().lower()
+        channel = _GROWTH_CHANNEL_ALIASES.get(channel, channel)
         title = str(d.get("title") or "").strip()
-        if not title:
+        if not title or channel not in _GROWTH_CHANNEL_SET:
             return None
         return GrowthHypothesisV1(
             hypothesis_id=str(uuid.uuid4()),

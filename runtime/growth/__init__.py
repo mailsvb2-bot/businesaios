@@ -7,6 +7,7 @@ from runtime.package_alias_namespace import build_package_alias_namespace
 CANON_RUNTIME_PACKAGE_ALIAS_NAMESPACE = True
 
 _PUBLIC_ATTRS = {
+    'GROWTH_PARTNERSHIP_VISIBILITY_NOTE': ('core.growth.strategy.contracts', 'GROWTH_PARTNERSHIP_VISIBILITY_NOTE'),
     'GrowthGoalV1': ('core.growth.strategy.contracts', 'GrowthGoalV1'),
     'GrowthScoringContext': ('core.growth.contracts', 'GrowthScoringContext'),
     'GrowthService': ('core.growth.service', 'GrowthService'),

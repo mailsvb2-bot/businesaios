@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from execution.verification.evidence_types import evidence_status_is_positive
-from runtime.growth import GrowthGoalV1, GrowthStrategyService
+from runtime.growth import GROWTH_PARTNERSHIP_VISIBILITY_NOTE, GrowthGoalV1, GrowthStrategyService
 from runtime.ports.effects import EffectsPort
 
 CANON_HANDLER_IMPLEMENTATION_OWNER = True
@@ -93,7 +93,7 @@ def handle_growth_strategy_generate(
         correlation_id=correlation_id,
         tenant_id=tenant_id,
         user_id=user_id,
-        text=_render_plan(plan),
+        text=_render_plan(plan, limit=max(0, min(8, n))),
         reply_markup=_menu_markup(),
         callback_query_id=body.get("callback_query_id"),
         critical=False,
@@ -150,7 +150,21 @@ def _parse_goal(data: dict[str, Any]) -> GrowthGoalV1:
         return GrowthGoalV1()
 
 
-def _render_plan(plan) -> str:
+def _visible_hypotheses(plan, *, limit: int = 8):
+    ranked = tuple(plan.top_hypotheses)
+    visible = list(ranked[: max(0, int(limit))])
+    if not visible or GROWTH_PARTNERSHIP_VISIBILITY_NOTE not in set(plan.notes):
+        return tuple(visible)
+    if any(hypothesis.channel == "partnerships" for hypothesis in visible):
+        return tuple(visible)
+    for hypothesis in ranked[len(visible) :]:
+        if hypothesis.channel == "partnerships":
+            visible[-1] = hypothesis
+            break
+    return tuple(visible)
+
+
+def _render_plan(plan, *, limit: int = 8) -> str:
     signals = plan.signals
     lines = [
         "🧠 AI Growth Strategy — backlog гипотез",
@@ -161,7 +175,7 @@ def _render_plan(plan) -> str:
     if signals.top_channels:
         lines.append("Топ-каналы: " + ", ".join(signals.top_channels))
     lines.append("")
-    for index, hypothesis in enumerate(plan.top_hypotheses[:8], 1):
+    for index, hypothesis in enumerate(_visible_hypotheses(plan, limit=limit), 1):
         lines.append(f"{index}) [{hypothesis.stage}/{hypothesis.channel}] {hypothesis.title}")
         if hypothesis.expected_impact:
             lines.append(f"   эффект: {hypothesis.expected_impact}")
