@@ -4,11 +4,12 @@ import json
 import os
 from pathlib import Path
 
+from scripts.ci import step_ids as _step_ids
 from scripts.ci.contracts import ExecutionReport
 from scripts.ci.fs import safe_write_text
 
 _STATUS = {"passed": "PASS", "failed": "FAIL", "skipped": "NOT_PROVEN"}
-_SCENARIO_STEP = "user-scenario-gate"
+_SCENARIO_STEP = _step_ids.user_scenario_gate()
 
 
 def _write_json(path: Path, payload: dict) -> None:
