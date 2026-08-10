@@ -26,7 +26,7 @@ def _nested_evidence_status(evidence: dict) -> str:
     rust, scenarios = evidence.get("rust_matrix"), evidence.get("scenarios")
     try:
         expected = json.loads((repo_root() / USER_SCENARIO_RUST_FIXTURE).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return "FAIL"
     if evidence.get("schema") != "businessaios_user_scenario_evidence.v1" or not isinstance(rust, dict) or not isinstance(scenarios, list):
         return "FAIL"
@@ -50,7 +50,7 @@ def _scenario_proof(step_status: str, exact_sha: str | None) -> dict:
     except FileNotFoundError:
         proof["status"] = "NOT_PROVEN" if step_status == "PASS" else step_status
         return proof
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
         proof["status"] = "FAIL"
         return proof
     if not isinstance(evidence, dict):
