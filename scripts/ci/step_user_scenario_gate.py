@@ -8,7 +8,11 @@ from scripts.ci.fs import safe_write_text
 from scripts.ci.paths import reports_dir, repo_root
 from scripts.ci.pytest_tools import run_pytest_with_report
 from scripts.ci.subprocess_io import isolated_cargo_target, run_command
-from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME, USER_SCENARIO_MARK_EXPRESSION, USER_SCENARIOS
+from scripts.ci.user_scenario_targets import (
+    USER_SCENARIO_EVIDENCE_NAME,
+    USER_SCENARIO_MARK_EXPRESSION,
+    USER_SCENARIOS,
+)
 
 
 def _evidence(status: str, message: str, **details) -> dict:
