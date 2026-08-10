@@ -15,6 +15,7 @@ MANDATORY = (
 MERGE_SHA = "github.event.pull_request.merge_commit_sha"
 TARGET_ENV = "BAIOS_CI_TARGET_SHA"
 CLOSED_GUARD = "github.event.action != 'closed' || github.event.pull_request.merged == true"
+TARGET_SCOPED_CONCURRENCY = "group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.ref }}"
 
 
 def test_mandatory_ci_runs_on_merged_pr_and_targets_exact_main_commit() -> None:
@@ -29,6 +30,13 @@ def test_mandatory_ci_runs_on_merged_pr_and_targets_exact_main_commit() -> None:
         assert CLOSED_GUARD in text
         assert "ref: ${{ env.BAIOS_CI_TARGET_SHA }}" in text
         assert "EXPECTED_SHA: ${{ env.BAIOS_CI_TARGET_SHA }}" in text
+
+
+def test_mandatory_ci_concurrency_is_scoped_to_target_identity() -> None:
+    for relative in MANDATORY:
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        assert TARGET_SCOPED_CONCURRENCY in text
+        assert "group: ${{ github.workflow }}-${{ github.ref }}" not in text
 
 
 def test_targeted_ci_uses_pre_change_base_for_push_and_merged_events() -> None:
