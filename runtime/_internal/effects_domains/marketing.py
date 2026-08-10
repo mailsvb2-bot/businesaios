@@ -4,6 +4,7 @@ from typing import Any
 
 from runtime._internal.effects_clients.visual_gateway_client import visual_gateway_json
 from runtime._internal.effects_domains.visual_creative_gateway import (
+    assert_visual_creative_scope,
     visual_creative_evidence,
     visual_creative_idempotency_key,
     visual_creative_job_payload,
@@ -194,8 +195,7 @@ class MarketingEffectsMixin:
             transport=self.http_transport,
         )
         job = visual_creative_job_payload(raw)
-        if job["scope_id"] != tenant:
-            raise RuntimeError("visual_gateway_scope_mismatch")
+        assert_visual_creative_scope(tenant_id=tenant, job=job)
         self.event_log.emit(
             event_type=(
                 "visual_creative_generated"
@@ -251,8 +251,7 @@ class MarketingEffectsMixin:
                 transport=self.http_transport,
             )
         )
-        if job["scope_id"] != tenant:
-            raise RuntimeError("visual_gateway_scope_mismatch")
+        assert_visual_creative_scope(tenant_id=tenant, job=job)
         self.event_log.emit(
             event_type="visual_creative_polled",
             source="visual_creative",
