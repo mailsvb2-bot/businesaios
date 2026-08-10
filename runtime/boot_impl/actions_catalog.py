@@ -22,7 +22,7 @@ SPEC_ROWS: tuple[tuple[str, str, bool, str, int, int], ...] = (
     ("ads_rl_report@v1", "runtime.handlers.ads_rl_report:handle_ads_rl_report", True, "ads", 60, 60),
     ("ads_autopilot_tick@v1", "runtime.handlers.ads_autopilot_tick:handle_ads_autopilot_tick", True, "ads", 30, 30),
     ("visual_creative_generate@v1", "runtime.handlers.visual_creative_gateway:handle_generate_visual_creative", True, "ads", 20, 10),
-    ("visual_creative_poll@v1", "runtime.handlers.visual_creative_gateway:handle_poll_visual_creative", False, "ads", 60, 30),
+    ("visual_creative_poll@v1", "runtime.handlers.visual_creative_gateway:handle_poll_visual_creative", True, "ads", 60, 30),
     (ACTION_AI_CEO_PLAN_V1, "runtime.handlers.ai_ceo_plan:handle_ai_ceo_plan", True, "llm", 60, 30),
     ("autopilot_decision@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
     ("autopilot_run_started@v1", "runtime.boot.system_builder:inline", True, "general", 120, 60),
