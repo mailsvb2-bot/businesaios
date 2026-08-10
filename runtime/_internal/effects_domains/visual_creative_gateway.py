@@ -43,6 +43,11 @@ def visual_creative_job_payload(value: object) -> dict[str, Any]:
     return job
 
 
+def assert_visual_creative_scope(*, tenant_id: str, job: Mapping[str, Any]) -> None:
+    if str(job.get("scope_id") or "") != str(tenant_id or ""):
+        raise RuntimeError("visual_gateway_scope_mismatch")
+
+
 def visual_creative_evidence(*, tenant_id: str, job: Mapping[str, Any]) -> dict[str, Any]:
     accepted = str(job.get("status") or "") != "failed" and bool(job.get("id"))
     completed = str(job.get("status") or "") == "succeeded"
@@ -71,6 +76,7 @@ def visual_creative_evidence(*, tenant_id: str, job: Mapping[str, Any]) -> dict[
 
 
 __all__ = [
+    "assert_visual_creative_scope",
     "visual_creative_evidence",
     "visual_creative_idempotency_key",
     "visual_creative_job_payload",
