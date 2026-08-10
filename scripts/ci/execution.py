@@ -14,39 +14,30 @@ from scripts.ci.plan_registry import (
     requires_release_dependency_lock_environment,
     requires_release_proof_environment,
 )
-from scripts.ci.reports import write_report
+from scripts.ci.reports import release_verdict, write_release_verdict, write_report
 from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state
 from scripts.ci.step_registry import handler_for_step
 from scripts.ci.summary import write_failure_summary
 from scripts.ci.timing import measure_time
 
 _PROOF_ENV_KEYS = (
-    "POSTGRES_LIVE_PROOF_REQUIRED",
-    "CONTAINER_RUNTIME_PROOF_REQUIRED",
-    "CONTAINER_RUNTIME_EVIDENCE_REQUIRED",
-    "REAL_RUNTIME_BOOT_EVIDENCE_REQUIRED",
-    "PRODUCTION_BOOT_PROOF_REQUIRED",
-    "STAGING_RUNTIME_PROOF_REQUIRED",
+    "POSTGRES_LIVE_PROOF_REQUIRED", "CONTAINER_RUNTIME_PROOF_REQUIRED", "CONTAINER_RUNTIME_EVIDENCE_REQUIRED",
+    "REAL_RUNTIME_BOOT_EVIDENCE_REQUIRED", "PRODUCTION_BOOT_PROOF_REQUIRED", "STAGING_RUNTIME_PROOF_REQUIRED",
 )
-
 _RELEASE_RUNTIME_ENV_KEYS = (
-    "ENV",
-    "APP_ENV",
-    "APP_PROFILE",
-    "POSTGRES_RUNTIME_ENABLED",
-    "POSTGRES_EVENT_STORE_ENABLED",
-    "RUN_MIGRATIONS_BEFORE_START",
-    "POSTGRES_APPLY_MIGRATIONS",
-    "BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK",
+    "ENV", "APP_ENV", "APP_PROFILE", "POSTGRES_RUNTIME_ENABLED", "POSTGRES_EVENT_STORE_ENABLED",
+    "RUN_MIGRATIONS_BEFORE_START", "POSTGRES_APPLY_MIGRATIONS", "BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK",
 )
+_RELEASE_RUNTIME_DEFAULTS = {
+    "ENV": "production", "APP_ENV": "production", "APP_PROFILE": "api", "POSTGRES_RUNTIME_ENABLED": "1",
+    "POSTGRES_EVENT_STORE_ENABLED": "1", "RUN_MIGRATIONS_BEFORE_START": "1", "POSTGRES_APPLY_MIGRATIONS": "1",
+}
 
 
 @contextmanager
 def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
     quality_key = "BAIOS_REQUIRE_QUALITY_TOOLS"
-    previous_quality = os.environ.get(quality_key)
-    previous_proof = {key: os.environ.get(key) for key in _PROOF_ENV_KEYS}
-    previous_release_runtime = {key: os.environ.get(key) for key in _RELEASE_RUNTIME_ENV_KEYS}
+    previous = {key: os.environ.get(key) for key in (quality_key, *_PROOF_ENV_KEYS, *_RELEASE_RUNTIME_ENV_KEYS)}
     if requires_release_dependency_lock_environment(gate=gate, step_name=step_name):
         os.environ["BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK"] = "1"
     if step_name == "quality-check" and gate in {"release", "pre-release"}:
@@ -54,27 +45,13 @@ def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
     if requires_release_proof_environment(gate=gate, step_name=step_name):
         for key in _PROOF_ENV_KEYS:
             os.environ[key] = "1"
-        os.environ.setdefault("ENV", "production")
-        os.environ.setdefault("APP_ENV", "production")
-        os.environ.setdefault("APP_PROFILE", "api")
-        os.environ.setdefault("POSTGRES_RUNTIME_ENABLED", "1")
-        os.environ.setdefault("POSTGRES_EVENT_STORE_ENABLED", "1")
-        os.environ.setdefault("RUN_MIGRATIONS_BEFORE_START", "1")
-        os.environ.setdefault("POSTGRES_APPLY_MIGRATIONS", "1")
+        for key, value in _RELEASE_RUNTIME_DEFAULTS.items():
+            os.environ.setdefault(key, value)
         os.environ[quality_key] = "release"
     try:
         yield
     finally:
-        if previous_quality is None:
-            os.environ.pop(quality_key, None)
-        else:
-            os.environ[quality_key] = previous_quality
-        for key, value in previous_proof.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
-        for key, value in previous_release_runtime.items():
+        for key, value in previous.items():
             if value is None:
                 os.environ.pop(key, None)
             else:
@@ -82,42 +59,25 @@ def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
 
 
 def _mutable_cleanup_result(*, name: str, duration_ms: int, removed: list[str]) -> StepResult:
-    message = (
-        f"{name} removed {len(removed)} mutable runtime artifact(s)"
-        if removed
-        else f"{name} found no mutable DB artifacts"
-    )
+    message = f"{name} removed {len(removed)} mutable runtime artifact(s)" if removed else f"{name} found no mutable DB artifacts"
     return StepResult(name=name, status="passed", message=message, duration_ms=duration_ms)
 
 
-def _cleanup_before_lock_tests(report: ExecutionReport, *, next_step_name: str) -> None:
-    if next_step_name != "lock-tests":
-        return
-    if report.gate not in {"fast", "full", "release", "pre-push", "pre-release", "business-critical"}:
-        return
+def _cleanup_runtime_state(report: ExecutionReport, name: str) -> None:
     with measure_time() as watch:
         removed = cleanup_ci_runtime_state()
-    report.add(
-        _mutable_cleanup_result(
-            name="pre-lock-runtime-artifact-cleanup",
-            duration_ms=watch.duration_ms,
-            removed=removed,
-        )
-    )
+    report.add(_mutable_cleanup_result(name=name, duration_ms=watch.duration_ms, removed=removed))
+
+
+def _cleanup_before_lock_tests(report: ExecutionReport, *, next_step_name: str) -> None:
+    gates = {"fast", "full", "release", "pre-push", "pre-release", "business-critical"}
+    if next_step_name == "lock-tests" and report.gate in gates:
+        _cleanup_runtime_state(report, "pre-lock-runtime-artifact-cleanup")
 
 
 def _cleanup_after_gate(report: ExecutionReport) -> None:
-    if report.gate not in {"fast", "full", "release", "pre-push", "pre-release"}:
-        return
-    with measure_time() as watch:
-        removed = cleanup_ci_runtime_state()
-    report.add(
-        _mutable_cleanup_result(
-            name="final-runtime-artifact-cleanup",
-            duration_ms=watch.duration_ms,
-            removed=removed,
-        )
-    )
+    if report.gate in {"fast", "full", "release", "pre-push", "pre-release"}:
+        _cleanup_runtime_state(report, "final-runtime-artifact-cleanup")
 
 
 def execute(request: ExecutionRequest) -> ExecutionReport:
@@ -131,19 +91,23 @@ def execute(request: ExecutionRequest) -> ExecutionReport:
             ok, message = handler()
 
         status = "passed" if ok else ("skipped" if "skipped by contract" in message else "failed")
-        result = StepResult(
-            name=step.name,
-            status=status,
-            message=message,
-            duration_ms=watch.duration_ms,
-        )
+        result = StepResult(name=step.name, status=status, message=message, duration_ms=watch.duration_ms)
         report.add(result)
-
         if result.status == "failed":
             break
     _cleanup_after_gate(report)
 
+    verdict_status = str(release_verdict(report)["status"])
+    if request.gate == "release" and verdict_status != "PASS":
+        report.add(
+            StepResult(
+                name="release-verdict", status="failed",
+                message=f"release blocked by canonical verdict: {verdict_status}", duration_ms=0,
+            )
+        )
+
     if request.emit_report:
+        write_release_verdict(reports_dir() / "release-verdict.json", report)
         write_report(reports_dir() / f"{request.gate}.report.json", report)
         if request.emit_junit:
             write_junit_xml(junit_dir() / f"{request.gate}.xml", report)
