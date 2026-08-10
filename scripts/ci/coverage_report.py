@@ -13,11 +13,10 @@ def write_ci_execution_summary_xml(path: Path, report: ExecutionReport) -> None:
         "ci-execution-summary", version="ci-canon-v8", gate=report.gate,
         success=str(report.success).lower(), claims_code_coverage="false", claims_production_ready="false",
     )
-    summary = ET.SubElement(root, "summary")
-    summary.set("steps", str(len(report.steps)))
-    summary.set("failed_steps", str(sum(1 for step in report.steps if step.status == "failed")))
-    summary.set("skipped_steps", str(sum(1 for step in report.steps if step.status == "skipped")))
-    summary.set("coverage_kind", "not_code_coverage")
+    ET.SubElement(
+        root, "summary", steps=str(len(report.steps)), failed_steps=str(sum(1 for step in report.steps if step.status == "failed")),
+        skipped_steps=str(sum(1 for step in report.steps if step.status == "skipped")), coverage_kind="not_code_coverage",
+    )
     safe_write_bytes(path, ET.tostring(root, encoding="utf-8", xml_declaration=True))
 
 
