@@ -43,4 +43,4 @@ def test_every_action_is_rejected_after_the_same_decision_is_committed() -> None
         with pytest.raises(RuntimeError):
             guard.verify_and_lock(envelope)
         cases += 1
-    assert cases == 43
+    assert cases == 45
