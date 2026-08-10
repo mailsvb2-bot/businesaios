@@ -19,8 +19,12 @@ def test_release_i001_ratchet_blocks_regressions(
     monkeypatch.setattr(quality, "repo_root", lambda: tmp_path)
     monkeypatch.setattr(quality, "_quality_target_paths", lambda _root: (tmp_path / "runtime",))
     monkeypatch.setattr(quality.importlib.util, "find_spec", lambda _name: object())
-    outcomes = iter([_outcome(returncode=0)] * 16 + [_outcome(returncode=1)])
-    monkeypatch.setattr(quality, "run_command", lambda *_args, **_kwargs: next(outcomes))
+
+    def run_command(args, **_kwargs):
+        is_target = str(tmp_path / "release") in args and "--select" in args and args[args.index("--select") + 1] == "I001"
+        return _outcome(returncode=1 if is_target else 0)
+
+    monkeypatch.setattr(quality, "run_command", run_command)
     monkeypatch.setattr(
         quality,
         "_targeted_debt_report",
