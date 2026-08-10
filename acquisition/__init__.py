@@ -43,7 +43,7 @@ CANON_ACQUISITION_PUBLIC_API = True
 from .public_api_owner import (
     AcquisitionPublicAPI,
     AcquisitionSolver,
-    CANON_ACQUISITION_PUBLIC_API_OWNER,
+    CANON_ACQUISITION_PUBLIC_API_OWNER as CANON_ACQUISITION_PUBLIC_API_OWNER,
     create_acquisition_public_api,
     evaluate_acquisition_plan,
 )
