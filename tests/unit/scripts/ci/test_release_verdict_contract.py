@@ -107,6 +107,17 @@ def test_release_verdict_recomputes_nested_scenario_evidence(monkeypatch, tmp_pa
     assert verdict["canonical_user_scenarios"]["evidence_status"] == "FAIL"
 
 
+def test_release_verdict_treats_invalid_utf8_evidence_as_corrupt(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
+    monkeypatch.setattr(reports_module, "reports_dir", lambda: tmp_path)
+    (tmp_path / USER_SCENARIO_EVIDENCE_NAME).write_bytes(b"\xff\xfe\xfa")
+
+    verdict = release_verdict(_report_for("release"))
+
+    assert verdict["status"] == "FAIL"
+    assert verdict["canonical_user_scenarios"]["status"] == "FAIL"
+
+
 def test_release_verdict_is_not_proven_without_scenario_evidence(monkeypatch) -> None:
     monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "b" * 40)
     report = ExecutionReport(gate="fast", goal="test", steps=[_step("doctor-check")])
