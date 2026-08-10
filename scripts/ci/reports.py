@@ -23,23 +23,17 @@ def _combined_status(*states: str) -> str:
 
 
 def _nested_evidence_status(evidence: dict) -> str:
-    if evidence.get("schema") != "businessaios_user_scenario_evidence.v1":
-        return "FAIL"
     rust, scenarios = evidence.get("rust_matrix"), evidence.get("scenarios")
-    if not isinstance(rust, dict) or not isinstance(scenarios, list) or not all(isinstance(item, dict) for item in scenarios):
+    if evidence.get("schema") != "businessaios_user_scenario_evidence.v1" or not isinstance(rust, dict) or not isinstance(scenarios, list):
         return "FAIL"
     cases = rust.get("cases")
-    if not isinstance(cases, list) or not cases or rust.get("total_cases") != len(cases):
+    ids = [item.get("id") if isinstance(item, dict) else None for item in scenarios]
+    if not isinstance(cases, list) or not cases or rust.get("total_cases") != len(cases) or ids != [item[0] for item in USER_SCENARIOS]:
         return "FAIL"
     rust_status = "PASS" if all(isinstance(case, dict) and case.get("passed") is True for case in cases) else "FAIL"
-    expected_ids = [scenario_id for scenario_id, _ in USER_SCENARIOS]
-    if [item.get("id") for item in scenarios] != expected_ids:
-        return "FAIL"
     scenario_status = _combined_status(*(str(item.get("status", "NOT_PROVEN")) for item in scenarios))
     nested_status = _combined_status(rust_status, scenario_status)
-    if rust.get("status") != rust_status or evidence.get("status") != nested_status:
-        return "FAIL"
-    return nested_status
+    return nested_status if rust.get("status") == rust_status and evidence.get("status") == nested_status else "FAIL"
 
 
 def _scenario_proof(step_status: str, exact_sha: str | None) -> dict:
