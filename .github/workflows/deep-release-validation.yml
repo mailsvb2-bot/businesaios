@@ -12,25 +12,27 @@ on:
       - opened
       - synchronize
       - reopened
+  pull_request_target:
+    types:
       - closed
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request_target' && format('pr-{0}-closed-unmerged', github.event.pull_request.number) || github.ref }}
   cancel-in-progress: true
 
 env:
-  BAIOS_CI_TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+  BAIOS_CI_TARGET_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
   PYTHON_BASE_IMAGE_SOURCE: python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
   PYTHON_BASE_IMAGE_LOCAL: businesaios/python-runtime-base:3.12-slim
 
 jobs:
   release-proof:
     if: >-
-      (github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true) &&
-      (github.event_name != 'pull_request' || github.event.action == 'closed' || github.event.pull_request.head.repo.full_name == github.repository)
+      (github.event_name != 'pull_request_target' || github.event.pull_request.merged == true) &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 180
     services:
