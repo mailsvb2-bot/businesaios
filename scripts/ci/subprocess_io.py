@@ -18,7 +18,7 @@ PYTEST_REQUIRED_PLUGINS = ("pytest_asyncio.plugin",)
 
 PRESERVED_ENV_KEYS = (
     "PATH",
-    "HOME",
+    "HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH",
     "LANG",
     "LC_ALL",
     "TZ",
