@@ -9,6 +9,7 @@ FunnelStage = Literal["acquisition", "activation", "retention", "referral", "rev
 GROWTH_NON_MESSAGING_CHANNELS = ("organic", "seo", "content", "referral", "partnerships")
 GROWTH_MESSAGING_CHANNELS = (*ALL_CHANNELS, "push")
 GROWTH_PAID_CHANNELS = ("meta_ads", "google_ads", "tiktok_ads", "vk_ads", "yandex_direct", "other_paid")
+GROWTH_PARTNERSHIP_VISIBILITY_NOTE = "partnership_visibility_required"
 Channel = Literal[*GROWTH_NON_MESSAGING_CHANNELS, *GROWTH_MESSAGING_CHANNELS, *GROWTH_PAID_CHANNELS]
 
 
