@@ -20,6 +20,7 @@ concurrency:
 
 env:
   BAIOS_CI_TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+  BAIOS_TARGETED_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.base.sha || '' }}
 
 jobs:
   targeted-domain-ci:
@@ -48,11 +49,18 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.lock.txt
-      - name: Fetch main ref for targeted diff
-        run: git fetch --no-tags --prune origin main
+      - name: Resolve targeted diff base
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$BAIOS_TARGETED_BASE_SHA" ]; then
+            git cat-file -e "${BAIOS_TARGETED_BASE_SHA}^{commit}"
+            echo "TARGETED_CI_BASE=$BAIOS_TARGETED_BASE_SHA" >> "$GITHUB_ENV"
+          else
+            git fetch --no-tags --prune origin main
+            echo "TARGETED_CI_BASE=origin/main" >> "$GITHUB_ENV"
+          fi
       - name: Run targeted domain CI
-        env:
-          TARGETED_CI_BASE: origin/main
         run: python -m scripts.ci.cli --gate targeted-domain
       - name: Upload targeted-domain artifacts
         if: always()
