@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -23,6 +22,4 @@ def write_junit_xml(path: Path, report: ExecutionReport) -> None:
             detail = ET.SubElement(case, "failure" if step.status == "failed" else "skipped", message=step.message)
             detail.text = step.message
 
-    buffer = io.BytesIO()
-    ET.ElementTree(testsuite).write(buffer, encoding="utf-8", xml_declaration=True)
-    safe_write_bytes(path, buffer.getvalue())
+    safe_write_bytes(path, ET.tostring(testsuite, encoding="utf-8", xml_declaration=True))
