@@ -28,6 +28,8 @@ def _nested_evidence_status(evidence: dict) -> str:
         expected = json.loads((repo_root() / USER_SCENARIO_RUST_FIXTURE).read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         return "FAIL"
+    if not isinstance(expected, dict):
+        return "FAIL"
     if evidence.get("schema") != "businessaios_user_scenario_evidence.v1" or not isinstance(rust, dict) or not isinstance(scenarios, list):
         return "FAIL"
     cases, expected_cases = rust.get("cases"), expected.get("cases", [])
@@ -78,10 +80,9 @@ def release_verdict(report: ExecutionReport) -> dict:
     exact_sha = os.environ.get("BAIOS_CI_TARGET_SHA")
     steps = [{"id": step.name, "status": _STATUS.get(step.status, "NOT_PROVEN")} for step in report.steps]
     scenario_proof = _scenario_proof(next((item["status"] for item in steps if item["id"] == _step_ids.user_scenario_gate()), "NOT_PROVEN"), exact_sha)
-    gate_status = _combined_status(*(item["status"] for item in steps))
     complete = report.gate == "release" and {step.name for step in plan_for_gate("release").steps if step.required}.issubset(
         {item["id"] for item in steps if item["status"] == "PASS"})
-    status = "FAIL" if "FAIL" in {gate_status, scenario_proof["status"]} else (
+    status = "FAIL" if "FAIL" in {_combined_status(*(item["status"] for item in steps)), scenario_proof["status"]} else (
         "PASS" if complete and exact_sha and scenario_proof["status"] == "PASS" else "NOT_PROVEN")
     return {
         "schema": "businessaios_release_verdict.v1", "exact_sha": exact_sha, "gate": report.gate,
