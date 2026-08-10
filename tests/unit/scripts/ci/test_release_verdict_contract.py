@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 
-from scripts.ci import execution
+from scripts.ci import execution, reports as reports_module
 from scripts.ci.contracts import ExecutionPlan, ExecutionReport, ExecutionRequest, StepResult
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.reports import release_verdict
+from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME
 
 
 def _step(name: str, status: str = "passed") -> StepResult:
@@ -14,6 +15,18 @@ def _step(name: str, status: str = "passed") -> StepResult:
 
 def _report_for(gate: str) -> ExecutionReport:
     return ExecutionReport(gate=gate, goal="test", steps=[_step(step.name) for step in plan_for_gate(gate).steps])
+
+
+def _write_scenario_evidence(monkeypatch, tmp_path, sha: str) -> None:
+    monkeypatch.setattr(reports_module, "reports_dir", lambda: tmp_path)
+    payload = {
+        "schema": "businessaios_user_scenario_evidence.v1",
+        "exact_sha": sha,
+        "status": "PASS",
+        "rust_matrix": {"status": "PASS", "cases": [{"name": "case", "passed": True}]},
+        "scenarios": [{"id": "cli_run", "status": "PASS", "junit": "junit/user-scenario-3.xml"}],
+    }
+    (tmp_path / USER_SCENARIO_EVIDENCE_NAME).write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _release_without_steps(monkeypatch, *, emit_report: bool, tmp_path=None) -> ExecutionReport:
@@ -28,8 +41,9 @@ def _release_without_steps(monkeypatch, *, emit_report: bool, tmp_path=None) -> 
     )
 
 
-def test_release_verdict_requires_exact_sha_and_complete_release_plan(monkeypatch) -> None:
+def test_release_verdict_requires_exact_sha_complete_plan_and_scenario_evidence(monkeypatch, tmp_path) -> None:
     report = _report_for("release")
+    _write_scenario_evidence(monkeypatch, tmp_path, "a" * 40)
 
     monkeypatch.delenv("BAIOS_CI_TARGET_SHA", raising=False)
     assert release_verdict(report)["status"] == "NOT_PROVEN"
@@ -38,14 +52,13 @@ def test_release_verdict_requires_exact_sha_and_complete_release_plan(monkeypatc
     verdict = release_verdict(report)
     assert verdict["status"] == "PASS"
     assert verdict["exact_sha"] == "a" * 40
-    assert verdict["canonical_user_scenarios"] == {
-        "source_step": "user-scenario-gate",
-        "status": "PASS",
-    }
+    assert verdict["canonical_user_scenarios"]["status"] == "PASS"
+    assert verdict["canonical_user_scenarios"]["scenarios"][0]["id"] == "cli_run"
 
 
-def test_non_release_gate_cannot_publish_pass_verdict(monkeypatch) -> None:
+def test_non_release_gate_cannot_publish_pass_verdict(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "b" * 40)
+    _write_scenario_evidence(monkeypatch, tmp_path, "b" * 40)
 
     verdict = release_verdict(_report_for("full"))
 
@@ -53,12 +66,23 @@ def test_non_release_gate_cannot_publish_pass_verdict(monkeypatch) -> None:
     assert verdict["canonical_user_scenarios"]["status"] == "PASS"
 
 
-def test_release_verdict_is_not_proven_when_required_release_evidence_is_missing(monkeypatch) -> None:
+def test_release_verdict_is_not_proven_when_required_release_evidence_is_missing(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
+    _write_scenario_evidence(monkeypatch, tmp_path, "c" * 40)
     report = _report_for("release")
     report.steps = [step for step in report.steps if step.name != "build-artifact"]
 
     assert release_verdict(report)["status"] == "NOT_PROVEN"
+
+
+def test_release_verdict_rejects_stale_scenario_evidence(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
+    _write_scenario_evidence(monkeypatch, tmp_path, "e" * 40)
+
+    verdict = release_verdict(_report_for("release"))
+
+    assert verdict["status"] == "NOT_PROVEN"
+    assert verdict["canonical_user_scenarios"]["evidence_status"] == "NOT_PROVEN"
 
 
 def test_release_verdict_is_not_proven_without_scenario_evidence(monkeypatch) -> None:
