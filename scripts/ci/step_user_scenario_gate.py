@@ -49,6 +49,11 @@ def _rust_evidence() -> dict:
     )
 
 
+def _run_rust_user_scenario_matrix() -> tuple[bool, str]:
+    evidence = _rust_evidence()
+    return evidence["status"] == "PASS", str(evidence["message"])
+
+
 def _scenario_evidence(index: int, scenario_id: str, target: str) -> dict:
     if not (repo_root() / target).exists():
         return _evidence("NOT_PROVEN", "scenario target missing", id=scenario_id, target=target)
