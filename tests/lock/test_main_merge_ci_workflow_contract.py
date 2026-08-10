@@ -15,7 +15,8 @@ MANDATORY = (
 MERGE_SHA = "github.event.pull_request.merge_commit_sha"
 TARGET_ENV = "BAIOS_CI_TARGET_SHA"
 MERGED_TARGET_GUARD = "github.event_name != 'pull_request_target' || github.event.pull_request.merged == true"
-TARGET_SCOPED_CONCURRENCY = "group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.ref }}"
+UNMERGED_TARGET_GROUP = "format('pr-{0}-closed-unmerged', github.event.pull_request.number)"
+TARGET_SCOPED_CONCURRENCY = "group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request_target' && format('pr-{0}-closed-unmerged', github.event.pull_request.number) || github.ref }}"
 ORDINARY_PR_TYPES = "  pull_request:\n    types:\n      - opened\n      - synchronize\n      - reopened\n  pull_request_target:\n    types:\n      - closed"
 
 
@@ -35,6 +36,7 @@ def test_mandatory_ci_concurrency_is_scoped_to_target_identity() -> None:
     for relative in MANDATORY:
         text = (ROOT / relative).read_text(encoding="utf-8")
         assert TARGET_SCOPED_CONCURRENCY in text
+        assert UNMERGED_TARGET_GROUP in text
         assert "group: ${{ github.workflow }}-${{ github.ref }}" not in text
 
 
