@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from runtime._internal.effects_clients.visual_gateway_client import visual_gateway_json
+from runtime._internal.effects_domains.visual_creative_gateway import (
+    visual_creative_evidence,
+    visual_creative_idempotency_key,
+    visual_creative_job_payload,
+)
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
@@ -35,6 +41,7 @@ class MarketingEffectsMixin:
     """Marketing runtime hooks and governed copy storage."""
 
     event_log: Any
+    http_transport: Any
 
     def set_marketing_copy(
         self,
@@ -120,6 +127,144 @@ class MarketingEffectsMixin:
             "copy": payload,
             "notification": notification,
             "router_evidence": evidence,
+        }
+
+    def generate_visual_creative(
+        self,
+        *,
+        decision_id: str,
+        correlation_id: str,
+        tenant_id: str,
+        user_id: str,
+        kind: str,
+        prompt: str,
+        country_code: str = "",
+        preferred_provider: str = "",
+        aspect_ratio: str = "1:1",
+        duration_seconds: int = 5,
+        negative_prompt: str = "",
+        reference_url: str = "",
+        brand_context: str = "",
+        wait_seconds: int = 0,
+    ) -> dict[str, Any]:
+        assert_called_from_executor()
+        tenant = assert_event_log_tenant(
+            self.event_log,
+            tenant_id=str(tenant_id),
+            operation="generate_visual_creative",
+        )
+        decision = str(decision_id or "").strip()
+        correlation = str(correlation_id or "").strip()
+        user = str(user_id or "").strip()
+        visual_kind = str(kind or "").strip().lower()
+        visual_prompt = str(prompt or "").strip()
+        if not decision:
+            raise RuntimeError("DECISION_ID_REQUIRED")
+        if not correlation:
+            raise RuntimeError("CORRELATION_ID_REQUIRED")
+        if not user:
+            raise RuntimeError("USER_ID_REQUIRED")
+        if visual_kind not in {"image", "video"} or not visual_prompt:
+            raise ValueError("valid visual kind and prompt are required")
+
+        bounded_wait = max(0, min(int(wait_seconds or 0), 60))
+        idem = visual_creative_idempotency_key(
+            tenant_id=tenant,
+            decision_id=decision,
+            kind=visual_kind,
+        )
+        raw = visual_gateway_json(
+            "POST",
+            "/v1/creative/generations",
+            {
+                "kind": visual_kind,
+                "prompt": visual_prompt,
+                "country_code": str(country_code or ""),
+                "preferred_provider": str(preferred_provider or ""),
+                "aspect_ratio": str(aspect_ratio or "1:1"),
+                "duration_seconds": max(2, min(int(duration_seconds or 5), 15)),
+                "negative_prompt": str(negative_prompt or ""),
+                "reference_url": str(reference_url or ""),
+                "brand_context": str(brand_context or ""),
+                "wait_seconds": bounded_wait,
+                "scope_id": tenant,
+                "idempotency_key": idem,
+            },
+            timeout_s=max(30, bounded_wait + 15),
+            transport=self.http_transport,
+        )
+        job = visual_creative_job_payload(raw)
+        if job["scope_id"] != tenant:
+            raise RuntimeError("visual_gateway_scope_mismatch")
+        self.event_log.emit(
+            event_type=(
+                "visual_creative_generated"
+                if job["status"] == "succeeded"
+                else "visual_creative_submitted"
+            ),
+            source="visual_creative",
+            user_id=user,
+            decision_id=decision,
+            correlation_id=correlation,
+            payload={**job, "tenant_id": tenant},
+        )
+        return {
+            "ok": job["status"] != "failed",
+            "job": job,
+            "router_evidence": visual_creative_evidence(tenant_id=tenant, job=job),
+        }
+
+    def poll_visual_creative(
+        self,
+        *,
+        decision_id: str,
+        correlation_id: str,
+        tenant_id: str,
+        user_id: str,
+        job_id: str,
+    ) -> dict[str, Any]:
+        assert_called_from_executor()
+        tenant = assert_event_log_tenant(
+            self.event_log,
+            tenant_id=str(tenant_id),
+            operation="poll_visual_creative",
+        )
+        decision = str(decision_id or "").strip()
+        correlation = str(correlation_id or "").strip()
+        user = str(user_id or "").strip()
+        token = str(job_id or "").strip()
+        if not decision:
+            raise RuntimeError("DECISION_ID_REQUIRED")
+        if not correlation:
+            raise RuntimeError("CORRELATION_ID_REQUIRED")
+        if not user:
+            raise RuntimeError("USER_ID_REQUIRED")
+        if not token or len(token) > 128 or not all(ch.isalnum() or ch in "_-" for ch in token):
+            raise ValueError("valid visual job id is required")
+
+        job = visual_creative_job_payload(
+            visual_gateway_json(
+                "GET",
+                f"/v1/creative/generations/{token}",
+                {"scope_id": tenant},
+                timeout_s=30,
+                transport=self.http_transport,
+            )
+        )
+        if job["scope_id"] != tenant:
+            raise RuntimeError("visual_gateway_scope_mismatch")
+        self.event_log.emit(
+            event_type="visual_creative_polled",
+            source="visual_creative",
+            user_id=user,
+            decision_id=decision,
+            correlation_id=correlation,
+            payload={**job, "tenant_id": tenant},
+        )
+        return {
+            "ok": job["status"] != "failed",
+            "job": job,
+            "router_evidence": visual_creative_evidence(tenant_id=tenant, job=job),
         }
 
     def record_variant_shown(
