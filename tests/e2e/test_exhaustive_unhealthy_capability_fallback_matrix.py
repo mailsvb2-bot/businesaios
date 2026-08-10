@@ -52,4 +52,4 @@ def test_every_unhealthy_capability_blocks_or_routes_to_an_explicit_fallback(tmp
             assert planning.get("allowed") is False
             assert planning.get("reason")
         cases += 1
-    assert cases == 43
+    assert cases == 45
