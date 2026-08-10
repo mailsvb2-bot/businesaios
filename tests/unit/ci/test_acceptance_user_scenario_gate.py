@@ -54,6 +54,9 @@ def test_acceptance_toolchain_policy_crosses_hermetic_subprocess_boundary(monkey
     preserved = {
         "CARGO_NET_OFFLINE": "true",
         "SYSTEMROOT": "windows-system-root",
+        "USERPROFILE": "windows-user-profile",
+        "HOMEDRIVE": "W:",
+        "HOMEPATH": "\\Users\\canonical",
         "INCLUDE": "msvc-include-search",
         "LIB": "msvc-lib-search",
         "LIBPATH": "msvc-libpath-search",
@@ -61,15 +64,14 @@ def test_acceptance_toolchain_policy_crosses_hermetic_subprocess_boundary(monkey
     for key, value in preserved.items():
         monkeypatch.setenv(key, value)
     monkeypatch.setenv("BUSINESAIOS_UNTRUSTED_AMBIENT_ENV", "must-not-leak")
-    script = (
-        "import os; "
-        "print('|'.join(os.getenv(k, '') for k in "
-        "('CARGO_NET_OFFLINE','SYSTEMROOT','INCLUDE','LIB','LIBPATH','BUSINESAIOS_UNTRUSTED_AMBIENT_ENV')))"
+    keys = (
+        "CARGO_NET_OFFLINE", "SYSTEMROOT", "USERPROFILE", "HOMEDRIVE", "HOMEPATH",
+        "INCLUDE", "LIB", "LIBPATH", "BUSINESAIOS_UNTRUSTED_AMBIENT_ENV",
     )
+    script = f"import os; print('|'.join(os.getenv(k, '') for k in {keys!r}))"
     outcome = run_command([sys.executable, "-c", script], echo_output=False)
-    expected = (
-        "true|windows-system-root|msvc-include-search|"
-        "msvc-lib-search|msvc-libpath-search|"
-    )
     assert outcome.returncode == 0
-    assert outcome.stdout.strip() == expected
+    assert outcome.stdout.strip() == (
+        "true|windows-system-root|windows-user-profile|W:|\\Users\\canonical|"
+        "msvc-include-search|msvc-lib-search|msvc-libpath-search|"
+    )
