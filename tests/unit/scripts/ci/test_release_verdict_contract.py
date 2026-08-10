@@ -11,6 +11,18 @@ def _step(name: str, status: str = "passed") -> StepResult:
     return StepResult(name=name, status=status, message=name, duration_ms=1)
 
 
+def _release_without_steps(monkeypatch, *, emit_report: bool, tmp_path=None) -> ExecutionReport:
+    monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "d" * 40)
+    monkeypatch.setattr(execution, "plan_for_gate", lambda gate: ExecutionPlan(gate=gate, steps=()))
+    monkeypatch.setattr(execution, "cleanup_ci_runtime_state", lambda: [])
+    monkeypatch.setattr(execution, "write_failure_summary", lambda report: None)
+    if tmp_path is not None:
+        monkeypatch.setattr(execution, "reports_dir", lambda: tmp_path)
+    return execution.execute(
+        ExecutionRequest(gate="release", emit_report=emit_report, emit_junit=False, emit_coverage=False)
+    )
+
+
 def test_release_verdict_requires_exact_sha_and_canonical_user_scenarios(monkeypatch) -> None:
     report = ExecutionReport(gate="acceptance", goal="test", steps=[_step("user-scenario-gate")])
 
@@ -40,8 +52,7 @@ def test_release_verdict_is_not_proven_without_scenario_evidence(monkeypatch) ->
 def test_release_verdict_fails_when_a_required_step_fails(monkeypatch) -> None:
     monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
     report = ExecutionReport(
-        gate="acceptance",
-        goal="test",
+        gate="acceptance", goal="test",
         steps=[_step("user-scenario-gate"), _step("business-critical-tests", "failed")],
     )
 
@@ -49,15 +60,7 @@ def test_release_verdict_fails_when_a_required_step_fails(monkeypatch) -> None:
 
 
 def test_release_gate_turns_not_proven_verdict_into_failure(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "d" * 40)
-    monkeypatch.setattr(execution, "plan_for_gate", lambda gate: ExecutionPlan(gate=gate, steps=()))
-    monkeypatch.setattr(execution, "cleanup_ci_runtime_state", lambda: [])
-    monkeypatch.setattr(execution, "reports_dir", lambda: tmp_path)
-    monkeypatch.setattr(execution, "write_failure_summary", lambda report: None)
-
-    report = execution.execute(
-        ExecutionRequest(gate="release", emit_report=True, emit_junit=False, emit_coverage=False)
-    )
+    report = _release_without_steps(monkeypatch, emit_report=True, tmp_path=tmp_path)
 
     assert report.success is False
     assert report.steps[-1].name == "release-verdict"
@@ -65,3 +68,10 @@ def test_release_gate_turns_not_proven_verdict_into_failure(monkeypatch, tmp_pat
     verdict = json.loads((tmp_path / "release-verdict.json").read_text(encoding="utf-8"))
     assert verdict["status"] == "FAIL"
     assert verdict["canonical_user_scenarios"]["status"] == "NOT_PROVEN"
+
+
+def test_release_gate_enforces_not_proven_when_reports_are_disabled(monkeypatch) -> None:
+    report = _release_without_steps(monkeypatch, emit_report=False)
+
+    assert report.success is False
+    assert [(step.name, step.status) for step in report.steps] == [("release-verdict", "failed")]
