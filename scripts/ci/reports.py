@@ -24,7 +24,7 @@ def release_verdict(report: ExecutionReport) -> dict:
         "NOT_PROVEN" if any(item["status"] == "NOT_PROVEN" for item in steps) else "PASS"
     )
     status = "FAIL" if "FAIL" in {gate_status, scenario_status} else (
-        "PASS" if exact_sha and gate_status == scenario_status == "PASS" else "NOT_PROVEN"
+        "PASS" if report.gate == "release" and exact_sha and gate_status == scenario_status == "PASS" else "NOT_PROVEN"
     )
     return {
         "schema": "businessaios_release_verdict.v1",
