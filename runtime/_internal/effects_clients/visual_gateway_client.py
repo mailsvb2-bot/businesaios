@@ -20,43 +20,23 @@ def _gateway_config() -> tuple[str, dict[str, str]]:
     return base_url, headers
 
 
-def visual_gateway_json(
-    method: str,
-    path: str,
-    payload: dict[str, Any] | None,
-    *,
-    timeout_s: int = 30,
-    transport: HttpTransport | None = None,
-) -> dict[str, Any]:
-    """Call the operator-controlled visual gateway through the sealed transport."""
-
-    normalized_method = str(method or "GET").strip().upper()
-    if normalized_method not in {"GET", "POST"}:
-        raise ValueError(f"unsupported_visual_gateway_method:{normalized_method}")
+def visual_gateway_json(method: str, path: str, payload: dict[str, Any] | None, *, timeout_s: int = 30, transport: HttpTransport | None = None) -> dict[str, Any]:
+    method = str(method or "GET").strip().upper()
+    if method not in {"GET", "POST"}:
+        raise ValueError(f"unsupported_visual_gateway_method:{method}")
     base_url, headers = _gateway_config()
-    relative = "/" + str(path or "").lstrip("/")
-    active_transport = transport or build_http_transport()
-    bounded_timeout = max(3, min(int(timeout_s or 30), 300))
+    target = base_url + "/" + str(path or "").lstrip("/")
+    active = transport or build_http_transport()
+    timeout = max(3, min(int(timeout_s or 30), 300))
 
     async def _call():
-        if normalized_method == "GET":
-            return await active_transport.get_json(
-                url=base_url + relative,
-                headers=headers,
-                params=dict(payload or {}),
-                timeout_s=bounded_timeout,
-            )
-        return await active_transport.post_json(
-            url=base_url + relative,
-            headers=headers,
-            data=dict(payload or {}),
-            timeout_s=bounded_timeout,
-        )
+        if method == "GET":
+            return await active.get_json(url=target, headers=headers, params=dict(payload or {}), timeout_s=timeout)
+        return await active.post_json(url=target, headers=headers, data=dict(payload or {}), timeout_s=timeout)
 
     response = _run_coroutine_sync(_call())
-    status = int(getattr(response, "status", 0) or 0)
-    body = getattr(response, "json", None)
-    if not (200 <= status < 300) or not isinstance(body, dict):
+    status, body = int(getattr(response, "status", 0) or 0), getattr(response, "json", None)
+    if not 200 <= status < 300 or not isinstance(body, dict):
         raise RuntimeError(f"visual_gateway_http_{status}")
     return dict(body)
 
