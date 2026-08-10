@@ -20,6 +20,7 @@ from .backlog_store import (
 )
 from .contracts import (
     GROWTH_MESSAGING_CHANNELS,
+    GROWTH_PARTNERSHIP_VISIBILITY_NOTE,
     Channel,
     ExperimentSpecV1,
     GrowthGoalV1,
@@ -102,20 +103,14 @@ class GrowthStrategyService:
         hypotheses = _stabilize_hypotheses(hypotheses, tenant_id=tenant_id, decision_id=decision_id)
         score_by_id = {item.hypothesis_id: item.score for item in rank_hypotheses(hypotheses)}
         ranked = tuple(sorted(hypotheses, key=lambda h: score_by_id.get(h.hypothesis_id, self._policy.zero_rank_score), reverse=True))
-        if _partnership_relevant(goal, policy=self._policy):
-            visible_limit = max(1, min(self._policy.default_hypothesis_count, hypothesis_count if hypothesis_count > 0 else self._policy.default_hypothesis_count))
-            partner_index = next((index for index, h in enumerate(ranked) if h.channel == "partnerships"), -1)
-            if partner_index >= visible_limit:
-                partner, rest = ranked[partner_index], ranked[:partner_index] + ranked[partner_index + 1 :]
-                insert_at = visible_limit - 1
-                ranked = rest[:insert_at] + (partner,) + rest[insert_at:]
+        visibility_notes = (GROWTH_PARTNERSHIP_VISIBILITY_NOTE,) if _partnership_relevant(goal, policy=self._policy) else ()
         return StrategyPlanV1(
             tenant_id=tenant_id,
             created_ms=now_ms(),
             goal=goal,
             signals=signals,
             top_hypotheses=ranked,
-            notes=("llm" if self._llm is not None else "no_llm", "advisory_ranking_only", "decision_idempotent", "manifest_sealed"),
+            notes=("llm" if self._llm is not None else "no_llm", "advisory_ranking_only", "decision_idempotent", "manifest_sealed", *visibility_notes),
         )
 
     def _persist_plan_details(self, *, plan: StrategyPlanV1, tenant_id: str, user_id: str, decision_id: str, correlation_id: str) -> None:
