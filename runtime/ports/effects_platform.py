@@ -4,6 +4,9 @@ from typing import Any, Protocol
 
 
 class EffectsPlatformPort(Protocol):
+    def generate_visual_creative(self, *, decision_id: str, correlation_id: str, tenant_id: str, user_id: str, kind: str, prompt: str, country_code: str = "", preferred_provider: str = "", aspect_ratio: str = "1:1", duration_seconds: int = 5, negative_prompt: str = "", reference_url: str = "", brand_context: str = "", wait_seconds: int = 0) -> Any: ...
+    def poll_visual_creative(self, *, decision_id: str, correlation_id: str, tenant_id: str, user_id: str, job_id: str) -> Any: ...
+
     def enqueue_evolution_job(
         self,
         *,

@@ -5,6 +5,7 @@ import re
 
 from execution.market_intelligence_action_specs import build_market_intelligence_action_specs
 from execution.revenue_os_action_specs import build_revenue_os_action_specs
+from execution.visual_creative_action_specs import build_visual_creative_action_specs
 
 CANON_ACTION_CATALOG = True
 
@@ -252,6 +253,7 @@ _ACTION_SPECS: dict[str, ActionSpec] = {
 
 _ACTION_SPECS.update(build_market_intelligence_action_specs())
 _ACTION_SPECS.update(build_revenue_os_action_specs())
+_ACTION_SPECS.update(build_visual_creative_action_specs())
 
 
 _UNKNOWN_SPEC = ActionSpec(

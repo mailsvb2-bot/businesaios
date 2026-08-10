@@ -65,6 +65,30 @@ class SyncHTTPResult:
     error_kind: str | None = None
     error_message: str | None = None
 
+def _url_origin(url: str) -> tuple[str, str, int]:
+    parsed = _urllib_parse().urlsplit(_normalized_url(url))
+    scheme = str(parsed.scheme).lower()
+    port = int(parsed.port or (443 if scheme == "https" else 80))
+    return scheme, str(parsed.hostname or "").lower(), port
+
+
+def same_origin_url(source_url: str, target_url: str) -> bool:
+    return _url_origin(source_url) == _url_origin(target_url)
+
+
+def _authenticated_urlopen(source_url: str) -> Callable[..., object]:
+    request_module = _urllib_request()
+    error_module = _urllib_error()
+
+    class _SameOriginRedirectHandler(request_module.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            if not same_origin_url(source_url, str(newurl)):
+                raise error_module.HTTPError(newurl, code, "cross_origin_redirect_blocked", headers, fp)
+            return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+    return request_module.build_opener(_SameOriginRedirectHandler()).open
+
+
 def sync_request(
     *,
     method: str,
@@ -81,7 +105,8 @@ def sync_request(
         headers=hdrs,
         method=str(method or "GET").upper(),
     )
-    open_call = opener or _urllib_request().urlopen
+    has_authorization = any(str(key).lower() == "authorization" for key in hdrs)
+    open_call = opener or (_authenticated_urlopen(str(url)) if has_authorization else _urllib_request().urlopen)
     try:
         with open_call(req, timeout=timeout_s) as resp:
             decoded = _decode_response(resp)
@@ -281,6 +306,7 @@ __all__ = [
     "build_http_transport",
     "form_urlencode",
     "runtime_network_mode",
+    "same_origin_url",
     "sync_get",
     "sync_post_json",
     "sync_request",
