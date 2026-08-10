@@ -31,9 +31,10 @@ def test_mandatory_ci_runs_on_merged_pr_and_targets_exact_main_commit() -> None:
         assert "EXPECTED_SHA: ${{ env.BAIOS_CI_TARGET_SHA }}" in text
 
 
-def test_targeted_ci_uses_pre_merge_base_for_merged_event() -> None:
+def test_targeted_ci_uses_pre_change_base_for_push_and_merged_events() -> None:
     text = (ROOT / ".github/workflows/targeted-domain-ci.yml").read_text(encoding="utf-8")
     assert "BAIOS_TARGETED_BASE_SHA:" in text
+    assert "github.event_name == 'push' && github.event.before" in text
     assert "github.event.pull_request.base.sha" in text
     assert 'if [ -n "$BAIOS_TARGETED_BASE_SHA" ]; then' in text
     assert 'TARGETED_CI_BASE=$BAIOS_TARGETED_BASE_SHA' in text
