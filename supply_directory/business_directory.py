@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from contracts.supply import BusinessSupplyProfile
 from supply_directory.business_profile_store import BusinessProfileStore
 
