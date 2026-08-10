@@ -8,21 +8,29 @@ on:
     tags:
       - 'v*'
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.ref }}
   cancel-in-progress: true
 
 env:
+  BAIOS_CI_TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
   PYTHON_BASE_IMAGE_SOURCE: python:3.12-slim@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
   PYTHON_BASE_IMAGE_LOCAL: businesaios/python-runtime-base:3.12-slim
 
 jobs:
   release-proof:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      (github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true) &&
+      (github.event_name != 'pull_request' || github.event.action == 'closed' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 180
     services:
@@ -43,13 +51,13 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.BAIOS_CI_TARGET_SHA }}
           fetch-depth: 0
           persist-credentials: false
 
       - name: Verify exact checkout
         env:
-          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          EXPECTED_SHA: ${{ env.BAIOS_CI_TARGET_SHA }}
         run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -113,7 +121,7 @@ jobs:
       - name: Run real ephemeral staging proof
         env:
           PYTHON_BIN: ${{ github.workspace }}/.venv/bin/python
-          GIT_COMMIT_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          GIT_COMMIT_SHA: ${{ env.BAIOS_CI_TARGET_SHA }}
           BAIOS_STAGING_PROOF_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
           BAIOS_STAGING_TIMEOUT_SECONDS: "240"
           BAIOS_PYTHON_BASE_IMAGE: ${{ env.PYTHON_BASE_IMAGE_LOCAL }}
@@ -125,14 +133,14 @@ jobs:
       - name: Run canonical release gate
         env:
           BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK: "1"
-          GIT_COMMIT_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          GIT_COMMIT_SHA: ${{ env.BAIOS_CI_TARGET_SHA }}
         run: .venv/bin/python -m scripts.ci.cli --gate release
 
       - name: Upload deep release evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: deep-release-${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          name: deep-release-${{ env.BAIOS_CI_TARGET_SHA }}
           path: |
             artifacts/ci
             release/manifest.json
