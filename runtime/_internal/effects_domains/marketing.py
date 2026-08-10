@@ -4,6 +4,7 @@ from typing import Any
 
 from runtime._internal.effects_clients.visual_gateway_client import visual_gateway_json
 from runtime._internal.effects_domains.visual_creative_gateway import (
+    assert_visual_creative_job_id,
     assert_visual_creative_scope,
     visual_creative_evidence,
     visual_creative_idempotency_key,
@@ -252,6 +253,7 @@ class MarketingEffectsMixin:
             )
         )
         assert_visual_creative_scope(tenant_id=tenant, job=job)
+        assert_visual_creative_job_id(expected_job_id=token, job=job)
         self.event_log.emit(
             event_type="visual_creative_polled",
             source="visual_creative",
