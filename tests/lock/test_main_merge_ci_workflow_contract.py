@@ -31,6 +31,16 @@ def test_mandatory_ci_runs_on_merged_pr_and_targets_exact_main_commit() -> None:
         assert "EXPECTED_SHA: ${{ env.BAIOS_CI_TARGET_SHA }}" in text
 
 
+def test_targeted_ci_uses_pre_merge_base_for_merged_event() -> None:
+    text = (ROOT / ".github/workflows/targeted-domain-ci.yml").read_text(encoding="utf-8")
+    assert "BAIOS_TARGETED_BASE_SHA:" in text
+    assert "github.event.pull_request.base.sha" in text
+    assert 'if [ -n "$BAIOS_TARGETED_BASE_SHA" ]; then' in text
+    assert 'TARGETED_CI_BASE=$BAIOS_TARGETED_BASE_SHA' in text
+    assert 'TARGETED_CI_BASE=origin/main' in text
+    assert "TARGETED_CI_BASE: origin/main" not in text
+
+
 def test_deep_release_keeps_untrusted_pr_head_blocked_but_allows_merged_commit() -> None:
     text = (ROOT / ".github/workflows/deep-release-validation.yml").read_text(encoding="utf-8")
     assert "github.event.pull_request.head.repo.full_name == github.repository" in text
