@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from scripts.ci import execution, reports as reports_module
 from scripts.ci.contracts import ExecutionPlan, ExecutionReport, ExecutionRequest, StepResult
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.reports import release_verdict
-from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME, USER_SCENARIOS
+from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME, USER_SCENARIO_RUST_FIXTURE, USER_SCENARIOS
 
 
 def _step(name: str, status: str = "passed") -> StepResult:
@@ -19,11 +20,13 @@ def _report_for(gate: str) -> ExecutionReport:
 
 def _write_scenario_evidence(monkeypatch, tmp_path, sha: str) -> dict:
     monkeypatch.setattr(reports_module, "reports_dir", lambda: tmp_path)
+    fixture = json.loads(Path(USER_SCENARIO_RUST_FIXTURE).read_text(encoding="utf-8"))
+    cases = [{"name": case["name"], "passed": True} for case in fixture["cases"]]
     payload = {
         "schema": "businessaios_user_scenario_evidence.v1",
         "exact_sha": sha,
         "status": "PASS",
-        "rust_matrix": {"status": "PASS", "total_cases": 1, "cases": [{"name": "case", "passed": True}]},
+        "rust_matrix": {"status": "PASS", "version": fixture["version"], "total_cases": len(cases), "cases": cases},
         "scenarios": [
             {"id": scenario_id, "status": "PASS", "junit": f"junit/user-scenario-{index}.xml"}
             for index, (scenario_id, _) in enumerate(USER_SCENARIOS, 1)
