@@ -9,7 +9,7 @@ from scripts.ci.contracts import ExecutionReport
 from scripts.ci.fs import safe_write_text
 from scripts.ci.paths import reports_dir
 from scripts.ci.plan_registry import plan_for_gate
-from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME
+from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME, USER_SCENARIOS
 
 _STATUS = {"passed": "PASS", "failed": "FAIL", "skipped": "NOT_PROVEN"}
 
@@ -20,6 +20,26 @@ def _write_json(path: Path, payload: dict) -> None:
 
 def _combined_status(*states: str) -> str:
     return "FAIL" if "FAIL" in states else "PASS" if states and all(state == "PASS" for state in states) else "NOT_PROVEN"
+
+
+def _nested_evidence_status(evidence: dict) -> str:
+    if evidence.get("schema") != "businessaios_user_scenario_evidence.v1":
+        return "FAIL"
+    rust, scenarios = evidence.get("rust_matrix"), evidence.get("scenarios")
+    if not isinstance(rust, dict) or not isinstance(scenarios, list) or not all(isinstance(item, dict) for item in scenarios):
+        return "FAIL"
+    cases = rust.get("cases")
+    if not isinstance(cases, list) or not cases or rust.get("total_cases") != len(cases):
+        return "FAIL"
+    rust_status = "PASS" if all(isinstance(case, dict) and case.get("passed") is True for case in cases) else "FAIL"
+    expected_ids = [scenario_id for scenario_id, _ in USER_SCENARIOS]
+    if [item.get("id") for item in scenarios] != expected_ids:
+        return "FAIL"
+    scenario_status = _combined_status(*(str(item.get("status", "NOT_PROVEN")) for item in scenarios))
+    nested_status = _combined_status(rust_status, scenario_status)
+    if rust.get("status") != rust_status or evidence.get("status") != nested_status:
+        return "FAIL"
+    return nested_status
 
 
 def _scenario_proof(step_status: str, exact_sha: str | None) -> dict:
@@ -37,7 +57,7 @@ def _scenario_proof(step_status: str, exact_sha: str | None) -> dict:
     if not isinstance(evidence, dict):
         proof["status"] = "FAIL"
         return proof
-    evidence_status = str(evidence.get("status", "NOT_PROVEN"))
+    evidence_status = _nested_evidence_status(evidence)
     if not exact_sha or evidence.get("exact_sha") != exact_sha:
         evidence_status = "NOT_PROVEN"
     proof.update(
