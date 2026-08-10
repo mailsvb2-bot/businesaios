@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import datetime, timezone
 
 from core.tenancy.normalization import require_tenant_id
 
