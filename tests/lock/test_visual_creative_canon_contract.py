@@ -29,4 +29,4 @@ def test_visual_creative_registry_contract_is_external_generate_and_advisory_pol
     assert generate.requires_idempotency_key is True
     assert poll.execution_category == "advisory"
     assert poll.external_confirmation_mode == "not_required"
-    assert poll.requires_idempotency_key is False
+    assert poll.requires_idempotency_key is True
