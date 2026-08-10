@@ -86,6 +86,20 @@ def ads_catalog() -> dict[str, CatalogEntry]:
             optional={"objective", "offer", "audience", "channels", "constraints", "max_daily_budget_minor", "max_total_budget_minor", "currency", "allowed_platforms", "callback_query_id", "channel", "channel_policy"},
             field_types={"tenant_id": str, "user_id": str, "objective": (str, dict), "offer": dict, "audience": dict, "channels": list, "constraints": dict, "max_daily_budget_minor": int, "max_total_budget_minor": int, "currency": str, "allowed_platforms": list, "callback_query_id": str, "channel": str, "channel_policy": dict},
         ),
+        "visual_creative_generate@v1": _entry(
+            "visual_creative_generate@v1",
+            1,
+            required={"tenant_id", "user_id", "kind", "prompt"},
+            optional={"country_code", "preferred_provider", "aspect_ratio", "duration_seconds", "negative_prompt", "reference_url", "brand_context", "wait_seconds"},
+            field_types={"tenant_id": str, "user_id": str, "kind": str, "prompt": str, "country_code": str, "preferred_provider": str, "aspect_ratio": str, "duration_seconds": int, "negative_prompt": str, "reference_url": str, "brand_context": str, "wait_seconds": int},
+        ),
+        "visual_creative_poll@v1": _entry(
+            "visual_creative_poll@v1",
+            1,
+            required={"tenant_id", "user_id", "job_id"},
+            optional=set(),
+            field_types={"tenant_id": str, "user_id": str, "job_id": str},
+        ),
     }
 
 
