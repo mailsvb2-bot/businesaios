@@ -53,6 +53,7 @@ def test_windows_acceptance_reuses_canonical_user_scenario_gate() -> None:
 def test_acceptance_toolchain_policy_crosses_hermetic_subprocess_boundary(monkeypatch) -> None:
     preserved = {
         "CARGO_NET_OFFLINE": "true",
+        "SYSTEMROOT": "windows-system-root",
         "INCLUDE": "msvc-include-search",
         "LIB": "msvc-lib-search",
         "LIBPATH": "msvc-libpath-search",
@@ -63,12 +64,12 @@ def test_acceptance_toolchain_policy_crosses_hermetic_subprocess_boundary(monkey
     script = (
         "import os; "
         "print('|'.join(os.getenv(k, '') for k in "
-        "('CARGO_NET_OFFLINE','INCLUDE','LIB','LIBPATH','BUSINESAIOS_UNTRUSTED_AMBIENT_ENV')))"
+        "('CARGO_NET_OFFLINE','SYSTEMROOT','INCLUDE','LIB','LIBPATH','BUSINESAIOS_UNTRUSTED_AMBIENT_ENV')))"
     )
     outcome = run_command([sys.executable, "-c", script], echo_output=False)
     expected = (
-        "true|msvc-include-search|msvc-lib-search|"
-        "msvc-libpath-search|"
+        "true|windows-system-root|msvc-include-search|"
+        "msvc-lib-search|msvc-libpath-search|"
     )
     assert outcome.returncode == 0
     assert outcome.stdout.strip() == expected
