@@ -21,8 +21,7 @@ def release_verdict(report: ExecutionReport) -> dict:
     steps = [{"id": step.name, "status": _STATUS.get(step.status, "NOT_PROVEN")} for step in report.steps]
     scenario_status = next((item["status"] for item in steps if item["id"] == _step_ids.user_scenario_gate()), "NOT_PROVEN")
     gate_status = "FAIL" if any(item["status"] == "FAIL" for item in steps) else (
-        "NOT_PROVEN" if any(item["status"] == "NOT_PROVEN" for item in steps) else "PASS"
-    )
+        "NOT_PROVEN" if any(item["status"] == "NOT_PROVEN" for item in steps) else "PASS")
     required = {step.name for step in plan_for_gate("release").steps if step.required}
     release_complete = report.gate == "release" and required.issubset({item["id"] for item in steps if item["status"] == "PASS"})
     status = "FAIL" if "FAIL" in {gate_status, scenario_status} else (
