@@ -9,21 +9,23 @@ on:
       - opened
       - synchronize
       - reopened
+  pull_request_target:
+    types:
       - closed
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.ref }}
   cancel-in-progress: true
 
 env:
-  BAIOS_CI_TARGET_SHA: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+  BAIOS_CI_TARGET_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.merge_commit_sha || github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
 jobs:
   clean-source:
-    if: github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
     name: clean source archive (3.12)
     runs-on: ubuntu-latest
     env:
@@ -70,7 +72,7 @@ jobs:
             tests/unit/execution/test_evidence_identity_determinism.py
 
   test:
-    if: github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -107,7 +109,7 @@ jobs:
           if-no-files-found: warn
 
   frontend:
-    if: github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
     name: frontend production build
     runs-on: ubuntu-latest
     steps:
@@ -142,7 +144,7 @@ jobs:
           if-no-files-found: error
 
   complete-tree:
-    if: github.event_name != 'pull_request' || github.event.action != 'closed' || github.event.pull_request.merged == true
+    if: github.event_name != 'pull_request_target' || github.event.pull_request.merged == true
     name: complete pytest tree (3.12)
     needs: test
     runs-on: ubuntu-latest
@@ -172,21 +174,14 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts/ci/complete-tree
-          tar \
-            --exclude=.git \
-            --exclude=artifacts \
-            --exclude='*/__pycache__/*' \
-            --exclude='*.pyc' \
-            -czf /tmp/businesaios-source-snapshot.tar.gz .
+          tar --exclude=.git --exclude=artifacts --exclude='*/__pycache__/*' --exclude='*.pyc' -czf /tmp/businesaios-source-snapshot.tar.gz .
           cp /tmp/businesaios-source-snapshot.tar.gz artifacts/ci/complete-tree/source-snapshot.tar.gz
       - name: Run complete pytest tree without quarantine
         shell: bash
         run: |
           mkdir -p artifacts/ci/complete-tree
           set +e
-          pytest -q tests \
-            --junitxml=artifacts/ci/complete-tree/junit.xml \
-            2>&1 | tee artifacts/ci/complete-tree/pytest.log
+          pytest -q tests --junitxml=artifacts/ci/complete-tree/junit.xml 2>&1 | tee artifacts/ci/complete-tree/pytest.log
           status=${PIPESTATUS[0]}
           printf '%s\n' "$status" > artifacts/ci/complete-tree/exit-code.txt
           exit "$status"
