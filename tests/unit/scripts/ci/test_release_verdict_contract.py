@@ -4,11 +4,16 @@ import json
 
 from scripts.ci import execution
 from scripts.ci.contracts import ExecutionPlan, ExecutionReport, ExecutionRequest, StepResult
+from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.reports import release_verdict
 
 
 def _step(name: str, status: str = "passed") -> StepResult:
     return StepResult(name=name, status=status, message=name, duration_ms=1)
+
+
+def _report_for(gate: str) -> ExecutionReport:
+    return ExecutionReport(gate=gate, goal="test", steps=[_step(step.name) for step in plan_for_gate(gate).steps])
 
 
 def _release_without_steps(monkeypatch, *, emit_report: bool, tmp_path=None) -> ExecutionReport:
@@ -23,8 +28,8 @@ def _release_without_steps(monkeypatch, *, emit_report: bool, tmp_path=None) -> 
     )
 
 
-def test_release_verdict_requires_exact_sha_and_canonical_user_scenarios(monkeypatch) -> None:
-    report = ExecutionReport(gate="acceptance", goal="test", steps=[_step("user-scenario-gate")])
+def test_release_verdict_requires_exact_sha_and_complete_release_plan(monkeypatch) -> None:
+    report = _report_for("release")
 
     monkeypatch.delenv("BAIOS_CI_TARGET_SHA", raising=False)
     assert release_verdict(report)["status"] == "NOT_PROVEN"
@@ -37,6 +42,23 @@ def test_release_verdict_requires_exact_sha_and_canonical_user_scenarios(monkeyp
         "source_step": "user-scenario-gate",
         "status": "PASS",
     }
+
+
+def test_non_release_gate_cannot_publish_pass_verdict(monkeypatch) -> None:
+    monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "b" * 40)
+
+    verdict = release_verdict(_report_for("full"))
+
+    assert verdict["status"] == "NOT_PROVEN"
+    assert verdict["canonical_user_scenarios"]["status"] == "PASS"
+
+
+def test_release_verdict_is_not_proven_when_required_release_evidence_is_missing(monkeypatch) -> None:
+    monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
+    report = _report_for("release")
+    report.steps = [step for step in report.steps if step.name != "build-artifact"]
+
+    assert release_verdict(report)["status"] == "NOT_PROVEN"
 
 
 def test_release_verdict_is_not_proven_without_scenario_evidence(monkeypatch) -> None:
