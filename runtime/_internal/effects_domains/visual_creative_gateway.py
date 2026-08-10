@@ -40,6 +40,8 @@ def visual_creative_job_payload(value: object) -> dict[str, Any]:
         or job["status"] not in {"queued", "running", "succeeded", "failed"}
     ):
         raise RuntimeError("visual_gateway_invalid_job")
+    if job["status"] == "succeeded" and not job["asset_ready"]:
+        raise RuntimeError("visual_gateway_inconsistent_completion")
     return job
 
 
@@ -48,9 +50,14 @@ def assert_visual_creative_scope(*, tenant_id: str, job: Mapping[str, Any]) -> N
         raise RuntimeError("visual_gateway_scope_mismatch")
 
 
+def assert_visual_creative_job_id(*, expected_job_id: str, job: Mapping[str, Any]) -> None:
+    if str(job.get("id") or "") != str(expected_job_id or ""):
+        raise RuntimeError("visual_gateway_job_id_mismatch")
+
+
 def visual_creative_evidence(*, tenant_id: str, job: Mapping[str, Any]) -> dict[str, Any]:
     accepted = str(job.get("status") or "") != "failed" and bool(job.get("id"))
-    completed = str(job.get("status") or "") == "succeeded"
+    completed = str(job.get("status") or "") == "succeeded" and bool(job.get("asset_ready"))
     return {
         "source": "connector",
         "verified": accepted,
@@ -76,6 +83,7 @@ def visual_creative_evidence(*, tenant_id: str, job: Mapping[str, Any]) -> dict[
 
 
 __all__ = [
+    "assert_visual_creative_job_id",
     "assert_visual_creative_scope",
     "visual_creative_evidence",
     "visual_creative_idempotency_key",
