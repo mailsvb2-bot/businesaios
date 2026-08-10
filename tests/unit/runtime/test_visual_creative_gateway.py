@@ -8,6 +8,7 @@ import pytest
 from execution.action_catalog import get_action_spec
 from runtime._internal.effects_clients.visual_gateway_client import visual_gateway_json
 from runtime._internal.effects_domains.visual_creative_gateway import (
+    assert_visual_creative_job_id,
     assert_visual_creative_scope,
     visual_creative_evidence,
     visual_creative_idempotency_key,
@@ -47,6 +48,15 @@ def test_job_payload_rejects_unsafe_identifier_and_scope() -> None:
         visual_creative_job_payload({"id": "j1", "scope_id": "../escape?", "kind": "image", "status": "queued"})
 
 
+def test_succeeded_job_requires_ready_asset() -> None:
+    with pytest.raises(RuntimeError, match="inconsistent_completion"):
+        _job(status="succeeded", asset_ready=False)
+    completed = _job(status="succeeded", asset_ready=True)
+    evidence = visual_creative_evidence(tenant_id="tenant-1", job=completed)
+    assert evidence["code"] == "visual_creative_completed"
+    assert evidence["payload"]["asset_ready"] is True
+
+
 def test_job_acceptance_evidence_is_trusted_but_does_not_claim_completion() -> None:
     evidence = visual_creative_evidence(tenant_id="tenant-1", job=_job())
     assert evidence["source"] == "connector"
@@ -66,10 +76,14 @@ def test_failed_job_is_not_verified() -> None:
     assert evidence["external_refs"] == []
 
 
-def test_visual_scope_mismatch_fails_closed() -> None:
-    assert_visual_creative_scope(tenant_id="tenant-1", job=_job())
+def test_visual_scope_and_job_identity_mismatches_fail_closed() -> None:
+    job = _job()
+    assert_visual_creative_scope(tenant_id="tenant-1", job=job)
+    assert_visual_creative_job_id(expected_job_id="j1", job=job)
     with pytest.raises(RuntimeError, match="scope_mismatch"):
-        assert_visual_creative_scope(tenant_id="tenant-2", job=_job())
+        assert_visual_creative_scope(tenant_id="tenant-2", job=job)
+    with pytest.raises(RuntimeError, match="job_id_mismatch"):
+        assert_visual_creative_job_id(expected_job_id="j2", job=job)
 
 
 def test_visual_idempotency_is_stable_and_tenant_scoped() -> None:
