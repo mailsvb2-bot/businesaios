@@ -30,12 +30,20 @@ def _nested_evidence_status(evidence: dict) -> str:
         return "FAIL"
     if evidence.get("schema") != "businessaios_user_scenario_evidence.v1" or not isinstance(rust, dict) or not isinstance(scenarios, list):
         return "FAIL"
-    cases = rust.get("cases")
-    ids = [item.get("id") if isinstance(item, dict) else None for item in scenarios]
-    case_names = [case.get("name") if isinstance(case, dict) else None for case in cases] if isinstance(cases, list) else []
-    if not cases or rust.get("version") != expected.get("version") or case_names != [case.get("name") for case in expected.get("cases", [])] or ids != [item[0] for item in USER_SCENARIOS]:
+    cases, expected_cases = rust.get("cases"), expected.get("cases", [])
+    actual_rust = [
+        (case.get("name"), case.get("scenario"), case.get("entrypoint"), case.get("allowed"), case.get("reason"), case.get("expected_allowed"), case.get("expected_reason"), case.get("passed"))
+        for case in cases if isinstance(case, dict)
+    ] if isinstance(cases, list) else []
+    expected_rust = [
+        (case.get("name"), case.get("scenario"), case.get("input", {}).get("entrypoint"), case.get("expected", {}).get("allowed"), case.get("expected", {}).get("reason"), case.get("expected", {}).get("allowed"), case.get("expected", {}).get("reason"), True)
+        for case in expected_cases if isinstance(case, dict)
+    ]
+    actual_python = [(item.get("id"), item.get("target"), item.get("junit")) for item in scenarios if isinstance(item, dict)]
+    expected_python = [(scenario_id, target, f"junit/user-scenario-{index}.xml") for index, (scenario_id, target) in enumerate(USER_SCENARIOS, 1)]
+    if rust.get("version") != expected.get("version") or actual_rust != expected_rust or actual_python != expected_python or rust.get("total_cases") != len(expected_rust):
         return "FAIL"
-    rust_status = "PASS" if all(case.get("passed") is True for case in cases) and rust.get("total_cases") == len(cases) else "FAIL"
+    rust_status = "PASS" if actual_rust else "FAIL"
     scenario_status = _combined_status(*(str(item.get("status", "NOT_PROVEN")) for item in scenarios))
     nested_status = _combined_status(rust_status, scenario_status)
     return nested_status if rust.get("status") == rust_status and evidence.get("status") == nested_status else "FAIL"
