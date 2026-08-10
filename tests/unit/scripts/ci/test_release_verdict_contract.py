@@ -74,4 +74,5 @@ def test_release_gate_enforces_not_proven_when_reports_are_disabled(monkeypatch)
     report = _release_without_steps(monkeypatch, emit_report=False)
 
     assert report.success is False
-    assert [(step.name, step.status) for step in report.steps] == [("release-verdict", "failed")]
+    assert report.steps[-2].name == "final-runtime-artifact-cleanup"
+    assert (report.steps[-1].name, report.steps[-1].status) == ("release-verdict", "failed")
