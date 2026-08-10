@@ -1,11 +1,13 @@
 from __future__ import annotations
+
 from quality.business_quality_snapshot import BusinessQualitySnapshot
+from quality.complaint_penalty_engine import ComplaintPenaltyEngine
 from quality.customer_satisfaction_tracker import CustomerSatisfactionTracker
+from quality.fraud_risk_tracker import FraudRiskTracker
+from quality.no_response_penalty_engine import NoResponsePenaltyEngine
 from quality.refund_quality_tracker import RefundQualityTracker
 from quality.repeat_customer_tracker import RepeatCustomerTracker
-from quality.no_response_penalty_engine import NoResponsePenaltyEngine
-from quality.complaint_penalty_engine import ComplaintPenaltyEngine
-from quality.fraud_risk_tracker import FraudRiskTracker
+
 
 class BusinessQualityEngine:
     def __init__(self) -> None:
