@@ -4,9 +4,10 @@ import json
 import time
 from pathlib import Path
 
-from core.growth.strategy.contracts import GrowthGoalV1
+from core.growth.strategy.contracts import GROWTH_PARTNERSHIP_VISIBILITY_NOTE, GrowthGoalV1
 from core.growth.strategy.service import GrowthStrategyService
 from core.growth.strategy.signals import build_signals
+from runtime.handler_impl.growth_strategy_generate import _visible_hypotheses
 from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 
 
@@ -196,7 +197,7 @@ def test_llm_cannot_drop_relevant_partnership_hypothesis(tmp_path: Path):
         assert partners[0].action_hints["advisory_only"] is True
 
 
-def test_required_partnership_is_visible_without_dropping_ranked_hypotheses(tmp_path: Path):
+def test_required_partnership_visibility_is_a_render_projection_not_ranking_override(tmp_path: Path):
     with SqliteEventStore(str(tmp_path / "partner-visible.db")) as store:
         svc = GrowthStrategyService(event_store=store, llm=_FullHighScoreLLM())
         plan = svc.generate_backlog(
@@ -209,7 +210,15 @@ def test_required_partnership_is_visible_without_dropping_ranked_hypotheses(tmp_
         )
         assert len(plan.top_hypotheses) == 9
         assert sum(h.title.startswith("High score hypothesis") for h in plan.top_hypotheses) == 8
-        assert any(h.channel == "partnerships" for h in plan.top_hypotheses[:8])
+        assert all(h.channel != "partnerships" for h in plan.top_hypotheses[:8])
+        assert plan.top_hypotheses[8].channel == "partnerships"
+        assert GROWTH_PARTNERSHIP_VISIBILITY_NOTE in plan.notes
+
+        visible = _visible_hypotheses(plan, limit=8)
+        assert len(visible) == 8
+        assert any(h.channel == "partnerships" for h in visible)
+        assert len(plan.top_hypotheses) == 9
+        assert plan.top_hypotheses[8].channel == "partnerships"
 
 
 def test_llm_partnership_cannot_smuggle_executable_authority(tmp_path: Path):
