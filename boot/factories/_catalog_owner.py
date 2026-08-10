@@ -5,7 +5,6 @@ from typing import Callable, Final
 from boot.runtime_service_specs import CATALOG_BACKED_FACTORY_NAMES
 from runtime.errors import RuntimeConfigurationError
 from runtime.runtime_observability import RuntimeObservability
-from runtime.service_names import RuntimeServiceName
 from runtime.integration.runtime_packet_provider import RuntimePacketProvider
 from runtime.decision_input.decision_input_service import DecisionInputService, build_decision_input_service as build_runtime_decision_input_service
 from runtime.decision_gateway import (
