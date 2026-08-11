@@ -182,6 +182,8 @@ def _outputs(
     html_extra: dict | None = None,
     html_data: bool = True,
     truncated_steps: bool = False,
+    json_errors: bool = False,
+    html_errors: bool = False,
 ) -> None:
     names = projects or browser_evidence.browser_project_names()
     specs = [
@@ -193,7 +195,8 @@ def _outputs(
     ]
     browser.mkdir(parents=True, exist_ok=True)
     (browser / "playwright.json").write_text(json.dumps({
-        "config": {"projects": [{"name": name} for name in names]}, "suites": [{"specs": specs, "suites": []}],
+        "config": {"projects": [{"name": name} for name in names]}, "errors": [{"message": "reporter failure"}] if json_errors else [],
+        "suites": [{"specs": specs, "suites": []}],
         "stats": {"expected": len(names), "unexpected": 0, "skipped": skipped, "flaky": 0},
     }), encoding="utf-8")
     suites = "".join(
@@ -206,7 +209,7 @@ def _outputs(
         tests *= 2
     file_id = "canonical-browser-spec"
     stats = {"total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True}
-    report = {"projectNames": list(names), "files": [{"fileId": file_id, "fileName": file, "tests": tests, "stats": stats}], "stats": stats}
+    report = {"projectNames": list(names), "errors": [{"message": "reporter failure"}] if html_errors else [], "files": [{"fileId": file_id, "fileName": file, "tests": tests, "stats": stats}], "stats": stats}
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as handle:
         handle.writestr("report.json", json.dumps(report))
@@ -236,6 +239,8 @@ def test_evidence_requires_exact_projects_canonical_identity_and_three_real_arti
         lambda: _outputs(browser, html_extra={"status": "failed", "errors": [{"message": "forged"}]}),
         lambda: _outputs(browser, html_data=False),
         lambda: _outputs(browser, truncated_steps=True),
+        lambda: _outputs(browser, json_errors=True),
+        lambda: _outputs(browser, html_errors=True),
     ):
         mutate()
         assert browser_evidence.browser_artifact_snapshot(browser) is None
