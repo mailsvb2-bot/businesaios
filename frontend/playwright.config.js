@@ -28,7 +28,7 @@ export default defineConfig({
   outputDir: path.join(artifacts, "test-results"),
   use: {
     baseURL: uiTarget,
-    trace: "retain-on-failure",
+    trace: "off",
     screenshot: "only-on-failure",
     video: "retain-on-failure"
   },
