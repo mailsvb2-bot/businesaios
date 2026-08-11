@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
+import io
 import json
+import zipfile
 from pathlib import Path
 
 from scripts.ci import execution
@@ -24,6 +27,18 @@ def _write_payload(tmp_path, payload: dict) -> None:
     (tmp_path / USER_SCENARIO_EVIDENCE_NAME).write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _html_report(expected: int) -> str:
+    report = {
+        "projectNames": ["chromium"], "files": [{"tests": [{} for _ in range(expected)]}],
+        "stats": {"total": expected, "expected": expected, "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True},
+    }
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("report.json", json.dumps(report))
+    encoded = base64.b64encode(output.getvalue()).decode("ascii")
+    return f'<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body><template id="playwrightReportBase64">data:application/zip;base64,{encoded}</template></body></html>'
+
+
 def _write_browser_evidence(tmp_path, sha: str, *, expected: int = 1) -> None:
     browser = tmp_path / "browser-e2e"
     browser.mkdir(parents=True, exist_ok=True)
@@ -35,8 +50,7 @@ def _write_browser_evidence(tmp_path, sha: str, *, expected: int = 1) -> None:
         encoding="utf-8",
     )
     (browser / "html").mkdir(exist_ok=True)
-    html = "<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body><script>" + ("x" * 5000) + "</script></body></html>"
-    (browser / "html" / "index.html").write_text(html, encoding="utf-8")
+    (browser / "html" / "index.html").write_text(_html_report(expected), encoding="utf-8")
     snapshot = browser_artifact_snapshot(browser)
     (tmp_path / BROWSER_EVIDENCE_NAME).write_text(json.dumps({
         "schema": "businessaios_browser_e2e.v1", "exact_sha": sha, "status": "PASS", "project": "chromium",
