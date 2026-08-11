@@ -17,6 +17,8 @@ from scripts.ci.subprocess_io import CommandOutcome
 
 TITLE = "onboarding creates a read-only OWNER workspace without persisting the API key"
 SPEC = "onboarding-workspace.spec.js"
+STEP_SHA = "82c26034d808f62577ec7e69c1022c9e0e31b37feefda51822feb71b5ab8493a"
+STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
 MATRIX = [
     {"name": "chromium", "device": "Desktop Chrome", "engine": "chromium", "surface": "desktop"},
     {"name": "firefox", "device": "Desktop Firefox", "engine": "firefox", "surface": "desktop"},
@@ -31,7 +33,7 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
     assert contract == {
         "schema": browser_evidence.BROWSER_PROJECT_MATRIX_SCHEMA,
         "projects": MATRIX,
-        "scenarios": [{"id": "onboarding_owner_workspace", "title": TITLE, "file": SPEC}],
+        "scenarios": [{"id": "onboarding_owner_workspace", "title": TITLE, "file": SPEC, "detail_step_sha256": STEP_SHA}],
     }
     assert browser_evidence.browser_project_names() == tuple(item["name"] for item in MATRIX)
     config = Path("frontend/playwright.config.js").read_text(encoding="utf-8")
@@ -140,11 +142,29 @@ def _embedded(
     }
 
 
-def _detail_test(test: dict) -> dict:
+def _fixture_step(node: dict, project: str) -> dict:
+    slug = "-".join(project.lower().split())
+    title = str(node["title"])
+    title = title.replace("browser-e2e+{project}@example.test", f"browser-e2e+{slug}@example.test")
+    title = title.replace("{project}", project)
+    step = {
+        "title": title, "startTime": "2026-08-11T10:48:09.726Z", "duration": 1,
+        "steps": [_fixture_step(child, project) for child in node["children"]],
+        "attachments": [], "count": 1, "skipped": False,
+    }
+    if node["location"]:
+        file, line, column = node["location"]
+        step.update(location={"file": file, "line": line, "column": column}, snippet="locked Playwright fixture")
+    return step
+
+
+def _detail_test(test: dict, *, truncated_steps: bool = False) -> dict:
     detail = dict(test)
+    project = str(test["projectName"])
+    steps = [_fixture_step(node, project) for node in STEP_SHAPE]
     detail["results"] = [{
         "duration": 1, "startTime": "2026-08-11T10:48:09.726Z", "retry": 0,
-        "steps": [{"title": "Before Hooks", "startTime": "2026-08-11T10:48:09.726Z", "duration": 1, "steps": [], "attachments": [], "count": 1, "skipped": False}],
+        "steps": steps[:1] if truncated_steps else steps,
         "errors": [], "status": "passed", "attachments": [], "annotations": [], "workerIndex": 0,
     }]
     return detail
@@ -161,6 +181,7 @@ def _outputs(
     attempts: int = 1,
     html_extra: dict | None = None,
     html_data: bool = True,
+    truncated_steps: bool = False,
 ) -> None:
     names = projects or browser_evidence.browser_project_names()
     specs = [
@@ -190,7 +211,7 @@ def _outputs(
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as handle:
         handle.writestr("report.json", json.dumps(report))
         if html_data:
-            handle.writestr(f"{file_id}.json", json.dumps({"fileId": file_id, "fileName": file, "tests": [_detail_test(test) for test in tests]}))
+            handle.writestr(f"{file_id}.json", json.dumps({"fileId": file_id, "fileName": file, "tests": [_detail_test(test, truncated_steps=truncated_steps) for test in tests]}))
     html = base64.b64encode(archive.getvalue()).decode("ascii")
     (browser / "html").mkdir(exist_ok=True)
     (browser / "html" / "index.html").write_text(
@@ -214,6 +235,7 @@ def test_evidence_requires_exact_projects_canonical_identity_and_three_real_arti
         lambda: _outputs(browser, attempts=2),
         lambda: _outputs(browser, html_extra={"status": "failed", "errors": [{"message": "forged"}]}),
         lambda: _outputs(browser, html_data=False),
+        lambda: _outputs(browser, truncated_steps=True),
     ):
         mutate()
         assert browser_evidence.browser_artifact_snapshot(browser) is None
