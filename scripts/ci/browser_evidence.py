@@ -104,10 +104,18 @@ def _embedded_report(html: str, project_names: tuple[str, ...]) -> tuple[dict, d
             if not isinstance(test, dict) or not isinstance(location, dict) or not isinstance(results, list) or not results:
                 return None
             project = str(test.get("projectName") or "")
-            signature = (str(test.get("title") or "").strip(), str(location.get("file") or "").strip(), _count(location.get("line")), _count(location.get("column")))
-            if project not in grouped or not str(test.get("testId") or "").strip() or not all(signature) or test.get("outcome") != "expected" or test.get("ok") is not True:
+            title, file = str(test.get("title") or "").strip(), str(location.get("file") or "").strip()
+            line, column = _count(location.get("line")), _count(location.get("column"))
+            result_ok = all(
+                isinstance(result, dict) and _count(result.get("workerIndex")) >= 0 and str(result.get("startTime") or "").strip()
+                for result in results
+            )
+            if (
+                project not in grouped or not str(test.get("testId") or "").strip() or not title or not file
+                or line <= 0 or column <= 0 or not result_ok or test.get("outcome") != "expected" or test.get("ok") is not True
+            ):
                 return None
-            grouped[project].append(signature)
+            grouped[project].append((title, file, line, column))
     signatures = {name: tuple(sorted(values, key=repr)) for name, values in grouped.items()}
     baseline = signatures[project_names[0]] if project_names else ()
     total = sum(len(values) for values in signatures.values())
