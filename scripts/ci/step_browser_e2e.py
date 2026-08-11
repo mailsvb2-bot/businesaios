@@ -36,13 +36,9 @@ def _runtime_env(*, sha: str | None, runtime_dir: str) -> tuple[dict[str, str], 
         raise RuntimeError("release browser proof requires DATABASE_URL")
     env.update({key: str(os.environ[key]) for key in _PRODUCTION_ENV_KEYS if str(os.environ.get(key) or "").strip()})
     env.update({
-        "ENV": "production", "APP_ENV": "production", "APP_PROFILE": "api",
-        "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE": "1",
-        "API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS": "0",
-        "API_CONTROL_PLANE_API_KEY_PEPPER": secrets.token_urlsafe(48),
-        "DECISION_SIGNING_SECRET": secrets.token_urlsafe(64),
-        "BUSINESAIOS_API_KEY_STORE_BACKEND": "file",
-        "BUSINESAIOS_KEY_PROVIDER_BACKEND": "file",
+        "ENV": "production", "APP_ENV": "production", "APP_PROFILE": "api", "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE": "1",
+        "API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS": "0", "API_CONTROL_PLANE_API_KEY_PEPPER": secrets.token_urlsafe(48), "DECISION_SIGNING_SECRET": secrets.token_urlsafe(64),
+        "BUSINESAIOS_API_KEY_STORE_BACKEND": "file", "BUSINESAIOS_KEY_PROVIDER_BACKEND": "file",
         "BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64": base64.b64encode(secrets.token_bytes(32)).decode("ascii"),
     })
     return env, mode, storage
@@ -58,22 +54,18 @@ def run() -> tuple[bool, str]:
     shutil.rmtree(browser_dir, ignore_errors=True)
     runtime_dir = tempfile.mkdtemp(prefix="businessaios-browser-e2e-")
     try:
-        try:
-            runtime_env, mode, storage = _runtime_env(sha=sha, runtime_dir=runtime_dir)
-        except RuntimeError as exc:
-            _write({"schema": BROWSER_EVIDENCE_SCHEMA, "exact_sha": sha, "status": "FAIL", "reason": str(exc)})
-            return False, f"browser-e2e: {exc}"
+        runtime_env, mode, storage = _runtime_env(sha=sha, runtime_dir=runtime_dir)
         outcome = run_command(["npm", "run", "test:e2e"], cwd=frontend, timeout=600, env=runtime_env)
+    except RuntimeError as exc:
+        _write({"schema": BROWSER_EVIDENCE_SCHEMA, "exact_sha": sha, "status": "FAIL", "reason": str(exc)})
+        return False, f"browser-e2e: {exc}"
     finally:
         shutil.rmtree(runtime_dir, ignore_errors=True)
     snapshot = browser_artifact_snapshot(browser_dir)
     passed = bool(outcome.returncode == 0 and snapshot)
     _write({
-        "schema": BROWSER_EVIDENCE_SCHEMA, "exact_sha": sha,
-        "status": "PASS" if passed and sha else "NOT_PROVEN" if passed else "FAIL",
-        "runtime_mode": mode, "storage_backend": storage,
-        "stats": snapshot["stats"] if snapshot else {}, "projects": snapshot["projects"] if snapshot else [],
+        "schema": BROWSER_EVIDENCE_SCHEMA, "exact_sha": sha, "status": "PASS" if passed and sha else "NOT_PROVEN" if passed else "FAIL",
+        "runtime_mode": mode, "storage_backend": storage, "stats": snapshot["stats"] if snapshot else {}, "projects": snapshot["projects"] if snapshot else [],
         "project_matrix": snapshot["project_matrix"] if snapshot else {}, "artifacts": snapshot["artifacts"] if snapshot else {},
     })
-    project_names = [item["name"] for item in snapshot["projects"]] if snapshot else []
-    return passed, f"browser-e2e: {'passed' if passed else 'failed'} projects={project_names} mode={mode} storage={storage}; stats={snapshot['stats'] if snapshot else {}}"
+    return passed, f"browser-e2e: {'passed' if passed else 'failed'} projects={[item['name'] for item in snapshot['projects']] if snapshot else []} mode={mode} storage={storage}; stats={snapshot['stats'] if snapshot else {}}"
