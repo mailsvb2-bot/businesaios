@@ -136,7 +136,8 @@ def _embedded_test(project: str, title: str | None = None) -> dict:
     return {
         "testId": f"browser-test-{project}", "title": name, "projectName": project,
         "location": {"file": file, "line": line, "column": column},
-        "outcome": "expected", "ok": True, "results": [{"workerIndex": 0}],
+        "outcome": "expected", "ok": True,
+        "results": [{"workerIndex": 0, "startTime": "2026-08-11T00:00:00.000Z"}],
     }
 
 
