@@ -3,13 +3,15 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 import sys
 import zipfile
 from pathlib import Path
 
 import pytest
 
-from scripts.ci import step_browser_e2e
+from scripts.ci import execution, step_browser_e2e
+from scripts.ci.browser_evidence import browser_artifact_snapshot
 from scripts.ci.plan_registry import allowed_gates, plan_for_gate, requires_release_runtime_environment
 from scripts.ci.step_registry import handler_for_step
 from scripts.ci.subprocess_io import CommandOutcome
@@ -42,6 +44,14 @@ def test_browser_gate_is_provisioned_by_ci_and_deep_release() -> None:
     assert "npx playwright" not in ci + deep
 
 
+def test_release_executor_sets_canonical_postgres_event_store_flag(monkeypatch) -> None:
+    for key in ("BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE", "POSTGRES_EVENT_STORE_ENABLED"):
+        monkeypatch.delenv(key, raising=False)
+    with execution._step_environment(gate="release", step_name="browser-e2e"):
+        assert os.environ["BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE"] == "1"
+        assert "POSTGRES_EVENT_STORE_ENABLED" not in os.environ
+
+
 def test_release_browser_runtime_requires_real_database_and_production_security(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("BAIOS_CI_ACTIVE_GATE", "release")
     monkeypatch.delenv("DATABASE_URL", raising=False)
@@ -53,6 +63,8 @@ def test_release_browser_runtime_requires_real_database_and_production_security(
     assert (mode, storage) == ("production", "postgres")
     assert env["ENV"] == env["APP_ENV"] == "production"
     assert env["DATABASE_URL"].startswith("postgresql://")
+    assert env["BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE"] == "1"
+    assert "POSTGRES_EVENT_STORE_ENABLED" not in env
     assert env["API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS"] == "0"
     assert env["BUSINESAIOS_API_KEY_STORE_BACKEND"] == "file"
     assert env["BUSINESAIOS_KEY_PROVIDER_BACKEND"] == "file"
@@ -65,6 +77,7 @@ def test_playwright_runtime_switches_mode_without_production_fallbacks() -> None
     assert 'const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development"' in config
     assert 'const production = runtimeMode === "production"' in config
     assert '"DATABASE_URL", "DECISION_SIGNING_SECRET", "API_CONTROL_PLANE_API_KEY_PEPPER"' in config
+    assert '"BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64", "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE"' in config
     assert 'APP_ENV: production ? "production" : "dev"' in config
     assert 'API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS: production ? "0"' in config
     assert 'BUSINESAIOS_API_KEY_STORE_BACKEND: production ? "file"' in config
@@ -81,9 +94,23 @@ def test_browser_failure_evidence_cannot_capture_owner_key_network_payload() -> 
     assert "context().cookies()" in scenario
 
 
-def _html_report(expected: int) -> str:
+def _embedded_test(index: int) -> dict:
+    return {
+        "testId": f"browser-test-{index}",
+        "title": f"browser-{index}",
+        "projectName": "chromium",
+        "location": {"file": "onboarding-workspace.spec.js", "line": index + 1, "column": 1},
+        "outcome": "expected",
+        "ok": True,
+        "results": [{"workerIndex": 0}],
+    }
+
+
+def _html_report(expected: int, *, embedded_count: int | None = None, empty_records: bool = False) -> str:
+    count = expected if embedded_count is None else embedded_count
+    tests = [{} for _ in range(count)] if empty_records else [_embedded_test(index) for index in range(count)]
     report = {
-        "projectNames": ["chromium"], "files": [{"tests": [{} for _ in range(expected)]}],
+        "projectNames": ["chromium"], "files": [{"tests": tests}],
         "stats": {"total": expected, "expected": expected, "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True},
     }
     output = io.BytesIO()
@@ -106,6 +133,17 @@ def _write_outputs(browser: Path, stats: dict, *, diagnostics: bool) -> None:
     )
     (browser / "html").mkdir(exist_ok=True)
     (browser / "html" / "index.html").write_text(_html_report(expected), encoding="utf-8")
+
+
+def test_browser_evidence_rejects_mismatched_or_empty_embedded_test_records(tmp_path) -> None:
+    browser = tmp_path / "browser"
+    stats = {"expected": 2, "unexpected": 0, "skipped": 0}
+    _write_outputs(browser, stats, diagnostics=True)
+    html_path = browser / "html" / "index.html"
+    html_path.write_text(_html_report(2, embedded_count=1), encoding="utf-8")
+    assert browser_artifact_snapshot(browser) is None
+    html_path.write_text(_html_report(2, empty_records=True), encoding="utf-8")
+    assert browser_artifact_snapshot(browser) is None
 
 
 def _run_browser_step(monkeypatch, tmp_path, stats: dict, returncode: int = 0, diagnostics: bool = True):
