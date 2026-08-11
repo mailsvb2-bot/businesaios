@@ -25,7 +25,9 @@ if (projectNames.some((name) => !name) || new Set(projectNames).size !== project
 const projects = projectMatrix.projects.map((entry) => {
   const device = devices[entry.device];
   if (!device) throw new Error(`unknown Playwright device in canonical matrix: ${entry.device}`);
-  return { name: entry.name, use: { ...device } };
+  if (!["chromium", "firefox", "webkit"].includes(entry.engine)) throw new Error(`invalid browser engine: ${entry.engine}`);
+  if (!["desktop", "mobile"].includes(entry.surface)) throw new Error(`invalid browser surface: ${entry.surface}`);
+  return { name: entry.name, use: { ...device, browserName: entry.engine } };
 });
 const productionRequired = [
   "DATABASE_URL", "DECISION_SIGNING_SECRET", "API_CONTROL_PLANE_API_KEY_PEPPER",
