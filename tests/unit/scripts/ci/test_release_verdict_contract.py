@@ -38,7 +38,7 @@ def _browser_test(project: str) -> dict:
         "title": "onboarding creates a read-only OWNER workspace without persisting the API key",
         "projectName": project,
         "location": {"file": "onboarding-workspace.spec.js", "line": 21, "column": 1},
-        "outcome": "expected", "ok": True,
+        "duration": 1, "annotations": [], "tags": [], "outcome": "expected", "path": [], "ok": True,
         "results": [{"attachments": [], "workerIndex": 0, "startTime": "2026-08-11T00:00:00.000Z"}],
     }
 
@@ -46,7 +46,8 @@ def _browser_test(project: str) -> dict:
 def _browser_detail_test(test: dict) -> dict:
     detail = dict(test)
     detail["results"] = [{
-        "duration": 1, "startTime": "2026-08-11T00:00:00.000Z", "retry": 0, "steps": [],
+        "duration": 1, "startTime": "2026-08-11T00:00:00.000Z", "retry": 0,
+        "steps": [{"title": "Before Hooks", "startTime": "2026-08-11T00:00:00.000Z", "duration": 1, "steps": [], "attachments": [], "count": 1, "skipped": False}],
         "errors": [], "status": "passed", "attachments": [], "annotations": [], "workerIndex": 0,
     }]
     return detail
