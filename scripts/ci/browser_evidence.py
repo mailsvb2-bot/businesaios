@@ -35,7 +35,7 @@ def _matrix_snapshot() -> tuple[list[dict[str, str]], str] | None:
     except (OSError, UnicodeError, json.JSONDecodeError):
         return None
     projects = payload.get("projects") if isinstance(payload, dict) else None
-    if payload.get("schema") != BROWSER_PROJECT_MATRIX_SCHEMA or not isinstance(projects, list) or len(projects) != 5:
+    if not isinstance(payload, dict) or payload.get("schema") != BROWSER_PROJECT_MATRIX_SCHEMA or not isinstance(projects, list) or len(projects) != 5:
         return None
     normalized: list[dict[str, str]] = []
     for item in projects:
@@ -133,8 +133,10 @@ def _embedded_html_report(html: str, project_names: tuple[str, ...]) -> tuple[di
             report = json.loads(archive.read("report.json").decode("utf-8"))
     except (ValueError, OSError, UnicodeError, json.JSONDecodeError, KeyError, zipfile.BadZipFile):
         return None
-    files, stats = report.get("files"), report.get("stats") if isinstance(report, dict) else (None, None)
-    if not isinstance(report, dict) or tuple(report.get("projectNames", ())) != project_names or not isinstance(files, list) or not files or not isinstance(stats, dict):
+    if not isinstance(report, dict):
+        return None
+    files, stats = report.get("files"), report.get("stats")
+    if tuple(report.get("projectNames", ())) != project_names or not isinstance(files, list) or not files or not isinstance(stats, dict):
         return None
     records: list[tuple[str, tuple[object, ...]]] = []
     for item in files:
@@ -142,14 +144,16 @@ def _embedded_html_report(html: str, project_names: tuple[str, ...]) -> tuple[di
         if not isinstance(tests, list):
             return None
         for test in tests:
-            location = test.get("location") if isinstance(test, dict) else None
-            results = test.get("results") if isinstance(test, dict) else None
-            title = str(test.get("title") or "").strip() if isinstance(test, dict) else ""
-            file = str(location.get("file") or "").strip() if isinstance(location, dict) else ""
-            line, column = _count(location.get("line")), _count(location.get("column")) if isinstance(location, dict) else (-1, -1)
+            if not isinstance(test, dict):
+                return None
+            location, results = test.get("location"), test.get("results")
+            if not isinstance(location, dict) or not isinstance(results, list) or not results:
+                return None
+            title, file = str(test.get("title") or "").strip(), str(location.get("file") or "").strip()
+            line, column = _count(location.get("line")), _count(location.get("column"))
             if (
-                not isinstance(test, dict) or not str(test.get("testId") or "").strip() or not title or not file or line <= 0 or column <= 0
-                or test.get("outcome") != "expected" or test.get("ok") is not True or not isinstance(results, list) or not results
+                not str(test.get("testId") or "").strip() or not title or not file or line <= 0 or column <= 0
+                or test.get("outcome") != "expected" or test.get("ok") is not True
             ):
                 return None
             records.append((str(test.get("projectName") or ""), (title, file, line, column)))
