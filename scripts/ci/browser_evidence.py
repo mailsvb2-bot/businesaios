@@ -110,7 +110,7 @@ def _json_report(doc, projects, canonical):
         for test in spec["tests"]:
             results = test.get("results") if isinstance(test, dict) else None
             _need(isinstance(test, dict) and test.get("expectedStatus") == "passed" and test.get("status") == "expected")
-            _need(isinstance(results, list) and results)
+            _need(isinstance(results, list) and len(results) == 1)
             _need(all(isinstance(result, dict) and result.get("status") == "passed" and not result.get("errors") for result in results))
             records.append((_text(test.get("projectName")), title, file))
     _need(_scenario_matrix(records, projects, canonical) and _stats_ok(stats, len(records)))
@@ -131,7 +131,7 @@ def _html_report(html, projects, canonical):
         _need(isinstance(tests, list))
         for test in tests:
             location, results = (test.get("location"), test.get("results")) if isinstance(test, dict) else (None, None)
-            _need(isinstance(location, dict) and isinstance(results, list) and results)
+            _need(isinstance(location, dict) and isinstance(results, list) and len(results) == 1)
             _need(all(isinstance(result, dict) and _integer(result.get("workerIndex")) >= 0 and _timestamp(result.get("startTime")) for result in results))
             title, file = _text(test.get("title")), _text(location.get("file"))
             _need(_text(test.get("testId")) and title and file)
