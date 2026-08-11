@@ -16,7 +16,12 @@ BROWSER_EVIDENCE_SCHEMA = "businessaios_browser_e2e.v2"
 BROWSER_PROJECT_MATRIX = "frontend/e2e/project-matrix.json"
 BROWSER_PROJECT_MATRIX_SCHEMA = "businessaios_browser_project_matrix.v2"
 _HTML_MARKER = '<template id="playwrightReportBase64">data:application/zip;base64,'
-_HTML_RESULT_KEYS, _JSON_RESULT_KEYS = frozenset({"attachments", "startTime", "workerIndex"}), frozenset({"workerIndex", "parallelIndex", "status", "duration", "errors", "stdout", "stderr", "retry", "startTime", "annotations", "attachments"})
+_HTML_RESULT_KEYS = frozenset({"attachments", "startTime", "workerIndex"})
+_HTML_TEST_KEYS = frozenset({"testId", "title", "projectName", "location", "duration", "annotations", "tags", "outcome", "path", "ok", "results"})
+_HTML_DETAIL_RESULT_KEYS = frozenset({"duration", "startTime", "retry", "steps", "errors", "status", "attachments", "annotations", "workerIndex"})
+_STEP_KEYS = frozenset({"title", "startTime", "duration", "steps", "attachments", "count", "skipped"})
+_STEP_LOCATION_KEYS = _STEP_KEYS | {"location", "snippet"}
+_JSON_RESULT_KEYS = frozenset({"workerIndex", "parallelIndex", "status", "duration", "errors", "stdout", "stderr", "retry", "startTime", "annotations", "attachments"})
 
 
 def _need(condition: object) -> None:
@@ -39,6 +44,16 @@ def _timestamp(value: object) -> bool:
     except ValueError:
         return False
     return "T" in text and parsed.tzinfo is not None and parsed.utcoffset() is not None
+
+
+def _step_ok(step: object, file: str) -> bool:
+    keys = set(step) if isinstance(step, dict) else set()
+    location = step.get("location") if isinstance(step, dict) else None
+    return bool(keys in {_STEP_KEYS, _STEP_LOCATION_KEYS} and _text(step.get("title")) and _timestamp(step.get("startTime")) and type(step.get("duration")) is int and step["duration"] >= 0 and step.get("attachments") == [] and step.get("count") == 1 and step.get("skipped") is False and _steps(step.get("steps"), file) and (keys == _STEP_KEYS or (isinstance(location, dict) and set(location) == {"file", "line", "column"} and _text(location.get("file")) == file and min(_integer(location.get("line")), _integer(location.get("column"))) > 0 and _text(step.get("snippet")))))
+
+
+def _steps(value: object, file: str) -> bool:
+    return isinstance(value, list) and all(_step_ok(step, file) for step in value)
 
 
 def _matrix_snapshot():
@@ -122,20 +137,21 @@ def _html_report(html, projects, canonical):
         _need(isinstance(doc, dict) and tuple(doc.get("projectNames", ())) == projects and isinstance(doc.get("files"), list))
         for item in doc["files"]:
             tests, file_id, file_name = (item.get("tests"), _text(item.get("fileId")), _text(item.get("fileName"))) if isinstance(item, dict) else (None, "", "")
-            _need(isinstance(tests, list) and file_id and file_name)
+            _need(isinstance(tests, list) and file_id and file_name and _stats_ok(item.get("stats"), len(tests), total=True))
             detail = json.loads(archive.read(f"{file_id}.json"))
             detail_tests = detail.get("tests") if isinstance(detail, dict) else None
             _need(isinstance(detail_tests, list) and detail.get("fileId") == file_id and detail.get("fileName") == file_name and len(detail_tests) == len(tests))
-            _need([(_text(test.get("testId")), _text(test.get("title")), _text(test.get("projectName"))) for test in detail_tests if isinstance(test, dict)] == [(_text(test.get("testId")), _text(test.get("title")), _text(test.get("projectName"))) for test in tests if isinstance(test, dict)] and len(tests) == len([test for test in detail_tests if isinstance(test, dict)]))
-            for test in tests:
-                location, results = (test.get("location"), test.get("results")) if isinstance(test, dict) else (None, None)
-                _need(isinstance(location, dict) and isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict))
-                _need(set(results[0]) == _HTML_RESULT_KEYS and results[0].get("attachments") == [] and _integer(results[0].get("workerIndex")) >= 0 and _timestamp(results[0].get("startTime")))
-                title, file = _text(test.get("title")), _text(location.get("file"))
-                _need(_text(test.get("testId")) and title and file and file == file_name)
-                _need(min(_integer(location.get("line")), _integer(location.get("column"))) > 0)
-                _need(test.get("outcome") == "expected" and test.get("ok") is True)
-                records.append((_text(test.get("projectName")), title, file))
+            for test, detailed in zip(tests, detail_tests, strict=True):
+                _need(isinstance(test, dict) and isinstance(detailed, dict) and set(test) == set(detailed) == _HTML_TEST_KEYS)
+                _need(all(detailed.get(key) == test.get(key) for key in _HTML_TEST_KEYS - {"results"}))
+                location, results, detail_results = test["location"], test["results"], detailed["results"]
+                _need(isinstance(location, dict) and set(location) == {"file", "line", "column"} and _text(location.get("file")) == file_name and min(_integer(location.get("line")), _integer(location.get("column"))) > 0 and isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict))
+                _need(set(results[0]) == _HTML_RESULT_KEYS and results[0].get("attachments") == [] and type(results[0].get("workerIndex")) is int and results[0]["workerIndex"] >= 0 and _timestamp(results[0].get("startTime")))
+                _need(isinstance(detail_results, list) and len(detail_results) == 1 and isinstance(detail_results[0], dict) and set(detail_results[0]) == _HTML_DETAIL_RESULT_KEYS and type(detail_results[0].get("duration")) is int and detail_results[0]["duration"] >= 0 and detail_results[0].get("retry") == 0 and detail_results[0].get("status") == "passed" and all(detail_results[0].get(key) == [] for key in ("errors", "attachments", "annotations")) and type(detail_results[0].get("workerIndex")) is int and detail_results[0]["workerIndex"] >= 0 and _timestamp(detail_results[0].get("startTime")) and isinstance(detail_results[0].get("steps"), list) and bool(detail_results[0]["steps"]) and _steps(detail_results[0]["steps"], file_name))
+                _need(detail_results[0]["startTime"] == results[0]["startTime"] and detail_results[0]["workerIndex"] == results[0]["workerIndex"] and detail_results[0]["duration"] == detailed["duration"])
+                title = _text(test.get("title"))
+                _need(_text(test.get("testId")) and title and test.get("outcome") == "expected" and test.get("ok") is True)
+                records.append((_text(test.get("projectName")), title, file_name))
     stats = doc.get("stats")
     _need(_scenario_matrix(records, projects, canonical) and _stats_ok(stats, len(records), total=True))
     return stats
