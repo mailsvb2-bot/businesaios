@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -13,6 +14,25 @@ const pythonPath = [repoRoot, process.env.PYTHONPATH].filter(Boolean).join(path.
 const pythonExecutable = process.env.BAIOS_E2E_PYTHON || "python";
 const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development";
 const production = runtimeMode === "production";
+const projectMatrix = JSON.parse(fs.readFileSync(new URL("./e2e/project-matrix.json", import.meta.url), "utf8"));
+if (
+  projectMatrix.schema !== "businessaios_browser_project_matrix.v2"
+  || !Array.isArray(projectMatrix.projects) || !projectMatrix.projects.length
+  || !Array.isArray(projectMatrix.scenarios) || !projectMatrix.scenarios.length
+) {
+  throw new Error("invalid canonical browser proof contract");
+}
+const projectNames = projectMatrix.projects.map((entry) => String(entry?.name || "").trim());
+if (projectNames.some((name) => !name) || new Set(projectNames).size !== projectNames.length) {
+  throw new Error("canonical browser project names must be non-empty and unique");
+}
+const projects = projectMatrix.projects.map((entry) => {
+  const device = devices[entry.device];
+  if (!device) throw new Error(`unknown Playwright device in canonical matrix: ${entry.device}`);
+  if (!["chromium", "firefox", "webkit"].includes(entry.engine)) throw new Error(`invalid browser engine: ${entry.engine}`);
+  if (!["desktop", "mobile"].includes(entry.surface)) throw new Error(`invalid browser surface: ${entry.surface}`);
+  return { name: entry.name, use: { ...device, browserName: entry.engine } };
+});
 const productionRequired = [
   "DATABASE_URL", "DECISION_SIGNING_SECRET", "API_CONTROL_PLANE_API_KEY_PEPPER",
   "BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64", "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE"
@@ -40,7 +60,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "retain-on-failure"
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects,
   webServer: [
     {
       name: production ? "Production API" : "Isolated API",

@@ -5,95 +5,197 @@ import hashlib
 import io
 import json
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from xml.etree import ElementTree
 
+from scripts.ci.paths import repo_root
+
 BROWSER_EVIDENCE_NAME = "browser-e2e-evidence.json"
-_HTML_REPORT_MARKER = '<template id="playwrightReportBase64">data:application/zip;base64,'
+BROWSER_EVIDENCE_SCHEMA = "businessaios_browser_e2e.v2"
+BROWSER_PROJECT_MATRIX = "frontend/e2e/project-matrix.json"
+BROWSER_PROJECT_MATRIX_SCHEMA = "businessaios_browser_project_matrix.v2"
+_HTML_MARKER = '<template id="playwrightReportBase64">data:application/zip;base64,'
+_HTML_RESULT_KEYS = frozenset({"attachments", "startTime", "workerIndex"})
+_HTML_TEST_KEYS = frozenset({"testId", "title", "projectName", "location", "duration", "annotations", "tags", "outcome", "path", "ok", "results"})
+_HTML_DETAIL_RESULT_KEYS = frozenset({"duration", "startTime", "retry", "steps", "errors", "status", "attachments", "annotations", "workerIndex"})
+_STEP_KEYS = frozenset({"title", "startTime", "duration", "steps", "attachments", "count", "skipped"})
+_JSON_RESULT_KEYS = frozenset({"workerIndex", "parallelIndex", "status", "duration", "errors", "stdout", "stderr", "retry", "startTime", "annotations", "attachments"})
 
 
-def _sha256(payload: bytes) -> str:
+def _need(condition: object) -> None:
+    if not condition:
+        raise ValueError("invalid browser evidence")
+
+
+def _integer(value: object) -> int:
+    return value if type(value) is int else int(value) if isinstance(value, str) and value.isdecimal() else -1
+
+
+def _text(value: object) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _timestamp(value: object) -> bool:
+    text = _text(value)
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return "T" in text and parsed.tzinfo is not None and parsed.utcoffset() is not None
+
+
+def _step_shape(step: object, file: str, project: str) -> dict:
+    _need(isinstance(step, dict))
+    keys, location = set(step), step.get("location")
+    _need(keys in {_STEP_KEYS, _STEP_KEYS | {"location", "snippet"}} and _text(step.get("title")) and _timestamp(step.get("startTime")) and type(step.get("duration")) is int and step["duration"] >= 0 and isinstance(step.get("steps"), list) and step.get("attachments") == [] and step.get("count") == 1 and step.get("skipped") is False)
+    _need(keys == _STEP_KEYS or (isinstance(location, dict) and set(location) == {"file", "line", "column"} and _text(location.get("file")) == file and min(_integer(location.get("line")), _integer(location.get("column"))) > 0 and _text(step.get("snippet"))))
+    slug = "-".join(project.lower().split())
+    title = _text(step.get("title")).replace(f"Canonical Browser E2E {project}", "Canonical Browser E2E {project}").replace(f"browser-e2e+{slug}@example.test", "browser-e2e+{project}@example.test")
+    return {"title": title, "location": [_text(location.get("file")), _integer(location.get("line")), _integer(location.get("column"))] if isinstance(location, dict) else None, "children": [_step_shape(child, file, project) for child in step["steps"]]}
+
+
+def _step_fingerprint(steps: object, file: str, project: str) -> str:
+    _need(isinstance(steps, list) and steps)
+    payload = json.dumps([_step_shape(step, file, project) for step in steps], ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
     return hashlib.sha256(payload).hexdigest()
 
 
-def _count(value: object) -> int:
+def _matrix_snapshot():
     try:
-        return int(value)
-    except (TypeError, ValueError):
-        return -1
+        raw = (repo_root() / BROWSER_PROJECT_MATRIX).read_bytes()
+        doc = json.loads(raw)
+        _need(isinstance(doc, dict) and doc.get("schema") == BROWSER_PROJECT_MATRIX_SCHEMA)
+        projects, scenarios = doc.get("projects"), doc.get("scenarios")
+        _need(isinstance(projects, list) and len(projects) == 5 and isinstance(scenarios, list) and scenarios)
+        rows = [{key: _text(item.get(key)) for key in ("name", "device", "engine", "surface")} for item in projects if isinstance(item, dict)]
+        identities = [(_text(item.get("id")), _text(item.get("title")), _text(item.get("file")), _text(item.get("detail_step_sha256"))) for item in scenarios if isinstance(item, dict)]
+        _need(len(rows) == 5 and len(identities) == len(scenarios) and all(all(row.values()) for row in rows))
+        _need(all(all(item) for item in identities) and all(len(item[3]) == 64 and all(char in "0123456789abcdef" for char in item[3]) for item in identities) and len({item[0] for item in identities}) == len(identities))
+        _need(len({row["name"] for row in rows}) == len({row["device"] for row in rows}) == 5)
+        _need(len([row for row in rows if row["surface"] == "desktop"]) == 3 and {row["engine"] for row in rows if row["surface"] == "desktop"} == {"chromium", "firefox", "webkit"})
+        _need(len([row for row in rows if row["surface"] == "mobile"]) == 2 and {row["engine"] for row in rows if row["surface"] == "mobile"} == {"chromium", "webkit"})
+        canonical = tuple(sorted((title, file, fingerprint) for _, title, file, fingerprint in identities))
+        _need(len(canonical) == len(set(canonical)))
+        return rows, canonical, hashlib.sha256(raw).hexdigest()
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+        return None
 
 
-def _embedded_html_stats(html: str) -> dict | None:
-    start = html.find(_HTML_REPORT_MARKER)
-    end = html.find("</template>", start + len(_HTML_REPORT_MARKER)) if start >= 0 else -1
-    if start < 0 or end < 0:
-        return None
-    encoded = html[start + len(_HTML_REPORT_MARKER):end].strip()
-    try:
-        archive_bytes = base64.b64decode(encoded, validate=True)
-        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
-            report = json.loads(archive.read("report.json").decode("utf-8"))
-    except (ValueError, OSError, UnicodeError, json.JSONDecodeError, KeyError, zipfile.BadZipFile):
-        return None
-    if not isinstance(report, dict) or report.get("projectNames") != ["chromium"]:
-        return None
-    files, stats = report.get("files"), report.get("stats")
-    if not isinstance(files, list) or not files or not isinstance(stats, dict):
-        return None
-    tests: list[object] = []
-    for item in files:
-        if not isinstance(item, dict) or not isinstance(item.get("tests"), list):
+def browser_project_names() -> tuple[str, ...]:
+    contract = _matrix_snapshot()
+    return tuple(row["name"] for row in contract[0]) if contract else ()
+
+
+def _stats_ok(stats: object, expected: int, *, total: bool = False) -> bool:
+    return bool(isinstance(stats, dict) and _integer(stats.get("expected")) == expected and all(_integer(stats.get(key)) == 0 for key in ("unexpected", "skipped", "flaky")) and (not total or (_integer(stats.get("total")) == expected and stats.get("ok") is True)))
+
+
+def _scenario_matrix(records, projects, canonical):
+    expected = tuple((title, file) for title, file, _ in canonical)
+    grouped = {project: [] for project in projects}
+    for project, title, file in records:
+        if project not in grouped or not title or not file:
             return None
-        tests.extend(item["tests"])
-    for test in tests:
-        if not isinstance(test, dict) or any(not str(test.get(key) or "").strip() for key in ("testId", "title")):
-            return None
-        if test.get("projectName") != "chromium" or test.get("outcome") != "expected" or test.get("ok") is not True:
-            return None
-        if not isinstance(test.get("location"), dict) or not isinstance(test.get("results"), list) or not test["results"]:
-            return None
-    if not tests or _count(stats.get("total")) != len(tests):
-        return None
+        grouped[project].append((title, file))
+    return grouped if canonical and all(tuple(sorted(grouped[project])) == expected for project in projects) else None
+
+
+def _walk(suites):
+    for suite in suites:
+        _need(isinstance(suite, dict))
+        specs, children = suite.get("specs", []), suite.get("suites", [])
+        _need(isinstance(specs, list) and isinstance(children, list))
+        yield from specs
+        yield from _walk(children)
+
+
+def _json_report(doc, projects, canonical):
+    _need(isinstance(doc, dict) and doc.get("errors") == [] and isinstance(doc.get("config"), dict))
+    configured, suites, stats = doc["config"].get("projects"), doc.get("suites"), doc.get("stats")
+    _need(isinstance(configured, list) and len(configured) == len(projects) and isinstance(suites, list))
+    _need(tuple(_text(item.get("name")) for item in configured if isinstance(item, dict)) == projects)
+    records = []
+    for spec in _walk(suites):
+        _need(isinstance(spec, dict) and spec.get("ok") is True and isinstance(spec.get("tests"), list))
+        title, file = _text(spec.get("title")), _text(spec.get("file"))
+        _need(title and file and min(_integer(spec.get("line")), _integer(spec.get("column"))) > 0)
+        for test in spec["tests"]:
+            results = test.get("results") if isinstance(test, dict) else None
+            _need(isinstance(test, dict) and test.get("expectedStatus") == "passed" and test.get("status") == "expected")
+            _need(isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict) and set(results[0]) == _JSON_RESULT_KEYS and all(type(results[0].get(key)) is int and results[0][key] >= 0 for key in ("workerIndex", "parallelIndex", "duration")) and type(results[0].get("retry")) is int and results[0]["retry"] == 0 and results[0].get("status") == "passed" and results[0].get("errors") == [] and all(results[0].get(key) == [] for key in ("stdout", "stderr", "annotations", "attachments")) and _timestamp(results[0].get("startTime")))
+            records.append((_text(test.get("projectName")), title, file))
+    _need(_scenario_matrix(records, projects, canonical) and _stats_ok(stats, len(records)))
     return stats
 
 
+def _html_report(html, projects, canonical):
+    start = html.find(_HTML_MARKER)
+    end = html.find("</template>", start + len(_HTML_MARKER)) if start >= 0 else -1
+    _need(start >= 0 and end >= 0)
+    encoded = html[start + len(_HTML_MARKER):end].strip()
+    records, fingerprints = [], {(title, file): fingerprint for title, file, fingerprint in canonical}
+    with zipfile.ZipFile(io.BytesIO(base64.b64decode(encoded, validate=True))) as archive:
+        doc = json.loads(archive.read("report.json"))
+        _need(isinstance(doc, dict) and doc.get("errors") == [] and tuple(doc.get("projectNames", ())) == projects and isinstance(doc.get("files"), list))
+        for item in doc["files"]:
+            tests, file_id, file_name = (item.get("tests"), _text(item.get("fileId")), _text(item.get("fileName"))) if isinstance(item, dict) else (None, "", "")
+            _need(isinstance(tests, list) and file_id and file_name and _stats_ok(item.get("stats"), len(tests), total=True))
+            detail = json.loads(archive.read(f"{file_id}.json"))
+            detail_tests = detail.get("tests") if isinstance(detail, dict) else None
+            _need(isinstance(detail_tests, list) and detail.get("fileId") == file_id and detail.get("fileName") == file_name and len(detail_tests) == len(tests))
+            for test, detailed in zip(tests, detail_tests, strict=True):
+                _need(isinstance(test, dict) and isinstance(detailed, dict) and set(test) == set(detailed) == _HTML_TEST_KEYS)
+                _need(all(detailed.get(key) == test.get(key) for key in _HTML_TEST_KEYS - {"results"}))
+                location, results, detail_results = test["location"], test["results"], detailed["results"]
+                _need(isinstance(location, dict) and set(location) == {"file", "line", "column"} and _text(location.get("file")) == file_name and min(_integer(location.get("line")), _integer(location.get("column"))) > 0 and isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict))
+                _need(set(results[0]) == _HTML_RESULT_KEYS and results[0].get("attachments") == [] and type(results[0].get("workerIndex")) is int and results[0]["workerIndex"] >= 0 and _timestamp(results[0].get("startTime")))
+                _need(isinstance(detail_results, list) and len(detail_results) == 1 and isinstance(detail_results[0], dict) and set(detail_results[0]) == _HTML_DETAIL_RESULT_KEYS and type(detail_results[0].get("duration")) is int and detail_results[0]["duration"] >= 0 and detail_results[0].get("retry") == 0 and detail_results[0].get("status") == "passed" and all(detail_results[0].get(key) == [] for key in ("errors", "attachments", "annotations")) and type(detail_results[0].get("workerIndex")) is int and detail_results[0]["workerIndex"] >= 0 and _timestamp(detail_results[0].get("startTime")) and isinstance(detail_results[0].get("steps"), list) and bool(detail_results[0]["steps"]))
+                _need(detail_results[0]["startTime"] == results[0]["startTime"] and detail_results[0]["workerIndex"] == results[0]["workerIndex"] and detail_results[0]["duration"] == detailed["duration"])
+                title, project = _text(test.get("title")), _text(test.get("projectName"))
+                _need(_text(test.get("testId")) and title and project and test.get("outcome") == "expected" and test.get("ok") is True and _step_fingerprint(detail_results[0]["steps"], file_name, project) == fingerprints.get((title, file_name)))
+                records.append((project, title, file_name))
+    stats = doc.get("stats")
+    _need(_scenario_matrix(records, projects, canonical) and _stats_ok(stats, len(records), total=True))
+    return stats
+
+
+def _junit_report(root, projects, canonical) -> int:
+    _need(root.tag == "testsuites" and all(_integer(root.get(key)) == 0 for key in ("failures", "skipped", "errors")))
+    records = []
+    for suite in root:
+        project, cases = _text(suite.get("hostname")), list(suite)
+        _need(suite.tag == "testsuite" and project in projects and _integer(suite.get("tests")) == len(cases))
+        _need(all(_integer(suite.get(key)) == 0 for key in ("failures", "skipped", "errors")))
+        _need(all(case.tag == "testcase" for case in cases))
+        for case in cases:
+            _need(not any(child.tag in {"failure", "error", "skipped"} for child in case))
+            records.append((project, _text(case.get("name")), _text(case.get("classname"))))
+    _need(_scenario_matrix(records, projects, canonical) and _integer(root.get("tests")) == len(records))
+    return len(records)
+
+
 def browser_artifact_snapshot(browser_dir: Path) -> dict | None:
-    json_path, junit_path, html_path = (
-        browser_dir / "playwright.json", browser_dir / "junit.xml", browser_dir / "html" / "index.html",
-    )
+    contract = _matrix_snapshot()
+    if not contract:
+        return None
+    matrix, canonical, matrix_sha = contract
+    projects = tuple(row["name"] for row in matrix)
+    paths = browser_dir / "playwright.json", browser_dir / "junit.xml", browser_dir / "html" / "index.html"
     try:
-        json_bytes, junit_bytes, html_bytes = json_path.read_bytes(), junit_path.read_bytes(), html_path.read_bytes()
-        payload = json.loads(json_bytes.decode("utf-8"))
-        junit_root = ElementTree.fromstring(junit_bytes)
-        html = html_bytes.decode("utf-8")
-    except (OSError, UnicodeError, json.JSONDecodeError, ElementTree.ParseError):
+        json_bytes, junit_bytes, html_bytes = (path.read_bytes() for path in paths)
+        json_stats = _json_report(json.loads(json_bytes), projects, canonical)
+        junit_tests = _junit_report(ElementTree.fromstring(junit_bytes), projects, canonical)
+        html = html_bytes.decode()
+        html_stats = _html_report(html, projects, canonical)
+        expected = _integer(json_stats.get("expected"))
+        _need(expected > 0 and _integer(html_stats.get("expected")) == expected == junit_tests)
+        _need("<title>Playwright Test Report</title>" in html and "</html>" in html)
+    except (OSError, UnicodeError, json.JSONDecodeError, ElementTree.ParseError, zipfile.BadZipFile, KeyError, TypeError, ValueError):
         return None
-    stats = payload.get("stats") if isinstance(payload, dict) else None
-    if not isinstance(stats, dict):
-        return None
-    expected, unexpected, skipped = (_count(stats.get(key)) for key in ("expected", "unexpected", "skipped"))
-    testcases = len(junit_root.findall(".//testcase"))
-    junit_failures = len(junit_root.findall(".//failure")) + len(junit_root.findall(".//error"))
-    junit_skipped = len(junit_root.findall(".//skipped"))
-    html_stats = _embedded_html_stats(html)
-    html_ok = bool(
-        html_stats and _count(html_stats.get("total")) == testcases and _count(html_stats.get("expected")) == expected
-        and _count(html_stats.get("unexpected")) == unexpected and _count(html_stats.get("skipped")) == skipped
-        and html_stats.get("ok") is True and "<title>Playwright Test Report</title>" in html and "</html>" in html
-    )
-    if expected <= 0 or unexpected != 0 or skipped != 0 or testcases != expected or junit_failures or junit_skipped or not html_ok:
-        return None
-    return {
-        "stats": stats,
-        "artifacts": {
-            "json": {"path": "browser-e2e/playwright.json", "sha256": _sha256(json_bytes), "bytes": len(json_bytes)},
-            "junit": {
-                "path": "browser-e2e/junit.xml", "sha256": _sha256(junit_bytes), "bytes": len(junit_bytes),
-                "tests": testcases, "failures": junit_failures, "skipped": junit_skipped,
-            },
-            "html": {"path": "browser-e2e/html/index.html", "sha256": _sha256(html_bytes), "bytes": len(html_bytes)},
-        },
-    }
+    artifacts = {name: {"path": rel, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)} for name, rel, raw in zip(("json", "junit", "html"), ("browser-e2e/playwright.json", "browser-e2e/junit.xml", "browser-e2e/html/index.html"), (json_bytes, junit_bytes, html_bytes), strict=True)}
+    artifacts["junit"].update(tests=junit_tests, failures=0, skipped=0)
+    return {"stats": json_stats, "projects": [{**row, "tests": len(canonical)} for row in matrix], "project_matrix": {"path": BROWSER_PROJECT_MATRIX, "schema": BROWSER_PROJECT_MATRIX_SCHEMA, "sha256": matrix_sha}, "artifacts": artifacts}
 
 
-__all__ = ["BROWSER_EVIDENCE_NAME", "browser_artifact_snapshot"]
+__all__ = ["BROWSER_EVIDENCE_NAME", "BROWSER_EVIDENCE_SCHEMA", "BROWSER_PROJECT_MATRIX", "BROWSER_PROJECT_MATRIX_SCHEMA", "browser_artifact_snapshot", "browser_project_names"]
