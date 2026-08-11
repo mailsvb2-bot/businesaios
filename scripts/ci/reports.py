@@ -12,6 +12,7 @@ from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME, USER_SCENARIO_RUST_FIXTURE, USER_SCENARIOS
 
 _STATUS = {"passed": "PASS", "failed": "FAIL", "skipped": "NOT_PROVEN"}
+_BROWSER_EVIDENCE = "browser-e2e-evidence.json"
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -76,18 +77,43 @@ def _scenario_proof(step_status: str, exact_sha: str | None) -> dict:
     return proof
 
 
+def _browser_proof(step_status: str, exact_sha: str | None) -> dict:
+    proof = {"source_step": _step_ids.browser_e2e(), "status": step_status, "artifact": _BROWSER_EVIDENCE}
+    if step_status == "NOT_PROVEN":
+        return proof
+    try:
+        evidence = json.loads((reports_dir() / _BROWSER_EVIDENCE).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        proof["status"] = "NOT_PROVEN" if step_status == "PASS" else step_status
+        return proof
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        proof["status"] = "FAIL"
+        return proof
+    stats = evidence.get("stats") if isinstance(evidence, dict) else None
+    if not exact_sha or not isinstance(evidence, dict) or evidence.get("exact_sha") != exact_sha:
+        evidence_status = "NOT_PROVEN"
+    else:
+        valid = evidence.get("schema") == "businessaios_browser_e2e.v1" and evidence.get("status") == "PASS" and evidence.get("project") == "chromium" and isinstance(stats, dict)
+        valid = bool(valid and int(stats.get("expected", 0)) > 0 and int(stats.get("unexpected", 0)) == 0 and int(stats.get("skipped", 0)) == 0)
+        evidence_status = "PASS" if valid else "FAIL"
+    proof.update(status=_combined_status(step_status, evidence_status), evidence_status=evidence_status, project=evidence.get("project") if isinstance(evidence, dict) else None, stats=stats or {})
+    return proof
+
+
 def release_verdict(report: ExecutionReport) -> dict:
     exact_sha = os.environ.get("BAIOS_CI_TARGET_SHA")
     steps = [{"id": step.name, "status": _STATUS.get(step.status, "NOT_PROVEN")} for step in report.steps]
-    scenario_proof = _scenario_proof(next((item["status"] for item in steps if item["id"] == _step_ids.user_scenario_gate()), "NOT_PROVEN"), exact_sha)
+    step_status = lambda name: next((item["status"] for item in steps if item["id"] == name), "NOT_PROVEN")
+    scenario_proof = _scenario_proof(step_status(_step_ids.user_scenario_gate()), exact_sha)
+    browser_proof = _browser_proof(step_status(_step_ids.browser_e2e()), exact_sha)
     complete = report.gate == "release" and {step.name for step in plan_for_gate("release").steps if step.required}.issubset(
         {item["id"] for item in steps if item["status"] == "PASS"})
-    status = "FAIL" if "FAIL" in {_combined_status(*(item["status"] for item in steps)), scenario_proof["status"]} else (
-        "PASS" if complete and exact_sha and scenario_proof["status"] == "PASS" else "NOT_PROVEN")
+    status = "FAIL" if "FAIL" in {_combined_status(*(item["status"] for item in steps)), scenario_proof["status"], browser_proof["status"]} else (
+        "PASS" if complete and exact_sha and scenario_proof["status"] == browser_proof["status"] == "PASS" else "NOT_PROVEN")
     return {
         "schema": "businessaios_release_verdict.v1", "exact_sha": exact_sha, "gate": report.gate,
-        "status": status, "scope": "declared-canonical-user-scenarios",
-        "canonical_user_scenarios": scenario_proof, "steps": steps,
+        "status": status, "scope": "declared-canonical-user-scenarios-and-browser",
+        "canonical_user_scenarios": scenario_proof, "browser_e2e": browser_proof, "steps": steps,
     }
 
 
