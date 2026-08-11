@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
 
@@ -73,7 +74,9 @@ function Workspace({ data, apiBase, onRestart }) {
   const integrations = data.integration_plan || [];
   const ownerSession = data.owner_session || {};
   const apiKey = ownerSession.api_key || "";
-  const workspaceUrl = `${apiBase.replace(/\/$/, "")}/business-workspace/providers`;
+  const baseApi = apiBase.replace(/\/$/, "");
+  const workspaceUrl = `${baseApi}/business-workspace/providers`;
+  const acquisitionUrl = `${baseApi}/business-workspace/acquisition-plan`;
   const authHeaders = useMemo(() => (apiKey ? { "X-API-Key": apiKey } : {}), [apiKey]);
   const selectedKeys = useMemo(() => new Set(integrations.map((item) => item.provider_key)), [integrations]);
   const [catalog, setCatalog] = useState([]);
@@ -211,6 +214,8 @@ function Workspace({ data, apiBase, onRestart }) {
         <article className="summary-card"><span className="summary-icon">◇</span><div><small>Режим</small><strong>{data.user_functionality?.autonomy_mode_label || "Советник"}</strong></div></article>
       </section>
 
+      <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
+
       <section className="workspace-grid">
         <article className="panel primary-panel">
           <div className="panel-title-row"><div><p className="eyebrow">Защищённое подключение</p><h2>Источники данных</h2></div><span className="privacy-badge">Запись выключена</span></div>
@@ -266,7 +271,7 @@ function Workspace({ data, apiBase, onRestart }) {
               </>
             ) : (preview.checks || []).map((item) => <div className="check-row" key={item}><span>✓</span><strong>{item}</strong></div>)}
           </div>
-          <div className="truth-note">{liveEvidence ? "Этот статус построен из сохранённой истории реального sync, а не из клика по кнопке или демо-данных." : "Здесь нет придуманных цифр. Финансовые выводы появятся только после реального sync ваших данных."}</div>
+          <div className="truth-note">{liveEvidence ? "Этот статус построен из сохранённой истории реального sync, а не из клика по кнопке или демо-данных." : "Здесь нет придуманных фактических цифр. Фактические финансовые выводы появятся только после real sync ваших данных; сценарный калькулятор выше использует только введённые вами предположения."}</div>
         </article>
       </section>
 
