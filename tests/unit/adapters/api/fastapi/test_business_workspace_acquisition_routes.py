@@ -76,18 +76,18 @@ def test_acquisition_plan_uses_session_scope_and_canonical_solver(monkeypatch) -
     assert result['economics']['blended_cac'] == 30.0
 
 
-def test_acquisition_plan_rejects_invalid_payload(monkeypatch) -> None:
+def test_acquisition_plan_rejects_invalid_or_overflowing_payload(monkeypatch) -> None:
     router = APIRouter()
     acquisition_routes.register_business_workspace_acquisition_routes(router=router, auth_bundle=object())
     monkeypatch.setattr(acquisition_routes, 'business_owner_scope', lambda **_: (_principal(), 'tenant-session', 'business-session'))
+    for body in ({'target_customers': 10}, {**_payload(), 'target_customers': float('inf')}):
+        async def fake_json_body(_request, payload=body):
+            return payload
 
-    async def fake_json_body(_request):
-        return {'target_customers': 10}
-
-    monkeypatch.setattr(acquisition_routes, 'json_body', fake_json_body)
-    with pytest.raises(HTTPException) as exc:
-        asyncio.run(_route(router)(object()))
-    assert exc.value.status_code == 422
+        monkeypatch.setattr(acquisition_routes, 'json_body', fake_json_body)
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(_route(router)(object()))
+        assert exc.value.status_code == 422
 
 
 def test_acquisition_plan_json_projection_is_safe_for_unbounded_timeline() -> None:
