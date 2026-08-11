@@ -78,9 +78,11 @@ def test_release_browser_runtime_is_fail_closed(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
     with pytest.raises(RuntimeError, match="DATABASE_URL"):
         step_browser_e2e._runtime_env(sha="a" * 40, runtime_dir=str(tmp_path))
-    monkeypatch.setenv("DATABASE_URL", "postgresql://proof@127.0.0.1:5432/businessaios")
+    database_url = "postgresql://proof@127.0.0.1:5432/businessaios"
+    monkeypatch.setenv("DATABASE_URL", database_url)
     env, mode, storage = step_browser_e2e._runtime_env(sha="a" * 40, runtime_dir=str(tmp_path))
     assert (mode, storage) == ("production", "postgres")
+    assert env["DATABASE_URL"] == database_url
     assert env["ENV"] == env["APP_ENV"] == "production" and env["BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE"] == "1"
     assert env["API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS"] == "0" and env["BUSINESAIOS_API_KEY_STORE_BACKEND"] == "file"
     assert env["BUSINESAIOS_KEY_PROVIDER_BACKEND"] == "file" and env["DECISION_SIGNING_SECRET"] != "dev-secret"
@@ -95,6 +97,7 @@ def test_evidence_integer_types_are_strict(value, expected) -> None:
 @pytest.mark.parametrize("value, expected", [
     ("2026-08-11T10:48:09.726Z", True), ("2026-08-11T10:48:09+00:00", True),
     ({"not": "a timestamp"}, False), (123, False), ("not-a-timestamp", False),
+    ("2026-08-11", False), ("2026-08-11T10:48:09", False),
 ])
 def test_evidence_timestamp_types_are_strict(value, expected) -> None:
     assert browser_evidence._timestamp(value) is expected
@@ -104,7 +107,7 @@ def _embedded(project: str, title: str = TITLE, file: str = SPEC) -> dict:
     return {
         "testId": f"browser-{project}", "title": title, "projectName": project,
         "location": {"file": file, "line": 21, "column": 1}, "outcome": "expected", "ok": True,
-        "results": [{"workerIndex": 0, "startTime": "2026-08-11T10:48:09.726Z"}],
+        "results": [{"attachments": [], "workerIndex": 0, "startTime": "2026-08-11T10:48:09.726Z"}],
     }
 
 
@@ -197,6 +200,8 @@ def test_browser_step_requires_complete_matrix_and_fails_closed(monkeypatch, tmp
     assert result[0] and evidence["status"] == "PASS" and evidence["schema"] == browser_evidence.BROWSER_EVIDENCE_SCHEMA
     assert [item["name"] for item in evidence["projects"]] == list(browser_evidence.browser_project_names())
     assert captured["env"]["BAIOS_E2E_PYTHON"] == sys.executable
+    assert evidence["exact_sha"] == "a" * 40 and evidence["runtime_mode"] == "development"
+    assert evidence["storage_backend"] == "isolated-local" and all(item["tests"] == 1 for item in evidence["projects"])
     for skipped, diagnostics in ((1, True), (0, False)):
         child = tmp_path / f"case-{skipped}-{diagnostics}"
         child.mkdir()
