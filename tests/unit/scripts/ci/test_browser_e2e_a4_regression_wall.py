@@ -13,6 +13,18 @@ from scripts.ci import browser_evidence, step_browser_e2e
 from scripts.ci.subprocess_io import CommandOutcome
 
 
+def _html_document(report: dict) -> str:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("report.json", json.dumps(report))
+    encoded = base64.b64encode(output.getvalue()).decode("ascii")
+    return (
+        '<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body>'
+        f'<template id="playwrightReportBase64">data:application/zip;base64,{encoded}</template>'
+        "</body></html>"
+    )
+
+
 def test_playwright_production_security_bindings_remain_locked() -> None:
     config = Path("frontend/playwright.config.js").read_text(encoding="utf-8")
     assert 'const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development"' in config
@@ -44,7 +56,7 @@ def test_playwright_evidence_timestamps_require_timezone() -> None:
         assert browser_evidence._timestamp(value) is False
 
 
-def test_playwright_evidence_rejects_multiple_attempts_in_each_artifact() -> None:
+def test_playwright_evidence_rejects_multiple_and_failed_attempts() -> None:
     contract = browser_evidence._matrix_snapshot()
     assert contract
     matrix, canonical, _ = contract
@@ -67,7 +79,12 @@ def test_playwright_evidence_rejects_multiple_attempts_in_each_artifact() -> Non
                 "location": {"file": file, "line": 1, "column": 1},
                 "outcome": "expected",
                 "ok": True,
-                "results": [{"workerIndex": 0, "startTime": "2026-08-11T10:48:09.726Z"}],
+                "results": [{
+                    "workerIndex": 0,
+                    "startTime": "2026-08-11T10:48:09.726Z",
+                    "status": "passed",
+                    "errors": [],
+                }],
             })
         specs.append({"title": title, "file": file, "line": 1, "column": 1, "ok": True, "tests": json_tests})
     total = len(projects) * len(canonical)
@@ -80,23 +97,28 @@ def test_playwright_evidence_rejects_multiple_attempts_in_each_artifact() -> Non
     with pytest.raises(ValueError, match="invalid browser evidence"):
         browser_evidence._json_report(json_doc, projects, canonical)
 
-    html_tests[0]["results"].append({"workerIndex": 0, "startTime": "2026-08-11T10:48:09.727Z"})
+    html_tests[0]["results"].append({
+        "workerIndex": 0,
+        "startTime": "2026-08-11T10:48:09.727Z",
+        "status": "passed",
+        "errors": [],
+    })
     report = {
         "projectNames": list(projects),
         "files": [{"tests": html_tests}],
         "stats": {"total": total, "expected": total, "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True},
     }
-    output = io.BytesIO()
-    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("report.json", json.dumps(report))
-    encoded = base64.b64encode(output.getvalue()).decode("ascii")
-    html = (
-        '<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body>'
-        f'<template id="playwrightReportBase64">data:application/zip;base64,{encoded}</template>'
-        "</body></html>"
-    )
     with pytest.raises(ValueError, match="invalid browser evidence"):
-        browser_evidence._html_report(html, projects, canonical)
+        browser_evidence._html_report(_html_document(report), projects, canonical)
+
+    html_tests[0]["results"] = [{
+        "workerIndex": 0,
+        "startTime": "2026-08-11T10:48:09.726Z",
+        "status": "failed",
+        "errors": [{"message": "contradictory failure"}],
+    }]
+    with pytest.raises(ValueError, match="invalid browser evidence"):
+        browser_evidence._html_report(_html_document(report), projects, canonical)
 
 
 def test_release_runtime_forwards_database_url(monkeypatch, tmp_path) -> None:
