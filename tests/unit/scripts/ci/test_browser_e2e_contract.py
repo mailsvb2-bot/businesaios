@@ -38,12 +38,15 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
     scenario = Path("frontend/e2e/onboarding-workspace.spec.js").read_text(encoding="utf-8")
     assert 'readFileSync(new URL("./e2e/project-matrix.json", import.meta.url)' in config
     assert "browserName: entry.engine" in config and 'trace: "off"' in config
-    for binding in (
-        "BAIOS_E2E_RUNTIME_MODE", "DATABASE_URL", "DECISION_SIGNING_SECRET",
-        "API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS", "BUSINESAIOS_API_KEY_STORE_BACKEND",
-        "BUSINESAIOS_KEY_PROVIDER_BACKEND", "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE",
-    ):
-        assert binding in config
+    assert 'const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development"' in config
+    assert 'const production = runtimeMode === "production"' in config
+    assert '"DATABASE_URL", "DECISION_SIGNING_SECRET", "API_CONTROL_PLANE_API_KEY_PEPPER"' in config
+    assert '"BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64", "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE"' in config
+    assert 'APP_ENV: production ? "production" : "dev"' in config
+    assert 'ENV: production ? "production" : "dev"' in config
+    assert 'API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS: production ? "0"' in config
+    assert 'BUSINESAIOS_API_KEY_STORE_BACKEND: production ? "file"' in config
+    assert 'BUSINESAIOS_KEY_PROVIDER_BACKEND: production ? "file"' in config
     assert 'find((item) => item?.id === "onboarding_owner_workspace")' in scenario
     assert "test(canonicalScenario.title" in scenario and "testInfo.project.name" in scenario
     assert "hasNoHorizontalOverflow" in scenario and "indexedDB.databases()" in scenario and "context().cookies()" in scenario
