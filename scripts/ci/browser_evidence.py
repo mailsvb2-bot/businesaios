@@ -34,13 +34,11 @@ def _text(value: object) -> str:
 
 def _timestamp(value: object) -> bool:
     text = _text(value)
-    if "T" not in text:
-        return False
     try:
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError:
         return False
-    return parsed.tzinfo is not None and parsed.utcoffset() is not None
+    return "T" in text and parsed.tzinfo is not None and parsed.utcoffset() is not None
 
 
 def _matrix_snapshot():
@@ -72,12 +70,9 @@ def browser_project_names() -> tuple[str, ...]:
 
 
 def _stats_ok(stats: object, expected: int, *, total: bool = False) -> bool:
-    return bool(
-        isinstance(stats, dict)
-        and _integer(stats.get("expected")) == expected
-        and all(_integer(stats.get(key)) == 0 for key in ("unexpected", "skipped", "flaky"))
-        and (not total or (_integer(stats.get("total")) == expected and stats.get("ok") is True))
-    )
+    return bool(isinstance(stats, dict) and _integer(stats.get("expected")) == expected
+                and all(_integer(stats.get(key)) == 0 for key in ("unexpected", "skipped", "flaky"))
+                and (not total or (_integer(stats.get("total")) == expected and stats.get("ok") is True)))
 
 
 def _scenario_matrix(records, projects, canonical):
@@ -111,8 +106,8 @@ def _json_report(doc, projects, canonical):
         for test in spec["tests"]:
             results = test.get("results") if isinstance(test, dict) else None
             _need(isinstance(test, dict) and test.get("expectedStatus") == "passed" and test.get("status") == "expected")
-            _need(isinstance(results, list) and len(results) == 1)
-            _need(all(isinstance(result, dict) and result.get("status") == "passed" and isinstance(result.get("errors"), list) and not result["errors"] for result in results))
+            _need(isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict)
+                  and results[0].get("status") == "passed" and results[0].get("errors") == [])
             records.append((_text(test.get("projectName")), title, file))
     _need(_scenario_matrix(records, projects, canonical) and _stats_ok(stats, len(records)))
     return stats
@@ -132,8 +127,9 @@ def _html_report(html, projects, canonical):
         _need(isinstance(tests, list))
         for test in tests:
             location, results = (test.get("location"), test.get("results")) if isinstance(test, dict) else (None, None)
-            _need(isinstance(location, dict) and isinstance(results, list) and len(results) == 1)
-            _need(all(isinstance(result, dict) and set(result) == _HTML_RESULT_KEYS and isinstance(result.get("attachments"), list) and _integer(result.get("workerIndex")) >= 0 and _timestamp(result.get("startTime")) for result in results))
+            _need(isinstance(location, dict) and isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict))
+            _need(set(results[0]) == _HTML_RESULT_KEYS and isinstance(results[0].get("attachments"), list)
+                  and _integer(results[0].get("workerIndex")) >= 0 and _timestamp(results[0].get("startTime")))
             title, file = _text(test.get("title")), _text(location.get("file"))
             _need(_text(test.get("testId")) and title and file)
             _need(min(_integer(location.get("line")), _integer(location.get("column"))) > 0)
@@ -177,26 +173,21 @@ def browser_artifact_snapshot(browser_dir: Path) -> dict | None:
         _need("<title>Playwright Test Report</title>" in html and "</html>" in html)
     except (OSError, UnicodeError, json.JSONDecodeError, ElementTree.ParseError, zipfile.BadZipFile, KeyError, TypeError, ValueError):
         return None
-    names = "json", "junit", "html"
-    rels = "browser-e2e/playwright.json", "browser-e2e/junit.xml", "browser-e2e/html/index.html"
     artifacts = {
         name: {"path": rel, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
-        for name, rel, raw in zip(names, rels, (json_bytes, junit_bytes, html_bytes), strict=True)
+        for name, rel, raw in zip(("json", "junit", "html"),
+            ("browser-e2e/playwright.json", "browser-e2e/junit.xml", "browser-e2e/html/index.html"),
+            (json_bytes, junit_bytes, html_bytes), strict=True)
     }
     artifacts["junit"].update(tests=junit_tests, failures=0, skipped=0)
     return {
-        "stats": json_stats,
-        "projects": [{**row, "tests": len(canonical)} for row in matrix],
+        "stats": json_stats, "projects": [{**row, "tests": len(canonical)} for row in matrix],
         "project_matrix": {"path": BROWSER_PROJECT_MATRIX, "schema": BROWSER_PROJECT_MATRIX_SCHEMA, "sha256": matrix_sha},
         "artifacts": artifacts,
     }
 
 
 __all__ = [
-    "BROWSER_EVIDENCE_NAME",
-    "BROWSER_EVIDENCE_SCHEMA",
-    "BROWSER_PROJECT_MATRIX",
-    "BROWSER_PROJECT_MATRIX_SCHEMA",
-    "browser_artifact_snapshot",
-    "browser_project_names",
+    "BROWSER_EVIDENCE_NAME", "BROWSER_EVIDENCE_SCHEMA", "BROWSER_PROJECT_MATRIX", "BROWSER_PROJECT_MATRIX_SCHEMA",
+    "browser_artifact_snapshot", "browser_project_names",
 ]
