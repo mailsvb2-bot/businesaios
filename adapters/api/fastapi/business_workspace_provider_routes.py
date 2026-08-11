@@ -4,23 +4,18 @@ from typing import Any, Mapping
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from adapters.api.fastapi.router_support import authorize_request, json_body
+from adapters.api.fastapi.router_support import business_owner_scope, json_body
 from application.business_autonomy.provider_truth_matrix import provider_truth_map
 from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
-from governance.rbac_contract import RoleId
 
 CANON_BUSINESS_WORKSPACE_PROVIDER_ROUTES = True
 _READY = frozenset({'live_ready', 'read_only_ready', 'implemented', 'partial'})
 
 
 def _workspace_scope(*, request: Request, auth_bundle) -> tuple[object, str, str]:
-    _, principal = authorize_request(request=request, auth_bundle=auth_bundle)
-    if RoleId.OWNER not in tuple(principal.roles) or 'provider_control_plane' not in tuple(principal.scopes):
+    principal, tenant_id, business_id = business_owner_scope(request=request, auth_bundle=auth_bundle)
+    if 'provider_control_plane' not in tuple(principal.scopes):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='owner_provider_scope_required')
-    tenant_id = str(principal.tenant_id or '').strip()
-    business_id = str(dict(principal.metadata or {}).get('business_id') or '').strip()
-    if not tenant_id or not business_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='business_workspace_scope_missing')
     return principal, tenant_id, business_id
 
 
