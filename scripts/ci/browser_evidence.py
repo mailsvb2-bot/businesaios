@@ -32,10 +32,14 @@ def _text(value: object) -> str:
 
 
 def _timestamp(value: object) -> bool:
-    try:
-        return bool(_text(value)) and bool(datetime.fromisoformat(value.replace("Z", "+00:00")))
-    except (AttributeError, ValueError):
+    text = _text(value)
+    if "T" not in text:
         return False
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None and parsed.utcoffset() is not None
 
 
 def _matrix_snapshot():
