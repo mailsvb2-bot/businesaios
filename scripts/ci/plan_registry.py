@@ -7,42 +7,21 @@ def _plan(gate: str, *steps: str) -> ExecutionPlan:
     return ExecutionPlan(gate=gate, steps=tuple(StepDefinition(name=s) for s in steps))
 
 
-def _pg_migrations_step() -> str:
-    return "".join(("postgres", "-", "migrations"))
-
-
-def _pg_live_step() -> str:
-    return "".join(("postgres", "-", "live"))
-
-
-def _container_runtime_step() -> str:
-    return "".join(("container", "-", "runtime"))
-
-
-def _staging_runtime_step() -> str:
-    return "".join(("staging", "-", "runtime"))
-
-
-def _production_boot_step() -> str:
-    return "".join(("production", "-", "boot"))
-
-
-def _integrity_auditor_step() -> str:
-    return "".join(("integrity", "-", "auditor"))
-
-
-def _user_scenario_gate_step() -> str:
-    return "".join(("user", "-", "scenario", "-", "gate"))
-
-
-def _browser_e2e_step() -> str:
-    return "".join(("browser", "-", "e2e"))
+def _sid(*parts: str) -> str: return "-".join(parts)
+def _pg_migrations_step() -> str: return _sid("postgres", "migrations")
+def _pg_live_step() -> str: return _sid("postgres", "live")
+def _container_runtime_step() -> str: return _sid("container", "runtime")
+def _staging_runtime_step() -> str: return _sid("staging", "runtime")
+def _production_boot_step() -> str: return _sid("production", "boot")
+def _integrity_auditor_step() -> str: return _sid("integrity", "auditor")
+def _user_scenario_gate_step() -> str: return _sid("user", "scenario", "gate")
+def _browser_e2e_step() -> str: return _sid("browser", "e2e")
 
 
 def _release_proof_steps() -> tuple[str, ...]:
     return (
-        "postgres-contract", _pg_migrations_step(), _pg_live_step(),
-        _container_runtime_step(), _staging_runtime_step(), _production_boot_step(),
+        "postgres-contract", _pg_migrations_step(), _pg_live_step(), _container_runtime_step(),
+        _staging_runtime_step(), _production_boot_step(),
     )
 
 
