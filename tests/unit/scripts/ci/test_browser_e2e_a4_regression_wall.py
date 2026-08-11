@@ -56,7 +56,7 @@ def test_playwright_evidence_timestamps_require_timezone() -> None:
         assert browser_evidence._timestamp(value) is False
 
 
-def test_playwright_evidence_rejects_multiple_and_failed_attempts() -> None:
+def test_playwright_evidence_rejects_multiple_and_contradictory_attempts() -> None:
     contract = browser_evidence._matrix_snapshot()
     assert contract
     matrix, canonical, _ = contract
@@ -80,10 +80,9 @@ def test_playwright_evidence_rejects_multiple_and_failed_attempts() -> None:
                 "outcome": "expected",
                 "ok": True,
                 "results": [{
+                    "attachments": [],
                     "workerIndex": 0,
                     "startTime": "2026-08-11T10:48:09.726Z",
-                    "status": "passed",
-                    "errors": [],
                 }],
             })
         specs.append({"title": title, "file": file, "line": 1, "column": 1, "ok": True, "tests": json_tests})
@@ -98,10 +97,9 @@ def test_playwright_evidence_rejects_multiple_and_failed_attempts() -> None:
         browser_evidence._json_report(json_doc, projects, canonical)
 
     html_tests[0]["results"].append({
+        "attachments": [],
         "workerIndex": 0,
         "startTime": "2026-08-11T10:48:09.727Z",
-        "status": "passed",
-        "errors": [],
     })
     report = {
         "projectNames": list(projects),
@@ -112,6 +110,7 @@ def test_playwright_evidence_rejects_multiple_and_failed_attempts() -> None:
         browser_evidence._html_report(_html_document(report), projects, canonical)
 
     html_tests[0]["results"] = [{
+        "attachments": [],
         "workerIndex": 0,
         "startTime": "2026-08-11T10:48:09.726Z",
         "status": "failed",
