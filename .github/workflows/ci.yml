@@ -145,7 +145,7 @@ jobs:
           test -s frontend/dist/index.html
           grep -R -F -q "https://api.businessaios.ru" frontend/dist
       - name: Upload frontend bundle
-        if: always()
+        if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: frontend-dist
