@@ -7,11 +7,16 @@ export function AcquisitionPlanner({ enabled, onEvaluate }) {
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const update = (key) => (event) => setForm((previous) => ({ ...previous, [key]: event.target.value }));
+  const update = (key) => (event) => {
+    setForm((previous) => ({ ...previous, [key]: event.target.value }));
+    setResult(null);
+    setError("");
+  };
 
   const evaluate = async () => {
     setBusy(true);
     setError("");
+    setResult(null);
     try {
       setResult(await onEvaluate(acquisitionPayload(form)));
     } catch (err) {
