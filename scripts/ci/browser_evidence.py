@@ -111,7 +111,7 @@ def _walk(suites):
 
 
 def _json_report(doc, projects, canonical):
-    _need(isinstance(doc, dict) and isinstance(doc.get("config"), dict))
+    _need(isinstance(doc, dict) and doc.get("errors") == [] and isinstance(doc.get("config"), dict))
     configured, suites, stats = doc["config"].get("projects"), doc.get("suites"), doc.get("stats")
     _need(isinstance(configured, list) and len(configured) == len(projects) and isinstance(suites, list))
     _need(tuple(_text(item.get("name")) for item in configured if isinstance(item, dict)) == projects)
@@ -137,7 +137,7 @@ def _html_report(html, projects, canonical):
     records, fingerprints = [], {(title, file): fingerprint for title, file, fingerprint in canonical}
     with zipfile.ZipFile(io.BytesIO(base64.b64decode(encoded, validate=True))) as archive:
         doc = json.loads(archive.read("report.json"))
-        _need(isinstance(doc, dict) and tuple(doc.get("projectNames", ())) == projects and isinstance(doc.get("files"), list))
+        _need(isinstance(doc, dict) and doc.get("errors") == [] and tuple(doc.get("projectNames", ())) == projects and isinstance(doc.get("files"), list))
         for item in doc["files"]:
             tests, file_id, file_name = (item.get("tests"), _text(item.get("fileId")), _text(item.get("fileName"))) if isinstance(item, dict) else (None, "", "")
             _need(isinstance(tests, list) and file_id and file_name and _stats_ok(item.get("stats"), len(tests), total=True))
