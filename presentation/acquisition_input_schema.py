@@ -7,14 +7,7 @@ CANON_PRESENTATION_ACQUISITION_INPUT_SCHEMA = True
 
 @dataclass(frozen=True, slots=True)
 class AcquisitionInputField:
-    """
-    Presentation-only metadata for external controls.
-
-    Important:
-    - no feasibility math here
-    - no solver branching here
-    - no localized prose inside acquisition domain
-    """
+    """Presentation-only metadata for external acquisition controls."""
 
     key: str
     label_key: str
@@ -41,111 +34,34 @@ class AcquisitionInputSchema:
         raise KeyError(key)
 
 
+_FIELD_SPECS = (
+    ("target_customers", 1, 10_000, 1, 10, "customers"),
+    ("total_budget", 0, 1_000_000, 10, 1_000, "currency"),
+    ("daily_budget", 0, 100_000, 1, 100, "currency_per_day"),
+    ("target_days", 1, 3_650, 1, 30, "days"),
+    ("cost_per_entry", 0.01, 10_000, 0.01, 2.0, "currency_per_entry"),
+    ("gross_margin_ltv", 0, 1_000_000, 1, 300, "currency"),
+    ("setup_cost", 0, 1_000_000, 1, 0, "currency"),
+    ("max_cac_to_ltv_ratio", 0.01, 1.0, 0.01, 0.33, "ratio"),
+    ("payback_horizon_months", 1, 120, 1, 12, "months"),
+    ("expected_monthly_margin_per_customer", 0, 100_000, 1, 20, "currency_per_month"),
+)
+
+
 def acquisition_input_schema() -> AcquisitionInputSchema:
-    schema = AcquisitionInputSchema(
-        fields=(
-            AcquisitionInputField(
-                key="target_customers",
-                label_key="acquisition.target_customers.label",
-                description_key="acquisition.target_customers.description",
-                minimum=1,
-                maximum=10_000,
-                step=1,
-                default=10,
-                unit="customers",
-            ),
-            AcquisitionInputField(
-                key="total_budget",
-                label_key="acquisition.total_budget.label",
-                description_key="acquisition.total_budget.description",
-                minimum=0,
-                maximum=1_000_000,
-                step=10,
-                default=1_000,
-                unit="currency",
-            ),
-            AcquisitionInputField(
-                key="daily_budget",
-                label_key="acquisition.daily_budget.label",
-                description_key="acquisition.daily_budget.description",
-                minimum=0,
-                maximum=100_000,
-                step=1,
-                default=100,
-                unit="currency_per_day",
-            ),
-            AcquisitionInputField(
-                key="target_days",
-                label_key="acquisition.target_days.label",
-                description_key="acquisition.target_days.description",
-                minimum=1,
-                maximum=3_650,
-                step=1,
-                default=30,
-                unit="days",
-            ),
-            AcquisitionInputField(
-                key="cost_per_entry",
-                label_key="acquisition.cost_per_entry.label",
-                description_key="acquisition.cost_per_entry.description",
-                minimum=0.01,
-                maximum=10_000,
-                step=0.01,
-                default=2.0,
-                unit="currency_per_entry",
-            ),
-            AcquisitionInputField(
-                key="gross_margin_ltv",
-                label_key="acquisition.gross_margin_ltv.label",
-                description_key="acquisition.gross_margin_ltv.description",
-                minimum=0,
-                maximum=1_000_000,
-                step=1,
-                default=300,
-                unit="currency",
-            ),
-            AcquisitionInputField(
-                key="setup_cost",
-                label_key="acquisition.setup_cost.label",
-                description_key="acquisition.setup_cost.description",
-                minimum=0,
-                maximum=1_000_000,
-                step=1,
-                default=0,
-                unit="currency",
-            ),
-            AcquisitionInputField(
-                key="max_cac_to_ltv_ratio",
-                label_key="acquisition.max_cac_to_ltv_ratio.label",
-                description_key="acquisition.max_cac_to_ltv_ratio.description",
-                minimum=0.01,
-                maximum=1.0,
-                step=0.01,
-                default=0.33,
-                unit="ratio",
-            ),
-            AcquisitionInputField(
-                key="payback_horizon_months",
-                label_key="acquisition.payback_horizon_months.label",
-                description_key="acquisition.payback_horizon_months.description",
-                minimum=1,
-                maximum=120,
-                step=1,
-                default=12,
-                unit="months",
-            ),
-            AcquisitionInputField(
-                key="expected_monthly_margin_per_customer",
-                label_key="acquisition.expected_monthly_margin_per_customer.label",
-                description_key="acquisition.expected_monthly_margin_per_customer.description",
-                minimum=0,
-                maximum=100_000,
-                step=1,
-                default=20,
-                unit="currency_per_month",
-            ),
+    schema = AcquisitionInputSchema(fields=tuple(
+        AcquisitionInputField(
+            key=key,
+            label_key=f"acquisition.{key}.label",
+            description_key=f"acquisition.{key}.description",
+            minimum=minimum,
+            maximum=maximum,
+            step=step,
+            default=default,
+            unit=unit,
         )
-    )
+        for key, minimum, maximum, step, default, unit in _FIELD_SPECS
+    ))
     _validate_schema(schema)
     return schema
 
