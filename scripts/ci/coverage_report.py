@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -9,33 +8,18 @@ from scripts.ci.fs import safe_write_bytes
 
 
 def write_ci_execution_summary_xml(path: Path, report: ExecutionReport) -> None:
-    """Write a CI execution summary XML, not code coverage.
-
-    This artifact intentionally reports gate/step status only. It must never be
-    interpreted as coverage.py metrics or production readiness evidence.
-    """
-
+    """Write gate status metadata; this artifact never claims code coverage or production readiness."""
     root = ET.Element(
-        "ci-execution-summary",
-        version="ci-canon-v8",
-        gate=report.gate,
-        success=str(report.success).lower(),
-        claims_code_coverage="false",
-        claims_production_ready="false",
+        "ci-execution-summary", version="ci-canon-v8", gate=report.gate,
+        success=str(report.success).lower(), claims_code_coverage="false", claims_production_ready="false",
     )
-    summary = ET.SubElement(root, "summary")
-    summary.set("steps", str(len(report.steps)))
-    summary.set("failed_steps", str(sum(1 for step in report.steps if step.status == "failed")))
-    summary.set("skipped_steps", str(sum(1 for step in report.steps if step.status == "skipped")))
-    summary.set("coverage_kind", "not_code_coverage")
-
-    buffer = io.BytesIO()
-    ET.ElementTree(root).write(buffer, encoding="utf-8", xml_declaration=True)
-    safe_write_bytes(path, buffer.getvalue())
+    ET.SubElement(
+        root, "summary", steps=str(len(report.steps)), failed_steps=str(sum(1 for step in report.steps if step.status == "failed")),
+        skipped_steps=str(sum(1 for step in report.steps if step.status == "skipped")), coverage_kind="not_code_coverage",
+    )
+    safe_write_bytes(path, ET.tostring(root, encoding="utf-8", xml_declaration=True))
 
 
-# Backward-compatible name for existing callers. The emitted XML is intentionally
-# not a coverage report and carries explicit non-coverage claims.
 def write_coverage_stub_xml(path: Path, report: ExecutionReport) -> None:
     write_ci_execution_summary_xml(path, report)
 

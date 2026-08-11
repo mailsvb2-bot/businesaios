@@ -10,40 +10,36 @@ def repo_root() -> Path:
 
 
 def artifacts_dir() -> Path:
-    path = repo_root() / "artifacts"
-    return ensure_writable_dir(path)
+    return ensure_writable_dir(repo_root() / "artifacts")
 
 
 def reports_dir() -> Path:
-    path = artifacts_dir() / "ci"
-    return ensure_writable_dir(path)
+    return ensure_writable_dir(artifacts_dir() / "ci")
+
+
+def _report_subdir(name: str) -> Path:
+    return ensure_writable_dir(reports_dir() / name)
 
 
 def junit_dir() -> Path:
-    path = reports_dir() / "junit"
-    return ensure_writable_dir(path)
-
+    return _report_subdir("junit")
 
 
 def execution_dir() -> Path:
-    path = reports_dir() / "execution"
-    return ensure_writable_dir(path)
+    return _report_subdir("execution")
+
 
 def coverage_dir() -> Path:
-    path = reports_dir() / "coverage"
-    return ensure_writable_dir(path)
+    return _report_subdir("coverage")
 
 
 def summaries_dir() -> Path:
-    path = reports_dir() / "summaries"
-    return ensure_writable_dir(path)
+    return _report_subdir("summaries")
 
 
 def dist_dir() -> Path:
-    path = repo_root() / "dist"
-    return ensure_writable_dir(path)
+    return ensure_writable_dir(repo_root() / "dist")
 
 
 def hooks_dir() -> Path:
-    path = repo_root() / ".githooks"
-    return ensure_writable_dir(path)
+    return repo_root() / ".githooks"
