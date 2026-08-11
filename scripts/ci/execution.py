@@ -13,6 +13,7 @@ from scripts.ci.plan_registry import (
     plan_for_gate,
     requires_release_dependency_lock_environment,
     requires_release_proof_environment,
+    requires_release_runtime_environment,
 )
 from scripts.ci.reports import release_verdict, write_release_verdict, write_report
 from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state
@@ -26,25 +27,27 @@ _PROOF_ENV_KEYS = (
 )
 _RELEASE_RUNTIME_DEFAULTS = {
     "ENV": "production", "APP_ENV": "production", "APP_PROFILE": "api", "POSTGRES_RUNTIME_ENABLED": "1",
-    "POSTGRES_EVENT_STORE_ENABLED": "1", "RUN_MIGRATIONS_BEFORE_START": "1", "POSTGRES_APPLY_MIGRATIONS": "1",
+    "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE": "1", "RUN_MIGRATIONS_BEFORE_START": "1", "POSTGRES_APPLY_MIGRATIONS": "1",
 }
-_RELEASE_RUNTIME_ENV_KEYS = (*_RELEASE_RUNTIME_DEFAULTS, "BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK")
+_RELEASE_RUNTIME_ENV_KEYS = (*_RELEASE_RUNTIME_DEFAULTS, "BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK", "BAIOS_CI_ACTIVE_GATE")
 
 
 @contextmanager
 def _step_environment(*, gate: str, step_name: str) -> Iterator[None]:
     quality_key = "BAIOS_REQUIRE_QUALITY_TOOLS"
     previous = {key: os.environ.get(key) for key in (quality_key, *_PROOF_ENV_KEYS, *_RELEASE_RUNTIME_ENV_KEYS)}
+    os.environ["BAIOS_CI_ACTIVE_GATE"] = gate
     if requires_release_dependency_lock_environment(gate=gate, step_name=step_name):
         os.environ["BAIOS_REQUIRE_TRANSITIVE_DEPENDENCY_LOCK"] = "1"
     if step_name == "quality-check" and gate in {"release", "pre-release"}:
         os.environ[quality_key] = "release"
-    if requires_release_proof_environment(gate=gate, step_name=step_name):
-        for key in _PROOF_ENV_KEYS:
-            os.environ[key] = "1"
+    if requires_release_runtime_environment(gate=gate, step_name=step_name):
         for key, value in _RELEASE_RUNTIME_DEFAULTS.items():
             os.environ.setdefault(key, value)
         os.environ[quality_key] = "release"
+    if requires_release_proof_environment(gate=gate, step_name=step_name):
+        for key in _PROOF_ENV_KEYS:
+            os.environ[key] = "1"
     try:
         yield
     finally:

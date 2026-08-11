@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const DEFAULT_API = "https://api.businessaios.ru";
+const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
 
 const GOALS = [
   { value: "growth", title: "Больше клиентов", text: "Найти потери в воронке и точки роста продаж." },
