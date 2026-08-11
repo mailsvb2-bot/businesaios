@@ -38,11 +38,25 @@ def test_browser_failure_evidence_cannot_capture_owner_key_network_payload() -> 
     config = Path("frontend/playwright.config.js").read_text(encoding="utf-8")
     scenario = Path("frontend/e2e/onboarding-workspace.spec.js").read_text(encoding="utf-8")
     assert 'trace: "off"' in config
-    assert "retain-on-failure" not in config.split('trace: "off"', 1)[0]
+    assert 'trace: "retain-on-failure"' not in config
     assert "expect(ownerKey)" not in scenario
     assert ".toContain(ownerKey)" not in scenario
     assert "indexedDB.databases()" in scenario
     assert "context().cookies()" in scenario
+
+
+def _write_outputs(browser: Path, stats: dict, *, diagnostics: bool) -> None:
+    browser.mkdir(parents=True, exist_ok=True)
+    (browser / "playwright.json").write_text(json.dumps({"stats": stats}), encoding="utf-8")
+    if not diagnostics:
+        return
+    (browser / "junit.xml").write_text(
+        '<testsuites tests="1" failures="0" skipped="0" errors="0"><testsuite><testcase name="browser"/></testsuite></testsuites>',
+        encoding="utf-8",
+    )
+    html = "<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body><script>" + ("x" * 5000) + "</script></body></html>"
+    (browser / "html").mkdir(exist_ok=True)
+    (browser / "html" / "index.html").write_text(html, encoding="utf-8")
 
 
 def _run_browser_step(monkeypatch, tmp_path, stats: dict, returncode: int = 0, diagnostics: bool = True):
@@ -50,12 +64,6 @@ def _run_browser_step(monkeypatch, tmp_path, stats: dict, returncode: int = 0, d
     reports = root / "artifacts" / "ci"
     browser = reports / "browser-e2e"
     (root / "frontend").mkdir(parents=True)
-    browser.mkdir(parents=True)
-    (browser / "playwright.json").write_text(json.dumps({"stats": stats}), encoding="utf-8")
-    if diagnostics:
-        (browser / "junit.xml").write_text("<testsuites/>", encoding="utf-8")
-        (browser / "html").mkdir()
-        (browser / "html" / "index.html").write_text("browser evidence", encoding="utf-8")
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     captured = {}
@@ -67,12 +75,7 @@ def _run_browser_step(monkeypatch, tmp_path, stats: dict, returncode: int = 0, d
 
     def _run(*args, **kwargs):
         captured.update(kwargs)
-        browser.mkdir(parents=True, exist_ok=True)
-        (browser / "playwright.json").write_text(json.dumps({"stats": stats}), encoding="utf-8")
-        if diagnostics:
-            (browser / "junit.xml").write_text("<testsuites/>", encoding="utf-8")
-            (browser / "html").mkdir(exist_ok=True)
-            (browser / "html" / "index.html").write_text("browser evidence", encoding="utf-8")
+        _write_outputs(browser, stats, diagnostics=diagnostics)
         return CommandOutcome(returncode, "", "")
 
     monkeypatch.setattr(step_browser_e2e, "run_command", _run)
@@ -86,6 +89,8 @@ def test_browser_step_requires_real_non_skipped_playwright_test(monkeypatch, tmp
     assert result[0] is True
     assert evidence["status"] == "PASS"
     assert evidence["exact_sha"] == "a" * 40
+    assert evidence["artifacts"]["junit"]["tests"] == 1
+    assert len(evidence["artifacts"]["html"]["sha256"]) == 64
     assert captured["env"]["BAIOS_E2E_PYTHON"] == sys.executable
 
 
@@ -95,7 +100,7 @@ def test_browser_step_fails_closed_on_vacuous_or_skipped_report(monkeypatch, tmp
     assert evidence["status"] == "FAIL"
 
 
-def test_browser_step_fails_closed_without_diagnostics(monkeypatch, tmp_path) -> None:
+def test_browser_step_fails_closed_without_parseable_diagnostics(monkeypatch, tmp_path) -> None:
     result, evidence, _ = _run_browser_step(
         monkeypatch, tmp_path, {"expected": 1, "unexpected": 0, "skipped": 0}, diagnostics=False,
     )
