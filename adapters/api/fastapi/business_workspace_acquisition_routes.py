@@ -31,7 +31,7 @@ def register_business_workspace_acquisition_routes(*, router: APIRouter, auth_bu
         try:
             result = evaluate_acquisition_payload(body)
             view = build_acquisition_view_model(result)
-        except (TypeError, ValueError) as exc:
+        except (TypeError, ValueError, OverflowError) as exc:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
         return _json_safe({
             'ok': True,
