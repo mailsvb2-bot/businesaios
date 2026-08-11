@@ -14,6 +14,7 @@ from entrypoints.api.api_key_policy import ApiKeyPolicy, build_default_api_key_s
 from entrypoints.api.jwt_policy import JwtPolicy
 from entrypoints.api.request_context import RequestContext
 from entrypoints.api.security_owner_bundle import ApiSecurityOwnerBundle
+from governance.rbac_contract import RoleId
 from observability.metrics import InMemoryMetrics
 from security.key_provider import build_default_key_provider
 from security.webhook_signature_verifier import WebhookSignatureVerifier
@@ -62,6 +63,17 @@ def authorize_request(*, request: Request, auth_bundle: AuthDependencyBundle):
         metadata={**dict(untrusted_context.metadata), **proof},
     )
     return request_context, principal
+
+
+def business_owner_scope(*, request: Request, auth_bundle: AuthDependencyBundle, required_scope: str | None = None):
+    _, principal = authorize_request(request=request, auth_bundle=auth_bundle)
+    if RoleId.OWNER not in tuple(principal.roles) or (required_scope and required_scope not in tuple(principal.scopes)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='owner_business_scope_required')
+    tenant_id = str(principal.tenant_id or '').strip()
+    business_id = str(dict(principal.metadata or {}).get('business_id') or '').strip()
+    if not tenant_id or not business_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='business_workspace_scope_missing')
+    return principal, tenant_id, business_id
 
 
 def tenant_if_present(*, principal, request_context, tenant_guard, body):
