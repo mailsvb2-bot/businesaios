@@ -43,15 +43,24 @@ def _browser_test(project: str) -> dict:
     }
 
 
+def _browser_detail_test(test: dict) -> dict:
+    detail = dict(test)
+    detail["results"] = [{
+        "duration": 1, "startTime": "2026-08-11T00:00:00.000Z", "retry": 0, "steps": [],
+        "errors": [], "status": "passed", "attachments": [], "annotations": [], "workerIndex": 0,
+    }]
+    return detail
+
+
 def _html_report(projects: tuple[str, ...]) -> str:
     tests = [_browser_test(project) for project in projects]
-    report = {
-        "projectNames": list(projects), "files": [{"tests": tests}],
-        "stats": {"total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True},
-    }
+    file_id, file_name = "canonical-browser-spec", "onboarding-workspace.spec.js"
+    stats = {"total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True}
+    report = {"projectNames": list(projects), "files": [{"fileId": file_id, "fileName": file_name, "tests": tests, "stats": stats}], "stats": stats}
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("report.json", json.dumps(report))
+        archive.writestr(f"{file_id}.json", json.dumps({"fileId": file_id, "fileName": file_name, "tests": [_browser_detail_test(test) for test in tests]}))
     encoded = base64.b64encode(output.getvalue()).decode("ascii")
     return f'<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body><template id="playwrightReportBase64">data:application/zip;base64,{encoded}</template></body></html>'
 
