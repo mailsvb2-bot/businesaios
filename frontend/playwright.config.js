@@ -11,6 +11,14 @@ const apiTarget = `http://127.0.0.1:${apiPort}`;
 const uiTarget = `http://127.0.0.1:${uiPort}`;
 const pythonPath = [repoRoot, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
 const pythonExecutable = process.env.BAIOS_E2E_PYTHON || "python";
+const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development";
+const production = runtimeMode === "production";
+const productionRequired = [
+  "DATABASE_URL", "DECISION_SIGNING_SECRET", "API_CONTROL_PLANE_API_KEY_PEPPER",
+  "BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64"
+];
+const missingProduction = productionRequired.filter((key) => !String(process.env[key] || "").trim());
+if (production && missingProduction.length) throw new Error(`production browser runtime missing: ${missingProduction.join(",")}`);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -35,7 +43,7 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
-      name: "Production API",
+      name: production ? "Production API" : "Isolated API",
       command: `"${pythonExecutable}" ../scripts/server/run_profile.py`,
       cwd: path.resolve("."),
       url: `${apiTarget}/health`,
@@ -46,16 +54,19 @@ export default defineConfig({
       env: {
         ...process.env,
         APP_PROFILE: "api",
-        APP_ENV: "dev",
-        ENV: "dev",
+        APP_ENV: production ? "production" : "dev",
+        ENV: production ? "production" : "dev",
         API_HOST: "127.0.0.1",
         API_PORT: apiPort,
         APP_RUNTIME_DATA_DIR: path.join(runtimeRoot, "runtime"),
         BUSINESAIOS_DATA_DIR: path.join(runtimeRoot, "runtime"),
         DATA_DIR: path.join(runtimeRoot, "data"),
+        BUSINESAIOS_API_KEY_STORE_BACKEND: production ? "file" : (process.env.BUSINESAIOS_API_KEY_STORE_BACKEND || "file"),
         BUSINESAIOS_API_KEY_STORE_PATH: path.join(runtimeRoot, "api_keys.json"),
         BUSINESAIOS_TENANT_REGISTRY_PATH: path.join(runtimeRoot, "tenant_registry.json"),
-        API_CONTROL_PLANE_API_KEY_PEPPER: "canonical-browser-e2e-pepper",
+        API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS: production ? "0" : (process.env.API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS || "1"),
+        API_CONTROL_PLANE_API_KEY_PEPPER: process.env.API_CONTROL_PLANE_API_KEY_PEPPER || "canonical-browser-e2e-pepper",
+        BUSINESAIOS_KEY_PROVIDER_BACKEND: production ? "file" : (process.env.BUSINESAIOS_KEY_PROVIDER_BACKEND || "memory"),
         FORWARDED_ALLOW_IPS: "203.0.113.254",
         BUSINESAIOS_TRUST_PROXY_HEADERS: "1",
         BUSINESAIOS_TRUSTED_PROXY_IPS: "127.0.0.1/32",
