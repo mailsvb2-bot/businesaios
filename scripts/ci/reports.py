@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from scripts.ci import step_ids as _step_ids
+from scripts.ci.browser_evidence import BROWSER_EVIDENCE_NAME, browser_artifact_snapshot
 from scripts.ci.contracts import ExecutionReport
 from scripts.ci.fs import safe_write_text
 from scripts.ci.paths import repo_root, reports_dir
@@ -12,7 +13,6 @@ from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME, USER_SCENARIO_RUST_FIXTURE, USER_SCENARIOS
 
 _STATUS = {"passed": "PASS", "failed": "FAIL", "skipped": "NOT_PROVEN"}
-_BROWSER_EVIDENCE = "browser-e2e-evidence.json"
 
 
 def _write_json(path: Path, payload: dict) -> None:
@@ -78,25 +78,33 @@ def _scenario_proof(step_status: str, exact_sha: str | None) -> dict:
 
 
 def _browser_proof(step_status: str, exact_sha: str | None) -> dict:
-    proof = {"source_step": _step_ids.browser_e2e(), "status": step_status, "artifact": _BROWSER_EVIDENCE}
+    proof = {"source_step": _step_ids.browser_e2e(), "status": step_status, "artifact": BROWSER_EVIDENCE_NAME}
     if step_status == "NOT_PROVEN":
         return proof
     try:
-        evidence = json.loads((reports_dir() / _BROWSER_EVIDENCE).read_text(encoding="utf-8"))
+        evidence = json.loads((reports_dir() / BROWSER_EVIDENCE_NAME).read_text(encoding="utf-8"))
     except FileNotFoundError:
         proof["status"] = "NOT_PROVEN" if step_status == "PASS" else step_status
         return proof
     except (OSError, UnicodeError, json.JSONDecodeError):
         proof["status"] = "FAIL"
         return proof
-    stats = evidence.get("stats") if isinstance(evidence, dict) else None
     if not exact_sha or not isinstance(evidence, dict) or evidence.get("exact_sha") != exact_sha:
         evidence_status = "NOT_PROVEN"
     else:
-        valid = evidence.get("schema") == "businessaios_browser_e2e.v1" and evidence.get("status") == "PASS" and evidence.get("project") == "chromium" and isinstance(stats, dict)
-        valid = bool(valid and int(stats.get("expected", 0)) > 0 and int(stats.get("unexpected", 0)) == 0 and int(stats.get("skipped", 0)) == 0)
+        snapshot = browser_artifact_snapshot(reports_dir() / "browser-e2e")
+        valid = bool(
+            snapshot and evidence.get("schema") == "businessaios_browser_e2e.v1"
+            and evidence.get("status") == "PASS" and evidence.get("project") == "chromium"
+            and evidence.get("stats") == snapshot["stats"] and evidence.get("artifacts") == snapshot["artifacts"]
+        )
         evidence_status = "PASS" if valid else "FAIL"
-    proof.update(status=_combined_status(step_status, evidence_status), evidence_status=evidence_status, project=evidence.get("project") if isinstance(evidence, dict) else None, stats=stats or {})
+    proof.update(
+        status=_combined_status(step_status, evidence_status), evidence_status=evidence_status,
+        project=evidence.get("project") if isinstance(evidence, dict) else None,
+        stats=evidence.get("stats", {}) if isinstance(evidence, dict) else {},
+        artifacts=evidence.get("artifacts", {}) if isinstance(evidence, dict) else {},
+    )
     return proof
 
 
