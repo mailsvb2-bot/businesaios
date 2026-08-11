@@ -23,21 +23,6 @@ def _count(value: object) -> int:
         return -1
 
 
-def _embedded_test_ok(test: object) -> bool:
-    if not isinstance(test, dict):
-        return False
-    return bool(
-        str(test.get("testId") or "").strip()
-        and str(test.get("title") or "").strip()
-        and test.get("projectName") == "chromium"
-        and test.get("outcome") == "expected"
-        and test.get("ok") is True
-        and isinstance(test.get("location"), dict)
-        and isinstance(test.get("results"), list)
-        and test.get("results")
-    )
-
-
 def _embedded_html_stats(html: str) -> dict | None:
     start = html.find(_HTML_REPORT_MARKER)
     end = html.find("</template>", start + len(_HTML_REPORT_MARKER)) if start >= 0 else -1
@@ -60,7 +45,14 @@ def _embedded_html_stats(html: str) -> dict | None:
         if not isinstance(item, dict) or not isinstance(item.get("tests"), list):
             return None
         tests.extend(item["tests"])
-    if not tests or not all(_embedded_test_ok(test) for test in tests) or _count(stats.get("total")) != len(tests):
+    for test in tests:
+        if not isinstance(test, dict) or any(not str(test.get(key) or "").strip() for key in ("testId", "title")):
+            return None
+        if test.get("projectName") != "chromium" or test.get("outcome") != "expected" or test.get("ok") is not True:
+            return None
+        if not isinstance(test.get("location"), dict) or not isinstance(test.get("results"), list) or not test["results"]:
+            return None
+    if not tests or _count(stats.get("total")) != len(tests):
         return None
     return stats
 
