@@ -72,56 +72,29 @@ _RELEASE_SHARED = (
     _pg_migrations_step(), _pg_live_step(), _container_runtime_step(), _staging_runtime_step(), _production_boot_step(),
     _browser_e2e_step(), "verify-release",
 )
+_LOCKED_BODIES = {
+    "fast": _FAST_BODY, "pre-push": _FAST_BODY, "full": (*_FULL_SHARED, "rust-safety-core"),
+    "acceptance": (_user_scenario_gate_step(),), "browser": (_browser_e2e_step(),),
+    "business-critical": _BUSINESS_CRITICAL_BODY, "targeted-domain": ("targeted-domain-tests",),
+    "integrity": (_integrity_auditor_step(),), "integrity-cargo": ("integrity-cargo-tests",),
+    "test-quality": ("test-quality",), "test-collection": ("test-quality", "test-collection"),
+    "all-tests": ("test-quality", "test-collection", "all-tests"), "coverage": ("code-coverage",),
+    "release": (*_RELEASE_SHARED, "build-artifact"), "pre-release": _RELEASE_SHARED,
+}
+_SHAPE_BODIES = {
+    "doctor": (), "rust-safety": ("rust-safety-core",), "rust-deps": ("rust-supply-chain",),
+    "postgres-contract": ("postgres-contract",), _pg_migrations_step(): (_pg_migrations_step(),),
+    _pg_live_step(): (_pg_live_step(),), _container_runtime_step(): (_container_runtime_step(),),
+    _staging_runtime_step(): (_staging_runtime_step(),),
+    _production_boot_step(): (
+        "postgres-contract", _pg_migrations_step(), _pg_live_step(), _container_runtime_step(), _production_boot_step(),
+    ),
+}
 
 
 def plan_for_gate(gate: str) -> ExecutionPlan:
-    if gate == "doctor":
-        return _shape_doctor(gate)
-    if gate == "fast" or gate == "pre-push":
-        return _locked(gate, *_FAST_BODY)
-    if gate == "full":
-        return _locked(gate, *_FULL_SHARED, "rust-safety-core")
-    if gate == "acceptance":
-        return _locked(gate, _user_scenario_gate_step())
-    if gate == "browser":
-        return _locked(gate, _browser_e2e_step())
-    if gate == "business-critical":
-        return _locked(gate, *_BUSINESS_CRITICAL_BODY)
-    if gate == "targeted-domain":
-        return _locked(gate, "targeted-domain-tests")
-    if gate == "integrity":
-        return _locked(gate, _integrity_auditor_step())
-    if gate == "integrity-cargo":
-        return _locked(gate, "integrity-cargo-tests")
-    if gate == "test-quality":
-        return _locked(gate, "test-quality")
-    if gate == "test-collection":
-        return _locked(gate, "test-quality", "test-collection")
-    if gate == "all-tests":
-        return _locked(gate, "test-quality", "test-collection", "all-tests")
-    if gate == "coverage":
-        return _locked(gate, "code-coverage")
-    if gate == "rust-safety":
-        return _shape_doctor(gate, "rust-safety-core")
-    if gate == "rust-deps":
-        return _shape_doctor(gate, "rust-supply-chain")
-    if gate == "postgres-contract":
-        return _shape_doctor(gate, "postgres-contract")
-    if gate == _pg_migrations_step():
-        return _shape_doctor(gate, _pg_migrations_step())
-    if gate == _pg_live_step():
-        return _shape_doctor(gate, _pg_live_step())
-    if gate == _container_runtime_step():
-        return _shape_doctor(gate, _container_runtime_step())
-    if gate == _staging_runtime_step():
-        return _shape_doctor(gate, _staging_runtime_step())
-    if gate == _production_boot_step():
-        return _shape_doctor(
-            gate, "postgres-contract", _pg_migrations_step(), _pg_live_step(),
-            _container_runtime_step(), _production_boot_step(),
-        )
-    if gate == "release":
-        return _locked(gate, *_RELEASE_SHARED, "build-artifact")
-    if gate == "pre-release":
-        return _locked(gate, *_RELEASE_SHARED)
+    if gate in _LOCKED_BODIES:
+        return _locked(gate, *_LOCKED_BODIES[gate])
+    if gate in _SHAPE_BODIES:
+        return _shape_doctor(gate, *_SHAPE_BODIES[gate])
     raise ValueError(f"unknown gate: {gate}")
