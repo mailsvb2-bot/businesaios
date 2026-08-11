@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -13,6 +14,19 @@ const pythonPath = [repoRoot, process.env.PYTHONPATH].filter(Boolean).join(path.
 const pythonExecutable = process.env.BAIOS_E2E_PYTHON || "python";
 const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development";
 const production = runtimeMode === "production";
+const projectMatrix = JSON.parse(fs.readFileSync(new URL("./e2e/project-matrix.json", import.meta.url), "utf8"));
+if (projectMatrix.schema !== "businessaios_browser_project_matrix.v1" || !Array.isArray(projectMatrix.projects) || !projectMatrix.projects.length) {
+  throw new Error("invalid canonical browser project matrix");
+}
+const projectNames = projectMatrix.projects.map((entry) => String(entry?.name || "").trim());
+if (projectNames.some((name) => !name) || new Set(projectNames).size !== projectNames.length) {
+  throw new Error("canonical browser project names must be non-empty and unique");
+}
+const projects = projectMatrix.projects.map((entry) => {
+  const device = devices[entry.device];
+  if (!device) throw new Error(`unknown Playwright device in canonical matrix: ${entry.device}`);
+  return { name: entry.name, use: { ...device } };
+});
 const productionRequired = [
   "DATABASE_URL", "DECISION_SIGNING_SECRET", "API_CONTROL_PLANE_API_KEY_PEPPER",
   "BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64", "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE"
@@ -40,7 +54,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "retain-on-failure"
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects,
   webServer: [
     {
       name: production ? "Production API" : "Isolated API",
