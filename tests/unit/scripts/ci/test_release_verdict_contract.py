@@ -10,6 +10,8 @@ from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.reports import release_verdict
 from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME, USER_SCENARIO_RUST_FIXTURE, USER_SCENARIOS
 
+_BROWSER_EVIDENCE = "browser-e2e-evidence.json"
+
 
 def _step(name: str, status: str = "passed") -> StepResult:
     return StepResult(name=name, status=status, message=name, duration_ms=1)
@@ -21,6 +23,13 @@ def _report_for(gate: str) -> ExecutionReport:
 
 def _write_payload(tmp_path, payload: dict) -> None:
     (tmp_path / USER_SCENARIO_EVIDENCE_NAME).write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _write_browser_evidence(tmp_path, sha: str, *, expected: int = 1) -> None:
+    (tmp_path / _BROWSER_EVIDENCE).write_text(json.dumps({
+        "schema": "businessaios_browser_e2e.v1", "exact_sha": sha, "status": "PASS", "project": "chromium",
+        "stats": {"expected": expected, "unexpected": 0, "skipped": 0},
+    }), encoding="utf-8")
 
 
 def _write_scenario_evidence(monkeypatch, tmp_path, sha: str) -> dict:
@@ -43,6 +52,7 @@ def _write_scenario_evidence(monkeypatch, tmp_path, sha: str) -> dict:
         ],
     }
     _write_payload(tmp_path, payload)
+    _write_browser_evidence(tmp_path, sha)
     return payload
 
 
@@ -70,6 +80,7 @@ def test_release_verdict_requires_exact_sha_complete_plan_and_scenario_evidence(
     assert verdict["status"] == "PASS"
     assert verdict["exact_sha"] == "a" * 40
     assert verdict["canonical_user_scenarios"]["status"] == "PASS"
+    assert verdict["browser_e2e"]["status"] == "PASS"
     assert [item["id"] for item in verdict["canonical_user_scenarios"]["scenarios"]] == [
         scenario_id for scenario_id, _ in USER_SCENARIOS
     ]
@@ -83,6 +94,7 @@ def test_non_release_gate_cannot_publish_pass_verdict(monkeypatch, tmp_path) -> 
 
     assert verdict["status"] == "NOT_PROVEN"
     assert verdict["canonical_user_scenarios"]["status"] == "PASS"
+    assert verdict["browser_e2e"]["status"] == "NOT_PROVEN"
 
 
 def test_release_verdict_is_not_proven_when_required_release_evidence_is_missing(monkeypatch, tmp_path) -> None:
@@ -94,9 +106,26 @@ def test_release_verdict_is_not_proven_when_required_release_evidence_is_missing
     assert release_verdict(report)["status"] == "NOT_PROVEN"
 
 
+def test_release_verdict_requires_exact_browser_evidence(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
+    _write_scenario_evidence(monkeypatch, tmp_path, "c" * 40)
+    (tmp_path / _BROWSER_EVIDENCE).unlink()
+    assert release_verdict(_report_for("release"))["status"] == "NOT_PROVEN"
+    _write_browser_evidence(tmp_path, "e" * 40)
+    assert release_verdict(_report_for("release"))["status"] == "NOT_PROVEN"
+
+
+def test_release_verdict_rejects_vacuous_browser_evidence(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
+    _write_scenario_evidence(monkeypatch, tmp_path, "c" * 40)
+    _write_browser_evidence(tmp_path, "c" * 40, expected=0)
+    assert release_verdict(_report_for("release"))["status"] == "FAIL"
+
+
 def test_release_verdict_rejects_stale_scenario_evidence(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
     _write_scenario_evidence(monkeypatch, tmp_path, "e" * 40)
+    _write_browser_evidence(tmp_path, "c" * 40)
 
     verdict = release_verdict(_report_for("release"))
 
@@ -156,6 +185,7 @@ def test_release_verdict_is_not_proven_without_scenario_evidence(monkeypatch) ->
 
     assert verdict["status"] == "NOT_PROVEN"
     assert verdict["canonical_user_scenarios"]["status"] == "NOT_PROVEN"
+    assert verdict["browser_e2e"]["status"] == "NOT_PROVEN"
 
 
 def test_release_verdict_fails_when_a_required_step_fails(monkeypatch) -> None:
@@ -177,6 +207,7 @@ def test_release_gate_turns_not_proven_verdict_into_failure(monkeypatch, tmp_pat
     verdict = json.loads((tmp_path / "release-verdict.json").read_text(encoding="utf-8"))
     assert verdict["status"] == "FAIL"
     assert verdict["canonical_user_scenarios"]["status"] == "NOT_PROVEN"
+    assert verdict["browser_e2e"]["status"] == "NOT_PROVEN"
 
 
 def test_release_gate_enforces_not_proven_when_reports_are_disabled(monkeypatch) -> None:
