@@ -134,7 +134,8 @@ def _embedded(
     result.update(extra or {})
     return {
         "testId": f"browser-{project}", "title": title, "projectName": project,
-        "location": {"file": file, "line": 21, "column": 1}, "outcome": "expected", "ok": True,
+        "location": {"file": file, "line": 21, "column": 1}, "duration": 1,
+        "annotations": [], "tags": [], "outcome": "expected", "path": [], "ok": True,
         "results": [dict(result) for _ in range(attempts)],
     }
 
@@ -142,7 +143,8 @@ def _embedded(
 def _detail_test(test: dict) -> dict:
     detail = dict(test)
     detail["results"] = [{
-        "duration": 1, "startTime": "2026-08-11T10:48:09.726Z", "retry": 0, "steps": [],
+        "duration": 1, "startTime": "2026-08-11T10:48:09.726Z", "retry": 0,
+        "steps": [{"title": "Before Hooks", "startTime": "2026-08-11T10:48:09.726Z", "duration": 1, "steps": [], "attachments": [], "count": 1, "skipped": False}],
         "errors": [], "status": "passed", "attachments": [], "annotations": [], "workerIndex": 0,
     }]
     return detail
