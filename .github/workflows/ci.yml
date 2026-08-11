@@ -136,8 +136,14 @@ jobs:
           ./node_modules/.bin/playwright install --with-deps chromium
       - name: Run canonical browser gate
         run: python -m scripts.ci.cli --gate browser
+      - name: Rebuild canonical production frontend bundle
+        working-directory: frontend
+        run: env -u VITE_API_BASE npm run build
       - name: Verify production bundle
-        run: test -s frontend/dist/index.html
+        shell: bash
+        run: |
+          test -s frontend/dist/index.html
+          grep -R -F -q "https://api.businessaios.ru" frontend/dist
       - name: Upload frontend bundle
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
