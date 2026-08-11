@@ -60,6 +60,8 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             "BUSINESAIOS_API_KEY_STORE_PATH": str(tmp_path / "api_keys.json"),
             "BUSINESAIOS_TENANT_REGISTRY_PATH": str(tmp_path / "tenant_registry.json"),
             "API_CONTROL_PLANE_API_KEY_PEPPER": "canonical-api-e2e-pepper",
+            "BUSINESAIOS_TRUST_PROXY_HEADERS": "1",
+            "BUSINESAIOS_TRUSTED_PROXY_IPS": "127.0.0.1/32",
             "PYTHONPATH": os.pathsep.join(value for value in pythonpath if value),
         }
     )
@@ -74,9 +76,18 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             text=True,
         )
         try:
-            with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=5.0) as client:
-                _wait_until_healthy(client, process, log_path)
+            base_url = f"http://127.0.0.1:{port}"
+            with httpx.Client(base_url=base_url, timeout=5.0) as direct_client:
+                _wait_until_healthy(direct_client, process, log_path)
+                insecure_marketplace = direct_client.get("/public-site/integrations")
+                assert insecure_marketplace.status_code == 403, insecure_marketplace.text
+                assert insecure_marketplace.json()["detail"] == "compliance_failed"
 
+            with httpx.Client(
+                base_url=base_url,
+                timeout=5.0,
+                headers={"X-Forwarded-Proto": "https"},
+            ) as client:
                 marketplace_response = client.get("/public-site/integrations")
                 assert marketplace_response.status_code == 200, marketplace_response.text
                 marketplace = marketplace_response.json()
