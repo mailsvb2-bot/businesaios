@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -21,11 +22,26 @@ def _sha256(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def _count(value: object) -> int:
-    try:
+def _integer(value: object) -> int:
+    if type(value) is int:
+        return value
+    if isinstance(value, str) and value.isdecimal():
         return int(value)
-    except (TypeError, ValueError):
-        return -1
+    return -1
+
+
+def _text(value: object) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _timestamp(value: object) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return True
 
 
 def _matrix_snapshot() -> tuple[list[dict[str, str]], str] | None:
@@ -38,7 +54,7 @@ def _matrix_snapshot() -> tuple[list[dict[str, str]], str] | None:
     if not isinstance(payload, dict) or payload.get("schema") != BROWSER_PROJECT_MATRIX_SCHEMA or not isinstance(projects, list) or len(projects) != 5:
         return None
     rows = [
-        {key: str(item.get(key) or "").strip() for key in ("name", "device", "engine", "surface")}
+        {key: _text(item.get(key)) for key in ("name", "device", "engine", "surface")}
         for item in projects if isinstance(item, dict)
     ]
     if len(rows) != 5 or any(not all(row.values()) for row in rows):
@@ -60,9 +76,9 @@ def browser_project_names() -> tuple[str, ...]:
 
 def _stats_ok(stats: object, expected: int, *, require_total: bool = False) -> bool:
     return bool(
-        isinstance(stats, dict) and _count(stats.get("expected")) == expected
-        and _count(stats.get("unexpected")) == _count(stats.get("skipped")) == _count(stats.get("flaky")) == 0
-        and (not require_total or (_count(stats.get("total")) == expected and stats.get("ok") is True))
+        isinstance(stats, dict) and _integer(stats.get("expected")) == expected
+        and _integer(stats.get("unexpected")) == _integer(stats.get("skipped")) == _integer(stats.get("flaky")) == 0
+        and (not require_total or (_integer(stats.get("total")) == expected and stats.get("ok") is True))
     )
 
 
@@ -87,7 +103,7 @@ def _json_report(payload: object, projects: tuple[str, ...]) -> tuple[dict, dict
     configured, suites, stats = payload["config"].get("projects"), payload.get("suites"), payload.get("stats")
     if (
         not isinstance(configured, list) or len(configured) != len(projects) or any(not isinstance(item, dict) for item in configured)
-        or tuple(item.get("name") for item in configured) != projects or not isinstance(suites, list) or not isinstance(stats, dict)
+        or tuple(_text(item.get("name")) for item in configured) != projects or not isinstance(suites, list) or not isinstance(stats, dict)
     ):
         return None
     records: list[tuple[str, str, str]] = []
@@ -98,8 +114,8 @@ def _json_report(payload: object, projects: tuple[str, ...]) -> tuple[dict, dict
         for spec in suite.get("specs", []):
             if not isinstance(spec, dict) or spec.get("ok") is not True or not isinstance(spec.get("tests"), list):
                 return False
-            title, file = str(spec.get("title") or "").strip(), str(spec.get("file") or "").strip()
-            if not title or not file or _count(spec.get("line")) <= 0 or _count(spec.get("column")) <= 0:
+            title, file = _text(spec.get("title")), _text(spec.get("file"))
+            if not title or not file or _integer(spec.get("line")) <= 0 or _integer(spec.get("column")) <= 0:
                 return False
             for test in spec["tests"]:
                 results = test.get("results") if isinstance(test, dict) else None
@@ -109,7 +125,7 @@ def _json_report(payload: object, projects: tuple[str, ...]) -> tuple[dict, dict
                     or any(not isinstance(result, dict) or result.get("status") != "passed" or result.get("errors") for result in results)
                 ):
                     return False
-                records.append((str(test.get("projectName") or ""), title, file))
+                records.append((_text(test.get("projectName")), title, file))
         return all(visit(child) for child in suite.get("suites", []))
 
     if not all(visit(suite) for suite in suites):
@@ -143,23 +159,23 @@ def _embedded_report(html: str, projects: tuple[str, ...]) -> tuple[dict, dict[s
             location, results = (test.get(key) for key in ("location", "results")) if isinstance(test, dict) else (None, None)
             if not isinstance(test, dict) or not isinstance(location, dict) or not isinstance(results, list) or not results:
                 return None
-            title, file = str(test.get("title") or "").strip(), str(location.get("file") or "").strip()
+            title, file = _text(test.get("title")), _text(location.get("file"))
             result_ok = all(
-                isinstance(result, dict) and _count(result.get("workerIndex")) >= 0 and str(result.get("startTime") or "").strip()
+                isinstance(result, dict) and _integer(result.get("workerIndex")) >= 0 and _timestamp(result.get("startTime"))
                 for result in results
             )
             if (
-                not str(test.get("testId") or "").strip() or not title or not file or _count(location.get("line")) <= 0
-                or _count(location.get("column")) <= 0 or not result_ok or test.get("outcome") != "expected" or test.get("ok") is not True
+                not _text(test.get("testId")) or not title or not file or _integer(location.get("line")) <= 0
+                or _integer(location.get("column")) <= 0 or not result_ok or test.get("outcome") != "expected" or test.get("ok") is not True
             ):
                 return None
-            records.append((str(test.get("projectName") or ""), title, file))
+            records.append((_text(test.get("projectName")), title, file))
     matrix = _scenario_matrix(records, projects)
     return (stats, matrix) if matrix and _stats_ok(stats, len(records), require_total=True) else None
 
 
 def _junit_report(root: ElementTree.Element, projects: tuple[str, ...]) -> tuple[dict[str, tuple[tuple[str, str], ...]], int] | None:
-    if root.tag != "testsuites" or any(_count(root.get(key)) != 0 for key in ("failures", "skipped", "errors")):
+    if root.tag != "testsuites" or any(_integer(root.get(key)) != 0 for key in ("failures", "skipped", "errors")):
         return None
     suites = list(root)
     if not suites or any(suite.tag != "testsuite" for suite in suites):
@@ -167,19 +183,19 @@ def _junit_report(root: ElementTree.Element, projects: tuple[str, ...]) -> tuple
     records: list[tuple[str, str, str]] = []
     total = 0
     for suite in suites:
-        project = str(suite.get("hostname") or "")
+        project = _text(suite.get("hostname"))
         cases = [child for child in suite if child.tag == "testcase"]
-        if project not in projects or any(_count(suite.get(key)) != 0 for key in ("failures", "skipped", "errors")):
+        if project not in projects or any(_integer(suite.get(key)) != 0 for key in ("failures", "skipped", "errors")):
             return None
-        if _count(suite.get("tests")) != len(cases) or any(child.tag != "testcase" for child in suite):
+        if _integer(suite.get("tests")) != len(cases) or any(child.tag != "testcase" for child in suite):
             return None
         for case in cases:
             if any(child.tag in {"failure", "error", "skipped"} for child in case):
                 return None
-            records.append((project, str(case.get("name") or "").strip(), str(case.get("classname") or "").strip()))
+            records.append((project, _text(case.get("name")), _text(case.get("classname"))))
         total += len(cases)
     matrix = _scenario_matrix(records, projects)
-    return (matrix, total) if matrix and _count(root.get("tests")) == total else None
+    return (matrix, total) if matrix and _integer(root.get("tests")) == total else None
 
 
 def browser_artifact_snapshot(browser_dir: Path) -> dict | None:
@@ -202,8 +218,8 @@ def browser_artifact_snapshot(browser_dir: Path) -> dict | None:
     json_stats, json_matrix = json_report
     html_stats, html_matrix = html_report
     junit_matrix, testcases = junit_report
-    expected = _count(json_stats.get("expected"))
-    if json_matrix != html_matrix or json_matrix != junit_matrix or expected != _count(html_stats.get("expected")) or testcases != expected:
+    expected = _integer(json_stats.get("expected"))
+    if json_matrix != html_matrix or json_matrix != junit_matrix or expected != _integer(html_stats.get("expected")) or testcases != expected:
         return None
     if "<title>Playwright Test Report</title>" not in html or "</html>" not in html:
         return None
