@@ -34,6 +34,17 @@ def test_browser_gate_is_provisioned_by_ci_and_deep_release() -> None:
     assert "npx playwright" not in ci + deep
 
 
+def test_browser_failure_evidence_cannot_capture_owner_key_network_payload() -> None:
+    config = Path("frontend/playwright.config.js").read_text(encoding="utf-8")
+    scenario = Path("frontend/e2e/onboarding-workspace.spec.js").read_text(encoding="utf-8")
+    assert 'trace: "off"' in config
+    assert "retain-on-failure" not in config.split('trace: "off"', 1)[0]
+    assert "expect(ownerKey)" not in scenario
+    assert ".toContain(ownerKey)" not in scenario
+    assert "indexedDB.databases()" in scenario
+    assert "context().cookies()" in scenario
+
+
 def _run_browser_step(monkeypatch, tmp_path, stats: dict, returncode: int = 0, diagnostics: bool = True):
     root = tmp_path / "repo"
     reports = root / "artifacts" / "ci"
