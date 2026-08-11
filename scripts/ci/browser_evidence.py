@@ -56,6 +56,18 @@ def _steps(value: object, file: str) -> bool:
     return isinstance(value, list) and all(_step_ok(step, file) for step in value)
 
 
+def _step_fingerprint(steps: list, project: str) -> str:
+    slug = "-".join(project.lower().split())
+
+    def shape(step: dict) -> dict:
+        location = step.get("location")
+        title = _text(step.get("title")).replace(f"Canonical Browser E2E {project}", "Canonical Browser E2E {project}").replace(f"browser-e2e+{slug}@example.test", "browser-e2e+{project}@example.test")
+        return {"title": title, "location": [_text(location.get("file")), _integer(location.get("line")), _integer(location.get("column"))] if isinstance(location, dict) else None, "children": [shape(child) for child in step.get("steps", [])]}
+
+    payload = json.dumps([shape(step) for step in steps], ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
 def _matrix_snapshot():
     try:
         raw = (repo_root() / BROWSER_PROJECT_MATRIX).read_bytes()
@@ -64,15 +76,15 @@ def _matrix_snapshot():
         projects, scenarios = doc.get("projects"), doc.get("scenarios")
         _need(isinstance(projects, list) and len(projects) == 5 and isinstance(scenarios, list) and scenarios)
         rows = [{key: _text(item.get(key)) for key in ("name", "device", "engine", "surface")} for item in projects if isinstance(item, dict)]
-        identities = [(_text(item.get("id")), _text(item.get("title")), _text(item.get("file"))) for item in scenarios if isinstance(item, dict)]
+        identities = [(_text(item.get("id")), _text(item.get("title")), _text(item.get("file")), _text(item.get("detail_step_sha256"))) for item in scenarios if isinstance(item, dict)]
         _need(len(rows) == 5 and len(identities) == len(scenarios) and all(all(row.values()) for row in rows))
-        _need(all(all(item) for item in identities) and len({item[0] for item in identities}) == len(identities))
+        _need(all(all(item) for item in identities) and all(len(item[3]) == 64 and all(char in "0123456789abcdef" for char in item[3]) for item in identities) and len({item[0] for item in identities}) == len(identities))
         _need(len({row["name"] for row in rows}) == len({row["device"] for row in rows}) == 5)
         desktop = [row for row in rows if row["surface"] == "desktop"]
         mobile = [row for row in rows if row["surface"] == "mobile"]
         _need(len(desktop) == 3 and {row["engine"] for row in desktop} == {"chromium", "firefox", "webkit"})
         _need(len(mobile) == 2 and {row["engine"] for row in mobile} == {"chromium", "webkit"})
-        canonical = tuple(sorted((title, file) for _, title, file in identities))
+        canonical = tuple(sorted((title, file, fingerprint) for _, title, file, fingerprint in identities))
         _need(len(canonical) == len(set(canonical)))
         return rows, canonical, hashlib.sha256(raw).hexdigest()
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
@@ -89,12 +101,13 @@ def _stats_ok(stats: object, expected: int, *, total: bool = False) -> bool:
 
 
 def _scenario_matrix(records, projects, canonical):
+    expected = tuple((title, file) for title, file, _ in canonical)
     grouped = {project: [] for project in projects}
     for project, title, file in records:
         if project not in grouped or not title or not file:
             return None
         grouped[project].append((title, file))
-    return grouped if canonical and all(tuple(sorted(grouped[project])) == canonical for project in projects) else None
+    return grouped if canonical and all(tuple(sorted(grouped[project])) == expected for project in projects) else None
 
 
 def _walk(suites):
@@ -131,7 +144,7 @@ def _html_report(html, projects, canonical):
     end = html.find("</template>", start + len(_HTML_MARKER)) if start >= 0 else -1
     _need(start >= 0 and end >= 0)
     encoded = html[start + len(_HTML_MARKER):end].strip()
-    records = []
+    records, fingerprints = [], {(title, file): fingerprint for title, file, fingerprint in canonical}
     with zipfile.ZipFile(io.BytesIO(base64.b64decode(encoded, validate=True))) as archive:
         doc = json.loads(archive.read("report.json"))
         _need(isinstance(doc, dict) and tuple(doc.get("projectNames", ())) == projects and isinstance(doc.get("files"), list))
@@ -149,9 +162,9 @@ def _html_report(html, projects, canonical):
                 _need(set(results[0]) == _HTML_RESULT_KEYS and results[0].get("attachments") == [] and type(results[0].get("workerIndex")) is int and results[0]["workerIndex"] >= 0 and _timestamp(results[0].get("startTime")))
                 _need(isinstance(detail_results, list) and len(detail_results) == 1 and isinstance(detail_results[0], dict) and set(detail_results[0]) == _HTML_DETAIL_RESULT_KEYS and type(detail_results[0].get("duration")) is int and detail_results[0]["duration"] >= 0 and detail_results[0].get("retry") == 0 and detail_results[0].get("status") == "passed" and all(detail_results[0].get(key) == [] for key in ("errors", "attachments", "annotations")) and type(detail_results[0].get("workerIndex")) is int and detail_results[0]["workerIndex"] >= 0 and _timestamp(detail_results[0].get("startTime")) and isinstance(detail_results[0].get("steps"), list) and bool(detail_results[0]["steps"]) and _steps(detail_results[0]["steps"], file_name))
                 _need(detail_results[0]["startTime"] == results[0]["startTime"] and detail_results[0]["workerIndex"] == results[0]["workerIndex"] and detail_results[0]["duration"] == detailed["duration"])
-                title = _text(test.get("title"))
-                _need(_text(test.get("testId")) and title and test.get("outcome") == "expected" and test.get("ok") is True)
-                records.append((_text(test.get("projectName")), title, file_name))
+                title, project = _text(test.get("title")), _text(test.get("projectName"))
+                _need(_text(test.get("testId")) and title and project and test.get("outcome") == "expected" and test.get("ok") is True and _step_fingerprint(detail_results[0]["steps"], project) == fingerprints.get((title, file_name)))
+                records.append((project, title, file_name))
     stats = doc.get("stats")
     _need(_scenario_matrix(records, projects, canonical) and _stats_ok(stats, len(records), total=True))
     return stats
