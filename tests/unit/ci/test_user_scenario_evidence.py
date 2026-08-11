@@ -69,6 +69,9 @@ def test_gate_runs_all_scenarios_and_records_failure_diagnostics(monkeypatch, tm
     assert payload["exact_sha"] == "f" * 40
     assert payload["status"] == "FAIL"
     assert [item["id"] for item in payload["scenarios"]] == [scenario_id for scenario_id, _ in USER_SCENARIOS]
-    assert [item["status"] for item in payload["scenarios"]] == ["PASS", "PASS", "FAIL", "PASS", "PASS"]
-    assert payload["scenarios"][2]["junit"] == "junit/user-scenario-3.xml"
-    assert payload["scenarios"][2]["diagnostics"] == "pytest/user-scenario-3.failure.json"
+    assert [item["status"] for item in payload["scenarios"]] == [
+        "FAIL" if scenario_id == "cli_run" else "PASS" for scenario_id, _ in USER_SCENARIOS
+    ]
+    failed_index = [scenario_id for scenario_id, _ in USER_SCENARIOS].index("cli_run")
+    assert payload["scenarios"][failed_index]["junit"] == f"junit/user-scenario-{failed_index + 1}.xml"
+    assert payload["scenarios"][failed_index]["diagnostics"] == f"pytest/user-scenario-{failed_index + 1}.failure.json"

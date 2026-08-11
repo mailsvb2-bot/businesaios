@@ -6,7 +6,7 @@ from pathlib import Path
 from scripts.ci.plan_registry import allowed_gates, plan_for_gate
 from scripts.ci.step_registry import handler_for_step
 from scripts.ci.subprocess_io import run_command
-from scripts.ci.user_scenario_targets import USER_SCENARIO_MARK_EXPRESSION, USER_SCENARIO_TARGETS
+from scripts.ci.user_scenario_targets import USER_SCENARIO_MARK_EXPRESSION, USER_SCENARIO_TARGETS, USER_SCENARIOS
 
 
 def test_acceptance_gate_is_registered_as_user_scenario_gate() -> None:
@@ -22,13 +22,15 @@ def test_acceptance_gate_is_registered_as_user_scenario_gate() -> None:
 
 def test_user_scenario_gate_targets_existing_user_surfaces() -> None:
     assert USER_SCENARIO_MARK_EXPRESSION == "not slow and not gate"
-    assert USER_SCENARIO_TARGETS == (
-        "tests/integration/headless/test_cli_capability_matrix.py",
-        "tests/integration/headless/test_cli_connector_matrix.py",
-        "tests/integration/headless/test_cli_run_smoke.py",
-        "tests/integration/headless/test_cli_scenario_smoke.py",
-        "tests/integration/headless/test_sdk_execute_smoke.py",
+    assert USER_SCENARIOS == (
+        ("capability_matrix", "tests/integration/headless/test_cli_capability_matrix.py"),
+        ("connector_matrix", "tests/integration/headless/test_cli_connector_matrix.py"),
+        ("cli_run", "tests/integration/headless/test_cli_run_smoke.py"),
+        ("cli_scenario", "tests/integration/headless/test_cli_scenario_smoke.py"),
+        ("sdk_execute", "tests/integration/headless/test_sdk_execute_smoke.py"),
+        ("api_onboarding_workspace", "tests/integration/http/test_api_onboarding_workspace_e2e.py"),
     )
+    assert USER_SCENARIO_TARGETS == tuple(target for _, target in USER_SCENARIOS)
     for target in USER_SCENARIO_TARGETS:
         assert Path(target).exists(), target
 
