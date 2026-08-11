@@ -23,6 +23,21 @@ def _count(value: object) -> int:
         return -1
 
 
+def _embedded_test_ok(test: object) -> bool:
+    if not isinstance(test, dict):
+        return False
+    return bool(
+        str(test.get("testId") or "").strip()
+        and str(test.get("title") or "").strip()
+        and test.get("projectName") == "chromium"
+        and test.get("outcome") == "expected"
+        and test.get("ok") is True
+        and isinstance(test.get("location"), dict)
+        and isinstance(test.get("results"), list)
+        and test.get("results")
+    )
+
+
 def _embedded_html_stats(html: str) -> dict | None:
     start = html.find(_HTML_REPORT_MARKER)
     end = html.find("</template>", start + len(_HTML_REPORT_MARKER)) if start >= 0 else -1
@@ -40,8 +55,14 @@ def _embedded_html_stats(html: str) -> dict | None:
     files, stats = report.get("files"), report.get("stats")
     if not isinstance(files, list) or not files or not isinstance(stats, dict):
         return None
-    tests = sum(len(item.get("tests", [])) for item in files if isinstance(item, dict) and isinstance(item.get("tests"), list))
-    return stats if tests > 0 else None
+    tests: list[object] = []
+    for item in files:
+        if not isinstance(item, dict) or not isinstance(item.get("tests"), list):
+            return None
+        tests.extend(item["tests"])
+    if not tests or not all(_embedded_test_ok(test) for test in tests) or _count(stats.get("total")) != len(tests):
+        return None
+    return stats
 
 
 def browser_artifact_snapshot(browser_dir: Path) -> dict | None:
