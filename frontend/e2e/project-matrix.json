@@ -1,10 +1,10 @@
 {
   "schema": "businessaios_browser_project_matrix.v1",
   "projects": [
-    {"name": "chromium", "device": "Desktop Chrome", "surface": "desktop"},
-    {"name": "firefox", "device": "Desktop Firefox", "surface": "desktop"},
-    {"name": "webkit", "device": "Desktop Safari", "surface": "desktop"},
-    {"name": "Mobile Chrome", "device": "Pixel 5", "surface": "mobile"},
-    {"name": "Mobile Safari", "device": "iPhone 12", "surface": "mobile"}
+    {"name": "chromium", "device": "Desktop Chrome", "engine": "chromium", "surface": "desktop"},
+    {"name": "firefox", "device": "Desktop Firefox", "engine": "firefox", "surface": "desktop"},
+    {"name": "webkit", "device": "Desktop Safari", "engine": "webkit", "surface": "desktop"},
+    {"name": "Mobile Chrome", "device": "Pixel 5", "engine": "chromium", "surface": "mobile"},
+    {"name": "Mobile Safari", "device": "iPhone 12", "engine": "webkit", "surface": "mobile"}
   ]
 }
