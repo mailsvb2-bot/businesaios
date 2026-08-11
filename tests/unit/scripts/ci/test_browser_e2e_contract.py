@@ -11,7 +11,6 @@ from pathlib import Path
 import pytest
 
 from scripts.ci import browser_evidence, execution, step_browser_e2e
-from scripts.ci.browser_evidence import BROWSER_EVIDENCE_SCHEMA, BROWSER_PROJECT_MATRIX, browser_artifact_snapshot, browser_project_names
 from scripts.ci.plan_registry import allowed_gates, plan_for_gate, requires_release_runtime_environment
 from scripts.ci.step_registry import handler_for_step
 from scripts.ci.subprocess_io import CommandOutcome
@@ -28,13 +27,13 @@ MATRIX = [
 
 
 def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
-    contract = json.loads(Path(BROWSER_PROJECT_MATRIX).read_text(encoding="utf-8"))
+    contract = json.loads(Path(browser_evidence.BROWSER_PROJECT_MATRIX).read_text(encoding="utf-8"))
     assert contract == {
         "schema": browser_evidence.BROWSER_PROJECT_MATRIX_SCHEMA,
         "projects": MATRIX,
         "scenarios": [{"id": "onboarding_owner_workspace", "title": TITLE, "file": SPEC}],
     }
-    assert browser_project_names() == tuple(item["name"] for item in MATRIX)
+    assert browser_evidence.browser_project_names() == tuple(item["name"] for item in MATRIX)
     config = Path("frontend/playwright.config.js").read_text(encoding="utf-8")
     scenario = Path("frontend/e2e/onboarding-workspace.spec.js").read_text(encoding="utf-8")
     assert 'readFileSync(new URL("./e2e/project-matrix.json", import.meta.url)' in config
@@ -110,7 +109,7 @@ def _embedded(project: str, title: str = TITLE, file: str = SPEC) -> dict:
 
 
 def _outputs(browser: Path, *, projects: tuple[str, ...] | None = None, title: str = TITLE, file: str = SPEC, duplicate: bool = False, skipped: int = 0) -> None:
-    names = projects or browser_project_names()
+    names = projects or browser_evidence.browser_project_names()
     specs = [
         {"title": title, "file": file, "line": 21, "column": 1, "ok": True, "tests": [{
             "expectedStatus": "passed", "projectName": project, "status": "expected",
@@ -145,9 +144,9 @@ def _outputs(browser: Path, *, projects: tuple[str, ...] | None = None, title: s
 
 
 def test_evidence_requires_exact_projects_canonical_identity_and_three_real_artifacts(tmp_path) -> None:
-    browser, names = tmp_path / "browser", browser_project_names()
+    browser, names = tmp_path / "browser", browser_evidence.browser_project_names()
     _outputs(browser)
-    snapshot = browser_artifact_snapshot(browser)
+    snapshot = browser_evidence.browser_artifact_snapshot(browser)
     assert snapshot and [item["name"] for item in snapshot["projects"]] == list(names)
     assert all(item["tests"] == 1 for item in snapshot["projects"]) and snapshot["artifacts"]["junit"]["tests"] == 5
     canonical = browser_evidence._matrix_snapshot()
@@ -159,28 +158,35 @@ def test_evidence_requires_exact_projects_canonical_identity_and_three_real_arti
         lambda: _outputs(browser, duplicate=True),
     ):
         mutate()
-        assert browser_artifact_snapshot(browser) is None
+        assert browser_evidence.browser_artifact_snapshot(browser) is None
     _outputs(browser)
-    payload = json.loads((browser / "playwright.json").read_text(encoding="utf-8")); payload["suites"] = []
+    payload = json.loads((browser / "playwright.json").read_text(encoding="utf-8"))
+    payload["suites"] = []
     (browser / "playwright.json").write_text(json.dumps(payload), encoding="utf-8")
-    assert browser_artifact_snapshot(browser) is None
-    _outputs(browser); (browser / "junit.xml").write_text("<root><testcase name='forged'/></root>", encoding="utf-8")
-    assert browser_artifact_snapshot(browser) is None
+    assert browser_evidence.browser_artifact_snapshot(browser) is None
+    _outputs(browser)
+    (browser / "junit.xml").write_text("<root><testcase name='forged'/></root>", encoding="utf-8")
+    assert browser_evidence.browser_artifact_snapshot(browser) is None
 
 
 def _run_step(monkeypatch, tmp_path, *, skipped: int = 0, diagnostics: bool = True):
     root, runtime = tmp_path / "repo", tmp_path / "runtime"
     reports, browser = root / "artifacts" / "ci", root / "artifacts" / "ci" / "browser-e2e"
-    (root / "frontend").mkdir(parents=True); runtime.mkdir()
+    (root / "frontend").mkdir(parents=True)
+    runtime.mkdir()
     monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "a" * 40)
-    monkeypatch.setattr(step_browser_e2e, "repo_root", lambda: root); monkeypatch.setattr(step_browser_e2e, "reports_dir", lambda: reports)
+    monkeypatch.setattr(step_browser_e2e, "repo_root", lambda: root)
+    monkeypatch.setattr(step_browser_e2e, "reports_dir", lambda: reports)
     monkeypatch.setattr(step_browser_e2e.shutil, "which", lambda command: "/usr/bin/npm")
     monkeypatch.setattr(step_browser_e2e.tempfile, "mkdtemp", lambda **kwargs: str(runtime))
     captured = {}
+
     def run(*args, **kwargs):
         captured.update(kwargs)
-        if diagnostics: _outputs(browser, skipped=skipped)
+        if diagnostics:
+            _outputs(browser, skipped=skipped)
         return CommandOutcome(0, "", "")
+
     monkeypatch.setattr(step_browser_e2e, "run_command", run)
     result = step_browser_e2e.run()
     return result, json.loads((reports / "browser-e2e-evidence.json").read_text(encoding="utf-8")), captured
@@ -188,10 +194,11 @@ def _run_step(monkeypatch, tmp_path, *, skipped: int = 0, diagnostics: bool = Tr
 
 def test_browser_step_requires_complete_matrix_and_fails_closed(monkeypatch, tmp_path) -> None:
     result, evidence, captured = _run_step(monkeypatch, tmp_path)
-    assert result[0] and evidence["status"] == "PASS" and evidence["schema"] == BROWSER_EVIDENCE_SCHEMA
-    assert [item["name"] for item in evidence["projects"]] == list(browser_project_names())
+    assert result[0] and evidence["status"] == "PASS" and evidence["schema"] == browser_evidence.BROWSER_EVIDENCE_SCHEMA
+    assert [item["name"] for item in evidence["projects"]] == list(browser_evidence.browser_project_names())
     assert captured["env"]["BAIOS_E2E_PYTHON"] == sys.executable
     for skipped, diagnostics in ((1, True), (0, False)):
-        child = tmp_path / f"case-{skipped}-{diagnostics}"; child.mkdir()
+        child = tmp_path / f"case-{skipped}-{diagnostics}"
+        child.mkdir()
         failed, proof, _ = _run_step(monkeypatch, child, skipped=skipped, diagnostics=diagnostics)
         assert not failed[0] and proof["status"] == "FAIL"
