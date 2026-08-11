@@ -2,12 +2,20 @@ import { expect, test } from "@playwright/test";
 
 const BUSINESS_NAME = "Canonical Browser E2E Business";
 
-function storageSnapshot() {
-  const read = (storage) => Object.fromEntries(Array.from({ length: storage.length }, (_, index) => {
-    const key = storage.key(index);
-    return [key, storage.getItem(key)];
-  }));
-  return { local: read(localStorage), session: read(sessionStorage) };
+async function persistentBrowserStateContains(page, secret) {
+  const webStorageContains = await page.evaluate((needle) => {
+    const values = [];
+    for (const storage of [localStorage, sessionStorage]) {
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        values.push(key, storage.getItem(key));
+      }
+    }
+    return values.some((value) => String(value || "").includes(needle));
+  }, secret);
+  const cookieContains = (await page.context().cookies()).some((cookie) => String(cookie.value || "").includes(secret));
+  const indexedDbCreated = await page.evaluate(async () => (await indexedDB.databases()).length > 0);
+  return webStorageContains || cookieContains || indexedDbCreated;
 }
 
 test("onboarding creates a read-only OWNER workspace without persisting the API key", async ({ page }) => {
@@ -39,8 +47,7 @@ test("onboarding creates a read-only OWNER workspace without persisting the API 
   expect(ctaResponse.status()).toBe(200);
   const cta = await ctaResponse.json();
   const ownerKey = cta?.owner_session?.api_key;
-  expect(typeof ownerKey).toBe("string");
-  expect(ownerKey).toContain(".");
+  expect(Boolean(typeof ownerKey === "string" && ownerKey.includes("."))).toBe(true);
   expect(cta.write_actions_enabled).toBe(false);
   expect(cta.approval_required_before_execution).toBe(true);
 
@@ -54,12 +61,10 @@ test("onboarding creates a read-only OWNER workspace without persisting the API 
   await expect(page.getByText("Запись выключена")).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(providerTitle) })).toBeVisible();
   await expect(page.getByText("Не удалось открыть защищённый workspace интеграций.")).toHaveCount(0);
-
-  const storage = JSON.stringify(await page.evaluate(storageSnapshot));
-  expect(storage).not.toContain(ownerKey);
+  expect(await persistentBrowserStateContains(page, ownerKey)).toBe(false);
 
   await page.reload();
   await expect(page.getByRole("heading", { name: BUSINESS_NAME, level: 1 })).toBeVisible();
   await expect(page.getByText(/Защищённая OWNER-сессия отсутствует или была потеряна/)).toBeVisible();
-  expect(JSON.stringify(await page.evaluate(storageSnapshot))).not.toContain(ownerKey);
+  expect(await persistentBrowserStateContains(page, ownerKey)).toBe(false);
 });
