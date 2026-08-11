@@ -19,6 +19,8 @@ from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.reports import release_verdict
 from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME, USER_SCENARIO_RUST_FIXTURE, USER_SCENARIOS
 
+STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
+
 
 def _step(name: str, status: str = "passed") -> StepResult:
     return StepResult(name=name, status=status, message=name, duration_ms=1)
@@ -43,11 +45,28 @@ def _browser_test(project: str) -> dict:
     }
 
 
+def _fixture_step(node: dict, project: str) -> dict:
+    slug = "-".join(project.lower().split())
+    title = str(node["title"])
+    title = title.replace("browser-e2e+{project}@example.test", f"browser-e2e+{slug}@example.test")
+    title = title.replace("{project}", project)
+    step = {
+        "title": title, "startTime": "2026-08-11T00:00:00.000Z", "duration": 1,
+        "steps": [_fixture_step(child, project) for child in node["children"]],
+        "attachments": [], "count": 1, "skipped": False,
+    }
+    if node["location"]:
+        file, line, column = node["location"]
+        step.update(location={"file": file, "line": line, "column": column}, snippet="locked Playwright fixture")
+    return step
+
+
 def _browser_detail_test(test: dict) -> dict:
     detail = dict(test)
+    project = str(test["projectName"])
     detail["results"] = [{
         "duration": 1, "startTime": "2026-08-11T00:00:00.000Z", "retry": 0,
-        "steps": [{"title": "Before Hooks", "startTime": "2026-08-11T00:00:00.000Z", "duration": 1, "steps": [], "attachments": [], "count": 1, "skipped": False}],
+        "steps": [_fixture_step(node, project) for node in STEP_SHAPE],
         "errors": [], "status": "passed", "attachments": [], "annotations": [], "workerIndex": 0,
     }]
     return detail
