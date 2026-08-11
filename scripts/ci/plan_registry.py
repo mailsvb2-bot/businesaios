@@ -50,6 +50,10 @@ def requires_release_proof_environment(*, gate: str, step_name: str) -> bool:
     return gate in {"release", "pre-release"} and step_name in _release_proof_steps()
 
 
+def requires_release_runtime_environment(*, gate: str, step_name: str) -> bool:
+    return gate in {"release", "pre-release"} and step_name in (*_release_proof_steps(), _browser_e2e_step())
+
+
 def requires_release_dependency_lock_environment(*, gate: str, step_name: str) -> bool:
     return gate in {"release", "pre-release"} and step_name == "dependency-lock"
 
