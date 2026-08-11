@@ -139,6 +139,15 @@ def _embedded(
     }
 
 
+def _detail_test(test: dict) -> dict:
+    detail = dict(test)
+    detail["results"] = [{
+        "duration": 1, "startTime": "2026-08-11T10:48:09.726Z", "retry": 0, "steps": [],
+        "errors": [], "status": "passed", "attachments": [], "annotations": [], "workerIndex": 0,
+    }]
+    return detail
+
+
 def _outputs(
     browser: Path,
     *,
@@ -149,6 +158,7 @@ def _outputs(
     skipped: int = 0,
     attempts: int = 1,
     html_extra: dict | None = None,
+    html_data: bool = True,
 ) -> None:
     names = projects or browser_evidence.browser_project_names()
     specs = [
@@ -171,12 +181,14 @@ def _outputs(
     tests = [_embedded(project, title, file, attempts, html_extra) for project in names]
     if duplicate:
         tests *= 2
-    report = {"projectNames": list(names), "files": [{"tests": tests}], "stats": {
-        "total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True,
-    }}
+    file_id = "canonical-browser-spec"
+    stats = {"total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True}
+    report = {"projectNames": list(names), "files": [{"fileId": file_id, "fileName": file, "tests": tests, "stats": stats}], "stats": stats}
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as handle:
         handle.writestr("report.json", json.dumps(report))
+        if html_data:
+            handle.writestr(f"{file_id}.json", json.dumps({"fileId": file_id, "fileName": file, "tests": [_detail_test(test) for test in tests]}))
     html = base64.b64encode(archive.getvalue()).decode("ascii")
     (browser / "html").mkdir(exist_ok=True)
     (browser / "html" / "index.html").write_text(
@@ -199,9 +211,16 @@ def test_evidence_requires_exact_projects_canonical_identity_and_three_real_arti
         lambda: _outputs(browser, duplicate=True),
         lambda: _outputs(browser, attempts=2),
         lambda: _outputs(browser, html_extra={"status": "failed", "errors": [{"message": "forged"}]}),
+        lambda: _outputs(browser, html_data=False),
     ):
         mutate()
         assert browser_evidence.browser_artifact_snapshot(browser) is None
+    _outputs(browser)
+    payload = json.loads((browser / "playwright.json").read_text(encoding="utf-8"))
+    result = payload["suites"][0]["specs"][0]["tests"][0]["results"][0]
+    result["stdout"], result["attachments"] = [42], [False]
+    (browser / "playwright.json").write_text(json.dumps(payload), encoding="utf-8")
+    assert browser_evidence.browser_artifact_snapshot(browser) is None
     _outputs(browser)
     payload = json.loads((browser / "playwright.json").read_text(encoding="utf-8"))
     payload["suites"][0]["specs"][0]["tests"][0]["results"][0] = {"status": "passed", "errors": []}
