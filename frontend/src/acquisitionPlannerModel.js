@@ -22,7 +22,19 @@ export const ACQUISITION_FIELDS = [
   ["expected_monthly_margin_per_customer", "Маржа с клиента в месяц", "Нужна для расчёта окупаемости CAC", 0, 100000, 1]
 ];
 
+export function isAcquisitionFormValid(form) {
+  return ACQUISITION_FIELDS.every(([key, , , min, max, step]) => {
+    const raw = form[key];
+    if (raw === null || raw === undefined || String(raw).trim() === "") return false;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < min || value > max) return false;
+    const steps = (value - min) / step;
+    return Math.abs(steps - Math.round(steps)) < 1e-8;
+  });
+}
+
 export function acquisitionPayload(form) {
+  if (!isAcquisitionFormValid(form)) throw new TypeError("invalid acquisition assumptions");
   return {
     target_customers: Number(form.target_customers),
     total_budget: Number(form.total_budget),
