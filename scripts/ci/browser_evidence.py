@@ -61,6 +61,11 @@ def _matrix_snapshot():
         return None
 
 
+def browser_project_names() -> tuple[str, ...]:
+    contract = _matrix_snapshot()
+    return tuple(row["name"] for row in contract[0]) if contract else ()
+
+
 def _stats_ok(stats: object, expected: int, *, total: bool = False) -> bool:
     return bool(
         isinstance(stats, dict)
@@ -182,4 +187,11 @@ def browser_artifact_snapshot(browser_dir: Path) -> dict | None:
     }
 
 
-__all__ = ["BROWSER_EVIDENCE_NAME", "BROWSER_EVIDENCE_SCHEMA", "BROWSER_PROJECT_MATRIX", "BROWSER_PROJECT_MATRIX_SCHEMA", "browser_artifact_snapshot"]
+__all__ = [
+    "BROWSER_EVIDENCE_NAME",
+    "BROWSER_EVIDENCE_SCHEMA",
+    "BROWSER_PROJECT_MATRIX",
+    "BROWSER_PROJECT_MATRIX_SCHEMA",
+    "browser_artifact_snapshot",
+    "browser_project_names",
+]
