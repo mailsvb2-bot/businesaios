@@ -113,6 +113,17 @@ class InMemoryTenantRegistry(TenantRegistryContract):
             self._records[updated.tenant_id] = updated
         return updated
 
+    def set_plan(self, *, tenant_id: str, plan: TenantPlan) -> TenantRecord:
+        current = self.require(tenant_id)
+        target_plan = plan if isinstance(plan, TenantPlan) else TenantPlan(str(plan))
+        if current.plan is target_plan:
+            return current
+        updated = replace(current, plan=target_plan)
+        updated.validate()
+        with self._lock:
+            self._records[updated.tenant_id] = updated
+        return updated
+
     @staticmethod
     def _normalized_aliases(values: tuple[str, ...]) -> tuple[str, ...]:
         result: list[str] = []
@@ -174,6 +185,11 @@ class PersistentTenantRegistry(InMemoryTenantRegistry):
 
     def set_status(self, *, tenant_id: str, status: TenantStatus) -> TenantRecord:
         updated = super().set_status(tenant_id=tenant_id, status=status)
+        self._flush()
+        return updated
+
+    def set_plan(self, *, tenant_id: str, plan: TenantPlan) -> TenantRecord:
+        updated = super().set_plan(tenant_id=tenant_id, plan=plan)
         self._flush()
         return updated
 
