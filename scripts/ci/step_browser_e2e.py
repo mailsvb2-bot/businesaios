@@ -8,7 +8,7 @@ import shutil
 import sys
 import tempfile
 
-from scripts.ci.browser_evidence import BROWSER_EVIDENCE_NAME, browser_artifact_snapshot
+from scripts.ci.browser_evidence import BROWSER_EVIDENCE_NAME, BROWSER_EVIDENCE_SCHEMA, browser_artifact_snapshot
 from scripts.ci.fs import safe_write_text
 from scripts.ci.paths import repo_root, reports_dir
 from scripts.ci.subprocess_io import run_command
@@ -55,7 +55,7 @@ def run() -> tuple[bool, str]:
     root, frontend = repo_root(), repo_root() / "frontend"
     sha = os.environ.get("BAIOS_CI_TARGET_SHA") or None
     if shutil.which("npm") is None:
-        _write({"schema": "businessaios_browser_e2e.v1", "exact_sha": sha, "status": "FAIL", "reason": "npm_missing"})
+        _write({"schema": BROWSER_EVIDENCE_SCHEMA, "exact_sha": sha, "status": "FAIL", "reason": "npm_missing"})
         return False, "browser-e2e: npm is unavailable"
     browser_dir = root / "artifacts" / "ci" / "browser-e2e"
     shutil.rmtree(browser_dir, ignore_errors=True)
@@ -64,17 +64,19 @@ def run() -> tuple[bool, str]:
         try:
             runtime_env, mode, storage = _runtime_env(sha=sha, runtime_dir=runtime_dir)
         except RuntimeError as exc:
-            _write({"schema": "businessaios_browser_e2e.v1", "exact_sha": sha, "status": "FAIL", "reason": str(exc)})
+            _write({"schema": BROWSER_EVIDENCE_SCHEMA, "exact_sha": sha, "status": "FAIL", "reason": str(exc)})
             return False, f"browser-e2e: {exc}"
-        outcome = run_command(["npm", "run", "test:e2e"], cwd=frontend, timeout=300, env=runtime_env)
+        outcome = run_command(["npm", "run", "test:e2e"], cwd=frontend, timeout=600, env=runtime_env)
     finally:
         shutil.rmtree(runtime_dir, ignore_errors=True)
     snapshot = browser_artifact_snapshot(browser_dir)
     passed = bool(outcome.returncode == 0 and snapshot)
     _write({
-        "schema": "businessaios_browser_e2e.v1", "exact_sha": sha,
-        "status": "PASS" if passed and sha else "NOT_PROVEN" if passed else "FAIL", "project": "chromium",
+        "schema": BROWSER_EVIDENCE_SCHEMA, "exact_sha": sha,
+        "status": "PASS" if passed and sha else "NOT_PROVEN" if passed else "FAIL",
         "runtime_mode": mode, "storage_backend": storage,
-        "stats": snapshot["stats"] if snapshot else {}, "artifacts": snapshot["artifacts"] if snapshot else {},
+        "stats": snapshot["stats"] if snapshot else {}, "projects": snapshot["projects"] if snapshot else [],
+        "project_matrix": snapshot["project_matrix"] if snapshot else {}, "artifacts": snapshot["artifacts"] if snapshot else {},
     })
-    return passed, f"browser-e2e: {'passed' if passed else 'failed'} chromium mode={mode} storage={storage}; stats={snapshot['stats'] if snapshot else {}}"
+    project_names = [item["name"] for item in snapshot["projects"]] if snapshot else []
+    return passed, f"browser-e2e: {'passed' if passed else 'failed'} projects={project_names} mode={mode} storage={storage}; stats={snapshot['stats'] if snapshot else {}}"
