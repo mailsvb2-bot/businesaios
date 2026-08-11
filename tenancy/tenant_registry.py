@@ -9,7 +9,6 @@ from core.tenancy.normalization import normalize_tenant_id, require_tenant_id
 from governance.persistence_codec import atomic_write_json, from_dataclass, read_json_or_default, to_jsonable
 from tenancy.tenant_contract import TenantPlan, TenantRecord, TenantRegistryContract, TenantStatus
 
-
 CANON_TENANT_REGISTRY = True
 
 
@@ -24,11 +23,10 @@ class InMemoryTenantRegistry(TenantRegistryContract):
         return InMemoryTenantRegistry.register_many(self, (record,))[0]
 
     def register_many(self, records: tuple[TenantRecord, ...] | list[TenantRecord]) -> tuple[TenantRecord, ...]:
-        prepared = tuple(records)
         with self._lock:
             shadow_records, shadow_aliases = dict(self._records), dict(self._aliases)
             stored: list[TenantRecord] = []
-            for record in prepared:
+            for record in records:
                 record.validate()
                 tenant_id = require_tenant_id(record.tenant_id)
                 existing = shadow_records.get(tenant_id)
@@ -55,8 +53,7 @@ class InMemoryTenantRegistry(TenantRegistryContract):
         with self._lock:
             return self._records.get(tid)
 
-    def get(self, tenant_id: str) -> TenantRecord | None:
-        return self.lookup(tenant_id)
+    get = lookup
 
     def require(self, tenant_id: str) -> TenantRecord:
         record = self.lookup(tenant_id)
@@ -69,8 +66,7 @@ class InMemoryTenantRegistry(TenantRegistryContract):
         if not hint:
             return None
         with self._lock:
-            direct = self._records.get(hint)
-            return direct if direct is not None else self._records.get(self._aliases.get(hint, ""))
+            return self._records.get(hint) or self._records.get(self._aliases.get(hint, ""))
 
     def assert_active(self, tenant_id: str) -> TenantRecord:
         record = self.require(tenant_id)
@@ -80,12 +76,8 @@ class InMemoryTenantRegistry(TenantRegistryContract):
 
     def list_active(self) -> tuple[TenantRecord, ...]:
         with self._lock:
-            return tuple(
-                sorted(
-                    (record for record in self._records.values() if record.status is TenantStatus.ACTIVE),
-                    key=lambda item: item.tenant_id,
-                )
-            )
+            active = (record for record in self._records.values() if record.status is TenantStatus.ACTIVE)
+            return tuple(sorted(active, key=lambda item: item.tenant_id))
 
     def _replace_record(self, tenant_id: str, **changes: object) -> TenantRecord:
         updated = replace(self.require(tenant_id), **changes)
@@ -98,17 +90,11 @@ class InMemoryTenantRegistry(TenantRegistryContract):
         return self._replace_record(tenant_id, status=status)
 
     def set_plan(self, *, tenant_id: str, plan: TenantPlan) -> TenantRecord:
-        target = plan if isinstance(plan, TenantPlan) else TenantPlan(str(plan))
-        return self._replace_record(tenant_id, plan=target)
+        return self._replace_record(tenant_id, plan=plan if isinstance(plan, TenantPlan) else TenantPlan(str(plan)))
 
     @staticmethod
     def _normalized_aliases(values: tuple[str, ...]) -> tuple[str, ...]:
-        result: list[str] = []
-        for item in values:
-            alias = normalize_tenant_id(item)
-            if alias and alias not in result:
-                result.append(alias)
-        return tuple(result)
+        return tuple(dict.fromkeys(alias for item in values if (alias := normalize_tenant_id(item))))
 
 
 def ensure_tenant_record(
@@ -125,16 +111,12 @@ def ensure_tenant_record(
         return existing
     record = TenantRecord(tenant_id=tid, display_name=str(display_name or tid), plan=plan)
     register_many = getattr(tenant_registry, "register_many", None)
-    if callable(register_many):
-        return register_many((record,))[0]
-    return getattr(tenant_registry, "register")(record)
+    return register_many((record,))[0] if callable(register_many) else getattr(tenant_registry, "register")(record)
 
 
 def tenancy_data_dir() -> Path:
     explicit = os.getenv("BUSINESAIOS_TENANCY_DATA_DIR", "").strip()
-    if explicit:
-        return Path(explicit)
-    return Path(os.getenv("DATA_DIR", "data").strip() or "data") / "tenancy"
+    return Path(explicit) if explicit else Path(os.getenv("DATA_DIR", "data").strip() or "data") / "tenancy"
 
 
 def tenant_registry_path() -> Path:
@@ -184,8 +166,7 @@ class PersistentTenantRegistry(InMemoryTenantRegistry):
 
 
 def build_default_tenant_registry() -> InMemoryTenantRegistry:
-    mode = os.getenv("BUSINESAIOS_TENANT_REGISTRY_BACKEND", "file").strip().lower()
-    return InMemoryTenantRegistry() if mode == "memory" else PersistentTenantRegistry()
+    return InMemoryTenantRegistry() if os.getenv("BUSINESAIOS_TENANT_REGISTRY_BACKEND", "file").strip().lower() == "memory" else PersistentTenantRegistry()
 
 
 __all__ = [
