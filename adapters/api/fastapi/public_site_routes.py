@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-from fastapi import Request
+from dataclasses import asdict
 
+from fastapi import HTTPException, Request, status
+
+from acquisition import evaluate_acquisition_plan, request_from_payload
 from application.public_site.cta_intake import CTALandingIntakeService, public_integration_marketplace
 from entrypoints.api.request_context import RequestContext
+from presentation import build_acquisition_view_model
 from tenancy.tenant_registry import ensure_tenant_record
 
 
@@ -42,6 +46,36 @@ def register_public_site_routes(*, router, enforce_public_security, auth_bundle=
         secure(http_request, '/public-site/integrations', {})
         rows = public_integration_marketplace()
         return {'ok': True, 'items': list(rows), 'total': len(rows), 'policy': {'initial_sync': 'read_only', 'write_actions_enabled': False, 'credential_activation_requires_authenticated_control_plane': True}}
+
+    @router.post('/public-site/acquisition/feasibility', tags=['public-site', 'acquisition'])
+    async def public_site_acquisition_feasibility(http_request: Request) -> dict:
+        try:
+            body = await http_request.json()
+        except Exception:
+            body = {}
+        body = body if isinstance(body, dict) else {}
+        secure(http_request, '/public-site/acquisition/feasibility', body)
+        try:
+            result = evaluate_acquisition_plan(request_from_payload(body))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        view = build_acquisition_view_model(result)
+        return {
+            'ok': True,
+            'scenario_source': 'user_assumptions',
+            'write_actions_enabled': False,
+            'disclaimer': 'Сценарный расчёт по введённым предположениям; это не подтверждённые метрики бизнеса.',
+            'view': asdict(view),
+            'economics': {
+                'feasibility_score': result.feasibility_score,
+                'overall_conversion_rate': result.funnel.overall_conversion_rate,
+                'blended_cac': result.cac.blended_cac,
+                'max_sustainable_cac': result.cac.max_sustainable_cac,
+                'ltv_to_cac_ratio': result.cac.ltv_to_cac_ratio,
+                'payback_months': result.cac.payback_months,
+                'sustainable': result.cac.sustainable,
+            },
+        }
 
     @router.post('/public-site/cta/start', tags=['public-site'])
     async def public_site_cta_start(http_request: Request) -> dict:
