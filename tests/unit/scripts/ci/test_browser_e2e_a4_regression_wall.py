@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import base64
 import hashlib
+import io
 import json
+import zipfile
 from pathlib import Path
+
+import pytest
 
 from scripts.ci import browser_evidence, step_browser_e2e
 from scripts.ci.subprocess_io import CommandOutcome
@@ -37,6 +42,61 @@ def test_playwright_evidence_timestamps_require_timezone() -> None:
     assert browser_evidence._timestamp("2026-08-11T10:48:09+00:00") is True
     for value in ("2026-08-11", "2026-08-11T10:48:09", "2026-08-11T10:48:09.726"):
         assert browser_evidence._timestamp(value) is False
+
+
+def test_playwright_evidence_rejects_multiple_attempts_in_each_artifact() -> None:
+    contract = browser_evidence._matrix_snapshot()
+    assert contract
+    matrix, canonical, _ = contract
+    projects = tuple(item["name"] for item in matrix)
+    specs = []
+    html_tests = []
+    for title, file in canonical:
+        json_tests = []
+        for project in projects:
+            json_tests.append({
+                "expectedStatus": "passed",
+                "projectName": project,
+                "status": "expected",
+                "results": [{"status": "passed", "errors": []}],
+            })
+            html_tests.append({
+                "testId": f"{project}-{file}",
+                "title": title,
+                "projectName": project,
+                "location": {"file": file, "line": 1, "column": 1},
+                "outcome": "expected",
+                "ok": True,
+                "results": [{"workerIndex": 0, "startTime": "2026-08-11T10:48:09.726Z"}],
+            })
+        specs.append({"title": title, "file": file, "line": 1, "column": 1, "ok": True, "tests": json_tests})
+    total = len(projects) * len(canonical)
+    json_doc = {
+        "config": {"projects": [{"name": project} for project in projects]},
+        "suites": [{"specs": specs, "suites": []}],
+        "stats": {"expected": total, "unexpected": 0, "skipped": 0, "flaky": 0},
+    }
+    json_doc["suites"][0]["specs"][0]["tests"][0]["results"].append({"status": "passed", "errors": []})
+    with pytest.raises(ValueError, match="invalid browser evidence"):
+        browser_evidence._json_report(json_doc, projects, canonical)
+
+    html_tests[0]["results"].append({"workerIndex": 0, "startTime": "2026-08-11T10:48:09.727Z"})
+    report = {
+        "projectNames": list(projects),
+        "files": [{"tests": html_tests}],
+        "stats": {"total": total, "expected": total, "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True},
+    }
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("report.json", json.dumps(report))
+    encoded = base64.b64encode(output.getvalue()).decode("ascii")
+    html = (
+        '<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body>'
+        f'<template id="playwrightReportBase64">data:application/zip;base64,{encoded}</template>'
+        "</body></html>"
+    )
+    with pytest.raises(ValueError, match="invalid browser evidence"):
+        browser_evidence._html_report(html, projects, canonical)
 
 
 def test_release_runtime_forwards_database_url(monkeypatch, tmp_path) -> None:
