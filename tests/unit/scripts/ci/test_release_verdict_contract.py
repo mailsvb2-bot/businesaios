@@ -27,9 +27,21 @@ def _write_payload(tmp_path, payload: dict) -> None:
     (tmp_path / USER_SCENARIO_EVIDENCE_NAME).write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _embedded_test(index: int) -> dict:
+    return {
+        "testId": f"browser-test-{index}",
+        "title": f"browser-{index}",
+        "projectName": "chromium",
+        "location": {"file": "onboarding-workspace.spec.js", "line": index + 1, "column": 1},
+        "outcome": "expected",
+        "ok": True,
+        "results": [{"workerIndex": 0}],
+    }
+
+
 def _html_report(expected: int) -> str:
     report = {
-        "projectNames": ["chromium"], "files": [{"tests": [{} for _ in range(expected)]}],
+        "projectNames": ["chromium"], "files": [{"tests": [_embedded_test(index) for index in range(expected)]}],
         "stats": {"total": expected, "expected": expected, "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True},
     }
     output = io.BytesIO()
