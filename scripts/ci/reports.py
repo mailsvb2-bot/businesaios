@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from scripts.ci import step_ids as _step_ids
-from scripts.ci.browser_evidence import BROWSER_EVIDENCE_NAME, browser_artifact_snapshot
+from scripts.ci.browser_evidence import BROWSER_EVIDENCE_NAME, BROWSER_EVIDENCE_SCHEMA, browser_artifact_snapshot
 from scripts.ci.contracts import ExecutionReport
 from scripts.ci.fs import safe_write_text
 from scripts.ci.paths import repo_root, reports_dir
@@ -94,14 +94,15 @@ def _browser_proof(step_status: str, exact_sha: str | None, *, require_productio
         snapshot = browser_artifact_snapshot(reports_dir() / "browser-e2e")
         mode_ok = evidence.get("runtime_mode") == "production" and evidence.get("storage_backend") == "postgres" if require_production else evidence.get("runtime_mode") in {"development", "production"}
         valid = bool(
-            snapshot and mode_ok and evidence.get("schema") == "businessaios_browser_e2e.v1"
-            and evidence.get("status") == "PASS" and evidence.get("project") == "chromium"
-            and evidence.get("stats") == snapshot["stats"] and evidence.get("artifacts") == snapshot["artifacts"]
+            snapshot and mode_ok and evidence.get("schema") == BROWSER_EVIDENCE_SCHEMA and evidence.get("status") == "PASS"
+            and evidence.get("stats") == snapshot["stats"] and evidence.get("projects") == snapshot["projects"]
+            and evidence.get("project_matrix") == snapshot["project_matrix"] and evidence.get("artifacts") == snapshot["artifacts"]
         )
         evidence_status = "PASS" if valid else "FAIL"
     proof.update(
         status=_combined_status(step_status, evidence_status), evidence_status=evidence_status,
-        project=evidence.get("project"), runtime_mode=evidence.get("runtime_mode"), storage_backend=evidence.get("storage_backend"),
+        projects=evidence.get("projects", []), project_matrix=evidence.get("project_matrix", {}),
+        runtime_mode=evidence.get("runtime_mode"), storage_backend=evidence.get("storage_backend"),
         stats=evidence.get("stats", {}), artifacts=evidence.get("artifacts", {}),
     )
     return proof
@@ -124,7 +125,7 @@ def release_verdict(report: ExecutionReport) -> dict:
         "PASS" if complete and exact_sha and scenario_proof["status"] == browser_proof["status"] == "PASS" else "NOT_PROVEN")
     return {
         "schema": "businessaios_release_verdict.v1", "exact_sha": exact_sha, "gate": report.gate,
-        "status": status, "scope": "declared-canonical-user-scenarios-and-browser",
+        "status": status, "scope": "declared-canonical-user-scenarios-and-browser-matrix",
         "canonical_user_scenarios": scenario_proof, "browser_e2e": browser_proof, "steps": steps,
     }
 
