@@ -32,6 +32,22 @@ def test_browser_workflow_execution_and_failure_diagnostics_remain_locked() -> N
     assert "if: always()" in ci[evidence:complete_tree]
 
 
+def test_playwright_evidence_timestamps_require_timezone() -> None:
+    assert browser_evidence._timestamp("2026-08-11T10:48:09.726Z") is True
+    assert browser_evidence._timestamp("2026-08-11T10:48:09+00:00") is True
+    for value in ("2026-08-11", "2026-08-11T10:48:09", "2026-08-11T10:48:09.726"):
+        assert browser_evidence._timestamp(value) is False
+
+
+def test_release_runtime_forwards_database_url(monkeypatch, tmp_path) -> None:
+    database_url = "postgresql://proof@127.0.0.1:5432/businessaios"
+    monkeypatch.setenv("BAIOS_CI_ACTIVE_GATE", "release")
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    env, mode, storage = step_browser_e2e._runtime_env(sha="a" * 40, runtime_dir=str(tmp_path))
+    assert (mode, storage) == ("production", "postgres")
+    assert env["DATABASE_URL"] == database_url
+
+
 def test_browser_step_emits_exact_release_binding_fields(monkeypatch, tmp_path) -> None:
     reports = tmp_path / "artifacts" / "ci"
     frontend = tmp_path / "frontend"
