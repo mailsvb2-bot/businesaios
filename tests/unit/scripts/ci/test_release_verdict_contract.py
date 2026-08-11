@@ -39,7 +39,9 @@ def _html_report(expected: int) -> str:
     return f'<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body><template id="playwrightReportBase64">data:application/zip;base64,{encoded}</template></body></html>'
 
 
-def _write_browser_evidence(tmp_path, sha: str, *, expected: int = 1) -> None:
+def _write_browser_evidence(
+    tmp_path, sha: str, *, expected: int = 1, runtime_mode: str = "production", storage_backend: str = "postgres",
+) -> None:
     browser = tmp_path / "browser-e2e"
     browser.mkdir(parents=True, exist_ok=True)
     stats = {"expected": expected, "unexpected": 0, "skipped": 0}
@@ -54,6 +56,7 @@ def _write_browser_evidence(tmp_path, sha: str, *, expected: int = 1) -> None:
     snapshot = browser_artifact_snapshot(browser)
     (tmp_path / BROWSER_EVIDENCE_NAME).write_text(json.dumps({
         "schema": "businessaios_browser_e2e.v1", "exact_sha": sha, "status": "PASS", "project": "chromium",
+        "runtime_mode": runtime_mode, "storage_backend": storage_backend,
         "stats": snapshot["stats"] if snapshot else stats, "artifacts": snapshot["artifacts"] if snapshot else {},
     }), encoding="utf-8")
 
@@ -107,6 +110,8 @@ def test_release_verdict_requires_exact_sha_complete_plan_and_scenario_evidence(
     assert verdict["exact_sha"] == "a" * 40
     assert verdict["canonical_user_scenarios"]["status"] == "PASS"
     assert verdict["browser_e2e"]["status"] == "PASS"
+    assert verdict["browser_e2e"]["runtime_mode"] == "production"
+    assert verdict["browser_e2e"]["storage_backend"] == "postgres"
     assert [item["id"] for item in verdict["canonical_user_scenarios"]["scenarios"]] == [
         scenario_id for scenario_id, _ in USER_SCENARIOS
     ]
@@ -139,6 +144,15 @@ def test_release_verdict_requires_exact_browser_evidence(monkeypatch, tmp_path) 
     assert release_verdict(_report_for("release"))["status"] == "NOT_PROVEN"
     _write_browser_evidence(tmp_path, "e" * 40)
     assert release_verdict(_report_for("release"))["status"] == "NOT_PROVEN"
+
+
+def test_release_verdict_rejects_development_browser_evidence(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
+    _write_scenario_evidence(monkeypatch, tmp_path, "c" * 40)
+    _write_browser_evidence(tmp_path, "c" * 40, runtime_mode="development", storage_backend="isolated-local")
+    verdict = release_verdict(_report_for("release"))
+    assert verdict["status"] == "FAIL"
+    assert verdict["browser_e2e"]["evidence_status"] == "FAIL"
 
 
 def test_release_verdict_rejects_vacuous_browser_evidence(monkeypatch, tmp_path) -> None:
