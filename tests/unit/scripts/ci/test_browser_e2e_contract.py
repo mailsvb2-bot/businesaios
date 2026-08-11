@@ -11,10 +11,34 @@ from pathlib import Path
 import pytest
 
 from scripts.ci import execution, step_browser_e2e
-from scripts.ci.browser_evidence import browser_artifact_snapshot
+from scripts.ci.browser_evidence import (
+    BROWSER_EVIDENCE_SCHEMA,
+    BROWSER_PROJECT_MATRIX,
+    browser_artifact_snapshot,
+    browser_project_names,
+)
 from scripts.ci.plan_registry import allowed_gates, plan_for_gate, requires_release_runtime_environment
 from scripts.ci.step_registry import handler_for_step
 from scripts.ci.subprocess_io import CommandOutcome
+
+
+def _matrix() -> list[dict]:
+    return json.loads(Path(BROWSER_PROJECT_MATRIX).read_text(encoding="utf-8"))["projects"]
+
+
+def test_browser_project_matrix_is_canonical_and_single_owned() -> None:
+    expected = [
+        {"name": "chromium", "device": "Desktop Chrome", "engine": "chromium", "surface": "desktop"},
+        {"name": "firefox", "device": "Desktop Firefox", "engine": "firefox", "surface": "desktop"},
+        {"name": "webkit", "device": "Desktop Safari", "engine": "webkit", "surface": "desktop"},
+        {"name": "Mobile Chrome", "device": "Pixel 5", "engine": "chromium", "surface": "mobile"},
+        {"name": "Mobile Safari", "device": "iPhone 12", "engine": "webkit", "surface": "mobile"},
+    ]
+    assert _matrix() == expected
+    assert browser_project_names() == tuple(item["name"] for item in expected)
+    config = Path("frontend/playwright.config.js").read_text(encoding="utf-8")
+    assert 'readFileSync(new URL("./e2e/project-matrix.json", import.meta.url)' in config
+    assert "browserName: entry.engine" in config
 
 
 def test_browser_gate_and_release_plan_are_canonical() -> None:
@@ -37,7 +61,7 @@ def test_browser_gate_is_provisioned_by_ci_and_deep_release() -> None:
     for workflow in (ci, deep):
         assert "actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e" in workflow
         assert "npm ci --ignore-scripts --no-audit --no-fund" in workflow
-        assert "./node_modules/.bin/playwright install --with-deps chromium" in workflow
+        assert "./node_modules/.bin/playwright install --with-deps chromium firefox webkit" in workflow
     assert "python -m scripts.ci.cli --gate browser" in ci
     assert ".venv/bin/python -m scripts.ci.cli --gate release" in deep
     assert "DATABASE_URL=$DATABASE_URL" in deep
@@ -55,8 +79,7 @@ def test_ci_rebuilds_default_production_bundle_after_e2e_override() -> None:
     assert "env -u VITE_API_BASE npm run build" in ci
     assert 'grep -R -F -q "https://api.businessaios.ru" frontend/dist' in ci
     upload_block = ci[upload:browser_evidence]
-    assert "if: success()" in upload_block
-    assert "if: always()" not in upload_block
+    assert "if: success()" in upload_block and "if: always()" not in upload_block
     assert "if: always()" in ci[browser_evidence:]
 
 
@@ -88,8 +111,9 @@ def test_release_browser_runtime_requires_real_database_and_production_security(
     assert len(base64.b64decode(env["BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64"])) == 32
 
 
-def test_playwright_runtime_switches_mode_without_production_fallbacks() -> None:
+def test_playwright_runtime_and_scenario_keep_security_and_mobile_contracts() -> None:
     config = Path("frontend/playwright.config.js").read_text(encoding="utf-8")
+    scenario = Path("frontend/e2e/onboarding-workspace.spec.js").read_text(encoding="utf-8")
     assert 'const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development"' in config
     assert 'const production = runtimeMode === "production"' in config
     assert '"DATABASE_URL", "DECISION_SIGNING_SECRET", "API_CONTROL_PLANE_API_KEY_PEPPER"' in config
@@ -97,37 +121,53 @@ def test_playwright_runtime_switches_mode_without_production_fallbacks() -> None
     assert 'APP_ENV: production ? "production" : "dev"' in config
     assert 'API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS: production ? "0"' in config
     assert 'BUSINESAIOS_API_KEY_STORE_BACKEND: production ? "file"' in config
+    assert 'trace: "off"' in config and 'trace: "retain-on-failure"' not in config
+    assert "testInfo.project.name" in scenario and "hasNoHorizontalOverflow" in scenario
+    assert "expect(ownerKey)" not in scenario and ".toContain(ownerKey)" not in scenario
+    assert "indexedDB.databases()" in scenario and "context().cookies()" in scenario
 
 
-def test_browser_failure_evidence_cannot_capture_owner_key_network_payload() -> None:
-    config = Path("frontend/playwright.config.js").read_text(encoding="utf-8")
-    scenario = Path("frontend/e2e/onboarding-workspace.spec.js").read_text(encoding="utf-8")
-    assert 'trace: "off"' in config
-    assert 'trace: "retain-on-failure"' not in config
-    assert "expect(ownerKey)" not in scenario
-    assert ".toContain(ownerKey)" not in scenario
-    assert "indexedDB.databases()" in scenario
-    assert "context().cookies()" in scenario
+def _signature(title: str = "onboarding creates a read-only OWNER workspace without persisting the API key") -> tuple[str, str, int, int]:
+    return title, "onboarding-workspace.spec.js", 21, 1
 
 
-def _embedded_test(index: int) -> dict:
+def _embedded_test(project: str, title: str | None = None) -> dict:
+    name, file, line, column = _signature(title or _signature()[0])
     return {
-        "testId": f"browser-test-{index}",
-        "title": f"browser-{index}",
-        "projectName": "chromium",
-        "location": {"file": "onboarding-workspace.spec.js", "line": index + 1, "column": 1},
-        "outcome": "expected",
-        "ok": True,
-        "results": [{"workerIndex": 0}],
+        "testId": f"browser-test-{project}", "title": name, "projectName": project,
+        "location": {"file": file, "line": line, "column": column},
+        "outcome": "expected", "ok": True, "results": [{"workerIndex": 0}],
     }
 
 
-def _html_report(expected: int, *, embedded_count: int | None = None, empty_records: bool = False) -> str:
-    count = expected if embedded_count is None else embedded_count
-    tests = [{} for _ in range(count)] if empty_records else [_embedded_test(index) for index in range(count)]
+def _json_report(projects: tuple[str, ...], *, drift_project: str | None = None, skipped: int = 0) -> dict:
+    title, file, line, column = _signature()
+    tests = []
+    for project in projects:
+        project_title = f"{title} drift" if project == drift_project else title
+        tests.append({
+            "expectedStatus": "passed", "projectName": project, "status": "expected",
+            "results": [{"status": "passed", "errors": []}], "_title": project_title,
+        })
+    specs = []
+    for project, test in zip(projects, tests, strict=True):
+        specs.append({
+            "title": test.pop("_title"), "file": file, "line": line, "column": column, "ok": True,
+            "tests": [test],
+        })
+    return {
+        "config": {"projects": [{"name": name} for name in projects]},
+        "suites": [{"specs": specs, "suites": []}],
+        "stats": {"expected": len(projects), "unexpected": 0, "skipped": skipped, "flaky": 0},
+    }
+
+
+def _html_report(projects: tuple[str, ...], *, drift_project: str | None = None) -> str:
+    title = _signature()[0]
+    tests = [_embedded_test(project, f"{title} drift" if project == drift_project else title) for project in projects]
     report = {
-        "projectNames": ["chromium"], "files": [{"tests": tests}],
-        "stats": {"total": expected, "expected": expected, "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True},
+        "projectNames": list(projects), "files": [{"tests": tests}],
+        "stats": {"total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True},
     }
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -136,33 +176,35 @@ def _html_report(expected: int, *, embedded_count: int | None = None, empty_reco
     return f'<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body><template id="playwrightReportBase64">data:application/zip;base64,{encoded}</template></body></html>'
 
 
-def _write_outputs(browser: Path, stats: dict, *, diagnostics: bool) -> None:
+def _write_outputs(browser: Path, *, projects: tuple[str, ...] | None = None, diagnostics: bool = True, skipped: int = 0, drift_project: str | None = None) -> None:
+    names = projects or browser_project_names()
     browser.mkdir(parents=True, exist_ok=True)
-    (browser / "playwright.json").write_text(json.dumps({"stats": stats}), encoding="utf-8")
+    (browser / "playwright.json").write_text(json.dumps(_json_report(names, drift_project=drift_project, skipped=skipped)), encoding="utf-8")
     if not diagnostics:
         return
-    expected = int(stats.get("expected", 0))
-    testcases = "".join(f'<testcase name="browser-{index}"/>' for index in range(expected))
+    testcases = "".join(f'<testcase name="browser-{index}"/>' for index, _ in enumerate(names, 1))
     (browser / "junit.xml").write_text(
-        f'<testsuites tests="{expected}" failures="0" skipped="0" errors="0"><testsuite>{testcases}</testsuite></testsuites>',
+        f'<testsuites tests="{len(names)}" failures="0" skipped="0" errors="0"><testsuite>{testcases}</testsuite></testsuites>',
         encoding="utf-8",
     )
     (browser / "html").mkdir(exist_ok=True)
-    (browser / "html" / "index.html").write_text(_html_report(expected), encoding="utf-8")
+    (browser / "html" / "index.html").write_text(_html_report(names, drift_project=drift_project), encoding="utf-8")
 
 
-def test_browser_evidence_rejects_mismatched_or_empty_embedded_test_records(tmp_path) -> None:
+def test_browser_evidence_requires_every_project_and_identical_scenario() -> None:
+    assert len(browser_project_names()) == 5
+
+
+def test_browser_evidence_rejects_missing_project_or_cross_project_drift(tmp_path) -> None:
     browser = tmp_path / "browser"
-    stats = {"expected": 2, "unexpected": 0, "skipped": 0}
-    _write_outputs(browser, stats, diagnostics=True)
-    html_path = browser / "html" / "index.html"
-    html_path.write_text(_html_report(2, embedded_count=1), encoding="utf-8")
+    names = browser_project_names()
+    _write_outputs(browser, projects=names[:-1])
     assert browser_artifact_snapshot(browser) is None
-    html_path.write_text(_html_report(2, empty_records=True), encoding="utf-8")
+    _write_outputs(browser, projects=names, drift_project=names[-1])
     assert browser_artifact_snapshot(browser) is None
 
 
-def _run_browser_step(monkeypatch, tmp_path, stats: dict, returncode: int = 0, diagnostics: bool = True):
+def _run_browser_step(monkeypatch, tmp_path, *, skipped: int = 0, diagnostics: bool = True):
     root = tmp_path / "repo"
     reports = root / "artifacts" / "ci"
     browser = reports / "browser-e2e"
@@ -178,8 +220,8 @@ def _run_browser_step(monkeypatch, tmp_path, stats: dict, returncode: int = 0, d
 
     def _run(*args, **kwargs):
         captured.update(kwargs)
-        _write_outputs(browser, stats, diagnostics=diagnostics)
-        return CommandOutcome(returncode, "", "")
+        _write_outputs(browser, diagnostics=diagnostics, skipped=skipped)
+        return CommandOutcome(0, "", "")
 
     monkeypatch.setattr(step_browser_e2e, "run_command", _run)
     result = step_browser_e2e.run()
@@ -187,27 +229,23 @@ def _run_browser_step(monkeypatch, tmp_path, stats: dict, returncode: int = 0, d
     return result, evidence, captured
 
 
-def test_browser_step_requires_real_non_skipped_playwright_test(monkeypatch, tmp_path) -> None:
-    result, evidence, captured = _run_browser_step(monkeypatch, tmp_path, {"expected": 1, "unexpected": 0, "skipped": 0})
-    assert result[0] is True
-    assert evidence["status"] == "PASS"
+def test_browser_step_requires_complete_non_skipped_matrix(monkeypatch, tmp_path) -> None:
+    result, evidence, captured = _run_browser_step(monkeypatch, tmp_path)
+    assert result[0] is True and evidence["status"] == "PASS" and evidence["schema"] == BROWSER_EVIDENCE_SCHEMA
     assert evidence["exact_sha"] == "a" * 40
-    assert evidence["runtime_mode"] == "development"
-    assert evidence["storage_backend"] == "isolated-local"
-    assert evidence["artifacts"]["junit"]["tests"] == 1
-    assert len(evidence["artifacts"]["html"]["sha256"]) == 64
+    assert evidence["runtime_mode"] == "development" and evidence["storage_backend"] == "isolated-local"
+    assert [item["name"] for item in evidence["projects"]] == list(browser_project_names())
+    assert all(item["tests"] == 1 for item in evidence["projects"])
+    assert evidence["artifacts"]["junit"]["tests"] == len(browser_project_names())
+    assert len(evidence["project_matrix"]["sha256"]) == 64
     assert captured["env"]["BAIOS_E2E_PYTHON"] == sys.executable
 
 
-def test_browser_step_fails_closed_on_vacuous_or_skipped_report(monkeypatch, tmp_path) -> None:
-    result, evidence, _ = _run_browser_step(monkeypatch, tmp_path, {"expected": 0, "unexpected": 0, "skipped": 1})
-    assert result[0] is False
-    assert evidence["status"] == "FAIL"
+def test_browser_step_fails_closed_on_skipped_or_missing_diagnostics(monkeypatch, tmp_path) -> None:
+    result, evidence, _ = _run_browser_step(monkeypatch, tmp_path, skipped=1)
+    assert result[0] is False and evidence["status"] == "FAIL"
 
-
-def test_browser_step_fails_closed_without_parseable_diagnostics(monkeypatch, tmp_path) -> None:
-    result, evidence, _ = _run_browser_step(
-        monkeypatch, tmp_path, {"expected": 1, "unexpected": 0, "skipped": 0}, diagnostics=False,
-    )
-    assert result[0] is False
-    assert evidence["status"] == "FAIL"
+    second = tmp_path / "second"
+    second.mkdir()
+    result, evidence, _ = _run_browser_step(monkeypatch, second, diagnostics=False)
+    assert result[0] is False and evidence["status"] == "FAIL"
