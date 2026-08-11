@@ -50,9 +50,14 @@ def test_ci_rebuilds_default_production_bundle_after_e2e_override() -> None:
     rebuild = ci.index("- name: Rebuild canonical production frontend bundle")
     verify = ci.index("- name: Verify production bundle")
     upload = ci.index("- name: Upload frontend bundle")
-    assert browser < rebuild < verify < upload
+    browser_evidence = ci.index("- name: Upload browser evidence")
+    assert browser < rebuild < verify < upload < browser_evidence
     assert "env -u VITE_API_BASE npm run build" in ci
     assert 'grep -R -F -q "https://api.businessaios.ru" frontend/dist' in ci
+    upload_block = ci[upload:browser_evidence]
+    assert "if: success()" in upload_block
+    assert "if: always()" not in upload_block
+    assert "if: always()" in ci[browser_evidence:]
 
 
 def test_release_executor_sets_canonical_postgres_event_store_flag(monkeypatch) -> None:
