@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import base64
+import io
 import json
 import sys
+import zipfile
 from pathlib import Path
 
 from scripts.ci import step_browser_e2e
@@ -45,18 +48,31 @@ def test_browser_failure_evidence_cannot_capture_owner_key_network_payload() -> 
     assert "context().cookies()" in scenario
 
 
+def _html_report(expected: int) -> str:
+    report = {
+        "projectNames": ["chromium"], "files": [{"tests": [{} for _ in range(expected)]}],
+        "stats": {"total": expected, "expected": expected, "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True},
+    }
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("report.json", json.dumps(report))
+    encoded = base64.b64encode(output.getvalue()).decode("ascii")
+    return f'<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body><template id="playwrightReportBase64">data:application/zip;base64,{encoded}</template></body></html>'
+
+
 def _write_outputs(browser: Path, stats: dict, *, diagnostics: bool) -> None:
     browser.mkdir(parents=True, exist_ok=True)
     (browser / "playwright.json").write_text(json.dumps({"stats": stats}), encoding="utf-8")
     if not diagnostics:
         return
+    expected = int(stats.get("expected", 0))
+    testcases = "".join(f'<testcase name="browser-{index}"/>' for index in range(expected))
     (browser / "junit.xml").write_text(
-        '<testsuites tests="1" failures="0" skipped="0" errors="0"><testsuite><testcase name="browser"/></testsuite></testsuites>',
+        f'<testsuites tests="{expected}" failures="0" skipped="0" errors="0"><testsuite>{testcases}</testsuite></testsuites>',
         encoding="utf-8",
     )
-    html = "<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body><script>" + ("x" * 5000) + "</script></body></html>"
     (browser / "html").mkdir(exist_ok=True)
-    (browser / "html" / "index.html").write_text(html, encoding="utf-8")
+    (browser / "html" / "index.html").write_text(_html_report(expected), encoding="utf-8")
 
 
 def _run_browser_step(monkeypatch, tmp_path, stats: dict, returncode: int = 0, diagnostics: bool = True):
