@@ -16,7 +16,7 @@ BROWSER_EVIDENCE_SCHEMA = "businessaios_browser_e2e.v2"
 BROWSER_PROJECT_MATRIX = "frontend/e2e/project-matrix.json"
 BROWSER_PROJECT_MATRIX_SCHEMA = "businessaios_browser_project_matrix.v2"
 _HTML_MARKER = '<template id="playwrightReportBase64">data:application/zip;base64,'
-_HTML_RESULT_KEYS = frozenset({"attachments", "startTime", "workerIndex"})
+_HTML_RESULT_KEYS, _JSON_RESULT_KEYS = frozenset({"attachments", "startTime", "workerIndex"}), frozenset({"workerIndex", "parallelIndex", "status", "duration", "errors", "stdout", "stderr", "retry", "startTime", "annotations", "attachments"})
 
 
 def _need(condition: object) -> None:
@@ -106,8 +106,8 @@ def _json_report(doc, projects, canonical):
         for test in spec["tests"]:
             results = test.get("results") if isinstance(test, dict) else None
             _need(isinstance(test, dict) and test.get("expectedStatus") == "passed" and test.get("status") == "expected")
-            _need(isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict)
-                  and results[0].get("status") == "passed" and results[0].get("errors") == [])
+            _need(isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict) and set(results[0]) == _JSON_RESULT_KEYS
+                  and all(type(results[0].get(key)) is int and results[0][key] >= 0 for key in ("workerIndex", "parallelIndex", "duration")) and type(results[0].get("retry")) is int and results[0]["retry"] == 0 and results[0].get("status") == "passed" and results[0].get("errors") == [] and all(isinstance(results[0].get(key), list) for key in ("stdout", "stderr", "annotations", "attachments")) and _timestamp(results[0].get("startTime")))
             records.append((_text(test.get("projectName")), title, file))
     _need(_scenario_matrix(records, projects, canonical) and _stats_ok(stats, len(records)))
     return stats
