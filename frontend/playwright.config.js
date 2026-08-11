@@ -15,7 +15,7 @@ const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development";
 const production = runtimeMode === "production";
 const productionRequired = [
   "DATABASE_URL", "DECISION_SIGNING_SECRET", "API_CONTROL_PLANE_API_KEY_PEPPER",
-  "BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64"
+  "BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64", "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE"
 ];
 const missingProduction = productionRequired.filter((key) => !String(process.env[key] || "").trim());
 if (production && missingProduction.length) throw new Error(`production browser runtime missing: ${missingProduction.join(",")}`);
