@@ -5,12 +5,11 @@ from pathlib import Path
 
 from scripts.ci import execution
 from scripts.ci import reports as reports_module
+from scripts.ci.browser_evidence import BROWSER_EVIDENCE_NAME, browser_artifact_snapshot
 from scripts.ci.contracts import ExecutionPlan, ExecutionReport, ExecutionRequest, StepResult
 from scripts.ci.plan_registry import plan_for_gate
 from scripts.ci.reports import release_verdict
 from scripts.ci.user_scenario_targets import USER_SCENARIO_EVIDENCE_NAME, USER_SCENARIO_RUST_FIXTURE, USER_SCENARIOS
-
-_BROWSER_EVIDENCE = "browser-e2e-evidence.json"
 
 
 def _step(name: str, status: str = "passed") -> StepResult:
@@ -26,9 +25,22 @@ def _write_payload(tmp_path, payload: dict) -> None:
 
 
 def _write_browser_evidence(tmp_path, sha: str, *, expected: int = 1) -> None:
-    (tmp_path / _BROWSER_EVIDENCE).write_text(json.dumps({
+    browser = tmp_path / "browser-e2e"
+    browser.mkdir(parents=True, exist_ok=True)
+    stats = {"expected": expected, "unexpected": 0, "skipped": 0}
+    (browser / "playwright.json").write_text(json.dumps({"stats": stats}), encoding="utf-8")
+    testcases = "".join(f'<testcase name="browser-{index}"/>' for index in range(expected))
+    (browser / "junit.xml").write_text(
+        f'<testsuites tests="{expected}" failures="0" skipped="0" errors="0"><testsuite>{testcases}</testsuite></testsuites>',
+        encoding="utf-8",
+    )
+    (browser / "html").mkdir(exist_ok=True)
+    html = "<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body><script>" + ("x" * 5000) + "</script></body></html>"
+    (browser / "html" / "index.html").write_text(html, encoding="utf-8")
+    snapshot = browser_artifact_snapshot(browser)
+    (tmp_path / BROWSER_EVIDENCE_NAME).write_text(json.dumps({
         "schema": "businessaios_browser_e2e.v1", "exact_sha": sha, "status": "PASS", "project": "chromium",
-        "stats": {"expected": expected, "unexpected": 0, "skipped": 0},
+        "stats": snapshot["stats"] if snapshot else stats, "artifacts": snapshot["artifacts"] if snapshot else {},
     }), encoding="utf-8")
 
 
@@ -109,7 +121,7 @@ def test_release_verdict_is_not_proven_when_required_release_evidence_is_missing
 def test_release_verdict_requires_exact_browser_evidence(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
     _write_scenario_evidence(monkeypatch, tmp_path, "c" * 40)
-    (tmp_path / _BROWSER_EVIDENCE).unlink()
+    (tmp_path / BROWSER_EVIDENCE_NAME).unlink()
     assert release_verdict(_report_for("release"))["status"] == "NOT_PROVEN"
     _write_browser_evidence(tmp_path, "e" * 40)
     assert release_verdict(_report_for("release"))["status"] == "NOT_PROVEN"
@@ -119,6 +131,13 @@ def test_release_verdict_rejects_vacuous_browser_evidence(monkeypatch, tmp_path)
     monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
     _write_scenario_evidence(monkeypatch, tmp_path, "c" * 40)
     _write_browser_evidence(tmp_path, "c" * 40, expected=0)
+    assert release_verdict(_report_for("release"))["status"] == "FAIL"
+
+
+def test_release_verdict_rejects_tampered_browser_diagnostics(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "c" * 40)
+    _write_scenario_evidence(monkeypatch, tmp_path, "c" * 40)
+    (tmp_path / "browser-e2e" / "junit.xml").write_text("<testsuites/>", encoding="utf-8")
     assert release_verdict(_report_for("release"))["status"] == "FAIL"
 
 
