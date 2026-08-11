@@ -16,6 +16,7 @@ BROWSER_EVIDENCE_SCHEMA = "businessaios_browser_e2e.v2"
 BROWSER_PROJECT_MATRIX = "frontend/e2e/project-matrix.json"
 BROWSER_PROJECT_MATRIX_SCHEMA = "businessaios_browser_project_matrix.v2"
 _HTML_MARKER = '<template id="playwrightReportBase64">data:application/zip;base64,'
+_HTML_RESULT_KEYS = frozenset({"attachments", "startTime", "workerIndex"})
 
 
 def _need(condition: object) -> None:
@@ -111,7 +112,7 @@ def _json_report(doc, projects, canonical):
             results = test.get("results") if isinstance(test, dict) else None
             _need(isinstance(test, dict) and test.get("expectedStatus") == "passed" and test.get("status") == "expected")
             _need(isinstance(results, list) and len(results) == 1)
-            _need(all(isinstance(result, dict) and result.get("status") == "passed" and not result.get("errors") for result in results))
+            _need(all(isinstance(result, dict) and result.get("status") == "passed" and isinstance(result.get("errors"), list) and not result["errors"] for result in results))
             records.append((_text(test.get("projectName")), title, file))
     _need(_scenario_matrix(records, projects, canonical) and _stats_ok(stats, len(records)))
     return stats
@@ -132,7 +133,7 @@ def _html_report(html, projects, canonical):
         for test in tests:
             location, results = (test.get("location"), test.get("results")) if isinstance(test, dict) else (None, None)
             _need(isinstance(location, dict) and isinstance(results, list) and len(results) == 1)
-            _need(all(isinstance(result, dict) and _integer(result.get("workerIndex")) >= 0 and _timestamp(result.get("startTime")) and result.get("status") == "passed" and not result.get("errors") for result in results))
+            _need(all(isinstance(result, dict) and set(result) == _HTML_RESULT_KEYS and isinstance(result.get("attachments"), list) and _integer(result.get("workerIndex")) >= 0 and _timestamp(result.get("startTime")) for result in results))
             title, file = _text(test.get("title")), _text(location.get("file"))
             _need(_text(test.get("testId")) and title and file)
             _need(min(_integer(location.get("line")), _integer(location.get("column"))) > 0)
