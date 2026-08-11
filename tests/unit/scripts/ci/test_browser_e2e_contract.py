@@ -38,6 +38,12 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
     scenario = Path("frontend/e2e/onboarding-workspace.spec.js").read_text(encoding="utf-8")
     assert 'readFileSync(new URL("./e2e/project-matrix.json", import.meta.url)' in config
     assert "browserName: entry.engine" in config and 'trace: "off"' in config
+    for binding in (
+        "BAIOS_E2E_RUNTIME_MODE", "DATABASE_URL", "DECISION_SIGNING_SECRET",
+        "API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS", "BUSINESAIOS_API_KEY_STORE_BACKEND",
+        "BUSINESAIOS_KEY_PROVIDER_BACKEND", "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE",
+    ):
+        assert binding in config
     assert 'find((item) => item?.id === "onboarding_owner_workspace")' in scenario
     assert "test(canonicalScenario.title" in scenario and "testInfo.project.name" in scenario
     assert "hasNoHorizontalOverflow" in scenario and "indexedDB.databases()" in scenario and "context().cookies()" in scenario
@@ -57,6 +63,8 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
         assert "npm ci --ignore-scripts --no-audit --no-fund" in workflow
         assert "./node_modules/.bin/playwright install --with-deps chromium firefox webkit" in workflow
         assert "npx playwright" not in workflow
+    assert "python -m scripts.ci.cli --gate browser" in ci
+    assert ".venv/bin/python -m scripts.ci.cli --gate release" in deep and "DATABASE_URL=$DATABASE_URL" in deep
     browser, rebuild, verify, upload, evidence = (
         ci.index(name) for name in (
             "- name: Run canonical browser gate", "- name: Rebuild canonical production frontend bundle",
@@ -66,6 +74,7 @@ def test_browser_contract_plans_provisioning_and_security_are_locked() -> None:
     assert browser < rebuild < verify < upload < evidence
     assert "env -u VITE_API_BASE npm run build" in ci and 'grep -R -F -q "https://api.businessaios.ru" frontend/dist' in ci
     assert "if: success()" in ci[upload:evidence] and "if: always()" not in ci[upload:evidence]
+    assert "if: always()" in ci[evidence:ci.index("\n  complete-tree:", evidence)]
 
 
 def test_release_browser_runtime_is_fail_closed(monkeypatch, tmp_path) -> None:
@@ -103,20 +112,38 @@ def test_evidence_timestamp_types_are_strict(value, expected) -> None:
     assert browser_evidence._timestamp(value) is expected
 
 
-def _embedded(project: str, title: str = TITLE, file: str = SPEC) -> dict:
+def _embedded(
+    project: str,
+    title: str = TITLE,
+    file: str = SPEC,
+    attempts: int = 1,
+    extra: dict | None = None,
+) -> dict:
+    result = {"attachments": [], "workerIndex": 0, "startTime": "2026-08-11T10:48:09.726Z"}
+    result.update(extra or {})
     return {
         "testId": f"browser-{project}", "title": title, "projectName": project,
         "location": {"file": file, "line": 21, "column": 1}, "outcome": "expected", "ok": True,
-        "results": [{"attachments": [], "workerIndex": 0, "startTime": "2026-08-11T10:48:09.726Z"}],
+        "results": [dict(result) for _ in range(attempts)],
     }
 
 
-def _outputs(browser: Path, *, projects: tuple[str, ...] | None = None, title: str = TITLE, file: str = SPEC, duplicate: bool = False, skipped: int = 0) -> None:
+def _outputs(
+    browser: Path,
+    *,
+    projects: tuple[str, ...] | None = None,
+    title: str = TITLE,
+    file: str = SPEC,
+    duplicate: bool = False,
+    skipped: int = 0,
+    attempts: int = 1,
+    html_extra: dict | None = None,
+) -> None:
     names = projects or browser_evidence.browser_project_names()
     specs = [
         {"title": title, "file": file, "line": 21, "column": 1, "ok": True, "tests": [{
             "expectedStatus": "passed", "projectName": project, "status": "expected",
-            "results": [{"status": "passed", "errors": []}],
+            "results": [{"status": "passed", "errors": []} for _ in range(attempts)],
         }]}
         for project in names
     ]
@@ -130,7 +157,7 @@ def _outputs(browser: Path, *, projects: tuple[str, ...] | None = None, title: s
         for project in names
     )
     (browser / "junit.xml").write_text(f'<testsuites tests="{len(names)}" failures="0" skipped="0" errors="0">{suites}</testsuites>', encoding="utf-8")
-    tests = [_embedded(project, title, file) for project in names]
+    tests = [_embedded(project, title, file, attempts, html_extra) for project in names]
     if duplicate:
         tests *= 2
     report = {"projectNames": list(names), "files": [{"tests": tests}], "stats": {
@@ -159,6 +186,8 @@ def test_evidence_requires_exact_projects_canonical_identity_and_three_real_arti
         lambda: _outputs(browser, projects=names[:-1]),
         lambda: _outputs(browser, title="forged scenario", file="forged.spec.js"),
         lambda: _outputs(browser, duplicate=True),
+        lambda: _outputs(browser, attempts=2),
+        lambda: _outputs(browser, html_extra={"status": "failed", "errors": [{"message": "forged"}]}),
     ):
         mutate()
         assert browser_evidence.browser_artifact_snapshot(browser) is None
@@ -202,6 +231,7 @@ def test_browser_step_requires_complete_matrix_and_fails_closed(monkeypatch, tmp
     assert captured["env"]["BAIOS_E2E_PYTHON"] == sys.executable
     assert evidence["exact_sha"] == "a" * 40 and evidence["runtime_mode"] == "development"
     assert evidence["storage_backend"] == "isolated-local" and all(item["tests"] == 1 for item in evidence["projects"])
+    assert evidence["project_matrix"]["sha256"] == browser_evidence._matrix_snapshot()[2]
     for skipped, diagnostics in ((1, True), (0, False)):
         child = tmp_path / f"case-{skipped}-{diagnostics}"
         child.mkdir()
