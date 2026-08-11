@@ -1,0 +1,31 @@
+.planner-shell { width: min(1180px, calc(100% - 48px)); margin: 0 auto 28px; }
+.planner-panel { padding: 28px; }
+.planner-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+.planner-heading h2 { margin: 0; font-size: 1.65rem; letter-spacing: -.035em; }
+.planner-heading .muted-text { max-width: 760px; margin-bottom: 0; }
+.planner-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.planner-form label { min-width: 0; }
+.planner-form small { min-height: 34px; color: #8792a3; line-height: 1.35; font-weight: 500; }
+.planner-actions { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 20px; padding-top: 18px; border-top: 1px solid #edf0f4; }
+.planner-actions p { margin: 0; max-width: 700px; color: #748196; font-size: .84rem; line-height: 1.5; }
+.planner-session-note, .planner-error { margin-bottom: 16px; padding: 12px 14px; border-radius: 12px; font-size: .85rem; }
+.planner-session-note { background: #fff7e7; border: 1px solid #f1dfb8; color: #8b651f; }
+.planner-error { background: #fff0f0; border: 1px solid #f5d5d5; color: #ac3e3e; }
+.planner-result { margin-top: 24px; padding: 22px; border-radius: 18px; border: 1px solid #dfe5ef; background: #fbfcfe; }
+.planner-result.feasible { border-color: #cce8d6; background: #f6fcf8; }
+.planner-result.constrained { border-color: #eedfbd; background: #fffbf3; }
+.planner-result-copy h3 { margin: 0; font-size: 1.35rem; letter-spacing: -.025em; }
+.planner-result-copy > p:last-child { color: #5f6e82; line-height: 1.55; }
+.planner-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.planner-metrics > div { display: grid; gap: 5px; padding: 13px; border: 1px solid #e5eaf1; border-radius: 13px; background: #fff; }
+.planner-metrics small { color: #7d8999; }
+.planner-metrics strong { font-size: 1.1rem; }
+.planner-economics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.planner-economics span { padding: 7px 10px; border-radius: 999px; background: #edf2ff; color: #53627b; font-size: .78rem; }
+.planner-recommendations { margin-top: 18px; }
+.planner-recommendations h4 { margin: 0 0 10px; }
+.planner-recommendations > div { padding: 12px 0; border-top: 1px solid #e8ecf2; }
+.planner-recommendations p { margin: 4px 0 0; color: #68768a; line-height: 1.45; font-size: .85rem; }
+.planner-disclaimer { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid #e8ecf2; color: #8792a2; font-size: .78rem; line-height: 1.45; }
+@media (max-width: 860px) { .planner-form, .planner-metrics { grid-template-columns: 1fr 1fr; } .planner-heading, .planner-actions { align-items: stretch; flex-direction: column; } }
+@media (max-width: 560px) { .planner-shell { width: min(100% - 24px, 1180px); } .planner-panel { padding: 20px; } .planner-form, .planner-metrics { grid-template-columns: 1fr; } }

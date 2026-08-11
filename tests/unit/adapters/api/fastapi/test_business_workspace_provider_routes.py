@@ -7,6 +7,7 @@ import pytest
 from fastapi import APIRouter, HTTPException
 
 from adapters.api.fastapi import business_workspace_provider_routes as workspace
+from adapters.api.fastapi import router_support
 from governance.rbac_contract import RoleId
 
 
@@ -53,12 +54,16 @@ def _truth_rows():
     }
 
 
+def _authenticate_as(monkeypatch, principal) -> None:
+    monkeypatch.setattr(router_support, 'authorize_request', lambda **_: (object(), principal))
+
+
 def test_workspace_scope_requires_owner_and_provider_scope(monkeypatch) -> None:
-    monkeypatch.setattr(workspace, 'authorize_request', lambda **_: (object(), _principal()))
+    _authenticate_as(monkeypatch, _principal())
     _, tenant_id, business_id = workspace._workspace_scope(request=object(), auth_bundle=object())
     assert (tenant_id, business_id) == ('tenant-session', 'business-session')
     for principal in (_principal(roles=()), _principal(scopes=())):
-        monkeypatch.setattr(workspace, 'authorize_request', lambda **_: (object(), principal))
+        _authenticate_as(monkeypatch, principal)
         with pytest.raises(HTTPException) as exc:
             workspace._workspace_scope(request=object(), auth_bundle=object())
         assert exc.value.status_code == 403
@@ -68,7 +73,7 @@ def test_customer_catalog_fails_closed_for_contract_only_read_plan(monkeypatch) 
     handlers = _Handlers(({'provider_key': 'contract-provider'}, {'provider_key': 'partial-provider'}))
     router = APIRouter()
     workspace.register_business_workspace_provider_routes(router=router, auth_bundle=object(), provider_admin_handlers=handlers)
-    monkeypatch.setattr(workspace, 'authorize_request', lambda **_: (object(), _principal()))
+    _authenticate_as(monkeypatch, _principal())
     monkeypatch.setattr(workspace, 'provider_truth_map', _truth_rows)
     result = asyncio.run(_route(router, 'GET')(object()))
     rows = {row['provider_key']: row for row in result['providers']}
@@ -81,7 +86,7 @@ def test_activation_ignores_browser_workspace_identity_and_ownership(monkeypatch
     handlers = _Handlers()
     router = APIRouter()
     workspace.register_business_workspace_provider_routes(router=router, auth_bundle=object(), provider_admin_handlers=handlers)
-    monkeypatch.setattr(workspace, 'authorize_request', lambda **_: (object(), _principal()))
+    _authenticate_as(monkeypatch, _principal())
     monkeypatch.setattr(workspace, 'provider_truth_map', _truth_rows)
 
     async def fake_json_body(_request):
@@ -100,7 +105,7 @@ def test_write_operation_is_rejected_before_provider_runtime(monkeypatch) -> Non
     handlers = _Handlers()
     router = APIRouter()
     workspace.register_business_workspace_provider_routes(router=router, auth_bundle=object(), provider_admin_handlers=handlers)
-    monkeypatch.setattr(workspace, 'authorize_request', lambda **_: (object(), _principal()))
+    _authenticate_as(monkeypatch, _principal())
     monkeypatch.setattr(workspace, 'provider_truth_map', _truth_rows)
 
     async def fake_json_body(_request):
