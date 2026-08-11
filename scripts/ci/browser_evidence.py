@@ -14,7 +14,7 @@ from scripts.ci.paths import repo_root
 BROWSER_EVIDENCE_NAME = "browser-e2e-evidence.json"
 BROWSER_EVIDENCE_SCHEMA = "businessaios_browser_e2e.v2"
 BROWSER_PROJECT_MATRIX = "frontend/e2e/project-matrix.json"
-BROWSER_PROJECT_MATRIX_SCHEMA = "businessaios_browser_project_matrix.v1"
+BROWSER_PROJECT_MATRIX_SCHEMA = "businessaios_browser_project_matrix.v2"
 _HTML_REPORT_MARKER = '<template id="playwrightReportBase64">data:application/zip;base64,'
 
 
@@ -44,20 +44,31 @@ def _timestamp(value: object) -> bool:
     return True
 
 
-def _matrix_snapshot() -> tuple[list[dict[str, str]], str] | None:
+def _matrix_snapshot() -> tuple[list[dict[str, str]], tuple[tuple[str, str], ...], str] | None:
     try:
         raw = (repo_root() / BROWSER_PROJECT_MATRIX).read_bytes()
         payload = json.loads(raw.decode("utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError):
         return None
     projects = payload.get("projects") if isinstance(payload, dict) else None
-    if not isinstance(payload, dict) or payload.get("schema") != BROWSER_PROJECT_MATRIX_SCHEMA or not isinstance(projects, list) or len(projects) != 5:
+    scenarios = payload.get("scenarios") if isinstance(payload, dict) else None
+    if (
+        not isinstance(payload, dict) or payload.get("schema") != BROWSER_PROJECT_MATRIX_SCHEMA
+        or not isinstance(projects, list) or len(projects) != 5
+        or not isinstance(scenarios, list) or not scenarios
+    ):
         return None
     rows = [
         {key: _text(item.get(key)) for key in ("name", "device", "engine", "surface")}
         for item in projects if isinstance(item, dict)
     ]
-    if len(rows) != 5 or any(not all(row.values()) for row in rows):
+    scenario_rows = [
+        (_text(item.get("id")), _text(item.get("title")), _text(item.get("file")))
+        for item in scenarios if isinstance(item, dict)
+    ]
+    if len(rows) != 5 or any(not all(row.values()) for row in rows) or len(scenario_rows) != len(scenarios):
+        return None
+    if any(not all(item) for item in scenario_rows) or len({item[0] for item in scenario_rows}) != len(scenario_rows):
         return None
     if len({row["name"] for row in rows}) != 5 or len({row["device"] for row in rows}) != 5:
         return None
@@ -66,7 +77,10 @@ def _matrix_snapshot() -> tuple[list[dict[str, str]], str] | None:
         return None
     if len(mobile) != 2 or {row["engine"] for row in mobile} != {"chromium", "webkit"}:
         return None
-    return rows, _sha256(raw)
+    canonical = tuple(sorted((title, file) for _, title, file in scenario_rows))
+    if len(canonical) != len(set(canonical)):
+        return None
+    return rows, canonical, _sha256(raw)
 
 
 def browser_project_names() -> tuple[str, ...]:
@@ -82,22 +96,25 @@ def _stats_ok(stats: object, expected: int, *, require_total: bool = False) -> b
     )
 
 
-def _scenario_matrix(records: list[tuple[str, str, str]], projects: tuple[str, ...]) -> dict[str, tuple[tuple[str, str], ...]] | None:
+def _scenario_matrix(
+    records: list[tuple[str, str, str]], projects: tuple[str, ...], canonical: tuple[tuple[str, str], ...],
+) -> dict[str, tuple[tuple[str, str], ...]] | None:
     grouped: dict[str, list[tuple[str, str]]] = {project: [] for project in projects}
     for project, title, file in records:
         if project not in grouped or not title or not file:
             return None
         grouped[project].append((title, file))
     signatures = {project: tuple(sorted(values)) for project, values in grouped.items()}
-    baseline = signatures[projects[0]] if projects else ()
-    if len(baseline) != 1 or len(set(baseline)) != len(baseline):
+    if not canonical or any(signatures[project] != canonical for project in projects):
         return None
-    if any(signatures[project] != baseline or len(set(signatures[project])) != len(signatures[project]) for project in projects):
+    if any(len(set(signatures[project])) != len(signatures[project]) for project in projects):
         return None
     return signatures
 
 
-def _json_report(payload: object, projects: tuple[str, ...]) -> tuple[dict, dict[str, tuple[tuple[str, str], ...]]] | None:
+def _json_report(
+    payload: object, projects: tuple[str, ...], canonical: tuple[tuple[str, str], ...],
+) -> tuple[dict, dict[str, tuple[tuple[str, str], ...]]] | None:
     if not isinstance(payload, dict) or not isinstance(payload.get("config"), dict):
         return None
     configured, suites, stats = payload["config"].get("projects"), payload.get("suites"), payload.get("stats")
@@ -130,11 +147,13 @@ def _json_report(payload: object, projects: tuple[str, ...]) -> tuple[dict, dict
 
     if not all(visit(suite) for suite in suites):
         return None
-    matrix = _scenario_matrix(records, projects)
+    matrix = _scenario_matrix(records, projects, canonical)
     return (stats, matrix) if matrix and _stats_ok(stats, len(records)) else None
 
 
-def _embedded_report(html: str, projects: tuple[str, ...]) -> tuple[dict, dict[str, tuple[tuple[str, str], ...]]] | None:
+def _embedded_report(
+    html: str, projects: tuple[str, ...], canonical: tuple[tuple[str, str], ...],
+) -> tuple[dict, dict[str, tuple[tuple[str, str], ...]]] | None:
     start = html.find(_HTML_REPORT_MARKER)
     end = html.find("</template>", start + len(_HTML_REPORT_MARKER)) if start >= 0 else -1
     if start < 0 or end < 0:
@@ -170,11 +189,13 @@ def _embedded_report(html: str, projects: tuple[str, ...]) -> tuple[dict, dict[s
             ):
                 return None
             records.append((_text(test.get("projectName")), title, file))
-    matrix = _scenario_matrix(records, projects)
+    matrix = _scenario_matrix(records, projects, canonical)
     return (stats, matrix) if matrix and _stats_ok(stats, len(records), require_total=True) else None
 
 
-def _junit_report(root: ElementTree.Element, projects: tuple[str, ...]) -> tuple[dict[str, tuple[tuple[str, str], ...]], int] | None:
+def _junit_report(
+    root: ElementTree.Element, projects: tuple[str, ...], canonical: tuple[tuple[str, str], ...],
+) -> tuple[dict[str, tuple[tuple[str, str], ...]], int] | None:
     if root.tag != "testsuites" or any(_integer(root.get(key)) != 0 for key in ("failures", "skipped", "errors")):
         return None
     suites = list(root)
@@ -194,7 +215,7 @@ def _junit_report(root: ElementTree.Element, projects: tuple[str, ...]) -> tuple
                 return None
             records.append((project, _text(case.get("name")), _text(case.get("classname"))))
         total += len(cases)
-    matrix = _scenario_matrix(records, projects)
+    matrix = _scenario_matrix(records, projects, canonical)
     return (matrix, total) if matrix and _integer(root.get("tests")) == total else None
 
 
@@ -202,17 +223,18 @@ def browser_artifact_snapshot(browser_dir: Path) -> dict | None:
     matrix = _matrix_snapshot()
     if not matrix:
         return None
-    project_matrix, matrix_sha = matrix
+    project_matrix, canonical, matrix_sha = matrix
     projects = tuple(row["name"] for row in project_matrix)
     json_path, junit_path, html_path = browser_dir / "playwright.json", browser_dir / "junit.xml", browser_dir / "html" / "index.html"
     try:
         json_bytes, junit_bytes, html_bytes = json_path.read_bytes(), junit_path.read_bytes(), html_path.read_bytes()
-        json_report = _json_report(json.loads(json_bytes.decode("utf-8")), projects)
+        json_report = _json_report(json.loads(json_bytes.decode("utf-8")), projects, canonical)
         junit_root = ElementTree.fromstring(junit_bytes)
         html = html_bytes.decode("utf-8")
     except (OSError, UnicodeError, json.JSONDecodeError, ElementTree.ParseError):
         return None
-    html_report, junit_report = _embedded_report(html, projects), _junit_report(junit_root, projects)
+    html_report = _embedded_report(html, projects, canonical)
+    junit_report = _junit_report(junit_root, projects, canonical)
     if not json_report or not html_report or not junit_report:
         return None
     json_stats, json_matrix = json_report
