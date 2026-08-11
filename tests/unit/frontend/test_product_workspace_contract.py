@@ -32,6 +32,7 @@ def test_owner_workspace_exposes_truthful_acquisition_scenario_planner() -> None
     styles = _read("AcquisitionPlanner.css")
     assert 'AcquisitionPlanner enabled={Boolean(apiKey)}' in app
     assert all(token in planner for token in ("Сценарий по вашим предположениям", "Проверить достижимость цели", "не подтверждённые показатели бизнеса", "CAC", "LTV/CAC", "Окупаемость"))
+    assert planner.count("setResult(null);") >= 2
     assert all(token in model for token in ("target_customers", "total_budget", "daily_budget", "target_days", "cost_per_entry", "gross_margin_ltv", "expected_monthly_margin_per_customer", "conversion_rate: Number(form.conversion_percent) / 100"))
     assert all(token in styles for token in (".planner-shell", ".planner-form", ".planner-metrics", "@media (max-width: 560px)"))
     assert "Фактические финансовые выводы появятся только после real sync" in app
