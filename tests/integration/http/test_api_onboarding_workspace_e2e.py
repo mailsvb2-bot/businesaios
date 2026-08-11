@@ -60,6 +60,7 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             "BUSINESAIOS_API_KEY_STORE_PATH": str(tmp_path / "api_keys.json"),
             "BUSINESAIOS_TENANT_REGISTRY_PATH": str(tmp_path / "tenant_registry.json"),
             "API_CONTROL_PLANE_API_KEY_PEPPER": "canonical-api-e2e-pepper",
+            "FORWARDED_ALLOW_IPS": "203.0.113.254",
             "BUSINESAIOS_TRUST_PROXY_HEADERS": "1",
             "BUSINESAIOS_TRUSTED_PROXY_IPS": "127.0.0.1/32",
             "PYTHONPATH": os.pathsep.join(value for value in pythonpath if value),
