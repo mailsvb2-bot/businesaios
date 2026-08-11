@@ -115,6 +115,14 @@ def test_evidence_timestamp_types_are_strict(value, expected) -> None:
     assert browser_evidence._timestamp(value) is expected
 
 
+def _json_result() -> dict:
+    return {
+        "workerIndex": 0, "parallelIndex": 0, "status": "passed", "duration": 1, "errors": [],
+        "stdout": [], "stderr": [], "retry": 0, "startTime": "2026-08-11T10:48:09.726Z",
+        "annotations": [], "attachments": [],
+    }
+
+
 def _embedded(
     project: str,
     title: str = TITLE,
@@ -146,7 +154,7 @@ def _outputs(
     specs = [
         {"title": title, "file": file, "line": 21, "column": 1, "ok": True, "tests": [{
             "expectedStatus": "passed", "projectName": project, "status": "expected",
-            "results": [{"status": "passed", "errors": []} for _ in range(attempts)],
+            "results": [dict(_json_result()) for _ in range(attempts)],
         }]}
         for project in names
     ]
@@ -194,6 +202,11 @@ def test_evidence_requires_exact_projects_canonical_identity_and_three_real_arti
     ):
         mutate()
         assert browser_evidence.browser_artifact_snapshot(browser) is None
+    _outputs(browser)
+    payload = json.loads((browser / "playwright.json").read_text(encoding="utf-8"))
+    payload["suites"][0]["specs"][0]["tests"][0]["results"][0] = {"status": "passed", "errors": []}
+    (browser / "playwright.json").write_text(json.dumps(payload), encoding="utf-8")
+    assert browser_evidence.browser_artifact_snapshot(browser) is None
     _outputs(browser)
     payload = json.loads((browser / "playwright.json").read_text(encoding="utf-8"))
     payload["suites"] = []
