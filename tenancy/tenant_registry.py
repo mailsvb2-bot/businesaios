@@ -115,13 +115,11 @@ def ensure_tenant_record(
 
 
 def tenancy_data_dir() -> Path:
-    explicit = os.getenv("BUSINESAIOS_TENANCY_DATA_DIR", "").strip()
-    return Path(explicit) if explicit else Path(os.getenv("DATA_DIR", "data").strip() or "data") / "tenancy"
+    return Path(explicit) if (explicit := os.getenv("BUSINESAIOS_TENANCY_DATA_DIR", "").strip()) else Path(os.getenv("DATA_DIR", "data").strip() or "data") / "tenancy"
 
 
 def tenant_registry_path() -> Path:
-    explicit = os.getenv("BUSINESAIOS_TENANT_REGISTRY_PATH", "").strip()
-    return Path(explicit) if explicit else tenancy_data_dir() / "tenant_registry.json"
+    return Path(explicit) if (explicit := os.getenv("BUSINESAIOS_TENANT_REGISTRY_PATH", "").strip()) else tenancy_data_dir() / "tenant_registry.json"
 
 
 class PersistentTenantRegistry(InMemoryTenantRegistry):
