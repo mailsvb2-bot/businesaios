@@ -60,7 +60,11 @@ def _json_report(projects: tuple[str, ...]) -> dict:
     tests = [
         {
             "expectedStatus": "passed", "projectName": project, "status": "expected",
-            "results": [{"status": "passed", "errors": []}],
+            "results": [{
+                "workerIndex": 0, "parallelIndex": 0, "status": "passed", "duration": 1,
+                "errors": [], "stdout": [], "stderr": [], "retry": 0,
+                "startTime": "2026-08-11T10:48:09.726Z", "annotations": [], "attachments": [],
+            }],
         }
         for project in projects
     ]
