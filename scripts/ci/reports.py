@@ -23,6 +23,16 @@ def _combined_status(*states: str) -> str:
     return "FAIL" if "FAIL" in states else "PASS" if states and all(state == "PASS" for state in states) else "NOT_PROVEN"
 
 
+def _read_evidence(name: str, step_status: str) -> tuple[dict | None, str | None]:
+    try:
+        payload = json.loads((reports_dir() / name).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None, "NOT_PROVEN" if step_status == "PASS" else step_status
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None, "FAIL"
+    return (payload, None) if isinstance(payload, dict) else (None, "FAIL")
+
+
 def _nested_evidence_status(evidence: dict) -> str:
     rust, scenarios = evidence.get("rust_matrix"), evidence.get("scenarios")
     try:
@@ -56,16 +66,9 @@ def _scenario_proof(step_status: str, exact_sha: str | None) -> dict:
     proof = {"source_step": _step_ids.user_scenario_gate(), "status": step_status, "artifact": USER_SCENARIO_EVIDENCE_NAME}
     if step_status == "NOT_PROVEN":
         return proof
-    try:
-        evidence = json.loads((reports_dir() / USER_SCENARIO_EVIDENCE_NAME).read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        proof["status"] = "NOT_PROVEN" if step_status == "PASS" else step_status
-        return proof
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        proof["status"] = "FAIL"
-        return proof
-    if not isinstance(evidence, dict):
-        proof["status"] = "FAIL"
+    evidence, error_status = _read_evidence(USER_SCENARIO_EVIDENCE_NAME, step_status)
+    if error_status:
+        proof["status"] = error_status
         return proof
     evidence_status = _nested_evidence_status(evidence)
     if not exact_sha or evidence.get("exact_sha") != exact_sha:
@@ -81,15 +84,11 @@ def _browser_proof(step_status: str, exact_sha: str | None, *, require_productio
     proof = {"source_step": _step_ids.browser_e2e(), "status": step_status, "artifact": BROWSER_EVIDENCE_NAME}
     if step_status == "NOT_PROVEN":
         return proof
-    try:
-        evidence = json.loads((reports_dir() / BROWSER_EVIDENCE_NAME).read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        proof["status"] = "NOT_PROVEN" if step_status == "PASS" else step_status
+    evidence, error_status = _read_evidence(BROWSER_EVIDENCE_NAME, step_status)
+    if error_status:
+        proof["status"] = error_status
         return proof
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        proof["status"] = "FAIL"
-        return proof
-    if not exact_sha or not isinstance(evidence, dict) or evidence.get("exact_sha") != exact_sha:
+    if not exact_sha or evidence.get("exact_sha") != exact_sha:
         evidence_status = "NOT_PROVEN"
     else:
         snapshot = browser_artifact_snapshot(reports_dir() / "browser-e2e")
@@ -102,11 +101,8 @@ def _browser_proof(step_status: str, exact_sha: str | None, *, require_productio
         evidence_status = "PASS" if valid else "FAIL"
     proof.update(
         status=_combined_status(step_status, evidence_status), evidence_status=evidence_status,
-        project=evidence.get("project") if isinstance(evidence, dict) else None,
-        runtime_mode=evidence.get("runtime_mode") if isinstance(evidence, dict) else None,
-        storage_backend=evidence.get("storage_backend") if isinstance(evidence, dict) else None,
-        stats=evidence.get("stats", {}) if isinstance(evidence, dict) else {},
-        artifacts=evidence.get("artifacts", {}) if isinstance(evidence, dict) else {},
+        project=evidence.get("project"), runtime_mode=evidence.get("runtime_mode"), storage_backend=evidence.get("storage_backend"),
+        stats=evidence.get("stats", {}), artifacts=evidence.get("artifacts", {}),
     )
     return proof
 
