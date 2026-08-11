@@ -38,7 +38,8 @@ def _browser_test(project: str) -> dict:
         "title": "onboarding creates a read-only OWNER workspace without persisting the API key",
         "projectName": project,
         "location": {"file": "onboarding-workspace.spec.js", "line": 21, "column": 1},
-        "outcome": "expected", "ok": True, "results": [{"workerIndex": 0}],
+        "outcome": "expected", "ok": True,
+        "results": [{"workerIndex": 0, "startTime": "2026-08-11T00:00:00.000Z"}],
     }
 
 
