@@ -6,7 +6,7 @@ from pathlib import Path
 from scripts.ci.plan_registry import allowed_gates, plan_for_gate
 from scripts.ci.step_registry import handler_for_step
 from scripts.ci.subprocess_io import run_command
-from scripts.ci.user_scenario_targets import USER_SCENARIO_MARK_EXPRESSION, USER_SCENARIOS, USER_SCENARIO_TARGETS
+from scripts.ci.user_scenario_targets import USER_SCENARIO_MARK_EXPRESSION, USER_SCENARIO_TARGETS, USER_SCENARIOS
 
 
 def test_acceptance_gate_is_registered_as_user_scenario_gate() -> None:
