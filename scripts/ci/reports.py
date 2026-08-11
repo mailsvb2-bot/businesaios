@@ -77,7 +77,7 @@ def _scenario_proof(step_status: str, exact_sha: str | None) -> dict:
     return proof
 
 
-def _browser_proof(step_status: str, exact_sha: str | None) -> dict:
+def _browser_proof(step_status: str, exact_sha: str | None, *, require_production: bool = False) -> dict:
     proof = {"source_step": _step_ids.browser_e2e(), "status": step_status, "artifact": BROWSER_EVIDENCE_NAME}
     if step_status == "NOT_PROVEN":
         return proof
@@ -93,8 +93,9 @@ def _browser_proof(step_status: str, exact_sha: str | None) -> dict:
         evidence_status = "NOT_PROVEN"
     else:
         snapshot = browser_artifact_snapshot(reports_dir() / "browser-e2e")
+        mode_ok = evidence.get("runtime_mode") == "production" and evidence.get("storage_backend") == "postgres" if require_production else evidence.get("runtime_mode") in {"development", "production"}
         valid = bool(
-            snapshot and evidence.get("schema") == "businessaios_browser_e2e.v1"
+            snapshot and mode_ok and evidence.get("schema") == "businessaios_browser_e2e.v1"
             and evidence.get("status") == "PASS" and evidence.get("project") == "chromium"
             and evidence.get("stats") == snapshot["stats"] and evidence.get("artifacts") == snapshot["artifacts"]
         )
@@ -102,6 +103,8 @@ def _browser_proof(step_status: str, exact_sha: str | None) -> dict:
     proof.update(
         status=_combined_status(step_status, evidence_status), evidence_status=evidence_status,
         project=evidence.get("project") if isinstance(evidence, dict) else None,
+        runtime_mode=evidence.get("runtime_mode") if isinstance(evidence, dict) else None,
+        storage_backend=evidence.get("storage_backend") if isinstance(evidence, dict) else None,
         stats=evidence.get("stats", {}) if isinstance(evidence, dict) else {},
         artifacts=evidence.get("artifacts", {}) if isinstance(evidence, dict) else {},
     )
@@ -116,7 +119,9 @@ def release_verdict(report: ExecutionReport) -> dict:
         return next((item["status"] for item in steps if item["id"] == name), "NOT_PROVEN")
 
     scenario_proof = _scenario_proof(step_status(_step_ids.user_scenario_gate()), exact_sha)
-    browser_proof = _browser_proof(step_status(_step_ids.browser_e2e()), exact_sha)
+    browser_proof = _browser_proof(
+        step_status(_step_ids.browser_e2e()), exact_sha, require_production=report.gate in {"release", "pre-release"},
+    )
     complete = report.gate == "release" and {step.name for step in plan_for_gate("release").steps if step.required}.issubset(
         {item["id"] for item in steps if item["status"] == "PASS"})
     status = "FAIL" if "FAIL" in {_combined_status(*(item["status"] for item in steps)), scenario_proof["status"], browser_proof["status"]} else (
