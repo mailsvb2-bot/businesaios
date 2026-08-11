@@ -10,6 +10,7 @@ const uiPort = process.env.BAIOS_E2E_UI_PORT || "4173";
 const apiTarget = `http://127.0.0.1:${apiPort}`;
 const uiTarget = `http://127.0.0.1:${uiPort}`;
 const pythonPath = [repoRoot, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
+const pythonExecutable = process.env.BAIOS_E2E_PYTHON || "python";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -35,7 +36,7 @@ export default defineConfig({
   webServer: [
     {
       name: "Production API",
-      command: "python ../scripts/server/run_profile.py",
+      command: `"${pythonExecutable}" ../scripts/server/run_profile.py`,
       cwd: path.resolve("."),
       url: `${apiTarget}/health`,
       reuseExistingServer: false,
