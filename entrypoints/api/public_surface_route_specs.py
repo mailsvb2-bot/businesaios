@@ -57,6 +57,7 @@ _ROUTE_SPECS: dict[str, PublicSurfaceRouteSpec] = {
     '/economic/client-outcome-truth/{order_id}/{lead_id}': PublicSurfaceRouteSpec('api.public.economic.client_outcome_truth', 'economic_client_outcome_truth', SecurityAction.READ, ('internal', 'economic', 'client_outcome', 'truth', 'public_api')),
     '/economic/business-truth/{order_id}/{lead_id}': PublicSurfaceRouteSpec('api.public.economic.business_truth', 'economic_business_truth', SecurityAction.READ, ('internal', 'economic', 'business', 'truth', 'public_api')),
     '/public-site/integrations': PublicSurfaceRouteSpec('api.public.public_site.integrations', 'public_site_integration_catalog', SecurityAction.READ, ('public', 'public_site', 'integrations', 'public_api')),
+    '/public-site/acquisition/feasibility': PublicSurfaceRouteSpec('api.public.public_site.acquisition_feasibility', 'acquisition_scenario', SecurityAction.READ, ('public', 'public_site', 'acquisition', 'public_api')),
     '/public-site/cta/start': PublicSurfaceRouteSpec('api.public.public_site.cta_start', 'public_site_cta_intake', SecurityAction.WRITE, ('public', 'public_site', 'cta', 'public_api')),
     '/public-site/cta/{intake_id}': PublicSurfaceRouteSpec('api.public.public_site.cta_status', 'public_site_cta_intake', SecurityAction.READ, ('public', 'public_site', 'cta', 'public_api')),
 }
