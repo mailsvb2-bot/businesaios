@@ -44,6 +44,17 @@ def test_browser_gate_is_provisioned_by_ci_and_deep_release() -> None:
     assert "npx playwright" not in ci + deep
 
 
+def test_ci_rebuilds_default_production_bundle_after_e2e_override() -> None:
+    ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    browser = ci.index("- name: Run canonical browser gate")
+    rebuild = ci.index("- name: Rebuild canonical production frontend bundle")
+    verify = ci.index("- name: Verify production bundle")
+    upload = ci.index("- name: Upload frontend bundle")
+    assert browser < rebuild < verify < upload
+    assert "env -u VITE_API_BASE npm run build" in ci
+    assert 'grep -R -F -q "https://api.businessaios.ru" frontend/dist' in ci
+
+
 def test_release_executor_sets_canonical_postgres_event_store_flag(monkeypatch) -> None:
     for key in ("BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE", "POSTGRES_EVENT_STORE_ENABLED"):
         monkeypatch.delenv(key, raising=False)
