@@ -111,7 +111,10 @@ def _browser_proof(step_status: str, exact_sha: str | None) -> dict:
 def release_verdict(report: ExecutionReport) -> dict:
     exact_sha = os.environ.get("BAIOS_CI_TARGET_SHA")
     steps = [{"id": step.name, "status": _STATUS.get(step.status, "NOT_PROVEN")} for step in report.steps]
-    step_status = lambda name: next((item["status"] for item in steps if item["id"] == name), "NOT_PROVEN")
+
+    def step_status(name: str) -> str:
+        return next((item["status"] for item in steps if item["id"] == name), "NOT_PROVEN")
+
     scenario_proof = _scenario_proof(step_status(_step_ids.user_scenario_gate()), exact_sha)
     browser_proof = _browser_proof(step_status(_step_ids.browser_e2e()), exact_sha)
     complete = report.gate == "release" and {step.name for step in plan_for_gate("release").steps if step.required}.issubset(
