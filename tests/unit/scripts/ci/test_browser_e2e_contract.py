@@ -135,26 +135,22 @@ def _embedded_test(project: str, title: str | None = None) -> dict:
     name, file, line, column = _signature(title or _signature()[0])
     return {
         "testId": f"browser-test-{project}", "title": name, "projectName": project,
-        "location": {"file": file, "line": line, "column": column},
-        "outcome": "expected", "ok": True,
+        "location": {"file": file, "line": line, "column": column}, "outcome": "expected", "ok": True,
         "results": [{"workerIndex": 0, "startTime": "2026-08-11T00:00:00.000Z"}],
     }
 
 
 def _json_report(projects: tuple[str, ...], *, drift_project: str | None = None, skipped: int = 0) -> dict:
     title, file, line, column = _signature()
-    tests = []
+    specs = []
     for project in projects:
         project_title = f"{title} drift" if project == drift_project else title
-        tests.append({
-            "expectedStatus": "passed", "projectName": project, "status": "expected",
-            "results": [{"status": "passed", "errors": []}], "_title": project_title,
-        })
-    specs = []
-    for project, test in zip(projects, tests, strict=True):
         specs.append({
-            "title": test.pop("_title"), "file": file, "line": line, "column": column, "ok": True,
-            "tests": [test],
+            "title": project_title, "file": file, "line": line, "column": column, "ok": True,
+            "tests": [{
+                "expectedStatus": "passed", "projectName": project, "status": "expected",
+                "results": [{"status": "passed", "errors": []}],
+            }],
         })
     return {
         "config": {"projects": [{"name": name} for name in projects]},
@@ -163,9 +159,11 @@ def _json_report(projects: tuple[str, ...], *, drift_project: str | None = None,
     }
 
 
-def _html_report(projects: tuple[str, ...], *, drift_project: str | None = None) -> str:
+def _html_report(projects: tuple[str, ...], *, drift_project: str | None = None, duplicate: bool = False) -> str:
     title = _signature()[0]
     tests = [_embedded_test(project, f"{title} drift" if project == drift_project else title) for project in projects]
+    if duplicate:
+        tests = [test for test in tests for _ in range(2)]
     report = {
         "projectNames": list(projects), "files": [{"tests": tests}],
         "stats": {"total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True},
@@ -177,17 +175,23 @@ def _html_report(projects: tuple[str, ...], *, drift_project: str | None = None)
     return f'<!DOCTYPE html><html><head><title>Playwright Test Report</title></head><body><template id="playwrightReportBase64">data:application/zip;base64,{encoded}</template></body></html>'
 
 
+def _junit_report(projects: tuple[str, ...]) -> str:
+    title, file, _, _ = _signature()
+    suites = "".join(
+        f'<testsuite name="{file}" hostname="{project}" tests="1" failures="0" skipped="0" errors="0">'
+        f'<testcase name="{title}" classname="{file}"/></testsuite>'
+        for project in projects
+    )
+    return f'<testsuites tests="{len(projects)}" failures="0" skipped="0" errors="0">{suites}</testsuites>'
+
+
 def _write_outputs(browser: Path, *, projects: tuple[str, ...] | None = None, diagnostics: bool = True, skipped: int = 0, drift_project: str | None = None) -> None:
     names = projects or browser_project_names()
     browser.mkdir(parents=True, exist_ok=True)
     (browser / "playwright.json").write_text(json.dumps(_json_report(names, drift_project=drift_project, skipped=skipped)), encoding="utf-8")
     if not diagnostics:
         return
-    testcases = "".join(f'<testcase name="browser-{index}"/>' for index, _ in enumerate(names, 1))
-    (browser / "junit.xml").write_text(
-        f'<testsuites tests="{len(names)}" failures="0" skipped="0" errors="0"><testsuite>{testcases}</testsuite></testsuites>',
-        encoding="utf-8",
-    )
+    (browser / "junit.xml").write_text(_junit_report(names), encoding="utf-8")
     (browser / "html").mkdir(exist_ok=True)
     (browser / "html" / "index.html").write_text(_html_report(names, drift_project=drift_project), encoding="utf-8")
 
@@ -202,6 +206,23 @@ def test_browser_evidence_rejects_missing_project_or_cross_project_drift(tmp_pat
     _write_outputs(browser, projects=names[:-1])
     assert browser_artifact_snapshot(browser) is None
     _write_outputs(browser, projects=names, drift_project=names[-1])
+    assert browser_artifact_snapshot(browser) is None
+
+
+def test_browser_evidence_rejects_missing_json_tests_malformed_junit_and_duplicate_html(tmp_path) -> None:
+    browser, names = tmp_path / "browser", browser_project_names()
+    _write_outputs(browser)
+    payload = json.loads((browser / "playwright.json").read_text(encoding="utf-8"))
+    payload["suites"] = []
+    (browser / "playwright.json").write_text(json.dumps(payload), encoding="utf-8")
+    assert browser_artifact_snapshot(browser) is None
+
+    _write_outputs(browser)
+    (browser / "junit.xml").write_text("<root><testcase name='forged'/></root>", encoding="utf-8")
+    assert browser_artifact_snapshot(browser) is None
+
+    _write_outputs(browser)
+    (browser / "html" / "index.html").write_text(_html_report(names, duplicate=True), encoding="utf-8")
     assert browser_artifact_snapshot(browser) is None
 
 
