@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-const BUSINESS_NAME = "Canonical Browser E2E Business";
+function projectIdentity(projectName) {
+  const slug = String(projectName || "browser").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return {
+    businessName: `Canonical Browser E2E ${projectName}`,
+    email: `browser-e2e+${slug}@example.test`
+  };
+}
 
 async function persistentBrowserStateContains(page, secret) {
   const webStorageContains = await page.evaluate((needle) => {
@@ -18,12 +24,18 @@ async function persistentBrowserStateContains(page, secret) {
   return webStorageContains || cookieContains || indexedDbCreated;
 }
 
-test("onboarding creates a read-only OWNER workspace without persisting the API key", async ({ page }) => {
+async function hasNoHorizontalOverflow(page) {
+  return page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
+}
+
+test("onboarding creates a read-only OWNER workspace without persisting the API key", async ({ page }, testInfo) => {
+  const { businessName, email } = projectIdentity(testInfo.project.name);
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Подключите бизнес/ })).toBeVisible();
+  expect(await hasNoHorizontalOverflow(page)).toBe(true);
 
-  await page.getByLabel("Название бизнеса").fill(BUSINESS_NAME);
-  await page.getByLabel("Email владельца").fill("browser-e2e@example.test");
+  await page.getByLabel("Название бизнеса").fill(businessName);
+  await page.getByLabel("Email владельца").fill(email);
   await page.getByLabel("Сфера").fill("services");
   await page.getByLabel("Город").fill("Amsterdam");
   await page.getByRole("button", { name: /Продолжить/ }).click();
@@ -57,14 +69,16 @@ test("onboarding creates a read-only OWNER workspace without persisting the API 
   expect(workspace.scope_source).toBe("authenticated_owner_session");
   expect(workspace.write_actions_enabled).toBe(false);
 
-  await expect(page.getByRole("heading", { name: BUSINESS_NAME, level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: businessName, level: 1 })).toBeVisible();
   await expect(page.getByText("Запись выключена")).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(providerTitle) })).toBeVisible();
   await expect(page.getByText("Не удалось открыть защищённый workspace интеграций.")).toHaveCount(0);
+  expect(await hasNoHorizontalOverflow(page)).toBe(true);
   expect(await persistentBrowserStateContains(page, ownerKey)).toBe(false);
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: BUSINESS_NAME, level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: businessName, level: 1 })).toBeVisible();
   await expect(page.getByText(/Защищённая OWNER-сессия отсутствует или была потеряна/)).toBeVisible();
+  expect(await hasNoHorizontalOverflow(page)).toBe(true);
   expect(await persistentBrowserStateContains(page, ownerKey)).toBe(false);
 });
