@@ -7,8 +7,10 @@ import sys
 import zipfile
 from pathlib import Path
 
+import pytest
+
 from scripts.ci import step_browser_e2e
-from scripts.ci.plan_registry import allowed_gates, plan_for_gate
+from scripts.ci.plan_registry import allowed_gates, plan_for_gate, requires_release_runtime_environment
 from scripts.ci.step_registry import handler_for_step
 from scripts.ci.subprocess_io import CommandOutcome
 
@@ -22,6 +24,8 @@ def test_browser_gate_and_release_plan_are_canonical() -> None:
     for gate in ("release", "pre-release"):
         names = tuple(step.name for step in plan_for_gate(gate).steps)
         assert names[names.index("production-boot") + 1:names.index("verify-release")] == ("browser-e2e",)
+        assert requires_release_runtime_environment(gate=gate, step_name="browser-e2e") is True
+    assert requires_release_runtime_environment(gate="browser", step_name="browser-e2e") is False
     assert callable(handler_for_step("browser-e2e"))
 
 
@@ -34,7 +38,36 @@ def test_browser_gate_is_provisioned_by_ci_and_deep_release() -> None:
         assert "./node_modules/.bin/playwright install --with-deps chromium" in workflow
     assert "python -m scripts.ci.cli --gate browser" in ci
     assert ".venv/bin/python -m scripts.ci.cli --gate release" in deep
+    assert "DATABASE_URL=$DATABASE_URL" in deep
     assert "npx playwright" not in ci + deep
+
+
+def test_release_browser_runtime_requires_real_database_and_production_security(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("BAIOS_CI_ACTIVE_GATE", "release")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    with pytest.raises(RuntimeError, match="DATABASE_URL"):
+        step_browser_e2e._runtime_env(sha="a" * 40, runtime_dir=str(tmp_path))
+
+    monkeypatch.setenv("DATABASE_URL", "postgresql://proof@127.0.0.1:5432/businessaios")
+    env, mode, storage = step_browser_e2e._runtime_env(sha="a" * 40, runtime_dir=str(tmp_path))
+    assert (mode, storage) == ("production", "postgres")
+    assert env["ENV"] == env["APP_ENV"] == "production"
+    assert env["DATABASE_URL"].startswith("postgresql://")
+    assert env["API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS"] == "0"
+    assert env["BUSINESAIOS_API_KEY_STORE_BACKEND"] == "file"
+    assert env["BUSINESAIOS_KEY_PROVIDER_BACKEND"] == "file"
+    assert env["DECISION_SIGNING_SECRET"] != "dev-secret"
+    assert len(base64.b64decode(env["BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64"])) == 32
+
+
+def test_playwright_runtime_switches_mode_without_production_fallbacks() -> None:
+    config = Path("frontend/playwright.config.js").read_text(encoding="utf-8")
+    assert 'const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development"' in config
+    assert 'const production = runtimeMode === "production"' in config
+    assert '"DATABASE_URL", "DECISION_SIGNING_SECRET", "API_CONTROL_PLANE_API_KEY_PEPPER"' in config
+    assert 'APP_ENV: production ? "production" : "dev"' in config
+    assert 'API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS: production ? "0"' in config
+    assert 'BUSINESAIOS_API_KEY_STORE_BACKEND: production ? "file"' in config
 
 
 def test_browser_failure_evidence_cannot_capture_owner_key_network_payload() -> None:
@@ -105,6 +138,8 @@ def test_browser_step_requires_real_non_skipped_playwright_test(monkeypatch, tmp
     assert result[0] is True
     assert evidence["status"] == "PASS"
     assert evidence["exact_sha"] == "a" * 40
+    assert evidence["runtime_mode"] == "development"
+    assert evidence["storage_backend"] == "isolated-local"
     assert evidence["artifacts"]["junit"]["tests"] == 1
     assert len(evidence["artifacts"]["html"]["sha256"]) == 64
     assert captured["env"]["BAIOS_E2E_PYTHON"] == sys.executable
