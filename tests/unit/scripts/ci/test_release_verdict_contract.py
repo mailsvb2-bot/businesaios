@@ -76,7 +76,7 @@ def _html_report(projects: tuple[str, ...]) -> str:
     tests = [_browser_test(project) for project in projects]
     file_id, file_name = "canonical-browser-spec", "onboarding-workspace.spec.js"
     stats = {"total": len(tests), "expected": len(tests), "unexpected": 0, "flaky": 0, "skipped": 0, "ok": True}
-    report = {"projectNames": list(projects), "files": [{"fileId": file_id, "fileName": file_name, "tests": tests, "stats": stats}], "stats": stats}
+    report = {"projectNames": list(projects), "errors": [], "files": [{"fileId": file_id, "fileName": file_name, "tests": tests, "stats": stats}], "stats": stats}
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("report.json", json.dumps(report))
@@ -98,7 +98,7 @@ def _json_report(projects: tuple[str, ...]) -> dict:
         for project in projects
     ]
     return {
-        "config": {"projects": [{"name": name} for name in projects]},
+        "config": {"projects": [{"name": name} for name in projects]}, "errors": [],
         "suites": [{
             "specs": [{
                 "title": "onboarding creates a read-only OWNER workspace without persisting the API key",
