@@ -77,6 +77,16 @@ def _json_report(projects: tuple[str, ...]) -> dict:
     }
 
 
+def _junit_report(projects: tuple[str, ...]) -> str:
+    title, file = "onboarding creates a read-only OWNER workspace without persisting the API key", "onboarding-workspace.spec.js"
+    suites = "".join(
+        f'<testsuite name="{file}" hostname="{project}" tests="1" failures="0" skipped="0" errors="0">'
+        f'<testcase name="{title}" classname="{file}"/></testsuite>'
+        for project in projects
+    )
+    return f'<testsuites tests="{len(projects)}" failures="0" skipped="0" errors="0">{suites}</testsuites>'
+
+
 def _write_browser_evidence(
     tmp_path, sha: str, *, expected: int | None = None, runtime_mode: str = "production", storage_backend: str = "postgres",
 ) -> None:
@@ -85,11 +95,7 @@ def _write_browser_evidence(
     browser.mkdir(parents=True, exist_ok=True)
     payload = _json_report(projects)
     (browser / "playwright.json").write_text(json.dumps(payload), encoding="utf-8")
-    testcases = "".join(f'<testcase name="browser-{index}"/>' for index, _ in enumerate(projects, 1))
-    (browser / "junit.xml").write_text(
-        f'<testsuites tests="{len(projects)}" failures="0" skipped="0" errors="0"><testsuite>{testcases}</testsuite></testsuites>',
-        encoding="utf-8",
-    )
+    (browser / "junit.xml").write_text(_junit_report(projects), encoding="utf-8")
     (browser / "html").mkdir(exist_ok=True)
     (browser / "html" / "index.html").write_text(_html_report(projects), encoding="utf-8")
     snapshot = browser_artifact_snapshot(browser)
