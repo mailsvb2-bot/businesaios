@@ -13,11 +13,9 @@ from scripts.ci.fs import safe_write_text
 from scripts.ci.paths import repo_root, reports_dir
 from scripts.ci.subprocess_io import run_command
 
-_RELEASE_GATES = {"release", "pre-release"}
 _PRODUCTION_ENV_KEYS = (
     "ENV", "APP_ENV", "APP_PROFILE", "DATABASE_URL", "POSTGRES_DSN", "POSTGRES_RUNTIME_ENABLED",
-    "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE", "POSTGRES_APPLY_MIGRATIONS", "RUN_MIGRATIONS_BEFORE_START",
-    "BAIOS_REQUIRE_QUALITY_TOOLS",
+    "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE", "POSTGRES_APPLY_MIGRATIONS", "RUN_MIGRATIONS_BEFORE_START", "BAIOS_REQUIRE_QUALITY_TOOLS",
 )
 
 
@@ -26,7 +24,7 @@ def _write(payload: dict) -> None:
 
 
 def _runtime_env(*, sha: str | None, runtime_dir: str) -> tuple[dict[str, str], str, str]:
-    production = os.environ.get("BAIOS_CI_ACTIVE_GATE", "") in _RELEASE_GATES
+    production = os.environ.get("BAIOS_CI_ACTIVE_GATE", "") in {"release", "pre-release"}
     mode, storage = ("production", "postgres") if production else ("development", "isolated-local")
     env = {
         "CI": "1", "BAIOS_CI_TARGET_SHA": sha or "", "BAIOS_E2E_RUNTIME_DIR": runtime_dir,
@@ -34,8 +32,7 @@ def _runtime_env(*, sha: str | None, runtime_dir: str) -> tuple[dict[str, str], 
     }
     if not production:
         return env, mode, storage
-    database_url = str(os.environ.get("DATABASE_URL") or "").strip()
-    if not database_url:
+    if not str(os.environ.get("DATABASE_URL") or "").strip():
         raise RuntimeError("release browser proof requires DATABASE_URL")
     env.update({key: str(os.environ[key]) for key in _PRODUCTION_ENV_KEYS if str(os.environ.get(key) or "").strip()})
     env.update({
