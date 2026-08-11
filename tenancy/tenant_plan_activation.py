@@ -19,29 +19,13 @@ class TenantPlanActivationResult:
 
 
 class TenantPlanActivationService:
-    """Apply one already-resolved plan entitlement state without becoming its owner.
+    """Coordinate canonical registry/policy owners; never resolve entitlements here."""
 
-    The caller must resolve the target policy bundle from the canonical product/policy
-    layer. This service only coordinates the existing tenant registry and tenant policy
-    store so payment/billing code does not invent a parallel entitlement authority.
-    """
-
-    def __init__(
-        self,
-        *,
-        tenant_registry: InMemoryTenantRegistry,
-        tenant_policy_store: InMemoryTenantPolicyStore,
-    ) -> None:
+    def __init__(self, *, tenant_registry: InMemoryTenantRegistry, tenant_policy_store: InMemoryTenantPolicyStore) -> None:
         self._tenant_registry = tenant_registry
         self._tenant_policy_store = tenant_policy_store
 
-    def activate(
-        self,
-        *,
-        tenant_id: str,
-        plan: TenantPlan,
-        policy: TenantPolicyBundle,
-    ) -> TenantPlanActivationResult:
+    def activate(self, *, tenant_id: str, plan: TenantPlan, policy: TenantPolicyBundle) -> TenantPlanActivationResult:
         tid = require_tenant_id(tenant_id)
         target_plan = plan if isinstance(plan, TenantPlan) else TenantPlan(str(plan))
         policy.validate()
@@ -51,42 +35,24 @@ class TenantPlanActivationService:
         previous_record = self._tenant_registry.require(tid)
         previous_policy = self._tenant_policy_store.require(tid)
         if previous_record.plan is target_plan and previous_policy == policy:
-            return TenantPlanActivationResult(
-                record=previous_record,
-                policy=previous_policy,
-                changed=False,
-            )
+            return TenantPlanActivationResult(previous_record, previous_policy, False)
 
         try:
-            # Rights are persisted before the display/billing plan marker. If a process
-            # dies between writes, a verified paid tenant can be reconciled forward
-            # without ever ending up with "GROWTH" displayed while old runtime rights
-            # remain active.
+            # Persist rights first so a crash never advertises a paid plan with stale rights.
             saved_policy = self._tenant_policy_store.save(policy)
             saved_record = self._tenant_registry.set_plan(tenant_id=tid, plan=target_plan)
         except Exception as exc:
             rollback_errors: list[Exception] = []
-            try:
-                self._tenant_registry.set_plan(tenant_id=tid, plan=previous_record.plan)
-            except Exception as rollback_exc:  # pragma: no cover - catastrophic storage failure
-                rollback_errors.append(rollback_exc)
-            try:
-                self._tenant_policy_store.save(previous_policy)
-            except Exception as rollback_exc:  # pragma: no cover - catastrophic storage failure
-                rollback_errors.append(rollback_exc)
+            restorers = (
+                lambda: self._tenant_registry.set_plan(tenant_id=tid, plan=previous_record.plan),
+                lambda: self._tenant_policy_store.save(previous_policy),
+            )
+            for restore in restorers:
+                try:
+                    restore()
+                except Exception as rollback_exc:  # pragma: no cover - catastrophic storage failure
+                    rollback_errors.append(rollback_exc)
             if rollback_errors:
                 raise RuntimeError("tenant plan activation failed and rollback was incomplete") from exc
             raise
-
-        return TenantPlanActivationResult(
-            record=saved_record,
-            policy=saved_policy,
-            changed=True,
-        )
-
-
-__all__ = [
-    "CANON_TENANT_PLAN_ACTIVATION",
-    "TenantPlanActivationResult",
-    "TenantPlanActivationService",
-]
+        return TenantPlanActivationResult(saved_record, saved_policy, True)
