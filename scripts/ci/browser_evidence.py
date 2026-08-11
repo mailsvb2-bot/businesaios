@@ -70,9 +70,7 @@ def browser_project_names() -> tuple[str, ...]:
 
 
 def _stats_ok(stats: object, expected: int, *, total: bool = False) -> bool:
-    return bool(isinstance(stats, dict) and _integer(stats.get("expected")) == expected
-                and all(_integer(stats.get(key)) == 0 for key in ("unexpected", "skipped", "flaky"))
-                and (not total or (_integer(stats.get("total")) == expected and stats.get("ok") is True)))
+    return bool(isinstance(stats, dict) and _integer(stats.get("expected")) == expected and all(_integer(stats.get(key)) == 0 for key in ("unexpected", "skipped", "flaky")) and (not total or (_integer(stats.get("total")) == expected and stats.get("ok") is True)))
 
 
 def _scenario_matrix(records, projects, canonical):
@@ -107,7 +105,7 @@ def _json_report(doc, projects, canonical):
             results = test.get("results") if isinstance(test, dict) else None
             _need(isinstance(test, dict) and test.get("expectedStatus") == "passed" and test.get("status") == "expected")
             _need(isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict) and set(results[0]) == _JSON_RESULT_KEYS
-                  and all(type(results[0].get(key)) is int and results[0][key] >= 0 for key in ("workerIndex", "parallelIndex", "duration")) and type(results[0].get("retry")) is int and results[0]["retry"] == 0 and results[0].get("status") == "passed" and results[0].get("errors") == [] and all(isinstance(results[0].get(key), list) for key in ("stdout", "stderr", "annotations", "attachments")) and _timestamp(results[0].get("startTime")))
+                  and all(type(results[0].get(key)) is int and results[0][key] >= 0 for key in ("workerIndex", "parallelIndex", "duration")) and type(results[0].get("retry")) is int and results[0]["retry"] == 0 and results[0].get("status") == "passed" and results[0].get("errors") == [] and all(results[0].get(key) == [] for key in ("stdout", "stderr", "annotations", "attachments")) and _timestamp(results[0].get("startTime")))
             records.append((_text(test.get("projectName")), title, file))
     _need(_scenario_matrix(records, projects, canonical) and _stats_ok(stats, len(records)))
     return stats
@@ -118,23 +116,26 @@ def _html_report(html, projects, canonical):
     end = html.find("</template>", start + len(_HTML_MARKER)) if start >= 0 else -1
     _need(start >= 0 and end >= 0)
     encoded = html[start + len(_HTML_MARKER):end].strip()
+    records = []
     with zipfile.ZipFile(io.BytesIO(base64.b64decode(encoded, validate=True))) as archive:
         doc = json.loads(archive.read("report.json"))
-    _need(isinstance(doc, dict) and tuple(doc.get("projectNames", ())) == projects)
-    records = []
-    for item in doc.get("files", ()):
-        tests = item.get("tests") if isinstance(item, dict) else None
-        _need(isinstance(tests, list))
-        for test in tests:
-            location, results = (test.get("location"), test.get("results")) if isinstance(test, dict) else (None, None)
-            _need(isinstance(location, dict) and isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict))
-            _need(set(results[0]) == _HTML_RESULT_KEYS and isinstance(results[0].get("attachments"), list)
-                  and _integer(results[0].get("workerIndex")) >= 0 and _timestamp(results[0].get("startTime")))
-            title, file = _text(test.get("title")), _text(location.get("file"))
-            _need(_text(test.get("testId")) and title and file)
-            _need(min(_integer(location.get("line")), _integer(location.get("column"))) > 0)
-            _need(test.get("outcome") == "expected" and test.get("ok") is True)
-            records.append((_text(test.get("projectName")), title, file))
+        _need(isinstance(doc, dict) and tuple(doc.get("projectNames", ())) == projects and isinstance(doc.get("files"), list))
+        for item in doc["files"]:
+            tests, file_id, file_name = (item.get("tests"), _text(item.get("fileId")), _text(item.get("fileName"))) if isinstance(item, dict) else (None, "", "")
+            _need(isinstance(tests, list) and file_id and file_name)
+            detail = json.loads(archive.read(f"{file_id}.json"))
+            detail_tests = detail.get("tests") if isinstance(detail, dict) else None
+            _need(isinstance(detail_tests, list) and detail.get("fileId") == file_id and detail.get("fileName") == file_name and len(detail_tests) == len(tests))
+            _need([(_text(test.get("testId")), _text(test.get("title")), _text(test.get("projectName"))) for test in detail_tests if isinstance(test, dict)] == [(_text(test.get("testId")), _text(test.get("title")), _text(test.get("projectName"))) for test in tests if isinstance(test, dict)] and len(tests) == len([test for test in detail_tests if isinstance(test, dict)]))
+            for test in tests:
+                location, results = (test.get("location"), test.get("results")) if isinstance(test, dict) else (None, None)
+                _need(isinstance(location, dict) and isinstance(results, list) and len(results) == 1 and isinstance(results[0], dict))
+                _need(set(results[0]) == _HTML_RESULT_KEYS and results[0].get("attachments") == [] and _integer(results[0].get("workerIndex")) >= 0 and _timestamp(results[0].get("startTime")))
+                title, file = _text(test.get("title")), _text(location.get("file"))
+                _need(_text(test.get("testId")) and title and file and file == file_name)
+                _need(min(_integer(location.get("line")), _integer(location.get("column"))) > 0)
+                _need(test.get("outcome") == "expected" and test.get("ok") is True)
+                records.append((_text(test.get("projectName")), title, file))
     stats = doc.get("stats")
     _need(_scenario_matrix(records, projects, canonical) and _stats_ok(stats, len(records), total=True))
     return stats
@@ -173,21 +174,9 @@ def browser_artifact_snapshot(browser_dir: Path) -> dict | None:
         _need("<title>Playwright Test Report</title>" in html and "</html>" in html)
     except (OSError, UnicodeError, json.JSONDecodeError, ElementTree.ParseError, zipfile.BadZipFile, KeyError, TypeError, ValueError):
         return None
-    artifacts = {
-        name: {"path": rel, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
-        for name, rel, raw in zip(("json", "junit", "html"),
-            ("browser-e2e/playwright.json", "browser-e2e/junit.xml", "browser-e2e/html/index.html"),
-            (json_bytes, junit_bytes, html_bytes), strict=True)
-    }
+    artifacts = {name: {"path": rel, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)} for name, rel, raw in zip(("json", "junit", "html"), ("browser-e2e/playwright.json", "browser-e2e/junit.xml", "browser-e2e/html/index.html"), (json_bytes, junit_bytes, html_bytes), strict=True)}
     artifacts["junit"].update(tests=junit_tests, failures=0, skipped=0)
-    return {
-        "stats": json_stats, "projects": [{**row, "tests": len(canonical)} for row in matrix],
-        "project_matrix": {"path": BROWSER_PROJECT_MATRIX, "schema": BROWSER_PROJECT_MATRIX_SCHEMA, "sha256": matrix_sha},
-        "artifacts": artifacts,
-    }
+    return {"stats": json_stats, "projects": [{**row, "tests": len(canonical)} for row in matrix], "project_matrix": {"path": BROWSER_PROJECT_MATRIX, "schema": BROWSER_PROJECT_MATRIX_SCHEMA, "sha256": matrix_sha}, "artifacts": artifacts}
 
 
-__all__ = [
-    "BROWSER_EVIDENCE_NAME", "BROWSER_EVIDENCE_SCHEMA", "BROWSER_PROJECT_MATRIX", "BROWSER_PROJECT_MATRIX_SCHEMA",
-    "browser_artifact_snapshot", "browser_project_names",
-]
+__all__ = ["BROWSER_EVIDENCE_NAME", "BROWSER_EVIDENCE_SCHEMA", "BROWSER_PROJECT_MATRIX", "BROWSER_PROJECT_MATRIX_SCHEMA", "browser_artifact_snapshot", "browser_project_names"]
