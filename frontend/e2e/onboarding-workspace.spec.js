@@ -1,4 +1,11 @@
 import { expect, test } from "@playwright/test";
+import fs from "node:fs";
+
+const proofContract = JSON.parse(fs.readFileSync(new URL("./project-matrix.json", import.meta.url), "utf8"));
+const canonicalScenario = proofContract.scenarios?.find((item) => item?.id === "onboarding_owner_workspace");
+if (!canonicalScenario?.title || canonicalScenario.file !== "onboarding-workspace.spec.js") {
+  throw new Error("invalid canonical onboarding browser scenario contract");
+}
 
 function projectIdentity(projectName) {
   const slug = String(projectName || "browser").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -28,7 +35,7 @@ async function hasNoHorizontalOverflow(page) {
   return page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
 }
 
-test("onboarding creates a read-only OWNER workspace without persisting the API key", async ({ page }, testInfo) => {
+test(canonicalScenario.title, async ({ page }, testInfo) => {
   const { businessName, email } = projectIdentity(testInfo.project.name);
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Подключите бизнес/ })).toBeVisible();
