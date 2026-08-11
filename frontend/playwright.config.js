@@ -15,8 +15,12 @@ const pythonExecutable = process.env.BAIOS_E2E_PYTHON || "python";
 const runtimeMode = process.env.BAIOS_E2E_RUNTIME_MODE || "development";
 const production = runtimeMode === "production";
 const projectMatrix = JSON.parse(fs.readFileSync(new URL("./e2e/project-matrix.json", import.meta.url), "utf8"));
-if (projectMatrix.schema !== "businessaios_browser_project_matrix.v1" || !Array.isArray(projectMatrix.projects) || !projectMatrix.projects.length) {
-  throw new Error("invalid canonical browser project matrix");
+if (
+  projectMatrix.schema !== "businessaios_browser_project_matrix.v2"
+  || !Array.isArray(projectMatrix.projects) || !projectMatrix.projects.length
+  || !Array.isArray(projectMatrix.scenarios) || !projectMatrix.scenarios.length
+) {
+  throw new Error("invalid canonical browser proof contract");
 }
 const projectNames = projectMatrix.projects.map((entry) => String(entry?.name || "").trim());
 if (projectNames.some((name) => !name) || new Set(projectNames).size !== projectNames.length) {
