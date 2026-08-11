@@ -16,7 +16,7 @@ from scripts.ci.subprocess_io import run_command
 _RELEASE_GATES = {"release", "pre-release"}
 _PRODUCTION_ENV_KEYS = (
     "ENV", "APP_ENV", "APP_PROFILE", "DATABASE_URL", "POSTGRES_DSN", "POSTGRES_RUNTIME_ENABLED",
-    "POSTGRES_EVENT_STORE_ENABLED", "POSTGRES_APPLY_MIGRATIONS", "RUN_MIGRATIONS_BEFORE_START",
+    "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE", "POSTGRES_APPLY_MIGRATIONS", "RUN_MIGRATIONS_BEFORE_START",
     "BAIOS_REQUIRE_QUALITY_TOOLS",
 )
 
@@ -40,6 +40,7 @@ def _runtime_env(*, sha: str | None, runtime_dir: str) -> tuple[dict[str, str], 
     env.update({key: str(os.environ[key]) for key in _PRODUCTION_ENV_KEYS if str(os.environ.get(key) or "").strip()})
     env.update({
         "ENV": "production", "APP_ENV": "production", "APP_PROFILE": "api",
+        "BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE": "1",
         "API_CONTROL_PLANE_ALLOW_DEV_FALLBACKS": "0",
         "API_CONTROL_PLANE_API_KEY_PEPPER": secrets.token_urlsafe(48),
         "DECISION_SIGNING_SECRET": secrets.token_urlsafe(64),
