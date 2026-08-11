@@ -1,10 +1,17 @@
 {
-  "schema": "businessaios_browser_project_matrix.v1",
+  "schema": "businessaios_browser_project_matrix.v2",
   "projects": [
     {"name": "chromium", "device": "Desktop Chrome", "engine": "chromium", "surface": "desktop"},
     {"name": "firefox", "device": "Desktop Firefox", "engine": "firefox", "surface": "desktop"},
     {"name": "webkit", "device": "Desktop Safari", "engine": "webkit", "surface": "desktop"},
     {"name": "Mobile Chrome", "device": "Pixel 5", "engine": "chromium", "surface": "mobile"},
     {"name": "Mobile Safari", "device": "iPhone 12", "engine": "webkit", "surface": "mobile"}
+  ],
+  "scenarios": [
+    {
+      "id": "onboarding_owner_workspace",
+      "title": "onboarding creates a read-only OWNER workspace without persisting the API key",
+      "file": "onboarding-workspace.spec.js"
+    }
   ]
 }
