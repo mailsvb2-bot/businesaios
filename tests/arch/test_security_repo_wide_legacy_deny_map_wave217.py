@@ -50,6 +50,8 @@ ALLOWED_SECURITY_INSTANTIATORS = {
     'security/secret_vault.py',
     'security/governance_owner_factory.py',
     'security/kms_provider_local_hsm_adapter.py',
+    # One-time production recovery boundary: owns explicit legacy envelope migration.
+    'tools/migrate_legacy_key_provider_envelopes.py',
 }
 BLOCKED_INSTANTIATION_PATTERNS = {
     'SecretVault(': 'security owner or explicit boundary adapters must own vault construction',
