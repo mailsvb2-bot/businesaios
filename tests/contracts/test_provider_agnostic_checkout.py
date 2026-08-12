@@ -9,6 +9,7 @@ from billing.payment_provider_capability import PaymentProviderCapabilities
 from billing.payment_provider_contract import PaymentCheckoutRequest, PaymentCheckoutSession
 from billing.payment_provider_registry import PaymentProviderRegistration, PaymentProviderRegistry
 from billing.payment_provider_router import PaymentProviderRouter
+from runtime._internal.effects_actions.payments import reconciliation as reconciliation_module
 from runtime._internal.effects_actions.payments import selection as selection_module
 from runtime._internal.effects_actions.payments.reconciliation_support import resolve_created_payment_context
 from runtime._internal.effects_actions.payments.selection import capture_payment_effect
@@ -47,12 +48,18 @@ class _EventLog:
 
 
 class _RuntimeEffects:
-    def __init__(self, provider_result=(False, {})) -> None:
+    def __init__(self, provider_result=(False, {}), provider_status: str = "succeeded") -> None:
         self.event_log = _EventLog()
         self.provider_result = provider_result
+        self.provider_status = provider_status
+        self.status_calls: list[str] = []
 
     def _yookassa_create_payment(self, **_kwargs):
         return self.provider_result
+
+    def _yookassa_get_payment_status(self, *, external_payment_id: str) -> str:
+        self.status_calls.append(str(external_payment_id))
+        return self.provider_status
 
 
 def _request(*, currency: str = "RUB") -> PaymentCheckoutRequest:
@@ -154,6 +161,45 @@ def test_created_payment_context_preserves_legacy_shape_and_records_provider_bin
     context = resolve_created_payment_context(effects=effects, external_id="new")
     assert context["provider_name"] == "stripe"
     assert context["currency"] == "EUR"
+
+
+def test_legacy_status_compatibility_stays_inside_routed_yookassa_adapter() -> None:
+    effects = _RuntimeEffects(provider_status="succeeded")
+
+    assert reconciliation_module._payment_status(
+        effects,
+        tenant_id="business-a",
+        external_id="legacy-payment",
+        context={},
+    ) == "succeeded"
+    assert effects.status_calls == ["legacy-payment"]
+    assert getattr(effects, "payment_provider_adapter", None) is None
+
+
+def test_missing_provider_binding_fails_closed_when_canonical_adapter_is_injected() -> None:
+    class StatusProvider(_Provider):
+        def get_payment_status(self, **_kwargs):
+            raise AssertionError("provider must not be called without durable provider binding")
+
+    registry = PaymentProviderRegistry((PaymentProviderRegistration(
+        provider_name="stripe",
+        provider=StatusProvider("stripe"),
+        currencies=("EUR",),
+        capabilities=PaymentProviderCapabilities(operations=("status",)),
+    ),))
+    effects = _RuntimeEffects()
+    effects.payment_provider_adapter = RoutingPaymentProviderAdapter(
+        registry=registry,
+        router=PaymentProviderRouter(registry=registry),
+    )
+
+    with pytest.raises(RuntimeError, match="PAYMENT_PROVIDER_CONTEXT_REQUIRED"):
+        reconciliation_module._payment_status(
+            effects,
+            tenant_id="business-a",
+            external_id="unbound-payment",
+            context={},
+        )
 
 
 def test_bad_checkout_binding_marks_provider_unhealthy() -> None:
