@@ -6,7 +6,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 CANON_BILLING_PAYMENT_PROVIDER_CAPABILITY = True
-ALLOWED_PROVIDER_OPERATIONS = frozenset({"ensure_customer", "checkout", "collect", "refund"})
+ALLOWED_PROVIDER_OPERATIONS = frozenset({"ensure_customer", "checkout", "status", "collect", "refund"})
 
 
 def _require_mapping(name: str, value: Any) -> Mapping[str, object]:

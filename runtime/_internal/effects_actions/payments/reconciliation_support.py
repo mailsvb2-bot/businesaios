@@ -85,6 +85,11 @@ def resolve_created_payment_context(*, effects: Any, external_id: str) -> dict[s
             context["user_id"] = str(event.get("user_id") or context["user_id"])
             context["correlation_id"] = str(event.get("correlation_id") or "")
             context["metadata"] = _business_metadata(payload)
+            provider_name, currency = str(payload.get("provider") or "").strip(), str(payload.get("currency") or "").strip().upper()
+            if provider_name:
+                context["provider_name"] = provider_name
+            if currency:
+                context["currency"] = currency
             break
     except Exception:
         return context

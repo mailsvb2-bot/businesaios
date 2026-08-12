@@ -80,19 +80,27 @@ class _YooKassaCheckoutProvider:
             metadata={"legacy_meta": dict(raw)},
         ).normalized_copy()
 
+    def get_payment_status(self, *, tenant_id: str, currency: str, provider_name: str, external_reference: str) -> str:
+        del tenant_id, currency, provider_name
+        return str(self._effects._yookassa_get_payment_status(external_payment_id=str(external_reference)))
+
+
+def _runtime_yookassa_adapter(effects: Any) -> RoutingPaymentProviderAdapter:
+    registry = PaymentProviderRegistry((PaymentProviderRegistration(
+        provider_name="yookassa",
+        provider=_YooKassaCheckoutProvider(effects),
+        currencies=("RUB",),
+        capabilities=PaymentProviderCapabilities(operations=("checkout", "status")),
+        backend_key="runtime_yookassa",
+    ),))
+    return RoutingPaymentProviderAdapter(router=PaymentProviderRouter(registry=registry), registry=registry)
+
 
 def _checkout_adapter(effects: Any) -> RoutingPaymentProviderAdapter:
     current = getattr(effects, "payment_provider_adapter", None)
     if current is not None:
         return current
-    registry = PaymentProviderRegistry((PaymentProviderRegistration(
-        provider_name="yookassa",
-        provider=_YooKassaCheckoutProvider(effects),
-        currencies=("RUB",),
-        capabilities=PaymentProviderCapabilities(operations=("checkout",)),
-        backend_key="runtime_yookassa",
-    ),))
-    current = RoutingPaymentProviderAdapter(router=PaymentProviderRouter(registry=registry), registry=registry)
+    current = _runtime_yookassa_adapter(effects)
     effects.payment_provider_adapter = current
     return current
 
