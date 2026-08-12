@@ -2,7 +2,7 @@ services:
   businesaios_api:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: Dockerfile
     container_name: businesaios_api
     restart: unless-stopped
     env_file:
@@ -30,7 +30,7 @@ services:
   businesaios_worker:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: Dockerfile
     container_name: businesaios_worker
     restart: unless-stopped
     env_file:
@@ -61,7 +61,7 @@ services:
     profiles: ["telegram"]
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
+      dockerfile: Dockerfile
     container_name: businesaios_connector_telegram
     restart: unless-stopped
     env_file:
