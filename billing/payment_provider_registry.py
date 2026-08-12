@@ -11,7 +11,7 @@ from billing.payment_provider_capability import PaymentProviderCapabilities
 from billing.payment_provider_contract import PaymentProviderContract
 
 CANON_BILLING_PAYMENT_PROVIDER_REGISTRY = True
-_PROVIDER_METHODS = {"ensure_customer": "ensure_customer", "checkout": "create_checkout", "collect": "collect", "refund": "refund"}
+_PROVIDER_METHODS = {"ensure_customer": "ensure_customer", "checkout": "create_checkout", "status": "get_payment_status", "collect": "collect", "refund": "refund"}
 
 
 def _normalize_string_tuple(name: str, values: Any, *, transform) -> tuple[str, ...]:
@@ -79,9 +79,14 @@ class PaymentProviderRegistration:
             return False
         if metadata is not None and not isinstance(metadata, Mapping):
             raise ValueError("metadata must be a mapping")
+        md = dict(metadata or {})
+        if operation == "status":
+            preferred = md.get("preferred_provider") or md.get("provider_name_hint")
+            if not isinstance(preferred, str) or not preferred.strip():
+                return False
+            return preferred.strip().lower() == normalized.provider_name.lower()
         if operation != "refund":
             return True
-        md = dict(metadata or {})
         if "strict_provider_affinity" in md and not isinstance(md["strict_provider_affinity"], bool):
             raise ValueError("strict_provider_affinity must be a boolean")
         if not (bool(md.get("strict_provider_affinity", False)) or normalized.capabilities.strict_affinity_for_refund):
