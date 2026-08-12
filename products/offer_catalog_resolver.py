@@ -57,6 +57,16 @@ def _optional_mapping_field(
     return value
 
 
+def _load_yaml_mapping(path: Path, *, error_code: str) -> Mapping[str, Any]:
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise OfferCatalogResolutionError(error_code) from exc
+    if not isinstance(payload, Mapping):
+        raise OfferCatalogResolutionError(error_code)
+    return payload
+
+
 def _external_catalog_path(*, raw: Mapping[str, Any], base_dir: Path, ref: str) -> Path:
     parts = ref.split(":")
     if len(parts) != 3 or any(not part.strip() for part in parts):
@@ -80,7 +90,25 @@ def _external_catalog_path(*, raw: Mapping[str, Any], base_dir: Path, ref: str) 
             f"OFFER_CATALOG_REF_ENVIRONMENT_MISMATCH:{ref_environment}:{environment}"
         )
 
-    catalog_dir = (base_dir / "offer_catalogs").resolve()
+    root_dir = base_dir.resolve()
+    descriptor_path = (root_dir / f"{domain}.yaml").resolve()
+    if descriptor_path.parent != root_dir:
+        raise OfferCatalogResolutionError("BAD_OFFER_CATALOG_DOMAIN")
+    if not descriptor_path.is_file():
+        raise OfferCatalogResolutionError(f"PRODUCT_DESCRIPTOR_NOT_FOUND:{domain}")
+
+    descriptor = _load_yaml_mapping(
+        descriptor_path,
+        error_code=f"BAD_PRODUCT_DESCRIPTOR:{domain}",
+    )
+    descriptor_product_id = str(descriptor.get("product_id") or "").strip()
+    descriptor_domain = str(descriptor.get("domain") or "").strip()
+    if descriptor_product_id != ref_product_id or descriptor_domain != domain:
+        raise OfferCatalogResolutionError(
+            f"OFFER_CATALOG_DOMAIN_PRODUCT_MISMATCH:{domain}:{descriptor_product_id}:{ref_product_id}"
+        )
+
+    catalog_dir = (root_dir / "offer_catalogs").resolve()
     path = (catalog_dir / f"{domain}.yaml").resolve()
     if path.parent != catalog_dir:
         raise OfferCatalogResolutionError("BAD_OFFER_CATALOG_DOMAIN")
@@ -91,12 +119,7 @@ def _external_catalog_path(*, raw: Mapping[str, Any], base_dir: Path, ref: str) 
 
 def _load_external_catalog(*, raw: Mapping[str, Any], base_dir: Path, ref: str) -> OfferCatalog:
     path = _external_catalog_path(raw=raw, base_dir=base_dir, ref=ref)
-    try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
-        raise OfferCatalogResolutionError(f"BAD_OFFER_CATALOG:{ref}") from exc
-    if not isinstance(payload, Mapping):
-        raise OfferCatalogResolutionError(f"BAD_OFFER_CATALOG:{ref}")
+    payload = _load_yaml_mapping(path, error_code=f"BAD_OFFER_CATALOG:{ref}")
 
     catalog_id = str(payload.get("catalog_id") or "").strip()
     offers_raw = payload.get("offers")
