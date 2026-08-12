@@ -11,6 +11,7 @@ from security.key_management_contract import KeyMaterialRecord, KeyPurpose
 from security.key_provider import FileKeyProvider, InMemoryKeyProvider
 from security.secret_contract import SecretRef
 from security.secret_vault import FileSecretVault
+from tools import migrate_legacy_key_provider_envelopes as migration
 from tools.migrate_legacy_key_provider_envelopes import apply_migration, build_migration_plan
 
 
@@ -111,6 +112,36 @@ def test_migrates_legacy_secret_b64_and_proves_existing_vault(monkeypatch, tmp_p
     assert second["applied"] is False
     assert second["validated_key_count"] == 1
     assert second["validated_secret_count"] == 1
+
+
+def test_retry_reuses_identical_backup_after_pre_replace_validation_failure(monkeypatch, tmp_path) -> None:
+    provider_path, vault_path, master_path, _, _ = _fixture(tmp_path)
+    monkeypatch.setenv("APP_ENV", "prod")
+    monkeypatch.delenv("BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64", raising=False)
+    original = provider_path.read_bytes()
+    plan = build_migration_plan(
+        key_provider_path=provider_path,
+        master_key_file=master_path,
+        secret_vault_path=vault_path,
+    )
+    original_validate_vault = migration._validate_vault
+
+    def fail_validation(*_args, **_kwargs):
+        raise RuntimeError("simulated dependent vault validation failure")
+
+    monkeypatch.setattr(migration, "_validate_vault", fail_validation)
+    with pytest.raises(RuntimeError, match="simulated dependent vault validation failure"):
+        migration.apply_migration(plan)
+
+    assert provider_path.read_bytes() == original
+    assert plan.backup_path.read_bytes() == original
+
+    monkeypatch.setattr(migration, "_validate_vault", original_validate_vault)
+    result = migration.apply_migration(plan)
+
+    assert result["applied"] is True
+    assert result["backup_created"] is False
+    assert result["backup_available"] is True
 
 
 def test_refuses_mixed_legacy_and_wrapped_record_formats(tmp_path) -> None:
