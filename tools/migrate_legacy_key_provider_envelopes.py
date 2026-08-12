@@ -233,6 +233,21 @@ def _validate_vault(vault_path: Path | None, provider: FileKeyProvider) -> int:
     return verified
 
 
+def _ensure_backup(plan: LegacyKeyProviderMigrationPlan) -> bool:
+    if plan.backup_path.exists():
+        if not filecmp.cmp(plan.key_provider_path, plan.backup_path, shallow=False):
+            raise RuntimeError(
+                "migration backup already exists and differs from the current legacy key-provider source: "
+                f"{plan.backup_path}"
+            )
+        return False
+    shutil.copy2(plan.key_provider_path, plan.backup_path)
+    os.chmod(plan.backup_path, 0o600)
+    if not filecmp.cmp(plan.key_provider_path, plan.backup_path, shallow=False):
+        raise RuntimeError("key-provider backup verification failed")
+    return True
+
+
 def apply_migration(plan: LegacyKeyProviderMigrationPlan) -> dict[str, object]:
     master_key = _read_master_key(plan.master_key_file)
     with _master_key_environment(master_key):
@@ -247,12 +262,7 @@ def apply_migration(plan: LegacyKeyProviderMigrationPlan) -> dict[str, object]:
                 "validated_secret_count": secret_count,
             }
 
-        if plan.backup_path.exists():
-            raise RuntimeError(f"migration backup already exists: {plan.backup_path}")
-        shutil.copy2(plan.key_provider_path, plan.backup_path)
-        os.chmod(plan.backup_path, 0o600)
-        if not filecmp.cmp(plan.key_provider_path, plan.backup_path, shallow=False):
-            raise RuntimeError("key-provider backup verification failed")
+        backup_created = _ensure_backup(plan)
 
         migrated_payload = dict(plan.payload)
         migrated_payload["records"] = [_serialize_record(record) for record in plan.records]
@@ -283,7 +293,8 @@ def apply_migration(plan: LegacyKeyProviderMigrationPlan) -> dict[str, object]:
         return {
             **plan.summary(),
             "applied": True,
-            "backup_created": plan.backup_path.is_file(),
+            "backup_created": backup_created,
+            "backup_available": plan.backup_path.is_file(),
             "validated_key_count": key_count,
             "validated_secret_count": secret_count,
         }
