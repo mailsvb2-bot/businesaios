@@ -34,3 +34,12 @@ def test_systemd_services_remain_unprivileged() -> None:
         assert 'User=businesaios' in unit
         assert 'Group=businesaios' in unit
         assert 'ExecStartPre=/opt/businesaios/.venv/bin/python -m scripts.server.migrate_before_start' in unit
+
+
+def test_production_env_declares_required_key_provider_master_key() -> None:
+    prod_env = (ROOT / '.env.example.prod').read_text(encoding='utf-8')
+
+    assert 'APP_ENV=prod' in prod_env
+    assert 'KEY_PROVIDER_BACKEND=postgres' in prod_env
+    assert 'BUSINESAIOS_KEY_PROVIDER_MASTER_KEY_B64=' in prod_env
+    assert 'Generate 32 cryptographically random bytes and Base64-encode them' in prod_env
