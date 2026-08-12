@@ -35,6 +35,30 @@ def test_systemd_units_define_server_contract() -> None:
         assert 'Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime' in text
 
 
+def test_compose_and_deploy_docs_match_server_profile_contract() -> None:
+    compose = (ROOT / 'deploy/docker-compose.yml').read_text(encoding='utf-8')
+    assert 'businesaios_api:' in compose
+    assert 'businesaios_worker:' in compose
+    assert 'businesaios_connector_telegram:' in compose
+    assert 'APP_PROFILE: api' in compose
+    assert 'APP_PROFILE: worker' in compose
+    assert 'APP_PROFILE: telegram' in compose
+    assert 'profiles: ["telegram"]' in compose
+    assert 'python -m scripts.server.migrate_before_start' in compose
+    assert 'python -m scripts.server.run_profile' in compose
+    assert 'businesaios_evolution:' not in compose
+    assert 'businesaios_telegram:' not in compose
+
+    contract = (ROOT / 'docs/DEPLOYMENT_CONTRACT.md').read_text(encoding='utf-8')
+    readme = (ROOT / 'deploy/README_DEPLOY.md').read_text(encoding='utf-8')
+    for text in (contract, readme):
+        assert 'businesaios-api.service' in text
+        assert 'businesaios-worker.service' in text
+        assert 'APP_PROFILE=api' in text
+        assert 'APP_PROFILE=worker' in text
+        assert 'scripts.server.run_profile' in text
+
+
 def test_env_example_covers_server_and_secret_contract() -> None:
     text = (ROOT / '.env.example').read_text(encoding='utf-8')
     for key in (
