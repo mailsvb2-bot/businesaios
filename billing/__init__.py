@@ -28,7 +28,7 @@ from billing.monetization_adapter import BillingMonetizationAdapter
 from billing.outcome_tariff import OutcomeTariff
 from billing.payment_collection import InMemoryCollectionResultStore, PaymentCollectionOrchestrator
 from billing.payment_provider_capability import PaymentProviderCapabilities
-from billing.payment_provider_contract import PaymentCustomerProfile, PaymentProviderContract
+from billing.payment_provider_contract import PaymentCheckoutRequest, PaymentCheckoutSession, PaymentCustomerProfile, PaymentProviderContract
 from billing.payment_provider_adapter import RoutingPaymentProviderAdapter
 from billing.refund_orchestrator import InMemoryRefundStore, RefundOrchestrator, RefundRequest, RefundResult
 from billing.payment_provider_health_registry import PaymentProviderHealthRegistry, ProviderHealthStatus
@@ -127,7 +127,7 @@ __all__ = [
     'LedgerStoreContract',
     'OutcomeTariff',
     'PaymentCollectionOrchestrator',
-    'PaymentCustomerProfile',
+    'PaymentCheckoutRequest', 'PaymentCheckoutSession', 'PaymentCustomerProfile',
     'PaymentProviderHealthRegistry',
     'PaymentProviderRegistration',
     'PaymentProviderRegistry',

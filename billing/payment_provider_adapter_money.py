@@ -10,9 +10,33 @@ from billing.commercial_cycle_contract import (
     require_commercial_int,
 )
 from billing.payment_provider_adapter_helpers import require_mapping
+from billing.payment_provider_contract import PaymentCheckoutRequest, PaymentCheckoutSession
 
 
 class PaymentProviderMoneyMixin:
+    def create_checkout(self, request: PaymentCheckoutRequest) -> PaymentCheckoutSession:
+        if not isinstance(request, PaymentCheckoutRequest):
+            raise ValueError("request must be PaymentCheckoutRequest")
+        normalized = request.normalized_copy()
+        provider = self._first_provider(tenant_id=normalized.tenant_id, currency=normalized.currency, operation="checkout", metadata=normalized.metadata, missing_message="no routed provider available for checkout")
+        provider_name, registration = self._registration_for(provider)
+        routing = {"owner": "billing.payment_provider_adapter", "routed_provider": provider_name, "provider_backend_key": registration.backend_key}
+        delegated = replace(normalized, metadata={**deepcopy(dict(normalized.metadata)), **routing})
+        try:
+            result = provider.create_checkout(delegated)
+            if not isinstance(result, PaymentCheckoutSession):
+                raise ValueError("routed provider must return PaymentCheckoutSession")
+            result = result.normalized_copy()
+            if result.tenant_id != normalized.tenant_id or result.provider_name.lower() != provider_name.lower():
+                raise ValueError("routed checkout returned mismatched tenant/provider binding")
+            if result.amount_minor != normalized.amount_minor or result.currency != normalized.currency:
+                raise ValueError("routed checkout returned mismatched amount or currency")
+        except Exception as exc:
+            self._safe_mark_failure(provider_name, reason=f"checkout:{type(exc).__name__}")
+            raise RuntimeError("routed provider failed checkout") from exc
+        self._safe_mark_success(provider_name)
+        return replace(result, metadata={**deepcopy(dict(result.metadata)), **routing})
+
     def collect(self, attempt: CommercialCollectionAttempt) -> CommercialCollectionResult:
         if not isinstance(attempt, CommercialCollectionAttempt):
             raise ValueError("attempt must be CommercialCollectionAttempt")

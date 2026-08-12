@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
-from runtime._internal.effect_types import EffectActionType
+from billing.payment_provider_adapter_impl import RoutingPaymentProviderAdapter
+from billing.payment_provider_capability import PaymentProviderCapabilities
+from billing.payment_provider_contract import PaymentCheckoutRequest, PaymentCheckoutSession
+from billing.payment_provider_registry import PaymentProviderRegistration, PaymentProviderRegistry
+from billing.payment_provider_router import PaymentProviderRouter
+from core.payments.provider import idempotence_key_for_order
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
@@ -10,64 +16,85 @@ from runtime.security.runtime_asserts import assert_called_from_executor
 
 def _business_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
     data = dict(metadata or {})
-    return {
-        key: data[key]
-        for key in ("tenant_id", "product_id", "order_id")
-        if str(data.get(key) or "").strip()
-    }
+    return {key: data[key] for key in ("tenant_id", "product_id", "order_id") if str(data.get(key) or "").strip()}
 
 
-def _required_business_metadata(
-    metadata: dict[str, Any] | None,
-) -> dict[str, str]:
+def _required_business_metadata(metadata: dict[str, Any] | None) -> dict[str, str]:
     observed = _business_metadata(metadata)
-    required: dict[str, str] = {}
-    for field in ("tenant_id", "product_id", "order_id"):
-        value = str(observed.get(field) or "").strip()
-        if not value:
-            raise RuntimeError(f"{field.upper()}_REQUIRED")
-        required[field] = value
+    required = {field: str(observed.get(field) or "").strip() for field in ("tenant_id", "product_id", "order_id")}
+    missing = next((field for field, value in required.items() if not value), None)
+    if missing:
+        raise RuntimeError(f"{missing.upper()}_REQUIRED")
     return required
 
 
 def _ledger_evidence(*, code: str, external_ref: str, payload: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "source": "ledger",
-        "verified": True,
-        "status": "verified",
-        "code": str(code),
-        "external_refs": [str(external_ref)],
-        "confidence": 1.0,
-        "payload": dict(payload),
-    }
+    return {"source": "ledger", "verified": True, "status": "verified", "code": str(code), "external_refs": [str(external_ref)], "confidence": 1.0, "payload": dict(payload)}
 
 
-def _payment_gateway_evidence(
-    *,
-    ok: bool,
-    external_id: str | None,
-    provider: str,
-    meta: dict[str, Any],
-    business_metadata: dict[str, Any],
-) -> dict[str, Any]:
+def _payment_gateway_evidence(*, ok: bool, external_id: str | None, provider: str, meta: dict[str, Any], business_metadata: dict[str, Any], provider_status: str | None = None) -> dict[str, Any]:
     external_ref = str(external_id or "").strip()
-    verified = bool(ok) and bool(external_ref)
-    provider_payload = (meta or {}).get("yookassa")
-    provider_status = provider_payload.get("status") if isinstance(provider_payload, dict) else None
+    verified = bool(ok and external_ref)
+    raw = (meta or {}).get(str(provider))
+    observed_status = provider_status or (raw.get("status") if isinstance(raw, dict) else None)
     return {
         "source": "payment_gateway",
-        "action_type": str(EffectActionType.PAYMENTS_YOOKASSA_CREATE),
+        "action_type": "payments.checkout",
         "verified": verified,
         "status": "verified" if verified else "failed",
         "summary": "payment_created" if verified else "payment_provider_confirmation_missing",
         "external_refs": [external_ref] if external_ref else [],
         "confidence": 1.0 if verified else 0.0,
-        "payload": {
-            "provider": str(provider),
-            "provider_status": provider_status,
-            **dict(business_metadata),
-        },
+        "payload": {"provider": str(provider), "provider_status": observed_status, **dict(business_metadata)},
     }
+
+
+class _YooKassaCheckoutProvider:
+    def __init__(self, effects: Any) -> None:
+        self._effects = effects
+
+    def provider_name(self) -> str:
+        return "yookassa"
+
+    def create_checkout(self, request: PaymentCheckoutRequest) -> PaymentCheckoutSession:
+        normalized = request.normalized_copy()
+        metadata = dict(normalized.metadata)
+        ok, raw = self._effects._yookassa_create_payment(
+            decision_id=str(metadata.get("decision_id") or normalized.idempotency_key),
+            amount=normalized.amount_minor,
+            currency=normalized.currency,
+            user_id=normalized.customer_reference,
+            metadata=metadata,
+        )
+        provider_payload = raw.get("yookassa") if isinstance(raw, Mapping) else None
+        if not ok or not isinstance(provider_payload, Mapping):
+            raise RuntimeError("yookassa checkout creation failed")
+        return PaymentCheckoutSession(
+            tenant_id=normalized.tenant_id,
+            provider_name="yookassa",
+            external_reference=str(provider_payload.get("id") or ""),
+            checkout_url=str(provider_payload.get("confirmation_url") or ""),
+            status=str(provider_payload.get("status") or ""),
+            amount_minor=normalized.amount_minor,
+            currency=normalized.currency,
+            metadata={"legacy_meta": dict(raw)},
+        ).normalized_copy()
+
+
+def _checkout_adapter(effects: Any) -> RoutingPaymentProviderAdapter:
+    current = getattr(effects, "payment_provider_adapter", None)
+    if current is not None:
+        return current
+    registry = PaymentProviderRegistry((PaymentProviderRegistration(
+        provider_name="yookassa",
+        provider=_YooKassaCheckoutProvider(effects),
+        currencies=("RUB",),
+        capabilities=PaymentProviderCapabilities(operations=("checkout",)),
+        backend_key="runtime_yookassa",
+    ),))
+    current = RoutingPaymentProviderAdapter(router=PaymentProviderRouter(registry=registry), registry=registry)
+    effects.payment_provider_adapter = current
+    return current
 
 
 def select_tariff_effect(
@@ -172,106 +199,71 @@ def capture_payment_effect(
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     assert_called_from_executor()
-    provider_norm = str(provider).lower().strip()
     payment_metadata = dict(metadata or {})
     causal_metadata = _required_business_metadata(payment_metadata)
-    tenant = assert_event_log_tenant(
-        effects.event_log,
-        tenant_id=causal_metadata["tenant_id"],
-        operation="capture_payment",
-    )
+    tenant = assert_event_log_tenant(effects.event_log, tenant_id=causal_metadata["tenant_id"], operation="capture_payment")
     causal_metadata["tenant_id"] = tenant
-    # The provider receives the same sealed business identity recorded in audit
-    # events and evidence. Direct callers cannot override it in extra metadata.
     payment_metadata.update(causal_metadata)
-
-    if provider_norm in {"yookassa", "yoo", "yoo_kassa"}:
-        provider_ok, meta = effects._yookassa_create_payment(
-            decision_id=str(decision_id),
-            amount=int(amount),
-            currency=str(currency),
-            user_id=str(user_id),
-            metadata=payment_metadata,
-        )
-    else:
-        provider_ok, meta = False, {"provider": str(provider), "mode": "unsupported"}
-
-    effects.event_log.emit(
-        event_type="payment_create_attempted",
-        source="payments",
-        user_id=str(user_id),
-        decision_id=str(decision_id),
-        correlation_id=str(correlation_id),
-        payload={
-            "amount": int(amount),
-            "currency": str(currency),
-            "provider": str(provider),
-            "capture_requested": True,
-            "ok": bool(provider_ok),
-            "metadata": causal_metadata,
-            "meta": meta,
-        },
-    )
-
-    external_id: str | None = None
+    provider_hint = str(provider or "").strip().lower()
+    if provider_hint in {"yoo", "yoo_kassa"}:
+        provider_hint = "yookassa"
+    session: PaymentCheckoutSession | None = None
+    meta: dict[str, Any]
     try:
-        from core.payments.contracts import validate_payment_external_id
-
-        raw_external_id = None
-        if isinstance(meta, dict):
-            provider_payload = (meta or {}).get("yookassa")
-            if isinstance(provider_payload, dict):
-                raw_external_id = provider_payload.get("id")
-        if provider_ok and provider_norm in {"yookassa", "yoo", "yoo_kassa"}:
-            external_id = validate_payment_external_id(str(raw_external_id or ""))
-            effects.event_log.emit(
-                event_type="payment_created",
-                source="payments",
-                user_id=str(user_id),
-                decision_id=str(decision_id),
-                correlation_id=str(correlation_id),
-                payload={
-                    "external_id": str(external_id),
-                    "status": (meta or {}).get("yookassa", {}).get("status") if isinstance(meta, dict) else None,
-                    "provider": "yookassa",
-                    "amount": int(amount),
-                    "currency": str(currency),
-                    "metadata": causal_metadata,
-                },
-            )
+        request = PaymentCheckoutRequest(
+            tenant_id=tenant,
+            amount_minor=int(amount),
+            currency=str(currency),
+            idempotency_key=idempotence_key_for_order(causal_metadata["order_id"]),
+            customer_reference=str(user_id),
+            description=str(payment_metadata.get("description") or "Payment"),
+            metadata={**payment_metadata, "decision_id": str(decision_id), "provider_name_hint": provider_hint},
+        )
+        session = _checkout_adapter(effects).create_checkout(request)
+        legacy_meta = session.metadata.get("legacy_meta")
+        meta = dict(legacy_meta) if isinstance(legacy_meta, Mapping) else {session.provider_name: {"id": session.external_reference, "status": session.status, "confirmation_url": session.checkout_url}}
+        provider_ok = True
     except Exception as exc:
-        try:
-            effects.event_log.emit(
-                event_type="payment_create_failed",
-                source="payments",
-                user_id=str(user_id),
-                decision_id=str(decision_id),
-                correlation_id=str(correlation_id),
-                payload={
-                    "provider": str(provider),
-                    "reason": "missing_or_invalid_external_id",
-                    "error": str(exc)[:500],
-                    "metadata": causal_metadata,
-                },
-            )
-        except Exception:
-            swallow(__name__, "runtime/_internal/effects_actions/payments/selection.py")
-
-    verified = bool(provider_ok and external_id)
-    evidence = _payment_gateway_evidence(
-        ok=verified,
-        external_id=external_id,
-        provider=provider_norm or str(provider),
-        meta=dict(meta or {}),
-        business_metadata=causal_metadata,
+        provider_ok = False
+        meta = {"provider": str(provider), "mode": "unsupported" if isinstance(exc, LookupError) else "failed", "error": type(exc).__name__}
+    effects.event_log.emit(
+        event_type="payment_create_attempted", source="payments", user_id=str(user_id),
+        decision_id=str(decision_id), correlation_id=str(correlation_id),
+        payload={"amount": int(amount), "currency": str(currency), "provider": str(provider), "capture_requested": True, "ok": provider_ok, "metadata": causal_metadata, "meta": meta},
     )
-    return {
-        "ok": verified,
-        "status": "verified" if verified else "failed",
-        "meta": meta,
-        "evidence": evidence,
-        "router_evidence": evidence if verified else None,
-    }
+    if session is None:
+        effects.event_log.emit(
+            event_type="payment_create_failed", source="payments", user_id=str(user_id),
+            decision_id=str(decision_id), correlation_id=str(correlation_id),
+            payload={"provider": str(provider), "reason": "checkout_unavailable", "error": str(meta.get("error") or "")[:500], "metadata": causal_metadata},
+        )
+    external_id: str | None = None
+    if session is not None:
+        try:
+            from core.payments.contracts import validate_payment_external_id
+            external_id = validate_payment_external_id(session.external_reference)
+            effects.event_log.emit(
+                event_type="payment_created", source="payments", user_id=str(user_id),
+                decision_id=str(decision_id), correlation_id=str(correlation_id),
+                payload={"external_id": external_id, "status": session.status, "provider": session.provider_name, "amount": int(amount), "currency": str(currency), "metadata": causal_metadata},
+            )
+        except Exception as exc:
+            external_id = None
+            try:
+                effects.event_log.emit(
+                    event_type="payment_create_failed", source="payments", user_id=str(user_id),
+                    decision_id=str(decision_id), correlation_id=str(correlation_id),
+                    payload={"provider": str(provider), "reason": "missing_or_invalid_external_id", "error": str(exc)[:500], "metadata": causal_metadata},
+                )
+            except Exception:
+                swallow(__name__, "runtime/_internal/effects_actions/payments/selection.py")
+    verified = bool(provider_ok and external_id and session)
+    evidence = _payment_gateway_evidence(
+        ok=verified, external_id=external_id, provider=session.provider_name if session else provider_hint or str(provider),
+        meta=meta, business_metadata=causal_metadata, provider_status=session.status if session else None,
+    )
+    checkout = None if not verified or session is None else {"provider": session.provider_name, "external_id": external_id, "status": session.status, "checkout_url": session.checkout_url}
+    return {"ok": verified, "status": "verified" if verified else "failed", "checkout": checkout, "meta": meta, "evidence": evidence, "router_evidence": evidence if verified else None}
 
 
 __all__ = ["capture_payment_effect", "select_tariff_effect"]
