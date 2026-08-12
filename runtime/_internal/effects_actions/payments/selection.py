@@ -93,10 +93,7 @@ def _checkout_adapter(effects: Any) -> RoutingPaymentProviderAdapter:
         backend_key="runtime_yookassa",
     ),))
     current = RoutingPaymentProviderAdapter(router=PaymentProviderRouter(registry=registry), registry=registry)
-    try:
-        effects.payment_provider_adapter = current
-    except Exception:
-        pass
+    effects.payment_provider_adapter = current
     return current
 
 
