@@ -44,6 +44,8 @@ def test_compose_and_deploy_docs_match_server_profile_contract() -> None:
     assert 'APP_PROFILE: worker' in compose
     assert 'APP_PROFILE: telegram' in compose
     assert 'profiles: ["telegram"]' in compose
+    assert 'dockerfile: Dockerfile' in compose
+    assert 'deploy/Dockerfile' not in compose
     assert 'python -m scripts.server.migrate_before_start' in compose
     assert 'python -m scripts.server.run_profile' in compose
     assert 'businesaios_evolution:' not in compose
