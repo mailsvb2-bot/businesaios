@@ -13,6 +13,9 @@ DEPLOY_PROFILE="${DEPLOY_PROFILE:-systemd-multichannel}"
 START_SERVICES="${START_SERVICES:-1}"
 HEALTH_STATUS="${HEALTH_STATUS:-pending}"
 ENABLE_TELEGRAM_CONNECTOR="${ENABLE_TELEGRAM_CONNECTOR:-0}"
+RUNTIME_USER="${RUNTIME_USER:-businesaios}"
+RUNTIME_GROUP="${RUNTIME_GROUP:-businesaios}"
+RUNTIME_ACCESS_SENTINEL="${RUNTIME_ACCESS_SENTINEL:-${APP_DIR}/scripts/server/migrate_before_start.py}"
 
 CORE_UNITS=(
   businesaios-api.service
@@ -50,6 +53,27 @@ require_file() {
     echo "[install] required file missing: $path" >&2
     exit 1
   fi
+}
+
+ensure_runtime_access() {
+  if ! command -v runuser >/dev/null 2>&1; then
+    echo "[install] runuser is required to verify runtime-user access" >&2
+    exit 1
+  fi
+
+  echo "[install] granting ${RUNTIME_USER}:${RUNTIME_GROUP} read/execute access to application tree"
+  run_root chgrp -R "$RUNTIME_GROUP" "$APP_DIR"
+  run_root chmod -R g+rX "$APP_DIR"
+
+  if ! run_root runuser -u "$RUNTIME_USER" -- test -x "$PYTHON_BIN"; then
+    echo "[install] runtime user cannot execute Python: $PYTHON_BIN" >&2
+    exit 1
+  fi
+  if ! run_root runuser -u "$RUNTIME_USER" -- test -r "$RUNTIME_ACCESS_SENTINEL"; then
+    echo "[install] runtime user cannot read application code: $RUNTIME_ACCESS_SENTINEL" >&2
+    exit 1
+  fi
+  echo "[install] runtime access verified"
 }
 
 write_state() {
@@ -98,11 +122,20 @@ for unit in "${DEPLOY_UNITS[@]}"; do
 done
 require_file "${APP_DIR}/deploy/systemd/businesaios.sysusers.conf"
 require_file "${APP_DIR}/RELEASE_TAG"
+require_file "$RUNTIME_ACCESS_SENTINEL"
 
 echo "[install] provisioning system user"
 run_root install -d -m 0755 "$SYSUSERS_DIR"
 run_root install -m 0644 "${APP_DIR}/deploy/systemd/businesaios.sysusers.conf" "$SYSUSERS_FILE"
 run_root systemd-sysusers "$SYSUSERS_FILE"
+
+# Production releases may be checked out or unpacked by root under a strict
+# umask (for example 0077). The services deliberately run as an unprivileged
+# account, so normalize only group read/traverse/execute access before systemd
+# attempts ExecStartPre/ExecStart. This keeps the application tree non-writable
+# to the runtime user while making the deployment path independent of caller
+# umask.
+ensure_runtime_access
 
 write_state installing
 
