@@ -53,7 +53,7 @@ def test_systemd_services_remain_unprivileged_and_use_writable_runtime_data() ->
         unit = (ROOT / 'deploy/systemd' / unit_name).read_text(encoding='utf-8')
         assert 'User=businesaios' in unit
         assert 'Group=businesaios' in unit
-        assert 'Environment=BUSINESAIOS_DATA_DIR=/var/lib/businesaios/runtime' in unit
+        assert 'Environment=DATA_DIR=/var/lib/businesaios/runtime' in unit
         assert 'StateDirectory=businesaios/runtime' in unit
         assert 'ExecStartPre=/opt/businesaios/.venv/bin/python -m scripts.server.migrate_before_start' in unit
 
@@ -62,7 +62,7 @@ def test_production_env_declares_required_key_provider_master_key() -> None:
     prod_env = (ROOT / '.env.example.prod').read_text(encoding='utf-8')
 
     assert 'APP_ENV=prod' in prod_env
-    assert 'BUSINESAIOS_DATA_DIR=/var/lib/businesaios/runtime' in prod_env
+    assert 'DATA_DIR=/var/lib/businesaios/runtime' in prod_env
     assert 'BUSINESAIOS_KEY_PROVIDER_BACKEND=file' in prod_env
     assert 'BUSINESAIOS_SECRET_VAULT_BACKEND=file' in prod_env
     assert 'KEY_PROVIDER_BACKEND=postgres' not in prod_env
