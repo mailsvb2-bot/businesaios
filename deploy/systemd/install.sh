@@ -209,6 +209,7 @@ echo "[install] enabling core platform services"
 run_root systemctl enable "${CORE_UNITS[@]}"
 if ((${#OPTIONAL_UNITS[@]})); then
   echo "[install] enabling optional connector services: ${OPTIONAL_UNITS[*]}"
+  run_root systemctl enable "${OPTIONAL_UNITS[@]}"
 else
   echo "[install] no polling/streaming connector units requested"
 fi
