@@ -10,6 +10,23 @@ from products.product_resolver import ProductResolver
 PRODUCTS_DIR = Path(__file__).resolve().parents[2] / "products"
 
 
+def _write_product_descriptor(
+    base_dir: Path,
+    *,
+    domain: str,
+    product_id: str,
+    environment: str = "prod",
+) -> None:
+    (base_dir / f"{domain}.yaml").write_text(
+        f"""\
+product_id: {product_id}
+domain: {domain}
+environment: {environment}
+""",
+        encoding="utf-8",
+    )
+
+
 @pytest.mark.parametrize(
     ("filename", "expected_ids", "expected_prices"),
     (
@@ -32,6 +49,7 @@ def test_product_loader_materializes_declared_external_offer_catalog(
 
 
 def test_explicit_offer_catalog_ref_is_fail_closed_when_catalog_is_missing(tmp_path: Path) -> None:
+    _write_product_descriptor(tmp_path, domain="widget", product_id="widget")
     raw = {
         "product_id": "widget",
         "domain": "widget",
@@ -68,6 +86,7 @@ def test_product_resolver_does_not_swallow_explicit_catalog_failure(
 
 
 def test_external_catalog_is_normalized_without_inventing_commercial_rules(tmp_path: Path) -> None:
+    _write_product_descriptor(tmp_path, domain="widget", product_id="widget")
     catalog_dir = tmp_path / "offer_catalogs"
     catalog_dir.mkdir()
     (catalog_dir / "widget.yaml").write_text(
@@ -116,6 +135,7 @@ def test_external_catalog_rejects_malformed_structured_fields(
     field_name: str,
     tmp_path: Path,
 ) -> None:
+    _write_product_descriptor(tmp_path, domain="widget", product_id="widget")
     catalog_dir = tmp_path / "offer_catalogs"
     catalog_dir.mkdir()
     (catalog_dir / "widget.yaml").write_text(
@@ -152,6 +172,45 @@ def test_external_catalog_ref_cannot_cross_product_boundary(tmp_path: Path) -> N
     }
 
     with pytest.raises(OfferCatalogResolutionError, match="OFFER_CATALOG_REF_PRODUCT_MISMATCH"):
+        resolve_offer_catalog(raw, base_dir=tmp_path)
+
+
+def test_external_catalog_domain_cannot_select_another_products_catalog(tmp_path: Path) -> None:
+    _write_product_descriptor(tmp_path, domain="sales", product_id="salesbot")
+    catalog_dir = tmp_path / "offer_catalogs"
+    catalog_dir.mkdir()
+    (catalog_dir / "sales.yaml").write_text(
+        """\
+catalog_id: offer_catalog_sales@v1
+offers:
+  - offer_id: sales_entry
+    base_price_rub: 600
+""",
+        encoding="utf-8",
+    )
+    copied_descriptor = {
+        "product_id": "organization_platform",
+        "domain": "sales",
+        "environment": "prod",
+        "offer_catalog_ref": "default:organization_platform:prod",
+    }
+
+    with pytest.raises(
+        OfferCatalogResolutionError,
+        match="OFFER_CATALOG_DOMAIN_PRODUCT_MISMATCH:sales:salesbot:organization_platform",
+    ):
+        resolve_offer_catalog(copied_descriptor, base_dir=tmp_path)
+
+
+def test_external_catalog_requires_canonical_domain_descriptor(tmp_path: Path) -> None:
+    raw = {
+        "product_id": "widget",
+        "domain": "widget",
+        "environment": "prod",
+        "offer_catalog_ref": "default:widget:prod",
+    }
+
+    with pytest.raises(OfferCatalogResolutionError, match="PRODUCT_DESCRIPTOR_NOT_FOUND:widget"):
         resolve_offer_catalog(raw, base_dir=tmp_path)
 
 
