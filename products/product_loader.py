@@ -58,7 +58,7 @@ class ProductLoader:
             required_entitlements=tuple(ep_raw.get("required_entitlements") or ()),
         )
 
-        offer_catalog = resolve_offer_catalog(raw)
+        offer_catalog = resolve_offer_catalog(raw, base_dir=self.base_dir)
         pricing_model = resolve_pricing_model(raw)
         telemetry_schema = resolve_telemetry_schema(raw)
 
