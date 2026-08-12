@@ -6,18 +6,20 @@ See `docs/DEPLOYMENT_CONTRACT.md` for the deployment source of truth.
 
 Assume the repository is in `/opt/businesaios`, the virtualenv is `/opt/businesaios/.venv`, and production environment files live under `/etc/businesaios/`.
 
+The mandatory core profiles are:
+
+- `APP_PROFILE=api` → `businesaios-api.service`
+- `APP_PROFILE=worker` → `businesaios-worker.service`
+
 Core runtime:
 
 ```bash
 sudo APP_DIR=/opt/businesaios deploy/systemd/install.sh
 ```
 
-This installs and restarts:
+This installs and restarts both mandatory services above.
 
-- `businesaios-api.service`
-- `businesaios-worker.service`
-
-Enable the optional Telegram long-polling connector only when that provider is actually used:
+Enable the optional Telegram long-polling connector only when that provider is actually used (`APP_PROFILE=telegram`):
 
 ```bash
 sudo ENABLE_TELEGRAM_CONNECTOR=1 APP_DIR=/opt/businesaios deploy/systemd/install.sh
