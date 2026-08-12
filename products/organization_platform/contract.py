@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Mapping
 
 from contracts.product_contract import (
@@ -7,13 +8,14 @@ from contracts.product_contract import (
     EntitlementsSpec,
     ModuleSpec,
     ModulesSpec,
-    Offer,
-    OfferCatalog,
     ProductContract,
     TelemetryEventSpec,
     TelemetryField,
     TelemetrySchema,
 )
+
+from products.offer_catalog_resolver import resolve_offer_catalog
+from runtime.platform.config.yaml_loader import load_yaml
 
 
 class OrganizationPlatformPricingV1:
@@ -22,8 +24,8 @@ class OrganizationPlatformPricingV1:
     def choose_offer_id(self, *, user_id: str, tenant_id: str, context: Mapping[str, Any]) -> str:
         stage = str((context or {}).get("lifecycle_stage") or "launch").strip().lower()
         if stage in {"scale", "growth"}:
-            return "org_scale_suite_2990"
-        return "org_launch_990"
+            return "org_scale"
+        return "org_launch"
 
 
 def build_organization_platform_contract() -> ProductContract:
@@ -35,76 +37,35 @@ def build_organization_platform_contract() -> ProductContract:
         required_entitlements=(),
     )
 
-    offer_catalog = OfferCatalog(
-        catalog_id="organization_platform_offers_v1",
-        offers=(
-            Offer(
-                offer_id="org_launch_990",
-                title="Launch Workspace",
-                price_minor=99000,
-                currency="RUB",
-                period_days=30,
-                tags=("subscription", "launch"),
-            ),
-            Offer(
-                offer_id="org_scale_suite_2990",
-                title="Scale Suite",
-                price_minor=299000,
-                currency="RUB",
-                period_days=30,
-                tags=("subscription", "scale"),
-            ),
-        ),
-    )
+    products_dir = Path(__file__).resolve().parents[1]
+    raw_product = load_yaml(products_dir / "organization_platform.yaml")
+    offer_catalog = resolve_offer_catalog(raw_product, base_dir=products_dir)
 
+    telemetry_events = (
+        ("ui_click", (("button_id", "str", True), ("surface", "str", False))),
+        ("offer_shown", (("offer_id", "str", True), ("placement", "str", False))),
+        ("offer_clicked", (("offer_id", "str", True),)),
+        ("purchase_attempt", (("offer_id", "str", True), ("provider", "str", False))),
+        ("purchase_success", (("offer_id", "str", True), ("receipt_id", "str", False))),
+        ("purchase_failed", (("offer_id", "str", True), ("reason", "str", False))),
+        ("workspace_connected", (("workspace_id", "str", True), ("channel", "str", False))),
+        ("campaign_synced", (("channel", "str", True), ("campaign_id", "str", False))),
+        ("autopilot_action_applied", (("action_type", "str", True), ("actor", "str", False))),
+    )
     telemetry_schema = TelemetrySchema(
         schema_id="organization_platform_telemetry_v1",
-        events=(
-            TelemetryEventSpec(
-                event_type="ui_click",
-                fields=(TelemetryField("button_id", "str"), TelemetryField("surface", "str", required=False)),
-            ),
-            TelemetryEventSpec(
-                event_type="offer_shown",
-                fields=(TelemetryField("offer_id", "str"), TelemetryField("placement", "str", required=False)),
-            ),
-            TelemetryEventSpec(event_type="offer_clicked", fields=(TelemetryField("offer_id", "str"),)),
-            TelemetryEventSpec(
-                event_type="purchase_attempt",
-                fields=(TelemetryField("offer_id", "str"), TelemetryField("provider", "str", required=False)),
-            ),
-            TelemetryEventSpec(
-                event_type="purchase_success",
-                fields=(TelemetryField("offer_id", "str"), TelemetryField("receipt_id", "str", required=False)),
-            ),
-            TelemetryEventSpec(
-                event_type="purchase_failed",
-                fields=(TelemetryField("offer_id", "str"), TelemetryField("reason", "str", required=False)),
-            ),
-            TelemetryEventSpec(
-                event_type="workspace_connected",
-                fields=(TelemetryField("workspace_id", "str"), TelemetryField("channel", "str", required=False)),
-            ),
-            TelemetryEventSpec(
-                event_type="campaign_synced",
-                fields=(TelemetryField("channel", "str"), TelemetryField("campaign_id", "str", required=False)),
-            ),
-            TelemetryEventSpec(
-                event_type="autopilot_action_applied",
-                fields=(TelemetryField("action_type", "str"), TelemetryField("actor", "str", required=False)),
-            ),
+        events=tuple(
+            TelemetryEventSpec(event_type, fields=tuple(TelemetryField(*field) for field in fields))
+            for event_type, fields in telemetry_events
         ),
     )
 
     entitlements = EntitlementsSpec(keys=("workspace.access", "workspace.paid", "workspace.admin"))
 
     modules = ModulesSpec(
-        modules=(
-            ModuleSpec(module_id="ring", enabled_by_default=True),
-            ModuleSpec(module_id="decision_core", enabled_by_default=True),
-            ModuleSpec(module_id="retention", enabled_by_default=True),
-            ModuleSpec(module_id="payments", enabled_by_default=True),
-            ModuleSpec(module_id="telemetry", enabled_by_default=True),
+        modules=tuple(
+            ModuleSpec(module_id=module_id, enabled_by_default=True)
+            for module_id in ("ring", "decision_core", "retention", "payments", "telemetry")
         )
     )
 
