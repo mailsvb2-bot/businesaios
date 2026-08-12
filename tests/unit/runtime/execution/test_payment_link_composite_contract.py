@@ -23,12 +23,11 @@ class FakeEffects:
         self.payment_calls.append(dict(kwargs))
         return {
             "ok": self.payment_ok,
-            "meta": {
-                "yookassa": {
-                    "id": "payment-42",
-                    "status": "pending",
-                    "confirmation": {"confirmation_url": "https://pay.example/payment-42"},
-                }
+            "checkout": {
+                "provider": "yookassa",
+                "external_id": "payment-42",
+                "status": "pending",
+                "checkout_url": "https://pay.example/payment-42",
             },
             "evidence": {
                 "source": "payment_gateway",
@@ -134,3 +133,15 @@ def test_payment_link_flow_rejects_ok_payment_without_positive_provider_proof() 
     assert result["ok"] is False
     assert result["router_evidence"] is None
     assert result["feedback"]["connector_snapshots"] == []
+
+
+def test_payment_link_handler_is_provider_agnostic_after_checkout_normalization() -> None:
+    effects = FakeEffects(payment_ok=True, delivery_ok=True)
+    payload = _payload()
+    payload["provider"] = "stripe"
+
+    result = handle_create_payment_and_send_link(payload, effects, _env())
+
+    assert result["ok"] is True
+    assert effects.sent[0]["text"] == "Ссылка на оплату: https://pay.example/payment-42"
+    assert effects.payment_calls[0]["provider"] == "stripe"

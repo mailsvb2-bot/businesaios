@@ -6,13 +6,29 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 CANON_BILLING_PAYMENT_PROVIDER_CAPABILITY = True
-ALLOWED_PROVIDER_OPERATIONS = frozenset({"ensure_customer", "collect", "refund"})
+ALLOWED_PROVIDER_OPERATIONS = frozenset({"ensure_customer", "checkout", "collect", "refund"})
 
 
 def _require_mapping(name: str, value: Any) -> Mapping[str, object]:
     if not isinstance(value, Mapping):
         raise ValueError(f"{name} must be a mapping")
     return value
+
+
+def _normalized_operations(value: object) -> tuple[str, ...]:
+    if not isinstance(value, tuple):
+        raise ValueError("operations must be a tuple")
+    if any(not isinstance(item, str) for item in value):
+        raise ValueError("operations must contain strings")
+    operations = tuple(item.strip().lower() for item in value)
+    if any(not item for item in operations):
+        raise ValueError("operations cannot contain blank values")
+    if len(set(operations)) != len(operations):
+        raise ValueError("operations must be unique")
+    unknown = set(operations) - ALLOWED_PROVIDER_OPERATIONS
+    if unknown:
+        raise ValueError(f"unsupported operations: {sorted(unknown)}")
+    return tuple(sorted(operations))
 
 
 @dataclass(frozen=True)
@@ -22,45 +38,22 @@ class PaymentProviderCapabilities:
     metadata: Mapping[str, object] = field(default_factory=dict)
 
     def validate(self) -> None:
-        if not isinstance(self.operations, tuple):
-            raise ValueError("operations must be a tuple")
-        normalized_ops: list[str] = []
-        for item in self.operations:
-            if not isinstance(item, str):
-                raise ValueError("operations must contain strings")
-            normalized = item.strip().lower()
-            if not normalized:
-                raise ValueError("operations cannot contain blank values")
-            normalized_ops.append(normalized)
-        if len(set(normalized_ops)) != len(normalized_ops):
-            raise ValueError("operations must be unique")
-        unknown = set(normalized_ops) - set(ALLOWED_PROVIDER_OPERATIONS)
-        if unknown:
-            raise ValueError(f"unsupported operations: {sorted(unknown)}")
+        _normalized_operations(self.operations)
         if not isinstance(self.strict_affinity_for_refund, bool):
             raise ValueError("strict_affinity_for_refund must be a boolean")
         _require_mapping("metadata", self.metadata)
 
     def normalized_copy(self) -> PaymentProviderCapabilities:
         self.validate()
-        return replace(
-            self,
-            operations=tuple(sorted(item.strip().lower() for item in self.operations)),
-            metadata=deepcopy(dict(self.metadata)),
-        )
+        return replace(self, operations=_normalized_operations(self.operations), metadata=deepcopy(dict(self.metadata)))
 
     def supports(self, operation: str) -> bool:
-        normalized = self.normalized_copy()
         if not isinstance(operation, str):
             raise ValueError("operation must be a string")
-        op = operation.strip().lower()
-        if not op:
+        operation = operation.strip().lower()
+        if not operation:
             raise ValueError("operation is required")
-        return op in set(normalized.operations)
+        return operation in self.normalized_copy().operations
 
 
-__all__ = [
-    "ALLOWED_PROVIDER_OPERATIONS",
-    "CANON_BILLING_PAYMENT_PROVIDER_CAPABILITY",
-    "PaymentProviderCapabilities",
-]
+__all__ = ["ALLOWED_PROVIDER_OPERATIONS", "CANON_BILLING_PAYMENT_PROVIDER_CAPABILITY", "PaymentProviderCapabilities"]

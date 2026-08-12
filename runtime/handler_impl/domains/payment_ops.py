@@ -84,18 +84,9 @@ def handle_create_payment_and_send_link(payload, effects, env):
         provider=str(body.get("provider", "yookassa") or "yookassa"),
         metadata=_payment_metadata(body, env),
     )
-    raw_confirmation_url = None
-    if isinstance(payment_result, dict):
-        meta = payment_result.get("meta")
-        provider_payload = (meta or {}).get("yookassa") if isinstance(meta, dict) else None
-        if isinstance(provider_payload, dict):
-            confirmation = (
-                provider_payload.get("confirmation")
-                if isinstance(provider_payload.get("confirmation"), dict)
-                else {}
-            )
-            raw_url = confirmation.get("confirmation_url") or confirmation.get("url")
-            raw_confirmation_url = str(raw_url).strip() if raw_url else None
+    checkout = payment_result.get("checkout") if isinstance(payment_result, dict) else None
+    raw_url = checkout.get("checkout_url") if isinstance(checkout, Mapping) else None
+    raw_confirmation_url = str(raw_url).strip() if raw_url else None
 
     payment_ok = bool(payment_result.get("ok")) if isinstance(payment_result, dict) else bool(payment_result)
     payment_evidence = _trusted_effect_proof(payment_result)
