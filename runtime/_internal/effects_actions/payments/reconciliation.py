@@ -16,6 +16,7 @@ from runtime._internal.effects_actions.payments.reconciliation_support import (
     resolve_created_payment_context,
     try_mark_terminal_outbox,
 )
+from runtime._internal.effects_actions.payments.selection import _checkout_adapter
 from runtime._internal.effects_tenant import assert_event_log_tenant
 from runtime.security.runtime_asserts import assert_called_from_executor
 
@@ -262,6 +263,16 @@ def _created_payment_context(
     return context, user_id, metadata
 
 
+def _payment_status(effects: Any, *, tenant_id: str, external_id: str, context: dict[str, Any]) -> str:
+    provider_name = str(context.get("provider_name") or "").strip()
+    currency = str(context.get("currency") or "").strip().upper()
+    if not provider_name or not currency:
+        raise RuntimeError(f"PAYMENT_PROVIDER_CONTEXT_REQUIRED:{external_id}")
+    return _checkout_adapter(effects).get_payment_status(
+        tenant_id=str(tenant_id), currency=currency, provider_name=provider_name, external_reference=str(external_id)
+    )
+
+
 def reconcile_payments_effect(
     effects: Any,
     *,
@@ -307,9 +318,7 @@ def reconcile_payments_effect(
             if event_already_processed(effects=effects, external_id=ext_id):
                 skipped_already += 1
                 continue
-            status = str(
-                effects._yookassa_get_payment_status(external_payment_id=ext_id)
-            ).lower()
+            status = _payment_status(effects, tenant_id=tenant, external_id=ext_id, context=context)
             envelope_id = str(context.get("envelope_id") or "")
             original_correlation_id = str(context.get("correlation_id") or "")
             if status in SUCCESS_STATUSES:
@@ -408,9 +417,7 @@ def reconcile_payment_effect(
         return True
 
     try:
-        status = str(
-            effects._yookassa_get_payment_status(external_payment_id=ext_id)
-        ).lower()
+        status = _payment_status(effects, tenant_id=tenant, external_id=ext_id, context=context)
     except Exception as exc:
         effects.event_log.emit(
             event_type="payment_checked",
