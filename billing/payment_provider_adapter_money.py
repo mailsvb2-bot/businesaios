@@ -37,6 +37,27 @@ class PaymentProviderMoneyMixin:
         self._safe_mark_success(provider_name)
         return replace(result, metadata={**deepcopy(dict(result.metadata)), **routing})
 
+    def get_payment_status(self, *, tenant_id: str, currency: str, provider_name: str, external_reference: str) -> str:
+        tenant = self._require_tenant(tenant_id)
+        normalized_currency = str(currency or "").strip().upper()
+        affinity = str(provider_name or "").strip()
+        external_id = str(external_reference or "").strip()
+        if not normalized_currency or not affinity or not external_id:
+            raise ValueError("currency, provider_name and external_reference are required")
+        provider = self._first_provider(tenant_id=tenant, currency=normalized_currency, operation="status", metadata={"provider_name_hint": affinity}, missing_message="recorded payment provider is unavailable for status")
+        routed_name, _ = self._registration_for(provider)
+        if routed_name.lower() != affinity.lower():
+            raise LookupError("recorded payment provider affinity mismatch")
+        try:
+            status = str(provider.get_payment_status(tenant_id=tenant, currency=normalized_currency, provider_name=routed_name, external_reference=external_id) or "").strip().lower()
+            if not status:
+                raise ValueError("routed provider returned empty payment status")
+        except Exception as exc:
+            self._safe_mark_failure(routed_name, reason=f"status:{type(exc).__name__}")
+            raise RuntimeError("routed provider failed payment status read") from exc
+        self._safe_mark_success(routed_name)
+        return status
+
     def collect(self, attempt: CommercialCollectionAttempt) -> CommercialCollectionResult:
         if not isinstance(attempt, CommercialCollectionAttempt):
             raise ValueError("attempt must be CommercialCollectionAttempt")
