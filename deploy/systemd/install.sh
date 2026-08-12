@@ -66,14 +66,23 @@ ensure_runtime_access() {
 
   echo "[install] granting ${RUNTIME_USER}:${RUNTIME_GROUP} read/execute access to application tree"
   run_root chgrp -R "$RUNTIME_GROUP" "$APP_DIR"
+  run_root chmod -R g-w "$APP_DIR"
   run_root chmod -R g+rX "$APP_DIR"
 
+  if [[ -n "$(run_root find "$APP_DIR" \( -type f -o -type d \) -perm -g=w -print -quit)" ]]; then
+    echo "[install] application tree still contains group-writable files or directories" >&2
+    exit 1
+  fi
   if ! run_root runuser -u "$RUNTIME_USER" -- test -x "$PYTHON_BIN"; then
     echo "[install] runtime user cannot execute Python: $PYTHON_BIN" >&2
     exit 1
   fi
   if ! run_root runuser -u "$RUNTIME_USER" -- test -r "$RUNTIME_ACCESS_SENTINEL"; then
     echo "[install] runtime user cannot read application code: $RUNTIME_ACCESS_SENTINEL" >&2
+    exit 1
+  fi
+  if run_root runuser -u "$RUNTIME_USER" -- test -w "$RUNTIME_ACCESS_SENTINEL"; then
+    echo "[install] runtime user must not be able to modify application code: $RUNTIME_ACCESS_SENTINEL" >&2
     exit 1
   fi
   echo "[install] runtime access verified"
