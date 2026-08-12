@@ -16,9 +16,10 @@ def test_systemd_installer_normalizes_runtime_access_before_restart() -> None:
     assert 'runuser -u "$RUNTIME_USER" -- test -x "$PYTHON_BIN"' in installer
     assert 'runuser -u "$RUNTIME_USER" -- test -r "$RUNTIME_ACCESS_SENTINEL"' in installer
 
-    access_index = installer.index('ensure_runtime_access\n\nwrite_state installing')
+    access_index = installer.index('ensure_runtime_access\n\n# Historical deployments stored encrypted')
+    migration_index = installer.index('migrate_legacy_security_state\n\nwrite_state installing')
     restart_index = installer.index('run_root systemctl restart "${CORE_UNITS[@]}"')
-    assert access_index < restart_index
+    assert access_index < migration_index < restart_index
 
     # The runtime account only needs read/traverse/execute access to code and
     # the venv. The installer must not make the application tree world-writable
@@ -26,6 +27,25 @@ def test_systemd_installer_normalizes_runtime_access_before_restart() -> None:
     assert 'chmod -R 777' not in installer
     assert 'chmod -R a+rwx' not in installer
     assert 'chmod -R g+rwx' not in installer
+
+
+def test_systemd_installer_migrates_legacy_security_state_fail_closed() -> None:
+    installer = (ROOT / 'deploy/systemd/install.sh').read_text(encoding='utf-8')
+
+    assert 'RUNTIME_DATA_DIR="${RUNTIME_DATA_DIR:-/var/lib/businesaios/runtime}"' in installer
+    assert 'LEGACY_SECURITY_DIR="${LEGACY_SECURITY_DIR:-${APP_DIR}/data/security}"' in installer
+    assert 'RUNTIME_SECURITY_DIR="${RUNTIME_SECURITY_DIR:-${RUNTIME_DATA_DIR}/security}"' in installer
+    assert 'run_root cp -a "$LEGACY_SECURITY_DIR/." "$RUNTIME_SECURITY_DIR/"' in installer
+    assert 'diff -qr "$LEGACY_SECURITY_DIR" "$RUNTIME_SECURITY_DIR"' in installer
+    assert 'refusing to overwrite divergent runtime security state' in installer
+    assert 'legacy security source preserved' in installer
+    assert 'run_root chown -R "$RUNTIME_USER:$RUNTIME_GROUP" "$RUNTIME_SECURITY_DIR"' in installer
+    assert 'run_root runuser -u "$RUNTIME_USER" -- test -w "$RUNTIME_SECURITY_DIR"' in installer
+
+    # Migration is copy-and-verify; the legacy encrypted source remains a
+    # rollback asset until production verification is complete.
+    assert 'rm -rf "$LEGACY_SECURITY_DIR"' not in installer
+    assert 'mv "$LEGACY_SECURITY_DIR"' not in installer
 
 
 def test_systemd_services_remain_unprivileged_and_use_writable_runtime_data() -> None:
