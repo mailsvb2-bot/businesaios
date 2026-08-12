@@ -1,45 +1,93 @@
 services:
-  businesaios_telegram:
+  businesaios_api:
     build:
       context: ..
-      dockerfile: deploy/Dockerfile
-    container_name: businesaios_telegram
+      dockerfile: Dockerfile
+    container_name: businesaios_api
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      - RUN_MODE=telegram
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    volumes:
-      - businesaios_data:/app/runtime/entrypoints/data
-    command: ["python", "main.py"]
-    depends_on:
-      businesaios_evolution:
-        condition: service_healthy
-
-  businesaios_evolution:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-    container_name: businesaios_evolution
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      - RUN_MODE=evolution
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - EVOLUTION_POLL_INTERVAL_SEC=${EVOLUTION_POLL_INTERVAL_SEC:-2}
-      - EVOLUTION_BATCH_SIZE=${EVOLUTION_BATCH_SIZE:-10}
-      - EVOLUTION_HEALTH_PORT=${EVOLUTION_HEALTH_PORT:-8087}
+      APP_PROFILE: api
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      API_HOST: 0.0.0.0
+      API_PORT: ${API_PORT:-8000}
+      APP_RUNTIME_DATA_DIR: /app/runtime/data
+      RUNTIME_DIR: /app/runtime/data/api
+      BAIOS_DATA_DIR: /app/runtime/data
     ports:
-      - "${EVOLUTION_HEALTH_PORT:-8087}:8087"
+      - "${API_PORT:-8000}:${API_PORT:-8000}"
     volumes:
-      - businesaios_data:/app/runtime/entrypoints/data
-    command: ["python", "main.py"]
+      - businesaios_data:/app/runtime/data
+    command: ["sh", "-c", "python -m scripts.server.migrate_before_start && exec python -m scripts.server.run_profile"]
     healthcheck:
-      test: ['CMD', 'python', '-c', "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8087/health').read()"]
+      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.getenv('API_PORT','8000')+'/readyz').read()\""]
       interval: 5s
-      timeout: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  businesaios_worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: businesaios_worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_PROFILE: worker
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      WORKER_HEALTH_PORT: ${WORKER_HEALTH_PORT:-8087}
+      EVOLUTION_HEALTH_PORT: ${WORKER_HEALTH_PORT:-8087}
+      EVOLUTION_ENABLED: "1"
+      HEALTH_HOST: 0.0.0.0
+      APP_RUNTIME_DATA_DIR: /app/runtime/data
+      RUNTIME_DIR: /app/runtime/data/worker
+      BAIOS_DATA_DIR: /app/runtime/data
+    ports:
+      - "127.0.0.1:${WORKER_HEALTH_PORT:-8087}:${WORKER_HEALTH_PORT:-8087}"
+    volumes:
+      - businesaios_data:/app/runtime/data
+    command: ["sh", "-c", "python -m scripts.server.migrate_before_start && exec python -m scripts.server.run_profile"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.getenv('WORKER_HEALTH_PORT','8087')+'/ready').read()\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  businesaios_connector_telegram:
+    profiles: ["telegram"]
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: businesaios_connector_telegram
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_PROFILE: telegram
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TELEGRAM_HEALTH_PORT: ${TELEGRAM_HEALTH_PORT:-8088}
+      HEALTH_HOST: 0.0.0.0
+      APP_RUNTIME_DATA_DIR: /app/runtime/data
+      RUNTIME_DIR: /app/runtime/data/telegram
+      BAIOS_DATA_DIR: /app/runtime/data
+    ports:
+      - "127.0.0.1:${TELEGRAM_HEALTH_PORT:-8088}:${TELEGRAM_HEALTH_PORT:-8088}"
+    volumes:
+      - businesaios_data:/app/runtime/data
+    command: ["sh", "-c", "python -m scripts.server.migrate_before_start && exec python -m scripts.server.run_profile"]
+    depends_on:
+      businesaios_api:
+        condition: service_healthy
+      businesaios_worker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.getenv('TELEGRAM_HEALTH_PORT','8088')+'/health').read()\""]
+      interval: 5s
+      timeout: 3s
       retries: 20
       start_period: 10s
 

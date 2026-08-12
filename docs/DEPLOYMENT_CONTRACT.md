@@ -1,102 +1,137 @@
 # Deployment Contract (Canonical) — BusinesAIOS
 
 This document is the single source of truth for how BusinesAIOS is deployed.
-Anything in deploy/ and infrastructure/ MUST comply with this contract.
+Anything in `deploy/` and `infrastructure/` MUST comply with this contract.
 
-## 1) Canonical Identity
+## 1) Canonical identity
 
-**Product name:** BusinesAIOS
+**Product name:** BusinesAIOS  
 **Canonical app_id:** `businesaios`
 
-Hard rule: deployment artifacts must not use legacy single-product identifiers and tenant-specific names in service names, directories, container names, k8s resource names, etc.
+Deployment artifacts must not make any messenger or tenant the platform identity.
 
-## 2) Processes / Run Modes
+## 2) Production process model
 
-BusinesAIOS runs in **2-process mode** (two independent processes using the same codebase):
+BusinesAIOS has two mandatory channel-agnostic core processes using the same codebase:
 
-1) **Telegram Runtime**
-   - `RUN_MODE=telegram`
-   - Purpose: serve Telegram UI / bot interactions, command processing.
+1. **API Runtime**
+   - `APP_PROFILE=api`
+   - serves HTTP/API traffic, control-plane operations and provider webhooks;
+   - default port: `API_PORT=8000`.
 
-2) **Evolution Worker**
-   - `RUN_MODE=evolution`
-   - Purpose: background ticks / policy execution / orchestration loops.
-   - Exposes health endpoint.
+2. **Background Worker**
+   - `APP_PROFILE=worker`
+   - executes queues, autonomous cycles and background provider work;
+   - default health port: `WORKER_HEALTH_PORT=8087`.
 
-Both processes are stateless aside from the shared data volume (see §4).
+Messaging transports are providers, not platform runtimes. A transport gets a dedicated process only when its protocol requires polling/streaming. The current optional example is:
 
-## 3) Network Contract
+3. **Telegram polling connector (optional)**
+   - `APP_PROFILE=telegram`
+   - enabled only for deployments that choose Telegram long polling.
 
-### 3.1 Health
+`RUN_MODE=telegram/evolution` may still exist inside compatibility implementation modules, but it is not the deployment authority and MUST NOT replace the `APP_PROFILE` process contract above.
 
-Evolution Worker MUST expose:
+## 3) Network and health contract
 
-- `GET /healthz` on port `EVOLUTION_HEALTH_PORT` (default `8087`)
+### 3.1 API Runtime
 
-### 3.2 Public exposure
+The API Runtime MUST expose:
 
-By default, only the health endpoint is exposed. Telegram Runtime typically does not need inbound ports.
+- `GET /health`
+- `GET /readyz`
 
-## 4) Storage Contract
+on `API_PORT` (default `8000`).
 
-### 4.1 Data directory
+### 3.2 Worker Runtime
 
-The runtime data directory is:
+The worker health server exposes:
 
-- `/app/runtime/entrypoints/data` (inside container)
+- `GET /health`
+- `GET /ready`
 
-### 4.2 Volume
+on `WORKER_HEALTH_PORT` (default `8087`). `EVOLUTION_HEALTH_PORT` is an internal compatibility name only.
 
-Docker compose MUST mount a named volume:
+### 3.3 Optional connector
 
-- `businesaios_data:/app/runtime/entrypoints/data`
+The Telegram polling connector may expose its own health endpoint on `TELEGRAM_HEALTH_PORT` (default `8088`). Webhook-based providers enter through the API/provider-webhook runtime and do not require a dedicated always-on service per messenger.
 
-Kubernetes SHOULD mount a persistent volume to the same path.
+## 4) Storage contract
 
-## 5) Environment Contract
+Production deployments use PostgreSQL for configured durable stores and a persistent runtime data root for file-backed runtime state/evidence.
 
-### 5.1 Required variables (minimum)
+- systemd canonical runtime root: `/var/lib/businesaios/runtime`
+- Docker Compose canonical runtime root: `/app/runtime/data`
+- `BAIOS_DATA_DIR` and `APP_RUNTIME_DATA_DIR` MUST point at the selected persistent runtime root.
 
-- `ENV` (e.g. `prod`, `stage`, `dev`)
-- `LOG_LEVEL` (e.g. `INFO`)
-- `RUN_MODE` (`telegram` or `evolution`)
+Docker Compose MUST mount the named volume `businesaios_data` at its runtime root.
 
-### 5.2 Evolution Worker variables
+## 5) Environment contract
 
-- `EVOLUTION_POLL_INTERVAL_SEC` (default `2`)
-- `EVOLUTION_BATCH_SIZE` (default `10`)
-- `EVOLUTION_HEALTH_PORT` (default `8087`)
+Minimum production configuration is based on `.env.example.prod` and includes:
 
-### 5.3 Telegram variables
+- `APP_ENV=prod`
+- `ENV=prod`
+- `LOG_LEVEL`
+- `STORAGE_BACKEND=postgres`
+- `DATABASE_URL` / `POSTGRES_DSN`
+- production secret/key backend configuration
+- provider credentials only for providers that are actually enabled.
 
-Telegram runtime requires its own credentials (token/keys) depending on adapter choice.
-The `.env.example` MUST list placeholders for those secrets (but never real values).
+Process identity is set by the deployment target (`APP_PROFILE=api`, `worker`, or an optional connector profile), not by copying one global `APP_PROFILE` value to every process.
 
-## 6) Security / Hardening Contract (baseline)
+## 6) Linux systemd contract
+
+Canonical production units are:
+
+- `businesaios-api.service`
+- `businesaios-worker.service`
+
+Optional polling connector:
+
+- `businesaios-connector-telegram.service`
+
+`deploy/systemd/install.sh` installs/restarts the core units, optionally enables the Telegram connector, writes release state, and disables historical `businesaios-telegram.service` / `businesaios-evolution.service` names after successful installation.
+
+## 7) Docker Compose contract
+
+`deploy/docker-compose.yml` MUST mirror the same process ownership:
+
+- `businesaios_api` → `APP_PROFILE=api`
+- `businesaios_worker` → `APP_PROFILE=worker`
+- optional `businesaios_connector_telegram` → `APP_PROFILE=telegram`
+
+The compose file MUST execute `scripts.server.migrate_before_start` before starting a server profile and MUST use `scripts.server.run_profile` as the runtime entrypoint.
+
+## 8) Security / hardening baseline
 
 Deployments SHOULD enforce:
-- least privilege execution (non-root where feasible)
-- no hostNetwork/hostPID/hostIPC on k8s
-- `automountServiceAccountToken: false` unless explicitly required
-- runtime sandboxing (e.g. `gvisor`) where available
 
-## 7) Deployment Targets
+- least privilege execution;
+- no hostNetwork/hostPID/hostIPC on Kubernetes;
+- `automountServiceAccountToken: false` unless explicitly required;
+- runtime sandboxing where available;
+- secrets supplied by the deployment environment, never committed to the repository.
 
-This repo provides:
-- Docker Compose: `deploy/docker-compose.yml`
-- systemd units: `deploy/systemd/*.service` + `deploy/systemd/install.sh`
-- Windows Task Scheduler: `deploy/windows/install_tasks.cmd`
-- Kubernetes manifests: `infrastructure/k8s/*.yaml`
+## 9) Deployment targets
 
-All targets MUST comply with this contract.
+This repository provides:
 
-## 8) Drift Prevention
+- Linux systemd: `deploy/systemd/*.service` + `deploy/systemd/install.sh` (canonical production server path);
+- Docker Compose: `deploy/docker-compose.yml` (containerized parity/staging/production where Compose is the chosen operator);
+- Kubernetes manifests under `infrastructure/k8s/`;
+- Windows deployment helpers where explicitly supported.
+
+Every maintained target MUST preserve the API + Worker core and optional-provider model.
+
+## 10) Drift prevention
 
 CI MUST fail if:
-- legacy identifiers appear in deploy/infrastructure docs or manifests
-- compose services/volumes drift from canonical names
-- systemd install script uses legacy app paths
-- this file is missing or modified to remove contract anchors
 
+- core systemd units stop using `APP_PROFILE=api/worker`;
+- Docker Compose reintroduces mandatory messenger-specific platform services or legacy evolution/telegram ownership;
+- compose/systemd runtime entrypoints bypass `scripts.server.run_profile`;
+- historical `businesaios-telegram.service` / `businesaios-evolution.service` become canonical again;
+- this file loses the API + Worker + optional-provider ownership contract.
 
-See also: `docs/ARCHITECTURE_CANON_V20.md` for the single-brain, single-executor canon.
+See also `docs/ARCHITECTURE_CANON_V20.md` for the single-brain, single-executor Canon.

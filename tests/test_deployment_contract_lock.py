@@ -24,10 +24,15 @@ def test_deployment_contract_exists_and_has_anchors() -> None:
     txt = _read_text(p)
     assert "Deployment Contract (Canonical) — BusinesAIOS" in txt
     assert "Canonical app_id:" in txt
-    assert "RUN_MODE=telegram" in txt
-    assert "RUN_MODE=evolution" in txt
-    assert "/healthz" in txt
-    assert "EVOLUTION_HEALTH_PORT" in txt
+    assert "APP_PROFILE=api" in txt
+    assert "APP_PROFILE=worker" in txt
+    assert "APP_PROFILE=telegram" in txt
+    assert "businesaios-api.service" in txt
+    assert "businesaios-worker.service" in txt
+    assert "GET /health" in txt
+    assert "GET /readyz" in txt
+    assert "WORKER_HEALTH_PORT" in txt
+    assert "EVOLUTION_HEALTH_PORT" in txt  # internal compatibility name only
 
 
 def test_no_legacy_identifiers_in_deploy_and_k8s() -> None:
@@ -60,13 +65,22 @@ def test_compose_has_canonical_service_and_volume_names() -> None:
     compose = ROOT / "deploy" / "docker-compose.yml"
     assert compose.exists(), "Missing deploy/docker-compose.yml"
     txt = _read_text(compose)
-    assert "businesaios_telegram:" in txt
-    assert "businesaios_evolution:" in txt
-    assert "container_name: businesaios_telegram" in txt
-    assert "container_name: businesaios_evolution" in txt
+    assert "businesaios_api:" in txt
+    assert "businesaios_worker:" in txt
+    assert "businesaios_connector_telegram:" in txt
+    assert "container_name: businesaios_api" in txt
+    assert "container_name: businesaios_worker" in txt
+    assert "container_name: businesaios_connector_telegram" in txt
+    assert "APP_PROFILE: api" in txt
+    assert "APP_PROFILE: worker" in txt
+    assert "APP_PROFILE: telegram" in txt
+    assert 'profiles: ["telegram"]' in txt
     assert "businesaios_data:" in txt
-    assert "businesaios_data:/app/runtime/entrypoints/data" in txt
-    assert "EVOLUTION_HEALTH_PORT=${EVOLUTION_HEALTH_PORT:-8087}" in txt
+    assert "businesaios_data:/app/runtime/data" in txt
+    assert "dockerfile: Dockerfile" in txt
+    assert "deploy/Dockerfile" not in txt
+    assert "businesaios_telegram:" not in txt
+    assert "businesaios_evolution:" not in txt
 
 
 def test_systemd_install_uses_canonical_app_dir_and_units() -> None:
@@ -76,5 +90,9 @@ def test_systemd_install_uses_canonical_app_dir_and_units() -> None:
     assert 'APP_DIR="${APP_DIR:-/opt/businesaios}"' in txt
     assert 'STATE_FILE="${STATE_FILE:-${STATE_DIR}/release_state.json}"' in txt
     assert 'DeploymentStateStore' in txt
+    assert "businesaios-api.service" in txt
+    assert "businesaios-worker.service" in txt
+    assert "businesaios-connector-telegram.service" in txt
+    # Historical names remain only so the installer can disable/remove them during migration.
     assert "businesaios-telegram.service" in txt
     assert "businesaios-evolution.service" in txt

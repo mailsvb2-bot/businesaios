@@ -1,35 +1,78 @@
 # Deploy (Canonical)
 
-See also: `docs/DEPLOYMENT_CONTRACT.md` (single source of truth).
+See `docs/DEPLOYMENT_CONTRACT.md` for the deployment source of truth.
+
+## Linux systemd — canonical production server path
+
+Assume the repository is in `/opt/businesaios`, the virtualenv is `/opt/businesaios/.venv`, and production environment files live under `/etc/businesaios/`.
+
+The mandatory core profiles are:
+
+- `APP_PROFILE=api` → `businesaios-api.service`
+- `APP_PROFILE=worker` → `businesaios-worker.service`
+
+Core runtime:
+
+```bash
+sudo APP_DIR=/opt/businesaios deploy/systemd/install.sh
+```
+
+This installs and restarts both mandatory services above.
+
+Enable the optional Telegram long-polling connector only when that provider is actually used (`APP_PROFILE=telegram`):
+
+```bash
+sudo ENABLE_TELEGRAM_CONNECTOR=1 APP_DIR=/opt/businesaios deploy/systemd/install.sh
+```
+
+Useful checks:
+
+```bash
+systemctl --no-pager --full status businesaios-api.service businesaios-worker.service
+curl -fsS http://127.0.0.1:${API_PORT:-8000}/health
+curl -fsS http://127.0.0.1:${API_PORT:-8000}/readyz
+curl -fsS http://127.0.0.1:${WORKER_HEALTH_PORT:-8087}/health
+curl -fsS http://127.0.0.1:${WORKER_HEALTH_PORT:-8087}/ready
+journalctl -u businesaios-api.service -n 200 --no-pager
+journalctl -u businesaios-worker.service -n 200 --no-pager
+```
+
+The installer records deployment state under `/opt/businesaios/data/deployment/release_state.json` by default and removes the historical `businesaios-telegram.service` / `businesaios-evolution.service` units after the canonical core is installed successfully.
 
 ## Docker Compose
-1) Put `.env` next to `deploy/docker-compose.yml` (or adjust `env_file`).
-2) Run:
-   - `docker compose -f deploy/docker-compose.yml up -d --build`
-3) Logs:
-   - `docker logs -f businesaios_evolution`
-   - `docker logs -f businesaios_telegram`
-4) Health:
-   - `http://localhost:${EVOLUTION_HEALTH_PORT:-8087}/healthz`
 
-## systemd (Linux)
-Assume app is in `/opt/businesaios` and venv in `/opt/businesaios/.venv`.
-1) Copy `.env` to `/opt/businesaios/.env`
-2) Run:
-   - `bash deploy/systemd/install.sh`
-3) Logs:
-   - `journalctl -u businesaios-evolution -f`
-   - `journalctl -u businesaios-telegram -f`
+Put a production-compatible `.env` next to `deploy/docker-compose.yml` and start the channel-agnostic core:
 
-## Windows Task Scheduler
-1) Edit paths in `deploy/windows/install_tasks.cmd`
-2) Run it as Administrator.
-3) Start:
-   - `schtasks /Run /TN "businesaios Evolution Worker"`
+```bash
+docker compose -f deploy/docker-compose.yml up -d --build businesaios_api businesaios_worker
+```
 
-## Canonical check
-After installation:
-- Telegram runtime calls `enqueue_evolution_job@v1`
-- Outbox has pending jobs
-- Worker processes -> `mark_done`
-- `/healthz` shows pending decreasing to 0
+Check:
+
+```bash
+docker compose -f deploy/docker-compose.yml ps
+curl -fsS http://127.0.0.1:${API_PORT:-8000}/readyz
+curl -fsS http://127.0.0.1:${WORKER_HEALTH_PORT:-8087}/ready
+```
+
+If Telegram long polling is required, enable its explicit Compose profile:
+
+```bash
+docker compose -f deploy/docker-compose.yml --profile telegram up -d --build
+```
+
+Webhook-based providers remain attached to the API/provider-webhook runtime; do not create an always-on service for each messenger.
+
+## Release acceptance
+
+A server release is accepted only when:
+
+1. the deployed Git SHA/tag is the intended release;
+2. migrations complete successfully;
+3. `businesaios-api.service` and `businesaios-worker.service` are active (or their Compose equivalents are healthy);
+4. API `/health` and `/readyz` are successful;
+5. worker `/health` and `/ready` are successful;
+6. recent service logs contain no startup crash loop;
+7. the canonical post-deploy smoke/user journey succeeds.
+
+Do not use the historical `RUN_MODE=telegram/evolution` pair as the platform deployment model. Those names remain only as internal compatibility implementation details behind `scripts.server.run_profile`.
