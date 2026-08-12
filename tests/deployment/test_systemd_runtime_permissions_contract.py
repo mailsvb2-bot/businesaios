@@ -12,9 +12,17 @@ def test_systemd_installer_normalizes_runtime_access_before_restart() -> None:
     assert 'RUNTIME_USER="${RUNTIME_USER:-businesaios}"' in installer
     assert 'RUNTIME_GROUP="${RUNTIME_GROUP:-businesaios}"' in installer
     assert 'chgrp -R "$RUNTIME_GROUP" "$APP_DIR"' in installer
+    assert 'chmod -R g-w "$APP_DIR"' in installer
     assert 'chmod -R g+rX "$APP_DIR"' in installer
+    assert 'find "$APP_DIR" \\( -type f -o -type d \\) -perm -g=w -print -quit' in installer
     assert 'runuser -u "$RUNTIME_USER" -- test -x "$PYTHON_BIN"' in installer
     assert 'runuser -u "$RUNTIME_USER" -- test -r "$RUNTIME_ACCESS_SENTINEL"' in installer
+    assert 'runuser -u "$RUNTIME_USER" -- test -w "$RUNTIME_ACCESS_SENTINEL"' in installer
+
+    chgrp_index = installer.index('chgrp -R "$RUNTIME_GROUP" "$APP_DIR"')
+    remove_group_write_index = installer.index('chmod -R g-w "$APP_DIR"')
+    add_group_read_index = installer.index('chmod -R g+rX "$APP_DIR"')
+    assert chgrp_index < remove_group_write_index < add_group_read_index
 
     access_index = installer.index('ensure_runtime_access\n\n# Historical deployments stored encrypted')
     migration_index = installer.index('migrate_legacy_security_state\n\nwrite_state installing')
@@ -22,11 +30,14 @@ def test_systemd_installer_normalizes_runtime_access_before_restart() -> None:
     assert access_index < migration_index < restart_index
 
     # The runtime account only needs read/traverse/execute access to code and
-    # the venv. The installer must not make the application tree world-writable
-    # or grant group write access as a shortcut.
+    # the venv. The installer must remove inherited group write bits before
+    # granting runtime-group access, then verify that the application tree did
+    # not retain a group-writable file or directory.
     assert 'chmod -R 777' not in installer
     assert 'chmod -R a+rwx' not in installer
     assert 'chmod -R g+rwx' not in installer
+    assert 'application tree still contains group-writable files or directories' in installer
+    assert 'runtime user must not be able to modify application code' in installer
 
 
 def test_systemd_installer_migrates_legacy_security_state_fail_closed() -> None:
