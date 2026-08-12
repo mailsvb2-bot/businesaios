@@ -9,7 +9,7 @@ import yaml
 from contracts.product_contract import Offer, OfferCatalog
 
 
-class OfferCatalogResolutionError(ValueError):
+class OfferCatalogResolutionError(RuntimeError):
     """Raised when an explicit external offer catalog cannot be resolved safely."""
 
 
@@ -39,6 +39,22 @@ def _variant_title(variants: object) -> str:
         if title:
             return title
     return ""
+
+
+def _optional_mapping_field(
+    item: Mapping[str, Any],
+    field_name: str,
+    *,
+    offer_id: str,
+) -> Mapping[str, Any]:
+    value = item.get(field_name)
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise OfferCatalogResolutionError(
+            f"BAD_OFFER_CATALOG_FIELD:{offer_id}:{field_name}"
+        )
+    return value
 
 
 def _external_catalog_path(*, raw: Mapping[str, Any], base_dir: Path, ref: str) -> Path:
@@ -97,15 +113,15 @@ def _load_external_catalog(*, raw: Mapping[str, Any], base_dir: Path, ref: str) 
         if not offer_id or "base_price_rub" not in item:
             raise OfferCatalogResolutionError(f"BAD_OFFER_CATALOG_ENTRY:{ref}")
 
-        meta = item.get("meta") if isinstance(item.get("meta"), Mapping) else {}
+        meta = _optional_mapping_field(item, "meta", offer_id=offer_id)
         declared_product = str(meta.get("product") or "").strip()
         if declared_product and declared_product != ref_product_id:
             raise OfferCatalogResolutionError(
                 f"OFFER_CATALOG_PRODUCT_MISMATCH:{offer_id}:{declared_product}:{ref_product_id}"
             )
 
-        variants = item.get("variants") if isinstance(item.get("variants"), Mapping) else {}
-        rules = item.get("rules") if isinstance(item.get("rules"), Mapping) else {}
+        variants = _optional_mapping_field(item, "variants", offer_id=offer_id)
+        rules = _optional_mapping_field(item, "rules", offer_id=offer_id)
         title = str(item.get("title") or "").strip() or _variant_title(variants) or offer_id
 
         period_days: int | None = None
