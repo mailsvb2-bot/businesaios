@@ -4,6 +4,7 @@ import pytest
 
 from products.offer_catalog_resolver import OfferCatalogResolutionError, resolve_offer_catalog
 from products.product_loader import ProductLoader
+from products.product_resolver import ProductResolver
 
 
 PRODUCTS_DIR = Path(__file__).resolve().parents[2] / "products"
@@ -52,6 +53,20 @@ def test_explicit_offer_catalog_ref_is_fail_closed_when_catalog_is_missing(tmp_p
         resolve_offer_catalog(raw, base_dir=tmp_path)
 
 
+def test_product_resolver_does_not_swallow_explicit_catalog_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def fail_load(_loader: ProductLoader, _filename: str) -> object:
+        raise OfferCatalogResolutionError("OFFER_CATALOG_NOT_FOUND:default:salesbot:prod")
+
+    monkeypatch.setattr(ProductLoader, "load", fail_load)
+    resolver = ProductResolver(base_dir=tmp_path, default_config="organization_platform.yaml")
+
+    with pytest.raises(OfferCatalogResolutionError, match="OFFER_CATALOG_NOT_FOUND"):
+        resolver.resolve(command="/start", args="sales", user_settings=None)
+
+
 def test_external_catalog_is_normalized_without_inventing_commercial_rules(tmp_path: Path) -> None:
     catalog_dir = tmp_path / "offer_catalogs"
     catalog_dir.mkdir()
@@ -94,6 +109,38 @@ offers:
     assert offer.metadata["rules"] == {"min_engagement": 0.25}
     assert offer.metadata["variants"]["a"]["body"] == "Existing catalog copy"
     assert offer.metadata["meta"] == {"product": "widget", "kind": "growth"}
+
+
+@pytest.mark.parametrize("field_name", ("rules", "variants", "meta"))
+def test_external_catalog_rejects_malformed_structured_fields(
+    field_name: str,
+    tmp_path: Path,
+) -> None:
+    catalog_dir = tmp_path / "offer_catalogs"
+    catalog_dir.mkdir()
+    (catalog_dir / "widget.yaml").write_text(
+        f"""\
+catalog_id: offer_catalog_widget@v1
+offers:
+  - offer_id: widget_offer
+    base_price_rub: 100
+    {field_name}:
+      - malformed
+""",
+        encoding="utf-8",
+    )
+    raw = {
+        "product_id": "widget",
+        "domain": "widget",
+        "environment": "prod",
+        "offer_catalog_ref": "default:widget:prod",
+    }
+
+    with pytest.raises(
+        OfferCatalogResolutionError,
+        match=rf"BAD_OFFER_CATALOG_FIELD:widget_offer:{field_name}",
+    ):
+        resolve_offer_catalog(raw, base_dir=tmp_path)
 
 
 def test_external_catalog_ref_cannot_cross_product_boundary(tmp_path: Path) -> None:
