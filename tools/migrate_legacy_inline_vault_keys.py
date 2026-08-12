@@ -33,6 +33,7 @@ class LegacyInlineVaultKeyMigrationPlan:
     provider_keys: tuple[KeyMaterialRecord, ...]
     merged_keys: tuple[KeyMaterialRecord, ...]
     provider_format: str
+    provider_write_required: bool
     already_migrated: bool
 
     def summary(self) -> dict[str, object]:
@@ -47,6 +48,7 @@ class LegacyInlineVaultKeyMigrationPlan:
             "provider_key_count": len(self.provider_keys),
             "merged_key_count": len(self.merged_keys),
             "provider_format": self.provider_format,
+            "provider_write_required": self.provider_write_required,
             "already_migrated": self.already_migrated,
         }
 
@@ -276,6 +278,9 @@ def build_migration_plan(
     )
     merged_keys = _merge_keys(provider_keys, inline_keys)
     already_migrated = not inline_keys
+    provider_write_required = bool(inline_keys) and (
+        provider_format != "wrapped" or len(merged_keys) != len(provider_keys)
+    )
 
     if already_migrated and provider_format == "wrapped":
         with _master_key_environment(master_key):
@@ -299,6 +304,7 @@ def build_migration_plan(
         provider_keys=provider_keys,
         merged_keys=merged_keys,
         provider_format=provider_format,
+        provider_write_required=provider_write_required,
         already_migrated=already_migrated,
     )
 
@@ -320,6 +326,34 @@ def _validate_final_state(plan: LegacyInlineVaultKeyMigrationPlan, *, master_key
     return len(plan.merged_keys), secret_count
 
 
+def _wrapped_provider_payload(plan: LegacyInlineVaultKeyMigrationPlan, *, master_key: bytes) -> dict[str, object]:
+    migrated = dict(plan.provider_payload)
+    with _master_key_environment(master_key):
+        migrated["records"] = [_serialize_record(record) for record in plan.merged_keys]
+    migrated["inline_vault_key_migration"] = {
+        "source": "secret_vault.inline_keys.secret_b64",
+        "target": "external_key_provider.BAIOS-KE2",
+        "inline_key_count": len(plan.inline_keys),
+        "merged_key_count": len(plan.merged_keys),
+        "vault_backup_path": str(plan.vault_backup_path),
+        "provider_backup_path": str(plan.provider_backup_path),
+    }
+    return migrated
+
+
+def _external_vault_payload(plan: LegacyInlineVaultKeyMigrationPlan) -> dict[str, object]:
+    migrated = dict(plan.vault_payload)
+    migrated.pop("keys", None)
+    migrated["key_storage"] = "external_key_provider"
+    migrated["inline_key_migration"] = {
+        "source": "inline_secret_b64_keys",
+        "target": "external_key_provider",
+        "key_count": len(plan.inline_keys),
+        "provider_path": str(plan.key_provider_path),
+    }
+    return migrated
+
+
 def apply_migration(plan: LegacyInlineVaultKeyMigrationPlan) -> dict[str, object]:
     master_key = _read_master_key(plan.master_key_file)
     if plan.already_migrated:
@@ -333,52 +367,50 @@ def apply_migration(plan: LegacyInlineVaultKeyMigrationPlan) -> dict[str, object
             "validated_secret_count": secret_count,
         }
 
-    migrated_provider = dict(plan.provider_payload)
-    with _master_key_environment(master_key):
-        migrated_provider["records"] = [_serialize_record(record) for record in plan.merged_keys]
-    migrated_provider["inline_vault_key_migration"] = {
-        "source": "secret_vault.inline_keys.secret_b64",
-        "target": "external_key_provider.BAIOS-KE2",
-        "inline_key_count": len(plan.inline_keys),
-        "merged_key_count": len(plan.merged_keys),
-        "vault_backup_path": str(plan.vault_backup_path),
-        "provider_backup_path": str(plan.provider_backup_path),
-    }
-
-    migrated_vault = dict(plan.vault_payload)
-    migrated_vault.pop("keys", None)
-    migrated_vault["key_storage"] = "external_key_provider"
-    migrated_vault["inline_key_migration"] = {
-        "source": "inline_secret_b64_keys",
-        "target": "external_key_provider",
-        "key_count": len(plan.inline_keys),
-        "provider_path": str(plan.key_provider_path),
-    }
-
-    provider_temporary = _atomic_temp_json(plan.key_provider_path, migrated_provider)
-    vault_temporary = _atomic_temp_json(plan.secret_vault_path, migrated_vault)
+    vault_temporary = _atomic_temp_json(plan.secret_vault_path, _external_vault_payload(plan))
+    provider_temporary: Path | None = None
+    provider_backup_created = False
     try:
-        with _master_key_environment(master_key):
-            staged_provider = FileKeyProvider(path=provider_temporary)
-            for expected in plan.merged_keys:
-                loaded = staged_provider.get(expected.key_id)
-                if not _same_key(loaded, expected):
-                    raise RuntimeError(f"staged key-provider record does not match source: {expected.key_id}")
-            staged_secret_count = _validate_vault_records(plan.vault_records, key_provider=staged_provider)
+        if plan.provider_write_required:
+            provider_temporary = _atomic_temp_json(
+                plan.key_provider_path,
+                _wrapped_provider_payload(plan, master_key=master_key),
+            )
+            with _master_key_environment(master_key):
+                staged_provider = FileKeyProvider(path=provider_temporary)
+                for expected in plan.merged_keys:
+                    loaded = staged_provider.get(expected.key_id)
+                    if not _same_key(loaded, expected):
+                        raise RuntimeError(f"staged key-provider record does not match source: {expected.key_id}")
+                staged_secret_count = _validate_vault_records(plan.vault_records, key_provider=staged_provider)
+        else:
+            with _master_key_environment(master_key):
+                staged_provider = FileKeyProvider(path=plan.key_provider_path)
+                for expected in plan.merged_keys:
+                    loaded = staged_provider.get(expected.key_id)
+                    if not _same_key(loaded, expected):
+                        raise RuntimeError(f"existing key-provider record does not match inline source: {expected.key_id}")
+                staged_secret_count = _validate_vault_records(plan.vault_records, key_provider=staged_provider)
 
-        provider_backup_created = _ensure_verified_backup(plan.key_provider_path, plan.provider_backup_path)
+        if plan.provider_write_required:
+            provider_backup_created = _ensure_verified_backup(plan.key_provider_path, plan.provider_backup_path)
         vault_backup_created = _ensure_verified_backup(plan.secret_vault_path, plan.vault_backup_path)
 
-        os.replace(provider_temporary, plan.key_provider_path)
-        os.chmod(plan.key_provider_path, 0o600)
-        _fsync_parent(plan.key_provider_path)
+        if provider_temporary is not None:
+            os.replace(provider_temporary, plan.key_provider_path)
+            provider_temporary = None
+            os.chmod(plan.key_provider_path, 0o600)
+            _fsync_parent(plan.key_provider_path)
 
         os.replace(vault_temporary, plan.secret_vault_path)
+        vault_temporary = Path("")
         os.chmod(plan.secret_vault_path, 0o600)
         _fsync_parent(plan.secret_vault_path)
     finally:
-        provider_temporary.unlink(missing_ok=True)
-        vault_temporary.unlink(missing_ok=True)
+        if provider_temporary is not None:
+            provider_temporary.unlink(missing_ok=True)
+        if vault_temporary and str(vault_temporary) != ".":
+            vault_temporary.unlink(missing_ok=True)
 
     key_count, secret_count = _validate_final_state(plan, master_key=master_key)
     if secret_count != staged_secret_count:
