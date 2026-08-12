@@ -61,6 +61,27 @@ def test_compose_and_deploy_docs_match_server_profile_contract() -> None:
         assert 'scripts.server.run_profile' in text
 
 
+def test_host_verifier_and_nginx_match_health_contract() -> None:
+    verifier = (ROOT / 'scripts/server/verify_runtime_host_contract.sh').read_text(encoding='utf-8')
+    assert 'businesaios-api.service' in verifier
+    assert 'businesaios-worker.service' in verifier
+    assert '$LOCAL_API_BASE/health' in verifier
+    assert '$LOCAL_API_BASE/readyz' in verifier
+    assert '$LOCAL_WORKER_BASE/health' in verifier
+    assert '$LOCAL_WORKER_BASE/ready' in verifier
+    assert '$PUBLIC_API_BASE/health' in verifier
+    assert '$PUBLIC_API_BASE/readyz' in verifier
+    assert '/healthz"' not in verifier
+
+    nginx = (ROOT / 'deploy/nginx/businesaios-api-status.template.conf').read_text(encoding='utf-8')
+    assert 'location = /healthz' in nginx
+    assert 'location = /health' in nginx
+    assert 'location = /readyz' in nginx
+    assert 'proxy_pass http://127.0.0.1:8000/readyz;' in nginx
+    healthz_block = nginx.split('location = /healthz', 1)[1].split('}', 1)[0]
+    assert 'proxy_pass http://127.0.0.1:8000/health;' in healthz_block
+
+
 def test_env_example_covers_server_and_secret_contract() -> None:
     text = (ROOT / '.env.example').read_text(encoding='utf-8')
     for key in (
