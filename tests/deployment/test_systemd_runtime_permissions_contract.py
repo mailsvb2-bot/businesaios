@@ -147,9 +147,12 @@ def test_systemd_installer_migrates_legacy_security_state_fail_closed() -> None:
     assert 'run_root cp -a "$LEGACY_SECURITY_DIR/." "$RUNTIME_SECURITY_DIR/"' in installer
     assert 'diff -qr "$LEGACY_SECURITY_DIR" "$RUNTIME_SECURITY_DIR"' in installer
     assert 'verify_legacy_security_lineage' in installer
+    assert 'run_root env \\' in installer
     assert 'key_provider.json.legacy-secret-b64.bak' in installer
     assert 'key_provider.json.pre-inline-vault-keys.bak' in installer
     assert 'secret_vault.json.legacy-inline-keys.bak' in installer
+    assert 'key_envelope_version' in installer
+    assert 'BAIOS-KE2' in installer
     assert 'wrapped_secret' in installer
     assert 'external_key_provider' in installer
     assert 'inline_key_migration' in installer
@@ -185,6 +188,19 @@ def test_security_lineage_verifier_accepts_canonical_migrated_successor(tmp_path
 def test_security_lineage_verifier_rejects_missing_rollback_proof(tmp_path: Path) -> None:
     legacy, runtime = _build_migrated_lineage_fixture(tmp_path)
     (runtime / 'key_provider.json.legacy-secret-b64.bak').unlink()
+
+    result = _run_lineage_verifier(legacy, runtime)
+
+    assert result.returncode == 1
+    assert 'unverified divergent legacy security file: key_provider.json' in result.stderr
+
+
+def test_security_lineage_verifier_rejects_noncanonical_provider_envelope(tmp_path: Path) -> None:
+    legacy, runtime = _build_migrated_lineage_fixture(tmp_path)
+    provider_path = runtime / 'key_provider.json'
+    payload = json.loads(provider_path.read_text(encoding='utf-8'))
+    payload['records'][0]['key_envelope_version'] = 'BAIOS-KE1'
+    _write_json(provider_path, payload)
 
     result = _run_lineage_verifier(legacy, runtime)
 
