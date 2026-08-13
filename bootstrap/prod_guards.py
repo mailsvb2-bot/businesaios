@@ -57,25 +57,36 @@ def enforce_production_strict_mode() -> None:
         f'run_mode={run_mode}:base={base or "<empty>"}:module={main_module or "<empty>"}'
     )
 
+def _normalized_admin_ids() -> tuple[str, ...]:
+    raw = env_str('ADMIN_USER_IDS', '').strip() or env_str('ADMIN_IDS', '').strip()
+    unique: list[str] = []
+    for part in raw.split(','):
+        admin_id = part.strip()
+        if admin_id and admin_id not in unique:
+            unique.append(admin_id)
+    return tuple(unique)
+
 def enforce_two_admins_in_prod_or_explain() -> None:
+    """Require at least one configured admin for production Telegram/webhook profiles.
+
+    The historical function name is retained for import compatibility. Production may
+    be legitimately operated by a single owner/admin; zero configured admins remains
+    fail-closed. Duplicate IDs do not count as additional administrators.
+    """
     app_env = env_str('APP_ENV', env_str('ENV', 'dev')).lower()
-    if app_env != 'prod' or not env_bool('PRODUCTION_STRICT_MODE', True) or env_bool('ALLOW_SELF_APPROVE', False):
+    if app_env != 'prod' or not env_bool('PRODUCTION_STRICT_MODE', True):
         return
     profile = env_str('RUN_MODE', env_str('APP_PROFILE', '')).lower().strip()
     if profile not in {'telegram', 'webhook'}:
         return
-    raw = env_str('ADMIN_USER_IDS', '').strip() or env_str('ADMIN_IDS', '').strip()
-    ids = [p.strip() for p in raw.split(',') if p.strip()]
-    if len(ids) >= 2:
+    ids = _normalized_admin_ids()
+    if ids:
         return
     msg = (
-        '\n⛔ GOVERNANCE GUARD: требуется минимум 2 администратора.\n\n'
-        'У тебя предусмотрено 2 админа. Сейчас в ADMIN_USER_IDS указан только 1 (или не указан вовсе).\n\n'
-        'Добавь второго админа в .env (переменная ADMIN_USER_IDS), через запятую:\n'
-        '  ADMIN_USER_IDS=123456789,987654321\n\n'
-        'Для добавления админа впиши его Telegram ID в ADMIN_USER_IDS через запятую.\n\n'
-        'Если ты временно один — можно включить аварийный режим (НЕ для прода):\n'
-        '  ALLOW_SELF_APPROVE=1\n'
+        '\n⛔ GOVERNANCE GUARD: требуется минимум 1 администратор.\n\n'
+        'Для production Telegram/webhook должен быть указан хотя бы один реальный Telegram ID администратора.\n\n'
+        'Укажи его в .env:\n'
+        '  ADMIN_USER_IDS=123456789\n'
     )
     print(msg, file=sys.stderr)
-    raise RuntimeError('GOVERNANCE_TWO_ADMINS_REQUIRED')
+    raise RuntimeError('GOVERNANCE_ADMIN_REQUIRED')
