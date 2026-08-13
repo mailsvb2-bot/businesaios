@@ -88,6 +88,109 @@ ensure_runtime_access() {
   echo "[install] runtime access verified"
 }
 
+verify_legacy_security_lineage() {
+  run_root env \
+    LEGACY_SECURITY_DIR="$LEGACY_SECURITY_DIR" \
+    RUNTIME_SECURITY_DIR="$RUNTIME_SECURITY_DIR" \
+    "$PYTHON_BIN" - <<'PY'
+from __future__ import annotations
+
+import filecmp
+import json
+import os
+import sys
+from pathlib import Path
+
+legacy = Path(os.environ["LEGACY_SECURITY_DIR"])
+runtime = Path(os.environ["RUNTIME_SECURITY_DIR"])
+
+approved_backups = {
+    "key_provider.json": (
+        "key_provider.json.legacy-secret-b64.bak",
+        "key_provider.json.pre-inline-vault-keys.bak",
+    ),
+    "secret_vault.json": (
+        "secret_vault.json.legacy-inline-keys.bak",
+    ),
+}
+
+
+def _migrated_shape_is_valid(relative: str, current: Path) -> bool:
+    try:
+        payload = json.loads(current.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+
+    if relative == "key_provider.json":
+        records = payload.get("records")
+        if not isinstance(records, list) or not records:
+            return False
+        if not all(isinstance(item, dict) for item in records):
+            return False
+        wrapped = all(
+            str(item.get("key_envelope_version") or "").strip() == "BAIOS-KE2"
+            and bool(str(item.get("wrapped_secret") or "").strip())
+            and not bool(str(item.get("secret_b64") or "").strip())
+            for item in records
+        )
+        migration_marker = isinstance(payload.get("migration"), dict) or isinstance(
+            payload.get("inline_vault_key_migration"), dict
+        )
+        return wrapped and migration_marker
+
+    if relative == "secret_vault.json":
+        records = payload.get("records")
+        if not isinstance(records, list):
+            return False
+        if payload.get("keys"):
+            return False
+        return (
+            payload.get("key_storage") == "external_key_provider"
+            and isinstance(payload.get("inline_key_migration"), dict)
+        )
+
+    return False
+
+
+legacy_files = sorted(path for path in legacy.rglob("*") if path.is_file())
+if not legacy_files:
+    print("[install] legacy security directory contains no files")
+    raise SystemExit(0)
+
+for source in legacy_files:
+    relative = source.relative_to(legacy).as_posix()
+    current = runtime / relative
+    if current.is_file() and filecmp.cmp(source, current, shallow=False):
+        continue
+
+    backup_names = approved_backups.get(relative, ())
+    matching_backup = next(
+        (
+            runtime / name
+            for name in backup_names
+            if (runtime / name).is_file()
+            and filecmp.cmp(source, runtime / name, shallow=False)
+        ),
+        None,
+    )
+    if matching_backup is None or not current.is_file() or not _migrated_shape_is_valid(relative, current):
+        print(
+            f"[install] unverified divergent legacy security file: {relative}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    print(
+        "[install] verified migrated security successor "
+        f"{relative} via rollback source {matching_backup.name}"
+    )
+
+print("[install] divergent runtime security state has verified migration lineage")
+PY
+}
+
 migrate_legacy_security_state() {
   local legacy_present=0
   local runtime_present=0
@@ -104,13 +207,16 @@ migrate_legacy_security_state() {
 
   if [[ "$legacy_present" == "1" ]]; then
     if [[ "$runtime_present" == "1" ]]; then
-      if ! diff -qr "$LEGACY_SECURITY_DIR" "$RUNTIME_SECURITY_DIR" >/dev/null; then
-        echo "[install] refusing to overwrite divergent runtime security state" >&2
+      if diff -qr "$LEGACY_SECURITY_DIR" "$RUNTIME_SECURITY_DIR" >/dev/null; then
+        echo "[install] runtime security state already matches legacy source"
+      elif verify_legacy_security_lineage; then
+        echo "[install] preserving verified migrated runtime security state"
+      else
+        echo "[install] refusing to overwrite divergent runtime security state without verified migration lineage" >&2
         echo "[install] legacy=${LEGACY_SECURITY_DIR}" >&2
         echo "[install] runtime=${RUNTIME_SECURITY_DIR}" >&2
         exit 1
       fi
-      echo "[install] runtime security state already matches legacy source"
     else
       echo "[install] migrating legacy security state to writable runtime directory"
       run_root cp -a "$LEGACY_SECURITY_DIR/." "$RUNTIME_SECURITY_DIR/"
@@ -199,9 +305,12 @@ ensure_runtime_access
 # Historical deployments stored encrypted key-provider and secret-vault state
 # beneath the application checkout. Canonical systemd services use
 # /var/lib/businesaios/runtime as their writable data root. Copy legacy security
-# state only into an empty runtime target, verify byte-for-byte equivalence, and
-# preserve the legacy source for rollback. A divergent non-empty target fails
-# closed instead of guessing which encrypted state is authoritative.
+# state only into an empty runtime target and verify byte-for-byte equivalence.
+# On later deploys, canonical key/vault migrations intentionally make runtime
+# differ from the preserved rollback source; accept that divergence only when
+# every changed legacy file has a byte-identical approved migration backup and
+# the live runtime file has the expected migrated shape. Unknown divergence
+# remains fail-closed and the installer never overwrites non-empty runtime state.
 migrate_legacy_security_state
 
 write_state installing
