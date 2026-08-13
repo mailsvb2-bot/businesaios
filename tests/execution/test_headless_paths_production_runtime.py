@@ -86,9 +86,9 @@ def test_test_process_keeps_isolated_runtime_fallback(monkeypatch) -> None:
         Path("deploy/systemd/businesaios-worker.service"),
     ),
 )
-def test_core_systemd_units_bind_headless_state_to_shared_runtime_root(unit_path) -> None:
+def test_core_systemd_units_expose_shared_runtime_root_without_legacy_env_name(unit_path) -> None:
     unit = unit_path.read_text(encoding="utf-8")
 
     assert "WorkingDirectory=/opt/businesaios" in unit
-    assert "Environment=BUSINESAIOS_DATA_DIR=/var/lib/businesaios/runtime" in unit
     assert "Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime" in unit
+    assert "Environment=BUSINESAIOS_DATA_DIR=" not in unit
