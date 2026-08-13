@@ -19,6 +19,8 @@ def test_core_systemd_runtime_is_api_plus_worker() -> None:
     assert 'Environment=APP_PROFILE=worker' in worker
     assert 'EnvironmentFile=/etc/businesaios/api.env' in api
     assert 'EnvironmentFile=/etc/businesaios/api.env' in worker
+    assert 'ExecStart=/usr/bin/env APP_PROFILE=api /opt/businesaios/.venv/bin/python -m scripts.server.run_profile' in api
+    assert 'ExecStart=/usr/bin/env APP_PROFILE=worker /opt/businesaios/.venv/bin/python -m scripts.server.run_profile' in worker
     assert "env_str('RUN_MODE', env_str('APP_PROFILE', ''))" in guard
     assert "'entrypoint_basenames': {'run_http.py', 'run_profile.py'}" in guard
     assert "'module_suffixes': {'main', 'runtime.boot.telegram_webhook_runner', 'scripts.server.run_profile'}" in guard
@@ -73,7 +75,24 @@ def test_telegram_is_an_optional_connector_not_a_core_service() -> None:
     assert 'businesaios-worker.service' in installer
     assert 'ENABLE_TELEGRAM_CONNECTOR="${ENABLE_TELEGRAM_CONNECTOR:-0}"' in installer
     assert 'Environment=APP_PROFILE=telegram' in connector
+    assert 'ExecStart=/usr/bin/env APP_PROFILE=telegram /opt/businesaios/.venv/bin/python -m scripts.server.run_profile' in connector
     assert 'optional polling adapter' in connector
+
+
+def test_systemd_exec_boundary_pins_profile_after_shared_environment_files() -> None:
+    expected = {
+        'businesaios-api.service': 'api',
+        'businesaios-worker.service': 'worker',
+        'businesaios-connector-telegram.service': 'telegram',
+    }
+    for name, profile in expected.items():
+        unit = _read(name)
+        assert 'EnvironmentFile=/etc/businesaios/api.env' in unit
+        assert f'Environment=APP_PROFILE={profile}' in unit
+        assert (
+            f'ExecStart=/usr/bin/env APP_PROFILE={profile} '
+            '/opt/businesaios/.venv/bin/python -m scripts.server.run_profile'
+        ) in unit
 
 
 def test_legacy_telegram_centric_units_are_not_shipped() -> None:
