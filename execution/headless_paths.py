@@ -26,9 +26,15 @@ def _resolve_headless_root(*, root_dir: str | Path | None = None) -> Path:
         return Path(env_root)
     if _is_test_process():
         return Path(".runtime")
-    env_data = _env("BUSINESAIOS_DATA_DIR")
-    if env_data:
-        return Path(env_data)
+    for name in (
+        "BUSINESAIOS_DATA_DIR",
+        "APP_RUNTIME_DATA_DIR",
+        "BAIOS_DATA_DIR",
+        "DATA_DIR",
+    ):
+        env_data = _env(name)
+        if env_data:
+            return Path(env_data)
     return Path(".runtime")
 
 
