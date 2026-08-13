@@ -89,9 +89,10 @@ ensure_runtime_access() {
 }
 
 verify_legacy_security_lineage() {
-  LEGACY_SECURITY_DIR="$LEGACY_SECURITY_DIR" \
-  RUNTIME_SECURITY_DIR="$RUNTIME_SECURITY_DIR" \
-  "$PYTHON_BIN" - <<'PY'
+  run_root env \
+    LEGACY_SECURITY_DIR="$LEGACY_SECURITY_DIR" \
+    RUNTIME_SECURITY_DIR="$RUNTIME_SECURITY_DIR" \
+    "$PYTHON_BIN" - <<'PY'
 from __future__ import annotations
 
 import filecmp
@@ -129,7 +130,8 @@ def _migrated_shape_is_valid(relative: str, current: Path) -> bool:
         if not all(isinstance(item, dict) for item in records):
             return False
         wrapped = all(
-            bool(str(item.get("wrapped_secret") or "").strip())
+            str(item.get("key_envelope_version") or "").strip() == "BAIOS-KE2"
+            and bool(str(item.get("wrapped_secret") or "").strip())
             and not bool(str(item.get("secret_b64") or "").strip())
             for item in records
         )
