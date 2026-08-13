@@ -48,13 +48,27 @@ def test_systemd_installer_migrates_legacy_security_state_fail_closed() -> None:
     assert 'RUNTIME_SECURITY_DIR="${RUNTIME_SECURITY_DIR:-${RUNTIME_DATA_DIR}/security}"' in installer
     assert 'run_root cp -a "$LEGACY_SECURITY_DIR/." "$RUNTIME_SECURITY_DIR/"' in installer
     assert 'diff -qr "$LEGACY_SECURITY_DIR" "$RUNTIME_SECURITY_DIR"' in installer
-    assert 'refusing to overwrite divergent runtime security state' in installer
+    assert 'verify_legacy_security_lineage' in installer
+    assert 'key_provider.json.legacy-secret-b64.bak' in installer
+    assert 'key_provider.json.pre-inline-vault-keys.bak' in installer
+    assert 'secret_vault.json.legacy-inline-keys.bak' in installer
+    assert 'wrapped_secret' in installer
+    assert 'external_key_provider' in installer
+    assert 'inline_key_migration' in installer
+    assert 'unverified divergent legacy security file' in installer
+    assert 'divergent runtime security state has verified migration lineage' in installer
+    assert 'preserving verified migrated runtime security state' in installer
+    assert 'refusing to overwrite divergent runtime security state without verified migration lineage' in installer
     assert 'legacy security source preserved' in installer
     assert 'run_root chown -R "$RUNTIME_USER:$RUNTIME_GROUP" "$RUNTIME_SECURITY_DIR"' in installer
     assert 'run_root runuser -u "$RUNTIME_USER" -- test -w "$RUNTIME_SECURITY_DIR"' in installer
 
-    # Migration is copy-and-verify; the legacy encrypted source remains a
-    # rollback asset until production verification is complete.
+    # First migration remains copy-and-verify. On later deploys, a non-empty
+    # runtime may differ only as a recognized canonical migration successor:
+    # every changed legacy source must match an approved rollback backup and
+    # the live key/vault file must have the expected post-migration shape.
+    # Unknown divergence stays fail-closed and the preserved legacy source is
+    # never removed or moved out of the application tree.
     assert 'rm -rf "$LEGACY_SECURITY_DIR"' not in installer
     assert 'mv "$LEGACY_SECURITY_DIR"' not in installer
 
