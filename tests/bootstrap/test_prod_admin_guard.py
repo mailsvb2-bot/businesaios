@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from bootstrap import prod_guards
@@ -19,21 +17,13 @@ def test_zero_admins_remains_fail_closed(monkeypatch: pytest.MonkeyPatch) -> Non
         prod_guards.enforce_two_admins_in_prod_or_explain()
 
 
-def test_one_admin_is_valid_for_prod_telegram(monkeypatch: pytest.MonkeyPatch) -> None:
-    _prod(monkeypatch)
-    monkeypatch.setenv("ADMIN_USER_IDS", "123456789")
-    prod_guards.enforce_two_admins_in_prod_or_explain()
-
-
-def test_one_admin_is_valid_for_prod_webhook(monkeypatch: pytest.MonkeyPatch) -> None:
-    _prod(monkeypatch, "webhook")
-    monkeypatch.setenv("ADMIN_USER_IDS", "123456789")
-    prod_guards.enforce_two_admins_in_prod_or_explain()
-
-
-def test_admin_alias_accepts_one_admin(monkeypatch: pytest.MonkeyPatch) -> None:
-    _prod(monkeypatch)
-    monkeypatch.setenv("ADMIN_IDS", "123456789")
+@pytest.mark.parametrize(
+    ("profile", "admin_var"),
+    [("telegram", "ADMIN_USER_IDS"), ("webhook", "ADMIN_USER_IDS"), ("telegram", "ADMIN_IDS")],
+)
+def test_one_admin_is_valid(monkeypatch: pytest.MonkeyPatch, profile: str, admin_var: str) -> None:
+    _prod(monkeypatch, profile)
+    monkeypatch.setenv(admin_var, "123456789")
     prod_guards.enforce_two_admins_in_prod_or_explain()
 
 
