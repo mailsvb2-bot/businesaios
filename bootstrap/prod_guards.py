@@ -59,28 +59,17 @@ def enforce_production_strict_mode() -> None:
 
 def _normalized_admin_ids() -> tuple[str, ...]:
     raw = env_str('ADMIN_USER_IDS', '').strip() or env_str('ADMIN_IDS', '').strip()
-    unique: list[str] = []
-    for part in raw.split(','):
-        admin_id = part.strip()
-        if admin_id and admin_id not in unique:
-            unique.append(admin_id)
-    return tuple(unique)
+    return tuple(dict.fromkeys(part.strip() for part in raw.split(',') if part.strip()))
 
 def enforce_two_admins_in_prod_or_explain() -> None:
-    """Require at least one configured admin for production Telegram/webhook profiles.
-
-    The historical function name is retained for import compatibility. Production may
-    be legitimately operated by a single owner/admin; zero configured admins remains
-    fail-closed. Duplicate IDs do not count as additional administrators.
-    """
+    """Require at least one configured admin for production Telegram/webhook profiles."""
     app_env = env_str('APP_ENV', env_str('ENV', 'dev')).lower()
     if app_env != 'prod' or not env_bool('PRODUCTION_STRICT_MODE', True):
         return
     profile = env_str('RUN_MODE', env_str('APP_PROFILE', '')).lower().strip()
     if profile not in {'telegram', 'webhook'}:
         return
-    ids = _normalized_admin_ids()
-    if ids:
+    if _normalized_admin_ids():
         return
     msg = (
         '\n⛔ GOVERNANCE GUARD: требуется минимум 1 администратор.\n\n'
