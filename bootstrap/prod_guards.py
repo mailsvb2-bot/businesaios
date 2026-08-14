@@ -23,22 +23,10 @@ def enforce_production_strict_mode() -> None:
     if not run_mode:
         raise RuntimeError('PROD_STRICT_RUN_MODE:unset')
     allowed_profiles = {
-        'api': {
-            'entrypoint_basenames': {'run_http.py', 'run_profile.py'},
-            'module_suffixes': {'entrypoints.api.run_http', 'scripts.server.run_profile'},
-        },
-        'telegram': {
-            'entrypoint_basenames': {'main.py', 'run_profile.py'},
-            'module_suffixes': {'main', 'runtime.boot.telegram_webhook_runner', 'scripts.server.run_profile'},
-        },
-        'worker': {
-            'entrypoint_basenames': {'run_profile.py'},
-            'module_suffixes': {'scripts.server.run_profile'},
-        },
-        'evolution': {
-            'entrypoint_basenames': {'run_profile.py'},
-            'module_suffixes': {'scripts.server.run_profile'},
-        },
+        'api': {'entrypoint_basenames': {'run_http.py', 'run_profile.py'}, 'module_suffixes': {'entrypoints.api.run_http', 'scripts.server.run_profile'}},
+        'telegram': {'entrypoint_basenames': {'main.py', 'run_profile.py'}, 'module_suffixes': {'main', 'runtime.boot.telegram_webhook_runner', 'scripts.server.run_profile'}},
+        'worker': {'entrypoint_basenames': {'run_profile.py'}, 'module_suffixes': {'scripts.server.run_profile'}},
+        'evolution': {'entrypoint_basenames': {'run_profile.py'}, 'module_suffixes': {'scripts.server.run_profile'}},
     }
     if run_mode not in allowed_profiles:
         raise RuntimeError(f'PROD_STRICT_RUN_MODE:{run_mode}')
@@ -48,34 +36,40 @@ def enforce_production_strict_mode() -> None:
     profile = allowed_profiles[run_mode]
     allowed_basenames = profile['entrypoint_basenames']
     allowed_modules = profile['module_suffixes']
-    if base in allowed_basenames:
-        return
-    if main_module in allowed_modules:
+    if base in allowed_basenames or main_module in allowed_modules:
         return
     raise RuntimeError(
         'PROD_STRICT_ENTRYPOINT:'
         f'run_mode={run_mode}:base={base or "<empty>"}:module={main_module or "<empty>"}'
     )
 
-def _normalized_admin_ids() -> tuple[str, ...]:
+def _production_governance_admin_ids() -> tuple[str, ...]:
     raw = env_str('ADMIN_USER_IDS', '').strip() or env_str('ADMIN_IDS', '').strip()
     return tuple(dict.fromkeys(part.strip() for part in raw.split(',') if part.strip()))
 
+def _telegram_governance_applies(profile: str) -> bool:
+    return profile in {'telegram', 'webhook'} or (
+        profile == 'api' and env_bool('TELEGRAM_WEBHOOK_ENABLED', env_bool('TELEGRAM_USE_WEBHOOK', False))
+    )
+
 def enforce_two_admins_in_prod_or_explain() -> None:
-    """Require at least one configured admin for production Telegram/webhook profiles."""
     app_env = env_str('APP_ENV', env_str('ENV', 'dev')).lower()
     if app_env != 'prod' or not env_bool('PRODUCTION_STRICT_MODE', True):
         return
     profile = env_str('RUN_MODE', env_str('APP_PROFILE', '')).lower().strip()
-    if profile not in {'telegram', 'webhook'}:
+    if not _telegram_governance_applies(profile):
         return
-    if _normalized_admin_ids():
+    ids = _production_governance_admin_ids()
+    if any(not value.isdecimal() or int(value) <= 0 for value in ids):
+        raise RuntimeError('GOVERNANCE_ADMIN_IDS_INVALID')
+    if env_bool('ALLOW_SELF_APPROVE', False):
+        raise RuntimeError('GOVERNANCE_SELF_APPROVE_FORBIDDEN')
+    mode = env_str('GOVERNANCE_ADMIN_MODE', 'dual_control').lower().strip()
+    if mode == 'single_owner':
+        if len(ids) != 1:
+            raise RuntimeError('GOVERNANCE_SINGLE_OWNER_REQUIRED')
         return
-    msg = (
-        '\n⛔ GOVERNANCE GUARD: требуется минимум 1 администратор.\n\n'
-        'Для production Telegram/webhook должен быть указан хотя бы один реальный Telegram ID администратора.\n\n'
-        'Укажи его в .env:\n'
-        '  ADMIN_USER_IDS=123456789\n'
-    )
-    print(msg, file=sys.stderr)
-    raise RuntimeError('GOVERNANCE_ADMIN_REQUIRED')
+    if mode not in {'dual_control', 'two_admins'}:
+        raise RuntimeError(f'GOVERNANCE_ADMIN_MODE_INVALID:{mode}')
+    if len(ids) < 2:
+        raise RuntimeError('GOVERNANCE_TWO_ADMINS_REQUIRED')
