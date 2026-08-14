@@ -16,7 +16,7 @@ class FraudRiskTracker:
         if outcome.get('source_spoof_flag'):
             score += policy.source_spoof_flag_weight
         if outcome.get('existing_customer_flag'):
-            score += policy.existing_customer_weight
+            score += policy.existing_customer_flag_weight
         return min(policy.score_ceiling, round(score, 4))
 
     def penalty(self, outcome: dict[str, object]) -> float:
