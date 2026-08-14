@@ -7,7 +7,8 @@ set -euo pipefail
 # Validations (only when ENV=prod):
 #  - PRODUCTION_STRICT_MODE must be enabled
 #  - ALLOW_SELF_APPROVE must be disabled
-#  - ADMIN_USER_IDS must include at least 2 Telegram IDs
+#  - GOVERNANCE_ADMIN_MODE must be dual_control/two_admins or explicit single_owner
+#  - ADMIN_USER_IDS must contain valid positive Telegram user IDs for the selected topology
 #
 # Inputs (priority order):
 #  1) Current process environment (CI variables)
@@ -31,13 +32,17 @@ norm_bool() {
   echo "0"
 }
 
-count_admins() {
-  # NOTE: pass raw list via argv to keep shell quoting predictable.
+count_valid_unique_admins() {
+  # Returns -1 when any configured entry is not a positive Telegram user ID.
   python - "${1:-}" <<'PY'
 import sys
-raw=sys.argv[1] if len(sys.argv)>1 else ""
-parts=[p.strip() for p in raw.split(',') if p.strip()]
-print(len(parts))
+raw = sys.argv[1] if len(sys.argv) > 1 else ""
+parts = [p.strip() for p in raw.split(',') if p.strip()]
+unique = list(dict.fromkeys(parts))
+if any(not value.isdecimal() or int(value) <= 0 for value in unique):
+    print(-1)
+else:
+    print(len(unique))
 PY
 }
 
@@ -73,7 +78,7 @@ parse_env_file() {
       v="${v%\"}"; v="${v#\"}"
       v="${v%\'}"; v="${v#\'}"
       case "$k" in
-        ENV|APP_ENV|PRODUCTION_STRICT_MODE|ALLOW_SELF_APPROVE|ADMIN_USER_IDS)
+        ENV|APP_ENV|PRODUCTION_STRICT_MODE|ALLOW_SELF_APPROVE|ADMIN_USER_IDS|GOVERNANCE_ADMIN_MODE)
           set_var_if_empty "$k" "$v" "$f"
           ;;
       esac
@@ -162,7 +167,7 @@ for raw in lines:
             out.append((m.group(1), m.group(2).strip().strip('"\'')))
 
 for k,v in out:
-    if k in {'ENV','APP_ENV','PRODUCTION_STRICT_MODE','ALLOW_SELF_APPROVE','ADMIN_USER_IDS'}:
+    if k in {'ENV','APP_ENV','PRODUCTION_STRICT_MODE','ALLOW_SELF_APPROVE','ADMIN_USER_IDS','GOVERNANCE_ADMIN_MODE'}:
         print(f"{k}={v}")
 PY
 "$f" | while IFS= read -r kv; do
@@ -179,6 +184,7 @@ discover_sources() {
   [[ -n "${PRODUCTION_STRICT_MODE:-}" ]] && set_var_force "PRODUCTION_STRICT_MODE" "$PRODUCTION_STRICT_MODE" "CI_ENV"
   [[ -n "${ALLOW_SELF_APPROVE:-}" ]] && set_var_force "ALLOW_SELF_APPROVE" "$ALLOW_SELF_APPROVE" "CI_ENV"
   [[ -n "${ADMIN_USER_IDS:-}" ]] && set_var_force "ADMIN_USER_IDS" "$ADMIN_USER_IDS" "CI_ENV"
+  [[ -n "${GOVERNANCE_ADMIN_MODE:-}" ]] && set_var_force "GOVERNANCE_ADMIN_MODE" "$GOVERNANCE_ADMIN_MODE" "CI_ENV"
 
   # Common env files
   local env_candidates=(
@@ -211,6 +217,8 @@ check_effective() {
   local strict="${VAL[PRODUCTION_STRICT_MODE]:-}"
   local allow_self="${VAL[ALLOW_SELF_APPROVE]:-}"
   local admins="${VAL[ADMIN_USER_IDS]:-}"
+  local mode="${VAL[GOVERNANCE_ADMIN_MODE]:-dual_control}"
+  mode="${mode,,}"
 
   if [[ "$(norm_bool "$strict")" != "1" ]]; then
     local src="${SRC[PRODUCTION_STRICT_MODE]:-${SRC[ENV]:-${SRC[APP_ENV]:-unknown}}}"
@@ -223,17 +231,42 @@ check_effective() {
     local src="${SRC[ALLOW_SELF_APPROVE]:-unknown}"
     fail_with_hint \
       "⛔ CI / GOVERNANCE GUARD: В проде запрещён ALLOW_SELF_APPROVE=1" \
-      "Исправь в: ${src}\n\nВ проде нужно 2 администратора.\nДобавь второго админа в ADMIN_USER_IDS, например:\n  ADMIN_USER_IDS=123456789,987654321\n\nALLOW_SELF_APPROVE=1 допускается только локально/на стенде."
+      "Исправь в: ${src}\n\nОставь ALLOW_SELF_APPROVE=0. Для одного владельца явно используй GOVERNANCE_ADMIN_MODE=single_owner и один ADMIN_USER_IDS."
   fi
 
   local cnt
-  cnt=$(count_admins "$admins")
-  if [[ "$cnt" -lt 2 ]]; then
+  cnt=$(count_valid_unique_admins "$admins")
+  if [[ "$cnt" -lt 0 ]]; then
     local src="${SRC[ADMIN_USER_IDS]:-unknown}"
     fail_with_hint \
-      "⛔ CI / GOVERNANCE GUARD: В проде требуется минимум 2 администратора" \
-      "У тебя предусмотрено 2 админа.\nДобавь второго администратора в: ${src}\n\nДля добавления админа впиши его Telegram ID через запятую:\n  ADMIN_USER_IDS=123456789,987654321\n\nЕсли ты временно один — НЕ для прода: ALLOW_SELF_APPROVE=1"
+      "⛔ CI / GOVERNANCE GUARD: ADMIN_USER_IDS содержит некорректный Telegram user ID" \
+      "Исправь в: ${src}\n\nКаждый ADMIN_USER_IDS должен быть положительным числовым Telegram user ID."
   fi
+
+  case "$mode" in
+    single_owner)
+      if [[ "$cnt" -ne 1 ]]; then
+        local src="${SRC[ADMIN_USER_IDS]:-unknown}"
+        fail_with_hint \
+          "⛔ CI / GOVERNANCE GUARD: single_owner требует ровно одного администратора" \
+          "Исправь в: ${src}\n\nУкажи один положительный Telegram user ID:\n  GOVERNANCE_ADMIN_MODE=single_owner\n  ADMIN_USER_IDS=123456789\n  ALLOW_SELF_APPROVE=0"
+      fi
+      ;;
+    dual_control|two_admins)
+      if [[ "$cnt" -lt 2 ]]; then
+        local src="${SRC[ADMIN_USER_IDS]:-unknown}"
+        fail_with_hint \
+          "⛔ CI / GOVERNANCE GUARD: dual-control требует минимум 2 администратора" \
+          "Добавь два разных положительных Telegram user ID в: ${src}\n\nНапример:\n  GOVERNANCE_ADMIN_MODE=dual_control\n  ADMIN_USER_IDS=123456789,987654321\n  ALLOW_SELF_APPROVE=0\n\nЕсли production принадлежит одному человеку, явно выбери GOVERNANCE_ADMIN_MODE=single_owner."
+      fi
+      ;;
+    *)
+      local src="${SRC[GOVERNANCE_ADMIN_MODE]:-unknown}"
+      fail_with_hint \
+        "⛔ CI / GOVERNANCE GUARD: неизвестный GOVERNANCE_ADMIN_MODE=${mode}" \
+        "Исправь в: ${src}\n\nДопустимо: dual_control (по умолчанию), two_admins или single_owner."
+      ;;
+  esac
 }
 
 # Legacy: if explicit files were provided, parse them first (higher priority than auto-discovery).

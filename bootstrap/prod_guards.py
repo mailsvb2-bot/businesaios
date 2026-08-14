@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from runtime.platform.config.env_flags import env_bool, env_str
 
+
 def verify_release_attestation_if_needed() -> None:
     app_env = env_str('APP_ENV', env_str('ENV', 'dev')).lower()
     if app_env != 'prod' or not env_bool('RELEASE_ATTEST', True):
@@ -13,6 +14,7 @@ def verify_release_attestation_if_needed() -> None:
         verify_manifest(root_dir=root, manifest_path=root / 'release' / 'manifest.json')
     except Exception as e:
         raise RuntimeError(f'RELEASE_ATTESTATION_FAILED:{e}')
+
 
 def enforce_production_strict_mode() -> None:
     app_env = env_str('APP_ENV', env_str('ENV', 'dev')).lower()
@@ -57,25 +59,62 @@ def enforce_production_strict_mode() -> None:
         f'run_mode={run_mode}:base={base or "<empty>"}:module={main_module or "<empty>"}'
     )
 
-def _normalized_admin_ids() -> tuple[str, ...]:
+
+def _production_governance_admin_ids() -> tuple[str, ...]:
     raw = env_str('ADMIN_USER_IDS', '').strip() or env_str('ADMIN_IDS', '').strip()
     return tuple(dict.fromkeys(part.strip() for part in raw.split(',') if part.strip()))
 
+
+def _validate_telegram_user_ids(ids: tuple[str, ...]) -> None:
+    invalid = tuple(value for value in ids if not value.isdecimal() or int(value) <= 0)
+    if invalid:
+        raise RuntimeError('GOVERNANCE_ADMIN_IDS_INVALID')
+
+
+def _telegram_governance_applies(profile: str) -> bool:
+    if profile in {'telegram', 'webhook'}:
+        return True
+    if profile != 'api':
+        return False
+    telegram_token = env_str('TELEGRAM_BOT_TOKEN', '').strip()
+    webhook_enabled = env_bool(
+        'TELEGRAM_WEBHOOK_ENABLED',
+        env_bool('TELEGRAM_USE_WEBHOOK', False),
+    )
+    return bool(telegram_token) and webhook_enabled
+
+
 def enforce_two_admins_in_prod_or_explain() -> None:
-    """Require at least one configured admin for production Telegram/webhook profiles."""
     app_env = env_str('APP_ENV', env_str('ENV', 'dev')).lower()
     if app_env != 'prod' or not env_bool('PRODUCTION_STRICT_MODE', True):
         return
     profile = env_str('RUN_MODE', env_str('APP_PROFILE', '')).lower().strip()
-    if profile not in {'telegram', 'webhook'}:
+    if not _telegram_governance_applies(profile):
         return
-    if _normalized_admin_ids():
+
+    ids = _production_governance_admin_ids()
+    _validate_telegram_user_ids(ids)
+    mode = env_str('GOVERNANCE_ADMIN_MODE', 'dual_control').lower().strip()
+
+    if env_bool('ALLOW_SELF_APPROVE', False):
+        raise RuntimeError('GOVERNANCE_SELF_APPROVE_FORBIDDEN')
+
+    if mode == 'single_owner':
+        if len(ids) == 1:
+            return
+        print(
+            '\nGOVERNANCE GUARD: single-owner mode requires exactly one valid positive Telegram user ID in ADMIN_USER_IDS.\n',
+            file=sys.stderr,
+        )
+        raise RuntimeError('GOVERNANCE_SINGLE_OWNER_REQUIRED')
+
+    if mode not in {'dual_control', 'two_admins'}:
+        raise RuntimeError(f'GOVERNANCE_ADMIN_MODE_INVALID:{mode}')
+    if len(ids) >= 2:
         return
     msg = (
-        '\n⛔ GOVERNANCE GUARD: требуется минимум 1 администратор.\n\n'
-        'Для production Telegram/webhook должен быть указан хотя бы один реальный Telegram ID администратора.\n\n'
-        'Укажи его в .env:\n'
-        '  ADMIN_USER_IDS=123456789\n'
+        '\nGOVERNANCE GUARD: dual-control mode requires at least 2 administrators.\n'
+        'Use two distinct positive Telegram user IDs in ADMIN_USER_IDS, or explicitly select single_owner.\n'
     )
     print(msg, file=sys.stderr)
-    raise RuntimeError('GOVERNANCE_ADMIN_REQUIRED')
+    raise RuntimeError('GOVERNANCE_TWO_ADMINS_REQUIRED')
