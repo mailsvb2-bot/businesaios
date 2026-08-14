@@ -2,9 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
-from .contracts import SpendExternalIngressBatch, SpendExternalIngressRuntimeRequest, SpendFact, SpendIngressEnvelope, SpendSourceFact, SpendSourceIngressRecord
+from .contracts import (
+    SpendExternalIngressBatch,
+    SpendExternalIngressRuntimeRequest,
+    SpendFact,
+    SpendIngressEnvelope,
+    SpendSourceFact,
+    SpendSourceIngressRecord,
+)
 
 CANON_SPEND_PUBLIC_API = True
 
@@ -306,7 +314,7 @@ def build_spend_external_ingress_runtime_request_from_client_outcome(*, truth_sn
     stages = list(batch.lifecycle_stages)
     runtime_request: dict[str, object] | None = None
     status = 'blocked'
-    if batch.batch_payload is not None and str((manifest.get('hash') or '')).strip():
+    if batch.batch_payload is not None and str(manifest.get('hash') or '').strip():
         runtime_request = {
             'batch_id': batch.batch_id,
             'amount_minor': batch.amount_minor,
