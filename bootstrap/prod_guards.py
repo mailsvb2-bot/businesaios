@@ -76,12 +76,7 @@ def _telegram_governance_applies(profile: str) -> bool:
         return True
     if profile != 'api':
         return False
-    telegram_token = env_str('TELEGRAM_BOT_TOKEN', '').strip()
-    webhook_enabled = env_bool(
-        'TELEGRAM_WEBHOOK_ENABLED',
-        env_bool('TELEGRAM_USE_WEBHOOK', False),
-    )
-    return bool(telegram_token) and webhook_enabled
+    return env_bool('TELEGRAM_WEBHOOK_ENABLED', env_bool('TELEGRAM_USE_WEBHOOK', False))
 
 
 def enforce_two_admins_in_prod_or_explain() -> None:
