@@ -16,7 +16,9 @@ def assert_crm_registry_consistency(
     provider it cannot execute or execute a provider DecisionCore cannot see.
     """
 
-    provider_keys = set(provider_registry.keys())
+    provider_keys = {
+        provider.provider_key for provider in provider_registry.list_enabled()
+    }
     connector_keys = set(connector_registry.keys())
 
     missing_connectors = provider_keys - connector_keys

@@ -51,6 +51,12 @@ _OWNER_MAP = {
     'CrmPipelineUpsertService': ('crm.pipeline.crm_pipeline_upsert_service', 'CrmPipelineUpsertService'),
     'CrmCapabilityRegistry': ('crm.registry.crm_capability_registry', 'CrmCapabilityRegistry'),
     'CrmConnectorRegistry': ('crm.registry.crm_connector_registry', 'CrmConnectorRegistry'),
+    'CrmProviderAssembly': ('crm.registry.crm_provider_assembly', 'CrmProviderAssembly'),
+    'CrmProviderDefinition': ('crm.registry.crm_provider_definition', 'CrmProviderDefinition'),
+    'build_default_crm_provider_definitions': (
+        'crm.registry.crm_provider_definitions',
+        'build_default_crm_provider_definitions',
+    ),
     'build_default_provider_catalog': ('crm.registry.crm_provider_catalog', 'build_default_provider_catalog'),
     'CrmProviderRegistry': ('crm.registry.crm_provider_registry', 'CrmProviderRegistry'),
     'CrmProviderSelector': ('crm.registry.crm_provider_selector', 'CrmProviderSelector'),

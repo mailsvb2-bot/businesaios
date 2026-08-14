@@ -79,6 +79,7 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
                 "tests/ads_autopilot",
                 "tests/core/product",
                 "tests/core/experiments",
+                "tests/external_integrations",
             )
             if (root / rel).exists()
         )
@@ -95,6 +96,22 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
                 "canon",
                 "contracts",
                 "config",
+                "market_intelligence",
+                "integration_observations",
+                "crm/__init__.py",
+                "crm/providers/salesforce",
+                "crm/providers/amocrm",
+                "crm/providers/bitrix24",
+                "crm/providers/common/crm_oauth_query_client.py",
+                "crm/onboarding/crm_connection_flow.py",
+                "crm/onboarding/crm_provider_connection_metadata.py",
+                "crm/registry/crm_connector_registry.py",
+                "crm/registry/crm_provider_catalog.py",
+                "crm/registry/crm_provider_definition.py",
+                "crm/registry/crm_provider_definitions.py",
+                "crm/registry/crm_provider_assembly.py",
+                "crm/registry/crm_registry_consistency.py",
+                "crm/state/crm_state_feed.py",
             )
             if (root / rel).exists()
         ),

@@ -45,12 +45,18 @@ class CrmConnectionFlow:
         external_account_id: str | None = None,
     ) -> CrmConnectionResult:
         start_request = self._state_store.pop(callback.state_token)
+        self._assert_provider_binding(
+            start_request=start_request,
+            callback=callback,
+            connector=connector,
+        )
         self._state_machine.transition('oauth_started', 'authorized')
         live_api = self._exchange_live_oauth_if_supported(
             connector=connector,
             secret_ref=secret_ref,
             authorization_code=callback.authorization_code,
             redirect_uri=start_request.redirect_uri,
+            callback_metadata=callback.metadata,
         )
 
         credential_binding = CrmCredentialBinding(
@@ -72,7 +78,6 @@ class CrmConnectionFlow:
                     provider_key=start_request.provider_key,
                     token_ref=credential_binding.token_binding_ref,
                 ),
-                'oauth_state_token': callback.state_token,
                 'live_api': live_api,
                 **provider_metadata,
             }
@@ -95,16 +100,37 @@ class CrmConnectionFlow:
         return self._verifier.verify(connector, connection)
 
     @staticmethod
+    def _assert_provider_binding(*, start_request, callback, connector) -> None:
+        expected = str(start_request.provider_key or '').strip()
+        observed = str(callback.provider_key or '').strip()
+        connector_provider = getattr(connector, 'provider', None)
+        connector_key = str(getattr(connector_provider, 'provider_key', '') or '').strip()
+        if not expected or observed != expected:
+            raise ValueError('CRM OAuth callback provider does not match saved state')
+        if connector_key != expected:
+            raise ValueError('CRM OAuth connector provider does not match saved state')
+
+    @staticmethod
     def _exchange_live_oauth_if_supported(
         *,
         connector,
         secret_ref: str,
         authorization_code: str,
         redirect_uri: str,
+        callback_metadata,
     ) -> bool:
         supports_live = bool(getattr(connector, 'supports_live_api', lambda: False)())
         if not supports_live:
             return False
+        exchange_with_metadata = getattr(connector, 'exchange_oauth_code_with_metadata', None)
+        if callable(exchange_with_metadata):
+            exchange_with_metadata(
+                secret_ref=secret_ref,
+                authorization_code=authorization_code,
+                redirect_uri=redirect_uri,
+                callback_metadata=callback_metadata,
+            )
+            return True
         exchange = getattr(connector, 'exchange_oauth_code', None)
         if exchange is None:
             raise RuntimeError('Connector claims live API support but does not expose exchange_oauth_code')

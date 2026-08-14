@@ -5,6 +5,8 @@ from typing import Mapping
 _ALLOWED_PROVIDER_METADATA: dict[str, tuple[str, ...]] = {
     "hubspot": ("portal_id", "hub_id", "account_id", "region"),
     "pipedrive": ("company_domain", "account_id", "region"),
+    "amocrm": ("referer", "account_id"),
+    "bitrix24": ("domain", "member_id"),
 }
 
 
