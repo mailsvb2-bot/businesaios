@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import Mapping, Sequence
 
 from shared.kinded_payloads import build_kinded_payload
 
@@ -29,7 +29,7 @@ class Touchpoint:
     contact_fingerprint: str = ''
 
     @classmethod
-    def from_mapping(cls, payload: Mapping[str, object]) -> 'Touchpoint':
+    def from_mapping(cls, payload: Mapping[str, object]) -> Touchpoint:
         return cls(
             source=str(payload.get('source', 'unknown')),
             channel=str(payload.get('channel', payload.get('source', 'unknown'))),

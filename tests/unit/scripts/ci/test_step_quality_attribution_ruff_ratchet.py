@@ -12,7 +12,7 @@ def _outcome(*, returncode: int) -> CommandOutcome:
     return CommandOutcome(returncode=returncode, stdout="", stderr="")
 
 
-def test_attribution_i001_ratchet_blocks_regressions(
+def test_attribution_modernization_ratchet_blocks_regressions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -38,6 +38,6 @@ def test_attribution_i001_ratchet_blocks_regressions(
     ok, message, payload = quality._ruff_check()
 
     assert ok is False
-    assert message == "attribution I001 ruff ratchet failed"
-    assert payload["attribution_i001_passed"] is False
-    assert payload["violations"] == ["attribution_i001_ratchet_failed"]
+    assert message == "attribution I001,UP035,UP037 ruff ratchet failed"
+    assert payload["attribution_i001,up035,up037_passed"] is False
+    assert payload["violations"] == ["attribution_i001,up035,up037_ratchet_failed"]
