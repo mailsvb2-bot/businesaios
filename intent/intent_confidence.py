@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from contracts.demand import ClientIntentSignal
+
 
 def compute_confidence(signals: tuple[ClientIntentSignal, ...]) -> float:
     if not signals:
