@@ -1,5 +1,7 @@
 from __future__ import annotations
+
 from contracts.demand import ClientIntentSignal
+
 
 class IntentExplainer:
     def explain(self, signals: tuple[ClientIntentSignal, ...]) -> tuple[str, ...]:
