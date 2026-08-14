@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from shared.numbers import coerce_float, coerce_int
+
 from .feasibility_solver import AcquisitionFeasibilityRequest
 from .funnel_model import FunnelStage
-from shared.numbers import coerce_float, coerce_int
 
 CANON_ACQUISITION_REQUEST_ADAPTER = True
 
@@ -35,11 +36,7 @@ def request_from_payload(
     )
 
     raw_stages = payload.get("stages")
-    if (
-        isinstance(raw_stages, Mapping)
-        or isinstance(raw_stages, (str, bytes))
-        or not isinstance(raw_stages, Iterable)
-    ):
+    if isinstance(raw_stages, Mapping | str | bytes) or not isinstance(raw_stages, Iterable):
         raise AcquisitionPayloadError(
             "stages must be an iterable of stage mappings or FunnelStage objects"
         )
