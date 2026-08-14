@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from .feasibility_solver import AcquisitionFeasibilityRequest, AcquisitionFeasibilityResult
 from .public_api_owner import AcquisitionPublicAPI, create_acquisition_public_api
