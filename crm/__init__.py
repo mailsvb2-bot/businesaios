@@ -1,15 +1,15 @@
-from __future__ import annotations
-
 """Canonical CRM package root.
 
 The package root is the single CRM owner surface. ``crm.public_api`` remains
 available only as a compatibility shell for historical imports.
 """
 
+from __future__ import annotations
+
 from importlib import import_module
+from typing import Any
 
 from canon.public_api_alias import install_public_api_alias
-from typing import Any
 
 CANON_CRM_PACKAGE_OWNER = True
 CANON_CRM_PUBLIC_API = True
@@ -51,6 +51,12 @@ _OWNER_MAP = {
     'CrmPipelineUpsertService': ('crm.pipeline.crm_pipeline_upsert_service', 'CrmPipelineUpsertService'),
     'CrmCapabilityRegistry': ('crm.registry.crm_capability_registry', 'CrmCapabilityRegistry'),
     'CrmConnectorRegistry': ('crm.registry.crm_connector_registry', 'CrmConnectorRegistry'),
+    'CrmProviderAssembly': ('crm.registry.crm_provider_assembly', 'CrmProviderAssembly'),
+    'CrmProviderDefinition': ('crm.registry.crm_provider_definition', 'CrmProviderDefinition'),
+    'build_default_crm_provider_definitions': (
+        'crm.registry.crm_provider_definitions',
+        'build_default_crm_provider_definitions',
+    ),
     'build_default_provider_catalog': ('crm.registry.crm_provider_catalog', 'build_default_provider_catalog'),
     'CrmProviderRegistry': ('crm.registry.crm_provider_registry', 'CrmProviderRegistry'),
     'CrmProviderSelector': ('crm.registry.crm_provider_selector', 'CrmProviderSelector'),

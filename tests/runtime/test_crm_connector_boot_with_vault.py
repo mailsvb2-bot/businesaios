@@ -1,4 +1,7 @@
-from runtime.bootstrap.crm_connector_boot import _build_token_store, build_crm_connector_registry
+from runtime.bootstrap.crm_connector_boot import (
+    _build_token_store,
+    build_crm_connector_registry,
+)
 from security.secret_vault import InMemorySecretVault
 
 
@@ -14,11 +17,17 @@ class _TokenStore:
 
 
 def test_connector_boot_accepts_injected_token_store() -> None:
-    registry = build_crm_connector_registry(token_store=_TokenStore(), vault=InMemorySecretVault())
-    assert registry.get("hubspot") is not None
-    assert registry.get("pipedrive") is not None
-
-
+    registry = build_crm_connector_registry(
+        token_store=_TokenStore(),
+        vault=InMemorySecretVault(),
+    )
+    assert registry.keys() == (
+        'amocrm',
+        'bitrix24',
+        'hubspot',
+        'pipedrive',
+        'salesforce',
+    )
 
 
 def test_connector_boot_prefers_vault_backed_store_when_vault_is_injected() -> None:
