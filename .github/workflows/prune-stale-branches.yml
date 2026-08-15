@@ -4,6 +4,11 @@ on:
   pull_request:
     types:
       - closed
+  push:
+    branches:
+      - main
+    paths:
+      - .github/branch-prune-request.tsv
 
 permissions:
   contents: read
@@ -91,3 +96,113 @@ jobs:
 
           echo "atomic deletion failed while $branch still points to merged SHA $expected_sha" >&2
           exit 1
+
+  validate-snapshot-prune:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      TRUSTED_HEAD_SHA: ${{ github.sha }}
+    steps:
+      - name: Check out exact trusted main revision without persisted credentials
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify exact checkout and request shape
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TRUSTED_HEAD_SHA"
+          test -s .github/branch-prune-request.tsv
+          while IFS=$'\t' read -r branch expected_sha extra; do
+            [ -z "$branch" ] && continue
+            case "$branch" in \#*) continue ;; esac
+            [ -z "${extra:-}" ] || { echo "unexpected third column for $branch" >&2; exit 64; }
+            [ "$branch" != "main" ] || { echo "main must never appear in prune request" >&2; exit 64; }
+            [ "${#expected_sha}" -eq 40 ] && [[ ! "$expected_sha" =~ [^0-9a-f] ]] || {
+              echo "bad expected SHA for $branch" >&2
+              exit 64
+            }
+          done < .github/branch-prune-request.tsv
+
+      - name: Run canonical doctor gate
+        shell: bash
+        run: python -m scripts.ci.cli --gate doctor
+
+  delete-snapshot-branches:
+    needs: validate-snapshot-prune
+    if: needs.validate-snapshot-prune.result == 'success'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Check out exact prune request without persisted credentials
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Delete only unchanged branches with no open pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          default_branch="${{ github.event.repository.default_branch }}"
+          owner="${GITHUB_REPOSITORY%%/*}"
+
+          repo_dir="$RUNNER_TEMP/snapshot-branch-gc"
+          rm -rf "$repo_dir"
+          git init --quiet "$repo_dir"
+          cd "$repo_dir"
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          gh auth setup-git
+
+          deleted=0
+          preserved=0
+          while IFS=$'\t' read -r branch expected_sha extra; do
+            [ -z "$branch" ] && continue
+            case "$branch" in \#*) continue ;; esac
+            [ "$branch" != "$default_branch" ] || {
+              echo "refusing to delete default branch: $branch" >&2
+              exit 64
+            }
+
+            ref="refs/heads/$branch"
+            current_sha="$(git ls-remote origin "$ref" | awk 'NR == 1 { print $1 }')"
+            if [ -z "$current_sha" ]; then
+              echo "already_absent=$branch"
+              continue
+            fi
+            if [ "$current_sha" != "$expected_sha" ]; then
+              echo "preserved_changed_ref=$branch expected=$expected_sha current=$current_sha"
+              preserved=$((preserved + 1))
+              continue
+            fi
+
+            open_prs="$(gh api --paginate \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/${GITHUB_REPOSITORY}/pulls?state=open&head=${owner}:${branch}&per_page=100" \
+              --jq 'length' | awk '{ total += $1 } END { print total + 0 }')"
+            if [ "$open_prs" -ne 0 ]; then
+              echo "preserved_open_pr_head=$branch count=$open_prs"
+              preserved=$((preserved + 1))
+              continue
+            fi
+
+            git push origin --force-with-lease="$ref:$expected_sha" ":$ref"
+            echo "deleted=$branch sha=$expected_sha"
+            deleted=$((deleted + 1))
+          done < "$GITHUB_WORKSPACE/.github/branch-prune-request.tsv"
+
+          echo "deleted_count=$deleted preserved_count=$preserved"
+          [ "$preserved" -eq 0 ] || {
+            echo "one or more branches changed or gained an open PR after the audited snapshot" >&2
+            exit 1
+          }
