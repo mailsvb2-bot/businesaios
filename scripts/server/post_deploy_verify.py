@@ -5,9 +5,10 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from scripts.ci.http_probe_io import fetch_json
 from scripts.server.smoke_flow import run_smoke_flow
