@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
-
 _WORDSTAT_HOST = 'api.wordstat.yandex.net'
 _WEBMASTER_HOST = 'api.webmaster.yandex.net'
 _ALLOWED_DEVICES = frozenset({'all', 'desktop', 'phone', 'tablet'})

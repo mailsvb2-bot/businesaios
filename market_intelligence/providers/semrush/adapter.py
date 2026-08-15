@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from hashlib import sha256
 
 from market_intelligence.contracts import (
@@ -31,7 +31,7 @@ class SemrushMarketIntelligenceProvider(MarketIntelligenceProvider):
         )
 
     def keyword_demand(self, *, tenant_id: str, business_id: str, queries: Sequence[str], database: str) -> MarketIntelligenceSnapshot:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         observations: list[SearchDemandObservation] = []
         rows = self._client.keyword_overviews(phrases=queries, database=database)
         for row in rows:
@@ -56,7 +56,7 @@ class SemrushMarketIntelligenceProvider(MarketIntelligenceProvider):
         )
 
     def organic_visibility(self, *, tenant_id: str, business_id: str, domain: str, database: str, limit: int = 100) -> MarketIntelligenceSnapshot:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         observations: list[SearchVisibilityObservation] = []
         for row in self._client.domain_organic_keywords(domain=domain, database=database, limit=limit):
             query = row.get('Keyword') or row.get('Ph') or ''

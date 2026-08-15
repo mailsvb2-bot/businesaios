@@ -21,7 +21,7 @@ class CrmConnectorRegistry:
         cls,
         *,
         extra_definitions: tuple[CrmProviderDefinition, ...] = (),
-    ) -> 'CrmConnectorRegistry':
+    ) -> CrmConnectorRegistry:
         definitions = merge_provider_definitions(
             build_default_crm_provider_definitions(),
             extra_definitions,
@@ -32,7 +32,7 @@ class CrmConnectorRegistry:
     def from_definitions(
         cls,
         definitions: tuple[CrmProviderDefinition, ...],
-    ) -> 'CrmConnectorRegistry':
+    ) -> CrmConnectorRegistry:
         connectors: dict[str, CrmConnector] = {}
         seen: set[str] = set()
         for definition in definitions:

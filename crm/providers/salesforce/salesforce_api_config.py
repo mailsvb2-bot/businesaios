@@ -4,7 +4,6 @@ import re
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
-
 _API_VERSION_RE = re.compile(r'^v\d+\.\d+$')
 
 

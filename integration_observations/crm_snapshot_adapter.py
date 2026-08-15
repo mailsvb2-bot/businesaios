@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping as MappingABC
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from crm.crm_connection_contract import CrmConnectionRef
 from crm.crm_connector_contract import CrmConnector
 from integration_observations.contracts import ProviderObservationEnvelope
-
 
 _BLOCKED_SECRET_KEYS = frozenset({
     'secretref', 'accesstoken', 'refreshtoken', 'authorization',
@@ -31,7 +30,7 @@ class CrmSnapshotObservationAdapter:
             business_id=connection.business_id,
             provider_key=connection.provider_key,
             observation_type='crm.snapshot',
-            observed_at=datetime.now(timezone.utc),
+            observed_at=datetime.now(UTC),
             payload=self._sanitize(snapshot),
             metadata={'connection_id': connection.connection_id},
         )
@@ -48,7 +47,7 @@ class CrmSnapshotObservationAdapter:
             return [cls._sanitize_value(item) for item in value]
         if isinstance(value, tuple):
             return tuple(cls._sanitize_value(item) for item in value)
-        if isinstance(value, (set, frozenset)):
+        if isinstance(value, set | frozenset):
             sanitized_items = [cls._sanitize_value(item) for item in value]
             return tuple(sorted(sanitized_items, key=repr))
         return value

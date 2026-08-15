@@ -4,7 +4,6 @@ from collections.abc import Mapping as MappingABC
 from dataclasses import dataclass, field
 from datetime import datetime
 
-
 FORBIDDEN_OBSERVATION_KEYS = frozenset({
     'finaldecision', 'winner', 'winningcreative', 'executorcommand',
     'directaction', 'approvedaction', 'actiontoexecute',
@@ -23,7 +22,7 @@ def _find_forbidden_keys(value: object) -> set[str]:
             if key_text in FORBIDDEN_OBSERVATION_KEYS:
                 found.add(key_text)
             found.update(_find_forbidden_keys(nested))
-    elif isinstance(value, (list, tuple, set, frozenset)):
+    elif isinstance(value, list | tuple | set | frozenset):
         for nested in value:
             found.update(_find_forbidden_keys(nested))
     return found

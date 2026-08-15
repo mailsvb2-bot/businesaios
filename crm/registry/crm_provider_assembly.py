@@ -29,7 +29,7 @@ class CrmProviderAssembly:
         cls,
         *,
         extra_definitions: tuple[CrmProviderDefinition, ...] = (),
-    ) -> 'CrmProviderAssembly':
+    ) -> CrmProviderAssembly:
         return cls(
             definitions=merge_provider_definitions(
                 build_default_crm_provider_definitions(),
@@ -41,7 +41,7 @@ class CrmProviderAssembly:
     def from_definitions(
         cls,
         definitions: tuple[CrmProviderDefinition, ...],
-    ) -> 'CrmProviderAssembly':
+    ) -> CrmProviderAssembly:
         return cls(definitions=merge_provider_definitions((), definitions))
 
     def build_provider_registry(self) -> CrmProviderRegistry:
