@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import os
 import uuid
 
 from scripts.ci.http_probe_io import fetch_json
+
 CANON_SERVER_SMOKE_FLOW = True
 
 
@@ -15,8 +17,7 @@ def _required_env(name: str, forbidden: str) -> str:
 
 def build_smoke_identity() -> dict[str, str]:
     run_id = uuid.uuid4().hex
-    return {"run_id": run_id, "idempotency_key": f"post-deploy-{run_id}",
-            "action_id": f"post-deploy-action-{run_id}", "offer_id": f"post-deploy-offer-{run_id}"}
+    return {"run_id": run_id, "idempotency_key": f"post-deploy-{run_id}", "action_id": f"post-deploy-action-{run_id}", "offer_id": f"post-deploy-offer-{run_id}"}
 
 
 def run_smoke_flow() -> dict[str, str]:
@@ -38,8 +39,7 @@ def run_smoke_flow() -> dict[str, str]:
     assert status == 200 and str(ready.get("status")).lower() == "ready"
     status, tenants = call("/control-plane/admin/tenants")
     assert status == 200 and "tenants" in tenants
-    status, result = call("/actions/execute", "POST", {"action_type": "pricing.publish_offer",
-                          "payload": {"offer_id": ids["offer_id"], "amount": 199}})
+    status, result = call("/actions/execute", "POST", {"action_type": "pricing.publish_offer", "payload": {"offer_id": ids["offer_id"], "amount": 199}})
     assert status == 200 and str(result.get("status") or "").lower() not in {"error", "failed"}
     status, audit = call("/control-plane/audit/actions")
     assert status == 200 and "records" in audit
