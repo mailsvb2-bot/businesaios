@@ -6,7 +6,6 @@ from market_intelligence.providers.semrush.config import SemrushConfig
 from market_intelligence.providers.semrush.parser import parse_semrush_table
 from market_intelligence.transport import ReadOnlyHttpTransport
 
-
 _KEYWORD_EXPORT_COLUMNS = 'Ph,Nq,Cp,Co,Nr,Kd'
 _DOMAIN_ORGANIC_EXPORT_COLUMNS = 'Ph,Po,Ur,Tr'
 

@@ -15,7 +15,7 @@ class MarketIntelligenceRegistry:
     @classmethod
     def from_providers(
         cls, providers: Iterable[MarketIntelligenceProvider]
-    ) -> 'MarketIntelligenceRegistry':
+    ) -> MarketIntelligenceRegistry:
         resolved: dict[str, MarketIntelligenceProvider] = {}
         for provider in providers:
             key = str(provider.provider_key or '').strip().casefold()

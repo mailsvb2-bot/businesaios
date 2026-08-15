@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Mapping as MappingABC, Sequence
+from collections.abc import Mapping as MappingABC
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Protocol, runtime_checkable
-
 
 _FORBIDDEN_KEYS = frozenset({
     'final_decision', 'winner', 'winning_creative', 'executor_command',
@@ -21,7 +21,7 @@ def _find_forbidden_keys(value: object) -> set[str]:
             if key_text in _FORBIDDEN_KEYS:
                 found.add(key_text)
             found.update(_find_forbidden_keys(nested))
-    elif isinstance(value, (list, tuple, set, frozenset)):
+    elif isinstance(value, list | tuple | set | frozenset):
         for nested in value:
             found.update(_find_forbidden_keys(nested))
     return found
