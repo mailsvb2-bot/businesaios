@@ -40,9 +40,9 @@ def run_smoke_flow() -> dict[str, str]:
     status, tenants = call("/control-plane/admin/tenants")
     assert status == 200 and "tenants" in tenants
     status, result = call("/actions/execute", "POST", {"action_type": "pricing.publish_offer", "payload": {"offer_id": ids["offer_id"], "amount": 199}})
-    assert status == 200 and str(result.get("status") or "").lower() not in {"error", "failed"}
+    assert status == 200 and str(result.get("status") or "").lower() == "ok"
     status, audit = call("/control-plane/audit/actions")
-    assert status == 200 and "records" in audit
+    assert status == 200 and any(str(item.get("action_id") or "") == ids["action_id"] for item in audit.get("records", []))
     return {**ids, "tenant_id": tenant_id}
 
 

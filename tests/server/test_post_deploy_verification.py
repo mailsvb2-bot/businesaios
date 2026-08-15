@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,8 +15,15 @@ VERIFY = PROJECT_ROOT / "scripts" / "server" / "verify_runtime_host_contract.sh"
 EXPECTED_SHA = "a" * 40
 
 
-def _run_verify(tmp_path: Path, **extra_env: str) -> subprocess.CompletedProcess[str]:
+def _run_verify(tmp_path: Path, *, env_text: str, **extra_env: str) -> subprocess.CompletedProcess[str]:
+    deploy_root = tmp_path / "deploy"
+    python_bin = deploy_root / ".venv" / "bin" / "python"
+    python_bin.parent.mkdir(parents=True)
+    python_bin.symlink_to(Path(sys.executable))
+    env_file = tmp_path / "api.env"
+    env_file.write_text(env_text, encoding="utf-8")
     env = {"PATH": os.environ.get("PATH", ""), "EXPECTED_SHA": EXPECTED_SHA,
+           "BUSINESAIOS_DEPLOY_ROOT": str(deploy_root), "PRODUCTION_ENV_FILE": str(env_file),
            "PRODUCTION_VERDICT_PATH": str(tmp_path / "verdict.json"), **extra_env}
     return subprocess.run(["bash", str(VERIFY)], cwd=PROJECT_ROOT, env=env,
                           text=True, capture_output=True, check=False)
@@ -33,6 +41,9 @@ def test_contract_contains_all_fail_closed_production_gates() -> None:
                   "DATABASE_URL", "POSTGRES_DSN", "SELECT 1", "runtime_readiness",
                   "runtime_orchestrator_present", "synthetic_flow", "PRODUCTION_VERDICT_PATH"):
         assert token in text
+    assert "/etc/businesaios/api.env" in text
+    assert '.venv/bin/python' in text and '"$PYTHON_BIN" -' in text
+    assert "for cmd in curl git python" not in text
     assert "development-control-plane-key" in text
     assert "default-business" in text
     assert "observed SHA" in text and "does not match expected SHA" in text
@@ -47,13 +58,29 @@ def test_expected_sha_is_mandatory_before_any_host_probe(tmp_path: Path) -> None
     assert not (tmp_path / "verdict.json").exists()
 
 
-def test_development_control_key_fails_and_writes_sha_bound_verdict(tmp_path: Path) -> None:
-    result = _run_verify(tmp_path, APP_ENV="prod", CONTROL_PLANE_API_KEY="development-control-plane-key",
-                         SMOKE_TENANT_ID="production-smoke", DATABASE_URL="postgresql://invalid/db")
+def test_canonical_venv_python_is_mandatory(tmp_path: Path) -> None:
+    result = subprocess.run(
+        ["bash", str(VERIFY)],
+        cwd=PROJECT_ROOT,
+        env={"PATH": os.environ.get("PATH", ""), "EXPECTED_SHA": EXPECTED_SHA,
+             "BUSINESAIOS_DEPLOY_ROOT": str(tmp_path / "missing-deploy")},
+        text=True, capture_output=True, check=False,
+    )
+    assert result.returncode != 0
+    assert "canonical production Python is missing or not executable" in result.stderr
+
+
+def test_development_control_key_from_production_env_fails_and_writes_sha_bound_verdict(tmp_path: Path) -> None:
+    result = _run_verify(
+        tmp_path,
+        env_text="APP_ENV=prod\nCONTROL_PLANE_API_KEY=development-control-plane-key\nDATABASE_URL=postgresql://invalid/db\n",
+        SMOKE_TENANT_ID="production-smoke",
+    )
     assert result.returncode != 0
     payload = json.loads((tmp_path / "verdict.json").read_text(encoding="utf-8"))
     assert payload["verdict"] == "fail"
     assert payload["expected_sha"] == EXPECTED_SHA
+    assert payload["checks"]["production_environment_file"]["status"] == "pass"
     assert payload["checks"]["production_credentials"]["status"] == "fail"
 
 
@@ -65,3 +92,29 @@ def test_smoke_tenant_and_ids_are_fail_closed_and_unique(monkeypatch: pytest.Mon
     second = smoke_flow.build_smoke_identity()
     for key in ("run_id", "idempotency_key", "action_id", "offer_id"):
         assert first[key] != second[key]
+
+
+def test_smoke_requires_ok_outcome_and_matching_action_audit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CONTROL_PLANE_API_KEY", "production-key")
+    monkeypatch.setenv("SMOKE_TENANT_ID", "production-smoke")
+
+    blocked = iter([
+        (200, {"status": "ok"}),
+        (200, {"status": "ready"}),
+        (200, {"tenants": []}),
+        (200, {"status": "blocked"}),
+    ])
+    monkeypatch.setattr(smoke_flow, "fetch_json", lambda *args, **kwargs: next(blocked))
+    with pytest.raises(AssertionError):
+        smoke_flow.run_smoke_flow()
+
+    wrong_audit = iter([
+        (200, {"status": "ok"}),
+        (200, {"status": "ready"}),
+        (200, {"tenants": []}),
+        (200, {"status": "ok"}),
+        (200, {"records": [{"action_id": "different-action"}]}),
+    ])
+    monkeypatch.setattr(smoke_flow, "fetch_json", lambda *args, **kwargs: next(wrong_audit))
+    with pytest.raises(AssertionError):
+        smoke_flow.run_smoke_flow()

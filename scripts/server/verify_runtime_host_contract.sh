@@ -9,7 +9,9 @@ API_SERVICE="${API_SERVICE:-businesaios-api.service}"
 WORKER_SERVICE="${WORKER_SERVICE:-businesaios-worker.service}"
 NGINX_SERVICE="${NGINX_SERVICE:-nginx.service}"
 BUSINESAIOS_DEPLOY_ROOT="${BUSINESAIOS_DEPLOY_ROOT:-/opt/businesaios}"
+PRODUCTION_ENV_FILE="${PRODUCTION_ENV_FILE:-/etc/businesaios/api.env}"
 PRODUCTION_VERDICT_DIR="${PRODUCTION_VERDICT_DIR:-/var/lib/businesaios/runtime/reports/post-deploy}"
+PYTHON_BIN="$BUSINESAIOS_DEPLOY_ROOT/.venv/bin/python"
 export LOCAL_WORKER_BASE BUSINESAIOS_DEPLOY_ROOT
 
 step() { printf '\n== %s ==\n' "$1"; }
@@ -27,17 +29,22 @@ EXPECTED_SHA="${EXPECTED_SHA:-}"
 }
 EXPECTED_SHA="${EXPECTED_SHA,,}"
 PRODUCTION_VERDICT_PATH="${PRODUCTION_VERDICT_PATH:-$PRODUCTION_VERDICT_DIR/production-verdict-$EXPECTED_SHA.json}"
-CURRENT_CHECK="production_environment"
+CURRENT_CHECK="canonical_python"
 PASSED_CHECKS=""
 OBSERVED_SHA=""
 SMOKE_JSON="{}"
+
+[[ -x "$PYTHON_BIN" ]] || {
+  echo "canonical production Python is missing or not executable: $PYTHON_BIN" >&2
+  exit 1
+}
 
 write_verdict() {
   local verdict="$1" error="${2:-}"
   VERDICT_STATUS="$verdict" VERDICT_ERROR="$error" CURRENT_CHECK="$CURRENT_CHECK" \
   PASSED_CHECKS="$PASSED_CHECKS" OBSERVED_SHA="$OBSERVED_SHA" SMOKE_JSON="$SMOKE_JSON" \
   EXPECTED_SHA="$EXPECTED_SHA" PRODUCTION_VERDICT_PATH="$PRODUCTION_VERDICT_PATH" \
-  APP_ENV_VALUE="${APP_ENV:-}" SMOKE_TENANT_VALUE="${SMOKE_TENANT_ID:-}" python - <<'PY'
+  APP_ENV_VALUE="${APP_ENV:-}" SMOKE_TENANT_VALUE="${SMOKE_TENANT_ID:-}" "$PYTHON_BIN" - <<'PY'
 import json
 import os
 from datetime import datetime, timezone
@@ -83,6 +90,15 @@ on_error() {
 }
 trap on_error ERR
 mark_pass() { PASSED_CHECKS+="$1,"; }
+mark_pass "$CURRENT_CHECK"
+
+CURRENT_CHECK="production_environment_file"
+[[ -r "$PRODUCTION_ENV_FILE" ]] || fail "production environment file is missing or unreadable: $PRODUCTION_ENV_FILE"
+set -a
+# shellcheck disable=SC1090
+source "$PRODUCTION_ENV_FILE"
+set +a
+mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="production_environment"
 require_env APP_ENV
@@ -98,14 +114,14 @@ DATABASE_DSN="${DATABASE_URL:-${POSTGRES_DSN:-}}"
 [[ -n "${DATABASE_DSN//[[:space:]]/}" ]] || fail "required production PostgreSQL DSN is missing: DATABASE_URL/POSTGRES_DSN"
 mark_pass "$CURRENT_CHECK"
 
-for cmd in curl git python systemctl nginx; do require_cmd "$cmd"; done
+for cmd in curl git systemctl nginx; do require_cmd "$cmd"; done
 
 api_check() {
   local url="$1" auth="${2:-0}"
   local args=(-fsS "$url")
   [[ "$auth" == "1" ]] && args=(-fsS -H "x-api-key: $CONTROL_PLANE_API_KEY" "$url")
   curl "${args[@]}" >/tmp/businesaios-api-health-check.json
-  python - <<'PY'
+  "$PYTHON_BIN" - <<'PY'
 import json
 from pathlib import Path
 payload = json.loads(Path('/tmp/businesaios-api-health-check.json').read_text())
@@ -120,7 +136,7 @@ PY
 
 worker_check() {
   curl -fsS "$1" >/tmp/businesaios-worker-health-check.json
-  python - <<'PY'
+  "$PYTHON_BIN" - <<'PY'
 import json
 from pathlib import Path
 payload = json.loads(Path('/tmp/businesaios-worker-health-check.json').read_text())
@@ -160,7 +176,7 @@ api_check "$LOCAL_API_BASE/readyz" 1
 mark_pass "$CURRENT_CHECK"
 CURRENT_CHECK="runtime"
 curl -fsS -H "x-api-key: $CONTROL_PLANE_API_KEY" "$LOCAL_API_BASE/health" >/tmp/businesaios-runtime-health-check.json
-python - <<'PY'
+"$PYTHON_BIN" - <<'PY'
 import json
 from pathlib import Path
 payload = json.loads(Path('/tmp/businesaios-runtime-health-check.json').read_text())
@@ -177,7 +193,7 @@ mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="postgresql"
 step "PostgreSQL"
-DATABASE_DSN="$DATABASE_DSN" python - <<'PY'
+DATABASE_DSN="$DATABASE_DSN" "$PYTHON_BIN" - <<'PY'
 import os
 import psycopg
 with psycopg.connect(os.environ['DATABASE_DSN'], connect_timeout=10) as conn:
@@ -191,13 +207,13 @@ mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="synthetic_flow"
 step "unique synthetic production flow"
-SMOKE_JSON="$(python - <<'PY'
+SMOKE_JSON="$("$PYTHON_BIN" - <<'PY'
 import json
 from scripts.server.smoke_flow import run_smoke_flow
 print(json.dumps(run_smoke_flow(), sort_keys=True))
 PY
 )"
-SMOKE_JSON="$SMOKE_JSON" python - <<'PY'
+SMOKE_JSON="$SMOKE_JSON" "$PYTHON_BIN" - <<'PY'
 import json
 import os
 payload = json.loads(os.environ['SMOKE_JSON'])
