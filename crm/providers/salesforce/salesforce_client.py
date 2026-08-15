@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
 from urllib.parse import quote
 
 from crm.providers.common.crm_http_client import CrmHttpClient, CrmHttpRequest, CrmHttpResponse

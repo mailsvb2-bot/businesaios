@@ -1,15 +1,15 @@
-from __future__ import annotations
-
 """Canonical CRM package root.
 
 The package root is the single CRM owner surface. ``crm.public_api`` remains
 available only as a compatibility shell for historical imports.
 """
 
+from __future__ import annotations
+
 from importlib import import_module
+from typing import Any
 
 from canon.public_api_alias import install_public_api_alias
-from typing import Any
 
 CANON_CRM_PACKAGE_OWNER = True
 CANON_CRM_PUBLIC_API = True

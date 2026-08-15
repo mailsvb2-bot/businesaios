@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 _ALLOWED_PROVIDER_METADATA: dict[str, tuple[str, ...]] = {
     "hubspot": ("portal_id", "hub_id", "account_id", "region"),
@@ -10,7 +10,11 @@ _ALLOWED_PROVIDER_METADATA: dict[str, tuple[str, ...]] = {
 }
 
 
-def extract_provider_connection_metadata(*, provider_key: str, metadata: Mapping[str, object]) -> dict[str, object]:
+def extract_provider_connection_metadata(
+    *,
+    provider_key: str,
+    metadata: Mapping[str, object],
+) -> dict[str, object]:
     allowed = _ALLOWED_PROVIDER_METADATA.get(provider_key, ())
     sanitized: dict[str, object] = {}
     for key in allowed:

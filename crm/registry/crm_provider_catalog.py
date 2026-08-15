@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Canonical CRM provider catalog assembled from provider definitions."""
+
+from __future__ import annotations
 
 from crm.crm_provider_contract import CrmProvider
 from crm.registry.crm_provider_definition import (
