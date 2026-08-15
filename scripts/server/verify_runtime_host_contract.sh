@@ -8,6 +8,8 @@ PUBLIC_STATUS_BASE="${PUBLIC_STATUS_BASE:-https://status.businessaios.ru}"
 API_SERVICE="${API_SERVICE:-businesaios-api.service}"
 WORKER_SERVICE="${WORKER_SERVICE:-businesaios-worker.service}"
 NGINX_SERVICE="${NGINX_SERVICE:-nginx.service}"
+BUSINESAIOS_DEPLOY_ROOT="${BUSINESAIOS_DEPLOY_ROOT:-/opt/businesaios}"
+export LOCAL_WORKER_BASE BUSINESAIOS_DEPLOY_ROOT
 
 step() {
   printf '\n== %s ==\n' "$1"
@@ -57,6 +59,7 @@ PY
 }
 
 require_cmd curl
+require_cmd git
 require_cmd python
 require_cmd systemctl
 require_cmd nginx
@@ -81,5 +84,9 @@ api_check public-api-ready "$PUBLIC_API_BASE/readyz"
 
 step "public status health"
 api_check public-status "$PUBLIC_STATUS_BASE/health"
+
+step "fail-closed production post-deploy verification"
+cd "$BUSINESAIOS_DEPLOY_ROOT"
+python -m scripts.server.post_deploy_verify
 
 step "runtime host contract passed"
