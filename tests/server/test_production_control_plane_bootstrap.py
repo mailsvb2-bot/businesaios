@@ -183,6 +183,42 @@ def test_bootstrap_never_revokes_unrelated_previous_credential(tmp_path: Path) -
     assert preserved is not None and preserved.is_active() is True
 
 
+def test_bootstrap_reconciles_orphaned_lifecycle_credentials(tmp_path: Path) -> None:
+    env_file, api_store_path, _ = _prepare(tmp_path)
+    store = PersistentApiKeyStore(path=api_store_path, pepper="test-production-pepper")
+    orphan_ids: list[str] = []
+    for suffix in ("one", "two"):
+        record, _ = store.issue(
+            tenant_id="production-smoke",
+            subject=f"orphan-{suffix}",
+            roles=(RoleId.OWNER,),
+            scopes=("provider_control_plane",),
+            metadata={
+                "credential_kind": bootstrap.CREDENTIAL_KIND,
+                "managed_by": bootstrap.MANAGED_BY,
+            },
+        )
+        orphan_ids.append(record.key_id)
+
+    result = bootstrap.bootstrap_production_control_plane(
+        tenant_id="production-smoke",
+        env_file=env_file,
+    )
+
+    reloaded = PersistentApiKeyStore(path=api_store_path, pepper="test-production-pepper")
+    for key_id in orphan_ids:
+        orphan = reloaded.get(key_id)
+        assert orphan is not None and orphan.is_active() is False
+    active_lifecycle = [
+        record
+        for record in reloaded.list_records()
+        if record.is_active()
+        and record.metadata.get("credential_kind") == bootstrap.CREDENTIAL_KIND
+        and record.metadata.get("managed_by") == bootstrap.MANAGED_BY
+    ]
+    assert [record.key_id for record in active_lifecycle] == [result.key_id]
+
+
 def test_persistent_api_key_store_reconciles_stale_writers_without_losing_keys(tmp_path: Path) -> None:
     store_path = tmp_path / "api-keys" / "api_keys.json"
     first_writer = PersistentApiKeyStore(path=store_path, pepper="test-production-pepper")
