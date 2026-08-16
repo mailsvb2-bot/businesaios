@@ -14,7 +14,9 @@ from tenancy.tenant_registry import PersistentTenantRegistry
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 HOST_LIFECYCLE = PROJECT_ROOT / "scripts" / "server" / "bootstrap_and_verify_production.sh"
+RUNTIME_VERIFIER = PROJECT_ROOT / "scripts" / "server" / "verify_runtime_host_contract.sh"
 RUNBOOK = PROJECT_ROOT / "docs" / "operations" / "production-control-plane-bootstrap.md"
+PRODUCTION_ENV_TEMPLATE = PROJECT_ROOT / ".env.example.prod"
 
 
 def _prepare(tmp_path: Path, *, tenant_status: TenantStatus = TenantStatus.ACTIVE) -> tuple[Path, Path, Path]:
@@ -338,6 +340,11 @@ def test_host_lifecycle_is_sha_bound_and_chains_bootstrap_restart_and_canonical_
         'API_SERVICE="businesaios-api.service"',
         'export PYTHONPATH="$BUSINESAIOS_DEPLOY_ROOT"',
         'cd "$BUSINESAIOS_DEPLOY_ROOT"',
+        'LOCAL_HEALTH_URL="http://127.0.0.1:8000/health"',
+        'LOCAL_READINESS_URL="http://127.0.0.1:8000/readyz"',
+        "API_READY=0",
+        "attempt<=60",
+        "curl -fsS --max-time 2",
     ):
         assert token in text
     assert "${BUSINESAIOS_DEPLOY_ROOT:-" not in text
@@ -347,7 +354,38 @@ def test_host_lifecycle_is_sha_bound_and_chains_bootstrap_restart_and_canonical_
     assert "deployed SHA $OBSERVED_SHA != expected SHA $EXPECTED_SHA" in text
     assert text.index('export PYTHONPATH="$BUSINESAIOS_DEPLOY_ROOT"') < text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"")
     assert text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"") < text.index("systemctl restart")
-    assert text.index("systemctl restart") < text.rindex("\"$VERIFY\"")
+    assert text.index("systemctl restart") < text.index("API_READY=0")
+    assert text.index("API_READY=0") < text.rindex("\"$VERIFY\"")
+
+
+def test_runtime_verifier_forces_privileged_smoke_through_https_ingress() -> None:
+    subprocess.run(["bash", "-n", str(RUNTIME_VERIFIER)], check=True)
+    text = RUNTIME_VERIFIER.read_text(encoding="utf-8")
+
+    for token in (
+        "production_ingress",
+        "PUBLIC_BASE_URL",
+        "BUSINESAIOS_TRUST_PROXY_HEADERS",
+        "BUSINESAIOS_TRUSTED_PROXY_IPS",
+        "127.0.0.1/32",
+        "::1/128",
+        'SMOKE_BASE_URL="$PUBLIC_BASE_URL"',
+        'api_check "$PUBLIC_BASE_URL/health"',
+        'api_check "$PUBLIC_BASE_URL/readyz"',
+    ):
+        assert token in text
+    assert "PUBLIC_API_BASE" not in text
+    assert 'SMOKE_BASE_URL="$LOCAL_API_BASE"' not in text
+    assert "scheme.lower() != 'https'" in text
+    assert "networks != expected" in text
+
+
+def test_production_env_template_defines_loopback_only_tls_proxy_boundary() -> None:
+    text = PRODUCTION_ENV_TEMPLATE.read_text(encoding="utf-8")
+
+    assert "PUBLIC_BASE_URL=https://api.businessaios.ru" in text
+    assert "BUSINESAIOS_TRUST_PROXY_HEADERS=true" in text
+    assert "BUSINESAIOS_TRUSTED_PROXY_IPS=127.0.0.1/32,::1/128" in text
 
 
 def test_runbook_requires_expected_sha_from_trusted_release_evidence() -> None:
@@ -356,3 +394,7 @@ def test_runbook_requires_expected_sha_from_trusted_release_evidence() -> None:
     assert 'EXPECTED_SHA="<exact-40-character-github-main-sha>"' in text
     assert 'EXPECTED_SHA="$(git -C /opt/businesaios rev-parse HEAD)"' not in text
     assert "Do not derive `EXPECTED_SHA` from the current production checkout" in text
+    assert "PUBLIC_BASE_URL=https://api.businessaios.ru" in text
+    assert "BUSINESAIOS_TRUST_PROXY_HEADERS=true" in text
+    assert "BUSINESAIOS_TRUSTED_PROXY_IPS=127.0.0.1/32,::1/128" in text
+    assert "authenticated synthetic action over HTTPS" in text
