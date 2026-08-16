@@ -226,30 +226,24 @@ def bootstrap_production_control_plane(
     env_file: str | Path = DEFAULT_ENV_FILE,
 ) -> BootstrapResult:
     path = Path(env_file)
-    _validate_env_destination(path)
-    original_text, values = read_environment_file(path)
-    _require_production(values)
     tenant_id = str(tenant_id or "").strip()
     if not tenant_id or tenant_id == "default-business":
         raise RuntimeError("explicit non-default production tenant_id is required")
 
-    store, registry = _load_persistent_surfaces(values)
-    tenant = registry.assert_active(tenant_id)
-    old_token = str(values.get("CONTROL_PLANE_API_KEY") or "").strip()
-    old_key_id = _key_id_from_token(old_token)
-    rotated_key_id: str | None = None
+    # Serialize the complete environment cutover. PersistentApiKeyStore owns a
+    # separate store-level lock for every key mutation, so live API writers and
+    # this lifecycle reconcile against the same latest on-disk snapshot.
+    with exclusive_file_lock(path):
+        _validate_env_destination(path)
+        original_text, values = read_environment_file(path)
+        _require_production(values)
+        store, registry = _load_persistent_surfaces(values)
+        tenant = registry.assert_active(tenant_id)
+        old_token = str(values.get("CONTROL_PLANE_API_KEY") or "").strip()
+        old_key_id = _key_id_from_token(old_token)
+        rotated_key_id: str | None = None
 
-    lock_path = store.path
-    with exclusive_file_lock(lock_path):
-        # Reload under the lifecycle lock so two bootstrap invocations cannot
-        # derive state from the same stale file snapshot.
-        with activated_environment(values):
-            locked_store = build_default_api_key_store(
-                pepper=str(values["API_CONTROL_PLANE_API_KEY_PEPPER"]).strip()
-            )
-        if not isinstance(locked_store, PersistentApiKeyStore):
-            raise RuntimeError("canonical production API key store is not persistent")
-        old_record = locked_store.get(old_key_id) if old_key_id else None
+        old_record = store.get(old_key_id) if old_key_id else None
         if (
             old_record is not None
             and str(old_record.metadata.get("credential_kind") or "") == CREDENTIAL_KIND
@@ -257,7 +251,7 @@ def bootstrap_production_control_plane(
         ):
             rotated_key_id = old_record.key_id
 
-        record, credential = locked_store.issue(
+        record, credential = store.issue(
             tenant_id=tenant.tenant_id,
             subject=f"production-control-plane-smoke:{tenant.tenant_id}",
             actor_id=f"production-control-plane-smoke:{tenant.tenant_id}",
@@ -276,7 +270,7 @@ def bootstrap_production_control_plane(
                 tenant_id=tenant.tenant_id,
                 values=values,
             )
-            store_text = locked_store.path.read_text(encoding="utf-8")
+            store_text = store.path.read_text(encoding="utf-8")
             if credential in store_text:
                 raise RuntimeError("plaintext credential leaked into application API key store")
             updated_text = _rewrite_managed_assignments(
@@ -286,25 +280,28 @@ def bootstrap_production_control_plane(
             )
             _atomic_write_private(path, updated_text)
         except BaseException:
-            locked_store.revoke(record.key_id)
+            store.revoke(record.key_id)
             raise
 
         if rotated_key_id and rotated_key_id != record.key_id:
-            current_old = locked_store.get(rotated_key_id)
+            # revoke() reloads the latest store snapshot under the store lock,
+            # preserving keys issued concurrently by the running API process.
+            current_store, _ = _load_persistent_surfaces(values)
+            current_old = current_store.get(rotated_key_id)
             if current_old is not None and current_old.is_active():
-                locked_store.revoke(rotated_key_id)
+                current_store.revoke(rotated_key_id)
 
-    # Re-read the only persistent plaintext surface and prove it resolves
-    # through the same application-side hash/pepper/tenant contracts.
-    key_id = validate_current_binding_from_environment(path)
-    return BootstrapResult(
-        tenant_id=tenant.tenant_id,
-        key_id=key_id,
-        env_file=path,
-        api_key_store=locked_store.path,
-        tenant_registry=registry.path,
-        rotated_key_id=rotated_key_id,
-    )
+        # Re-read the only persistent plaintext surface and prove it resolves
+        # through the same application-side hash/pepper/tenant contracts.
+        key_id = validate_current_binding_from_environment(path)
+        return BootstrapResult(
+            tenant_id=tenant.tenant_id,
+            key_id=key_id,
+            env_file=path,
+            api_key_store=store.path,
+            tenant_registry=registry.path,
+            rotated_key_id=rotated_key_id,
+        )
 
 
 def _build_parser() -> argparse.ArgumentParser:
