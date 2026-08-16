@@ -11,6 +11,10 @@ def _read(name: str) -> str:
     return (SYSTEMD_DIR / name).read_text(encoding='utf-8')
 
 
+def _exec_start(unit: str) -> str:
+    return next(line for line in unit.splitlines() if line.startswith('ExecStart='))
+
+
 def test_core_systemd_runtime_is_api_plus_worker() -> None:
     api = _read('businesaios-api.service')
     worker = _read('businesaios-worker.service')
@@ -20,7 +24,11 @@ def test_core_systemd_runtime_is_api_plus_worker() -> None:
     assert 'EnvironmentFile=/etc/businesaios/api.env' in api
     assert 'EnvironmentFile=/etc/businesaios/api.env' in worker
     assert 'ExecStart=/usr/bin/env APP_PROFILE=api /opt/businesaios/.venv/bin/python -m scripts.server.run_profile' in api
-    assert 'ExecStart=/usr/bin/env APP_PROFILE=worker /opt/businesaios/.venv/bin/python -m scripts.server.run_profile' in worker
+    worker_exec = _exec_start(worker)
+    assert worker_exec.startswith('ExecStart=/usr/bin/env APP_PROFILE=worker ')
+    assert worker_exec.endswith('/opt/businesaios/.venv/bin/python -m scripts.server.run_profile')
+    for token in ('HEALTH_HOST=127.0.0.1', 'WORKER_HEALTH_PORT=8087', 'EVOLUTION_HEALTH_PORT=8087', 'EVOLUTION_ENABLED=1'):
+        assert token in worker_exec
     assert "env_str('RUN_MODE', env_str('APP_PROFILE', ''))" in guard
     assert "'entrypoint_basenames': {'run_http.py', 'run_profile.py'}" in guard
     assert "'module_suffixes': {'main', 'runtime.boot.telegram_webhook_runner', 'scripts.server.run_profile'}" in guard
@@ -89,14 +97,17 @@ def test_systemd_exec_boundary_pins_profile_after_shared_environment_files() -> 
         'businesaios-worker.service': 'worker',
         'businesaios-connector-telegram.service': 'telegram',
     }
+    command = '/opt/businesaios/.venv/bin/python -m scripts.server.run_profile'
     for name, profile in expected.items():
         unit = _read(name)
         assert 'EnvironmentFile=/etc/businesaios/api.env' in unit
         assert f'Environment=APP_PROFILE={profile}' in unit
-        assert (
-            f'ExecStart=/usr/bin/env APP_PROFILE={profile} '
-            '/opt/businesaios/.venv/bin/python -m scripts.server.run_profile'
-        ) in unit
+        exec_start = _exec_start(unit)
+        assert exec_start.startswith(f'ExecStart=/usr/bin/env APP_PROFILE={profile} ')
+        assert exec_start.endswith(command)
+        if profile == 'worker':
+            for token in ('HEALTH_HOST=127.0.0.1', 'WORKER_HEALTH_PORT=8087', 'EVOLUTION_HEALTH_PORT=8087', 'EVOLUTION_ENABLED=1'):
+                assert token in exec_start
 
 
 def test_legacy_telegram_centric_units_are_not_shipped() -> None:

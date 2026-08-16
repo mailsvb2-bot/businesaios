@@ -23,10 +23,19 @@ def test_systemd_units_define_server_contract() -> None:
         text = (ROOT / rel).read_text(encoding='utf-8')
         assert f'Environment=APP_PROFILE={profile}' in text
         assert 'ExecStartPre=/opt/businesaios/.venv/bin/python -m scripts.server.migrate_before_start' in text
-        assert (
-            f'ExecStart=/usr/bin/env APP_PROFILE={profile} '
-            '/opt/businesaios/.venv/bin/python -m scripts.server.run_profile'
-        ) in text
+        exec_start = next(line for line in text.splitlines() if line.startswith('ExecStart='))
+        assert exec_start.startswith(f'ExecStart=/usr/bin/env APP_PROFILE={profile} ')
+        assert exec_start.endswith('/opt/businesaios/.venv/bin/python -m scripts.server.run_profile')
+        if profile == 'worker':
+            assert 'HEALTH_HOST=127.0.0.1' in exec_start
+            assert 'WORKER_HEALTH_PORT=8087' in exec_start
+            assert 'EVOLUTION_HEALTH_PORT=8087' in exec_start
+            assert 'EVOLUTION_ENABLED=1' in exec_start
+        else:
+            assert exec_start == (
+                f'ExecStart=/usr/bin/env APP_PROFILE={profile} '
+                '/opt/businesaios/.venv/bin/python -m scripts.server.run_profile'
+            )
         assert 'Restart=on-failure' in text
         assert 'StandardOutput=journal' in text
         assert 'WorkingDirectory=/opt/businesaios' in text
