@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import secrets
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Mapping
-import os
 
-from governance.persistence_codec import atomic_write_json, from_dataclass, read_json_or_default, to_jsonable
-
-from governance.rbac_contract import RoleId
 from entrypoints.api.auth_contract import AuthMechanism, AuthPrincipal, AuthVerdict, RequestAuthentication
+from governance.persistence_codec import (
+    atomic_write_json,
+    exclusive_file_lock,
+    from_dataclass,
+    read_json_or_default,
+    to_jsonable,
+)
+from governance.rbac_contract import RoleId
 
 
 CANON_API_KEY_POLICY = True
@@ -120,6 +125,9 @@ class InMemoryApiKeyStore:
     def get(self, key_id: str) -> ApiKeyRecord | None:
         return self._records.get(str(key_id))
 
+    def list_records(self) -> tuple[ApiKeyRecord, ...]:
+        return tuple(self._records.values())
+
     def verify_secret(self, *, key_id: str, raw_secret: str) -> bool:
         record = self.get(key_id)
         if record is None:
@@ -132,8 +140,6 @@ class InMemoryApiKeyStore:
         updated = replace(record, revoked_at=at or utc_now())
         self._records[str(key_id)] = updated
         return updated
-
-
 
 
 def api_key_store_path() -> Path:
@@ -157,14 +163,21 @@ class PersistentApiKeyStore(InMemoryApiKeyStore):
         return self._path
 
     def register(self, record: ApiKeyRecord) -> ApiKeyRecord:
-        saved = super().register(record)
-        self._flush()
-        return saved
+        # Every persistent mutation must reconcile with the latest on-disk
+        # snapshot under the same cross-process lock.  Without this, two
+        # long-lived API-key store instances can overwrite each other's keys.
+        with exclusive_file_lock(self._path):
+            self._load()
+            saved = super().register(record)
+            self._flush()
+            return saved
 
     def revoke(self, key_id: str, *, at: datetime | None = None) -> ApiKeyRecord:
-        updated = super().revoke(key_id, at=at)
-        self._flush()
-        return updated
+        with exclusive_file_lock(self._path):
+            self._load()
+            updated = super().revoke(key_id, at=at)
+            self._flush()
+            return updated
 
     def _load(self) -> None:
         raw = read_json_or_default(self._path, default={"records": []})
