@@ -17,24 +17,26 @@ This runbook defines the single canonical lifecycle for the production control-p
 
 The target release must already be checked out at `/opt/businesaios`, its canonical virtualenv must exist, and `/etc/businesaios/api.env` must contain the production pepper, PostgreSQL settings, and explicit persistent API-key/tenant-registry paths. The selected tenant must already exist and be active; this lifecycle deliberately does **not** create a tenant as a side effect of credential issuance.
 
-`EXPECTED_SHA` must be the exact 40-character SHA of the release in `/opt/businesaios`. Do not persist it in `api.env`.
+`EXPECTED_SHA` must be the exact 40-character SHA selected from trusted release evidence (normally the intended GitHub `main` commit) **before** the production host is changed. Do not derive `EXPECTED_SHA` from the current production checkout and do not persist it in `api.env`; otherwise a stale or unintended checkout could validate itself.
 
 ## Canonical command
 
-Run exactly one host lifecycle after the canonical deployment has placed the intended release at `/opt/businesaios`:
+After the canonical deployment has placed the intended release at `/opt/businesaios`, run exactly one host lifecycle with the externally selected release SHA:
 
 ```bash
 sudo env \
-  EXPECTED_SHA="$(git -C /opt/businesaios rev-parse HEAD)" \
+  EXPECTED_SHA="<exact-40-character-github-main-sha>" \
   SMOKE_TENANT_ID="<existing-active-production-tenant>" \
   bash /opt/businesaios/scripts/server/bootstrap_and_verify_production.sh
 ```
 
-Do not generate a control-plane token manually, write an unhashed token into the application key store, use `default-business`, or invoke a separate ad-hoc smoke verifier.
+Before running it, the operator must verify that `<exact-40-character-github-main-sha>` is the release SHA approved for deployment. The lifecycle itself will independently compare that value with `/opt/businesaios` `HEAD` before mutating the credential.
+
+Do not generate a control-plane token manually, write an unhashed token into the application key store, use `default-business`, derive `EXPECTED_SHA` from the production host being verified, or invoke a separate ad-hoc smoke verifier.
 
 ## What the lifecycle proves
 
-`bootstrap_and_verify_production.sh` first refuses to mutate credentials unless the deployed SHA exactly equals `EXPECTED_SHA`. It then calls `bootstrap_production_control_plane.py`, which validates the active tenant and persistent stores, issues an OWNER service credential through the application API-key store, proves the plaintext is absent from that store, and atomically writes the new credential plus `SMOKE_TENANT_ID` into `/etc/businesaios/api.env`.
+`bootstrap_and_verify_production.sh` first refuses to mutate credentials unless the deployed SHA exactly equals the externally supplied `EXPECTED_SHA`. It then calls `bootstrap_production_control_plane.py`, which validates the active tenant and persistent stores, issues an OWNER service credential through the application API-key store, proves the plaintext is absent from that store, and atomically writes the new credential plus `SMOKE_TENANT_ID` into `/etc/businesaios/api.env`.
 
 The API service is restarted so the in-process authentication store sees the newly issued record. The existing canonical `verify_runtime_host_contract.sh` then remains the sole post-deploy verifier and executes the SHA-bound chain:
 
