@@ -134,7 +134,7 @@ LOCAL_HEALTH_URL="$3"
 LOCAL_READINESS_URL="$4"
 LOCAL_WORKER_HEALTH_URL="$5"
 LOCAL_WORKER_READINESS_URL="$6"
-RUNTIME_READY=0
+API_READY=0
 for ((attempt=1; attempt<=60; attempt++)); do
   if systemctl is-active --quiet "$API_SERVICE" \
     && systemctl is-active --quiet "$WORKER_SERVICE" \
@@ -142,12 +142,12 @@ for ((attempt=1; attempt<=60; attempt++)); do
     && curl -fsS --max-time 2 "$LOCAL_READINESS_URL" >/dev/null \
     && curl -fsS --max-time 2 "$LOCAL_WORKER_HEALTH_URL" >/dev/null \
     && curl -fsS --max-time 2 "$LOCAL_WORKER_READINESS_URL" >/dev/null; then
-    RUNTIME_READY=1
+    API_READY=1
     break
   fi
   sleep 1
 done
-[[ "$RUNTIME_READY" == "1" ]]
+[[ "$API_READY" == "1" ]]
 ' _ "$API_SERVICE" "$WORKER_SERVICE" "$LOCAL_HEALTH_URL" "$LOCAL_READINESS_URL" "$LOCAL_WORKER_HEALTH_URL" "$LOCAL_WORKER_READINESS_URL"; then
   fail "core runtime did not become healthy and ready within 60 seconds after restart: $API_SERVICE $WORKER_SERVICE"
 fi
