@@ -324,7 +324,6 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Issue and bind the canonical production control-plane smoke credential."
     )
     parser.add_argument("--tenant-id", required=True, help="Existing active production tenant ID.")
-    parser.add_argument("--env-file", default=str(DEFAULT_ENV_FILE))
     return parser
 
 
@@ -332,7 +331,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     result = bootstrap_production_control_plane(
         tenant_id=args.tenant_id,
-        env_file=args.env_file,
+        env_file=DEFAULT_ENV_FILE,
     )
     rotation = f" rotated_key_id={result.rotated_key_id}" if result.rotated_key_id else ""
     print(
