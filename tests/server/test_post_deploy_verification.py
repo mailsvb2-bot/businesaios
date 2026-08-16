@@ -18,6 +18,12 @@ CANONICAL_INGRESS_ENV = (
     "BUSINESAIOS_TRUST_PROXY_HEADERS=true\n"
     "BUSINESAIOS_TRUSTED_PROXY_IPS=127.0.0.1/32,::1/128\n"
 )
+CANONICAL_RUNTIME_ENV = (
+    "HEALTH_HOST=127.0.0.1\n"
+    "WORKER_HEALTH_PORT=8087\n"
+    "EVOLUTION_HEALTH_PORT=8087\n"
+    "EVOLUTION_ENABLED=1\n"
+)
 
 
 def _run_verify(tmp_path: Path, *, env_text: str, **extra_env: str) -> subprocess.CompletedProcess[str]:
@@ -46,7 +52,9 @@ def test_contract_contains_all_fail_closed_production_gates() -> None:
                   "DATABASE_URL", "POSTGRES_DSN", "SELECT 1", "runtime_readiness",
                   "runtime_orchestrator_present", "synthetic_flow", "PRODUCTION_VERDICT_PATH",
                   "PUBLIC_BASE_URL", "BUSINESAIOS_TRUST_PROXY_HEADERS",
-                  "BUSINESAIOS_TRUSTED_PROXY_IPS"):
+                  "BUSINESAIOS_TRUSTED_PROXY_IPS", "production_runtime_bindings",
+                  "HEALTH_HOST", "WORKER_HEALTH_PORT", "EVOLUTION_HEALTH_PORT",
+                  "EVOLUTION_ENABLED"):
         assert token in text
     assert "/etc/businesaios/api.env" in text
     assert '.venv/bin/python' in text and '"$PYTHON_BIN" -' in text
@@ -54,6 +62,7 @@ def test_contract_contains_all_fail_closed_production_gates() -> None:
     assert "development-control-plane-key" in text
     assert "default-business" in text
     assert "observed SHA" in text and "does not match expected SHA" in text
+    assert "unset CONTROL_PLANE_API_KEY SMOKE_TENANT_ID DATABASE_URL POSTGRES_DSN" in text
 
 
 def test_expected_sha_is_mandatory_before_any_host_probe(tmp_path: Path) -> None:
@@ -83,10 +92,11 @@ def test_development_control_key_from_production_env_fails_and_writes_sha_bound_
         env_text=(
             "APP_ENV=prod\n"
             + CANONICAL_INGRESS_ENV
+            + CANONICAL_RUNTIME_ENV
             + "CONTROL_PLANE_API_KEY=development-control-plane-key\n"
+            + "SMOKE_TENANT_ID=production-smoke\n"
             + "DATABASE_URL=postgresql://invalid/db\n"
         ),
-        SMOKE_TENANT_ID="production-smoke",
     )
     assert result.returncode != 0
     payload = json.loads((tmp_path / "verdict.json").read_text(encoding="utf-8"))
@@ -94,7 +104,48 @@ def test_development_control_key_from_production_env_fails_and_writes_sha_bound_
     assert payload["expected_sha"] == EXPECTED_SHA
     assert payload["checks"]["production_environment_file"]["status"] == "pass"
     assert payload["checks"]["production_ingress"]["status"] == "pass"
+    assert payload["checks"]["production_runtime_bindings"]["status"] == "pass"
     assert payload["checks"]["production_credentials"]["status"] == "fail"
+
+
+def test_unsafe_worker_health_bind_fails_before_credentials_or_host_probes(tmp_path: Path) -> None:
+    result = _run_verify(
+        tmp_path,
+        env_text=(
+            "APP_ENV=prod\n"
+            + CANONICAL_INGRESS_ENV
+            + CANONICAL_RUNTIME_ENV.replace("HEALTH_HOST=127.0.0.1", "HEALTH_HOST=0.0.0.0")
+            + "CONTROL_PLANE_API_KEY=production-key\n"
+            + "SMOKE_TENANT_ID=production-smoke\n"
+            + "DATABASE_URL=postgresql://invalid/db\n"
+        ),
+    )
+    assert result.returncode != 0
+    payload = json.loads((tmp_path / "verdict.json").read_text(encoding="utf-8"))
+    assert payload["verdict"] == "fail"
+    assert payload["checks"]["production_ingress"]["status"] == "pass"
+    assert payload["checks"]["production_runtime_bindings"]["status"] == "fail"
+    assert "production_credentials" not in payload["checks"]
+    assert "HEALTH_HOST must be 127.0.0.1" in result.stderr
+
+
+def test_ambient_control_plane_values_cannot_replace_missing_production_env_values(tmp_path: Path) -> None:
+    result = _run_verify(
+        tmp_path,
+        env_text=(
+            "APP_ENV=prod\n"
+            + CANONICAL_INGRESS_ENV
+            + CANONICAL_RUNTIME_ENV
+            + "DATABASE_URL=postgresql://invalid/db\n"
+        ),
+        CONTROL_PLANE_API_KEY="ambient-production-key",
+        SMOKE_TENANT_ID="ambient-tenant",
+    )
+    assert result.returncode != 0
+    payload = json.loads((tmp_path / "verdict.json").read_text(encoding="utf-8"))
+    assert payload["checks"]["production_runtime_bindings"]["status"] == "pass"
+    assert payload["checks"]["production_credentials"]["status"] == "fail"
+    assert "required production setting is missing: CONTROL_PLANE_API_KEY" in result.stderr
 
 
 def test_smoke_tenant_and_ids_are_fail_closed_and_unique(monkeypatch: pytest.MonkeyPatch) -> None:
