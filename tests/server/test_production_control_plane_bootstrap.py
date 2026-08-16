@@ -285,10 +285,16 @@ def test_host_lifecycle_is_sha_bound_and_chains_bootstrap_restart_and_canonical_
         "bootstrap_production_control_plane.py",
         "systemctl restart",
         "verify_runtime_host_contract.sh",
+        'BUSINESAIOS_DEPLOY_ROOT="/opt/businesaios"',
+        'PRODUCTION_ENV_FILE="/etc/businesaios/api.env"',
+        'API_SERVICE="businesaios-api.service"',
         'export PYTHONPATH="$BUSINESAIOS_DEPLOY_ROOT"',
         'cd "$BUSINESAIOS_DEPLOY_ROOT"',
     ):
         assert token in text
+    assert "${BUSINESAIOS_DEPLOY_ROOT:-" not in text
+    assert "${PRODUCTION_ENV_FILE:-" not in text
+    assert "${API_SERVICE:-" not in text
     assert "deployed SHA $OBSERVED_SHA != expected SHA $EXPECTED_SHA" in text
     assert text.index('export PYTHONPATH="$BUSINESAIOS_DEPLOY_ROOT"') < text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"")
     assert text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"") < text.index("systemctl restart")
