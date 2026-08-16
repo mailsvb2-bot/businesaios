@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-BUSINESAIOS_DEPLOY_ROOT="${BUSINESAIOS_DEPLOY_ROOT:-/opt/businesaios}"
-PRODUCTION_ENV_FILE="${PRODUCTION_ENV_FILE:-/etc/businesaios/api.env}"
-API_SERVICE="${API_SERVICE:-businesaios-api.service}"
+# Production lifecycle surfaces are intentionally not configurable here.
+# Tests exercise the Python bootstrap against temporary paths directly, while
+# the canonical host entrypoint is bound to one deploy root, env file and API
+# service so plaintext credentials cannot be redirected to another surface.
+BUSINESAIOS_DEPLOY_ROOT="/opt/businesaios"
+PRODUCTION_ENV_FILE="/etc/businesaios/api.env"
+API_SERVICE="businesaios-api.service"
 PYTHON_BIN="$BUSINESAIOS_DEPLOY_ROOT/.venv/bin/python"
 BOOTSTRAP="$BUSINESAIOS_DEPLOY_ROOT/scripts/server/bootstrap_production_control_plane.py"
 VERIFY="$BUSINESAIOS_DEPLOY_ROOT/scripts/server/verify_runtime_host_contract.sh"
