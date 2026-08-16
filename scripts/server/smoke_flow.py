@@ -51,11 +51,6 @@ def run_smoke_flow() -> dict[str, str]:
     return {**ids, "tenant_id": tenant_id, "action_status": action_status}
 
 
-def main() -> int:
+if __name__ == "__main__":
     result = run_smoke_flow()
     print(f"SMOKE_FLOW_OK run_id={result['run_id']}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
