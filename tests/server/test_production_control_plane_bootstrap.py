@@ -182,6 +182,27 @@ def test_bootstrap_never_revokes_unrelated_previous_credential(tmp_path: Path) -
     assert preserved is not None and preserved.is_active() is True
 
 
+def test_persistent_api_key_store_reconciles_stale_writers_without_losing_keys(tmp_path: Path) -> None:
+    store_path = tmp_path / "api-keys" / "api_keys.json"
+    first_writer = PersistentApiKeyStore(path=store_path, pepper="test-production-pepper")
+    stale_second_writer = PersistentApiKeyStore(path=store_path, pepper="test-production-pepper")
+
+    first_record, _ = first_writer.issue(
+        tenant_id="tenant-a",
+        subject="first-writer",
+        roles=(RoleId.OWNER,),
+    )
+    second_record, _ = stale_second_writer.issue(
+        tenant_id="tenant-b",
+        subject="second-writer",
+        roles=(RoleId.OWNER,),
+    )
+
+    reloaded = PersistentApiKeyStore(path=store_path, pepper="test-production-pepper")
+    assert reloaded.get(first_record.key_id) == first_record
+    assert reloaded.get(second_record.key_id) == second_record
+
+
 def test_validator_rejects_noncanonical_credential_even_when_hash_is_valid(tmp_path: Path) -> None:
     env_file, api_store_path, tenant_store = _prepare(tmp_path)
     _, values = bootstrap.read_environment_file(env_file)
@@ -263,8 +284,11 @@ def test_host_lifecycle_is_sha_bound_and_chains_bootstrap_restart_and_canonical_
         "bootstrap_production_control_plane.py",
         "systemctl restart",
         "verify_runtime_host_contract.sh",
+        'export PYTHONPATH="$BUSINESAIOS_DEPLOY_ROOT"',
+        'cd "$BUSINESAIOS_DEPLOY_ROOT"',
     ):
         assert token in text
     assert "deployed SHA $OBSERVED_SHA != expected SHA $EXPECTED_SHA" in text
+    assert text.index('export PYTHONPATH="$BUSINESAIOS_DEPLOY_ROOT"') < text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"")
     assert text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"") < text.index("systemctl restart")
     assert text.index("systemctl restart") < text.rindex("\"$VERIFY\"")
