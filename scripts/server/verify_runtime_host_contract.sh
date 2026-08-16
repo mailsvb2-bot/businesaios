@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 LOCAL_API_BASE="${LOCAL_API_BASE:-http://127.0.0.1:8000}"
 LOCAL_WORKER_BASE="${LOCAL_WORKER_BASE:-http://127.0.0.1:8087}"
-PUBLIC_API_BASE="${PUBLIC_API_BASE:-https://api.businessaios.ru}"
 PUBLIC_STATUS_BASE="${PUBLIC_STATUS_BASE:-https://status.businessaios.ru}"
 API_SERVICE="${API_SERVICE:-businesaios-api.service}"
 WORKER_SERVICE="${WORKER_SERVICE:-businesaios-worker.service}"
@@ -94,15 +93,61 @@ mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="production_environment_file"
 [[ -r "$PRODUCTION_ENV_FILE" ]] || fail "production environment file is missing or unreadable: $PRODUCTION_ENV_FILE"
+# These production-ingress settings must come from the root-owned production
+# environment, never from an ambient shell or an ad-hoc smoke redirect.
+unset PUBLIC_BASE_URL BUSINESAIOS_TRUST_PROXY_HEADERS BUSINESAIOS_TRUSTED_PROXY_IPS SMOKE_BASE_URL
 set -a
 # shellcheck disable=SC1090
 source "$PRODUCTION_ENV_FILE"
 set +a
+unset SMOKE_BASE_URL
 mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="production_environment"
 require_env APP_ENV
 [[ "${APP_ENV,,}" == "prod" || "${APP_ENV,,}" == "production" ]] || fail "APP_ENV must be prod/production"
+mark_pass "$CURRENT_CHECK"
+
+CURRENT_CHECK="production_ingress"
+require_env PUBLIC_BASE_URL
+PUBLIC_BASE_URL="${PUBLIC_BASE_URL%/}"
+PUBLIC_BASE_URL_VALUE="$PUBLIC_BASE_URL" "$PYTHON_BIN" - <<'PY'
+import os
+from urllib.parse import urlsplit
+
+raw = os.environ['PUBLIC_BASE_URL_VALUE'].strip()
+parsed = urlsplit(raw)
+if parsed.scheme.lower() != 'https' or not parsed.hostname:
+    raise SystemExit('PUBLIC_BASE_URL must be an absolute HTTPS origin')
+if parsed.username or parsed.password or parsed.query or parsed.fragment:
+    raise SystemExit('PUBLIC_BASE_URL must be an HTTPS origin without credentials, query, or fragment')
+if parsed.path not in {'', '/'}:
+    raise SystemExit('PUBLIC_BASE_URL must not contain an application path')
+PY
+require_env BUSINESAIOS_TRUST_PROXY_HEADERS
+case "${BUSINESAIOS_TRUST_PROXY_HEADERS,,}" in
+  1|true|yes|on) ;;
+  *) fail "BUSINESAIOS_TRUST_PROXY_HEADERS must be enabled for the canonical nginx TLS boundary" ;;
+esac
+require_env BUSINESAIOS_TRUSTED_PROXY_IPS
+TRUSTED_PROXY_IPS_VALUE="$BUSINESAIOS_TRUSTED_PROXY_IPS" "$PYTHON_BIN" - <<'PY'
+import ipaddress
+import os
+
+raw = os.environ['TRUSTED_PROXY_IPS_VALUE']
+networks = set()
+for item in raw.replace(';', ',').split(','):
+    text = item.strip()
+    if not text:
+        continue
+    try:
+        networks.add(ipaddress.ip_network(text, strict=False))
+    except ValueError as exc:
+        raise SystemExit(f'invalid BUSINESAIOS_TRUSTED_PROXY_IPS entry: {text!r}') from exc
+expected = {ipaddress.ip_network('127.0.0.1/32'), ipaddress.ip_network('::1/128')}
+if networks != expected:
+    raise SystemExit('BUSINESAIOS_TRUSTED_PROXY_IPS must trust only loopback nginx peers: 127.0.0.1/32,::1/128')
+PY
 mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="production_credentials"
@@ -206,8 +251,8 @@ PY
 mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="synthetic_flow"
-step "unique synthetic production flow"
-SMOKE_JSON="$("$PYTHON_BIN" - <<'PY'
+step "unique synthetic production flow through canonical HTTPS ingress"
+SMOKE_JSON="$(SMOKE_BASE_URL="$PUBLIC_BASE_URL" "$PYTHON_BIN" - <<'PY'
 import json
 from scripts.server.smoke_flow import run_smoke_flow
 print(json.dumps(run_smoke_flow(), sort_keys=True))
@@ -225,8 +270,8 @@ mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="public_api"
 step "public api health"
-api_check "$PUBLIC_API_BASE/health"
-api_check "$PUBLIC_API_BASE/readyz"
+api_check "$PUBLIC_BASE_URL/health"
+api_check "$PUBLIC_BASE_URL/readyz"
 mark_pass "$CURRENT_CHECK"
 CURRENT_CHECK="public_status"
 step "public status health"
