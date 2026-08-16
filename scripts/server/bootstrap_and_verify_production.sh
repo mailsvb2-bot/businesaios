@@ -106,10 +106,15 @@ if not (values.get("DATABASE_URL", "").strip() or values.get("POSTGRES_DSN", "")
     raise SystemExit("DATABASE_URL/POSTGRES_DSN must be present before credential bootstrap")
 PY
 
-# The host must be using the service definitions shipped by the exact deployed
-# SHA. This is especially important for the worker unit because it provides a
-# second loopback-only guard even if a future environment file drifts.
+# The host must be using the effective service definitions shipped by the exact
+# deployed SHA. Reject stale manager state and all drop-ins before comparing the
+# fragment bytes, otherwise systemd could restart an override that is not part
+# of the release being verified.
 for service in "$API_SERVICE" "$WORKER_SERVICE"; do
+  need_reload="$(systemctl show "$service" -p NeedDaemonReload --value)"
+  [[ "$need_reload" == "no" ]] || fail "systemd manager state is stale for $service; run systemctl daemon-reload before production bootstrap"
+  drop_ins="$(systemctl show "$service" -p DropInPaths --value)"
+  [[ -z "${drop_ins//[[:space:]]/}" ]] || fail "unexpected systemd drop-ins for $service: $drop_ins"
   fragment="$(systemctl show "$service" -p FragmentPath --value)"
   [[ -n "$fragment" && -f "$fragment" ]] || fail "installed systemd unit is missing for $service"
   canonical="$BUSINESAIOS_DEPLOY_ROOT/deploy/systemd/$service"
