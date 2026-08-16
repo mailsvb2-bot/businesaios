@@ -31,14 +31,8 @@ def run_smoke_flow() -> dict[str, str]:
         if method == "POST":
             headers.update({"content-type": "application/json", "x-tenant-id": tenant_id,
                             "x-idempotency-key": ids["idempotency_key"], "x-action-id": ids["action_id"]})
-        return fetch_json(
-            f"{base}{path}",
-            method=method,
-            headers=headers,
-            payload=payload,
-            timeout=10,
-            follow_redirects=False,
-        )
+        return fetch_json(f"{base}{path}", method=method, headers=headers, payload=payload, timeout=10,
+                          follow_redirects=False)
 
     status, health = call("/health")
     assert status == 200 and str(health.get("status")).lower() in {"ok", "degraded"}
