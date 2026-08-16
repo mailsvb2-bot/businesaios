@@ -13,6 +13,11 @@ from scripts.server import smoke_flow
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 VERIFY = PROJECT_ROOT / "scripts" / "server" / "verify_runtime_host_contract.sh"
 EXPECTED_SHA = "a" * 40
+CANONICAL_INGRESS_ENV = (
+    "PUBLIC_BASE_URL=https://api.businessaios.ru\n"
+    "BUSINESAIOS_TRUST_PROXY_HEADERS=true\n"
+    "BUSINESAIOS_TRUSTED_PROXY_IPS=127.0.0.1/32,::1/128\n"
+)
 
 
 def _run_verify(tmp_path: Path, *, env_text: str, **extra_env: str) -> subprocess.CompletedProcess[str]:
@@ -39,7 +44,9 @@ def test_contract_contains_all_fail_closed_production_gates() -> None:
     text = VERIFY.read_text(encoding="utf-8")
     for token in ("EXPECTED_SHA", "APP_ENV", "CONTROL_PLANE_API_KEY", "SMOKE_TENANT_ID",
                   "DATABASE_URL", "POSTGRES_DSN", "SELECT 1", "runtime_readiness",
-                  "runtime_orchestrator_present", "synthetic_flow", "PRODUCTION_VERDICT_PATH"):
+                  "runtime_orchestrator_present", "synthetic_flow", "PRODUCTION_VERDICT_PATH",
+                  "PUBLIC_BASE_URL", "BUSINESAIOS_TRUST_PROXY_HEADERS",
+                  "BUSINESAIOS_TRUSTED_PROXY_IPS"):
         assert token in text
     assert "/etc/businesaios/api.env" in text
     assert '.venv/bin/python' in text and '"$PYTHON_BIN" -' in text
@@ -73,7 +80,12 @@ def test_canonical_venv_python_is_mandatory(tmp_path: Path) -> None:
 def test_development_control_key_from_production_env_fails_and_writes_sha_bound_verdict(tmp_path: Path) -> None:
     result = _run_verify(
         tmp_path,
-        env_text="APP_ENV=prod\nCONTROL_PLANE_API_KEY=development-control-plane-key\nDATABASE_URL=postgresql://invalid/db\n",
+        env_text=(
+            "APP_ENV=prod\n"
+            + CANONICAL_INGRESS_ENV
+            + "CONTROL_PLANE_API_KEY=development-control-plane-key\n"
+            + "DATABASE_URL=postgresql://invalid/db\n"
+        ),
         SMOKE_TENANT_ID="production-smoke",
     )
     assert result.returncode != 0
@@ -81,6 +93,7 @@ def test_development_control_key_from_production_env_fails_and_writes_sha_bound_
     assert payload["verdict"] == "fail"
     assert payload["expected_sha"] == EXPECTED_SHA
     assert payload["checks"]["production_environment_file"]["status"] == "pass"
+    assert payload["checks"]["production_ingress"]["status"] == "pass"
     assert payload["checks"]["production_credentials"]["status"] == "fail"
 
 
