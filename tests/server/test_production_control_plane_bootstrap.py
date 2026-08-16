@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import stat
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,9 @@ from governance.rbac_contract import RoleId
 from scripts.server import bootstrap_production_control_plane as bootstrap
 from tenancy.tenant_contract import TenantRecord, TenantStatus
 from tenancy.tenant_registry import PersistentTenantRegistry
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+HOST_LIFECYCLE = PROJECT_ROOT / "scripts" / "server" / "bootstrap_and_verify_production.sh"
 
 
 def _prepare(tmp_path: Path, *, tenant_status: TenantStatus = TenantStatus.ACTIVE) -> tuple[Path, Path, Path]:
@@ -165,3 +169,20 @@ def test_environment_parser_and_writer_fail_closed_on_duplicate_managed_keys(tmp
             tenant_id="production-smoke",
             env_file=env_file,
         )
+
+
+def test_host_lifecycle_is_sha_bound_and_chains_bootstrap_restart_and_canonical_verifier() -> None:
+    subprocess.run(["bash", "-n", str(HOST_LIFECYCLE)], check=True)
+    text = HOST_LIFECYCLE.read_text(encoding="utf-8")
+
+    for token in (
+        "EXPECTED_SHA",
+        "SMOKE_TENANT_ID",
+        "bootstrap_production_control_plane.py",
+        "systemctl restart",
+        "verify_runtime_host_contract.sh",
+    ):
+        assert token in text
+    assert "deployed SHA $OBSERVED_SHA != expected SHA $EXPECTED_SHA" in text
+    assert text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"") < text.index("systemctl restart")
+    assert text.index("systemctl restart") < text.index("\"$VERIFY\"")
