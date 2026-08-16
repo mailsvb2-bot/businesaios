@@ -93,9 +93,11 @@ mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="production_environment_file"
 [[ -r "$PRODUCTION_ENV_FILE" ]] || fail "production environment file is missing or unreadable: $PRODUCTION_ENV_FILE"
-# These production-ingress settings must come from the root-owned production
-# environment, never from an ambient shell or an ad-hoc smoke redirect.
-unset PUBLIC_BASE_URL BUSINESAIOS_TRUST_PROXY_HEADERS BUSINESAIOS_TRUSTED_PROXY_IPS SMOKE_BASE_URL
+# Production settings below must come only from the root-owned environment
+# file, never from an ambient shell. EXPECTED_SHA remains deliberately external.
+unset APP_ENV PUBLIC_BASE_URL BUSINESAIOS_TRUST_PROXY_HEADERS BUSINESAIOS_TRUSTED_PROXY_IPS
+unset CONTROL_PLANE_API_KEY SMOKE_TENANT_ID DATABASE_URL POSTGRES_DSN
+unset HEALTH_HOST WORKER_HEALTH_PORT EVOLUTION_HEALTH_PORT EVOLUTION_ENABLED SMOKE_BASE_URL
 set -a
 # shellcheck disable=SC1090
 source "$PRODUCTION_ENV_FILE"
@@ -148,6 +150,20 @@ expected = {ipaddress.ip_network('127.0.0.1/32'), ipaddress.ip_network('::1/128'
 if networks != expected:
     raise SystemExit('BUSINESAIOS_TRUSTED_PROXY_IPS must trust only loopback nginx peers: 127.0.0.1/32,::1/128')
 PY
+mark_pass "$CURRENT_CHECK"
+
+CURRENT_CHECK="production_runtime_bindings"
+require_env HEALTH_HOST
+[[ "$HEALTH_HOST" == "127.0.0.1" ]] || fail "HEALTH_HOST must be 127.0.0.1 in canonical production"
+require_env WORKER_HEALTH_PORT
+[[ "$WORKER_HEALTH_PORT" == "8087" ]] || fail "WORKER_HEALTH_PORT must be 8087 in canonical production"
+require_env EVOLUTION_HEALTH_PORT
+[[ "$EVOLUTION_HEALTH_PORT" == "8087" ]] || fail "EVOLUTION_HEALTH_PORT must be 8087 in canonical production"
+require_env EVOLUTION_ENABLED
+case "${EVOLUTION_ENABLED,,}" in
+  1|true|yes|on) ;;
+  *) fail "EVOLUTION_ENABLED must be enabled in canonical production" ;;
+esac
 mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="production_credentials"
