@@ -14,6 +14,7 @@ from tenancy.tenant_registry import PersistentTenantRegistry
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 HOST_LIFECYCLE = PROJECT_ROOT / "scripts" / "server" / "bootstrap_and_verify_production.sh"
+RUNBOOK = PROJECT_ROOT / "docs" / "operations" / "production-control-plane-bootstrap.md"
 
 
 def _prepare(tmp_path: Path, *, tenant_status: TenantStatus = TenantStatus.ACTIVE) -> tuple[Path, Path, Path]:
@@ -292,3 +293,11 @@ def test_host_lifecycle_is_sha_bound_and_chains_bootstrap_restart_and_canonical_
     assert text.index('export PYTHONPATH="$BUSINESAIOS_DEPLOY_ROOT"') < text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"")
     assert text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"") < text.index("systemctl restart")
     assert text.index("systemctl restart") < text.rindex("\"$VERIFY\"")
+
+
+def test_runbook_requires_expected_sha_from_trusted_release_evidence() -> None:
+    text = RUNBOOK.read_text(encoding="utf-8")
+
+    assert 'EXPECTED_SHA="<exact-40-character-github-main-sha>"' in text
+    assert 'EXPECTED_SHA="$(git -C /opt/businesaios rev-parse HEAD)"' not in text
+    assert "Do not derive `EXPECTED_SHA` from the current production checkout" in text
