@@ -7,9 +7,9 @@ import re
 import shlex
 import stat
 import tempfile
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Mapping
 
 from entrypoints.api.api_key_policy import PersistentApiKeyStore, build_default_api_key_store
 from governance.persistence_codec import exclusive_file_lock
@@ -197,6 +197,8 @@ def validate_credential_binding(
         raise RuntimeError("CONTROL_PLANE_API_KEY tenant binding mismatch")
     if RoleId.OWNER not in record.roles:
         raise RuntimeError("CONTROL_PLANE_API_KEY lacks OWNER role required by production smoke")
+    if "provider_control_plane" not in record.scopes:
+        raise RuntimeError("CONTROL_PLANE_API_KEY lacks provider_control_plane scope required by production smoke")
     if str(record.metadata.get("credential_kind") or "") != CREDENTIAL_KIND:
         raise RuntimeError("CONTROL_PLANE_API_KEY was not issued by canonical production bootstrap")
     if str(record.metadata.get("managed_by") or "") != MANAGED_BY:
@@ -250,7 +252,6 @@ def bootstrap_production_control_plane(
         old_record = locked_store.get(old_key_id) if old_key_id else None
         if (
             old_record is not None
-            and old_record.tenant_id == tenant.tenant_id
             and str(old_record.metadata.get("credential_kind") or "") == CREDENTIAL_KIND
             and str(old_record.metadata.get("managed_by") or "") == MANAGED_BY
         ):
