@@ -39,9 +39,7 @@ OBSERVED_SHA="${OBSERVED_SHA,,}"
 [[ "$OBSERVED_SHA" == "$EXPECTED_SHA" ]] || fail "refusing credential bootstrap: deployed SHA $OBSERVED_SHA != expected SHA $EXPECTED_SHA"
 
 echo "== canonical production control-plane bootstrap =="
-"$PYTHON_BIN" "$BOOTSTRAP" \
-  --tenant-id "$SMOKE_TENANT" \
-  --env-file "$PRODUCTION_ENV_FILE"
+"$PYTHON_BIN" "$BOOTSTRAP" --tenant-id "$SMOKE_TENANT"
 
 echo "== reload API with the newly issued application-side key record =="
 systemctl restart "$API_SERVICE"
