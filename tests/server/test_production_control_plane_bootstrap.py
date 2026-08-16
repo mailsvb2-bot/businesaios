@@ -289,6 +289,7 @@ def test_cli_reports_identifiers_but_never_prints_plaintext_credential(
 ) -> None:
     env_file, _, _ = _prepare(tmp_path)
     monkeypatch.setattr(bootstrap, "DEFAULT_ENV_FILE", env_file)
+    monkeypatch.setattr(bootstrap.os, "geteuid", lambda: 0)
 
     assert bootstrap.main(["--tenant-id", "production-smoke"]) == 0
     output = capsys.readouterr().out
