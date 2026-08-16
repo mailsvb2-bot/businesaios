@@ -66,6 +66,20 @@ The existing canonical `verify_runtime_host_contract.sh` remains the sole post-d
 
 A PASS verdict is written only by that verifier under `PRODUCTION_VERDICT_DIR`; its filename and payload are bound to `EXPECTED_SHA`.
 
+## Verifier-only recovery after a successful bootstrap
+
+Use verifier-only recovery only when the same production lifecycle has already emitted `PRODUCTION_CONTROL_PLANE_BOOTSTRAP_OK` and then failed later during readiness or post-deploy verification. In that case the canonical credential already exists in `/etc/businesaios/api.env`; rerunning the bootstrap lifecycle would rotate it unnecessarily.
+
+After deploying the corrected, externally approved exact SHA and installing that SHA's canonical systemd units, rerun only the existing sole verifier:
+
+```bash
+sudo env \
+  EXPECTED_SHA="<exact-40-character-github-main-sha>" \
+  bash /opt/businesaios/scripts/server/verify_runtime_host_contract.sh
+```
+
+Do not pass `CONTROL_PLANE_API_KEY`, `SMOKE_TENANT_ID`, PostgreSQL DSN or runtime bindings from the shell. The verifier deliberately discards ambient values and reloads the authoritative settings from `/etc/businesaios/api.env`. Verifier-only recovery is not valid when bootstrap itself failed before `PRODUCTION_CONTROL_PLANE_BOOTSTRAP_OK`; in that case fix the bootstrap precondition and rerun the full canonical lifecycle.
+
 ## Failure behavior
 
 Bootstrap failures before the environment replacement leave the previous plaintext environment unchanged and revoke the newly issued candidate key. Unknown, suspended or disabled tenants fail before credential issuance. Missing pepper, memory-backed security/tenant stores, relative production store paths, duplicate environment assignments, a symlinked environment file, an unsafe default tenant, a non-HTTPS `PUBLIC_BASE_URL`, disabled proxy trust, trusted proxy networks wider than loopback, worker health bindings wider than loopback, missing PostgreSQL configuration, stale systemd daemon state, systemd drop-ins, or installed systemd units that do not match the deployed SHA all fail closed.
