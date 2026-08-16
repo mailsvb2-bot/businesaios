@@ -125,6 +125,9 @@ class InMemoryApiKeyStore:
     def get(self, key_id: str) -> ApiKeyRecord | None:
         return self._records.get(str(key_id))
 
+    def list_records(self) -> tuple[ApiKeyRecord, ...]:
+        return tuple(self._records.values())
+
     def verify_secret(self, *, key_id: str, raw_secret: str) -> bool:
         record = self.get(key_id)
         if record is None:
