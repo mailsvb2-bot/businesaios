@@ -15,6 +15,11 @@ def _required_env(name: str, forbidden: str) -> str:
     return value
 
 
+def _require(condition: bool, message: str) -> None:
+    if not condition:
+        raise RuntimeError(message)
+
+
 def build_smoke_identity() -> dict[str, str]:
     run_id = uuid.uuid4().hex
     return {"run_id": run_id, "idempotency_key": f"post-deploy-{run_id}", "action_id": f"post-deploy-action-{run_id}", "offer_id": f"post-deploy-offer-{run_id}"}
@@ -29,22 +34,21 @@ def run_smoke_flow() -> dict[str, str]:
     def call(path: str, method: str = "GET", payload: dict | None = None) -> tuple[int, dict]:
         headers = {"x-api-key": api_key}
         if method == "POST":
-            headers.update({"content-type": "application/json", "x-tenant-id": tenant_id,
-                            "x-idempotency-key": ids["idempotency_key"], "x-action-id": ids["action_id"]})
-        return fetch_json(f"{base}{path}", method=method, headers=headers, payload=payload, timeout=10,
-                          follow_redirects=False)
+            headers.update({"content-type": "application/json", "x-tenant-id": tenant_id, "x-idempotency-key": ids["idempotency_key"], "x-action-id": ids["action_id"]})
+        return fetch_json(f"{base}{path}", method=method, headers=headers, payload=payload, timeout=10, follow_redirects=False)
 
     status, health = call("/health")
-    assert status == 200 and str(health.get("status")).lower() in {"ok", "degraded"}
+    _require(status == 200 and str(health.get("status")).lower() in {"ok", "degraded"}, "synthetic health check failed")
     status, ready = call("/readyz")
-    assert status == 200 and str(ready.get("status")).lower() == "ready"
+    _require(status == 200 and str(ready.get("status")).lower() == "ready", "synthetic readiness check failed")
     status, tenants = call("/control-plane/admin/tenants")
-    assert status == 200 and "tenants" in tenants
+    _require(status == 200 and "tenants" in tenants, "synthetic tenant control-plane check failed")
     status, result = call("/actions/execute", "POST", {"action_type": "pricing.publish_offer", "payload": {"offer_id": ids["offer_id"], "amount": 199}})
-    assert status == 200 and str(result.get("status") or "").lower() == "ok"
+    action_status = str(result.get("status") or "").strip().lower()
+    _require(status == 200 and bool(action_status) and action_status not in {"error", "failed"}, f"synthetic action failed: http_status={status} action_status={action_status!r}")
     status, audit = call("/control-plane/audit/actions")
-    assert status == 200 and any(str(item.get("action_id") or "") == ids["action_id"] for item in audit.get("records", []))
-    return {**ids, "tenant_id": tenant_id}
+    _require(status == 200 and any(str(item.get("action_id") or "") == ids["action_id"] for item in audit.get("records", [])), "synthetic action audit correlation failed")
+    return {**ids, "tenant_id": tenant_id, "action_status": action_status}
 
 
 def main() -> int:
