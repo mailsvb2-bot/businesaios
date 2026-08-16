@@ -285,16 +285,27 @@ def test_validator_requires_control_plane_scope_even_for_canonical_metadata(tmp_
 def test_cli_reports_identifiers_but_never_prints_plaintext_credential(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     env_file, _, _ = _prepare(tmp_path)
+    monkeypatch.setattr(bootstrap, "DEFAULT_ENV_FILE", env_file)
 
-    assert bootstrap.main(["--tenant-id", "production-smoke", "--env-file", str(env_file)]) == 0
+    assert bootstrap.main(["--tenant-id", "production-smoke"]) == 0
     output = capsys.readouterr().out
     credential = _credential(env_file)
 
     assert "PRODUCTION_CONTROL_PLANE_BOOTSTRAP_OK" in output
     assert credential not in output
     assert credential.split(".", 1)[1] not in output
+
+
+def test_cli_rejects_environment_path_override(tmp_path: Path) -> None:
+    env_file, _, _ = _prepare(tmp_path)
+
+    with pytest.raises(SystemExit):
+        bootstrap._build_parser().parse_args(
+            ["--tenant-id", "production-smoke", "--env-file", str(env_file)]
+        )
 
 
 def test_environment_parser_and_writer_fail_closed_on_duplicate_managed_keys(tmp_path: Path) -> None:
@@ -331,6 +342,7 @@ def test_host_lifecycle_is_sha_bound_and_chains_bootstrap_restart_and_canonical_
     assert "${BUSINESAIOS_DEPLOY_ROOT:-" not in text
     assert "${PRODUCTION_ENV_FILE:-" not in text
     assert "${API_SERVICE:-" not in text
+    assert "--env-file" not in text
     assert "deployed SHA $OBSERVED_SHA != expected SHA $EXPECTED_SHA" in text
     assert text.index('export PYTHONPATH="$BUSINESAIOS_DEPLOY_ROOT"') < text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"")
     assert text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"") < text.index("systemctl restart")
