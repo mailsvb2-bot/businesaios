@@ -18,12 +18,19 @@ SMOKE_TENANT="${SMOKE_TENANT_ID:-}"
 [[ "$SMOKE_TENANT" != "default-business" ]] || fail "SMOKE_TENANT_ID must not use the unsafe default tenant"
 unset SMOKE_TENANT_ID
 
+[[ -d "$BUSINESAIOS_DEPLOY_ROOT" ]] || fail "canonical production deploy root is missing: $BUSINESAIOS_DEPLOY_ROOT"
 [[ -x "$PYTHON_BIN" ]] || fail "canonical production Python is missing: $PYTHON_BIN"
 [[ -f "$BOOTSTRAP" ]] || fail "canonical production credential bootstrap is missing: $BOOTSTRAP"
 [[ -x "$VERIFY" ]] || fail "canonical production verifier is missing or not executable: $VERIFY"
 [[ -r "$PRODUCTION_ENV_FILE" ]] || fail "production environment file is missing or unreadable: $PRODUCTION_ENV_FILE"
 
-OBSERVED_SHA="$(git -C "$BUSINESAIOS_DEPLOY_ROOT" rev-parse HEAD)"
+# The repository is intentionally not installed as a second application copy.
+# Pin the canonical deploy root as the sole project import root so both the
+# path-invoked bootstrap and verifier work independently of the caller's cwd.
+export PYTHONPATH="$BUSINESAIOS_DEPLOY_ROOT"
+cd "$BUSINESAIOS_DEPLOY_ROOT"
+
+OBSERVED_SHA="$(git rev-parse HEAD)"
 OBSERVED_SHA="${OBSERVED_SHA,,}"
 [[ "$OBSERVED_SHA" == "$EXPECTED_SHA" ]] || fail "refusing credential bootstrap: deployed SHA $OBSERVED_SHA != expected SHA $EXPECTED_SHA"
 
