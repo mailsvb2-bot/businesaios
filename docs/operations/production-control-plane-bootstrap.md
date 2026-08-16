@@ -12,10 +12,20 @@ This runbook defines the single canonical lifecycle for the production control-p
 - The environment file is replaced atomically, preserves its owner/group and is forced to mode `0600`.
 - The bootstrap never prints the credential. It reports only tenant ID and key ID.
 - A second bootstrap invocation rotates only a previous credential carrying this lifecycle's canonical metadata; unrelated credentials are not revoked.
+- Privileged synthetic control-plane traffic must traverse the canonical public HTTPS ingress. Loopback HTTP remains valid only for local health/readiness probes.
+- The API may trust `X-Forwarded-*` only from the local nginx peer: `BUSINESAIOS_TRUST_PROXY_HEADERS=true` with `BUSINESAIOS_TRUSTED_PROXY_IPS=127.0.0.1/32,::1/128`.
 
 ## Preconditions
 
-The target release must already be checked out at `/opt/businesaios`, its canonical virtualenv must exist, and `/etc/businesaios/api.env` must contain the production pepper, PostgreSQL settings, and explicit persistent API-key/tenant-registry paths. The selected tenant must already exist and be active; this lifecycle deliberately does **not** create a tenant as a side effect of credential issuance.
+The target release must already be checked out at `/opt/businesaios`, its canonical virtualenv must exist, and `/etc/businesaios/api.env` must contain the production pepper, PostgreSQL settings, explicit persistent API-key/tenant-registry paths, and the canonical TLS boundary:
+
+```text
+PUBLIC_BASE_URL=https://api.businessaios.ru
+BUSINESAIOS_TRUST_PROXY_HEADERS=true
+BUSINESAIOS_TRUSTED_PROXY_IPS=127.0.0.1/32,::1/128
+```
+
+The selected tenant must already exist and be active; this lifecycle deliberately does **not** create a tenant as a side effect of credential issuance. Nginx must terminate TLS for `PUBLIC_BASE_URL` and forward the original scheme to the local API. The verifier rejects a non-HTTPS public origin and rejects any trusted-proxy network wider than loopback.
 
 `EXPECTED_SHA` must be the exact 40-character SHA selected from trusted release evidence (normally the intended GitHub `main` commit) **before** the production host is changed. Do not derive `EXPECTED_SHA` from the current production checkout and do not persist it in `api.env`; otherwise a stale or unintended checkout could validate itself.
 
@@ -32,20 +42,22 @@ sudo env \
 
 Before running it, the operator must verify that `<exact-40-character-github-main-sha>` is the release SHA approved for deployment. The lifecycle itself will independently compare that value with `/opt/businesaios` `HEAD` before mutating the credential.
 
-Do not generate a control-plane token manually, write an unhashed token into the application key store, use `default-business`, derive `EXPECTED_SHA` from the production host being verified, or invoke a separate ad-hoc smoke verifier.
+Do not generate a control-plane token manually, write an unhashed token into the application key store, use `default-business`, derive `EXPECTED_SHA` from the production host being verified, inject an ad-hoc `SMOKE_BASE_URL`, widen trusted proxy networks, or invoke a separate smoke verifier.
 
 ## What the lifecycle proves
 
 `bootstrap_and_verify_production.sh` first refuses to mutate credentials unless the deployed SHA exactly equals the externally supplied `EXPECTED_SHA`. It then calls `bootstrap_production_control_plane.py`, which validates the active tenant and persistent stores, issues an OWNER service credential through the application API-key store, proves the plaintext is absent from that store, and atomically writes the new credential plus `SMOKE_TENANT_ID` into `/etc/businesaios/api.env`.
 
-The API service is restarted so the in-process authentication store sees the newly issued record. The existing canonical `verify_runtime_host_contract.sh` then remains the sole post-deploy verifier and executes the SHA-bound chain:
+The API service is restarted so the in-process authentication store sees the newly issued record. The lifecycle then waits, fail-closed and with a bounded timeout, until the canonical local `/health` and `/readyz` probes actually answer successfully; `systemd` reporting the service merely `active` is not sufficient.
 
-`health -> readiness -> runtime -> PostgreSQL -> authenticated synthetic action -> action audit -> exact SHA verdict`
+The existing canonical `verify_runtime_host_contract.sh` remains the sole post-deploy verifier. Local core health/readiness/runtime checks stay on loopback HTTP, while the privileged authenticated synthetic action and audit flow is forced through `PUBLIC_BASE_URL` over HTTPS. The verifier executes the SHA-bound chain:
+
+`health -> readiness -> runtime -> PostgreSQL -> authenticated synthetic action over HTTPS -> action audit -> exact SHA verdict`
 
 A PASS verdict is written only by that verifier under `PRODUCTION_VERDICT_DIR`; its filename and payload are bound to `EXPECTED_SHA`.
 
 ## Failure behavior
 
-Bootstrap failures before the environment replacement leave the previous plaintext environment unchanged and revoke the newly issued candidate key. Unknown, suspended or disabled tenants fail before credential issuance. Missing pepper, memory-backed security/tenant stores, relative production store paths, duplicate environment assignments, a symlinked environment file, or an unsafe default tenant all fail closed.
+Bootstrap failures before the environment replacement leave the previous plaintext environment unchanged and revoke the newly issued candidate key. Unknown, suspended or disabled tenants fail before credential issuance. Missing pepper, memory-backed security/tenant stores, relative production store paths, duplicate environment assignments, a symlinked environment file, an unsafe default tenant, a non-HTTPS `PUBLIC_BASE_URL`, disabled proxy trust, or trusted proxy networks wider than loopback all fail closed.
 
-If service restart or post-deploy verification fails after a successful bootstrap, treat production verification as failed and investigate the emitted SHA-bound verdict. Do not manufacture a replacement token outside the canonical lifecycle.
+If the API does not become genuinely healthy and ready after restart, or if post-deploy verification fails after a successful bootstrap, treat production verification as failed and investigate the emitted SHA-bound verdict. Do not manufacture a replacement token outside the canonical lifecycle and do not bypass `encryption_required` with direct privileged loopback HTTP.
