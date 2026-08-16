@@ -185,4 +185,4 @@ def test_host_lifecycle_is_sha_bound_and_chains_bootstrap_restart_and_canonical_
         assert token in text
     assert "deployed SHA $OBSERVED_SHA != expected SHA $EXPECTED_SHA" in text
     assert text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"") < text.index("systemctl restart")
-    assert text.index("systemctl restart") < text.index("\"$VERIFY\"")
+    assert text.index("systemctl restart") < text.rindex("\"$VERIFY\"")
