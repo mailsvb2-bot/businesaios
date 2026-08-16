@@ -30,6 +30,7 @@ unset SMOKE_TENANT_ID
 [[ -x "$VERIFY" ]] || fail "canonical production verifier is missing or not executable: $VERIFY"
 [[ -r "$PRODUCTION_ENV_FILE" ]] || fail "production environment file is missing or unreadable: $PRODUCTION_ENV_FILE"
 command -v curl >/dev/null 2>&1 || fail "curl is required for API readiness verification"
+command -v timeout >/dev/null 2>&1 || fail "timeout is required for the bounded API readiness deadline"
 
 # The repository is intentionally not installed as a second application copy.
 # Pin the canonical deploy root as the sole project import root so both the
@@ -48,8 +49,12 @@ echo "== reload API with the newly issued application-side key record =="
 systemctl restart "$API_SERVICE"
 
 # systemd can report active before the HTTP application has completed runtime
-# boot. Do not enter the synthetic verifier until both canonical local probes
-# actually answer successfully. The bounded wait fails closed after 60 seconds.
+# boot. Enforce one 60-second wall-clock deadline around the entire retry loop;
+# two sequential per-probe timeouts must never multiply the rollout deadline.
+if ! timeout 60s bash -c '
+API_SERVICE="$1"
+LOCAL_HEALTH_URL="$2"
+LOCAL_READINESS_URL="$3"
 API_READY=0
 for ((attempt=1; attempt<=60; attempt++)); do
   if systemctl is-active --quiet "$API_SERVICE" \
@@ -60,7 +65,10 @@ for ((attempt=1; attempt<=60; attempt++)); do
   fi
   sleep 1
 done
-[[ "$API_READY" == "1" ]] || fail "API service did not become healthy and ready after restart: $API_SERVICE"
+[[ "$API_READY" == "1" ]]
+' _ "$API_SERVICE" "$LOCAL_HEALTH_URL" "$LOCAL_READINESS_URL"; then
+  fail "API service did not become healthy and ready within 60 seconds after restart: $API_SERVICE"
+fi
 
 echo "== SHA-bound authenticated synthetic production verdict =="
 EXPECTED_SHA="$EXPECTED_SHA" \
