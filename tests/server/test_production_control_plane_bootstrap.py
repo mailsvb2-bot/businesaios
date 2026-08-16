@@ -77,6 +77,7 @@ def test_bootstrap_binds_real_tenant_and_keeps_plaintext_only_in_private_env(tmp
     assert record is not None
     assert record.tenant_id == "production-smoke"
     assert RoleId.OWNER in record.roles
+    assert "provider_control_plane" in record.scopes
     assert record.metadata["credential_kind"] == bootstrap.CREDENTIAL_KIND
     assert record.metadata["managed_by"] == bootstrap.MANAGED_BY
 
@@ -123,6 +124,64 @@ def test_bootstrap_rotates_only_its_previous_managed_credential(tmp_path: Path) 
     assert second_record is not None and second_record.is_active() is True
 
 
+def test_bootstrap_rotates_previous_managed_credential_when_smoke_tenant_changes(tmp_path: Path) -> None:
+    env_file, api_store_path, tenant_store = _prepare(tmp_path)
+    registry = PersistentTenantRegistry(path=tenant_store)
+    registry.register(
+        TenantRecord(
+            tenant_id="production-smoke-next",
+            display_name="Production smoke next",
+            status=TenantStatus.ACTIVE,
+        )
+    )
+
+    first = bootstrap.bootstrap_production_control_plane(
+        tenant_id="production-smoke",
+        env_file=env_file,
+    )
+    second = bootstrap.bootstrap_production_control_plane(
+        tenant_id="production-smoke-next",
+        env_file=env_file,
+    )
+
+    assert second.tenant_id == "production-smoke-next"
+    assert second.rotated_key_id == first.key_id
+    store = PersistentApiKeyStore(path=api_store_path, pepper="test-production-pepper")
+    first_record = store.get(first.key_id)
+    second_record = store.get(second.key_id)
+    assert first_record is not None and first_record.is_active() is False
+    assert second_record is not None and second_record.is_active() is True
+    assert second_record.tenant_id == "production-smoke-next"
+
+
+def test_bootstrap_never_revokes_unrelated_previous_credential(tmp_path: Path) -> None:
+    env_file, api_store_path, _ = _prepare(tmp_path)
+    store = PersistentApiKeyStore(path=api_store_path, pepper="test-production-pepper")
+    unrelated_record, unrelated_credential = store.issue(
+        tenant_id="production-smoke",
+        subject="unrelated-control-plane-client",
+        roles=(RoleId.OWNER,),
+        scopes=("provider_control_plane",),
+    )
+    env_file.write_text(
+        env_file.read_text(encoding="utf-8").replace(
+            "CONTROL_PLANE_API_KEY=\n",
+            f"CONTROL_PLANE_API_KEY={unrelated_credential}\n",
+        ),
+        encoding="utf-8",
+    )
+
+    result = bootstrap.bootstrap_production_control_plane(
+        tenant_id="production-smoke",
+        env_file=env_file,
+    )
+
+    assert result.rotated_key_id is None
+    reloaded = PersistentApiKeyStore(path=api_store_path, pepper="test-production-pepper")
+    preserved = reloaded.get(unrelated_record.key_id)
+    assert preserved is not None and preserved.is_active() is True
+
+
 def test_validator_rejects_noncanonical_credential_even_when_hash_is_valid(tmp_path: Path) -> None:
     env_file, api_store_path, tenant_store = _prepare(tmp_path)
     _, values = bootstrap.read_environment_file(env_file)
@@ -131,10 +190,33 @@ def test_validator_rejects_noncanonical_credential_even_when_hash_is_valid(tmp_p
         tenant_id="production-smoke",
         subject="legacy",
         roles=(RoleId.OWNER,),
+        scopes=("provider_control_plane",),
     )
     values["BUSINESAIOS_TENANT_REGISTRY_PATH"] = str(tenant_store)
 
     with pytest.raises(RuntimeError, match="canonical production bootstrap"):
+        bootstrap.validate_credential_binding(
+            credential=credential,
+            tenant_id="production-smoke",
+            values=values,
+        )
+
+
+def test_validator_requires_control_plane_scope_even_for_canonical_metadata(tmp_path: Path) -> None:
+    env_file, api_store_path, _ = _prepare(tmp_path)
+    _, values = bootstrap.read_environment_file(env_file)
+    store = PersistentApiKeyStore(path=api_store_path, pepper="test-production-pepper")
+    _, credential = store.issue(
+        tenant_id="production-smoke",
+        subject="scope-deficient",
+        roles=(RoleId.OWNER,),
+        metadata={
+            "credential_kind": bootstrap.CREDENTIAL_KIND,
+            "managed_by": bootstrap.MANAGED_BY,
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="provider_control_plane scope"):
         bootstrap.validate_credential_binding(
             credential=credential,
             tenant_id="production-smoke",
