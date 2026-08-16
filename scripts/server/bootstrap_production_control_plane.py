@@ -11,7 +11,11 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from entrypoints.api.api_key_policy import PersistentApiKeyStore, build_default_api_key_store
+from entrypoints.api.api_key_policy import (
+    ApiKeyRecord,
+    PersistentApiKeyStore,
+    build_default_api_key_store,
+)
 from governance.persistence_codec import exclusive_file_lock
 from governance.rbac_contract import RoleId
 from tenancy.tenant_registry import PersistentTenantRegistry, build_default_tenant_registry
@@ -128,7 +132,7 @@ def _rewrite_managed_assignments(text: str, *, credential: str, tenant_id: str) 
 
 
 def _atomic_write_private(path: Path, text: str) -> None:
-    current = path.stat()
+    current = path.lstat()
     if stat.S_ISLNK(current.st_mode):
         raise RuntimeError(f"refusing symlink environment file: {path}")
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=str(path.parent))
@@ -161,6 +165,15 @@ def _key_id_from_token(token: str) -> str | None:
         return None
     key_id, raw_secret = value.split(".", 1)
     return key_id if key_id and raw_secret else None
+
+
+def _is_lifecycle_record(record: ApiKeyRecord | None) -> bool:
+    if record is None:
+        return False
+    return (
+        str(record.metadata.get("credential_kind") or "") == CREDENTIAL_KIND
+        and str(record.metadata.get("managed_by") or "") == MANAGED_BY
+    )
 
 
 def _load_persistent_surfaces(values: Mapping[str, str]) -> tuple[PersistentApiKeyStore, PersistentTenantRegistry]:
@@ -198,10 +211,8 @@ def validate_credential_binding(
         raise RuntimeError("CONTROL_PLANE_API_KEY lacks OWNER role required by production smoke")
     if "provider_control_plane" not in record.scopes:
         raise RuntimeError("CONTROL_PLANE_API_KEY lacks provider_control_plane scope required by production smoke")
-    if str(record.metadata.get("credential_kind") or "") != CREDENTIAL_KIND:
+    if not _is_lifecycle_record(record):
         raise RuntimeError("CONTROL_PLANE_API_KEY was not issued by canonical production bootstrap")
-    if str(record.metadata.get("managed_by") or "") != MANAGED_BY:
-        raise RuntimeError("CONTROL_PLANE_API_KEY lifecycle owner mismatch")
     _, raw_secret = credential.split(".", 1)
     if not store.verify_secret(key_id=key_id, raw_secret=raw_secret):
         raise RuntimeError("CONTROL_PLANE_API_KEY secret does not match application-side hash")
@@ -240,15 +251,20 @@ def bootstrap_production_control_plane(
         tenant = registry.assert_active(tenant_id)
         old_token = str(values.get("CONTROL_PLANE_API_KEY") or "").strip()
         old_key_id = _key_id_from_token(old_token)
-        rotated_key_id: str | None = None
-
         old_record = store.get(old_key_id) if old_key_id else None
-        if (
-            old_record is not None
-            and str(old_record.metadata.get("credential_kind") or "") == CREDENTIAL_KIND
-            and str(old_record.metadata.get("managed_by") or "") == MANAGED_BY
-        ):
-            rotated_key_id = old_record.key_id
+        rotated_key_id = old_record.key_id if _is_lifecycle_record(old_record) else None
+
+        # A prior process may have died after switching api.env but before
+        # revoking its superseded lifecycle key.  Retire every active orphan
+        # owned by this lifecycle before issuing another candidate, while
+        # preserving the currently env-bound key until the cutover succeeds.
+        for candidate in store.list_records():
+            if (
+                candidate.key_id != rotated_key_id
+                and candidate.is_active()
+                and _is_lifecycle_record(candidate)
+            ):
+                store.revoke(candidate.key_id)
 
         record, credential = store.issue(
             tenant_id=tenant.tenant_id,
