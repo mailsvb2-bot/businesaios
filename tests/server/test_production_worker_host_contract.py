@@ -21,6 +21,10 @@ def test_host_lifecycle_preflights_worker_bind_before_credential_mutation() -> N
     assert text.index("== canonical production runtime preflight ==") < text.index(
         '"$PYTHON_BIN" "$BOOTSTRAP" --tenant-id "$SMOKE_TENANT"'
     )
+    assert 'NeedDaemonReload --value' in text
+    assert 'DropInPaths --value' in text
+    assert "systemd manager state is stale" in text
+    assert "unexpected systemd drop-ins" in text
     assert "installed systemd unit does not match deployed SHA" in text
 
 
