@@ -47,8 +47,11 @@ jobs:
       - run: python scripts/ci/check_requirements_lock.py
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.lock.txt
-      - name: Verify fail-closed post-deploy contract
-        run: python -m pytest -q tests/server/test_post_deploy_verification.py
+      - name: Verify fail-closed production bootstrap and post-deploy contracts
+        run: >-
+          python -m pytest -q
+          tests/server/test_post_deploy_verification.py
+          tests/server/test_production_control_plane_bootstrap.py
       - name: Run canonical fast CI gate
         env:
           BAIOS_BOOT_SMOKE_ROOT: ${{ runner.temp }}/businesaios-boot-smoke/${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}-${{ matrix.python-version }}
