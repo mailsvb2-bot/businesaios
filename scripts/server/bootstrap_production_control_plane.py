@@ -93,9 +93,10 @@ def _require_production(values: Mapping[str, str]) -> None:
 
 
 def _validate_env_destination(path: Path) -> None:
-    if path == DEFAULT_ENV_FILE:
-        if os.name != "posix" or getattr(os, "geteuid", lambda: -1)() != 0:
-            raise PermissionError(f"root is required to update {DEFAULT_ENV_FILE}")
+    if path == DEFAULT_ENV_FILE and (
+        os.name != "posix" or getattr(os, "geteuid", lambda: -1)() != 0
+    ):
+        raise PermissionError(f"root is required to update {DEFAULT_ENV_FILE}")
     if not path.exists():
         raise FileNotFoundError(f"production environment file does not exist: {path}")
     if path.is_symlink():
@@ -148,10 +149,8 @@ def _atomic_write_private(path: Path, text: str) -> None:
         finally:
             os.close(dir_fd)
     except BaseException:
-        try:
+        with contextlib.suppress(OSError):
             os.close(fd)
-        except OSError:
-            pass
         tmp.unlink(missing_ok=True)
         raise
 
