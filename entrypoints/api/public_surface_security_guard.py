@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 from governance.rbac_contract import ActorContext, RoleId
@@ -12,6 +11,7 @@ from security.security_integration_adapter import SecurityIntegrationAdapter
 from entrypoints.api.auth_contract import AuthPrincipal
 from entrypoints.api.request_context import RequestContext
 from entrypoints.api.public_surface_route_specs import PublicSurfaceRouteSpec, _ROUTE_SPECS
+from entrypoints.api.security_surface_guard import ApiSecuritySurfaceGuard
 
 CANON_API_PUBLIC_SURFACE_SECURITY_GUARD = True
 CANON_API_FINAL_OWNER = True
@@ -78,10 +78,9 @@ class PublicSurfaceSecurityGuard:
             request_context=request_context,
             tenant_id=tenant_id,
         )
-        now = datetime.now(timezone.utc)
-        issued_at = now.isoformat() if is_service and auth_type == 'api_key' and session_id is None else str(auth_metadata.get('issued_at') or now.isoformat())
-        record_expires_at = datetime.fromisoformat(str(auth_metadata['expires_at']).replace('Z', '+00:00')) if auth_metadata.get('expires_at') else None
-        expires_at = (min(now + timedelta(seconds=int(self.default_token_ttl_seconds)), record_expires_at) if is_service and auth_type == 'api_key' and session_id is None and record_expires_at is not None else now + timedelta(seconds=int(self.default_token_ttl_seconds)) if is_service and auth_type == 'api_key' and session_id is None else record_expires_at or now + timedelta(seconds=int(self.default_token_ttl_seconds))).isoformat()
+        projection_guard = ApiSecuritySurfaceGuard(adapter=self.adapter, default_token_ttl_seconds=self.default_token_ttl_seconds)
+        auth_projection, session_projection = projection_guard._build_auth_payload(principal=principal, request_context=request_context), projection_guard._build_session_payload(principal=principal, request_context=request_context)
+        issued_at, expires_at, now = str(auth_projection['issued_at']), str(auth_projection['expires_at']), str(auth_projection['now'])
         actor = ActorContext(
             actor_id=actor_id,
             tenant_id=tenant_id,
@@ -103,7 +102,7 @@ class PublicSurfaceSecurityGuard:
             auth_payload={
                 'issued_at': issued_at,
                 'expires_at': expires_at,
-                'now': now.isoformat(),
+                'now': now,
                 'subject': subject,
                 'audience': audience,
                 'issuer': auth_metadata.get('issuer') or auth_type,
@@ -120,9 +119,9 @@ class PublicSurfaceSecurityGuard:
                 'auth_level': auth_type,
             },
             session_payload={
-                'created_at': issued_at if is_service and auth_type == 'api_key' and session_id is None else auth_metadata.get('session_created_at') or issued_at,
-                'last_seen_at': now.isoformat(),
-                'now': now.isoformat(),
+                'created_at': session_projection['created_at'],
+                'last_seen_at': session_projection['last_seen_at'],
+                'now': session_projection['now'],
                 'expected_ip': request_context.ip_address,
                 'observed_ip': request_context.ip_address,
                 'expected_user_agent': request_context.user_agent,
