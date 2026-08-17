@@ -11,9 +11,20 @@ from security.access_policy import SecurityAction
 from security.owner_factory import build_default_security_adapter
 from security.security_integration_adapter import SecurityIntegrationAdapter
 
-
 CANON_API_SECURITY_SURFACE_GUARD = True
 CANON_API_FINAL_OWNER = True
+
+
+def project_security_lifetime(*, metadata: Mapping[str, object], session_id: str | None, default_token_ttl_seconds: int) -> tuple[datetime, datetime, datetime, datetime, datetime]:
+    values = dict(metadata)
+    now = _coerce_dt(values.get('security_now')) or datetime.now(timezone.utc)
+    service_key = _text(values.get('auth_type')) == 'api_key' and _text(values.get('principal_kind')) == 'service' and session_id is None
+    issued_at = now if service_key else _coerce_dt(values.get('issued_at')) or _coerce_dt(values.get('created_at')) or (now - timedelta(seconds=60))
+    record_expiry = _coerce_dt(values.get('expires_at'))
+    expires_at = min(now + timedelta(seconds=int(default_token_ttl_seconds)), record_expiry) if service_key and record_expiry is not None else now + timedelta(seconds=int(default_token_ttl_seconds)) if service_key else record_expiry or (now + timedelta(seconds=int(default_token_ttl_seconds)))
+    created_at = now if service_key else _coerce_dt(values.get('session_created_at')) or _coerce_dt(values.get('issued_at')) or (now - timedelta(seconds=60))
+    last_seen_at = now if service_key else _coerce_dt(values.get('last_seen_at')) or now
+    return now, issued_at, expires_at, created_at, last_seen_at
 
 
 @dataclass(frozen=True)
@@ -91,9 +102,7 @@ class ApiSecuritySurfaceGuard:
 
     def _build_auth_payload(self, *, principal: AuthPrincipal, request_context: RequestContext) -> dict[str, Any]:
         metadata = dict(principal.metadata)
-        now = _coerce_dt(metadata.get('security_now')) or datetime.now(timezone.utc)
-        issued_at = now if _text(metadata.get('auth_type')) == 'api_key' and _text(metadata.get('principal_kind')) == 'service' and principal.session_id is None else _coerce_dt(metadata.get('issued_at')) or _coerce_dt(metadata.get('created_at')) or (now - timedelta(seconds=60))
-        expires_at = min(now + timedelta(seconds=int(self.default_token_ttl_seconds)), _coerce_dt(metadata.get('expires_at'))) if _text(metadata.get('auth_type')) == 'api_key' and _text(metadata.get('principal_kind')) == 'service' and principal.session_id is None and _coerce_dt(metadata.get('expires_at')) is not None else now + timedelta(seconds=int(self.default_token_ttl_seconds)) if _text(metadata.get('auth_type')) == 'api_key' and _text(metadata.get('principal_kind')) == 'service' and principal.session_id is None else _coerce_dt(metadata.get('expires_at')) or (now + timedelta(seconds=int(self.default_token_ttl_seconds)))
+        now, issued_at, expires_at, _, _ = project_security_lifetime(metadata=metadata, session_id=principal.session_id, default_token_ttl_seconds=self.default_token_ttl_seconds)
         audience = principal.audience or _text(metadata.get('audience')) or 'control-plane'
         issuer = _text(metadata.get('issuer')) or _text(metadata.get('auth_type')) or 'api-security-surface'
         algorithm = _text(metadata.get('algorithm'))
@@ -120,9 +129,7 @@ class ApiSecuritySurfaceGuard:
 
     def _build_session_payload(self, *, principal: AuthPrincipal, request_context: RequestContext) -> dict[str, Any]:
         metadata = dict(principal.metadata)
-        now = _coerce_dt(metadata.get('security_now')) or datetime.now(timezone.utc)
-        created_at = now if _text(metadata.get('auth_type')) == 'api_key' and _text(metadata.get('principal_kind')) == 'service' and principal.session_id is None else _coerce_dt(metadata.get('session_created_at')) or _coerce_dt(metadata.get('issued_at')) or (now - timedelta(seconds=60))
-        last_seen_at = now if _text(metadata.get('auth_type')) == 'api_key' and _text(metadata.get('principal_kind')) == 'service' and principal.session_id is None else _coerce_dt(metadata.get('last_seen_at')) or now
+        now, _, _, created_at, last_seen_at = project_security_lifetime(metadata=metadata, session_id=principal.session_id, default_token_ttl_seconds=self.default_token_ttl_seconds)
         return {
             'created_at': created_at.isoformat(),
             'last_seen_at': last_seen_at.isoformat(),
@@ -221,4 +228,5 @@ __all__ = [
     'ApiSecuritySurfaceGuard',
     'CANON_API_FINAL_OWNER',
     'CANON_API_SECURITY_SURFACE_GUARD',
+    'project_security_lifetime',
 ]
