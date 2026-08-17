@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
 from governance.rbac_contract import ActorContext, RoleId
@@ -12,6 +11,7 @@ from security.security_integration_adapter import SecurityIntegrationAdapter
 from entrypoints.api.auth_contract import AuthPrincipal
 from entrypoints.api.request_context import RequestContext
 from entrypoints.api.public_surface_route_specs import PublicSurfaceRouteSpec, _ROUTE_SPECS
+from entrypoints.api.security_surface_guard import project_security_lifetime
 
 CANON_API_PUBLIC_SURFACE_SECURITY_GUARD = True
 CANON_API_FINAL_OWNER = True
@@ -19,9 +19,6 @@ CANON_API_INTERNAL_WRITE_ADMIN_PERIMETER_FAIL_CLOSED = True
 CANON_API_INTERNAL_WRITE_ADMIN_REPLAY_REQUIRED = True
 CANON_API_INTERNAL_WRITE_ADMIN_EXPLICIT_REPLAY_MARKER = True
 CANON_API_INTERNAL_WRITE_ADMIN_TENANT_ISOLATION = True
-
-
-
 
 @dataclass(frozen=True)
 class PublicSurfaceSecurityGuard:
@@ -78,12 +75,7 @@ class PublicSurfaceSecurityGuard:
             request_context=request_context,
             tenant_id=tenant_id,
         )
-        now = datetime.now(timezone.utc)
-        issued_at = str(auth_metadata.get('issued_at') or now.isoformat())
-        expires_at = str(
-            auth_metadata.get('expires_at')
-            or (now + timedelta(seconds=int(self.default_token_ttl_seconds))).isoformat()
-        )
+        now, issued_at, expires_at, session_created_at, session_last_seen_at = project_security_lifetime(metadata=auth_metadata, session_id=session_id, default_token_ttl_seconds=self.default_token_ttl_seconds)
         actor = ActorContext(
             actor_id=actor_id,
             tenant_id=tenant_id,
@@ -103,8 +95,8 @@ class PublicSurfaceSecurityGuard:
             resource_id=self._resource_id(spec=spec, payload=payload, tenant_id=tenant_id),
             action=spec.action,
             auth_payload={
-                'issued_at': issued_at,
-                'expires_at': expires_at,
+                'issued_at': issued_at.isoformat(),
+                'expires_at': expires_at.isoformat(),
                 'now': now.isoformat(),
                 'subject': subject,
                 'audience': audience,
@@ -122,8 +114,8 @@ class PublicSurfaceSecurityGuard:
                 'auth_level': auth_type,
             },
             session_payload={
-                'created_at': auth_metadata.get('session_created_at') or issued_at,
-                'last_seen_at': now.isoformat(),
+                'created_at': session_created_at.isoformat(),
+                'last_seen_at': session_last_seen_at.isoformat(),
                 'now': now.isoformat(),
                 'expected_ip': request_context.ip_address,
                 'observed_ip': request_context.ip_address,
