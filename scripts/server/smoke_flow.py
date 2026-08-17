@@ -41,7 +41,7 @@ def run_smoke_flow() -> dict[str, str]:
     status, tenants = call("/control-plane/admin/tenants")
     if status != 200 or "tenants" not in tenants: raise AssertionError(f"synthetic tenant control-plane check failed: http_status={status} detail={str(tenants.get('detail') or '')!r}")
     status, result = call("/actions/execute", "POST", {"action_type": "pricing.publish_offer", "payload": {"offer_id": ids["offer_id"], "amount": 199}})
-    if status != 200 or str(result.get("status") or "").lower() != "accepted": raise RuntimeError(f"production synthetic action was not accepted: http_status={status} action_status={str(result.get('status') or '').lower()!r}")
+    if status != 200 or str(result.get("status") or "").lower() != "accepted": raise RuntimeError(f"production synthetic action was not accepted: http_status={status} action_status={str(result.get('status') or '').lower()!r} detail={str(result.get('detail') or result.get('reason') or '')!r}")
     status, audit = call("/control-plane/audit/actions")
     if status != 200 or not any(str(item.get("action_id") or "") == ids["action_id"] for item in audit.get("records", [])): raise AssertionError(f"synthetic action audit correlation failed: http_status={status}")
     return {**ids, "tenant_id": tenant_id}
