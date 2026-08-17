@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import Any, cast
 
 from app.web.auth import AuthService
 from app.web.session import SessionStore
 from entrypoints.api.auth_contract import AuthPrincipal
+from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityGuard
 from entrypoints.api.request_context import RequestContext
 from entrypoints.api.security_surface_guard import ApiSecuritySurfaceGuard
+from governance.rbac_contract import RoleId
 from interfaces.api.fastapi_dependencies import FastAPIDependencyContainer
 from security.payload_redaction import PayloadRedactor
 from security.security_integration_adapter import SecurityIntegrationAdapter
@@ -18,6 +20,17 @@ from security.token_policy import TokenPolicy
 class _BootResult:
     def __init__(self) -> None:
         self.decision_application = object()
+
+
+class _CapturingSecurityAdapter:
+    def __init__(self) -> None:
+        self.auth_payload: dict[str, Any] = {}
+        self.session_payload: dict[str, Any] = {}
+
+    def evaluate_surface(self, **kwargs: Any) -> dict[str, Any]:
+        self.auth_payload = dict(kwargs['auth_payload'])
+        self.session_payload = dict(kwargs['session_payload'])
+        return {'allowed': True, 'reason': 'allowed'}
 
 
 def test_auth_service_redacts_sensitive_payload() -> None:
@@ -144,3 +157,50 @@ def test_sessionless_service_api_key_projection_never_outlives_record_expiry() -
     payload = guard._build_auth_payload(principal=principal, request_context=RequestContext(tenant_id='tenant-live'))
 
     assert datetime.fromisoformat(str(payload['expires_at'])) == record_expires_at
+
+
+def test_public_action_surface_reuses_service_api_key_security_projection() -> None:
+    now = datetime(2026, 8, 17, 14, 27, tzinfo=UTC)
+    created_at = now - timedelta(days=7)
+    adapter = _CapturingSecurityAdapter()
+    principal = AuthPrincipal(
+        subject='production-control-plane-smoke:tenant-live',
+        tenant_id='tenant-live',
+        actor_id='production-control-plane-smoke:tenant-live',
+        roles=(RoleId.OWNER,),
+        scopes=('provider_control_plane',),
+        metadata={
+            'auth_type': 'api_key',
+            'principal_kind': 'service',
+            'key_id': 'ak_test',
+            'created_at': created_at.isoformat(),
+            'issued_at': created_at.isoformat(),
+            'session_created_at': created_at.isoformat(),
+            'security_now': now.isoformat(),
+        },
+    )
+    request_context = RequestContext(
+        tenant_id='tenant-live',
+        actor_id=principal.actor_id,
+        metadata={
+            'scheme': 'https',
+            'transport_encrypted': True,
+            'api_key_verified': True,
+            'idempotency_key': 'post-deploy-regression',
+            'method': 'POST',
+        },
+    )
+    guard = PublicSurfaceSecurityGuard(adapter=cast(SecurityIntegrationAdapter, adapter))
+
+    verdict = guard.enforce(
+        route_path='/actions/execute',
+        request_context=request_context,
+        body={'action_type': 'pricing.publish_offer', 'payload': {'offer_id': 'offer-test', 'amount': 199}},
+        principal=principal,
+    )
+
+    assert verdict['allowed'] is True
+    assert datetime.fromisoformat(str(adapter.auth_payload['issued_at'])) == now
+    assert datetime.fromisoformat(str(adapter.auth_payload['expires_at'])) == now + timedelta(seconds=guard.default_token_ttl_seconds)
+    assert datetime.fromisoformat(str(adapter.session_payload['created_at'])) == now
+    assert datetime.fromisoformat(str(adapter.session_payload['last_seen_at'])) == now
