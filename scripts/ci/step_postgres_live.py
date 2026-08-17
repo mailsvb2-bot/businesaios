@@ -44,7 +44,11 @@ def _apply_migrations() -> bool:
 
 
 def _expected_commit_sha() -> str:
-    return str(os.getenv("GIT_COMMIT_SHA") or os.getenv("BAIOS_CI_TARGET_SHA") or "").strip().lower()
+    return str(os.getenv("GIT_COMMIT_SHA") or os.getenv("BAIOS_CI_TARGET_SHA") or "").strip()
+
+
+def _is_exact_commit_sha(value: str) -> bool:
+    return len(value) == 40 and all(char in "0123456789abcdef" for char in value)
 
 
 def _ci_artifact_file(raw_path: object) -> Path | None:
@@ -78,6 +82,8 @@ def _backup_evidence_status() -> tuple[bool, str]:
     expected_sha = _expected_commit_sha()
     if not expected_sha:
         return False, "postgres_backup_expected_commit_sha_required"
+    if not _is_exact_commit_sha(expected_sha):
+        return False, "postgres_backup_expected_commit_sha_invalid"
 
     evidence_path = _ci_artifact_file(os.getenv("POSTGRES_BACKUP_EVIDENCE_PATH"))
     if evidence_path is None:
@@ -95,13 +101,16 @@ def _backup_evidence_status() -> tuple[bool, str]:
         return False, "postgres_backup_evidence_object_required"
     if payload.get("contract") != _BACKUP_EVIDENCE_CONTRACT:
         return False, "postgres_backup_evidence_contract_invalid"
-    if str(payload.get("commit_sha") or "").strip().lower() != expected_sha:
+    evidence_sha = str(payload.get("commit_sha") or "").strip()
+    if not _is_exact_commit_sha(evidence_sha):
+        return False, "postgres_backup_evidence_commit_sha_invalid"
+    if evidence_sha != expected_sha:
         return False, "postgres_backup_evidence_commit_sha_mismatch"
 
     dump_path = _ci_artifact_file(payload.get("dump_path"))
     if dump_path is None:
         return False, "postgres_backup_dump_path_invalid"
-    expected_dump_sha256 = str(payload.get("dump_sha256") or "").strip().lower()
+    expected_dump_sha256 = str(payload.get("dump_sha256") or "").strip()
     if len(expected_dump_sha256) != 64 or any(char not in "0123456789abcdef" for char in expected_dump_sha256):
         return False, "postgres_backup_dump_sha256_invalid"
     if _sha256(dump_path) != expected_dump_sha256:
@@ -112,7 +121,7 @@ def _backup_evidence_status() -> tuple[bool, str]:
             row = port.fetchone(_BACKUP_SENTINEL_QUERY, (1,))
     except Exception as exc:
         return False, f"postgres_backup_restore_probe_failed:{type(exc).__name__}"
-    restored_sha = str(row[0] if row else "").strip().lower()
+    restored_sha = str(row[0] if row else "").strip()
     if restored_sha != expected_sha:
         return False, "postgres_backup_restore_commit_sha_mismatch"
     return True, "postgres_backup_restore_verified"
