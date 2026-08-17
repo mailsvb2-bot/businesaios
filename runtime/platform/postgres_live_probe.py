@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Barrier
 
 from runtime.execution.crash_window_recovery_contract import ExecutionCrashWindowState, required_recovery_action
 from runtime.platform.postgres_contract import (
@@ -120,6 +122,58 @@ def _outbox_roundtrip(port: PostgresPort, *, tenant_id: str, proof_id: str) -> b
     return bool(row and row[0] == "verified")
 
 
+def _outbox_concurrent_idempotency_roundtrip(
+    port: PostgresPort,
+    *,
+    dsn: str,
+    tenant_id: str,
+    proof_id: str,
+) -> bool:
+    idempotency_key = f"pg-live-concurrent-idem-{proof_id}"
+    outbox_ids = (
+        f"pg-live-concurrent-a-{proof_id}",
+        f"pg-live-concurrent-b-{proof_id}",
+    )
+    port.execute("DELETE FROM runtime_outbox WHERE idempotency_key = %s;", (idempotency_key,))
+    port.commit()
+
+    barrier = Barrier(len(outbox_ids))
+
+    def _attempt_insert(outbox_id: str) -> None:
+        with PostgresPort(dsn, application_name="businesaios-postgres-live-concurrency") as candidate:
+            barrier.wait(timeout=15)
+            candidate.execute(
+                """
+                INSERT INTO runtime_outbox (outbox_id, tenant_id, idempotency_key, status, payload_json)
+                VALUES (%s,%s,%s,%s,%s)
+                ON CONFLICT (idempotency_key) DO NOTHING;
+                """,
+                (
+                    outbox_id,
+                    tenant_id,
+                    idempotency_key,
+                    "pending",
+                    json.dumps({"proof_id": proof_id, "candidate": outbox_id}, sort_keys=True),
+                ),
+            )
+            candidate.commit()
+
+    with ThreadPoolExecutor(max_workers=len(outbox_ids), thread_name_prefix="postgres-live-idempotency") as executor:
+        futures = [executor.submit(_attempt_insert, outbox_id) for outbox_id in outbox_ids]
+        for future in futures:
+            future.result()
+
+    row = port.fetchone(
+        """
+        SELECT COUNT(*), MIN(outbox_id)
+        FROM runtime_outbox
+        WHERE idempotency_key = %s;
+        """,
+        (idempotency_key,),
+    )
+    return bool(row and int(row[0]) == 1 and str(row[1]) in outbox_ids)
+
+
 def _recovery_roundtrip(port: PostgresPort, *, tenant_id: str, proof_id: str) -> bool:
     ledger_id = f"pg-live-ledger-{proof_id}"
     recovery_id = f"pg-live-recovery-{proof_id}"
@@ -211,7 +265,17 @@ def run_postgres_live_probe(config: PostgresLiveProbeConfig) -> dict[str, object
         schema = _schema_objects(port)
         migrations = _migrations(port)
         event_ok = _event_store_roundtrip(port, tenant_id=config.tenant_id, proof_id=config.proof_id) if "events" in schema else False
-        outbox_ok = _outbox_roundtrip(port, tenant_id=config.tenant_id, proof_id=config.proof_id) if "runtime_outbox" in schema else False
+        outbox_state_ok = _outbox_roundtrip(port, tenant_id=config.tenant_id, proof_id=config.proof_id) if "runtime_outbox" in schema else False
+        outbox_concurrency_ok = (
+            _outbox_concurrent_idempotency_roundtrip(
+                port,
+                dsn=config.dsn,
+                tenant_id=config.tenant_id,
+                proof_id=config.proof_id,
+            )
+            if "runtime_outbox" in schema
+            else False
+        )
         recovery_ok = _recovery_roundtrip(port, tenant_id=config.tenant_id, proof_id=config.proof_id) if "recovery_queue" in schema else False
         rollback_ok = _rollback_roundtrip(port, tenant_id=config.tenant_id, proof_id=config.proof_id) if "runtime_snapshots" in schema else False
         ledger_chain_ok = _ledger_chain_verification(port, tenant_id=config.tenant_id, proof_id=config.proof_id) if "execution_ledger" in schema else False
@@ -223,13 +287,16 @@ def run_postgres_live_probe(config: PostgresLiveProbeConfig) -> dict[str, object
         schema_objects_present=schema,
         migrations_applied=migrations,
         event_store_roundtrip_ok=event_ok,
-        outbox_roundtrip_ok=outbox_ok,
+        outbox_roundtrip_ok=outbox_state_ok and outbox_concurrency_ok,
         recovery_contract_ok=recovery_ok,
         rollback_roundtrip_ok=rollback_ok,
         backup_evidence_ok=config.backup_evidence_ok,
         ledger_chain_verification_ok=ledger_chain_ok,
     )
-    return evaluate_postgres_contract(proof)
+    payload = evaluate_postgres_contract(proof)
+    payload["outbox_state_transition_ok"] = outbox_state_ok
+    payload["outbox_concurrent_idempotency_ok"] = outbox_concurrency_ok
+    return payload
 
 
 __all__ = ["PostgresLiveProbeConfig", "run_postgres_live_probe"]
