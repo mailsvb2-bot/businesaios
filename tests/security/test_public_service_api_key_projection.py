@@ -53,7 +53,8 @@ def _context() -> RequestContext:
 
 
 def test_public_execute_action_projects_old_sessionless_service_api_key_at_request_time() -> None:
-    created_at = datetime.now(UTC) - timedelta(days=7)
+    now = datetime(2026, 8, 17, 15, 0, tzinfo=UTC)
+    created_at = now - timedelta(days=7)
     principal = AuthPrincipal(
         subject='production-control-plane-smoke:tenant-live',
         tenant_id='tenant-live',
@@ -67,6 +68,7 @@ def test_public_execute_action_projects_old_sessionless_service_api_key_at_reque
             'created_at': created_at.isoformat(),
             'issued_at': created_at.isoformat(),
             'session_created_at': created_at.isoformat(),
+            'security_now': now.isoformat(),
         },
     )
     adapter = _ProjectionCheckingAdapter()
@@ -83,14 +85,14 @@ def test_public_execute_action_projects_old_sessionless_service_api_key_at_reque
     assert adapter.last_call is not None
     auth = adapter.last_call['auth_payload']
     session = adapter.last_call['session_payload']
-    now = datetime.fromisoformat(str(auth['now']))
     assert datetime.fromisoformat(str(auth['issued_at'])) == now
     assert datetime.fromisoformat(str(auth['expires_at'])) == now + timedelta(seconds=guard.default_token_ttl_seconds)
     assert datetime.fromisoformat(str(session['created_at'])) == now
 
 
 def test_public_service_api_key_projection_is_capped_by_record_expiry() -> None:
-    record_expires_at = datetime.now(UTC) + timedelta(seconds=120)
+    now = datetime(2026, 8, 17, 15, 0, tzinfo=UTC)
+    record_expires_at = now + timedelta(seconds=120)
     principal = AuthPrincipal(
         subject='service',
         tenant_id='tenant-live',
@@ -102,6 +104,7 @@ def test_public_service_api_key_projection_is_capped_by_record_expiry() -> None:
             'principal_kind': 'service',
             'key_id': 'ak_test',
             'expires_at': record_expires_at.isoformat(),
+            'security_now': now.isoformat(),
         },
     )
     adapter = _ProjectionCheckingAdapter()
