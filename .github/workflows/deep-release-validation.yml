@@ -105,14 +105,71 @@ jobs:
           done
           exit 1
 
-      - name: Apply migrations and create real backup evidence
+      - name: Apply migrations and prove backup restore
         run: |
           set -Eeuo pipefail
           mkdir -p artifacts/ci
           .venv/bin/python -m scripts.ci.cli --gate postgres-migrations
-          pg_dump "$DATABASE_URL" --schema-only --no-owner --no-privileges > artifacts/ci/postgres_backup_evidence.sql
-          test -s artifacts/ci/postgres_backup_evidence.sql
-          echo "POSTGRES_BACKUP_EVIDENCE_PATH=$PWD/artifacts/ci/postgres_backup_evidence.sql" >> "$GITHUB_ENV"
+
+          cleanup_source_probe() {
+            psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 \
+              --command='DROP SCHEMA IF EXISTS deep_release_backup_probe CASCADE;' >/dev/null 2>&1 || true
+          }
+          trap cleanup_source_probe EXIT
+
+          psql "$DATABASE_URL" --set=ON_ERROR_STOP=1 --set=expected_sha="$BAIOS_CI_TARGET_SHA" <<'SQL'
+          DROP SCHEMA IF EXISTS deep_release_backup_probe CASCADE;
+          CREATE SCHEMA deep_release_backup_probe;
+          CREATE TABLE deep_release_backup_probe.restore_sentinel (
+            id INTEGER PRIMARY KEY,
+            commit_sha TEXT NOT NULL
+          );
+          INSERT INTO deep_release_backup_probe.restore_sentinel (id, commit_sha)
+          VALUES (1, :'expected_sha');
+          SQL
+
+          BACKUP_DUMP_PATH="$PWD/artifacts/ci/postgres_backup.dump"
+          pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="$BACKUP_DUMP_PATH"
+          test -s "$BACKUP_DUMP_PATH"
+
+          cleanup_source_probe
+          trap - EXIT
+
+          RESTORE_DB="businesaios_restore_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          ADMIN_DSN="${DATABASE_URL%/*}/postgres"
+          psql "$ADMIN_DSN" --set=ON_ERROR_STOP=1 --command="CREATE DATABASE ${RESTORE_DB};"
+          RESTORE_DSN="${DATABASE_URL%/*}/${RESTORE_DB}"
+          pg_restore --exit-on-error --no-owner --no-privileges --dbname="$RESTORE_DSN" "$BACKUP_DUMP_PATH"
+
+          RESTORED_SHA="$(
+            psql "$RESTORE_DSN" --no-align --tuples-only --set=ON_ERROR_STOP=1 \
+              --command='SELECT commit_sha FROM deep_release_backup_probe.restore_sentinel WHERE id = 1;'
+          )"
+          RESTORED_SHA="$(printf '%s' "$RESTORED_SHA" | tr -d '[:space:]')"
+          test "$RESTORED_SHA" = "$BAIOS_CI_TARGET_SHA"
+
+          DUMP_SHA256="$(sha256sum "$BACKUP_DUMP_PATH" | awk '{print $1}')"
+          export DUMP_SHA256 RESTORE_DB
+          .venv/bin/python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "contract": "businesaios.postgres_backup_restore_evidence.v1",
+              "commit_sha": os.environ["BAIOS_CI_TARGET_SHA"],
+              "dump_path": "artifacts/ci/postgres_backup.dump",
+              "dump_sha256": os.environ["DUMP_SHA256"],
+              "restore_database": os.environ["RESTORE_DB"],
+          }
+          Path("artifacts/ci/postgres_backup_restore_evidence.json").write_text(
+              json.dumps(payload, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+          echo "POSTGRES_BACKUP_EVIDENCE_PATH=$PWD/artifacts/ci/postgres_backup_restore_evidence.json" >> "$GITHUB_ENV"
+          echo "POSTGRES_RESTORE_DSN=$RESTORE_DSN" >> "$GITHUB_ENV"
 
       - name: Install cargo-audit for deep supply-chain proof
         run: |
