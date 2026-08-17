@@ -143,7 +143,7 @@ def test_server_boot_surface_supports_health_readiness_and_execute_flow(monkeypa
         )
         assert result.status_code == 200
         payload = result.json()
-        assert str(payload.get('status') or '').lower() not in {'error', 'failed'}
+        assert str(payload.get('status') or '').lower() == 'accepted'
         audit = client.get('/control-plane/audit/actions', headers=auth_headers)
         assert audit.status_code == 200
         assert 'records' in audit.json()

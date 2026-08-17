@@ -158,7 +158,7 @@ def test_smoke_tenant_and_ids_are_fail_closed_and_unique(monkeypatch: pytest.Mon
         assert first[key] != second[key]
 
 
-def test_smoke_requires_ok_outcome_and_matching_action_audit(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_smoke_requires_accepted_outcome_and_matching_action_audit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CONTROL_PLANE_API_KEY", "production-key")
     monkeypatch.setenv("SMOKE_TENANT_ID", "production-smoke")
 
@@ -169,14 +169,14 @@ def test_smoke_requires_ok_outcome_and_matching_action_audit(monkeypatch: pytest
         (200, {"status": "blocked"}),
     ])
     monkeypatch.setattr(smoke_flow, "fetch_json", lambda *args, **kwargs: next(blocked))
-    with pytest.raises(AssertionError):
+    with pytest.raises(RuntimeError, match="production synthetic action was not accepted"):
         smoke_flow.run_smoke_flow()
 
     wrong_audit = iter([
         (200, {"status": "ok"}),
         (200, {"status": "ready"}),
         (200, {"tenants": []}),
-        (200, {"status": "ok"}),
+        (200, {"status": "accepted"}),
         (200, {"records": [{"action_id": "different-action"}]}),
     ])
     monkeypatch.setattr(smoke_flow, "fetch_json", lambda *args, **kwargs: next(wrong_audit))
