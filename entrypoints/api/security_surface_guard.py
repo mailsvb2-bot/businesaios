@@ -92,8 +92,14 @@ class ApiSecuritySurfaceGuard:
     def _build_auth_payload(self, *, principal: AuthPrincipal, request_context: RequestContext) -> dict[str, Any]:
         metadata = dict(principal.metadata)
         now = _coerce_dt(metadata.get('security_now')) or datetime.now(timezone.utc)
-        issued_at = _coerce_dt(metadata.get('issued_at')) or _coerce_dt(metadata.get('created_at')) or (now - timedelta(seconds=60))
-        expires_at = _coerce_dt(metadata.get('expires_at')) or (now + timedelta(seconds=int(self.default_token_ttl_seconds)))
+        if self._is_sessionless_service_api_key(principal=principal):
+            issued_at = now
+            record_expires_at = _coerce_dt(metadata.get('expires_at'))
+            projected_expires_at = now + timedelta(seconds=int(self.default_token_ttl_seconds))
+            expires_at = min(projected_expires_at, record_expires_at) if record_expires_at is not None else projected_expires_at
+        else:
+            issued_at = _coerce_dt(metadata.get('issued_at')) or _coerce_dt(metadata.get('created_at')) or (now - timedelta(seconds=60))
+            expires_at = _coerce_dt(metadata.get('expires_at')) or (now + timedelta(seconds=int(self.default_token_ttl_seconds)))
         audience = principal.audience or _text(metadata.get('audience')) or 'control-plane'
         issuer = _text(metadata.get('issuer')) or _text(metadata.get('auth_type')) or 'api-security-surface'
         algorithm = _text(metadata.get('algorithm'))
@@ -121,8 +127,12 @@ class ApiSecuritySurfaceGuard:
     def _build_session_payload(self, *, principal: AuthPrincipal, request_context: RequestContext) -> dict[str, Any]:
         metadata = dict(principal.metadata)
         now = _coerce_dt(metadata.get('security_now')) or datetime.now(timezone.utc)
-        created_at = _coerce_dt(metadata.get('session_created_at')) or _coerce_dt(metadata.get('issued_at')) or (now - timedelta(seconds=60))
-        last_seen_at = _coerce_dt(metadata.get('last_seen_at')) or now
+        if self._is_sessionless_service_api_key(principal=principal):
+            created_at = now
+            last_seen_at = now
+        else:
+            created_at = _coerce_dt(metadata.get('session_created_at')) or _coerce_dt(metadata.get('issued_at')) or (now - timedelta(seconds=60))
+            last_seen_at = _coerce_dt(metadata.get('last_seen_at')) or now
         return {
             'created_at': created_at.isoformat(),
             'last_seen_at': last_seen_at.isoformat(),
@@ -134,6 +144,15 @@ class ApiSecuritySurfaceGuard:
             'auth_level': _text(metadata.get('auth_level')),
             'mfa_verified_at': _coerce_dt(metadata.get('mfa_verified_at')).isoformat() if _coerce_dt(metadata.get('mfa_verified_at')) else None,
         }
+
+    @staticmethod
+    def _is_sessionless_service_api_key(*, principal: AuthPrincipal) -> bool:
+        metadata = dict(principal.metadata)
+        return (
+            _text(metadata.get('auth_type')) == 'api_key'
+            and _text(metadata.get('principal_kind')) == 'service'
+            and principal.session_id is None
+        )
 
     @staticmethod
     def _transport_encrypted(*, request_context: RequestContext) -> bool:
