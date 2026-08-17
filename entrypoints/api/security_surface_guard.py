@@ -92,8 +92,8 @@ class ApiSecuritySurfaceGuard:
     def _build_auth_payload(self, *, principal: AuthPrincipal, request_context: RequestContext) -> dict[str, Any]:
         metadata = dict(principal.metadata)
         now = _coerce_dt(metadata.get('security_now')) or datetime.now(timezone.utc)
-        issued_at = _coerce_dt(metadata.get('issued_at')) or _coerce_dt(metadata.get('created_at')) or (now - timedelta(seconds=60))
-        expires_at = _coerce_dt(metadata.get('expires_at')) or (now + timedelta(seconds=int(self.default_token_ttl_seconds)))
+        issued_at = now if _text(metadata.get('auth_type')) == 'api_key' and _text(metadata.get('principal_kind')) == 'service' and principal.session_id is None else _coerce_dt(metadata.get('issued_at')) or _coerce_dt(metadata.get('created_at')) or (now - timedelta(seconds=60))
+        expires_at = min(now + timedelta(seconds=int(self.default_token_ttl_seconds)), _coerce_dt(metadata.get('expires_at'))) if _text(metadata.get('auth_type')) == 'api_key' and _text(metadata.get('principal_kind')) == 'service' and principal.session_id is None and _coerce_dt(metadata.get('expires_at')) is not None else now + timedelta(seconds=int(self.default_token_ttl_seconds)) if _text(metadata.get('auth_type')) == 'api_key' and _text(metadata.get('principal_kind')) == 'service' and principal.session_id is None else _coerce_dt(metadata.get('expires_at')) or (now + timedelta(seconds=int(self.default_token_ttl_seconds)))
         audience = principal.audience or _text(metadata.get('audience')) or 'control-plane'
         issuer = _text(metadata.get('issuer')) or _text(metadata.get('auth_type')) or 'api-security-surface'
         algorithm = _text(metadata.get('algorithm'))
@@ -121,8 +121,8 @@ class ApiSecuritySurfaceGuard:
     def _build_session_payload(self, *, principal: AuthPrincipal, request_context: RequestContext) -> dict[str, Any]:
         metadata = dict(principal.metadata)
         now = _coerce_dt(metadata.get('security_now')) or datetime.now(timezone.utc)
-        created_at = _coerce_dt(metadata.get('session_created_at')) or _coerce_dt(metadata.get('issued_at')) or (now - timedelta(seconds=60))
-        last_seen_at = _coerce_dt(metadata.get('last_seen_at')) or now
+        created_at = now if _text(metadata.get('auth_type')) == 'api_key' and _text(metadata.get('principal_kind')) == 'service' and principal.session_id is None else _coerce_dt(metadata.get('session_created_at')) or _coerce_dt(metadata.get('issued_at')) or (now - timedelta(seconds=60))
+        last_seen_at = now if _text(metadata.get('auth_type')) == 'api_key' and _text(metadata.get('principal_kind')) == 'service' and principal.session_id is None else _coerce_dt(metadata.get('last_seen_at')) or now
         return {
             'created_at': created_at.isoformat(),
             'last_seen_at': last_seen_at.isoformat(),

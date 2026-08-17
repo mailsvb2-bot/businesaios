@@ -35,15 +35,15 @@ def run_smoke_flow() -> dict[str, str]:
                           follow_redirects=False)
 
     status, health = call("/health")
-    assert status == 200 and str(health.get("status")).lower() in {"ok", "degraded"}
+    if status != 200 or str(health.get("status")).lower() not in {"ok", "degraded"}: raise AssertionError(f"synthetic health check failed: http_status={status} status={str(health.get('status') or '').lower()!r}")
     status, ready = call("/readyz")
-    assert status == 200 and str(ready.get("status")).lower() == "ready"
+    if status != 200 or str(ready.get("status")).lower() != "ready": raise AssertionError(f"synthetic readiness check failed: http_status={status} status={str(ready.get('status') or '').lower()!r}")
     status, tenants = call("/control-plane/admin/tenants")
-    assert status == 200 and "tenants" in tenants
+    if status != 200 or "tenants" not in tenants: raise AssertionError(f"synthetic tenant control-plane check failed: http_status={status} detail={str(tenants.get('detail') or '')!r}")
     status, result = call("/actions/execute", "POST", {"action_type": "pricing.publish_offer", "payload": {"offer_id": ids["offer_id"], "amount": 199}})
     if status != 200 or str(result.get("status") or "").lower() != "accepted": raise RuntimeError(f"production synthetic action was not accepted: http_status={status} action_status={str(result.get('status') or '').lower()!r}")
     status, audit = call("/control-plane/audit/actions")
-    assert status == 200 and any(str(item.get("action_id") or "") == ids["action_id"] for item in audit.get("records", []))
+    if status != 200 or not any(str(item.get("action_id") or "") == ids["action_id"] for item in audit.get("records", [])): raise AssertionError(f"synthetic action audit correlation failed: http_status={status}")
     return {**ids, "tenant_id": tenant_id}
 
 
