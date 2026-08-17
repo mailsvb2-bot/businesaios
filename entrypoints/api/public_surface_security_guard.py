@@ -78,8 +78,9 @@ class PublicSurfaceSecurityGuard:
             request_context=request_context,
             tenant_id=tenant_id,
         )
+        projection_principal = principal or AuthPrincipal(subject=subject, tenant_id=tenant_id, actor_id=actor_id, session_id=session_id, roles=tuple(role_ids), scopes=scopes, audience=audience, metadata={'auth_type': auth_type, 'principal_kind': 'service'})
         projection_guard = ApiSecuritySurfaceGuard(adapter=self.adapter, default_token_ttl_seconds=self.default_token_ttl_seconds)
-        auth_projection, session_projection = projection_guard._build_auth_payload(principal=principal, request_context=request_context), projection_guard._build_session_payload(principal=principal, request_context=request_context)
+        auth_projection, session_projection = projection_guard._build_auth_payload(principal=projection_principal, request_context=request_context), projection_guard._build_session_payload(principal=projection_principal, request_context=request_context)
         issued_at, expires_at, now = str(auth_projection['issued_at']), str(auth_projection['expires_at']), str(auth_projection['now'])
         actor = ActorContext(
             actor_id=actor_id,
