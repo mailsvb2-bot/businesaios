@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ from scripts.server import smoke_flow
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 HOST_LIFECYCLE = PROJECT_ROOT / "scripts" / "server" / "bootstrap_and_verify_production.sh"
+SMOKE_FLOW = PROJECT_ROOT / "scripts" / "server" / "smoke_flow.py"
 
 
 def _prepare_smoke(monkeypatch: pytest.MonkeyPatch, action_status: str) -> tuple[list[dict[str, object]], dict[str, str]]:
@@ -50,6 +52,12 @@ def test_production_smoke_rejects_governance_blocked_action(monkeypatch: pytest.
         smoke_flow.run_smoke_flow()
 
     assert len(calls) == 4
+
+
+def test_production_smoke_runtime_checks_survive_python_optimization() -> None:
+    tree = ast.parse(SMOKE_FLOW.read_text(encoding="utf-8"))
+
+    assert not any(isinstance(node, ast.Assert) for node in ast.walk(tree))
 
 
 def test_http_probe_can_disable_redirect_following(monkeypatch: pytest.MonkeyPatch) -> None:
