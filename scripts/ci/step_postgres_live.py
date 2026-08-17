@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -7,7 +8,13 @@ from pathlib import Path
 
 from runtime.platform.postgres_contract import PostgresRuntimeProof, evaluate_postgres_contract
 from runtime.platform.postgres_live_probe import PostgresLiveProbeConfig, run_postgres_live_probe
+from runtime.platform.postgres_port import PostgresPort
 from scripts.ci.paths import repo_root
+
+_BACKUP_EVIDENCE_CONTRACT = "businesaios.postgres_backup_restore_evidence.v1"
+_BACKUP_SENTINEL_QUERY = (
+    "SELECT commit_sha FROM deep_release_backup_probe.restore_sentinel WHERE id = %s;"
+)
 
 
 def _write_artifact(payload: dict[str, object]) -> None:
@@ -36,16 +43,79 @@ def _apply_migrations() -> bool:
     return str(os.getenv("POSTGRES_APPLY_MIGRATIONS") or os.getenv("RUN_MIGRATIONS_BEFORE_START") or "").strip().lower() in {"1", "true", "yes", "enabled"}
 
 
-def _backup_evidence_ok() -> bool:
-    if _truthy_env("POSTGRES_BACKUP_EVIDENCE_OK"):
-        return True
-    raw_path = str(os.getenv("POSTGRES_BACKUP_EVIDENCE_PATH") or "").strip()
-    if not raw_path:
-        return False
-    candidate = Path(raw_path)
+def _expected_commit_sha() -> str:
+    return str(os.getenv("GIT_COMMIT_SHA") or os.getenv("BAIOS_CI_TARGET_SHA") or "").strip().lower()
+
+
+def _ci_artifact_file(raw_path: object) -> Path | None:
+    value = str(raw_path or "").strip()
+    if not value:
+        return None
+    root = repo_root().resolve()
+    artifact_root = (root / "artifacts" / "ci").resolve()
+    candidate = Path(value)
     if not candidate.is_absolute():
-        candidate = repo_root() / candidate
-    return candidate.exists() and candidate.is_file()
+        candidate = root / candidate
+    candidate = candidate.resolve()
+    try:
+        candidate.relative_to(artifact_root)
+    except ValueError:
+        return None
+    if not candidate.exists() or not candidate.is_file():
+        return None
+    return candidate
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _backup_evidence_status() -> tuple[bool, str]:
+    expected_sha = _expected_commit_sha()
+    if not expected_sha:
+        return False, "postgres_backup_expected_commit_sha_required"
+
+    evidence_path = _ci_artifact_file(os.getenv("POSTGRES_BACKUP_EVIDENCE_PATH"))
+    if evidence_path is None:
+        return False, "postgres_backup_evidence_path_required"
+
+    restore_dsn = str(os.getenv("POSTGRES_RESTORE_DSN") or "").strip()
+    if not restore_dsn:
+        return False, "postgres_backup_restore_dsn_required"
+
+    try:
+        payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False, "postgres_backup_evidence_json_invalid"
+    if not isinstance(payload, dict):
+        return False, "postgres_backup_evidence_object_required"
+    if payload.get("contract") != _BACKUP_EVIDENCE_CONTRACT:
+        return False, "postgres_backup_evidence_contract_invalid"
+    if str(payload.get("commit_sha") or "").strip().lower() != expected_sha:
+        return False, "postgres_backup_evidence_commit_sha_mismatch"
+
+    dump_path = _ci_artifact_file(payload.get("dump_path"))
+    if dump_path is None:
+        return False, "postgres_backup_dump_path_invalid"
+    expected_dump_sha256 = str(payload.get("dump_sha256") or "").strip().lower()
+    if len(expected_dump_sha256) != 64 or any(char not in "0123456789abcdef" for char in expected_dump_sha256):
+        return False, "postgres_backup_dump_sha256_invalid"
+    if _sha256(dump_path) != expected_dump_sha256:
+        return False, "postgres_backup_dump_sha256_mismatch"
+
+    try:
+        with PostgresPort(restore_dsn, application_name="businesaios-postgres-backup-restore-proof") as port:
+            row = port.fetchone(_BACKUP_SENTINEL_QUERY, (1,))
+    except Exception as exc:
+        return False, f"postgres_backup_restore_probe_failed:{type(exc).__name__}"
+    restored_sha = str(row[0] if row else "").strip().lower()
+    if restored_sha != expected_sha:
+        return False, "postgres_backup_restore_commit_sha_mismatch"
+    return True, "postgres_backup_restore_verified"
 
 
 def _block_required_postgres_live(*, dsn: str, enabled: bool, psycopg_available: bool) -> tuple[bool, str]:
@@ -115,13 +185,15 @@ def run() -> tuple[bool, str]:
         payload["claims_production_ready"] = False
         _write_artifact(payload)
         return False, "postgres live blocked: " + ",".join(payload["violations"])
+
+    backup_evidence_ok, backup_evidence_reason = _backup_evidence_status()
     try:
         payload = run_postgres_live_probe(
             PostgresLiveProbeConfig(
                 dsn=dsn,
                 apply_migrations=_apply_migrations(),
                 proof_id=os.getenv("POSTGRES_LIVE_PROOF_ID", "ci-postgres-live-proof"),
-                backup_evidence_ok=_backup_evidence_ok(),
+                backup_evidence_ok=backup_evidence_ok,
             )
         )
     except Exception as exc:
@@ -141,6 +213,7 @@ def run() -> tuple[bool, str]:
         payload["artifact"] = "postgres_live"
         payload["live_runtime_probe"] = False
         payload["proof_required"] = required
+        payload["backup_evidence_reason"] = backup_evidence_reason
         payload["probe_error"] = f"{type(exc).__name__}: {exc}"
         payload["claims_production_ready"] = False
         _write_artifact(payload)
@@ -148,6 +221,7 @@ def run() -> tuple[bool, str]:
     payload["artifact"] = "postgres_live"
     payload["live_runtime_probe"] = True
     payload["proof_required"] = required
+    payload["backup_evidence_reason"] = backup_evidence_reason
     payload["claims_production_ready"] = False
     _write_artifact(payload)
     if payload["status"] != "ready":
