@@ -112,7 +112,7 @@ def test_public_repo_self_hosted_workflow_is_manual_and_trust_gated() -> None:
     assert "pull_request_target:" not in text
     assert "runs-on: [self-hosted, linux, production]" in text
     assert "runs-on: [self-hosted, windows, x64, physical-hardware]" in text
-    assert "needs: trust-gate" in text
+    assert "needs: trust_gate" in text
     assert "trusted certification accepts current main only" in text
     assert "Deep Release SHA mismatch" in text
     assert "environment: production" in text
