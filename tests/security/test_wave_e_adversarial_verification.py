@@ -65,7 +65,7 @@ def test_wave_e_property_model_exhausts_crash_window_state_space() -> None:
 
 
 def test_wave_e_malformed_fuzz_corpus_fails_closed() -> None:
-    malformed_ids = ("", " ", "\t", "\n", "\r\n", "\x00")
+    malformed_ids = ("", " ", "\t", "\n", "\r\n", "\x00", "\x7f", "\x85", "\u200b")
     for malformed in malformed_ids:
         state = replace(_state((True, False, False, False)), decision_id=malformed)
         assert required_recovery_action(state) is CrashWindowRecoveryAction.BLOCK_INVALID_STATE
