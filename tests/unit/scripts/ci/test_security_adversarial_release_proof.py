@@ -58,7 +58,7 @@ def test_verify_release_keeps_the_existing_zero_argument_aggregation_seam() -> N
 
 def test_security_adversarial_proof_is_exact_sha_bound_and_non_vacuous(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "a" * 40)
-    monkeypatch.setattr(step_verify_release, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(step_verify_release, "_artifact_path", lambda name: tmp_path / name)
     monkeypatch.setattr(step_verify_release, "junit_dir", lambda: tmp_path)
     monkeypatch.setattr(
         step_verify_release,
@@ -77,13 +77,13 @@ def test_security_adversarial_proof_is_exact_sha_bound_and_non_vacuous(monkeypat
     assert evidence["target"] == SECURITY_TEST_TARGET
     assert evidence["stats"] == {"tests": 7, "failures": 0, "errors": 0, "skipped": 0}
     assert evidence["violations"] == []
-    written = json.loads((tmp_path / "artifacts/ci/security_adversarial.json").read_text(encoding="utf-8"))
+    written = json.loads((tmp_path / "security_adversarial.json").read_text(encoding="utf-8"))
     assert written == evidence
 
 
 def test_security_adversarial_proof_fails_closed_on_skips(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("BAIOS_CI_TARGET_SHA", "b" * 40)
-    monkeypatch.setattr(step_verify_release, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(step_verify_release, "_artifact_path", lambda name: tmp_path / name)
     monkeypatch.setattr(step_verify_release, "junit_dir", lambda: tmp_path)
     monkeypatch.setattr(step_verify_release, "run_pytest_sharded_with_report", lambda **kwargs: (True, "pytest passed"))
     _write_junit(tmp_path / step_verify_release.SECURITY_ADVERSARIAL_JUNIT, tests=4, skipped=1)
@@ -97,7 +97,7 @@ def test_security_adversarial_proof_fails_closed_on_skips(monkeypatch, tmp_path)
 
 def test_security_adversarial_proof_is_not_proven_without_exact_sha(monkeypatch, tmp_path) -> None:
     monkeypatch.delenv("BAIOS_CI_TARGET_SHA", raising=False)
-    monkeypatch.setattr(step_verify_release, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(step_verify_release, "_artifact_path", lambda name: tmp_path / name)
     monkeypatch.setattr(step_verify_release, "junit_dir", lambda: tmp_path)
     monkeypatch.setattr(step_verify_release, "run_pytest_sharded_with_report", lambda **kwargs: (True, "pytest passed"))
     _write_junit(tmp_path / step_verify_release.SECURITY_ADVERSARIAL_JUNIT)
@@ -111,7 +111,7 @@ def test_security_adversarial_proof_is_not_proven_without_exact_sha(monkeypatch,
 
 def test_verify_release_artifact_aggregates_security_as_required_evidence(monkeypatch, tmp_path) -> None:
     artifact_dir = _proof_artifacts(tmp_path)
-    monkeypatch.setattr(step_verify_release, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(step_verify_release, "_artifact_path", lambda name: artifact_dir / name)
     security = {
         "schema": step_verify_release.SECURITY_ADVERSARIAL_SCHEMA,
         "status": "PASS",
