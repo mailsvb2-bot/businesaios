@@ -119,14 +119,21 @@ def release_verdict(report: ExecutionReport) -> dict:
     browser_proof = _browser_proof(
         step_status(_step_ids.browser_e2e()), exact_sha, require_production=report.gate in {"release", "pre-release"},
     )
+    security_proof = {
+        "source_step": _step_ids.verify_release(),
+        "status": step_status(_step_ids.verify_release()),
+        "artifact": "verify_release.json",
+        "layer": "security_adversarial",
+    }
     complete = report.gate == "release" and {step.name for step in plan_for_gate("release").steps if step.required}.issubset(
         {item["id"] for item in steps if item["status"] == "PASS"})
     status = "FAIL" if "FAIL" in {_combined_status(*(item["status"] for item in steps)), scenario_proof["status"], browser_proof["status"]} else (
         "PASS" if complete and exact_sha and scenario_proof["status"] == browser_proof["status"] == "PASS" else "NOT_PROVEN")
     return {
         "schema": "businessaios_release_verdict.v1", "exact_sha": exact_sha, "gate": report.gate,
-        "status": status, "scope": "declared-canonical-user-scenarios-and-browser-matrix",
-        "canonical_user_scenarios": scenario_proof, "browser_e2e": browser_proof, "steps": steps,
+        "status": status, "scope": "declared-canonical-user-scenarios-browser-matrix-and-release-security",
+        "canonical_user_scenarios": scenario_proof, "browser_e2e": browser_proof,
+        "security_verification": security_proof, "steps": steps,
     }
 
 
