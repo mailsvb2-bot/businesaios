@@ -46,27 +46,53 @@ def _load(path: Path) -> dict[str, object]:
 
 
 def _write(path: Path, payload: dict[str, object]) -> None:
-    safe_write_text(path, json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    safe_write_text(
+        path,
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _exact_sha(value: object) -> str | None:
     text = str(value or "")
-    return text if len(text) == 40 and text == text.lower() and all(ch in "0123456789abcdef" for ch in text) else None
+    return (
+        text
+        if len(text) == 40
+        and text == text.lower()
+        and all(ch in "0123456789abcdef" for ch in text)
+        else None
+    )
 
 
-def _production_proof(evidence: dict[str, object], exact_sha: str) -> dict[str, object]:
-    checks = evidence.get("checks") if isinstance(evidence.get("checks"), dict) else {}
-    missing = [name for name in _REQUIRED_PRODUCTION_CHECKS if str(checks.get(name, {}).get("status") or "").lower() != "pass"]
+def _check_passed(checks: dict[str, object], name: str) -> bool:
+    item = checks.get(name)
+    return isinstance(item, dict) and str(item.get("status") or "").lower() == "pass"
+
+
+def _production_proof(
+    evidence: dict[str, object], exact_sha: str
+) -> dict[str, object]:
+    raw_checks = evidence.get("checks")
+    checks = raw_checks if isinstance(raw_checks, dict) else {}
+    missing = [
+        name for name in _REQUIRED_PRODUCTION_CHECKS if not _check_passed(checks, name)
+    ]
     violations: list[str] = []
     if evidence.get("schema") != PRODUCTION_SYNTHETIC_SCHEMA:
         violations.append("production_synthetic_schema_invalid")
     if evidence.get("status") != "PASS":
         violations.append("production_synthetic_status_not_pass")
-    if _exact_sha(evidence.get("exact_sha")) != exact_sha or _exact_sha(evidence.get("observed_sha")) != exact_sha:
+    if (
+        _exact_sha(evidence.get("exact_sha")) != exact_sha
+        or _exact_sha(evidence.get("observed_sha")) != exact_sha
+    ):
         violations.append("production_synthetic_exact_sha_mismatch")
     if str(evidence.get("environment") or "").lower() not in {"prod", "production"}:
         violations.append("production_synthetic_environment_invalid")
-    if not str(evidence.get("tenant_id") or "").strip() or evidence.get("tenant_id") == "default-business":
+    if (
+        not str(evidence.get("tenant_id") or "").strip()
+        or evidence.get("tenant_id") == "default-business"
+    ):
         violations.append("production_synthetic_tenant_invalid")
     if not str(evidence.get("synthetic_run_id") or "").strip():
         violations.append("production_synthetic_run_id_missing")
@@ -74,7 +100,15 @@ def _production_proof(evidence: dict[str, object], exact_sha: str) -> dict[str, 
         violations.append("production_synthetic_checks_not_pass:" + ",".join(missing))
     if evidence.get("claims_production_ready") is not False:
         violations.append("production_synthetic_must_not_claim_release_ready")
-    status = "PASS" if not violations else ("NOT_PROVEN" if "production_synthetic_exact_sha_mismatch" in violations else "FAIL")
+    status = (
+        "PASS"
+        if not violations
+        else (
+            "NOT_PROVEN"
+            if "production_synthetic_exact_sha_mismatch" in violations
+            else "FAIL"
+        )
+    )
     return {
         "status": status,
         "schema": evidence.get("schema"),
@@ -88,9 +122,15 @@ def _production_proof(evidence: dict[str, object], exact_sha: str) -> dict[str, 
     }
 
 
-def _physical_proof(evidence: dict[str, object] | None, exact_sha: str) -> dict[str, object]:
+def _physical_proof(
+    evidence: dict[str, object] | None, exact_sha: str
+) -> dict[str, object]:
     if evidence is None:
-        return {"status": "NOT_PROVEN", "optional": True, "violations": ["physical_hardware_evidence_absent"]}
+        return {
+            "status": "NOT_PROVEN",
+            "optional": True,
+            "violations": ["physical_hardware_evidence_absent"],
+        }
     violations: list[str] = []
     if evidence.get("schema") != PHYSICAL_HARDWARE_SCHEMA:
         violations.append("physical_hardware_schema_invalid")
@@ -102,9 +142,15 @@ def _physical_proof(evidence: dict[str, object] | None, exact_sha: str) -> dict[
         violations.append("physical_hardware_platform_not_windows")
     if evidence.get("acceptance_gate") != "PASS":
         violations.append("physical_hardware_acceptance_not_pass")
-    return {"status": "PASS" if not violations else "FAIL", "optional": True, "violations": violations,
-            "exact_sha": evidence.get("exact_sha"), "platform": evidence.get("platform"),
-            "runner": evidence.get("runner"), "acceptance_gate": evidence.get("acceptance_gate")}
+    return {
+        "status": "PASS" if not violations else "FAIL",
+        "optional": True,
+        "violations": violations,
+        "exact_sha": evidence.get("exact_sha"),
+        "platform": evidence.get("platform"),
+        "runner": evidence.get("runner"),
+        "acceptance_gate": evidence.get("acceptance_gate"),
+    }
 
 
 def finalize_trusted_release_verdict(
@@ -117,18 +163,32 @@ def finalize_trusted_release_verdict(
 ) -> dict[str, object]:
     base = _load(base_verdict_path)
     exact_sha = _exact_sha(base.get("exact_sha"))
-    if base.get("schema") != RELEASE_VERDICT_SCHEMA or base.get("gate") != "release" or exact_sha is None:
-        raise TrustedEvidenceError("base artifact is not an exact-SHA canonical release verdict")
-    # Monotonicity lock: Wave F may never turn FAIL/NOT_PROVEN into PASS.
+    if (
+        base.get("schema") != RELEASE_VERDICT_SCHEMA
+        or base.get("gate") != "release"
+        or exact_sha is None
+    ):
+        raise TrustedEvidenceError(
+            "base artifact is not an exact-SHA canonical release verdict"
+        )
     if base.get("status") != "PASS":
-        raise TrustedEvidenceError(f"base canonical release verdict is not PASS: {base.get('status')!r}")
+        raise TrustedEvidenceError(
+            f"base canonical release verdict is not PASS: {base.get('status')!r}"
+        )
 
     production = _production_proof(_load(production_evidence_path), exact_sha)
-    physical = _physical_proof(_load(physical_evidence_path) if physical_evidence_path else None, exact_sha)
+    physical = _physical_proof(
+        _load(physical_evidence_path) if physical_evidence_path else None,
+        exact_sha,
+    )
     states = [str(production["status"])]
     if require_physical_hardware:
         states.append(str(physical["status"]))
-    status = "FAIL" if "FAIL" in states else "PASS" if all(item == "PASS" for item in states) else "NOT_PROVEN"
+    status = (
+        "FAIL"
+        if "FAIL" in states
+        else "PASS" if all(item == "PASS" for item in states) else "NOT_PROVEN"
+    )
 
     payload = dict(base)
     payload.update(
@@ -137,7 +197,10 @@ def finalize_trusted_release_verdict(
         certification_profile="wave_f_trusted",
         production_synthetic=production,
         physical_hardware=physical,
-        trusted_evidence={"status": status, "physical_hardware_required": require_physical_hardware},
+        trusted_evidence={
+            "status": status,
+            "physical_hardware_required": require_physical_hardware,
+        },
     )
     _write(output_path, payload)
     return payload
@@ -166,7 +229,10 @@ def main() -> int:
     except TrustedEvidenceError as exc:
         print(f"[trusted-release-evidence] blocked: {exc}")
         return 2
-    print(f"[trusted-release-evidence] status={payload['status']} exact_sha={payload['exact_sha']}")
+    print(
+        f"[trusted-release-evidence] status={payload['status']} "
+        f"exact_sha={payload['exact_sha']}"
+    )
     return 0 if payload["status"] == "PASS" else 1
 
 
@@ -174,4 +240,8 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["CANON_TRUSTED_RELEASE_EVIDENCE_ADAPTER", "TrustedEvidenceError", "finalize_trusted_release_verdict"]
+__all__ = [
+    "CANON_TRUSTED_RELEASE_EVIDENCE_ADAPTER",
+    "TrustedEvidenceError",
+    "finalize_trusted_release_verdict",
+]
