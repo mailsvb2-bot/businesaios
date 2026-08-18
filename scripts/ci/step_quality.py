@@ -106,10 +106,8 @@ def _targeted_debt_report(*, targets: tuple[Path, ...], config: Path) -> dict[st
     args = [*_ruff_base_args(targets=targets, config=config), "--select", ",".join(_TARGETED_STRICT_DEBT_SELECT), "--output-format", "json"]
     findings, error = _ruff_json_findings(args, timeout=180)
     base: dict[str, object] = {
-        "targeted_strict_debt_select": list(_TARGETED_STRICT_DEBT_SELECT),
-        "targeted_strict_debt_measured": findings is not None,
-        "targeted_strict_debt_counts": {},
-        "targeted_strict_debt_samples": [],
+        "targeted_strict_debt_select": list(_TARGETED_STRICT_DEBT_SELECT), "targeted_strict_debt_measured": findings is not None,
+        "targeted_strict_debt_counts": {}, "targeted_strict_debt_samples": [],
     }
     if findings is None:
         base.update({f"targeted_strict_debt_{key}": value for key, value in error.items()})
@@ -151,10 +149,8 @@ def _full_debt_report(*, config: Path) -> dict[str, object]:
     report_path = _artifact_path("ruff_full.json")
     report_path.write_text(json.dumps(findings, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     return {
-        "full_ruff_measured": True,
-        "full_ruff_total": len(findings),
-        "full_ruff_counts_by_rule": dict(sorted(by_rule.items())),
-        "full_ruff_counts_by_package": dict(sorted(by_package.items())),
+        "full_ruff_measured": True, "full_ruff_total": len(findings),
+        "full_ruff_counts_by_rule": dict(sorted(by_rule.items())), "full_ruff_counts_by_package": dict(sorted(by_package.items())),
         "full_ruff_report_path": report_path.relative_to(repo_root()).as_posix(),
     }
 
