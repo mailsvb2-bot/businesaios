@@ -18,6 +18,7 @@ CANON_VERIFY_RELEASE_ARTIFACT_AGGREGATION = True
 CANON_VERIFY_RELEASE_COMMAND_DIAGNOSTICS = True
 SECURITY_ADVERSARIAL_JUNIT = "security-release.xml"
 SECURITY_ADVERSARIAL_SCHEMA = "businessaios_security_adversarial_evidence.v1"
+_SECURITY_ADVERSARIAL_ARTIFACT = "security_adversarial.json"
 
 _REQUIRED_PROOF_ARTIFACTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("postgres_contract.json", ("ready",)),
@@ -26,6 +27,7 @@ _REQUIRED_PROOF_ARTIFACTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("container_runtime.json", ("ready",)),
     ("staging_runtime_proof.json", ("ready",)),
     ("production_boot.json", ("contract_satisfied",)),
+    (_SECURITY_ADVERSARIAL_ARTIFACT, ("PASS",)),
 )
 _COMMAND_FAILURE_ARTIFACT = "verify_release_command_failure.json"
 
@@ -64,6 +66,15 @@ def _write_verify_artifact(payload: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
     path.write_text(text, encoding="utf-8")
+
+
+def _write_security_adversarial_artifact(payload: dict[str, object]) -> None:
+    path = _artifact_path(_SECURITY_ADVERSARIAL_ARTIFACT)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _clear_command_failure_artifact() -> None:
@@ -141,7 +152,6 @@ def _run_security_adversarial_proof() -> tuple[bool, str, dict[str, object]]:
     violations: list[str] = []
     if targets != [SECURITY_TEST_TARGET]:
         violations.append("security_canonical_target_missing")
-        pytest_ok = False
     else:
         pytest_ok, _ = run_pytest_sharded_with_report(
             target_args=targets,
@@ -177,14 +187,21 @@ def _run_security_adversarial_proof() -> tuple[bool, str, dict[str, object]]:
         "repair_owner": "tests/security",
         "claims_production_ready": False,
     }
+    try:
+        _write_security_adversarial_artifact(evidence)
+    except OSError:
+        evidence["status"] = "FAIL"
+        violations.append("security_evidence_write_failed")
+        return False, "security adversarial proof blocked: " + ",".join(violations), evidence
     if status == "PASS":
         return True, f"security adversarial proof passed: {stats['tests']} tests", evidence
     return False, "security adversarial proof blocked: " + ",".join(violations), evidence
 
 
-def _aggregate_required_proof_artifacts(*, security_evidence: dict[str, object]) -> tuple[bool, str]:
+def _aggregate_required_proof_artifacts() -> tuple[bool, str]:
+    ok_security, security_message, _ = _run_security_adversarial_proof()
     artifacts: dict[str, dict[str, object]] = {}
-    violations = [str(item) for item in security_evidence.get("violations", []) if str(item)]
+    violations: list[str] = []
     for filename, accepted_statuses in _REQUIRED_PROOF_ARTIFACTS:
         artifact_name = filename.removesuffix(".json")
         payload = _read_artifact(filename)
@@ -195,20 +212,21 @@ def _aggregate_required_proof_artifacts(*, security_evidence: dict[str, object])
         if payload.get("claims_production_ready") is True:
             violations.append(artifact_name + "_must_not_claim_production_ready")
 
+    security_evidence = artifacts.get("security_adversarial", {})
     payload = {
         "artifact": "verify_release",
-        "status": "blocked" if violations else "ready",
+        "status": "blocked" if violations or not ok_security else "ready",
         "exact_sha": security_evidence.get("exact_sha"),
         "required_artifacts": [name for name, _ in _REQUIRED_PROOF_ARTIFACTS],
-        "security_adversarial": security_evidence,
         "artifacts": artifacts,
         "violations": violations,
         "claims_production_ready": False,
     }
     _write_verify_artifact(payload)
-    if violations:
-        return False, "verify release blocked: " + ",".join(violations)
-    return True, "verify release proof artifacts ready: artifacts/ci/verify_release.json"
+    if violations or not ok_security:
+        details = ",".join(violations) or "security_adversarial_not_ready"
+        return False, f"{security_message}; verify release blocked: {details}"
+    return True, f"{security_message}; verify release proof artifacts ready: artifacts/ci/verify_release.json"
 
 
 def _canonical_python_env() -> dict[str, str]:
@@ -310,11 +328,9 @@ def run() -> tuple[bool, str]:
     if not ok_project:
         return False, "; ".join(parts)
 
-    ok_security, msg_security, security_evidence = _run_security_adversarial_proof()
-    parts.append(msg_security)
-    ok_proof, msg_proof = _aggregate_required_proof_artifacts(security_evidence=security_evidence)
+    ok_proof, msg_proof = _aggregate_required_proof_artifacts()
     parts.append(msg_proof)
-    if not ok_security or not ok_proof:
+    if not ok_proof:
         return False, "; ".join(parts)
 
     return True, "; ".join(parts)
