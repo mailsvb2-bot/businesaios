@@ -1,0 +1,172 @@
+name: Trusted Production Certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Exact deployed main SHA to certify
+        required: true
+        type: string
+      deep_release_run_id:
+        description: Successful Deep Release Validation run for target_sha
+        required: true
+        type: string
+      require_physical_windows:
+        description: Require protected physical Windows evidence
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  trust_gate:
+    runs-on: ubuntu-latest
+    outputs:
+      target_sha: ${{ steps.trust.outputs.target_sha }}
+    steps:
+      - id: trust
+        name: Admit only current trusted main and matching Deep Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+          DEEP_RELEASE_RUN_ID: ${{ inputs.deep_release_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "target_sha must be lowercase full SHA" >&2; exit 1; }
+          MAIN_SHA="$(gh api "repos/$REPOSITORY/commits/main" --jq .sha)"
+          [[ "$TARGET_SHA" == "$MAIN_SHA" ]] || { echo "trusted certification accepts current main only: $TARGET_SHA != $MAIN_SHA" >&2; exit 1; }
+          RUN_JSON="$(gh api "repos/$REPOSITORY/actions/runs/$DEEP_RELEASE_RUN_ID")"
+          [[ "$(jq -r .name <<<"$RUN_JSON")" == "Deep Release Validation" ]] || { echo "run is not Deep Release Validation" >&2; exit 1; }
+          [[ "$(jq -r .head_sha <<<"$RUN_JSON")" == "$TARGET_SHA" ]] || { echo "Deep Release SHA mismatch" >&2; exit 1; }
+          [[ "$(jq -r .conclusion <<<"$RUN_JSON")" == "success" ]] || { echo "Deep Release is not successful" >&2; exit 1; }
+          echo "target_sha=$TARGET_SHA" >> "$GITHUB_OUTPUT"
+
+  production_synthetic:
+    needs: trust_gate
+    runs-on: [self-hosted, linux, production]
+    environment: production
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ needs.trust_gate.outputs.target_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify trusted exact checkout before execution
+        env:
+          EXPECTED_SHA: ${{ needs.trust_gate.outputs.target_sha }}
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Run existing production host contract as factual evidence
+        env:
+          EXPECTED_SHA: ${{ needs.trust_gate.outputs.target_sha }}
+          PRODUCTION_SYNTHETIC_EVIDENCE_PATH: ${{ github.workspace }}/artifacts/ci/production_synthetic.json
+        shell: bash
+        run: bash scripts/server/production_synthetic_evidence.sh
+      - name: Upload production synthetic evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: trusted-production-synthetic-${{ needs.trust_gate.outputs.target_sha }}
+          path: artifacts/ci/production_synthetic.json
+          if-no-files-found: error
+
+  physical_windows:
+    if: ${{ inputs.require_physical_windows }}
+    needs: trust_gate
+    runs-on: [self-hosted, windows, x64, physical-hardware]
+    environment: physical-hardware
+    env:
+      BAIOS_CI_TARGET_SHA: ${{ needs.trust_gate.outputs.target_sha }}
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ needs.trust_gate.outputs.target_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - name: Verify trusted exact checkout before execution
+        shell: pwsh
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:BAIOS_CI_TARGET_SHA) { throw "exact checkout mismatch: $actual != $env:BAIOS_CI_TARGET_SHA" }
+      - name: Install locked dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.lock.txt
+      - name: Prime canonical Rust toolchain and locked cache
+        shell: pwsh
+        run: |
+          $toolchain = (python -c "import tomllib; print(tomllib.load(open('rust/rust-toolchain.toml','rb'))['toolchain']['channel'])").Trim()
+          rustup toolchain install $toolchain --profile minimal --no-self-update
+          Push-Location rust/businessaios_safety_core
+          cargo fetch --locked
+          Pop-Location
+      - name: Run the existing canonical Windows acceptance gate
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (-not (Test-Path $vswhere)) { throw "vswhere is required" }
+          $installation = (& $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath).Trim()
+          $vcvars = Join-Path $installation "VC\Auxiliary\Build\vcvars64.bat"
+          cmd /d /s /c "`"$vcvars`" && set CARGO_NET_OFFLINE=true && python -m scripts.ci.cli --gate acceptance"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Bind physical evidence to the same exact SHA
+        shell: pwsh
+        run: python -m scripts.ci.physical_hardware_evidence --acceptance-report artifacts/ci/acceptance.report.json --exact-sha $env:BAIOS_CI_TARGET_SHA --runner $env:RUNNER_NAME --output artifacts/ci/physical_hardware.json
+      - name: Upload physical Windows evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: trusted-physical-windows-${{ needs.trust_gate.outputs.target_sha }}
+          path: artifacts/ci/physical_hardware.json
+          if-no-files-found: error
+
+  finalize:
+    if: ${{ always() && needs.trust_gate.result == 'success' && needs.production_synthetic.result == 'success' && (!inputs.require_physical_windows || needs.physical_windows.result == 'success') }}
+    needs: [trust_gate, production_synthetic, physical_windows]
+    runs-on: ubuntu-latest
+    env:
+      TARGET_SHA: ${{ needs.trust_gate.outputs.target_sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ needs.trust_gate.outputs.target_sha }}
+          persist-credentials: false
+      - name: Download exact-SHA Deep Release artifact
+        env:
+          DEEP_RELEASE_RUN_ID: ${{ inputs.deep_release_run_id }}
+        shell: bash
+        run: gh run download "$DEEP_RELEASE_RUN_ID" -n "deep-release-$TARGET_SHA" -D artifacts/deep-release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: trusted-production-synthetic-${{ needs.trust_gate.outputs.target_sha }}
+          path: artifacts/trusted-production
+      - if: ${{ inputs.require_physical_windows }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: trusted-physical-windows-${{ needs.trust_gate.outputs.target_sha }}
+          path: artifacts/trusted-physical
+      - name: Finalize the existing canonical release verdict monotonically
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(
+            --base-verdict "artifacts/deep-release/artifacts/ci/release-verdict.json"
+            --production-evidence "artifacts/trusted-production/production_synthetic.json"
+            --output "artifacts/ci/release-verdict.json"
+          )
+          if [[ "${{ inputs.require_physical_windows }}" == "true" ]]; then
+            args+=(--physical-evidence "artifacts/trusted-physical/physical_hardware.json" --require-physical-hardware)
+          fi
+          python -m scripts.ci.trusted_release_evidence "${args[@]}"
+      - name: Upload canonical trusted certification verdict
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: trusted-release-verdict-${{ needs.trust_gate.outputs.target_sha }}
+          path: artifacts/ci/release-verdict.json
+          if-no-files-found: error

@@ -136,6 +136,7 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             ".github/workflows/full-ci.yml",
             ".github/workflows/prune-stale-branches.yml",
             ".github/workflows/targeted-domain-ci.yml",
+            ".github/workflows/trusted-production-certification.yml",
         ),
         matrix_python_versions=("3.11", "3.12"),
     )
