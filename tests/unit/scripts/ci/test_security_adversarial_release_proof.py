@@ -46,7 +46,10 @@ def _install_security_result(monkeypatch, artifact_dir: Path, evidence: dict[str
 def test_security_release_proof_reuses_the_existing_canonical_unit_target() -> None:
     cfg = project_shape_config(ROOT)
     assert SECURITY_TEST_TARGET in cfg.unit_targets
-    assert '"tests/security"' not in (ROOT / "scripts/ci/step_verify_release.py").read_text(encoding="utf-8")
+    source = (ROOT / "scripts/ci/step_verify_release.py").read_text(encoding="utf-8")
+    assert "target_args=targets" in source
+    assert 'target_args=["tests/security"]' not in source
+    assert "target_args=['tests/security']" not in source
 
 
 def test_verify_release_keeps_the_existing_zero_argument_aggregation_seam() -> None:
