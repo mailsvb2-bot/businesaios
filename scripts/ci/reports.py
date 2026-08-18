@@ -123,7 +123,7 @@ def release_verdict(report: ExecutionReport) -> dict:
         "source_step": _step_ids.verify_release(),
         "status": step_status(_step_ids.verify_release()),
         "artifact": "verify_release.json",
-        "layer": "security_adversarial",
+        "layers": ["security", "property_model", "fuzz_malformed", "fault_recovery", "mutation", "postgres_concurrency"],
     }
     complete = report.gate == "release" and {step.name for step in plan_for_gate("release").steps if step.required}.issubset(
         {item["id"] for item in steps if item["status"] == "PASS"})
@@ -131,7 +131,7 @@ def release_verdict(report: ExecutionReport) -> dict:
         "PASS" if complete and exact_sha and scenario_proof["status"] == browser_proof["status"] == "PASS" else "NOT_PROVEN")
     return {
         "schema": "businessaios_release_verdict.v1", "exact_sha": exact_sha, "gate": report.gate,
-        "status": status, "scope": "declared-canonical-user-scenarios-browser-matrix-and-release-security",
+        "status": status, "scope": "declared-canonical-user-scenarios-browser-matrix-and-wave-e-adversarial-verification",
         "canonical_user_scenarios": scenario_proof, "browser_e2e": browser_proof,
         "security_verification": security_proof, "steps": steps,
     }
