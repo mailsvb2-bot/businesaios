@@ -67,6 +67,18 @@ def test_wave_f_requires_exact_sha_and_all_factual_production_checks(tmp_path: P
     assert any("synthetic_flow" in item for item in proof["violations"])
 
 
+def test_wave_f_malformed_check_entry_fails_closed(tmp_path: Path) -> None:
+    production = _production()
+    production["checks"]["runtime"] = "not-an-object"
+    result = finalize_trusted_release_verdict(
+        base_verdict_path=_write(tmp_path / "base.json", _base()),
+        production_evidence_path=_write(tmp_path / "production.json", production),
+        output_path=tmp_path / "out.json",
+    )
+    assert result["status"] == "FAIL"
+    assert any("runtime" in item for item in result["production_synthetic"]["violations"])
+
+
 def test_wave_f_production_certification_passes_without_optional_hardware(tmp_path: Path) -> None:
     result = finalize_trusted_release_verdict(
         base_verdict_path=_write(tmp_path / "base.json", _base()),
