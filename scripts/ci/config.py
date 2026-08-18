@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+SECURITY_TEST_TARGET = "tests/security"
+
 
 @dataclass(frozen=True)
 class ProjectShapeConfig:
@@ -71,7 +73,7 @@ def project_shape_config(root: Path) -> ProjectShapeConfig:
             for rel in (
                 "tests/unit",
                 "tests/core",
-                "tests/security",
+                SECURITY_TEST_TARGET,
                 "tests/growth",
                 "tests/growth_strategy",
                 "tests/autopilot",
