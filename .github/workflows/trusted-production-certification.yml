@@ -141,7 +141,7 @@ jobs:
         env:
           DEEP_RELEASE_RUN_ID: ${{ inputs.deep_release_run_id }}
         shell: bash
-        run: gh run download "$DEEP_RELEASE_RUN_ID" -n "deep-release-validation-$TARGET_SHA" -D artifacts/deep-release
+        run: gh run download "$DEEP_RELEASE_RUN_ID" -n "deep-release-$TARGET_SHA" -D artifacts/deep-release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: trusted-production-synthetic-${{ needs.trust_gate.outputs.target_sha }}
@@ -156,7 +156,7 @@ jobs:
         run: |
           set -euo pipefail
           args=(
-            --base-verdict "artifacts/deep-release/release-verdict.json"
+            --base-verdict "artifacts/deep-release/artifacts/ci/release-verdict.json"
             --production-evidence "artifacts/trusted-production/production_synthetic.json"
             --output "artifacts/ci/release-verdict.json"
           )
