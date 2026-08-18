@@ -127,6 +127,8 @@ def test_public_repo_self_hosted_workflow_is_manual_and_trust_gated() -> None:
     assert "needs: trust_gate" in text
     assert "trusted certification accepts current main only" in text
     assert "Deep Release SHA mismatch" in text
+    assert 'deep-release-$TARGET_SHA' in text
+    assert 'artifacts/deep-release/artifacts/ci/release-verdict.json' in text
     assert "environment: production" in text
     assert "environment: physical-hardware" in text
 
