@@ -73,8 +73,18 @@ jobs:
 
       - name: Install release dependencies and PostgreSQL client
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends postgresql-client
+          set -Eeuo pipefail
+          APT_BOUNDS=(
+            -o Acquire::Retries=3
+            -o Acquire::http::Timeout=20
+            -o Acquire::https::Timeout=20
+          )
+          sudo timeout --signal=TERM --kill-after=30s 5m apt-get "${APT_BOUNDS[@]}" update
+          sudo timeout --signal=TERM --kill-after=30s 5m apt-get "${APT_BOUNDS[@]}" install -y --no-install-recommends postgresql-client
+          command -v pg_isready >/dev/null
+          command -v psql >/dev/null
+          command -v pg_dump >/dev/null
+          command -v pg_restore >/dev/null
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
           .venv/bin/python -m pip install --require-hashes -r requirements.release.lock.txt
