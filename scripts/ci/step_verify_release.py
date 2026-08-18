@@ -1,17 +1,23 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from xml.etree import ElementTree
 
+from scripts.ci.config import SECURITY_TEST_TARGET, project_shape_config
 from scripts.ci.makefile_tools import has_make_target
-from scripts.ci.paths import repo_root
+from scripts.ci.paths import junit_dir, repo_root
+from scripts.ci.pytest_tools import run_pytest_sharded_with_report
 from scripts.ci.step_demo_e2e_smoke import cleanup_ci_runtime_state
 from scripts.ci.subprocess_io import CommandOutcome, run_command, run_python
 
 CANON_VERIFY_RELEASE_ARTIFACT_AGGREGATION = True
 CANON_VERIFY_RELEASE_COMMAND_DIAGNOSTICS = True
+SECURITY_ADVERSARIAL_JUNIT = "security-release.xml"
+SECURITY_ADVERSARIAL_SCHEMA = "businessaios_security_adversarial_evidence.v1"
 
 _REQUIRED_PROOF_ARTIFACTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("postgres_contract.json", ("ready",)),
@@ -116,9 +122,69 @@ def _command_failure_message(
     )
 
 
-def _aggregate_required_proof_artifacts() -> tuple[bool, str]:
-    artifacts: dict[str, dict[str, object]] = {}
+def _exact_sha(value: str | None) -> bool:
+    return bool(value and len(value) == 40 and value == value.lower() and all(char in "0123456789abcdef" for char in value))
+
+
+def _junit_stats(path: Path) -> dict[str, int] | None:
+    try:
+        root = ElementTree.parse(path).getroot()
+        return {key: int(root.attrib.get(key, "0") or 0) for key in ("tests", "failures", "errors", "skipped")}
+    except (OSError, ElementTree.ParseError, TypeError, ValueError):
+        return None
+
+
+def _run_security_adversarial_proof() -> tuple[bool, str, dict[str, object]]:
+    cfg = project_shape_config(repo_root())
+    targets = [target for target in cfg.unit_targets if target == SECURITY_TEST_TARGET]
+    exact_sha = os.environ.get("BAIOS_CI_TARGET_SHA")
     violations: list[str] = []
+    if targets != [SECURITY_TEST_TARGET]:
+        violations.append("security_canonical_target_missing")
+        pytest_ok = False
+    else:
+        pytest_ok, _ = run_pytest_sharded_with_report(
+            target_args=targets,
+            mark_expression=cfg.unit_mark_expression,
+            junit_name=SECURITY_ADVERSARIAL_JUNIT,
+            coverage_name="security-release-coverage.xml",
+            timeout_per_shard=240,
+        )
+        if not pytest_ok:
+            violations.append("security_pytest_failed")
+    stats = _junit_stats(junit_dir() / SECURITY_ADVERSARIAL_JUNIT)
+    if stats is None:
+        violations.append("security_junit_missing_or_invalid")
+    else:
+        if stats["tests"] <= 0:
+            violations.append("security_junit_vacuous")
+        if stats["failures"] or stats["errors"]:
+            violations.append("security_junit_failed")
+        if stats["skipped"]:
+            violations.append("security_junit_skipped")
+    if not _exact_sha(exact_sha):
+        violations.append("security_exact_sha_missing_or_invalid")
+    status = "PASS" if not violations else ("NOT_PROVEN" if violations == ["security_exact_sha_missing_or_invalid"] else "FAIL")
+    evidence: dict[str, object] = {
+        "schema": SECURITY_ADVERSARIAL_SCHEMA,
+        "status": status,
+        "exact_sha": exact_sha,
+        "target": SECURITY_TEST_TARGET,
+        "mark_expression": cfg.unit_mark_expression,
+        "junit": f"junit/{SECURITY_ADVERSARIAL_JUNIT}",
+        "stats": stats or {},
+        "violations": violations,
+        "repair_owner": "tests/security",
+        "claims_production_ready": False,
+    }
+    if status == "PASS":
+        return True, f"security adversarial proof passed: {stats['tests']} tests", evidence
+    return False, "security adversarial proof blocked: " + ",".join(violations), evidence
+
+
+def _aggregate_required_proof_artifacts(*, security_evidence: dict[str, object]) -> tuple[bool, str]:
+    artifacts: dict[str, dict[str, object]] = {}
+    violations = [str(item) for item in security_evidence.get("violations", []) if str(item)]
     for filename, accepted_statuses in _REQUIRED_PROOF_ARTIFACTS:
         artifact_name = filename.removesuffix(".json")
         payload = _read_artifact(filename)
@@ -132,7 +198,9 @@ def _aggregate_required_proof_artifacts() -> tuple[bool, str]:
     payload = {
         "artifact": "verify_release",
         "status": "blocked" if violations else "ready",
+        "exact_sha": security_evidence.get("exact_sha"),
         "required_artifacts": [name for name, _ in _REQUIRED_PROOF_ARTIFACTS],
+        "security_adversarial": security_evidence,
         "artifacts": artifacts,
         "violations": violations,
         "claims_production_ready": False,
@@ -242,9 +310,11 @@ def run() -> tuple[bool, str]:
     if not ok_project:
         return False, "; ".join(parts)
 
-    ok_proof, msg_proof = _aggregate_required_proof_artifacts()
+    ok_security, msg_security, security_evidence = _run_security_adversarial_proof()
+    parts.append(msg_security)
+    ok_proof, msg_proof = _aggregate_required_proof_artifacts(security_evidence=security_evidence)
     parts.append(msg_proof)
-    if not ok_proof:
+    if not ok_security or not ok_proof:
         return False, "; ".join(parts)
 
     return True, "; ".join(parts)
@@ -253,5 +323,7 @@ def run() -> tuple[bool, str]:
 __all__ = [
     "CANON_VERIFY_RELEASE_ARTIFACT_AGGREGATION",
     "CANON_VERIFY_RELEASE_COMMAND_DIAGNOSTICS",
+    "SECURITY_ADVERSARIAL_JUNIT",
+    "SECURITY_ADVERSARIAL_SCHEMA",
     "run",
 ]
