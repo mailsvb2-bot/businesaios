@@ -156,6 +156,6 @@ def test_canonical_release_verdict_surfaces_security_layer_from_verify_release(m
         "source_step": "verify-release",
         "status": "PASS",
         "artifact": "verify_release.json",
-        "layer": "security_adversarial",
+        "layers": ["security", "property_model", "fuzz_malformed", "fault_recovery", "mutation", "postgres_concurrency"],
     }
     assert verdict["status"] == "NOT_PROVEN"
