@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from hashlib import sha256
 from math import isfinite
 
