@@ -38,20 +38,40 @@ def _base_status(base: Mapping[str, object], exact_sha: str) -> str:
     return status if status in {"PASS", "FAIL", "NOT_PROVEN"} else "FAIL"
 
 
+def _normalize_production_evidence(evidence: Mapping[str, object]) -> dict[str, object]:
+    if evidence.get("schema") == PRODUCTION_SYNTHETIC_SCHEMA:
+        return dict(evidence)
+    if evidence.get("schema_version") == 1 and evidence.get("verdict") in {"pass", "fail"}:
+        return {
+            "schema": PRODUCTION_SYNTHETIC_SCHEMA,
+            "status": "PASS" if evidence.get("verdict") == "pass" else "FAIL",
+            "exact_sha": evidence.get("expected_sha"),
+            "observed_sha": evidence.get("observed_sha"),
+            "environment": evidence.get("environment"),
+            "tenant_id": evidence.get("tenant_id"),
+            "synthetic_run_id": evidence.get("synthetic_run_id"),
+            "checks": evidence.get("checks"),
+            "claims_release_verified": False,
+            "legacy_host_artifact": True,
+        }
+    return dict(evidence)
+
+
 def production_synthetic_status(evidence: Mapping[str, object], exact_sha: str) -> str:
-    if evidence.get("schema") != PRODUCTION_SYNTHETIC_SCHEMA:
+    normalized = _normalize_production_evidence(evidence)
+    if normalized.get("schema") != PRODUCTION_SYNTHETIC_SCHEMA:
         return "FAIL"
-    if evidence.get("claims_release_verified") is not False:
+    if normalized.get("claims_release_verified") is not False:
         return "FAIL"
-    if not _exact_sha(evidence.get("exact_sha")) or evidence.get("exact_sha") != exact_sha:
+    if not _exact_sha(normalized.get("exact_sha")) or normalized.get("exact_sha") != exact_sha:
         return "NOT_PROVEN"
-    if evidence.get("observed_sha") != exact_sha:
+    if normalized.get("observed_sha") != exact_sha:
         return "NOT_PROVEN"
-    status = str(evidence.get("status") or "NOT_PROVEN")
+    status = str(normalized.get("status") or "NOT_PROVEN")
     if status != "PASS":
         return status if status in {"FAIL", "NOT_PROVEN"} else "FAIL"
-    checks = evidence.get("checks")
-    if not isinstance(checks, Mapping) or not evidence.get("synthetic_run_id"):
+    checks = normalized.get("checks")
+    if not isinstance(checks, Mapping) or not normalized.get("synthetic_run_id"):
         return "FAIL"
     for name in _REQUIRED_PRODUCTION_CHECKS:
         item = checks.get(name)
@@ -81,7 +101,7 @@ def finalize_release_verdict(
     if not _exact_sha(exact_sha):
         raise ValueError("exact_sha must be a lowercase 40-character git SHA")
     base = _read_object(base_path)
-    production = _read_object(production_path)
+    production = _normalize_production_evidence(_read_object(production_path))
     base_state = _base_status(base, exact_sha)
     production_state = production_synthetic_status(production, exact_sha)
     hardware_projection: dict[str, object] = {
