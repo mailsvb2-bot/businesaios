@@ -21,9 +21,9 @@ class ExecutionCrashWindowState:
     effect_verified: bool
 
     def validate(self) -> None:
-        if not self.decision_id.strip() or any(ord(char) < 32 for char in self.decision_id):
+        if not self.decision_id.strip() or not self.decision_id.isprintable():
             raise ValueError("decision_id_required")
-        if not self.idempotency_key.strip() or any(ord(char) < 32 for char in self.idempotency_key):
+        if not self.idempotency_key.strip() or not self.idempotency_key.isprintable():
             raise ValueError("idempotency_key_required")
         if self.effect_verified and not self.handler_dispatched:
             raise ValueError("verified_effect_requires_handler_dispatch")
