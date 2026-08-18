@@ -6,7 +6,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-
 CANON_ANALYTICS_EXPORT_SANDBOX = True
 CANON_ANALYTICS_EXPORT_TENANT_ISOLATION = True
 _SAFE_EXPORT_ID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$')

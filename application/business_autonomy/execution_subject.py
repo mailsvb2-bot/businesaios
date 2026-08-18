@@ -8,7 +8,6 @@ from typing import Any
 from application.business_autonomy.contracts import BusinessExecutionRequest
 from governance.persistence_codec import to_jsonable
 
-
 CANON_BUSINESS_AUTONOMY_EXECUTION_SUBJECT = True
 _IDEMPOTENCY_SCOPE_MARKER = "|subject-sha256="
 
