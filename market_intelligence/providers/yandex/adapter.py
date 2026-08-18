@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from hashlib import sha256
 from math import isfinite
 
@@ -68,7 +68,7 @@ class YandexMarketIntelligenceProvider(MarketIntelligenceProvider):
     def keyword_demand(
         self, *, tenant_id: str, business_id: str, queries: Sequence[str], database: str
     ) -> MarketIntelligenceSnapshot:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if self._wordstat is None:
             return MarketIntelligenceSnapshot(
                 provider_key=self.provider_key,
@@ -116,7 +116,7 @@ class YandexMarketIntelligenceProvider(MarketIntelligenceProvider):
     def organic_visibility(
         self, *, tenant_id: str, business_id: str, domain: str, database: str, limit: int = 100
     ) -> MarketIntelligenceSnapshot:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if self._webmaster is None:
             return MarketIntelligenceSnapshot(
                 provider_key=self.provider_key,
