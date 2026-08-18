@@ -100,15 +100,12 @@ def _production_proof(
         violations.append("production_synthetic_checks_not_pass:" + ",".join(missing))
     if evidence.get("claims_production_ready") is not False:
         violations.append("production_synthetic_must_not_claim_release_ready")
-    status = (
-        "PASS"
-        if not violations
-        else (
-            "NOT_PROVEN"
-            if "production_synthetic_exact_sha_mismatch" in violations
-            else "FAIL"
-        )
-    )
+    if not violations:
+        status = "PASS"
+    elif violations == ["production_synthetic_exact_sha_mismatch"]:
+        status = "NOT_PROVEN"
+    else:
+        status = "FAIL"
     return {
         "status": status,
         "schema": evidence.get("schema"),
