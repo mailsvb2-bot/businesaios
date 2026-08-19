@@ -12,7 +12,7 @@ How it works:
     - If fingerprint changes, PRICING_VERSION must change.
 
 The optional override file remains a compatibility resolver for non-production
-callers of ``get_pricing_version``.  Strict production never consults it: the
+callers of ``get_pricing_version``. Strict production never consults it: the
 canonical production environment is the sole pricing-version authority.
 
 No side-effects on import.
@@ -89,11 +89,10 @@ def get_pricing_version() -> str:
 
 
 def _pricing_fingerprint_path() -> Path:
-    explicit = str(env_path("PRICING_FINGERPRINT_PATH", "")).strip()
+    explicit = env_str("PRICING_FINGERPRINT_PATH", "").strip()
     if explicit:
         return Path(explicit)
-    data_dir = Path(str(env_path("DATA_DIR", "data")))
-    return data_dir / "governance" / "pricing_fingerprint.json"
+    return env_path("DATA_DIR", "data") / "governance" / "pricing_fingerprint.json"
 
 
 def enforce_pricing_versioning_or_raise(*, pricing_config: Any, production_strict: bool, log: Any) -> None:
