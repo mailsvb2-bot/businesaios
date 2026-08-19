@@ -23,7 +23,17 @@ from tenancy.tenant_registry import PersistentTenantRegistry, build_default_tena
 
 CANON_PRODUCTION_CONTROL_PLANE_BOOTSTRAP = True
 
-DEFAULT_ENV_FILE = Path("/etc/businesaios/api.env")
+CANONICAL_PRODUCTION_ENV_FILE = Path("/etc/businesaios/api.env")
+DEFAULT_ENV_FILE = CANONICAL_PRODUCTION_ENV_FILE
+CANONICAL_RUNTIME_BINDINGS: dict[str, str] = {
+    "PRODUCTION_STRICT_MODE": "1",
+    "DATA_DIR": "/var/lib/businesaios/runtime",
+    "PRICING_FINGERPRINT_PATH": "/var/lib/businesaios/runtime/governance/pricing_fingerprint.json",
+    "BUSINESAIOS_TENANT_REGISTRY_BACKEND": "file",
+    "BUSINESAIOS_TENANT_REGISTRY_PATH": "/var/lib/businesaios/runtime/tenancy/tenant_registry.json",
+    "BUSINESAIOS_TENANT_POLICY_STORE_BACKEND": "file",
+    "BUSINESAIOS_TENANT_POLICY_STORE_PATH": "/var/lib/businesaios/runtime/tenancy/tenant_policies.json",
+}
 CREDENTIAL_KIND = "production_control_plane_smoke"
 MANAGED_BY = "scripts.server.bootstrap_production_control_plane"
 _KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -86,6 +96,20 @@ def activated_environment(values: Mapping[str, str]) -> Iterator[None]:
                 os.environ[key] = value
 
 
+def canonicalize_production_runtime_bindings(values: Mapping[str, str]) -> dict[str, str]:
+    """Overlay lifecycle-owned immutable production bindings, rejecting drift."""
+
+    result = {str(key): str(value) for key, value in values.items()}
+    for key, expected in CANONICAL_RUNTIME_BINDINGS.items():
+        actual = str(result.get(key) or "").strip()
+        if actual and actual != expected:
+            raise RuntimeError(
+                f"canonical production binding mismatch: {key}={actual!r}; expected {expected!r}"
+            )
+        result[key] = expected
+    return result
+
+
 def _require_production(values: Mapping[str, str]) -> None:
     env_name = (values.get("APP_ENV") or values.get("ENV") or "").strip().lower()
     if env_name not in {"prod", "production"}:
@@ -99,10 +123,10 @@ def _require_production(values: Mapping[str, str]) -> None:
 
 
 def _validate_env_destination(path: Path) -> None:
-    if path == DEFAULT_ENV_FILE and (
+    if path == CANONICAL_PRODUCTION_ENV_FILE and (
         os.name != "posix" or getattr(os, "geteuid", lambda: -1)() != 0
     ):
-        raise PermissionError(f"root is required to update {DEFAULT_ENV_FILE}")
+        raise PermissionError(f"root is required to update {CANONICAL_PRODUCTION_ENV_FILE}")
     if not path.exists():
         raise FileNotFoundError(f"production environment file does not exist: {path}")
     if path.is_symlink():
@@ -115,8 +139,10 @@ def _rewrite_managed_assignments(
     credential: str,
     tenant_id: str,
     pricing_version: str | None = None,
+    runtime_bindings: Mapping[str, str] | None = None,
 ) -> str:
     replacements = {
+        **dict(runtime_bindings or {}),
         "CONTROL_PLANE_API_KEY": credential,
         "SMOKE_TENANT_ID": tenant_id,
     }
@@ -261,7 +287,13 @@ def bootstrap_production_control_plane(
     # this lifecycle reconcile against the same latest on-disk snapshot.
     with exclusive_file_lock(path):
         _validate_env_destination(path)
-        original_text, values = read_environment_file(path)
+        original_text, raw_values = read_environment_file(path)
+        runtime_bindings: Mapping[str, str] = {}
+        if path == CANONICAL_PRODUCTION_ENV_FILE:
+            values = canonicalize_production_runtime_bindings(raw_values)
+            runtime_bindings = CANONICAL_RUNTIME_BINDINGS
+        else:
+            values = dict(raw_values)
         _require_production(values)
         store, registry = _load_persistent_surfaces(values)
         tenant = registry.assert_active(tenant_id)
@@ -309,6 +341,7 @@ def bootstrap_production_control_plane(
                 credential=credential,
                 tenant_id=tenant.tenant_id,
                 pricing_version=approved_pricing_version,
+                runtime_bindings=runtime_bindings,
             )
             _atomic_write_private(path, updated_text)
         except BaseException:

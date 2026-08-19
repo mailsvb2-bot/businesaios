@@ -66,11 +66,19 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from scripts.server.bootstrap_production_control_plane import activated_environment, read_environment_file
+from scripts.server.bootstrap_production_control_plane import (
+    activated_environment,
+    canonicalize_production_runtime_bindings,
+    read_environment_file,
+)
 from tenancy.tenant_policy_store import PersistentTenantPolicyStore, build_default_tenant_policy_store
 from tenancy.tenant_registry import PersistentTenantRegistry, build_default_tenant_registry
 
-_, values = read_environment_file(Path(sys.argv[1]))
+_, raw_values = read_environment_file(Path(sys.argv[1]))
+try:
+    values = canonicalize_production_runtime_bindings(raw_values)
+except RuntimeError as exc:
+    raise SystemExit(str(exc)) from exc
 smoke_tenant = sys.argv[2].strip()
 
 app_env = values.get("APP_ENV", "").strip().lower()
@@ -149,10 +157,10 @@ if systemctl is-enabled --quiet "$TELEGRAM_SERVICE" 2>/dev/null; then
   TELEGRAM_ENABLED=1
 fi
 
-# The host must be using the effective service definitions shipped by the exact
-# deployed SHA. Reject stale manager state and all drop-ins before comparing the
-# fragment bytes, otherwise systemd could restart an override that is not part
-# of the release being verified.
+# The host must be using effective service definitions shipped by the exact
+# deployed SHA. Reject stale manager state and every undeclared or modified
+# drop-in; release-declared byte-identical optional profiles remain part of the
+# same SHA-bound systemd contract rather than hidden host-only configuration.
 SERVICES=("$API_SERVICE" "$WORKER_SERVICE")
 if [[ "$TELEGRAM_ENABLED" == "1" ]]; then
   SERVICES+=("$TELEGRAM_SERVICE")
@@ -161,7 +169,16 @@ for service in "${SERVICES[@]}"; do
   need_reload="$(systemctl show "$service" -p NeedDaemonReload --value)"
   [[ "$need_reload" == "no" ]] || fail "systemd manager state is stale for $service; run systemctl daemon-reload before production bootstrap"
   drop_ins="$(systemctl show "$service" -p DropInPaths --value)"
-  [[ -z "${drop_ins//[[:space:]]/}" ]] || fail "unexpected systemd drop-ins for $service: $drop_ins"
+  if [[ -n "${drop_ins//[[:space:]]/}" ]]; then
+    read -r -a drop_in_paths <<< "$drop_ins"
+    for drop_in in "${drop_in_paths[@]}"; do
+      [[ -f "$drop_in" ]] || fail "installed systemd drop-in is missing for $service: $drop_in"
+      drop_in_name="$(basename "$drop_in")"
+      canonical_drop_in="$BUSINESAIOS_DEPLOY_ROOT/deploy/systemd/dropins/${service}.d/${drop_in_name}"
+      [[ -f "$canonical_drop_in" ]] || fail "unexpected systemd drop-in for $service: $drop_in"
+      cmp -s "$canonical_drop_in" "$drop_in" || fail "installed systemd drop-in does not match deployed SHA for $service: $drop_in"
+    done
+  fi
   fragment="$(systemctl show "$service" -p FragmentPath --value)"
   [[ -n "$fragment" && -f "$fragment" ]] || fail "installed systemd unit is missing for $service"
   canonical="$BUSINESAIOS_DEPLOY_ROOT/deploy/systemd/$service"
