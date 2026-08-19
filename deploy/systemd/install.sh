@@ -19,6 +19,7 @@ RUNTIME_ACCESS_SENTINEL="${RUNTIME_ACCESS_SENTINEL:-${APP_DIR}/scripts/server/mi
 RUNTIME_DATA_DIR="${RUNTIME_DATA_DIR:-/var/lib/businesaios/runtime}"
 LEGACY_SECURITY_DIR="${LEGACY_SECURITY_DIR:-${APP_DIR}/data/security}"
 RUNTIME_SECURITY_DIR="${RUNTIME_SECURITY_DIR:-${RUNTIME_DATA_DIR}/security}"
+RUNTIME_TENANCY_DIR="${RUNTIME_TENANCY_DIR:-${RUNTIME_DATA_DIR}/tenancy}"
 
 CORE_UNITS=(
   businesaios-api.service
@@ -197,6 +198,7 @@ migrate_legacy_security_state() {
 
   run_root install -d -o "$RUNTIME_USER" -g "$RUNTIME_GROUP" -m 0750 "$RUNTIME_DATA_DIR"
   run_root install -d -o "$RUNTIME_USER" -g "$RUNTIME_GROUP" -m 0750 "$RUNTIME_SECURITY_DIR"
+  run_root install -d -o "$RUNTIME_USER" -g "$RUNTIME_GROUP" -m 0750 "$RUNTIME_TENANCY_DIR"
 
   if [[ -d "$LEGACY_SECURITY_DIR" ]] && [[ -n "$(find "$LEGACY_SECURITY_DIR" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
     legacy_present=1
@@ -228,8 +230,8 @@ migrate_legacy_security_state() {
     fi
   fi
 
-  run_root chown -R "$RUNTIME_USER:$RUNTIME_GROUP" "$RUNTIME_SECURITY_DIR"
-  run_root chmod -R u+rwX,g+rX,o-rwx "$RUNTIME_SECURITY_DIR"
+  run_root chown -R "$RUNTIME_USER:$RUNTIME_GROUP" "$RUNTIME_SECURITY_DIR" "$RUNTIME_TENANCY_DIR"
+  run_root chmod -R u+rwX,g+rX,o-rwx "$RUNTIME_SECURITY_DIR" "$RUNTIME_TENANCY_DIR"
 
   if ! run_root runuser -u "$RUNTIME_USER" -- test -r "$RUNTIME_SECURITY_DIR"; then
     echo "[install] runtime user cannot read security state: $RUNTIME_SECURITY_DIR" >&2
@@ -237,6 +239,10 @@ migrate_legacy_security_state() {
   fi
   if ! run_root runuser -u "$RUNTIME_USER" -- test -w "$RUNTIME_SECURITY_DIR"; then
     echo "[install] runtime user cannot write security state: $RUNTIME_SECURITY_DIR" >&2
+    exit 1
+  fi
+  if ! run_root runuser -u "$RUNTIME_USER" -- test -w "$RUNTIME_TENANCY_DIR"; then
+    echo "[install] runtime user cannot write tenancy state: $RUNTIME_TENANCY_DIR" >&2
     exit 1
   fi
 }
