@@ -7,6 +7,7 @@ This runbook defines the single canonical host lifecycle for the production cont
 - `SMOKE_TENANT_ID` must name an existing **active** record in the canonical persistent tenant registry.
 - The same tenant must already have a persistent `TenantPolicyBundle`. Production runtime is a consumer of tenant registry/policy state and must never auto-create either surface during process startup.
 - Historical tenant records or policy bundles that still live under `/opt/businesaios/data/tenancy` may be migrated only by the explicit one-time `scripts.server.migrate_legacy_tenancy_state` operator action. That migration is merge-only: canonical runtime records win for tenant IDs they already own, only missing tenant IDs are imported, and the preserved legacy files are never deleted or rewritten.
+- Tenancy migration writes must run as the canonical runtime owner (`businesaios`), never as root. Atomic replacement creates a new inode as the calling user; the migration refuses a write when the process does not own the runtime tenancy directory and forces written surfaces to mode `0640`.
 - Credential issuance uses `entrypoints.api.api_key_policy.PersistentApiKeyStore`; no second hashing or credential implementation is allowed.
 - The application store persists `key_id`, the pepper-derived secret hash, tenant binding, roles/scopes and lifecycle metadata. It must never persist the plaintext credential.
 - `API_CONTROL_PLANE_API_KEY_PEPPER` remains application-side secret material in the production environment.
@@ -54,14 +55,21 @@ BUSINESAIOS_TRUSTED_PROXY_IPS=127.0.0.1/32,::1/128
 
 `PRICING_VERSION` may be blank in the template or hold the previously approved value in the live environment. The next approved value is supplied explicitly to the lifecycle command below; the bootstrap replaces it atomically together with the credential, smoke tenant and immutable runtime bindings. Do not hand-edit it during a release and do not use an override file to bypass the production gate.
 
-The selected tenant must already exist, be active, and have its persistent policy bundle in `/var/lib/businesaios/runtime/tenancy`. If an older deployment still has required business state only in `/opt/businesaios/data/tenancy`, inspect the migration first and then perform the explicit one-time merge before the production lifecycle:
+The selected tenant must already exist, be active, and have its persistent policy bundle in `/var/lib/businesaios/runtime/tenancy`. If an older deployment still has required business state only in `/opt/businesaios/data/tenancy`, inspect the migration first:
 
 ```bash
-sudo /opt/businesaios/.venv/bin/python -m scripts.server.migrate_legacy_tenancy_state --check
-sudo /opt/businesaios/.venv/bin/python -m scripts.server.migrate_legacy_tenancy_state
+sudo runuser -u businesaios -- \
+  /opt/businesaios/.venv/bin/python -m scripts.server.migrate_legacy_tenancy_state --check
 ```
 
-The second command is intentionally idempotent for records that have already crossed the historical boundary and never overwrites a runtime-owned tenant ID. It is a deployment migration, not a runtime bootstrap convenience.
+The write form must run only in the coordinated deployment window when participating services are not concurrently mutating tenant state, and it must run as the runtime owner rather than root:
+
+```bash
+sudo runuser -u businesaios -- \
+  /opt/businesaios/.venv/bin/python -m scripts.server.migrate_legacy_tenancy_state
+```
+
+The write command is intentionally idempotent for records that have already crossed the historical boundary and never overwrites a runtime-owned tenant ID. It is a deployment migration, not a runtime bootstrap convenience. The migration validates both registry and policy plans before the first write, refuses a process that does not own the runtime tenancy directory, and forces changed JSON files to mode `0640`.
 
 The systemd units installed on the host must be byte-identical to the corresponding files in `deploy/systemd/` from the exact deployed SHA. The systemd manager must already have reloaded those files (`NeedDaemonReload=no`). Any active drop-in must likewise be declared in `deploy/systemd/dropins/<service>.d/` and be byte-identical to the deployed release. The lifecycle deliberately refuses environment mutation when installed units/drop-ins lag the release or include host-only overrides.
 
@@ -85,7 +93,7 @@ sudo env \
 
 Before running it, the operator must verify both trusted inputs: `<exact-40-character-github-main-sha>` is the release approved for deployment and `<approved-production-pricing-version>` is the pricing version approved for the effective pricing configuration. The lifecycle independently compares `EXPECTED_SHA` with `/opt/businesaios` `HEAD` before mutating the environment.
 
-Do not generate a control-plane token manually, write an unhashed token into the application key store, use `default-business`, derive `EXPECTED_SHA` from the production host being verified, derive `PRICING_VERSION` from the deployed SHA, use `PRICING_VERSION_OVERRIDE_PATH` as a production fallback, let runtime auto-create a production tenant/policy, replace runtime-owned tenant state from a legacy checkout, inject an ad-hoc `SMOKE_BASE_URL`, widen trusted proxy networks, widen the worker health bind, add host-only systemd drop-ins, or invoke a separate smoke verifier.
+Do not generate a control-plane token manually, write an unhashed token into the application key store, use `default-business`, derive `EXPECTED_SHA` from the production host being verified, derive `PRICING_VERSION` from the deployed SHA, use `PRICING_VERSION_OVERRIDE_PATH` as a production fallback, let runtime auto-create a production tenant/policy, replace runtime-owned tenant state from a legacy checkout, run the tenancy write migration as root, inject an ad-hoc `SMOKE_BASE_URL`, widen trusted proxy networks, widen the worker health bind, add host-only systemd drop-ins, or invoke a separate smoke verifier.
 
 ## What the lifecycle proves
 
