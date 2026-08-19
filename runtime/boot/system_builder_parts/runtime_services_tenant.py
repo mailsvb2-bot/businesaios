@@ -18,12 +18,15 @@ from tenancy.tenant_startup_selfcheck import TenantStartupSelfcheck
 
 CANON_BOOT_WIRING_ONLY = True
 
-def build_tenant_runtime_services(*, tenant_id: str):
+def build_tenant_runtime_services(*, tenant_id: str, production: bool):
     tenant_registry = build_default_tenant_registry()
     tenant_policy_store = build_default_tenant_policy_store()
-    if tenant_registry.lookup(tenant_id) is None:
+    if production:
+        tenant_registry.assert_active(tenant_id)
+        tenant_policy_store.require(tenant_id)
+    if not production and tenant_registry.lookup(tenant_id) is None:
         tenant_registry.register(TenantRecord(tenant_id=tenant_id, display_name=tenant_id, plan=TenantPlan.STARTER))
-    if tenant_policy_store.get(tenant_id) is None:
+    if not production and tenant_policy_store.get(tenant_id) is None:
         tenant_policy_store.save(build_default_tenant_policy_bundle(tenant_id))
     tenant_quota_guard = TenantQuotaGuard(policy_store=tenant_policy_store)
     tenant_runtime_isolation = TenantRuntimeIsolation(policy_store=tenant_policy_store)

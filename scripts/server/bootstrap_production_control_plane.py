@@ -18,6 +18,7 @@ from entrypoints.api.api_key_policy import (
 )
 from governance.persistence_codec import exclusive_file_lock
 from governance.rbac_contract import RoleId
+from runtime.governance.pricing_versioning import validate_explicit_pricing_version
 from tenancy.tenant_registry import PersistentTenantRegistry, build_default_tenant_registry
 
 CANON_PRODUCTION_CONTROL_PLANE_BOOTSTRAP = True
@@ -35,6 +36,7 @@ class BootstrapResult:
     env_file: Path
     api_key_store: Path
     tenant_registry: Path
+    pricing_version: str | None = None
     rotated_key_id: str | None = None
 
 
@@ -107,11 +109,19 @@ def _validate_env_destination(path: Path) -> None:
         raise RuntimeError(f"production environment file must not be a symlink: {path}")
 
 
-def _rewrite_managed_assignments(text: str, *, credential: str, tenant_id: str) -> str:
+def _rewrite_managed_assignments(
+    text: str,
+    *,
+    credential: str,
+    tenant_id: str,
+    pricing_version: str | None = None,
+) -> str:
     replacements = {
         "CONTROL_PLANE_API_KEY": credential,
         "SMOKE_TENANT_ID": tenant_id,
     }
+    if pricing_version is not None:
+        replacements["PRICING_VERSION"] = pricing_version
     seen: set[str] = set()
     output: list[str] = []
     assignment = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
@@ -234,11 +244,17 @@ def bootstrap_production_control_plane(
     *,
     tenant_id: str,
     env_file: str | Path = DEFAULT_ENV_FILE,
+    pricing_version: str | None = None,
 ) -> BootstrapResult:
     path = Path(env_file)
     tenant_id = str(tenant_id or "").strip()
     if not tenant_id or tenant_id == "default-business":
         raise RuntimeError("explicit non-default production tenant_id is required")
+    approved_pricing_version = (
+        validate_explicit_pricing_version(pricing_version)
+        if pricing_version is not None
+        else None
+    )
 
     # Serialize the complete environment cutover. PersistentApiKeyStore owns a
     # separate store-level lock for every key mutation, so live API writers and
@@ -255,7 +271,7 @@ def bootstrap_production_control_plane(
         rotated_key_id = old_record.key_id if _is_lifecycle_record(old_record) else None
 
         # A prior process may have died after switching api.env but before
-        # revoking its superseded lifecycle key.  Retire every active orphan
+        # revoking its superseded lifecycle key. Retire every active orphan
         # owned by this lifecycle before issuing another candidate, while
         # preserving the currently env-bound key until the cutover succeeds.
         for candidate in store.list_records():
@@ -292,6 +308,7 @@ def bootstrap_production_control_plane(
                 original_text,
                 credential=credential,
                 tenant_id=tenant.tenant_id,
+                pricing_version=approved_pricing_version,
             )
             _atomic_write_private(path, updated_text)
         except BaseException:
@@ -315,6 +332,7 @@ def bootstrap_production_control_plane(
             env_file=path,
             api_key_store=store.path,
             tenant_registry=registry.path,
+            pricing_version=approved_pricing_version,
             rotated_key_id=rotated_key_id,
         )
 
@@ -324,6 +342,13 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Issue and bind the canonical production control-plane smoke credential."
     )
     parser.add_argument("--tenant-id", required=True, help="Existing active production tenant ID.")
+    parser.add_argument(
+        "--pricing-version",
+        help=(
+            "Operator-approved production pricing version to atomically bind in api.env. "
+            "The canonical host lifecycle always supplies this value."
+        ),
+    )
     return parser
 
 
@@ -332,11 +357,13 @@ def main(argv: list[str] | None = None) -> int:
     result = bootstrap_production_control_plane(
         tenant_id=args.tenant_id,
         env_file=DEFAULT_ENV_FILE,
+        pricing_version=args.pricing_version,
     )
     rotation = f" rotated_key_id={result.rotated_key_id}" if result.rotated_key_id else ""
+    pricing = f" pricing_version={result.pricing_version}" if result.pricing_version else ""
     print(
         "PRODUCTION_CONTROL_PLANE_BOOTSTRAP_OK "
-        f"tenant_id={result.tenant_id} key_id={result.key_id}{rotation} "
+        f"tenant_id={result.tenant_id} key_id={result.key_id}{rotation}{pricing} "
         f"env_file={result.env_file}"
     )
     return 0

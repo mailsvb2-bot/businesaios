@@ -19,8 +19,10 @@ def test_host_lifecycle_preflights_worker_bind_before_credential_mutation() -> N
     assert '"EVOLUTION_HEALTH_PORT": "8087"' in text
     assert 'EVOLUTION_ENABLED must be enabled in canonical production' in text
     assert text.index("== canonical production runtime preflight ==") < text.index(
-        '"$PYTHON_BIN" "$BOOTSTRAP" --tenant-id "$SMOKE_TENANT"'
+        "== canonical production control-plane + pricing bootstrap =="
     )
+    assert '--tenant-id "$SMOKE_TENANT"' in text
+    assert '--pricing-version "$APPROVED_PRICING_VERSION"' in text
     assert 'NeedDaemonReload --value' in text
     assert 'DropInPaths --value' in text
     assert "systemd manager state is stale" in text
