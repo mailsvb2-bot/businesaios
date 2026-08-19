@@ -7,8 +7,13 @@ How it works:
 - Compute fingerprint (sha256) from pricing-relevant fields.
 - Persist last known {pricing_version, fingerprint} to a local json file.
 - In strict prod:
-    - PRICING_VERSION must be set and must not look like a default placeholder.
+    - PRICING_VERSION must be set explicitly in the process environment.
+    - PRICING_VERSION must not look like a default placeholder.
     - If fingerprint changes, PRICING_VERSION must change.
+
+The optional override file remains a compatibility resolver for non-production
+callers of ``get_pricing_version``.  Strict production never consults it: the
+canonical production environment is the sole pricing-version authority.
 
 No side-effects on import.
 """
@@ -56,12 +61,21 @@ def _looks_like_default_version(v: str) -> bool:
     return vv in {"v1", "1", "0", "default", "dev", "test"} or vv.startswith("v0")
 
 
+def validate_explicit_pricing_version(value: str) -> str:
+    """Validate one operator-approved production pricing version."""
+    pricing_version = str(value or "").strip()
+    if not pricing_version:
+        raise RuntimeError("PRODUCTION_STRICT_MODE=1 requires PRICING_VERSION to be set")
+    if _looks_like_default_version(pricing_version):
+        raise RuntimeError(f"PROD_STRICT_PRICING_VERSION_INVALID:{pricing_version}")
+    return pricing_version
+
+
 def get_pricing_version() -> str:
-    """Resolve PRICING_VERSION from env or an operator-controlled override file."""
+    """Resolve pricing version for compatibility outside strict production."""
     v = env_str("PRICING_VERSION", "").strip()
     if v:
         return v
-    # Optional: allow a persisted override written by governed admin actions.
     override_path = str(env_path("PRICING_VERSION_OVERRIDE_PATH", "data/pricing_version_override.txt")).strip()
     if override_path:
         try:
@@ -70,35 +84,42 @@ def get_pricing_version() -> str:
             if txt:
                 return txt
         except Exception:
-            swallow(__name__, 'runtime/governance/pricing_versioning.py')
+            swallow(__name__, "runtime/governance/pricing_versioning.py")
     return ""
+
+
+def _pricing_fingerprint_path() -> Path:
+    explicit = str(env_path("PRICING_FINGERPRINT_PATH", "")).strip()
+    if explicit:
+        return Path(explicit)
+    data_dir = Path(str(env_path("DATA_DIR", "data")))
+    return data_dir / "governance" / "pricing_fingerprint.json"
 
 
 def enforce_pricing_versioning_or_raise(*, pricing_config: Any, production_strict: bool, log: Any) -> None:
     if not production_strict:
         return
 
-    pricing_version = get_pricing_version()
-    if not pricing_version:
-        raise RuntimeError("PRODUCTION_STRICT_MODE=1 requires PRICING_VERSION to be set")
-    if _looks_like_default_version(pricing_version):
-        raise RuntimeError(f"PROD_STRICT_PRICING_VERSION_INVALID:{pricing_version}")
+    # Strict production intentionally bypasses get_pricing_version(): accepting
+    # an override file here would create a second pricing-version authority next
+    # to the canonical production environment.
+    pricing_version = validate_explicit_pricing_version(env_str("PRICING_VERSION", ""))
 
-    path = str(env_path("PRICING_FINGERPRINT_PATH", "data/pricing_fingerprint.json")).strip()
+    path = _pricing_fingerprint_path()
     fp = compute_pricing_fingerprint(pricing_config)
 
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     prev = None
-    if Path(path).exists():
+    if path.exists():
         try:
-            with open(path, encoding="utf-8") as f:
+            with path.open(encoding="utf-8") as f:
                 prev = json.load(f)
         except Exception:
             prev = None
 
     if not isinstance(prev, dict) or not prev.get("fingerprint"):
-        with open(path, "w", encoding="utf-8") as f:
+        with path.open("w", encoding="utf-8") as f:
             json.dump({"pricing_version": pricing_version, "fingerprint": fp}, f, ensure_ascii=False, indent=2)
         log.info("[pricing] versioning initialized: PRICING_VERSION=%s fp=%s", pricing_version, fp[:8])
         return
@@ -112,7 +133,7 @@ def enforce_pricing_versioning_or_raise(*, pricing_config: Any, production_stric
                 "Pricing changed but PRICING_VERSION did not change. "
                 f"prev_version={prev_v} current_version={pricing_version}"
             )
-        with open(path, "w", encoding="utf-8") as f:
+        with path.open("w", encoding="utf-8") as f:
             json.dump({"pricing_version": pricing_version, "fingerprint": fp}, f, ensure_ascii=False, indent=2)
         log.warning("[pricing] pricing changed; bumped version %s -> %s (fp %s..)", prev_v, pricing_version, fp[:8])
         return
