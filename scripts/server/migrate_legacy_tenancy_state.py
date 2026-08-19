@@ -10,7 +10,6 @@ from governance.persistence_codec import atomic_write_json, from_dataclass
 from tenancy.tenant_contract import TenantRecord
 from tenancy.tenant_policy_store import TenantPolicyBundle
 
-
 CANON_LEGACY_TENANCY_MIGRATION = True
 DEFAULT_LEGACY_DIR = Path("/opt/businesaios/data/tenancy")
 DEFAULT_RUNTIME_DIR = Path("/var/lib/businesaios/runtime/tenancy")
