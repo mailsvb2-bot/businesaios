@@ -21,7 +21,7 @@ def build_event_log_and_bindings(*, event_store: Any, decision_archive: Any):
 
 
 def validate_payments_webhook_prod_strict(settings: Any) -> None:
-    if getattr(getattr(settings, "core", None), "env", "") != "prod":
+    if getattr(getattr(settings, "core", None), "env", "") != "prod" or env_str("APP_PROFILE", env_str("RUN_MODE", "api")).strip().lower() not in {"api", "webhook"}:
         return
     if not bool(getattr(getattr(settings, "core", None), "production_strict_mode", False)):
         return
