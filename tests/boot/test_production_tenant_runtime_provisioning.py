@@ -76,48 +76,44 @@ def _wire(monkeypatch: pytest.MonkeyPatch, registry: _Registry, policy_store: _P
 
 
 def test_production_unknown_tenant_fails_closed_without_registration(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APP_ENV", "prod")
     registry, policy_store = _Registry(), _PolicyStore()
     _wire(monkeypatch, registry, policy_store)
 
     with pytest.raises(KeyError, match="unknown tenant: tenant-live"):
-        subject.build_tenant_runtime_services(tenant_id="tenant-live")
+        subject.build_tenant_runtime_services(tenant_id="tenant-live", production=True)
 
     assert registry.registered == []
     assert policy_store.saved == []
 
 
 def test_production_missing_policy_fails_closed_without_default_policy(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APP_ENV", "production")
     registry, policy_store = _Registry(exists=True), _PolicyStore()
     _wire(monkeypatch, registry, policy_store)
 
     with pytest.raises(KeyError, match="missing tenant policy bundle: tenant-live"):
-        subject.build_tenant_runtime_services(tenant_id="tenant-live")
+        subject.build_tenant_runtime_services(tenant_id="tenant-live", production=True)
 
     assert registry.registered == []
     assert policy_store.saved == []
 
 
 def test_production_preprovisioned_tenant_reaches_runtime_without_mutation(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APP_ENV", "prod")
     registry, policy_store = _Registry(exists=True), _PolicyStore(exists=True)
     _wire(monkeypatch, registry, policy_store)
 
     with pytest.raises(_ReachedRuntimeAssembly):
-        subject.build_tenant_runtime_services(tenant_id="tenant-live")
+        subject.build_tenant_runtime_services(tenant_id="tenant-live", production=True)
 
     assert registry.registered == []
     assert policy_store.saved == []
 
 
 def test_nonproduction_keeps_bootstrap_convenience(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APP_ENV", "dev")
     registry, policy_store = _Registry(), _PolicyStore()
     _wire(monkeypatch, registry, policy_store)
 
     with pytest.raises(_ReachedRuntimeAssembly):
-        subject.build_tenant_runtime_services(tenant_id="tenant-live")
+        subject.build_tenant_runtime_services(tenant_id="tenant-live", production=False)
 
     assert [record.tenant_id for record in registry.registered] == ["tenant-live"]
     assert len(policy_store.saved) == 1
