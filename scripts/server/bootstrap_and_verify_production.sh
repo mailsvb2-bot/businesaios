@@ -9,6 +9,7 @@ BUSINESAIOS_DEPLOY_ROOT="/opt/businesaios"
 PRODUCTION_ENV_FILE="/etc/businesaios/api.env"
 API_SERVICE="businesaios-api.service"
 WORKER_SERVICE="businesaios-worker.service"
+TELEGRAM_SERVICE="businesaios-connector-telegram.service"
 PYTHON_BIN="$BUSINESAIOS_DEPLOY_ROOT/.venv/bin/python"
 BOOTSTRAP="$BUSINESAIOS_DEPLOY_ROOT/scripts/server/bootstrap_production_control_plane.py"
 VERIFY="$BUSINESAIOS_DEPLOY_ROOT/scripts/server/verify_runtime_host_contract.sh"
@@ -16,6 +17,7 @@ LOCAL_HEALTH_URL="http://127.0.0.1:8000/health"
 LOCAL_READINESS_URL="http://127.0.0.1:8000/readyz"
 LOCAL_WORKER_HEALTH_URL="http://127.0.0.1:8087/health"
 LOCAL_WORKER_READINESS_URL="http://127.0.0.1:8087/ready"
+LOCAL_TELEGRAM_READINESS_URL="http://127.0.0.1:8088/readyz"
 
 fail() { echo "$*" >&2; exit 1; }
 
@@ -25,7 +27,12 @@ EXPECTED_SHA="${EXPECTED_SHA,,}"
 SMOKE_TENANT="${SMOKE_TENANT_ID:-}"
 [[ -n "${SMOKE_TENANT//[[:space:]]/}" ]] || fail "SMOKE_TENANT_ID must name an existing production tenant"
 [[ "$SMOKE_TENANT" != "default-business" ]] || fail "SMOKE_TENANT_ID must not use the unsafe default tenant"
-unset SMOKE_TENANT_ID
+APPROVED_PRICING_VERSION="${PRICING_VERSION:-}"
+[[ -n "${APPROVED_PRICING_VERSION//[[:space:]]/}" ]] || fail "PRICING_VERSION must be an explicitly approved production pricing version"
+# Do not let ambient shell values become a second runtime configuration source.
+# The bootstrap receives the approved value as an explicit argument and writes
+# it atomically into the sole production environment file.
+unset SMOKE_TENANT_ID PRICING_VERSION
 
 [[ -d "$BUSINESAIOS_DEPLOY_ROOT" ]] || fail "canonical production deploy root is missing: $BUSINESAIOS_DEPLOY_ROOT"
 [[ -x "$PYTHON_BIN" ]] || fail "canonical production Python is missing: $PYTHON_BIN"
@@ -46,11 +53,12 @@ OBSERVED_SHA="$(git rev-parse HEAD)"
 OBSERVED_SHA="${OBSERVED_SHA,,}"
 [[ "$OBSERVED_SHA" == "$EXPECTED_SHA" ]] || fail "refusing credential bootstrap: deployed SHA $OBSERVED_SHA != expected SHA $EXPECTED_SHA"
 
-# Fail before credential mutation when immutable production runtime bindings
-# have drifted. In particular, the worker health surface is loopback-only on a
-# systemd host; exposing port 8087 on 0.0.0.0 is not a valid production state.
+# Fail before credential/environment mutation when immutable production runtime
+# bindings or tenant ownership have drifted. Production runtime is a consumer
+# of an already-provisioned active tenant and policy bundle; it is never the
+# authority that creates either one during startup.
 echo "== canonical production runtime preflight =="
-"$PYTHON_BIN" - "$PRODUCTION_ENV_FILE" <<'PY'
+"$PYTHON_BIN" - "$PRODUCTION_ENV_FILE" "$SMOKE_TENANT" <<'PY'
 from __future__ import annotations
 
 import ipaddress
@@ -58,13 +66,20 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from scripts.server.bootstrap_production_control_plane import read_environment_file
+from scripts.server.bootstrap_production_control_plane import activated_environment, read_environment_file
+from tenancy.tenant_policy_store import PersistentTenantPolicyStore, build_default_tenant_policy_store
+from tenancy.tenant_registry import PersistentTenantRegistry, build_default_tenant_registry
 
 _, values = read_environment_file(Path(sys.argv[1]))
+smoke_tenant = sys.argv[2].strip()
 
 app_env = values.get("APP_ENV", "").strip().lower()
 if app_env not in {"prod", "production"}:
     raise SystemExit("APP_ENV must be prod/production before credential bootstrap")
+
+strict_mode = values.get("PRODUCTION_STRICT_MODE", "").strip().lower()
+if strict_mode not in {"1", "true", "yes", "on"}:
+    raise SystemExit("PRODUCTION_STRICT_MODE must be enabled in canonical production")
 
 public_base_url = values.get("PUBLIC_BASE_URL", "").strip().rstrip("/")
 parsed = urlsplit(public_base_url)
@@ -93,6 +108,7 @@ required_exact = {
     "HEALTH_HOST": "127.0.0.1",
     "WORKER_HEALTH_PORT": "8087",
     "EVOLUTION_HEALTH_PORT": "8087",
+    "DATA_DIR": "/var/lib/businesaios/runtime",
 }
 for name, expected in required_exact.items():
     actual = values.get(name, "").strip()
@@ -104,13 +120,44 @@ if values.get("EVOLUTION_ENABLED", "").strip().lower() not in {"1", "true", "yes
 
 if not (values.get("DATABASE_URL", "").strip() or values.get("POSTGRES_DSN", "").strip()):
     raise SystemExit("DATABASE_URL/POSTGRES_DSN must be present before credential bootstrap")
+
+fingerprint_path = Path(values.get("PRICING_FINGERPRINT_PATH", "").strip())
+if not fingerprint_path.is_absolute():
+    raise SystemExit("PRICING_FINGERPRINT_PATH must be absolute in canonical production")
+runtime_root = Path("/var/lib/businesaios/runtime")
+try:
+    fingerprint_path.relative_to(runtime_root)
+except ValueError as exc:
+    raise SystemExit("PRICING_FINGERPRINT_PATH must live under the canonical runtime StateDirectory") from exc
+
+if values.get("BUSINESAIOS_TENANT_POLICY_STORE_BACKEND", "file").strip().lower() != "file":
+    raise SystemExit("production tenant policy store must use file backend")
+
+with activated_environment(values):
+    registry = build_default_tenant_registry()
+    policy_store = build_default_tenant_policy_store()
+if not isinstance(registry, PersistentTenantRegistry) or not registry.path.is_absolute():
+    raise SystemExit("canonical production tenant registry must be persistent and absolute")
+if not isinstance(policy_store, PersistentTenantPolicyStore) or not policy_store.path.is_absolute():
+    raise SystemExit("canonical production tenant policy store must be persistent and absolute")
+registry.assert_active(smoke_tenant)
+policy_store.require(smoke_tenant)
 PY
+
+TELEGRAM_ENABLED=0
+if systemctl is-enabled --quiet "$TELEGRAM_SERVICE" 2>/dev/null; then
+  TELEGRAM_ENABLED=1
+fi
 
 # The host must be using the effective service definitions shipped by the exact
 # deployed SHA. Reject stale manager state and all drop-ins before comparing the
 # fragment bytes, otherwise systemd could restart an override that is not part
 # of the release being verified.
-for service in "$API_SERVICE" "$WORKER_SERVICE"; do
+SERVICES=("$API_SERVICE" "$WORKER_SERVICE")
+if [[ "$TELEGRAM_ENABLED" == "1" ]]; then
+  SERVICES+=("$TELEGRAM_SERVICE")
+fi
+for service in "${SERVICES[@]}"; do
   need_reload="$(systemctl show "$service" -p NeedDaemonReload --value)"
   [[ "$need_reload" == "no" ]] || fail "systemd manager state is stale for $service; run systemctl daemon-reload before production bootstrap"
   drop_ins="$(systemctl show "$service" -p DropInPaths --value)"
@@ -122,39 +169,63 @@ for service in "$API_SERVICE" "$WORKER_SERVICE"; do
   cmp -s "$canonical" "$fragment" || fail "installed systemd unit does not match deployed SHA for $service; run deploy/systemd/install.sh before production bootstrap"
 done
 
-echo "== canonical production control-plane bootstrap =="
-"$PYTHON_BIN" "$BOOTSTRAP" --tenant-id "$SMOKE_TENANT"
+echo "== canonical production control-plane + pricing bootstrap =="
+"$PYTHON_BIN" "$BOOTSTRAP" \
+  --tenant-id "$SMOKE_TENANT" \
+  --pricing-version "$APPROVED_PRICING_VERSION"
 
-echo "== reload core runtime with the newly deployed code and application-side key record =="
-systemctl restart "$API_SERVICE" "$WORKER_SERVICE"
+echo "== reload runtime with the newly bound production environment =="
+if [[ "$TELEGRAM_ENABLED" == "1" ]]; then
+  # Clear a previous start-limit-hit only for the already-enabled canonical
+  # connector, then restart it in the same environment cutover as core runtime.
+  systemctl reset-failed "$TELEGRAM_SERVICE" || true
+  systemctl restart "$API_SERVICE" "$WORKER_SERVICE" "$TELEGRAM_SERVICE"
+else
+  systemctl restart "$API_SERVICE" "$WORKER_SERVICE"
+fi
 
-# systemd can report active before HTTP applications and worker health surfaces
-# are ready. Enforce one 60-second wall-clock deadline around the complete core
-# runtime readiness loop; sequential per-probe timeouts must never multiply the
-# rollout deadline.
+# systemd can report active before HTTP applications and health surfaces are
+# ready. Enforce one 60-second wall-clock deadline around the complete runtime
+# readiness loop; sequential per-probe timeouts must never multiply the rollout
+# deadline. The optional Telegram connector participates when it is enabled.
 if ! timeout 60s bash -c '
 API_SERVICE="$1"
 WORKER_SERVICE="$2"
-LOCAL_HEALTH_URL="$3"
-LOCAL_READINESS_URL="$4"
-LOCAL_WORKER_HEALTH_URL="$5"
-LOCAL_WORKER_READINESS_URL="$6"
-API_READY=0
+TELEGRAM_SERVICE="$3"
+TELEGRAM_ENABLED="$4"
+LOCAL_HEALTH_URL="$5"
+LOCAL_READINESS_URL="$6"
+LOCAL_WORKER_HEALTH_URL="$7"
+LOCAL_WORKER_READINESS_URL="$8"
+LOCAL_TELEGRAM_READINESS_URL="$9"
+RUNTIME_READY=0
 for ((attempt=1; attempt<=60; attempt++)); do
+  core_ready=0
+  telegram_ready=1
   if systemctl is-active --quiet "$API_SERVICE" \
     && systemctl is-active --quiet "$WORKER_SERVICE" \
     && curl -fsS --max-time 2 "$LOCAL_HEALTH_URL" >/dev/null \
     && curl -fsS --max-time 2 "$LOCAL_READINESS_URL" >/dev/null \
     && curl -fsS --max-time 2 "$LOCAL_WORKER_HEALTH_URL" >/dev/null \
     && curl -fsS --max-time 2 "$LOCAL_WORKER_READINESS_URL" >/dev/null; then
-    API_READY=1
+    core_ready=1
+  fi
+  if [[ "$TELEGRAM_ENABLED" == "1" ]]; then
+    telegram_ready=0
+    if systemctl is-active --quiet "$TELEGRAM_SERVICE" \
+      && curl -fsS --max-time 2 "$LOCAL_TELEGRAM_READINESS_URL" >/dev/null; then
+      telegram_ready=1
+    fi
+  fi
+  if [[ "$core_ready" == "1" && "$telegram_ready" == "1" ]]; then
+    RUNTIME_READY=1
     break
   fi
   sleep 1
 done
-[[ "$API_READY" == "1" ]]
-' _ "$API_SERVICE" "$WORKER_SERVICE" "$LOCAL_HEALTH_URL" "$LOCAL_READINESS_URL" "$LOCAL_WORKER_HEALTH_URL" "$LOCAL_WORKER_READINESS_URL"; then
-  fail "core runtime did not become healthy and ready within 60 seconds after restart: $API_SERVICE $WORKER_SERVICE"
+[[ "$RUNTIME_READY" == "1" ]]
+' _ "$API_SERVICE" "$WORKER_SERVICE" "$TELEGRAM_SERVICE" "$TELEGRAM_ENABLED" "$LOCAL_HEALTH_URL" "$LOCAL_READINESS_URL" "$LOCAL_WORKER_HEALTH_URL" "$LOCAL_WORKER_READINESS_URL" "$LOCAL_TELEGRAM_READINESS_URL"; then
+  fail "runtime did not become healthy and ready within 60 seconds after restart: ${SERVICES[*]}"
 fi
 
 echo "== SHA-bound authenticated synthetic production verdict =="
