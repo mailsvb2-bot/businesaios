@@ -37,7 +37,6 @@ def validate_explicit_pricing_version(value: str) -> str:
 
 
 def get_pricing_version() -> str:
-    """Resolve legacy override only for callers outside strict production."""
     version = env_str("PRICING_VERSION", "").strip()
     if version:
         return version
@@ -59,8 +58,6 @@ def _write_fingerprint(path: Path, *, pricing_version: str, fingerprint: str) ->
 def enforce_pricing_versioning_or_raise(*, pricing_config: Any, production_strict: bool, log: Any) -> None:
     if not production_strict:
         return
-    # Strict production reads the canonical environment directly; the optional
-    # compatibility override in get_pricing_version() is never a second authority.
     pricing_version = validate_explicit_pricing_version(env_str("PRICING_VERSION", ""))
     explicit_path = env_str("PRICING_FINGERPRINT_PATH", "").strip()
     path = Path(explicit_path) if explicit_path else env_path("DATA_DIR", "data") / "governance" / "pricing_fingerprint.json"
@@ -86,9 +83,7 @@ def enforce_pricing_versioning_or_raise(*, pricing_config: Any, production_stric
                 f"prev_version={previous_version} current_version={pricing_version}"
             )
         _write_fingerprint(path, pricing_version=pricing_version, fingerprint=fingerprint)
-        log.warning(
-            "[pricing] pricing changed; bumped version %s -> %s (fp %s..)",
-            previous_version, pricing_version, fingerprint[:8],
-        )
+        log.warning("[pricing] pricing changed; bumped version %s -> %s (fp %s..)",
+                    previous_version, pricing_version, fingerprint[:8])
         return
     log.info("[pricing] pricing stable: PRICING_VERSION=%s fp=%s", pricing_version, fingerprint[:8])
