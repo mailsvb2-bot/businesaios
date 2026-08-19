@@ -91,7 +91,7 @@ def build_runtime_services(*, ctx, stack, base, storage, repo_root, model_regist
     for key, value in outbound_services.items():
         ctx.set_value(key, value, min_phase=BootPhase.P50_OUTBOUND)
 
-    tenant_runtime_services = build_tenant_runtime_services(tenant_id=tenant_id)
+    tenant_runtime_services = build_tenant_runtime_services(tenant_id=tenant_id, production=settings.core.env == 'prod')
     for key, value in tenant_runtime_services.items():
         ctx.set_value(key, value, min_phase=BootPhase.P50_OUTBOUND)
 
