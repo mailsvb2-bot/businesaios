@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -145,6 +146,21 @@ def _plan_surface(*, legacy_dir: Path, runtime_dir: Path, spec: SurfaceSpec) -> 
     )
 
 
+def _require_runtime_owner_for_write(runtime_dir: Path) -> None:
+    if os.name != "posix" or not hasattr(os, "geteuid"):
+        return
+    anchor = runtime_dir if runtime_dir.exists() else runtime_dir.parent
+    if not anchor.exists():
+        raise RuntimeError(f"runtime tenancy parent does not exist: {anchor}")
+    effective_uid = os.geteuid()
+    owner_uid = anchor.stat().st_uid
+    if effective_uid != owner_uid:
+        raise PermissionError(
+            "tenancy migration write must run as the runtime directory owner "
+            f"(euid={effective_uid}, owner_uid={owner_uid}, path={anchor})"
+        )
+
+
 def _verify_written_plan(plan: SurfacePlan) -> None:
     _, written_items, written_by_tenant = _read_payload(
         plan.target,
@@ -180,10 +196,15 @@ def migrate_legacy_tenancy_state(
     )
 
     if write:
+        # Atomic replacement creates the new inode as the calling process. A
+        # root-run migration would therefore silently turn runtime-owned state
+        # into root-owned state. Require the canonical runtime owner instead.
+        _require_runtime_owner_for_write(runtime)
         runtime.mkdir(parents=True, exist_ok=True)
         for plan in plans:
             if plan.changed:
                 atomic_write_json(plan.target, plan.payload)
+                plan.target.chmod(0o640)
         for plan in plans:
             if plan.changed:
                 _verify_written_plan(plan)
