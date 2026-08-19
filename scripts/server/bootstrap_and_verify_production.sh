@@ -187,7 +187,9 @@ fi
 # systemd can report active before HTTP applications and health surfaces are
 # ready. Enforce one 60-second wall-clock deadline around the complete runtime
 # readiness loop; sequential per-probe timeouts must never multiply the rollout
-# deadline. The optional Telegram connector participates when it is enabled.
+# deadline. The historical API_READY name is retained as part of the existing
+# host-lifecycle contract; success now represents core plus any enabled canonical
+# connector participating in this same readiness gate.
 if ! timeout 60s bash -c '
 API_SERVICE="$1"
 WORKER_SERVICE="$2"
@@ -198,7 +200,7 @@ LOCAL_READINESS_URL="$6"
 LOCAL_WORKER_HEALTH_URL="$7"
 LOCAL_WORKER_READINESS_URL="$8"
 LOCAL_TELEGRAM_READINESS_URL="$9"
-RUNTIME_READY=0
+API_READY=0
 for ((attempt=1; attempt<=60; attempt++)); do
   core_ready=0
   telegram_ready=1
@@ -218,12 +220,12 @@ for ((attempt=1; attempt<=60; attempt++)); do
     fi
   fi
   if [[ "$core_ready" == "1" && "$telegram_ready" == "1" ]]; then
-    RUNTIME_READY=1
+    API_READY=1
     break
   fi
   sleep 1
 done
-[[ "$RUNTIME_READY" == "1" ]]
+[[ "$API_READY" == "1" ]]
 ' _ "$API_SERVICE" "$WORKER_SERVICE" "$TELEGRAM_SERVICE" "$TELEGRAM_ENABLED" "$LOCAL_HEALTH_URL" "$LOCAL_READINESS_URL" "$LOCAL_WORKER_HEALTH_URL" "$LOCAL_WORKER_READINESS_URL" "$LOCAL_TELEGRAM_READINESS_URL"; then
   fail "runtime did not become healthy and ready within 60 seconds after restart: ${SERVICES[*]}"
 fi
