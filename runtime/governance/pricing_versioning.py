@@ -13,10 +13,6 @@ from runtime.platform.config.env_flags import env_path, env_str
 _PRICING_FIELDS = {"currency", "default_price_rub", "subscriber_price_rub", "price_rub", "trial_price_rub", "price_caps"}
 
 
-def _stable_json(obj: Any) -> str:
-    return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-
-
 def compute_pricing_fingerprint(pricing_config: Any) -> str:
     if hasattr(pricing_config, "__dict__"):
         data = dict(pricing_config.__dict__ or {})
@@ -26,19 +22,16 @@ def compute_pricing_fingerprint(pricing_config: Any) -> str:
         except Exception:
             data = dict(pricing_config)  # type: ignore[arg-type]
     filtered = {key: data.get(key) for key in sorted(_PRICING_FIELDS) if key in data}
-    return hashlib.sha256(_stable_json(filtered).encode("utf-8")).hexdigest()
-
-
-def _looks_like_default_version(value: str) -> bool:
-    normalized = (value or "").strip().lower()
-    return normalized in {"v1", "1", "0", "default", "dev", "test"} or normalized.startswith("v0")
+    payload = json.dumps(filtered, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def validate_explicit_pricing_version(value: str) -> str:
     pricing_version = str(value or "").strip()
     if not pricing_version:
         raise RuntimeError("PRODUCTION_STRICT_MODE=1 requires PRICING_VERSION to be set")
-    if _looks_like_default_version(pricing_version):
+    normalized = pricing_version.lower()
+    if normalized in {"v1", "1", "0", "default", "dev", "test"} or normalized.startswith("v0"):
         raise RuntimeError(f"PROD_STRICT_PRICING_VERSION_INVALID:{pricing_version}")
     return pricing_version
 
@@ -49,18 +42,13 @@ def get_pricing_version() -> str:
     if version:
         return version
     override_path = str(env_path("PRICING_VERSION_OVERRIDE_PATH", "data/pricing_version_override.txt")).strip()
-    if override_path:
-        try:
+    try:
+        if override_path:
             with open(override_path, encoding="utf-8") as handle:
                 return handle.read().strip()
-        except Exception:
-            swallow(__name__, "runtime/governance/pricing_versioning.py")
+    except Exception:
+        swallow(__name__, "runtime/governance/pricing_versioning.py")
     return ""
-
-
-def _pricing_fingerprint_path() -> Path:
-    explicit = env_str("PRICING_FINGERPRINT_PATH", "").strip()
-    return Path(explicit) if explicit else env_path("DATA_DIR", "data") / "governance" / "pricing_fingerprint.json"
 
 
 def _write_fingerprint(path: Path, *, pricing_version: str, fingerprint: str) -> None:
@@ -71,10 +59,11 @@ def _write_fingerprint(path: Path, *, pricing_version: str, fingerprint: str) ->
 def enforce_pricing_versioning_or_raise(*, pricing_config: Any, production_strict: bool, log: Any) -> None:
     if not production_strict:
         return
-    # Strict production reads the canonical environment directly. The optional
+    # Strict production reads the canonical environment directly; the optional
     # compatibility override in get_pricing_version() is never a second authority.
     pricing_version = validate_explicit_pricing_version(env_str("PRICING_VERSION", ""))
-    path = _pricing_fingerprint_path()
+    explicit_path = env_str("PRICING_FINGERPRINT_PATH", "").strip()
+    path = Path(explicit_path) if explicit_path else env_path("DATA_DIR", "data") / "governance" / "pricing_fingerprint.json"
     fingerprint = compute_pricing_fingerprint(pricing_config)
     path.parent.mkdir(parents=True, exist_ok=True)
     previous = None
@@ -99,9 +88,7 @@ def enforce_pricing_versioning_or_raise(*, pricing_config: Any, production_stric
         _write_fingerprint(path, pricing_version=pricing_version, fingerprint=fingerprint)
         log.warning(
             "[pricing] pricing changed; bumped version %s -> %s (fp %s..)",
-            previous_version,
-            pricing_version,
-            fingerprint[:8],
+            previous_version, pricing_version, fingerprint[:8],
         )
         return
     log.info("[pricing] pricing stable: PRICING_VERSION=%s fp=%s", pricing_version, fingerprint[:8])
