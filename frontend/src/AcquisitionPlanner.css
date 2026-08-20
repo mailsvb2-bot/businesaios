@@ -29,3 +29,10 @@
 .planner-disclaimer { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid #e8ecf2; color: #8792a2; font-size: .78rem; line-height: 1.45; }
 @media (max-width: 860px) { .planner-form, .planner-metrics { grid-template-columns: 1fr 1fr; } .planner-heading, .planner-actions { align-items: stretch; flex-direction: column; } }
 @media (max-width: 560px) { .planner-shell { width: min(100% - 24px, 1180px); } .planner-panel { padding: 20px; } .planner-form, .planner-metrics { grid-template-columns: 1fr; } }
+
+.planner-advanced-toggle { margin-top: 14px; min-height: 40px; font-size: .84rem; }
+.planner-advanced-block { margin-top: 14px; padding: 18px; border: 1px solid #e5eaf1; border-radius: 15px; background: #f9fbfd; }
+.planner-advanced-block > p { margin: 0 0 14px; color: #748196; font-size: .84rem; line-height: 1.5; }
+.planner-advanced-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 860px) { .planner-advanced-form { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .planner-advanced-form { grid-template-columns: 1fr; } }
