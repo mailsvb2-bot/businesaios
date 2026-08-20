@@ -18,6 +18,9 @@ LOCAL_READINESS_URL="http://127.0.0.1:8000/readyz"
 LOCAL_WORKER_HEALTH_URL="http://127.0.0.1:8087/health"
 LOCAL_WORKER_READINESS_URL="http://127.0.0.1:8087/ready"
 LOCAL_TELEGRAM_READINESS_URL="http://127.0.0.1:8088/readyz"
+RUNTIME_USER="businesaios"
+RUNTIME_GROUP="businesaios"
+RUNTIME_API_DIR="/var/lib/businesaios/runtime/api"
 
 fail() { echo "$*" >&2; exit 1; }
 
@@ -190,6 +193,17 @@ echo "== canonical production control-plane + pricing bootstrap =="
 "$PYTHON_BIN" "$BOOTSTRAP" \
   --tenant-id "$SMOKE_TENANT" \
   --pricing-version "$APPROVED_PRICING_VERSION"
+
+# The root-only bootstrap atomically rotates the persistent API-key store.
+# Hand the resulting files back to the unprivileged runtime account before
+# any service restart; otherwise root-owned replacement files fail closed.
+install -d -o "$RUNTIME_USER" -g "$RUNTIME_GROUP" -m 0750 "$RUNTIME_API_DIR"
+chown -R "$RUNTIME_USER:$RUNTIME_GROUP" "$RUNTIME_API_DIR"
+chmod -R u+rwX,g+rX,o-rwx "$RUNTIME_API_DIR"
+runuser -u "$RUNTIME_USER" -- test -r "$RUNTIME_API_DIR/api_keys.json" \
+  || fail "runtime user cannot read canonical API-key store after bootstrap"
+runuser -u "$RUNTIME_USER" -- test -w "$RUNTIME_API_DIR/api_keys.json" \
+  || fail "runtime user cannot write canonical API-key store after bootstrap"
 
 echo "== reload runtime with the newly bound production environment =="
 if [[ "$TELEGRAM_ENABLED" == "1" ]]; then
