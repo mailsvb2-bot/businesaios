@@ -5,22 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from runtime.platform.config.env_flags import env_str
-
-_SHARED_RUNTIME_ENV_NAMES = (
-    "BUSINESAIOS_DATA_DIR",
-    "APP_RUNTIME_DATA_DIR",
-    "BAIOS_DATA_DIR",
-    "DATA_DIR",
-)
-
-
-def shared_runtime_root() -> Path | None:
-    """Resolve the canonical shared runtime root when production configured one."""
-    for name in _SHARED_RUNTIME_ENV_NAMES:
-        value = env_str(name, "").strip()
-        if value:
-            return Path(value).expanduser().resolve()
-    return None
+from shared.runtime_paths import shared_runtime_root
 
 
 def runtime_data_dir(*, app_dirname: str = ".businesaios", legacy_dirname: str = ".legacy_product") -> Path:

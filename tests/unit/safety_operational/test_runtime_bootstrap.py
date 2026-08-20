@@ -21,3 +21,22 @@ def test_runtime_bootstrap_uses_explicit_env_paths(tmp_path: Path, monkeypatch) 
     assert runtime.policy_provider.for_tenant('any').max_actions_per_hour == 3
     monkeypatch.delenv('BUSINESAIOS_OPERATIONAL_BUDGET_LEDGER', raising=False)
     monkeypatch.delenv('BUSINESAIOS_OPERATIONAL_BUDGET_POLICY_JSON', raising=False)
+
+
+def test_runtime_bootstrap_uses_systemd_shared_runtime_root(tmp_path: Path, monkeypatch) -> None:
+    for name in (
+        'BUSINESAIOS_DATA_DIR',
+        'APP_RUNTIME_DATA_DIR',
+        'BAIOS_DATA_DIR',
+        'DATA_DIR',
+        'BUSINESAIOS_OPERATIONAL_BUDGET_LEDGER',
+    ):
+        monkeypatch.delenv(name, raising=False)
+    runtime_root = tmp_path / 'runtime'
+    legacy_root = tmp_path / 'legacy-relative-root'
+    monkeypatch.setenv('APP_RUNTIME_DATA_DIR', str(runtime_root))
+
+    resolve_operational_safety_runtime(default_root=legacy_root)
+
+    assert (runtime_root / 'operational_budget').is_dir()
+    assert not (legacy_root / 'operational_budget').exists()

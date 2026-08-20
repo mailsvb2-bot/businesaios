@@ -105,3 +105,20 @@ def test_runbook_requires_explicit_business_pricing_version() -> None:
     assert 'PRICING_VERSION="<approved-production-pricing-version>"' in text
     assert "strict production does not accept `PRICING_VERSION_OVERRIDE_PATH`" in text
     assert "derive `PRICING_VERSION` from the deployed SHA" in text
+
+
+def test_host_lifecycle_hands_api_key_store_back_to_runtime_user_before_restart() -> None:
+    text = HOST_LIFECYCLE.read_text(encoding='utf-8')
+    for token in (
+        'RUNTIME_USER="businesaios"',
+        'RUNTIME_API_DIR="/var/lib/businesaios/runtime/api"',
+        'chown -R "$RUNTIME_USER:$RUNTIME_GROUP" "$RUNTIME_API_DIR"',
+        'chmod -R u+rwX,g+rX,o-rwx "$RUNTIME_API_DIR"',
+        'runuser -u "$RUNTIME_USER" -- test -r "$RUNTIME_API_DIR/api_keys.json"',
+        'runuser -u "$RUNTIME_USER" -- test -w "$RUNTIME_API_DIR/api_keys.json"',
+    ):
+        assert token in text
+    bootstrap_index = text.index('--pricing-version "$APPROVED_PRICING_VERSION"')
+    handoff_index = text.index('chown -R "$RUNTIME_USER:$RUNTIME_GROUP" "$RUNTIME_API_DIR"')
+    restart_index = text.index('systemctl restart "$API_SERVICE" "$WORKER_SERVICE"')
+    assert bootstrap_index < handoff_index < restart_index
