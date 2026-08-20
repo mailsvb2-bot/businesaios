@@ -156,6 +156,8 @@ def test_wave_f_production_runner_uses_narrow_root_owned_bridge() -> None:
     assert 'git -C "$APP_DIR" rev-parse HEAD' in bridge
     assert 'env -i' in bridge
     assert 'production_synthetic_evidence.sh' in bridge
+    assert '[[ -r "$ADAPTER" ]]' in bridge
+    assert '[[ -x "$ADAPTER" ]]' not in bridge
     assert 'verify_runtime_host_contract.sh' not in bridge
     assert 'unexpected production evidence fields' in bridge
     assert 'NOPASSWD: %s *' in installer
