@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
-import os
+
+from runtime.platform.app_paths import shared_runtime_root
 
 CANON_HEADLESS_RUNTIME_PATHS = True
 CANON_HEADLESS_RUNTIME_PATHS_SINGLE_OWNER = True
@@ -26,16 +28,7 @@ def _resolve_headless_root(*, root_dir: str | Path | None = None) -> Path:
         return Path(env_root)
     if _is_test_process():
         return Path(".runtime")
-    for name in (
-        "BUSINESAIOS_DATA_DIR",
-        "APP_RUNTIME_DATA_DIR",
-        "BAIOS_DATA_DIR",
-        "DATA_DIR",
-    ):
-        env_data = _env(name)
-        if env_data:
-            return Path(env_data)
-    return Path(".runtime")
+    return shared_runtime_root() or Path(".runtime")
 
 
 @dataclass(frozen=True)
