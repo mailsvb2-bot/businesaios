@@ -11,11 +11,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from entrypoints.api.api_key_policy import (
-    ApiKeyRecord,
-    PersistentApiKeyStore,
-    build_default_api_key_store,
-)
+from entrypoints.api.api_key_policy import ApiKeyRecord, PersistentApiKeyStore, build_default_api_key_store
 from governance.persistence_codec import exclusive_file_lock
 from governance.rbac_contract import RoleId
 from runtime.governance.pricing_versioning import validate_explicit_pricing_version
@@ -23,7 +19,9 @@ from tenancy.tenant_registry import PersistentTenantRegistry, build_default_tena
 
 CANON_PRODUCTION_CONTROL_PLANE_BOOTSTRAP = True
 
-DEFAULT_ENV_FILE = Path("/etc/businesaios/api.env")
+CANONICAL_PRODUCTION_ENV_FILE = Path("/etc/businesaios/api.env")
+DEFAULT_ENV_FILE = CANONICAL_PRODUCTION_ENV_FILE
+CANONICAL_RUNTIME_BINDINGS = {"PRODUCTION_STRICT_MODE": "1", "DATA_DIR": "/var/lib/businesaios/runtime", "PRICING_FINGERPRINT_PATH": "/var/lib/businesaios/runtime/governance/pricing_fingerprint.json", "BUSINESAIOS_TENANT_REGISTRY_BACKEND": "file", "BUSINESAIOS_TENANT_REGISTRY_PATH": "/var/lib/businesaios/runtime/tenancy/tenant_registry.json", "BUSINESAIOS_TENANT_POLICY_STORE_BACKEND": "file", "BUSINESAIOS_TENANT_POLICY_STORE_PATH": "/var/lib/businesaios/runtime/tenancy/tenant_policies.json"}
 CREDENTIAL_KIND = "production_control_plane_smoke"
 MANAGED_BY = "scripts.server.bootstrap_production_control_plane"
 _KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -86,9 +84,18 @@ def activated_environment(values: Mapping[str, str]) -> Iterator[None]:
                 os.environ[key] = value
 
 
+def canonicalize_production_runtime_bindings(values: Mapping[str, str]) -> dict[str, str]:
+    result = {str(key): str(value) for key, value in values.items()}
+    for key, expected in CANONICAL_RUNTIME_BINDINGS.items():
+        actual = str(result.get(key) or "").strip()
+        if actual and actual != expected:
+            raise RuntimeError(f"canonical production binding mismatch: {key}={actual!r}; expected {expected!r}")
+        result[key] = expected
+    return result
+
+
 def _require_production(values: Mapping[str, str]) -> None:
-    env_name = (values.get("APP_ENV") or values.get("ENV") or "").strip().lower()
-    if env_name not in {"prod", "production"}:
+    if (values.get("APP_ENV") or values.get("ENV") or "").strip().lower() not in {"prod", "production"}:
         raise RuntimeError("APP_ENV must be prod/production")
     if not str(values.get("API_CONTROL_PLANE_API_KEY_PEPPER") or "").strip():
         raise RuntimeError("API_CONTROL_PLANE_API_KEY_PEPPER is required")
@@ -99,35 +106,22 @@ def _require_production(values: Mapping[str, str]) -> None:
 
 
 def _validate_env_destination(path: Path) -> None:
-    if path == DEFAULT_ENV_FILE and (
-        os.name != "posix" or getattr(os, "geteuid", lambda: -1)() != 0
-    ):
-        raise PermissionError(f"root is required to update {DEFAULT_ENV_FILE}")
+    if path == CANONICAL_PRODUCTION_ENV_FILE and (os.name != "posix" or getattr(os, "geteuid", lambda: -1)() != 0):
+        raise PermissionError(f"root is required to update {CANONICAL_PRODUCTION_ENV_FILE}")
     if not path.exists():
         raise FileNotFoundError(f"production environment file does not exist: {path}")
     if path.is_symlink():
         raise RuntimeError(f"production environment file must not be a symlink: {path}")
 
 
-def _rewrite_managed_assignments(
-    text: str,
-    *,
-    credential: str,
-    tenant_id: str,
-    pricing_version: str | None = None,
-) -> str:
-    replacements = {
-        "CONTROL_PLANE_API_KEY": credential,
-        "SMOKE_TENANT_ID": tenant_id,
-    }
+def _rewrite_managed_assignments(text: str, *, credential: str, tenant_id: str, pricing_version: str | None = None, runtime_bindings: Mapping[str, str] | None = None) -> str:
+    replacements = {**dict(runtime_bindings or {}), "CONTROL_PLANE_API_KEY": credential, "SMOKE_TENANT_ID": tenant_id}
     if pricing_version is not None:
         replacements["PRICING_VERSION"] = pricing_version
-    seen: set[str] = set()
-    output: list[str] = []
+    seen, output = set(), []
     assignment = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
     for line in text.splitlines():
-        match = assignment.match(line)
-        key = match.group(1) if match else None
+        key = match.group(1) if (match := assignment.match(line)) else None
         if key in replacements:
             if key in seen:
                 raise RuntimeError(f"duplicate managed environment key: {key}")
@@ -135,9 +129,7 @@ def _rewrite_managed_assignments(
             seen.add(key)
         else:
             output.append(line)
-    for key, value in replacements.items():
-        if key not in seen:
-            output.append(f"{key}={value}")
+    output.extend(f"{key}={value}" for key, value in replacements.items() if key not in seen)
     return "\n".join(output) + "\n"
 
 
@@ -171,19 +163,12 @@ def _atomic_write_private(path: Path, text: str) -> None:
 
 def _key_id_from_token(token: str) -> str | None:
     value = str(token or "").strip()
-    if "." not in value:
-        return None
-    key_id, raw_secret = value.split(".", 1)
-    return key_id if key_id and raw_secret else None
+    key_id, separator, raw_secret = value.partition(".")
+    return key_id if separator and key_id and raw_secret else None
 
 
 def _is_lifecycle_record(record: ApiKeyRecord | None) -> bool:
-    if record is None:
-        return False
-    return (
-        str(record.metadata.get("credential_kind") or "") == CREDENTIAL_KIND
-        and str(record.metadata.get("managed_by") or "") == MANAGED_BY
-    )
+    return record is not None and str(record.metadata.get("credential_kind") or "") == CREDENTIAL_KIND and str(record.metadata.get("managed_by") or "") == MANAGED_BY
 
 
 def _load_persistent_surfaces(values: Mapping[str, str]) -> tuple[PersistentApiKeyStore, PersistentTenantRegistry]:
@@ -200,12 +185,7 @@ def _load_persistent_surfaces(values: Mapping[str, str]) -> tuple[PersistentApiK
     return store, registry
 
 
-def validate_credential_binding(
-    *,
-    credential: str,
-    tenant_id: str,
-    values: Mapping[str, str],
-) -> str:
+def validate_credential_binding(*, credential: str, tenant_id: str, values: Mapping[str, str]) -> str:
     _require_production(values)
     store, registry = _load_persistent_surfaces(values)
     tenant = registry.assert_active(tenant_id)
@@ -240,132 +220,63 @@ def validate_current_binding_from_environment(path: str | Path = DEFAULT_ENV_FIL
     return validate_credential_binding(credential=credential, tenant_id=tenant_id, values=values)
 
 
-def bootstrap_production_control_plane(
-    *,
-    tenant_id: str,
-    env_file: str | Path = DEFAULT_ENV_FILE,
-    pricing_version: str | None = None,
-) -> BootstrapResult:
+def bootstrap_production_control_plane(*, tenant_id: str, env_file: str | Path = DEFAULT_ENV_FILE, pricing_version: str | None = None) -> BootstrapResult:
     path = Path(env_file)
     tenant_id = str(tenant_id or "").strip()
     if not tenant_id or tenant_id == "default-business":
         raise RuntimeError("explicit non-default production tenant_id is required")
-    approved_pricing_version = (
-        validate_explicit_pricing_version(pricing_version)
-        if pricing_version is not None
-        else None
-    )
+    approved_pricing_version = validate_explicit_pricing_version(pricing_version) if pricing_version is not None else None
 
-    # Serialize the complete environment cutover. PersistentApiKeyStore owns a
-    # separate store-level lock for every key mutation, so live API writers and
-    # this lifecycle reconcile against the same latest on-disk snapshot.
     with exclusive_file_lock(path):
         _validate_env_destination(path)
-        original_text, values = read_environment_file(path)
+        original_text, raw_values = read_environment_file(path)
+        runtime_bindings = CANONICAL_RUNTIME_BINDINGS if path == CANONICAL_PRODUCTION_ENV_FILE else {}
+        values = canonicalize_production_runtime_bindings(raw_values) if runtime_bindings else dict(raw_values)
         _require_production(values)
         store, registry = _load_persistent_surfaces(values)
         tenant = registry.assert_active(tenant_id)
-        old_token = str(values.get("CONTROL_PLANE_API_KEY") or "").strip()
-        old_key_id = _key_id_from_token(old_token)
+        old_key_id = _key_id_from_token(str(values.get("CONTROL_PLANE_API_KEY") or "").strip())
         old_record = store.get(old_key_id) if old_key_id else None
         rotated_key_id = old_record.key_id if _is_lifecycle_record(old_record) else None
 
-        # A prior process may have died after switching api.env but before
-        # revoking its superseded lifecycle key. Retire every active orphan
-        # owned by this lifecycle before issuing another candidate, while
-        # preserving the currently env-bound key until the cutover succeeds.
         for candidate in store.list_records():
-            if (
-                candidate.key_id != rotated_key_id
-                and candidate.is_active()
-                and _is_lifecycle_record(candidate)
-            ):
+            if candidate.key_id != rotated_key_id and candidate.is_active() and _is_lifecycle_record(candidate):
                 store.revoke(candidate.key_id)
 
-        record, credential = store.issue(
-            tenant_id=tenant.tenant_id,
-            subject=f"production-control-plane-smoke:{tenant.tenant_id}",
-            actor_id=f"production-control-plane-smoke:{tenant.tenant_id}",
-            roles=(RoleId.OWNER,),
-            scopes=("provider_control_plane",),
-            display_name=f"Production control-plane smoke ({tenant.tenant_id})",
-            metadata={
-                "principal_kind": "service",
-                "credential_kind": CREDENTIAL_KIND,
-                "managed_by": MANAGED_BY,
-            },
-        )
+        record, credential = store.issue(tenant_id=tenant.tenant_id, subject=f"production-control-plane-smoke:{tenant.tenant_id}", actor_id=f"production-control-plane-smoke:{tenant.tenant_id}", roles=(RoleId.OWNER,), scopes=("provider_control_plane",), display_name=f"Production control-plane smoke ({tenant.tenant_id})", metadata={"principal_kind": "service", "credential_kind": CREDENTIAL_KIND, "managed_by": MANAGED_BY})
         try:
-            key_id = validate_credential_binding(
-                credential=credential,
-                tenant_id=tenant.tenant_id,
-                values=values,
-            )
-            store_text = store.path.read_text(encoding="utf-8")
-            if credential in store_text:
+            key_id = validate_credential_binding(credential=credential, tenant_id=tenant.tenant_id, values=values)
+            if credential in store.path.read_text(encoding="utf-8"):
                 raise RuntimeError("plaintext credential leaked into application API key store")
-            updated_text = _rewrite_managed_assignments(
-                original_text,
-                credential=credential,
-                tenant_id=tenant.tenant_id,
-                pricing_version=approved_pricing_version,
-            )
+            updated_text = _rewrite_managed_assignments(original_text, credential=credential, tenant_id=tenant.tenant_id, pricing_version=approved_pricing_version, runtime_bindings=runtime_bindings)
             _atomic_write_private(path, updated_text)
         except BaseException:
             store.revoke(record.key_id)
             raise
 
         if rotated_key_id and rotated_key_id != record.key_id:
-            # revoke() reloads the latest store snapshot under the store lock,
-            # preserving keys issued concurrently by the running API process.
-            current_store, _ = _load_persistent_surfaces(values)
+            current_store = _load_persistent_surfaces(values)[0]
             current_old = current_store.get(rotated_key_id)
             if current_old is not None and current_old.is_active():
                 current_store.revoke(rotated_key_id)
 
-        # Re-read the only persistent plaintext surface and prove it resolves
-        # through the same application-side hash/pepper/tenant contracts.
         key_id = validate_current_binding_from_environment(path)
-        return BootstrapResult(
-            tenant_id=tenant.tenant_id,
-            key_id=key_id,
-            env_file=path,
-            api_key_store=store.path,
-            tenant_registry=registry.path,
-            pricing_version=approved_pricing_version,
-            rotated_key_id=rotated_key_id,
-        )
+        return BootstrapResult(tenant_id=tenant.tenant_id, key_id=key_id, env_file=path, api_key_store=store.path, tenant_registry=registry.path, pricing_version=approved_pricing_version, rotated_key_id=rotated_key_id)
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Issue and bind the canonical production control-plane smoke credential."
-    )
+    parser = argparse.ArgumentParser(description="Issue and bind the canonical production control-plane smoke credential.")
     parser.add_argument("--tenant-id", required=True, help="Existing active production tenant ID.")
-    parser.add_argument(
-        "--pricing-version",
-        help=(
-            "Operator-approved production pricing version to atomically bind in api.env. "
-            "The canonical host lifecycle always supplies this value."
-        ),
-    )
+    parser.add_argument("--pricing-version", help="Operator-approved production pricing version to atomically bind in api.env; the canonical host lifecycle always supplies it.")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    result = bootstrap_production_control_plane(
-        tenant_id=args.tenant_id,
-        env_file=DEFAULT_ENV_FILE,
-        pricing_version=args.pricing_version,
-    )
+    result = bootstrap_production_control_plane(tenant_id=args.tenant_id, env_file=DEFAULT_ENV_FILE, pricing_version=args.pricing_version)
     rotation = f" rotated_key_id={result.rotated_key_id}" if result.rotated_key_id else ""
     pricing = f" pricing_version={result.pricing_version}" if result.pricing_version else ""
-    print(
-        "PRODUCTION_CONTROL_PLANE_BOOTSTRAP_OK "
-        f"tenant_id={result.tenant_id} key_id={result.key_id}{rotation}{pricing} "
-        f"env_file={result.env_file}"
-    )
+    print(f"PRODUCTION_CONTROL_PLANE_BOOTSTRAP_OK tenant_id={result.tenant_id} key_id={result.key_id}{rotation}{pricing} env_file={result.env_file}")
     return 0
 
 

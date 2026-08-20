@@ -7,12 +7,13 @@ SYSUSERS_DIR="${SYSUSERS_DIR:-/usr/lib/sysusers.d}"
 SYSUSERS_FILE="${SYSUSERS_FILE:-${SYSUSERS_DIR}/businesaios.conf}"
 STATE_DIR="${STATE_DIR:-${APP_DIR}/data/deployment}"
 STATE_FILE="${STATE_FILE:-${STATE_DIR}/release_state.json}"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
+PYTHON_BIN="${PYTHON_BIN:-${APP_DIR}/.venv/bin/python}"
 RELEASE_TAG="${RELEASE_TAG:-$(cat "${APP_DIR}/RELEASE_TAG" 2>/dev/null || echo unknown)}"
 DEPLOY_PROFILE="${DEPLOY_PROFILE:-systemd-multichannel}"
 START_SERVICES="${START_SERVICES:-1}"
 HEALTH_STATUS="${HEALTH_STATUS:-pending}"
 ENABLE_TELEGRAM_CONNECTOR="${ENABLE_TELEGRAM_CONNECTOR:-0}"
+TELEGRAM_EGRESS_PROFILE="${TELEGRAM_EGRESS_PROFILE:-preserve}"
 RUNTIME_USER="${RUNTIME_USER:-businesaios}"
 RUNTIME_GROUP="${RUNTIME_GROUP:-businesaios}"
 RUNTIME_ACCESS_SENTINEL="${RUNTIME_ACCESS_SENTINEL:-${APP_DIR}/scripts/server/migrate_before_start.py}"
@@ -26,6 +27,10 @@ CORE_UNITS=(
   businesaios-worker.service
 )
 TELEGRAM_CONNECTOR_UNIT=businesaios-connector-telegram.service
+TELEGRAM_AMSTERDAM_DROPIN_NAME=20-amsterdam-egress.conf
+TELEGRAM_AMSTERDAM_DROPIN_SOURCE="${APP_DIR}/deploy/systemd/dropins/${TELEGRAM_CONNECTOR_UNIT}.d/${TELEGRAM_AMSTERDAM_DROPIN_NAME}"
+TELEGRAM_DROPIN_DIR="${SYSTEMD_DIR}/${TELEGRAM_CONNECTOR_UNIT}.d"
+TELEGRAM_AMSTERDAM_DROPIN_TARGET="${TELEGRAM_DROPIN_DIR}/${TELEGRAM_AMSTERDAM_DROPIN_NAME}"
 LEGACY_UNITS=(
   businesaios-telegram.service
   businesaios-evolution.service
@@ -34,6 +39,18 @@ OPTIONAL_UNITS=()
 
 if [[ "$ENABLE_TELEGRAM_CONNECTOR" == "1" ]]; then
   OPTIONAL_UNITS+=("$TELEGRAM_CONNECTOR_UNIT")
+fi
+
+case "$TELEGRAM_EGRESS_PROFILE" in
+  preserve|amsterdam|direct) ;;
+  *)
+    echo "[install] TELEGRAM_EGRESS_PROFILE must be preserve, amsterdam, or direct" >&2
+    exit 1
+    ;;
+esac
+if [[ "$TELEGRAM_EGRESS_PROFILE" == "amsterdam" && "$ENABLE_TELEGRAM_CONNECTOR" != "1" ]]; then
+  echo "[install] TELEGRAM_EGRESS_PROFILE=amsterdam requires ENABLE_TELEGRAM_CONNECTOR=1" >&2
+  exit 1
 fi
 
 DEPLOY_UNITS=("${CORE_UNITS[@]}" "${OPTIONAL_UNITS[@]}")
@@ -57,6 +74,24 @@ require_file() {
     echo "[install] required file missing: $path" >&2
     exit 1
   fi
+}
+
+install_telegram_egress_profile() {
+  case "$TELEGRAM_EGRESS_PROFILE" in
+    preserve)
+      echo "[install] preserving existing Telegram egress profile"
+      ;;
+    amsterdam)
+      require_file "$TELEGRAM_AMSTERDAM_DROPIN_SOURCE"
+      echo "[install] installing release-declared Telegram Amsterdam egress profile"
+      run_root install -d -m 0755 "$TELEGRAM_DROPIN_DIR"
+      run_root install -m 0644 "$TELEGRAM_AMSTERDAM_DROPIN_SOURCE" "$TELEGRAM_AMSTERDAM_DROPIN_TARGET"
+      ;;
+    direct)
+      echo "[install] selecting direct Telegram egress; removing known Amsterdam profile"
+      run_root rm -f "$TELEGRAM_AMSTERDAM_DROPIN_TARGET"
+      ;;
+  esac
 }
 
 ensure_runtime_access() {
@@ -255,6 +290,7 @@ write_state() {
     HEALTH_STATUS="$HEALTH_STATUS" \
     DEPLOY_PROFILE="$DEPLOY_PROFILE" \
     DEPLOY_UNITS="$DEPLOY_UNITS_CSV" \
+    TELEGRAM_EGRESS_PROFILE="$TELEGRAM_EGRESS_PROFILE" \
     SYSTEMD_DIR="$SYSTEMD_DIR" \
     APP_DIR="$APP_DIR" \
     ACTIVATION_STATUS="$1" \
@@ -283,6 +319,7 @@ store.update(
         'core_services': ['businesaios-api.service', 'businesaios-worker.service'],
         'enabled_services': list(units),
         'messaging_model': 'provider_connectors',
+        'telegram_egress_profile': os.environ['TELEGRAM_EGRESS_PROFILE'],
     },
 )
 PY
@@ -294,6 +331,9 @@ done
 require_file "${APP_DIR}/deploy/systemd/businesaios.sysusers.conf"
 require_file "${APP_DIR}/RELEASE_TAG"
 require_file "$RUNTIME_ACCESS_SENTINEL"
+if [[ "$TELEGRAM_EGRESS_PROFILE" == "amsterdam" ]]; then
+  require_file "$TELEGRAM_AMSTERDAM_DROPIN_SOURCE"
+fi
 
 echo "[install] provisioning system user"
 run_root install -d -m 0755 "$SYSUSERS_DIR"
@@ -325,6 +365,12 @@ echo "[install] installing core platform units: ${CORE_UNITS[*]}"
 for unit in "${DEPLOY_UNITS[@]}"; do
   run_root install -m 0644 "${APP_DIR}/deploy/systemd/${unit}" "${SYSTEMD_DIR}/${unit}"
 done
+
+# Optional provider-specific networking remains explicit release state. The
+# default preserves an existing profile; selecting amsterdam installs the exact
+# SHA-tracked drop-in, while direct removes only that known profile. Unknown
+# drop-ins are never removed here and are rejected by the production lifecycle.
+install_telegram_egress_profile
 
 echo "[install] reloading systemd"
 run_root systemctl daemon-reload
@@ -368,4 +414,5 @@ echo "[install] core runtime: ${CORE_UNITS[*]}"
 if ((${#OPTIONAL_UNITS[@]})); then
   echo "[install] optional connectors: ${OPTIONAL_UNITS[*]}"
 fi
+echo "[install] Telegram egress profile: $TELEGRAM_EGRESS_PROFILE"
 echo "[install] done"
