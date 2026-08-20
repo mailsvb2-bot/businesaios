@@ -8,7 +8,7 @@ from core.safety.operational.factory import (
     build_persistent_operational_safety_runtime,
 )
 from core.safety.operational.tenant_policy_provider import TenantOperationalBudgetPolicyProvider
-from runtime.platform.app_paths import shared_runtime_root
+from shared.runtime_paths import shared_runtime_root
 
 CANON_OPERATIONAL_RUNTIME_BOOTSTRAP = True
 
