@@ -8,13 +8,13 @@ from core.safety.operational.factory import (
     build_persistent_operational_safety_runtime,
 )
 from core.safety.operational.tenant_policy_provider import TenantOperationalBudgetPolicyProvider
-from shared.runtime_paths import shared_runtime_root
+from shared import runtime_paths
 
 CANON_OPERATIONAL_RUNTIME_BOOTSTRAP = True
 
 
 def resolve_operational_safety_runtime(*, default_root: str | Path = '.runtime') -> OperationalSafetyRuntime:
-    root = shared_runtime_root() or Path(default_root)
+    root = runtime_paths.shared_runtime_root() or Path(default_root)
     ledger_path = Path(
         os.environ.get('BUSINESAIOS_OPERATIONAL_BUDGET_LEDGER')
         or (root / 'operational_budget' / 'ledger.json')
