@@ -27,8 +27,8 @@ export const ACQUISITION_ADVANCED_FIELDS = [
 
 export const ACQUISITION_FIELDS = [...ACQUISITION_PRIMARY_FIELDS, ...ACQUISITION_ADVANCED_FIELDS];
 
-export function isAcquisitionFormValid(form) {
-  return ACQUISITION_FIELDS.every(([key, , , min, max, step]) => {
+export function isAcquisitionFormValid(form, fields = ACQUISITION_FIELDS) {
+  return fields.every(([key, , , min, max, step]) => {
     const raw = form[key];
     if (raw === null || raw === undefined || String(raw).trim() === "") return false;
     const value = Number(raw);
