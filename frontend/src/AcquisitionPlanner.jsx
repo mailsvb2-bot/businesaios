@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   ACQUISITION_ADVANCED_FIELDS,
   ACQUISITION_DEFAULTS,
+  ACQUISITION_FIELDS,
   ACQUISITION_PRIMARY_FIELDS,
   acquisitionPayload,
   formatMetric as fmt,
@@ -25,7 +26,8 @@ export function AcquisitionPlanner({ enabled, onEvaluate }) {
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const valid = isAcquisitionFormValid(form);
+  const validationFields = showAdvanced ? ACQUISITION_FIELDS : ACQUISITION_PRIMARY_FIELDS;
+  const valid = isAcquisitionFormValid(form, validationFields);
   const update = (key) => (event) => {
     setForm((previous) => ({ ...previous, [key]: event.target.value }));
     setResult(null);
@@ -43,7 +45,10 @@ export function AcquisitionPlanner({ enabled, onEvaluate }) {
     setResult(null);
     try {
       const effectiveForm = showAdvanced ? form : {
-        ...form,
+        ...ACQUISITION_DEFAULTS,
+        target_customers: form.target_customers,
+        total_budget: form.total_budget,
+        target_days: form.target_days,
         daily_budget: Number(form.target_days) > 0 ? Number(form.total_budget) / Number(form.target_days) : 0
       };
       setResult(await onEvaluate(acquisitionPayload(effectiveForm)));
