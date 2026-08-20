@@ -41,9 +41,9 @@ def test_owner_workspace_exposes_simple_first_value_acquisition_planner_without_
     assert 'AcquisitionPlanner enabled={Boolean(apiKey)}' in app
     assert all(token in planner for token in ("Быстрый расчёт", "Сколько клиентов можно получить с вашим бюджетом?", "Уточнить расчёт вручную", "Рассчитать", "не подтверждённые показатели бизнеса", "Стоимость клиента", "Ценность / стоимость", "Окупаемость"))
     assert planner.count("setResult(null);") >= 2
-    assert all(token in planner for token in ("const valid = isAcquisitionFormValid(form)", "disabled={!enabled || busy || !valid}", "if (!valid)", "daily_budget: Number(form.target_days) > 0 ? Number(form.total_budget) / Number(form.target_days) : 0"))
+    assert all(token in planner for token in ("const validationFields = showAdvanced ? ACQUISITION_FIELDS : ACQUISITION_PRIMARY_FIELDS", "const valid = isAcquisitionFormValid(form, validationFields)", "disabled={!enabled || busy || !valid}", "if (!valid)", "...ACQUISITION_DEFAULTS", "daily_budget: Number(form.target_days) > 0 ? Number(form.total_budget) / Number(form.target_days) : 0"))
     assert 'export const ACQUISITION_PRIMARY_FIELDS' in model and 'export const ACQUISITION_ADVANCED_FIELDS' in model
     assert '["conversion_percent", "Конверсия лид → клиент, %", "Ваше текущее или ожидаемое значение", 0.01, 100, 0.01]' in model
-    assert all(token in model for token in ("target_customers", "total_budget", "daily_budget", "target_days", "cost_per_entry", "gross_margin_ltv", "expected_monthly_margin_per_customer", "conversion_rate: Number(form.conversion_percent) / 100", "isAcquisitionFormValid", "String(raw).trim() === \"\"", "Number.isFinite(value)", "Math.abs(steps - Math.round(steps)) < 1e-8"))
+    assert all(token in model for token in ("target_customers", "total_budget", "daily_budget", "target_days", "cost_per_entry", "gross_margin_ltv", "expected_monthly_margin_per_customer", "conversion_rate: Number(form.conversion_percent) / 100", "isAcquisitionFormValid", "String(raw).trim() === \"\"", "Number.isFinite(value)", "Math.abs(steps - Math.round(steps)) < 1e-8", "fields = ACQUISITION_FIELDS"))
     assert all(token in styles for token in (".planner-shell", ".planner-form", ".planner-metrics", ".planner-advanced-block", "@media (max-width: 560px)"))
     assert "Финансовые выводы появятся после подключения реальных данных" in app
