@@ -21,6 +21,10 @@ RUNTIME_DATA_DIR="${RUNTIME_DATA_DIR:-/var/lib/businesaios/runtime}"
 LEGACY_SECURITY_DIR="${LEGACY_SECURITY_DIR:-${APP_DIR}/data/security}"
 RUNTIME_SECURITY_DIR="${RUNTIME_SECURITY_DIR:-${RUNTIME_DATA_DIR}/security}"
 RUNTIME_TENANCY_DIR="${RUNTIME_TENANCY_DIR:-${RUNTIME_DATA_DIR}/tenancy}"
+TRUSTED_PRODUCTION_RUNNER_USER="${TRUSTED_PRODUCTION_RUNNER_USER:-github-runner}"
+TRUSTED_PRODUCTION_BRIDGE_SOURCE="${TRUSTED_PRODUCTION_BRIDGE_SOURCE:-${APP_DIR}/scripts/server/production_synthetic_privileged_bridge.sh}"
+TRUSTED_PRODUCTION_BRIDGE_TARGET="${TRUSTED_PRODUCTION_BRIDGE_TARGET:-/usr/local/sbin/businesaios-production-synthetic-evidence}"
+TRUSTED_PRODUCTION_SUDOERS_FILE="${TRUSTED_PRODUCTION_SUDOERS_FILE:-/etc/sudoers.d/businesaios-production-synthetic-evidence}"
 
 CORE_UNITS=(
   businesaios-api.service
@@ -122,6 +126,47 @@ ensure_runtime_access() {
     exit 1
   fi
   echo "[install] runtime access verified"
+}
+
+install_trusted_production_evidence_bridge() {
+  local runner_user="$TRUSTED_PRODUCTION_RUNNER_USER"
+  if ! id "$runner_user" >/dev/null 2>&1; then
+    echo "[install] trusted production runner user ${runner_user} is absent; disabling evidence bridge"
+    run_root rm -f "$TRUSTED_PRODUCTION_BRIDGE_TARGET" "$TRUSTED_PRODUCTION_SUDOERS_FILE"
+    return
+  fi
+  [[ "$runner_user" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || {
+    echo "[install] invalid trusted production runner user: $runner_user" >&2
+    exit 1
+  }
+  command -v sudo >/dev/null 2>&1 || { echo "[install] sudo is required for trusted production evidence" >&2; exit 1; }
+  command -v visudo >/dev/null 2>&1 || { echo "[install] visudo is required for trusted production evidence" >&2; exit 1; }
+
+  echo "[install] installing narrow trusted production evidence bridge for ${runner_user}"
+  run_root install -d -m 0755 "$(dirname "$TRUSTED_PRODUCTION_BRIDGE_TARGET")" "$(dirname "$TRUSTED_PRODUCTION_SUDOERS_FILE")"
+  run_root install -o root -g root -m 0755 "$TRUSTED_PRODUCTION_BRIDGE_SOURCE" "$TRUSTED_PRODUCTION_BRIDGE_TARGET"
+
+  local sudoers_tmp
+  sudoers_tmp="$(mktemp)"
+  printf '%s ALL=(root) NOPASSWD: %s *
+' "$runner_user" "$TRUSTED_PRODUCTION_BRIDGE_TARGET" >"$sudoers_tmp"
+  if ! run_root visudo -cf "$sudoers_tmp" >/dev/null; then
+    rm -f "$sudoers_tmp"
+    echo "[install] trusted production sudoers validation failed" >&2
+    exit 1
+  fi
+  run_root install -o root -g root -m 0440 "$sudoers_tmp" "$TRUSTED_PRODUCTION_SUDOERS_FILE"
+  rm -f "$sudoers_tmp"
+
+  if run_root runuser -u "$runner_user" -- test -w "$TRUSTED_PRODUCTION_BRIDGE_TARGET"; then
+    echo "[install] trusted production runner must not modify privileged bridge" >&2
+    exit 1
+  fi
+  if ! run_root runuser -u "$runner_user" -- sudo -n -l "$TRUSTED_PRODUCTION_BRIDGE_TARGET" >/dev/null 2>&1; then
+    echo "[install] trusted production runner cannot invoke privileged bridge" >&2
+    exit 1
+  fi
+  echo "[install] trusted production evidence bridge verified"
 }
 
 verify_legacy_security_lineage() {
@@ -331,6 +376,7 @@ done
 require_file "${APP_DIR}/deploy/systemd/businesaios.sysusers.conf"
 require_file "${APP_DIR}/RELEASE_TAG"
 require_file "$RUNTIME_ACCESS_SENTINEL"
+require_file "$TRUSTED_PRODUCTION_BRIDGE_SOURCE"
 if [[ "$TELEGRAM_EGRESS_PROFILE" == "amsterdam" ]]; then
   require_file "$TELEGRAM_AMSTERDAM_DROPIN_SOURCE"
 fi
@@ -360,6 +406,7 @@ ensure_runtime_access
 migrate_legacy_security_state
 
 write_state installing
+install_trusted_production_evidence_bridge
 
 echo "[install] installing core platform units: ${CORE_UNITS[*]}"
 for unit in "${DEPLOY_UNITS[@]}"; do

@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[4]
 SHA = "a" * 40
 WORKFLOW = ROOT / ".github" / "workflows" / "trusted-production-certification.yml"
 PRODUCTION_ADAPTER = ROOT / "scripts" / "server" / "production_synthetic_evidence.sh"
+PRIVILEGED_BRIDGE = ROOT / "scripts" / "server" / "production_synthetic_privileged_bridge.sh"
+SYSTEMD_INSTALLER = ROOT / "deploy" / "systemd" / "install.sh"
 REQUIRED_CHECKS = (
     "canonical_python", "production_environment_file", "production_environment", "production_ingress",
     "production_runtime_bindings", "production_credentials", "deployed_sha", "sha_match", "service_state",
@@ -140,3 +142,22 @@ def test_production_adapter_never_persists_legacy_verdict_as_wave_f_authority() 
     assert "mktemp" in text and "rm -f \"$TEMP_VERDICT\"" in text
     assert "PRODUCTION_VERDICT_PATH=\"$TEMP_VERDICT\"" in text
     assert "production-synthetic-$EXPECTED_SHA.json" in text
+
+
+def test_wave_f_production_runner_uses_narrow_root_owned_bridge() -> None:
+    adapter = PRODUCTION_ADAPTER.read_text(encoding="utf-8")
+    bridge = PRIVILEGED_BRIDGE.read_text(encoding="utf-8")
+    installer = SYSTEMD_INSTALLER.read_text(encoding="utf-8")
+
+    assert 'PRIVILEGED_BRIDGE="/usr/local/sbin/businesaios-production-synthetic-evidence"' in adapter
+    assert 'sudo -n "$PRIVILEGED_BRIDGE" "$EXPECTED_SHA"' in adapter
+    assert 'trusted production evidence bridge must run as root' in bridge
+    assert '[[ "$#" -eq 1 ]]' in bridge
+    assert 'git -C "$APP_DIR" rev-parse HEAD' in bridge
+    assert 'env -i' in bridge
+    assert 'production_synthetic_evidence.sh' in bridge
+    assert 'verify_runtime_host_contract.sh' not in bridge
+    assert 'unexpected production evidence fields' in bridge
+    assert 'NOPASSWD: %s *' in installer
+    assert 'visudo -cf' in installer
+    assert 'runuser -u "$runner_user" -- sudo -n -l' in installer

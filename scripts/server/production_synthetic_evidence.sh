@@ -11,11 +11,27 @@ EXPECTED_SHA="${EXPECTED_SHA:-}"
   exit 1
 }
 EXPECTED_SHA="${EXPECTED_SHA,,}"
-[[ -x "$PYTHON_BIN" ]] || { echo "canonical production Python is missing: $PYTHON_BIN" >&2; exit 1; }
-[[ -x "$HOST_VERIFY" ]] || { echo "canonical production host verifier is missing: $HOST_VERIFY" >&2; exit 1; }
-
 EVIDENCE_DIR="${PRODUCTION_SYNTHETIC_EVIDENCE_DIR:-/var/lib/businesaios/runtime/reports/post-deploy}"
 EVIDENCE_PATH="${PRODUCTION_SYNTHETIC_EVIDENCE_PATH:-$EVIDENCE_DIR/production-synthetic-$EXPECTED_SHA.json}"
+PRIVILEGED_BRIDGE="/usr/local/sbin/businesaios-production-synthetic-evidence"
+
+if [[ "$(id -u)" -ne 0 ]]; then
+  [[ -x "$PRIVILEGED_BRIDGE" ]] || { echo "trusted production evidence bridge is missing: $PRIVILEGED_BRIDGE" >&2; exit 1; }
+  command -v sudo >/dev/null 2>&1 || { echo "sudo is required for trusted production evidence" >&2; exit 1; }
+  mkdir -p "$(dirname "$EVIDENCE_PATH")"
+  TEMP_BRIDGE="$(mktemp "${TMPDIR:-/tmp}/businesaios-production-bridge.XXXXXX.json")"
+  cleanup_bridge() { rm -f "$TEMP_BRIDGE"; }
+  trap cleanup_bridge EXIT
+  sudo -n "$PRIVILEGED_BRIDGE" "$EXPECTED_SHA" > "$TEMP_BRIDGE"
+  [[ -s "$TEMP_BRIDGE" ]] || { echo "trusted production evidence bridge produced no evidence" >&2; exit 1; }
+  mv -f "$TEMP_BRIDGE" "$EVIDENCE_PATH"
+  trap - EXIT
+  echo "PRODUCTION_SYNTHETIC_EVIDENCE status=PASS sha=$EXPECTED_SHA path=$EVIDENCE_PATH"
+  exit 0
+fi
+
+[[ -x "$PYTHON_BIN" ]] || { echo "canonical production Python is missing: $PYTHON_BIN" >&2; exit 1; }
+[[ -x "$HOST_VERIFY" ]] || { echo "canonical production host verifier is missing: $HOST_VERIFY" >&2; exit 1; }
 TEMP_VERDICT="$(mktemp "${TMPDIR:-/tmp}/businesaios-production-probe.XXXXXX.json")"
 cleanup() { rm -f "$TEMP_VERDICT"; }
 trap cleanup EXIT
