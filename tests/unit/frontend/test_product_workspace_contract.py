@@ -29,7 +29,7 @@ def test_owner_workspace_uses_plain_business_language_for_first_value() -> None:
     app = _read("App.jsx")
     planner = _read("AcquisitionPlanner.jsx")
     visible_copy = app + "\n" + planner
-    assert all(token in visible_copy for token in ("Безопасный режим · только чтение", "Получить первые данные", "Данные получены", "Уточнить расчёт вручную"))
+    assert all(token in visible_copy for token in ("Безопасный режим · чтение данных", "Получить первые данные", "Данные получены", "Уточнить расчёт вручную"))
     assert all(token.lower() not in visible_copy.lower() for token in ("OWNER-сесс", "tenant-bound", "provider runtime", "sync evidence", "read-only sync", "Статус truth", "Write-действия"))
 
 
