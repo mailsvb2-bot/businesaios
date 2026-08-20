@@ -16,7 +16,7 @@ fail() {
 [[ "$#" -eq 1 ]] || fail "trusted production evidence bridge requires exactly one SHA"
 EXPECTED_SHA="$1"
 [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "trusted production evidence SHA must be lowercase full SHA"
-[[ -x "$ADAPTER" ]] || fail "canonical production evidence adapter is missing: $ADAPTER"
+[[ -r "$ADAPTER" ]] || fail "canonical production evidence adapter is unreadable: $ADAPTER"
 [[ -x "$PYTHON_BIN" ]] || fail "canonical production Python is missing: $PYTHON_BIN"
 
 OBSERVED_SHA="$(git -C "$APP_DIR" rev-parse HEAD)"
