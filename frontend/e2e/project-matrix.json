@@ -1,18 +1,43 @@
 {
   "schema": "businessaios_browser_project_matrix.v2",
   "projects": [
-    {"name": "chromium", "device": "Desktop Chrome", "engine": "chromium", "surface": "desktop"},
-    {"name": "firefox", "device": "Desktop Firefox", "engine": "firefox", "surface": "desktop"},
-    {"name": "webkit", "device": "Desktop Safari", "engine": "webkit", "surface": "desktop"},
-    {"name": "Mobile Chrome", "device": "Pixel 5", "engine": "chromium", "surface": "mobile"},
-    {"name": "Mobile Safari", "device": "iPhone 12", "engine": "webkit", "surface": "mobile"}
+    {
+      "name": "chromium",
+      "device": "Desktop Chrome",
+      "engine": "chromium",
+      "surface": "desktop"
+    },
+    {
+      "name": "firefox",
+      "device": "Desktop Firefox",
+      "engine": "firefox",
+      "surface": "desktop"
+    },
+    {
+      "name": "webkit",
+      "device": "Desktop Safari",
+      "engine": "webkit",
+      "surface": "desktop"
+    },
+    {
+      "name": "Mobile Chrome",
+      "device": "Pixel 5",
+      "engine": "chromium",
+      "surface": "mobile"
+    },
+    {
+      "name": "Mobile Safari",
+      "device": "iPhone 12",
+      "engine": "webkit",
+      "surface": "mobile"
+    }
   ],
   "scenarios": [
     {
       "id": "onboarding_owner_workspace",
       "title": "onboarding creates a read-only OWNER workspace without persisting the API key",
       "file": "onboarding-workspace.spec.js",
-      "detail_step_sha256": "82c26034d808f62577ec7e69c1022c9e0e31b37feefda51822feb71b5ab8493a"
+      "detail_step_sha256": "69808af735d86da6a81e23e76ce10b1d9fd84f1aeb2b3e218ddabd05a72d7484"
     }
   ]
 }
