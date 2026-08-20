@@ -192,7 +192,7 @@ function Workspace({ data, apiBase, onRestart }) {
     <main className="app-shell">
       <header className="topbar">
         <a className="brand" href="/"><span className="brand-mark">B</span><span>BusinessAIOS</span></a>
-        <div className="topbar-actions"><span className="safe-chip">Безопасный режим · только чтение</span><button className="ghost small" onClick={onRestart}>Новый бизнес</button></div>
+        <div className="topbar-actions"><span className="safe-chip">Безопасный режим · чтение данных</span><button className="ghost small" onClick={onRestart}>Новый бизнес</button></div>
       </header>
 
       <section className="workspace-hero">
