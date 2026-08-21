@@ -52,8 +52,8 @@ export function AcquisitionPlanner({ enabled, onEvaluate }) {
         daily_budget: Number(form.target_days) > 0 ? Number(form.total_budget) / Number(form.target_days) : 0
       };
       setResult(await onEvaluate(acquisitionPayload(effectiveForm)));
-    } catch (err) {
-      setError(`Не удалось посчитать сценарий: ${err.message || "ошибка API"}`);
+    } catch {
+      setError("Не удалось посчитать сценарий. Проверьте соединение и повторите попытку.");
     } finally {
       setBusy(false);
     }
