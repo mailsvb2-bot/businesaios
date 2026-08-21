@@ -19,6 +19,17 @@ const AUTONOMY = [
 
 const STEP_LABELS = ["О бизнесе", "Цель", "Интеграции", "Режим"];
 
+const INITIAL_FORM = {
+  email: "",
+  business_name: "",
+  website: "",
+  industry: "",
+  city: "",
+  business_model: "services",
+  goal: "growth",
+  autonomy_mode: "advisor"
+};
+
 async function readResponse(resp) {
   const text = await resp.text();
   let parsed;
@@ -191,8 +202,8 @@ function Workspace({ data, apiBase, onRestart }) {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/"><span className="brand-mark">B</span><span>BusinessAIOS</span></a>
-        <div className="topbar-actions"><span className="safe-chip">Безопасный режим · чтение данных</span><button className="ghost small" onClick={onRestart}>Новый бизнес</button></div>
+        <a className="brand" href="/"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></a>
+        <div className="topbar-actions"><span className="safe-chip"><span className="safe-chip-full">Безопасный режим · чтение данных</span><span className="safe-chip-short">Режим чтения</span></span><button className="ghost small" onClick={onRestart}>Новый бизнес</button></div>
       </header>
 
       <section className="workspace-hero">
@@ -294,7 +305,7 @@ export function App() {
   const [marketplace, setMarketplace] = useState([]);
   const [selectedProviders, setSelectedProviders] = useState([]);
   const [result, setResult] = useState(null);
-  const [form, setForm] = useState({ email: "", business_name: "", website: "", industry: "", city: "", business_model: "services", goal: "growth", autonomy_mode: "advisor" });
+  const [form, setForm] = useState(() => ({ ...INITIAL_FORM }));
 
   const endpoints = useMemo(() => {
     const base = apiBase.replace(/\/$/, "");
@@ -354,6 +365,7 @@ export function App() {
     setResult(null);
     setStep(0);
     setSelectedProviders([]);
+    setForm({ ...INITIAL_FORM });
     setError("");
   };
 
@@ -361,7 +373,7 @@ export function App() {
 
   return (
     <main className="onboarding-shell">
-      <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span>BusinessAIOS</span></div><span className="topbar-note">Настройка бизнеса</span></header>
+      <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></div><span className="topbar-note">Настройка бизнеса</span></header>
       <section className="onboarding-layout">
         <aside className="intro-column">
           <p className="eyebrow">Управление бизнесом с ИИ</p><h1>Подключите бизнес.<br />Остальное система разберёт сама.</h1>

@@ -47,3 +47,29 @@ def test_owner_workspace_exposes_simple_first_value_acquisition_planner_without_
     assert all(token in model for token in ("target_customers", "total_budget", "daily_budget", "target_days", "cost_per_entry", "gross_margin_ltv", "expected_monthly_margin_per_customer", "conversion_rate: Number(form.conversion_percent) / 100", "isAcquisitionFormValid", "String(raw).trim() === \"\"", "Number.isFinite(value)", "Math.abs(steps - Math.round(steps)) < 1e-8", "fields = ACQUISITION_FIELDS"))
     assert all(token in styles for token in (".planner-shell", ".planner-form", ".planner-metrics", ".planner-advanced-block", "@media (max-width: 560px)"))
     assert "Финансовые выводы появятся после подключения реальных данных" in app
+
+
+def test_new_business_restart_clears_previous_onboarding_identity() -> None:
+    app = _read("App.jsx")
+    assert 'const INITIAL_FORM = {' in app
+    assert 'const [form, setForm] = useState(() => ({ ...INITIAL_FORM }))' in app
+    restart = app.split('const restart = () => {', 1)[1].split('if (result)', 1)[0]
+    assert 'setStep(0)' in restart
+    assert 'setSelectedProviders([])' in restart
+    assert 'setForm({ ...INITIAL_FORM })' in restart
+    assert 'setError("")' in restart
+
+
+def test_mobile_workspace_keeps_safe_state_and_multiline_fields_styled() -> None:
+    app = _read("App.jsx")
+    styles = _read("styles.css")
+    assert 'safe-chip-full' in app and 'safe-chip-short' in app
+    assert 'Безопасный режим · чтение данных' in app and 'Режим чтения' in app and 'Только чтение' in app
+    assert '.safe-chip-short { display: none; }' in styles
+    assert '.safe-chip-full { display: none; }' in styles
+    assert '.safe-chip-short { display: inline; }' in styles
+    assert '@media (max-width: 420px)' in styles and '.brand-name { display: none; }' in styles
+    assert 'button, input, select, textarea { font: inherit; }' in styles
+    assert 'input, select, textarea {' in styles
+    assert 'textarea { min-height: 112px;' in styles
+    assert 'input:focus, select:focus, textarea:focus' in styles
