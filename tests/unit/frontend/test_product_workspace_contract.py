@@ -64,7 +64,7 @@ def test_mobile_workspace_keeps_safe_state_and_multiline_fields_styled() -> None
     app = _read("App.jsx")
     styles = _read("styles.css")
     assert 'safe-chip-full' in app and 'safe-chip-short' in app
-    assert 'Безопасный режим · чтение данных' in app and 'Только чтение' in app
+    assert 'Безопасный режим · чтение данных' in app and 'Режим чтения' in app and 'Только чтение' in app
     assert '.safe-chip-short { display: none; }' in styles
     assert '.safe-chip-full { display: none; }' in styles
     assert '.safe-chip-short { display: inline; }' in styles

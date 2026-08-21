@@ -203,7 +203,7 @@ function Workspace({ data, apiBase, onRestart }) {
     <main className="app-shell">
       <header className="topbar">
         <a className="brand" href="/"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></a>
-        <div className="topbar-actions"><span className="safe-chip"><span className="safe-chip-full">Безопасный режим · чтение данных</span><span className="safe-chip-short">Только чтение</span></span><button className="ghost small" onClick={onRestart}>Новый бизнес</button></div>
+        <div className="topbar-actions"><span className="safe-chip"><span className="safe-chip-full">Безопасный режим · чтение данных</span><span className="safe-chip-short">Режим чтения</span></span><button className="ghost small" onClick={onRestart}>Новый бизнес</button></div>
       </header>
 
       <section className="workspace-hero">
