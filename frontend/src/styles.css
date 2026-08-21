@@ -83,6 +83,7 @@ input, select, textarea { width: 100%; min-height: 48px; border: 1px solid #dbe1
 textarea { min-height: 112px; padding: 13px 14px; resize: vertical; line-height: 1.45; }
 input::placeholder, textarea::placeholder { color: #a8b1bd; }
 input:focus, select:focus, textarea:focus { border-color: #4c6fff; box-shadow: 0 0 0 4px rgba(76,111,255,.11); }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid #315fe9; outline-offset: 3px; }
 
 .choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
 .choice-card, .integration-card, .autonomy-card { text-align: left; border: 1px solid #e0e5ec; background: #fff; color: inherit; border-radius: 16px; cursor: pointer; transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease, background .15s ease; }
@@ -128,6 +129,11 @@ input:focus, select:focus, textarea:focus { border-color: #4c6fff; box-shadow: 0
 .navigation-row { min-height: 82px; padding: 18px 42px; border-top: 1px solid #edf0f4; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 button, .button { border: 0; border-radius: 12px; min-height: 44px; padding: 0 18px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease; }
 button:disabled { cursor: not-allowed; opacity: .46; transform: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  button, .button, input, select, textarea, .choice-card, .integration-card, .autonomy-card { transition: none; }
+  .choice-card:hover, .integration-card:hover:not(:disabled), .autonomy-card:hover, .primary:hover:not(:disabled), .button.primary:hover { transform: none; }
+}
 .primary, .button.primary { color: #fff; background: linear-gradient(135deg, #315fe9, #5578f2); box-shadow: 0 9px 22px rgba(57,91,221,.23); }
 .primary:hover:not(:disabled), .button.primary:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(57,91,221,.28); }
 .launch { min-width: 230px; }
