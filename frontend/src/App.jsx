@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AcquisitionPlanner } from "./AcquisitionPlanner.jsx";
 
 const DEFAULT_API = import.meta.env.VITE_API_BASE || "https://api.businessaios.ru";
@@ -60,6 +60,11 @@ function initialIntakeId() {
   } catch {
     return "";
   }
+}
+
+function isValidEmail(value) {
+  const email = String(value || "").trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function providerInitial(title) {
@@ -132,7 +137,7 @@ function Workspace({ data, apiBase, onRestart }) {
     refreshCatalog()
       .then((rows) => Promise.all(rows.filter((row) => selectedKeys.has(row.provider_key) && row.connected).map((row) => loadHistory(row.provider_key))))
       .catch(() => {
-        if (!cancelled) setWorkspaceError("Не удалось открыть защищённый workspace интеграций.");
+        if (!cancelled) setWorkspaceError("Не удалось открыть защищённый список подключений. Проверьте соединение и повторите попытку.");
       })
       .finally(() => {
         if (!cancelled) setWorkspaceLoading(false);
@@ -163,8 +168,8 @@ function Workspace({ data, apiBase, onRestart }) {
       await refreshCatalog();
       if (name === "sync") await loadHistory(providerKey);
       return result;
-    } catch (err) {
-      setWorkspaceError(`Действие не выполнено: ${err.message || "ошибка API"}`);
+    } catch {
+      setWorkspaceError("Действие не выполнено. Проверьте подключение и повторите попытку.");
       return null;
     } finally {
       setWorkspaceBusy("");
@@ -302,6 +307,7 @@ export function App() {
   const [loading, setLoading] = useState(false);
   const [marketLoading, setMarketLoading] = useState(true);
   const [error, setError] = useState("");
+  const [marketError, setMarketError] = useState("");
   const [marketplace, setMarketplace] = useState([]);
   const [selectedProviders, setSelectedProviders] = useState([]);
   const [result, setResult] = useState(null);
@@ -312,15 +318,23 @@ export function App() {
     return { integrations: `${base}/public-site/integrations`, ctaStart: `${base}/public-site/cta/start`, ctaStatus: (id) => `${base}/public-site/cta/${encodeURIComponent(id)}` };
   }, [apiBase]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadMarketplace = useCallback(async () => {
     setMarketLoading(true);
-    getJson(endpoints.integrations)
-      .then((payload) => { if (!cancelled) setMarketplace(Array.isArray(payload.items) ? payload.items : []); })
-      .catch(() => { if (!cancelled) setError("Не удалось загрузить каталог интеграций. Проверьте API и повторите попытку."); })
-      .finally(() => { if (!cancelled) setMarketLoading(false); });
-    return () => { cancelled = true; };
-  }, [endpoints]);
+    setMarketError("");
+    try {
+      const payload = await getJson(endpoints.integrations);
+      setMarketplace(Array.isArray(payload.items) ? payload.items : []);
+    } catch {
+      setMarketplace([]);
+      setMarketError("Не удалось загрузить список интеграций. Проверьте соединение и повторите попытку.");
+    } finally {
+      setMarketLoading(false);
+    }
+  }, [endpoints.integrations]);
+
+  useEffect(() => {
+    void loadMarketplace();
+  }, [loadMarketplace]);
 
   useEffect(() => {
     const intakeId = initialIntakeId();
@@ -334,13 +348,14 @@ export function App() {
     return () => { cancelled = true; };
   }, [endpoints]);
 
+  const emailValid = isValidEmail(form.email);
   const updateForm = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
   const toggleProvider = (item) => {
     if (!item.selectable) return;
     setSelectedProviders((prev) => prev.includes(item.provider_key) ? prev.filter((key) => key !== item.provider_key) : [...prev, item.provider_key]);
   };
   const canContinue = () => {
-    if (step === 0) return Boolean(form.business_name.trim() && form.email.trim());
+    if (step === 0) return Boolean(form.business_name.trim() && emailValid);
     if (step === 1) return Boolean(form.goal);
     if (step === 2) return selectedProviders.length > 0;
     return Boolean(form.autonomy_mode);
@@ -388,11 +403,11 @@ export function App() {
         <section className="onboarding-card">
           <div className="stepper">{STEP_LABELS.map((label, index) => <div className={`step ${index === step ? "active" : ""} ${index < step ? "done" : ""}`} key={label}><span>{index < step ? "✓" : index + 1}</span><small>{label}</small></div>)}</div>
 
-          {step === 0 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 1</p><h2>Расскажите о бизнесе</h2><p>Этого достаточно, чтобы создать отдельный защищённый кабинет.</p></div><div className="form-grid"><label className="full">Название бизнеса<input value={form.business_name} onChange={updateForm("business_name")} placeholder="Например, Студия Линия" autoFocus /></label><label>Email владельца<input value={form.email} onChange={updateForm("email")} placeholder="you@company.ru" type="email" /></label><label>Сайт или страница<input value={form.website} onChange={updateForm("website")} placeholder="https://..." /></label><label>Сфера<input value={form.industry} onChange={updateForm("industry")} placeholder="Услуги, магазин, образование..." /></label><label>Город<input value={form.city} onChange={updateForm("city")} placeholder="Москва" /></label><label className="full">Модель бизнеса<select value={form.business_model} onChange={updateForm("business_model")}><option value="services">Услуги</option><option value="commerce">Товары / интернет-магазин</option><option value="marketplace">Маркетплейсы</option><option value="b2b">B2B</option><option value="mixed">Смешанная</option></select></label></div></div> : null}
+          {step === 0 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 1</p><h2>Расскажите о бизнесе</h2><p>Этого достаточно, чтобы создать отдельный защищённый кабинет.</p></div><div className="form-grid"><label className="full">Название бизнеса<input value={form.business_name} onChange={updateForm("business_name")} placeholder="Например, Студия Линия" autoFocus /></label><label>Email владельца<input value={form.email} onChange={updateForm("email")} placeholder="you@company.ru" type="email" aria-invalid={Boolean(form.email.trim()) && !emailValid} />{form.email.trim() && !emailValid ? <small className="field-error">Введите email в формате name@company.ru</small> : null}</label><label>Сайт или страница<input value={form.website} onChange={updateForm("website")} placeholder="https://..." /></label><label>Сфера<input value={form.industry} onChange={updateForm("industry")} placeholder="Услуги, магазин, образование..." /></label><label>Город<input value={form.city} onChange={updateForm("city")} placeholder="Москва" /></label><label className="full">Модель бизнеса<select value={form.business_model} onChange={updateForm("business_model")}><option value="services">Услуги</option><option value="commerce">Товары / интернет-магазин</option><option value="marketplace">Маркетплейсы</option><option value="b2b">B2B</option><option value="mixed">Смешанная</option></select></label></div></div> : null}
 
           {step === 1 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 2</p><h2>Что важнее прямо сейчас?</h2><p>BusinessAIOS начнёт анализ с выбранной бизнес-задачи.</p></div><div className="choice-grid">{GOALS.map((goal) => <button type="button" className={`choice-card ${form.goal === goal.value ? "selected" : ""}`} onClick={() => setForm((prev) => ({ ...prev, goal: goal.value }))} key={goal.value}><span className="radio-dot" /><strong>{goal.title}</strong><small>{goal.text}</small></button>)}</div></div> : null}
 
-          {step === 2 ? <div className="step-content integrations-step"><div className="section-heading"><p className="eyebrow">Шаг 3</p><h2>Где уже живут данные бизнеса?</h2><p>Выберите хотя бы один источник. Подключение начнётся в режиме только чтения.</p></div>{marketLoading ? <div className="loading-box">Загружаем доступные интеграции…</div> : null}<div className="integration-grid">{marketplace.map((item) => { const selected = selectedProviders.includes(item.provider_key); return <button type="button" disabled={!item.selectable} className={`integration-card ${selected ? "selected" : ""} ${!item.selectable ? "disabled" : ""}`} onClick={() => toggleProvider(item)} key={item.provider_key}><div className="integration-card-head"><span className="provider-logo">{providerInitial(item.title)}</span>{item.recommended ? <span className="recommended">Рекомендуем</span> : null}</div><strong>{item.title}</strong><small>{item.description}</small><span className={`status-pill ${statusClass(item)}`}>{selected ? "Выбрано ✓" : item.availability_label}</span></button>; })}</div><p className="selection-count">Выбрано: <strong>{selectedProviders.length}</strong></p></div> : null}
+          {step === 2 ? <div className="step-content integrations-step"><div className="section-heading"><p className="eyebrow">Шаг 3</p><h2>Где уже живут данные бизнеса?</h2><p>Выберите хотя бы один источник. Подключение начнётся в режиме только чтения.</p></div>{marketLoading ? <div className="loading-box">Загружаем доступные интеграции…</div> : null}{marketError && !marketLoading ? <div className="recovery-box" role="alert"><p>{marketError}</p><button type="button" className="ghost" onClick={loadMarketplace}>Повторить загрузку</button></div> : null}<div className="integration-grid">{marketplace.map((item) => { const selected = selectedProviders.includes(item.provider_key); return <button type="button" disabled={!item.selectable} className={`integration-card ${selected ? "selected" : ""} ${!item.selectable ? "disabled" : ""}`} onClick={() => toggleProvider(item)} key={item.provider_key}><div className="integration-card-head"><span className="provider-logo">{providerInitial(item.title)}</span>{item.recommended ? <span className="recommended">Рекомендуем</span> : null}</div><strong>{item.title}</strong><small>{item.description}</small><span className={`status-pill ${statusClass(item)}`}>{selected ? "Выбрано ✓" : item.availability_label}</span></button>; })}</div><p className="selection-count">Выбрано: <strong>{selectedProviders.length}</strong></p></div> : null}
 
           {step === 3 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 4</p><h2>Сколько свободы дать системе?</h2><p>На старте система всё равно ничего не отправит и не изменит без проверки.</p></div><div className="autonomy-grid">{AUTONOMY.map((mode) => <button type="button" className={`autonomy-card ${form.autonomy_mode === mode.value ? "selected" : ""}`} onClick={() => setForm((prev) => ({ ...prev, autonomy_mode: mode.value }))} key={mode.value}><span className="mode-badge">{mode.badge}</span><strong>{mode.title}</strong><small>{mode.text}</small></button>)}</div><div className="launch-preview"><span>✓</span><div><strong>После создания кабинета</strong><p>Вы подключите выбранный источник прямо здесь, проверите его и получите первые реальные данные.</p></div></div></div> : null}
 

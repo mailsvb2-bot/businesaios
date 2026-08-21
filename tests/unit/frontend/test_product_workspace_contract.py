@@ -73,3 +73,23 @@ def test_mobile_workspace_keeps_safe_state_and_multiline_fields_styled() -> None
     assert 'input, select, textarea {' in styles
     assert 'textarea { min-height: 112px;' in styles
     assert 'input:focus, select:focus, textarea:focus' in styles
+
+
+def test_onboarding_validates_identity_and_recovers_integration_catalog_without_technical_jargon() -> None:
+    app = _read("App.jsx")
+    planner = _read("AcquisitionPlanner.jsx")
+    styles = _read("styles.css")
+    assert "function isValidEmail(value)" in app
+    assert "if (step === 0) return Boolean(form.business_name.trim() && emailValid)" in app
+    assert 'aria-invalid={Boolean(form.email.trim()) && !emailValid}' in app
+    assert "Введите email в формате name@company.ru" in app
+    assert "const [marketError, setMarketError] = useState" in app
+    assert "const loadMarketplace = useCallback(async () =>" in app
+    assert "void loadMarketplace()" in app
+    assert "Повторить загрузку" in app and 'role="alert"' in app
+    assert "Не удалось загрузить список интеграций. Проверьте соединение и повторите попытку." in app
+    assert "Не удалось открыть защищённый список подключений. Проверьте соединение и повторите попытку." in app
+    visible_copy = app + "\n" + planner
+    assert "Проверьте API" not in visible_copy
+    assert "ошибка API" not in visible_copy
+    assert ".recovery-box" in styles and ".field-error" in styles
