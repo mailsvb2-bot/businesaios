@@ -7,7 +7,7 @@ const GOALS = [
   { value: "growth", title: "Больше клиентов", text: "Найти потери в воронке и точки роста продаж." },
   { value: "retention", title: "Возвращать клиентов", text: "Находить клиентов, которых стоит реактивировать." },
   { value: "ads_efficiency", title: "Эффективнее реклама", text: "Искать неэффективный расход и проблемы атрибуции." },
-  { value: "sales", title: "Сильнее продажи", text: "Показывать зависшие сделки и пропущенные follow-up." },
+  { value: "sales", title: "Сильнее продажи", text: "Показывать зависшие сделки и пропущенные повторные контакты с клиентом." },
   { value: "operations", title: "Меньше рутины", text: "Находить повторяющиеся операции и задержки исполнения." }
 ];
 
@@ -182,7 +182,7 @@ function Workspace({ data, apiBase, onRestart }) {
     if (!activeProvider) return;
     const operation = activeProvider.runtime_plan?.read_operations?.[0];
     if (!operation) {
-      setWorkspaceError("Провайдер пока не сообщил безопасную read-операцию. Сначала выполните проверку подключения.");
+      setWorkspaceError("Для этого источника пока нет доступной операции чтения. Сначала проверьте подключение.");
       return;
     }
     await runWorkspaceAction("sync", { action: "read", mode: "live", operation, payload: {} });
@@ -192,19 +192,19 @@ function Workspace({ data, apiBase, onRestart }) {
     <main className="app-shell">
       <header className="topbar">
         <a className="brand" href="/"><span className="brand-mark">B</span><span>BusinessAIOS</span></a>
-        <div className="topbar-actions"><span className="safe-chip">Read-only onboarding</span><button className="ghost small" onClick={onRestart}>Новый бизнес</button></div>
+        <div className="topbar-actions"><span className="safe-chip">Безопасный режим · чтение данных</span><button className="ghost small" onClick={onRestart}>Новый бизнес</button></div>
       </header>
 
       <section className="workspace-hero">
         <div>
           <p className="eyebrow">Кабинет бизнеса</p>
           <h1>{profile.name || "Ваш бизнес"}</h1>
-          <p className="lead">База создана. Подключите реальные источники данных — первый результат появится только после подтверждённого read-only sync.</p>
+          <p className="lead">База создана. Подключите источник данных — BusinessAIOS сначала только читает и анализирует, ничего не меняя.</p>
         </div>
         <div className="progress-card">
-          <div className="progress-head"><span>Настройка</span><strong>{verifiedPercent}%</strong></div>
+          <div className="progress-head"><span>Готовность</span><strong>{verifiedPercent}%</strong></div>
           <div className="progress-track"><span style={{ width: `${verifiedPercent}%` }} /></div>
-          <small>{liveEvidence ? "Первый реальный sync подтверждён сохранённой историей." : connected ? "Доступ подтверждён. Следующий шаг — первый read-only sync." : "Следующий шаг: безопасно подтвердить доступ к выбранному источнику."}</small>
+          <small>{liveEvidence ? "Первые реальные данные получены." : connected ? "Доступ подтверждён. Теперь получите первые данные." : "Следующий шаг: подключить выбранный источник."}</small>
         </div>
       </section>
 
@@ -214,14 +214,12 @@ function Workspace({ data, apiBase, onRestart }) {
         <article className="summary-card"><span className="summary-icon">◇</span><div><small>Режим</small><strong>{data.user_functionality?.autonomy_mode_label || "Советник"}</strong></div></article>
       </section>
 
-      <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
-
       <section className="workspace-grid">
         <article className="panel primary-panel">
-          <div className="panel-title-row"><div><p className="eyebrow">Защищённое подключение</p><h2>Источники данных</h2></div><span className="privacy-badge">Запись выключена</span></div>
-          <p className="muted-text">Tenant и business определяются OWNER-сессией. Введённые токены живут только в памяти формы и очищаются после отправки; browser storage не используется.</p>
+          <div className="panel-title-row"><div><p className="eyebrow">Подключение</p><h2>Источники данных</h2></div><span className="privacy-badge">Только чтение</span></div>
+          <p className="muted-text">BusinessAIOS использует доступ только для чтения. Данные входа не сохраняются в браузере после подключения.</p>
 
-          {!apiKey ? <div className="error-box">Защищённая OWNER-сессия отсутствует или была потеряна после перезагрузки вкладки. Ключ намеренно не сохраняется в браузере. Создайте новый кабинет, чтобы получить новый короткоживущий сеанс подключения.</div> : null}
+          {!apiKey ? <div className="error-box">Вход в кабинет завершился после перезагрузки страницы. Для безопасности данные доступа не сохраняются в браузере. Создайте новый кабинет, чтобы продолжить.</div> : null}
           {workspaceLoading ? <div className="loading-box">Открываем защищённый каталог…</div> : null}
           {workspaceError ? <div className="error-box">{workspaceError}</div> : null}
 
@@ -232,48 +230,50 @@ function Workspace({ data, apiBase, onRestart }) {
                 <div className="connection-copy"><strong>{item.title}</strong><span>{item.connected ? "Доступ сохранён" : item.customer_selectable ? "Можно подключить для чтения" : "Пока не сертифицировано"}</span></div>
                 <span className={`dot ${item.connected ? "green" : item.customer_selectable ? "orange" : "gray"}`} />
               </button>
-            )) : <p className="empty-state">Для выбранных источников пока нет customer-ready подключения.</p>}
+            )) : <p className="empty-state">Для выбранных источников пока нет готового подключения.</p>}
           </div>
 
           {activeProvider && apiKey ? (
             <div className="step-content">
-              <div className="section-heading"><h2>{activeProvider.title}</h2><p>Статус truth: {activeProvider.truth_status}. Write-действия: выключены.</p></div>
+              <div className="section-heading"><h2>{activeProvider.title}</h2><p>{activeProvider.connected ? "Подключено. Можно проверить доступ и получить данные." : "Подключение начнётся в режиме только чтения."}</p></div>
               {!activeProvider.connected ? (
                 <div className="form-grid">
-                  <label className="full">Идентификатор подключения<input value={externalRef} onChange={(event) => setExternalRef(event.target.value)} placeholder="ID аккаунта, портала, магазина или канала" /></label>
+                  <label className="full">Аккаунт или ID<input value={externalRef} onChange={(event) => setExternalRef(event.target.value)} placeholder="Например, ID аккаунта или адрес портала" /></label>
                   {(activeProvider.secret_fields || []).map((field) => (
                     <label className={field.multiline ? "full" : ""} key={field.secret_name}>{field.label}{field.multiline ? <textarea value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} /> : <input type="password" autoComplete="off" value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} />}</label>
                   ))}
-                  <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={activateProvider}>{workspaceBusy === "activate" ? "Сохраняем…" : "Подключить безопасно"}</button>
+                  <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={activateProvider}>{workspaceBusy === "activate" ? "Подключаем…" : "Подключить"}</button>
                 </div>
               ) : (
                 <div className="navigation-row">
                   <button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={probeProvider}>{workspaceBusy === "probe" ? "Проверяем…" : "Проверить подключение"}</button>
-                  <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={syncProvider}>{workspaceBusy === "sync" ? "Синхронизируем…" : "Запустить read-only sync"}</button>
+                  <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={syncProvider}>{workspaceBusy === "sync" ? "Получаем данные…" : "Получить первые данные"}</button>
                 </div>
               )}
-              <small className="helper-text">Probe и sync выполняются через тот же tenant-bound provider runtime. Неизвестная или write-операция блокируется сервером до вызова провайдера.</small>
-              {lastAction?.providerKey === activeProvider.provider_key ? <pre>{JSON.stringify(lastAction.result, null, 2)}</pre> : null}
+              <small className="helper-text">На этом этапе BusinessAIOS может только читать данные. Изменения, отправки и расходы остаются выключены.</small>
+              {lastAction?.providerKey === activeProvider.provider_key ? <details className="technical-inline"><summary>Технические детали последней операции</summary><pre>{JSON.stringify(lastAction.result, null, 2)}</pre></details> : null}
             </div>
           ) : null}
         </article>
 
         <article className="panel value-panel">
-          <p className="eyebrow">{liveEvidence ? "Подтверждено sync evidence" : "Что получите первым"}</p>
-          <h2>{liveEvidence ? "Первый реальный sync выполнен" : preview.title || "Первый полезный результат"}</h2>
-          <p className="muted-text">{liveEvidence ? `${evidenceProvider?.title || liveEvidence.provider_key || "Источник"}: операция ${liveEvidence.operation || "read"}, статус ${liveEvidence.status || "зафиксирован"}.` : preview.message}</p>
+          <p className="eyebrow">{liveEvidence ? "Данные получены" : "Что получите первым"}</p>
+          <h2>{liveEvidence ? "Первые реальные данные получены" : preview.title || "Первый полезный результат"}</h2>
+          <p className="muted-text">{liveEvidence ? `${evidenceProvider?.title || liveEvidence.provider_key || "Источник"}: подключение работает, данные успешно прочитаны.` : preview.message}</p>
           <div className="check-list">
             {liveEvidence ? (
               <>
-                <div className="check-row"><span>✓</span><strong>Evidence сохранён в истории provider runtime</strong></div>
-                <div className="check-row"><span>✓</span><strong>Режим: live read-only</strong></div>
+                <div className="check-row"><span>✓</span><strong>Подключение работает</strong></div>
+                <div className="check-row"><span>✓</span><strong>Данные получены в безопасном режиме</strong></div>
                 {resourceCount !== undefined ? <div className="check-row"><span>✓</span><strong>Получено объектов: {resourceCount}</strong></div> : null}
               </>
             ) : (preview.checks || []).map((item) => <div className="check-row" key={item}><span>✓</span><strong>{item}</strong></div>)}
           </div>
-          <div className="truth-note">{liveEvidence ? "Этот статус построен из сохранённой истории реального sync, а не из клика по кнопке или демо-данных." : "Здесь нет придуманных фактических цифр. Фактические финансовые выводы появятся только после real sync ваших данных; сценарный калькулятор выше использует только введённые вами предположения."}</div>
+          <div className="truth-note">{liveEvidence ? "Результат подтверждён реальным чтением данных из подключённого источника." : "Финансовые выводы появятся после подключения реальных данных. До этого калькулятор ниже показывает только сценарий по вашим вводным."}</div>
         </article>
       </section>
+
+      <AcquisitionPlanner enabled={Boolean(apiKey)} onEvaluate={(payload) => postJson(acquisitionUrl, payload, authHeaders)} />
 
       <section className="panel business-card">
         <div><p className="eyebrow">Профиль</p><h2>{profile.name || "Бизнес"}</h2></div>
@@ -364,10 +364,10 @@ export function App() {
       <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span>BusinessAIOS</span></div><span className="topbar-note">Настройка бизнеса</span></header>
       <section className="onboarding-layout">
         <aside className="intro-column">
-          <p className="eyebrow">Business Autopilot</p><h1>Подключите бизнес.<br />Остальное система разберёт сама.</h1>
+          <p className="eyebrow">Управление бизнесом с ИИ</p><h1>Подключите бизнес.<br />Остальное система разберёт сама.</h1>
           <p className="lead">Сначала только чтение и анализ. Никаких расходов, сообщений клиентам или публикаций без вашего разрешения.</p>
           <div className="trust-list">
-            <div><span>✓</span><p><strong>Безопасный старт</strong><small>Внешние write-действия выключены.</small></p></div>
+            <div><span>✓</span><p><strong>Безопасный старт</strong><small>Ничего не отправляем и не меняем без вашего разрешения.</small></p></div>
             <div><span>✓</span><p><strong>Честные статусы</strong><small>Показываем только реально доступные интеграции.</small></p></div>
             <div><span>✓</span><p><strong>Первый результат на ваших данных</strong><small>Без выдуманных финансовых обещаний.</small></p></div>
           </div>
@@ -376,19 +376,19 @@ export function App() {
         <section className="onboarding-card">
           <div className="stepper">{STEP_LABELS.map((label, index) => <div className={`step ${index === step ? "active" : ""} ${index < step ? "done" : ""}`} key={label}><span>{index < step ? "✓" : index + 1}</span><small>{label}</small></div>)}</div>
 
-          {step === 0 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 1</p><h2>Расскажите о бизнесе</h2><p>Этого достаточно, чтобы создать отдельный защищённый workspace.</p></div><div className="form-grid"><label className="full">Название бизнеса<input value={form.business_name} onChange={updateForm("business_name")} placeholder="Например, Студия Линия" autoFocus /></label><label>Email владельца<input value={form.email} onChange={updateForm("email")} placeholder="you@company.ru" type="email" /></label><label>Сайт или страница<input value={form.website} onChange={updateForm("website")} placeholder="https://..." /></label><label>Сфера<input value={form.industry} onChange={updateForm("industry")} placeholder="Услуги, магазин, образование..." /></label><label>Город<input value={form.city} onChange={updateForm("city")} placeholder="Москва" /></label><label className="full">Модель бизнеса<select value={form.business_model} onChange={updateForm("business_model")}><option value="services">Услуги</option><option value="commerce">Товары / e-commerce</option><option value="marketplace">Маркетплейсы</option><option value="b2b">B2B</option><option value="mixed">Смешанная</option></select></label></div></div> : null}
+          {step === 0 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 1</p><h2>Расскажите о бизнесе</h2><p>Этого достаточно, чтобы создать отдельный защищённый кабинет.</p></div><div className="form-grid"><label className="full">Название бизнеса<input value={form.business_name} onChange={updateForm("business_name")} placeholder="Например, Студия Линия" autoFocus /></label><label>Email владельца<input value={form.email} onChange={updateForm("email")} placeholder="you@company.ru" type="email" /></label><label>Сайт или страница<input value={form.website} onChange={updateForm("website")} placeholder="https://..." /></label><label>Сфера<input value={form.industry} onChange={updateForm("industry")} placeholder="Услуги, магазин, образование..." /></label><label>Город<input value={form.city} onChange={updateForm("city")} placeholder="Москва" /></label><label className="full">Модель бизнеса<select value={form.business_model} onChange={updateForm("business_model")}><option value="services">Услуги</option><option value="commerce">Товары / интернет-магазин</option><option value="marketplace">Маркетплейсы</option><option value="b2b">B2B</option><option value="mixed">Смешанная</option></select></label></div></div> : null}
 
           {step === 1 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 2</p><h2>Что важнее прямо сейчас?</h2><p>BusinessAIOS начнёт анализ с выбранной бизнес-задачи.</p></div><div className="choice-grid">{GOALS.map((goal) => <button type="button" className={`choice-card ${form.goal === goal.value ? "selected" : ""}`} onClick={() => setForm((prev) => ({ ...prev, goal: goal.value }))} key={goal.value}><span className="radio-dot" /><strong>{goal.title}</strong><small>{goal.text}</small></button>)}</div></div> : null}
 
-          {step === 2 ? <div className="step-content integrations-step"><div className="section-heading"><p className="eyebrow">Шаг 3</p><h2>Где уже живут данные бизнеса?</h2><p>Выберите хотя бы один источник. Подключение начнётся в read-only режиме.</p></div>{marketLoading ? <div className="loading-box">Загружаем доступные интеграции…</div> : null}<div className="integration-grid">{marketplace.map((item) => { const selected = selectedProviders.includes(item.provider_key); return <button type="button" disabled={!item.selectable} className={`integration-card ${selected ? "selected" : ""} ${!item.selectable ? "disabled" : ""}`} onClick={() => toggleProvider(item)} key={item.provider_key}><div className="integration-card-head"><span className="provider-logo">{providerInitial(item.title)}</span>{item.recommended ? <span className="recommended">Рекомендуем</span> : null}</div><strong>{item.title}</strong><small>{item.description}</small><span className={`status-pill ${statusClass(item)}`}>{selected ? "Выбрано ✓" : item.availability_label}</span></button>; })}</div><p className="selection-count">Выбрано: <strong>{selectedProviders.length}</strong></p></div> : null}
+          {step === 2 ? <div className="step-content integrations-step"><div className="section-heading"><p className="eyebrow">Шаг 3</p><h2>Где уже живут данные бизнеса?</h2><p>Выберите хотя бы один источник. Подключение начнётся в режиме только чтения.</p></div>{marketLoading ? <div className="loading-box">Загружаем доступные интеграции…</div> : null}<div className="integration-grid">{marketplace.map((item) => { const selected = selectedProviders.includes(item.provider_key); return <button type="button" disabled={!item.selectable} className={`integration-card ${selected ? "selected" : ""} ${!item.selectable ? "disabled" : ""}`} onClick={() => toggleProvider(item)} key={item.provider_key}><div className="integration-card-head"><span className="provider-logo">{providerInitial(item.title)}</span>{item.recommended ? <span className="recommended">Рекомендуем</span> : null}</div><strong>{item.title}</strong><small>{item.description}</small><span className={`status-pill ${statusClass(item)}`}>{selected ? "Выбрано ✓" : item.availability_label}</span></button>; })}</div><p className="selection-count">Выбрано: <strong>{selectedProviders.length}</strong></p></div> : null}
 
-          {step === 3 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 4</p><h2>Сколько свободы дать системе?</h2><p>На старте любое внешнее write-действие всё равно остаётся заблокированным до проверки.</p></div><div className="autonomy-grid">{AUTONOMY.map((mode) => <button type="button" className={`autonomy-card ${form.autonomy_mode === mode.value ? "selected" : ""}`} onClick={() => setForm((prev) => ({ ...prev, autonomy_mode: mode.value }))} key={mode.value}><span className="mode-badge">{mode.badge}</span><strong>{mode.title}</strong><small>{mode.text}</small></button>)}</div><div className="launch-preview"><span>✓</span><div><strong>После создания кабинета</strong><p>Вы подключите выбранный источник прямо здесь, проверите его и запустите первый read-only sync.</p></div></div></div> : null}
+          {step === 3 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 4</p><h2>Сколько свободы дать системе?</h2><p>На старте система всё равно ничего не отправит и не изменит без проверки.</p></div><div className="autonomy-grid">{AUTONOMY.map((mode) => <button type="button" className={`autonomy-card ${form.autonomy_mode === mode.value ? "selected" : ""}`} onClick={() => setForm((prev) => ({ ...prev, autonomy_mode: mode.value }))} key={mode.value}><span className="mode-badge">{mode.badge}</span><strong>{mode.title}</strong><small>{mode.text}</small></button>)}</div><div className="launch-preview"><span>✓</span><div><strong>После создания кабинета</strong><p>Вы подключите выбранный источник прямо здесь, проверите его и получите первые реальные данные.</p></div></div></div> : null}
 
           {error ? <div className="error-box">{error}</div> : null}
           <div className="navigation-row"><button type="button" className="ghost" disabled={step === 0 || loading} onClick={() => setStep((value) => Math.max(0, value - 1))}>Назад</button>{step < STEP_LABELS.length - 1 ? <button type="button" className="primary" disabled={!canContinue() || loading} onClick={() => setStep((value) => Math.min(STEP_LABELS.length - 1, value + 1))}>Продолжить →</button> : <button type="button" className="primary launch" disabled={!canContinue() || loading} onClick={finishOnboarding}>{loading ? "Создаём кабинет…" : "Создать мой BusinessAIOS →"}</button>}</div>
         </section>
       </section>
-      <footer className="product-footer">BusinessAIOS · безопасная автоматизация бизнеса · write-действия только после проверки</footer>
+      <footer className="product-footer">BusinessAIOS · безопасная автоматизация бизнеса · изменения и отправки только после проверки</footer>
     </main>
   );
 }

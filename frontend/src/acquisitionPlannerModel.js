@@ -10,20 +10,25 @@ export const ACQUISITION_DEFAULTS = {
   expected_monthly_margin_per_customer: 20
 };
 
-export const ACQUISITION_FIELDS = [
+export const ACQUISITION_PRIMARY_FIELDS = [
   ["target_customers", "Новых клиентов", "Сколько клиентов хотите получить", 1, 10000, 1],
-  ["total_budget", "Общий бюджет", "В вашей рабочей валюте", 0, 1000000, 10],
-  ["daily_budget", "Бюджет в день", "Максимальный дневной темп", 0, 100000, 1],
-  ["target_days", "Срок, дней", "За сколько дней хотите прийти к цели", 1, 3650, 1],
+  ["total_budget", "Общий бюджет", "Сколько готовы вложить", 0, 1000000, 10],
+  ["target_days", "Срок, дней", "За сколько дней хотите прийти к цели", 1, 3650, 1]
+];
+
+export const ACQUISITION_ADVANCED_FIELDS = [
+  ["daily_budget", "Бюджет в день", "Если есть жёсткий дневной лимит", 0, 100000, 1],
   ["cost_per_entry", "Цена входящего лида", "Средняя стоимость одного входа в воронку", 0.01, 10000, 0.01],
   ["conversion_percent", "Конверсия лид → клиент, %", "Ваше текущее или ожидаемое значение", 0.01, 100, 0.01],
   ["sales_cycle_days", "Цикл сделки, дней", "Среднее время от лида до покупки", 0, 3650, 1],
-  ["gross_margin_ltv", "Маржинальный LTV клиента", "Ожидаемая валовая маржа за жизнь клиента", 0, 1000000, 1],
-  ["expected_monthly_margin_per_customer", "Маржа с клиента в месяц", "Нужна для расчёта окупаемости CAC", 0, 100000, 1]
+  ["gross_margin_ltv", "Маржинальная ценность клиента", "Ожидаемая валовая маржа за всё время работы с клиентом", 0, 1000000, 1],
+  ["expected_monthly_margin_per_customer", "Маржа с клиента в месяц", "Нужна для оценки срока окупаемости", 0, 100000, 1]
 ];
 
-export function isAcquisitionFormValid(form) {
-  return ACQUISITION_FIELDS.every(([key, , , min, max, step]) => {
+export const ACQUISITION_FIELDS = [...ACQUISITION_PRIMARY_FIELDS, ...ACQUISITION_ADVANCED_FIELDS];
+
+export function isAcquisitionFormValid(form, fields = ACQUISITION_FIELDS) {
+  return fields.every(([key, , , min, max, step]) => {
     const raw = form[key];
     if (raw === null || raw === undefined || String(raw).trim() === "") return false;
     const value = Number(raw);

@@ -20,5 +20,5 @@ def test_frontend_requires_persisted_successful_live_sync_evidence_before_verifi
     assert 'historyByProvider' in source
     assert 'row?.accepted === true' in source
     assert '=== "live_executed"' in source
-    assert 'Подтверждено sync evidence' in source
-    assert 'не из клика по кнопке' in source
+    assert 'Данные получены' in source
+    assert 'Результат подтверждён реальным чтением данных из подключённого источника.' in source

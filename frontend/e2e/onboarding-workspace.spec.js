@@ -77,7 +77,7 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   expect(workspace.write_actions_enabled).toBe(false);
 
   await expect(page.getByRole("heading", { name: businessName, level: 1 })).toBeVisible();
-  await expect(page.getByText("Запись выключена")).toBeVisible();
+  await expect(page.getByText("Только чтение")).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(providerTitle) })).toBeVisible();
   await expect(page.getByText("Не удалось открыть защищённый workspace интеграций.")).toHaveCount(0);
   expect(await hasNoHorizontalOverflow(page)).toBe(true);
@@ -85,7 +85,7 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
 
   await page.reload();
   await expect(page.getByRole("heading", { name: businessName, level: 1 })).toBeVisible();
-  await expect(page.getByText(/Защищённая OWNER-сессия отсутствует или была потеряна/)).toBeVisible();
+  await expect(page.getByText(/Вход в кабинет завершился после перезагрузки страницы/)).toBeVisible();
   expect(await hasNoHorizontalOverflow(page)).toBe(true);
   expect(await persistentBrowserStateContains(page, ownerKey)).toBe(false);
 });
