@@ -93,3 +93,22 @@ def test_onboarding_validates_identity_and_recovers_integration_catalog_without_
     assert "Проверьте API" not in visible_copy
     assert "ошибка API" not in visible_copy
     assert ".recovery-box" in styles and ".field-error" in styles
+
+
+def test_workspace_accessibility_exposes_state_errors_focus_and_motion_preferences() -> None:
+    app = _read("App.jsx")
+    planner = _read("AcquisitionPlanner.jsx")
+    styles = _read("styles.css")
+    assert 'aria-current={index === step ? "step" : undefined}' in app
+    assert 'aria-pressed={form.goal === goal.value}' in app
+    assert 'aria-pressed={selected}' in app
+    assert 'aria-pressed={form.autonomy_mode === mode.value}' in app
+    assert 'aria-current={activeProvider?.provider_key === item.provider_key ? "true" : undefined}' in app
+    assert 'role="progressbar"' in app and 'aria-valuenow={verifiedPercent}' in app
+    assert 'aria-live="polite"' in app
+    assert 'aria-describedby={form.email.trim() && !emailValid ? "owner-email-error" : undefined}' in app
+    assert 'id="owner-email-error"' in app
+    assert app.count('role="alert"') >= 4
+    assert 'className="planner-error" role="alert"' in planner
+    assert 'button:focus-visible, a:focus-visible, summary:focus-visible' in styles
+    assert '@media (prefers-reduced-motion: reduce)' in styles

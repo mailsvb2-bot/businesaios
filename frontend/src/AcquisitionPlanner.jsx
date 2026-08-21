@@ -73,7 +73,7 @@ export function AcquisitionPlanner({ enabled, onEvaluate }) {
           <span className="privacy-badge">Только расчёт</span>
         </div>
         {!enabled ? <div className="planner-session-note">Расчёт временно недоступен: вход в кабинет завершился после перезагрузки страницы.</div> : null}
-        {error ? <div className="planner-error">{error}</div> : null}
+        {error ? <div className="planner-error" role="alert">{error}</div> : null}
         <div className="planner-form planner-primary-form">{renderFields(ACQUISITION_PRIMARY_FIELDS, form, update, !enabled || busy, valid)}</div>
         <button type="button" className="ghost planner-advanced-toggle" onClick={() => setShowAdvanced((value) => !value)} disabled={!enabled || busy} aria-expanded={showAdvanced}>
           {showAdvanced ? "Скрыть дополнительные параметры" : "Уточнить расчёт вручную"}
