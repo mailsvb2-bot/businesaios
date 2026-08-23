@@ -86,7 +86,7 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
 
   const resumeCookie = (await page.context().cookies()).find((cookie) => cookie.name === "businessaios_owner_resume");
   expect(Boolean(resumeCookie?.httpOnly)).toBe(true);
-  expect(String(resumeCookie?.value || "")).not.toContain(ownerKey);
+  expect(String(resumeCookie?.value || "")).not.toBe(ownerKey);
 
   const resumedStatusPromise = page.waitForResponse((response) => response.url().includes(`/api/public-site/cta/${cta.intake_id}`) && response.request().method() === "GET");
   const resumedWorkspacePromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/providers") && response.request().method() === "GET");

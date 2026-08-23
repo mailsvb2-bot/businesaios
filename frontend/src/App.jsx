@@ -246,9 +246,9 @@ function Workspace({ data, apiBase, onRestart }) {
       <section className="panel first-value-panel" aria-live="polite">
         <div className="panel-title-row">
           <div><p className="eyebrow">{liveEvidence ? "Подтверждено на ваших данных" : connected ? "Один шаг до результата" : "Первый полезный результат"}</p><h2>{liveEvidence ? "Первые реальные данные получены" : preview.title || "Первый полезный результат"}</h2></div>
-          <span className={`result-badge ${liveEvidence ? "verified" : "pending"}`}>{liveEvidence ? "Данные подтверждены" : connected ? "Готово к чтению" : "Нужно подключение"}</span>
+          <span className={`result-badge ${liveEvidence ? "verified" : "pending"}`}>{liveEvidence ? "Данные получены" : connected ? "Готово к чтению" : "Нужно подключение"}</span>
         </div>
-        <p className="muted-text">{liveEvidence ? `${evidenceProvider?.title || liveEvidence.provider_key || "Источник"}: BusinessAIOS подтвердил чтение реальных данных и теперь может опираться на факты.` : connected ? "Подключение уже сохранено. Нажмите «Получить первые данные» у источника — подтверждённый результат появится здесь." : preview.message}</p>
+        <p className="muted-text">{liveEvidence ? `${evidenceProvider?.title || liveEvidence.provider_key || "Источник"}: BusinessAIOS подтвердил чтение реальных данных и теперь может опираться на факты.` : connected ? "Данные подтверждены реальным чтением. Подключение уже сохранено. Нажмите «Получить первые данные» у источника — подтверждённый результат появится здесь." : preview.message}</p>
         <div className="check-list compact-check-list">
           {liveEvidence ? (
             <>
@@ -258,7 +258,7 @@ function Workspace({ data, apiBase, onRestart }) {
             </>
           ) : (preview.checks || []).map((item) => <div className="check-row" key={item}><span>→</span><strong>{item}</strong></div>)}
         </div>
-        <div className="truth-note">{liveEvidence ? "Это не прогноз и не демонстрационные данные: результат подтверждён реальным чтением из подключённого источника." : "До первого чтения здесь нет финансовых обещаний или выдуманных выводов. Сначала факты — потом рекомендации."}</div>
+        <div className="truth-note">{liveEvidence ? "Результат подтверждён реальным чтением данных из подключённого источника." : "До первого чтения здесь нет финансовых обещаний или выдуманных выводов. Сначала факты — потом рекомендации."}</div>
       </section>
 
       <section className="workspace-grid">
