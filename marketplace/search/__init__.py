@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 class GeoQueryMapper:
     def map(self, text: str) -> str:
         return 'amsterdam' if 'amsterdam' in str(text).lower() else 'remote'
