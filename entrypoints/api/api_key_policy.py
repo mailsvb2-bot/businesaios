@@ -22,6 +22,7 @@ from governance.rbac_contract import RoleId
 
 CANON_API_KEY_POLICY = True
 CANON_API_FINAL_OWNER = True
+OWNER_SESSION_RESUME_SCOPE = 'owner_session_resume'
 
 
 def utc_now() -> datetime:
@@ -202,8 +203,79 @@ class ApiKeyPolicy:
     def __init__(self, *, store: InMemoryApiKeyStore) -> None:
         self._store = store
 
-    def issue_owner_session(self, *, tenant_id: str, business_id: str, subject: str, display_name: str | None = None, ttl_seconds: int = 3600) -> tuple[ApiKeyRecord, str]:
-        return self._store.issue(tenant_id=tenant_id, subject=subject, actor_id=subject, roles=(RoleId.OWNER,), scopes=('provider_control_plane',), display_name=display_name, ttl_seconds=ttl_seconds, metadata={'principal_kind': 'user', 'session_kind': 'owner_onboarding', 'business_id': business_id})
+    def issue_owner_session(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        subject: str,
+        display_name: str | None = None,
+        ttl_seconds: int = 3600,
+    ) -> tuple[ApiKeyRecord, str]:
+        return self._store.issue(
+            tenant_id=tenant_id,
+            subject=subject,
+            actor_id=subject,
+            roles=(RoleId.OWNER,),
+            scopes=('provider_control_plane',),
+            display_name=display_name,
+            ttl_seconds=ttl_seconds,
+            metadata={'principal_kind': 'user', 'session_kind': 'owner_onboarding', 'business_id': business_id},
+        )
+
+    def issue_owner_resume_session(
+        self,
+        *,
+        tenant_id: str,
+        business_id: str,
+        intake_id: str,
+        subject: str,
+        display_name: str | None = None,
+        ttl_seconds: int = 86400,
+    ) -> tuple[ApiKeyRecord, str]:
+        return self._store.issue(
+            tenant_id=tenant_id,
+            subject=subject,
+            actor_id=subject,
+            roles=(RoleId.OWNER,),
+            scopes=(OWNER_SESSION_RESUME_SCOPE,),
+            display_name=display_name,
+            ttl_seconds=ttl_seconds,
+            metadata={
+                'principal_kind': 'user',
+                'session_kind': 'owner_onboarding_resume',
+                'business_id': business_id,
+                'intake_id': intake_id,
+            },
+        )
+
+    def resume_owner_session(
+        self,
+        *,
+        resume_key: str,
+        intake_id: str,
+        tenant_id: str,
+        business_id: str,
+        ttl_seconds: int = 3600,
+    ) -> tuple[ApiKeyRecord, str] | None:
+        verdict = self.authenticate(RequestAuthentication(tenant_id=tenant_id, api_key=resume_key))
+        principal = verdict.principal
+        if not verdict.allowed or principal is None:
+            return None
+        metadata = dict(principal.metadata or {})
+        if RoleId.OWNER not in tuple(principal.roles) or OWNER_SESSION_RESUME_SCOPE not in tuple(principal.scopes):
+            return None
+        if str(metadata.get('session_kind') or '') != 'owner_onboarding_resume':
+            return None
+        if str(metadata.get('business_id') or '') != str(business_id) or str(metadata.get('intake_id') or '') != str(intake_id):
+            return None
+        return self.issue_owner_session(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            subject=principal.subject,
+            display_name=str(metadata.get('display_name') or '') or None,
+            ttl_seconds=ttl_seconds,
+        )
 
     def authenticate(self, request: RequestAuthentication) -> AuthVerdict:
         request.validate()
@@ -268,6 +340,7 @@ __all__ = [
     'ApiKeyRecord',
     'CANON_API_KEY_POLICY',
     'InMemoryApiKeyStore',
+    'OWNER_SESSION_RESUME_SCOPE',
     'PersistentApiKeyStore',
     'build_default_api_key_store',
     'api_key_store_path',
