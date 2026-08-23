@@ -23,7 +23,7 @@ def test_owner_resume_session_is_narrow_tenant_bound_and_can_only_mint_fresh_own
         display_name='Acme',
     )
 
-    assert resume_record.roles == (RoleId.OWNER,)
+    assert resume_record.roles == ()
     assert resume_record.scopes == (OWNER_SESSION_RESUME_SCOPE,)
     assert 'provider_control_plane' not in resume_record.scopes
     assert resume_record.metadata['session_kind'] == 'owner_onboarding_resume'
@@ -35,6 +35,7 @@ def test_owner_resume_session_is_narrow_tenant_bound_and_can_only_mint_fresh_own
     resume_verdict = policy.authenticate(RequestAuthentication(tenant_id='tenant-a', api_key=raw_resume))
     assert resume_verdict.allowed is True
     assert resume_verdict.principal is not None
+    assert resume_verdict.principal.roles == ()
     assert resume_verdict.principal.scopes == (OWNER_SESSION_RESUME_SCOPE,)
 
     resumed = policy.resume_owner_session(
