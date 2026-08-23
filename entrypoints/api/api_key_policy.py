@@ -237,7 +237,7 @@ class ApiKeyPolicy:
             tenant_id=tenant_id,
             subject=subject,
             actor_id=subject,
-            roles=(RoleId.OWNER,),
+            roles=(),
             scopes=(OWNER_SESSION_RESUME_SCOPE,),
             display_name=display_name,
             ttl_seconds=ttl_seconds,
@@ -263,7 +263,7 @@ class ApiKeyPolicy:
         if not verdict.allowed or principal is None:
             return None
         metadata = dict(principal.metadata or {})
-        if RoleId.OWNER not in tuple(principal.roles) or OWNER_SESSION_RESUME_SCOPE not in tuple(principal.scopes):
+        if tuple(principal.roles) or tuple(principal.scopes) != (OWNER_SESSION_RESUME_SCOPE,):
             return None
         if str(metadata.get('session_kind') or '') != 'owner_onboarding_resume':
             return None
