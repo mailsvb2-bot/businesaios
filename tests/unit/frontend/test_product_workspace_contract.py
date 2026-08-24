@@ -29,7 +29,7 @@ def test_owner_workspace_uses_plain_business_language_for_first_value() -> None:
     app = _read("App.jsx")
     planner = _read("AcquisitionPlanner.jsx")
     visible_copy = app + "\n" + planner
-    assert all(token in visible_copy for token in ("Безопасный режим · чтение данных", "Получить первые данные", "Данные подтверждены", "Уточнить расчёт вручную"))
+    assert all(token in visible_copy for token in ("Безопасный режим · чтение данных", "Получить первые данные", "Реальные данные ещё не читались", "Уточнить расчёт вручную"))
     assert all(token.lower() not in visible_copy.lower() for token in ("OWNER-сесс", "tenant-bound", "provider runtime", "sync evidence", "read-only sync", "Статус truth", "Write-действия"))
 
 
@@ -69,6 +69,8 @@ def test_owner_workspace_exposes_simple_first_value_acquisition_planner_without_
     assert all(token in model for token in ("target_customers", "total_budget", "daily_budget", "target_days", "cost_per_entry", "gross_margin_ltv", "expected_monthly_margin_per_customer", "conversion_rate: Number(form.conversion_percent) / 100", "isAcquisitionFormValid", "String(raw).trim() === \"\"", "Number.isFinite(value)", "Math.abs(steps - Math.round(steps)) < 1e-8", "fields = ACQUISITION_FIELDS"))
     assert all(token in styles for token in (".planner-shell", ".planner-form", ".planner-metrics", ".planner-advanced-block", "@media (max-width: 560px)"))
     assert "До первого чтения здесь нет финансовых обещаний" in app
+    assert "Данные подтверждены реальным чтением. Подключение уже сохранено." not in app
+    assert "BusinessAIOS подтвердил чтение реальных данных" in app
 
 
 def test_new_business_restart_clears_previous_onboarding_identity() -> None:
