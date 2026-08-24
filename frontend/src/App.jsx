@@ -248,7 +248,7 @@ function Workspace({ data, apiBase, onRestart }) {
           <div><p className="eyebrow">{liveEvidence ? "Подтверждено на ваших данных" : connected ? "Один шаг до результата" : "Первый полезный результат"}</p><h2>{liveEvidence ? "Первые реальные данные получены" : preview.title || "Первый полезный результат"}</h2></div>
           <span className={`result-badge ${liveEvidence ? "verified" : "pending"}`}>{liveEvidence ? "Данные получены" : connected ? "Готово к чтению" : "Нужно подключение"}</span>
         </div>
-        <p className="muted-text">{liveEvidence ? `${evidenceProvider?.title || liveEvidence.provider_key || "Источник"}: BusinessAIOS подтвердил чтение реальных данных и теперь может опираться на факты.` : connected ? "Данные подтверждены реальным чтением. Подключение уже сохранено. Нажмите «Получить первые данные» у источника — подтверждённый результат появится здесь." : preview.message}</p>
+        <p className="muted-text">{liveEvidence ? `${evidenceProvider?.title || liveEvidence.provider_key || "Источник"}: BusinessAIOS подтвердил чтение реальных данных и теперь может опираться на факты.` : connected ? "Доступ к источнику сохранён. Реальные данные ещё не читались. Нажмите «Получить первые данные» — подтверждённый результат появится здесь." : preview.message}</p>
         <div className="check-list compact-check-list">
           {liveEvidence ? (
             <>
