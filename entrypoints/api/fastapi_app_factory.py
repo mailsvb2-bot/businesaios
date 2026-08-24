@@ -21,8 +21,7 @@ API_TITLE = 'BusinesAIOS API'
 API_VERSION = '1.0.0'
 CANON_FASTAPI_APP_FACTORY = True
 DEFAULT_API_CORS_ALLOWED_ORIGINS = ('https://app.businessaios.ru',)
-API_CORS_ALLOWED_METHODS = ('GET', 'POST', 'OPTIONS')
-API_CORS_ALLOWED_HEADERS = ('Content-Type', 'X-API-Key')
+_FAIL_CLOSED_REASON = 'runtime_application_service_not_wired'
 
 
 def _project_root() -> Path:
@@ -38,50 +37,40 @@ def _read_version(default: str = API_VERSION) -> str:
 
 
 def _is_production_env() -> bool:
-    app_env = env_str('APP_ENV', '').strip().lower()
-    env = env_str('ENV', '').strip().lower()
-    return app_env in {'prod', 'production'} or env in {'prod', 'production'}
+    return (env_str('APP_ENV', '').strip().lower() in {'prod', 'production'}
+            or env_str('ENV', '').strip().lower() in {'prod', 'production'})
 
 
 def _api_docs_enabled() -> bool:
     return env_bool('API_DOCS_ENABLED', default=not _is_production_env())
 
 
-def _normalize_cors_origin(raw_origin: str) -> str:
-    origin = str(raw_origin or '').strip().rstrip('/')
-    if not origin or '*' in origin:
-        raise ValueError('API_CORS_ALLOWED_ORIGINS must contain exact origins and must not use wildcards')
-    parsed = urlsplit(origin)
-    if (
-        parsed.scheme not in {'http', 'https'}
-        or not parsed.netloc
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.path not in {'', '/'}
-        or parsed.query
-        or parsed.fragment
-    ):
-        raise ValueError(f'invalid CORS origin: {raw_origin!r}')
-    if _is_production_env() and parsed.scheme != 'https':
-        raise ValueError('production CORS origins must use https')
-    return f'{parsed.scheme.lower()}://{parsed.netloc.lower()}'
-
-
 def _api_cors_allowed_origins() -> tuple[str, ...]:
-    configured = env_csv('API_CORS_ALLOWED_ORIGINS', '')
-    candidates = configured or list(DEFAULT_API_CORS_ALLOWED_ORIGINS)
-    return tuple(dict.fromkeys(_normalize_cors_origin(origin) for origin in candidates))
+    allowed: list[str] = []
+    for raw in env_csv('API_CORS_ALLOWED_ORIGINS', '') or DEFAULT_API_CORS_ALLOWED_ORIGINS:
+        origin = str(raw or '').strip().rstrip('/')
+        parsed = urlsplit(origin)
+        if not origin or '*' in origin:
+            raise ValueError('API_CORS_ALLOWED_ORIGINS must contain exact origins and must not use wildcards')
+        invalid = (parsed.scheme not in {'http', 'https'} or not parsed.netloc
+                   or parsed.username is not None or parsed.password is not None or parsed.path not in {'', '/'}
+                   or bool(parsed.query or parsed.fragment))
+        if invalid:
+            raise ValueError(f'invalid CORS origin: {raw!r}')
+        if _is_production_env() and parsed.scheme != 'https':
+            raise ValueError('production CORS origins must use https')
+        allowed.append(f'{parsed.scheme.lower()}://{parsed.netloc.lower()}')
+    return tuple(dict.fromkeys(allowed))
 
 
 def _configure_browser_cors(app: object) -> None:
     from starlette.middleware.cors import CORSMiddleware
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(_api_cors_allowed_origins()),
         allow_credentials=True,
-        allow_methods=list(API_CORS_ALLOWED_METHODS),
-        allow_headers=list(API_CORS_ALLOWED_HEADERS),
+        allow_methods=['GET', 'POST', 'OPTIONS'],
+        allow_headers=['Content-Type', 'X-API-Key'],
     )
 
 
@@ -100,52 +89,36 @@ def _validate_inputs(*, application_service: object, dependency_container: objec
 
 class _FailsClosedApplicationService:
     """Safe fail-closed default used only when the API is instantiated without a wired runtime."""
-
     CANON_API_FAILS_CLOSED_DEFAULT_SERVICE = True
 
     def startup_audit_events(self) -> tuple[dict[str, str], ...]:
-        return ({"status": "blocked", "reason": "runtime_application_service_not_wired"},)
+        return ({"status": "blocked", "reason": _FAIL_CLOSED_REASON},)
 
     def execute_action(self, action: object, **_: object) -> dict[str, object]:
-        action_type = getattr(action, "action_type", None) or getattr(action, "type", None)
-        if not action_type and isinstance(action, dict):
+        if isinstance(action, dict):
             action_type = action.get("action_type") or action.get("type")
+        else:
+            action_type = getattr(action, "action_type", None) or getattr(action, "type", None)
         return {
-            "status": "blocked",
-            "action_type": str(action_type or ""),
-            "reason": "runtime_application_service_not_wired",
-            "details": {},
-            "capability_view": {},
+            "status": "blocked", "action_type": str(action_type or ""), "reason": _FAIL_CLOSED_REASON,
+            "details": {}, "capability_view": {},
         }
 
 
 def _fail_closed_status(*, surface: str) -> dict[str, object]:
-    base = {
-        "surface": surface,
-        "mode": "fails_closed",
-        "runtime_wired": False,
-        "reason": "runtime_application_service_not_wired",
-    }
-    if surface == "health":
-        return {**base, "status": "alive", "process_alive": True, "ready": False}
-    if surface == "livez":
-        return {**base, "status": "alive", "process_alive": True}
-    if surface == "startupz":
-        return {**base, "status": "blocked", "startup_complete": False}
-    if surface == "storagez":
-        return {**base, "status": "blocked", "storage_ready": False}
-    if surface == "executionz":
-        return {**base, "status": "blocked", "execution_ready": False, "effects_enabled": False}
-    return {**base, "status": "blocked", "ready": False}
+    details = {
+        "health": {"status": "alive", "process_alive": True, "ready": False},
+        "livez": {"status": "alive", "process_alive": True},
+        "startupz": {"status": "blocked", "startup_complete": False},
+        "storagez": {"status": "blocked", "storage_ready": False},
+        "executionz": {"status": "blocked", "execution_ready": False, "effects_enabled": False},
+    }.get(surface, {"status": "blocked", "ready": False})
+    return {"surface": surface, "mode": "fails_closed", "runtime_wired": False,
+            "reason": _FAIL_CLOSED_REASON, **details}
 
 
 def create_app(*, application_service: object | None = None, dependency_container: object | None = None) -> FastAPI:
-    """Backward-compatible public factory with safe default runtime.
-
-    With an explicit runtime service it delegates to the canonical full factory.
-    Without one it creates a minimal fail-closed API app for smoke tests and docs.
-    """
-
+    """Backward-compatible public factory with safe default runtime."""
     if application_service is not None or dependency_container is not None:
         return create_fastapi_app(
             application_service=application_service or _FailsClosedApplicationService(),
@@ -153,11 +126,7 @@ def create_app(*, application_service: object | None = None, dependency_containe
         )
 
     class _FailClosedAsgiApp:
-        """Tiny ASGI app for default fail-closed smoke surface.
-
-        It intentionally avoids importing the full FastAPI/control-plane graph.
-        """
-
+        """Tiny ASGI fail-closed smoke surface without the full control-plane graph."""
         routes = ()
 
         def __init__(self) -> None:
@@ -171,8 +140,7 @@ def create_app(*, application_service: object | None = None, dependency_containe
             method = str(scope.get("method") or "GET").upper()
             path = str(scope.get("path") or "/")
             if method == "POST" and path == "/actions/execute":
-                body = b""
-                more = True
+                body, more = b"", True
                 while more:
                     message = await receive()  # type: ignore[misc]
                     body += message.get("body", b"")
@@ -181,23 +149,16 @@ def create_app(*, application_service: object | None = None, dependency_containe
                     payload = json.loads(body.decode("utf-8") or "{}")
                 except Exception:
                     payload = {}
-                action_type = str(payload.get("action_type") or "")
-                response = {
-                    "status": "blocked",
-                    "action_type": action_type,
-                    "reason": "runtime_application_service_not_wired",
-                    "details": {},
-                    "capability_view": {},
-                }
+                response = {"status": "blocked", "action_type": str(payload.get("action_type") or ""),
+                            "reason": _FAIL_CLOSED_REASON, "details": {}, "capability_view": {}}
                 status = 200
             elif method == "GET" and path in {"/health", "/readyz", "/livez", "/startupz", "/storagez", "/executionz"}:
-                response = _fail_closed_status(surface=path.removeprefix("/"))
-                status = 200
+                response, status = _fail_closed_status(surface=path.removeprefix("/")), 200
             else:
-                response = {"detail": "not_found"}
-                status = 404
+                response, status = {"detail": "not_found"}, 404
             data = json.dumps(response).encode("utf-8")
-            await send({"type": "http.response.start", "status": status, "headers": [(b"content-type", b"application/json"), (b"content-length", str(len(data)).encode())]})  # type: ignore[misc]
+            headers = [(b"content-type", b"application/json"), (b"content-length", str(len(data)).encode())]
+            await send({"type": "http.response.start", "status": status, "headers": headers})  # type: ignore[misc]
             await send({"type": "http.response.body", "body": data})  # type: ignore[misc]
 
     return _FailClosedAsgiApp()
@@ -220,30 +181,24 @@ def create_fastapi_app(*, application_service: object, dependency_container: obj
         try:
             yield
         finally:
-            boot_result = getattr(dependency_container, 'boot_result', None) if dependency_container is not None else None
+            boot_result = (getattr(dependency_container, 'boot_result', None)
+                           if dependency_container is not None else None)
             runtime_infra = getattr(boot_result, 'runtime_infra', None) if boot_result is not None else None
             shutdown = getattr(runtime_infra, 'shutdown', None)
             if callable(shutdown):
                 shutdown()
 
-    app = _FastAPI(
-        title=API_TITLE,
-        version=_read_version(),
-        openapi_tags=OPENAPI_TAGS,
-        docs_url='/docs' if docs_enabled else None,
-        redoc_url='/redoc' if docs_enabled else None,
-        openapi_url='/openapi.json' if docs_enabled else None,
-        lifespan=_lifespan if dependency_container is not None else None,
-    )
+    app = _FastAPI(title=API_TITLE, version=_read_version(), openapi_tags=OPENAPI_TAGS,
+                   docs_url='/docs' if docs_enabled else None, redoc_url='/redoc' if docs_enabled else None,
+                   openapi_url='/openapi.json' if docs_enabled else None,
+                   lifespan=_lifespan if dependency_container is not None else None)
     _configure_browser_cors(app)
     app.state.application_service = application_service
     app.state.dependency_container = dependency_container
     register_exception_handlers(app)
-    app.include_router(
-        create_api_router(
-            application_service=application_service,
-            dependency_container=dependency_container,
-        )
-    )
+    app.include_router(create_api_router(
+        application_service=application_service,
+        dependency_container=dependency_container,
+    ))
     attach_security_schema(app)
     return app
