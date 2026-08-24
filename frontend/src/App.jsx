@@ -95,7 +95,7 @@ function isSuccessfulLiveEvidence(row) {
     && String(row?.status || "").toLowerCase() === "live_executed";
 }
 
-function Workspace({ data, apiBase, onRestart }) {
+function Workspace({ data, apiBase, onRestart, onRetryAccess }) {
   const profile = data.business_profile || {};
   const progress = data.onboarding_progress || {};
   const preview = data.first_value_preview || {};
@@ -115,6 +115,7 @@ function Workspace({ data, apiBase, onRestart }) {
   const [workspaceLoading, setWorkspaceLoading] = useState(Boolean(apiKey));
   const [workspaceBusy, setWorkspaceBusy] = useState("");
   const [workspaceError, setWorkspaceError] = useState("");
+  const [accessRecoveryBusy, setAccessRecoveryBusy] = useState(false);
   const [lastAction, setLastAction] = useState(null);
 
   const refreshCatalog = async () => {
@@ -227,6 +228,20 @@ function Workspace({ data, apiBase, onRestart }) {
     await runWorkspaceAction("sync", { action: "read", mode: "live", operation, payload: {} });
   };
 
+  const retryProtectedAccess = async () => {
+    if (!data.intake_id || !onRetryAccess) return;
+    setAccessRecoveryBusy(true);
+    setWorkspaceError("");
+    try {
+      const restored = await onRetryAccess(data.intake_id);
+      if (!restored) setWorkspaceError("Защищённый вход больше недоступен. Если срок безопасной сессии истёк, создайте новый кабинет.");
+    } catch {
+      setWorkspaceError("Не удалось повторно открыть защищённый вход. Проверьте соединение и повторите попытку.");
+    } finally {
+      setAccessRecoveryBusy(false);
+    }
+  };
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -281,7 +296,7 @@ function Workspace({ data, apiBase, onRestart }) {
           <div className="panel-title-row"><div><p className="eyebrow">Шаг к результату</p><h2>Подключите источник данных</h2></div><span className="privacy-badge">Только чтение</span></div>
           <p className="muted-text">Выберите источник и дайте доступ для чтения. Секреты используются только для подключения и не сохраняются в браузере.</p>
 
-          {!apiKey ? <div className="error-box inline-error" role="alert">Не удалось восстановить защищённый вход в этот кабинет. Данные доступа в браузере не хранятся; создайте новый кабинет, если защищённая сессия уже истекла.</div> : null}
+          {!apiKey ? <div className="recovery-box" role="alert"><p><strong>Кабинет найден, но защищённый вход сейчас не восстановлен.</strong> Обычная перезагрузка сама по себе сессию не завершает. Повторите вход; если срок безопасной сессии истёк, создайте новый кабинет.</p><button type="button" className="ghost" disabled={accessRecoveryBusy} onClick={retryProtectedAccess}>{accessRecoveryBusy ? "Восстанавливаем вход…" : "Повторить защищённый вход"}</button></div> : null}
           {workspaceLoading ? <div className="loading-box">Восстанавливаем кабинет и проверяем подключения…</div> : null}
           {workspaceError ? <div className="error-box inline-error" role="alert">{workspaceError}</div> : null}
 
@@ -366,6 +381,19 @@ export function App() {
     return { integrations: `${base}/public-site/integrations`, ctaStart: `${base}/public-site/cta/start`, ctaStatus: (id) => `${base}/public-site/cta/${encodeURIComponent(id)}` };
   }, [apiBase]);
 
+  const openSavedWorkspace = useCallback(async (intakeId) => {
+    const payload = await getJson(endpoints.ctaStatus(intakeId));
+    if (!payload?.ok) throw new Error("workspace_not_found");
+    setResult(payload);
+    setError("");
+    return payload;
+  }, [endpoints]);
+
+  const restoreWorkspaceAccess = useCallback(async (intakeId) => {
+    const payload = await openSavedWorkspace(intakeId);
+    return Boolean(payload?.owner_session?.api_key);
+  }, [openSavedWorkspace]);
+
   const loadMarketplace = useCallback(async () => {
     setMarketLoading(true);
     setMarketError("");
@@ -389,12 +417,25 @@ export function App() {
     if (!intakeId) return;
     let cancelled = false;
     setLoading(true);
-    getJson(endpoints.ctaStatus(intakeId))
-      .then((payload) => { if (!cancelled && payload.ok) setResult(payload); })
+    openSavedWorkspace(intakeId)
       .catch(() => { if (!cancelled) setError("Не удалось открыть сохранённый кабинет бизнеса."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [endpoints]);
+  }, [openSavedWorkspace]);
+
+  const savedIntakeId = initialIntakeId();
+  const retrySavedWorkspace = async () => {
+    if (!savedIntakeId) return;
+    setLoading(true);
+    setError("");
+    try {
+      await openSavedWorkspace(savedIntakeId);
+    } catch {
+      setError("Не удалось открыть сохранённый кабинет бизнеса. Проверьте соединение и повторите попытку.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const emailValid = isValidEmail(form.email);
   const updateForm = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
@@ -432,7 +473,7 @@ export function App() {
     setError("");
   };
 
-  if (result) return <Workspace data={result} apiBase={apiBase} onRestart={restart} />;
+  if (result) return <Workspace data={result} apiBase={apiBase} onRestart={restart} onRetryAccess={restoreWorkspaceAccess} />;
 
   return (
     <main className="onboarding-shell">
@@ -459,7 +500,7 @@ export function App() {
 
           {step === 3 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 4</p><h2>Сколько свободы дать системе?</h2><p>На старте система всё равно ничего не отправит и не изменит без проверки.</p></div><div className="autonomy-grid">{AUTONOMY.map((mode) => <button type="button" className={`autonomy-card ${form.autonomy_mode === mode.value ? "selected" : ""}`} aria-pressed={form.autonomy_mode === mode.value} onClick={() => setForm((prev) => ({ ...prev, autonomy_mode: mode.value }))} key={mode.value}><span className="mode-badge">{mode.badge}</span><strong>{mode.title}</strong><small>{mode.text}</small></button>)}</div><div className="launch-preview"><span>✓</span><div><strong>После создания кабинета</strong><p>Вы подключите один источник, получите первые реальные данные и сразу увидите подтверждённый результат.</p></div></div></div> : null}
 
-          {error ? <div className="error-box" role="alert">{error}</div> : null}
+          {error && savedIntakeId ? <div className="recovery-box" role="alert"><p>{error}</p><button type="button" className="ghost" disabled={loading} onClick={retrySavedWorkspace}>{loading ? "Открываем кабинет…" : "Повторить открытие кабинета"}</button></div> : error ? <div className="error-box" role="alert">{error}</div> : null}
           <div className="navigation-row"><button type="button" className="ghost" disabled={step === 0 || loading} onClick={() => setStep((value) => Math.max(0, value - 1))}>Назад</button>{step < STEP_LABELS.length - 1 ? <button type="button" className="primary" disabled={!canContinue() || loading} onClick={() => setStep((value) => Math.min(STEP_LABELS.length - 1, value + 1))}>Продолжить →</button> : <button type="button" className="primary launch" disabled={!canContinue() || loading} onClick={finishOnboarding}>{loading ? "Создаём кабинет…" : "Создать мой BusinessAIOS →"}</button>}</div>
         </section>
       </section>
