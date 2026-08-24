@@ -79,13 +79,36 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   await expect(page.getByRole("heading", { name: businessName, level: 1 })).toBeVisible();
   await expect(page.getByText("Только чтение")).toBeVisible();
   await expect(page.getByRole("button", { name: new RegExp(providerTitle) })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Первый полезный результат" })).toBeVisible();
   await expect(page.getByText("Не удалось открыть защищённый workspace интеграций.")).toHaveCount(0);
   expect(await hasNoHorizontalOverflow(page)).toBe(true);
   expect(await persistentBrowserStateContains(page, ownerKey)).toBe(false);
 
+  const resumeCookie = (await page.context().cookies()).find((cookie) => cookie.name === "businessaios_owner_resume");
+  expect(Boolean(resumeCookie?.httpOnly)).toBe(true);
+  expect(String(resumeCookie?.value || "")).not.toBe(ownerKey);
+
+  const resumedStatusPromise = page.waitForResponse((response) => response.url().includes(`/api/public-site/cta/${cta.intake_id}`) && response.request().method() === "GET");
+  const resumedWorkspacePromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/providers") && response.request().method() === "GET");
   await page.reload();
+
+  const resumedStatusResponse = await resumedStatusPromise;
+  expect(resumedStatusResponse.status()).toBe(200);
+  const resumedStatus = await resumedStatusResponse.json();
+  const resumedOwnerKey = resumedStatus?.owner_session?.api_key;
+  expect(Boolean(typeof resumedOwnerKey === "string" && resumedOwnerKey.includes("."))).toBe(true);
+  expect(resumedOwnerKey).not.toBe(ownerKey);
+
+  const resumedWorkspaceResponse = await resumedWorkspacePromise;
+  expect(resumedWorkspaceResponse.status()).toBe(200);
+  const resumedWorkspace = await resumedWorkspaceResponse.json();
+  expect(resumedWorkspace.scope_source).toBe("authenticated_owner_session");
+  expect(resumedWorkspace.write_actions_enabled).toBe(false);
+
   await expect(page.getByRole("heading", { name: businessName, level: 1 })).toBeVisible();
-  await expect(page.getByText(/Вход в кабинет завершился после перезагрузки страницы/)).toBeVisible();
+  await expect(page.getByText(/Не удалось восстановить защищённый вход/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: new RegExp(providerTitle) })).toBeVisible();
   expect(await hasNoHorizontalOverflow(page)).toBe(true);
   expect(await persistentBrowserStateContains(page, ownerKey)).toBe(false);
+  expect(await persistentBrowserStateContains(page, resumedOwnerKey)).toBe(false);
 });

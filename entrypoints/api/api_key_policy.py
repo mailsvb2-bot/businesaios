@@ -19,9 +19,9 @@ from governance.persistence_codec import (
 )
 from governance.rbac_contract import RoleId
 
-
 CANON_API_KEY_POLICY = True
 CANON_API_FINAL_OWNER = True
+OWNER_SESSION_RESUME_SCOPE = 'owner_session_resume'
 
 
 def utc_now() -> datetime:
@@ -69,11 +69,7 @@ class ApiKeyRecord:
         moment = now or utc_now()
         if moment.tzinfo is None:
             raise ValueError('now must be timezone-aware')
-        if self.revoked_at is not None and self.revoked_at <= moment:
-            return False
-        if self.expires_at is not None and self.expires_at <= moment:
-            return False
-        return True
+        return not ((self.revoked_at is not None and self.revoked_at <= moment) or (self.expires_at is not None and self.expires_at <= moment))
 
 
 class InMemoryApiKeyStore:
@@ -92,33 +88,11 @@ class InMemoryApiKeyStore:
         self._records[record.key_id] = record
         return record
 
-    def issue(
-        self,
-        *,
-        tenant_id: str,
-        subject: str,
-        actor_id: str | None = None,
-        roles: tuple[RoleId, ...] = (),
-        scopes: tuple[str, ...] = (),
-        display_name: str | None = None,
-        ttl_seconds: int | None = None,
-        metadata: Mapping[str, object] | None = None,
-    ) -> tuple[ApiKeyRecord, str]:
+    def issue(self, *, tenant_id: str, subject: str, actor_id: str | None = None, roles: tuple[RoleId, ...] = (), scopes: tuple[str, ...] = (), display_name: str | None = None, ttl_seconds: int | None = None, metadata: Mapping[str, object] | None = None) -> tuple[ApiKeyRecord, str]:
         raw_secret = secrets.token_urlsafe(32)
         key_id = f'ak_{secrets.token_hex(8)}'
         expires_at = None if ttl_seconds is None else utc_now() + timedelta(seconds=int(ttl_seconds))
-        record = ApiKeyRecord(
-            key_id=key_id,
-            secret_hash=_derive_secret_hash(secret=raw_secret, pepper=self._pepper),
-            tenant_id=str(tenant_id),
-            subject=str(subject),
-            actor_id=actor_id,
-            roles=tuple(roles),
-            scopes=tuple(str(item) for item in scopes),
-            display_name=display_name,
-            expires_at=expires_at,
-            metadata=dict(metadata or {}),
-        )
+        record = ApiKeyRecord(key_id=key_id, secret_hash=_derive_secret_hash(secret=raw_secret, pepper=self._pepper), tenant_id=str(tenant_id), subject=str(subject), actor_id=actor_id, roles=tuple(roles), scopes=tuple(str(item) for item in scopes), display_name=display_name, expires_at=expires_at, metadata=dict(metadata or {}))
         self.register(record)
         return record, f'{key_id}.{raw_secret}'
 
@@ -144,10 +118,8 @@ class InMemoryApiKeyStore:
 
 def api_key_store_path() -> Path:
     explicit = os.getenv("BUSINESAIOS_API_KEY_STORE_PATH", "").strip()
-    if explicit:
-        return Path(explicit)
     data_dir = os.getenv("DATA_DIR", "data").strip() or "data"
-    return Path(data_dir) / "api" / "api_keys.json"
+    return Path(explicit) if explicit else Path(data_dir) / "api" / "api_keys.json"
 
 
 class PersistentApiKeyStore(InMemoryApiKeyStore):
@@ -163,9 +135,6 @@ class PersistentApiKeyStore(InMemoryApiKeyStore):
         return self._path
 
     def register(self, record: ApiKeyRecord) -> ApiKeyRecord:
-        # Every persistent mutation must reconcile with the latest on-disk
-        # snapshot under the same cross-process lock.  Without this, two
-        # long-lived API-key store instances can overwrite each other's keys.
         with exclusive_file_lock(self._path):
             self._load()
             saved = super().register(record)
@@ -193,9 +162,7 @@ class PersistentApiKeyStore(InMemoryApiKeyStore):
 
 def build_default_api_key_store(*, pepper: str = '') -> InMemoryApiKeyStore:
     mode = os.getenv("BUSINESAIOS_API_KEY_STORE_BACKEND", "file").strip().lower()
-    if mode == 'memory':
-        return InMemoryApiKeyStore(pepper=pepper)
-    return PersistentApiKeyStore(pepper=pepper)
+    return InMemoryApiKeyStore(pepper=pepper) if mode == 'memory' else PersistentApiKeyStore(pepper=pepper)
 
 
 class ApiKeyPolicy:
@@ -204,6 +171,22 @@ class ApiKeyPolicy:
 
     def issue_owner_session(self, *, tenant_id: str, business_id: str, subject: str, display_name: str | None = None, ttl_seconds: int = 3600) -> tuple[ApiKeyRecord, str]:
         return self._store.issue(tenant_id=tenant_id, subject=subject, actor_id=subject, roles=(RoleId.OWNER,), scopes=('provider_control_plane',), display_name=display_name, ttl_seconds=ttl_seconds, metadata={'principal_kind': 'user', 'session_kind': 'owner_onboarding', 'business_id': business_id})
+
+    def issue_owner_resume_session(self, *, tenant_id: str, business_id: str, intake_id: str, subject: str, display_name: str | None = None, ttl_seconds: int = 86400) -> tuple[ApiKeyRecord, str]:
+        metadata = {'principal_kind': 'user', 'session_kind': 'owner_onboarding_resume', 'business_id': business_id, 'intake_id': intake_id}
+        return self._store.issue(tenant_id=tenant_id, subject=subject, actor_id=subject, roles=(), scopes=(OWNER_SESSION_RESUME_SCOPE,), display_name=display_name, ttl_seconds=ttl_seconds, metadata=metadata)
+
+    def resume_owner_session(self, *, resume_key: str, intake_id: str, tenant_id: str, business_id: str, ttl_seconds: int = 3600) -> tuple[ApiKeyRecord, str] | None:
+        verdict = self.authenticate(RequestAuthentication(tenant_id=tenant_id, api_key=resume_key))
+        principal = verdict.principal
+        if not verdict.allowed or principal is None:
+            return None
+        metadata = dict(principal.metadata or {})
+        if tuple(principal.roles) or tuple(principal.scopes) != (OWNER_SESSION_RESUME_SCOPE,) or str(metadata.get('session_kind') or '') != 'owner_onboarding_resume':
+            return None
+        if str(metadata.get('business_id') or '') != str(business_id) or str(metadata.get('intake_id') or '') != str(intake_id):
+            return None
+        return self.issue_owner_session(tenant_id=tenant_id, business_id=business_id, subject=principal.subject, display_name=str(metadata.get('display_name') or '') or None, ttl_seconds=ttl_seconds)
 
     def authenticate(self, request: RequestAuthentication) -> AuthVerdict:
         request.validate()
@@ -263,12 +246,4 @@ class ApiKeyPolicy:
         return verdict
 
 
-__all__ = [
-    'ApiKeyPolicy',
-    'ApiKeyRecord',
-    'CANON_API_KEY_POLICY',
-    'InMemoryApiKeyStore',
-    'PersistentApiKeyStore',
-    'build_default_api_key_store',
-    'api_key_store_path',
-]
+__all__ = ['ApiKeyPolicy', 'ApiKeyRecord', 'CANON_API_KEY_POLICY', 'InMemoryApiKeyStore', 'OWNER_SESSION_RESUME_SCOPE', 'PersistentApiKeyStore', 'build_default_api_key_store', 'api_key_store_path']
