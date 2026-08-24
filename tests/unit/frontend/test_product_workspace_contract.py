@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[3] / "frontend" / "src"
 
 
@@ -149,3 +148,18 @@ def test_workspace_accessibility_exposes_state_errors_focus_and_motion_preferenc
     assert 'className="planner-error" role="alert"' in planner
     assert 'button:focus-visible, a:focus-visible, summary:focus-visible' in styles
     assert '@media (prefers-reduced-motion: reduce)' in styles
+
+
+def test_onboarding_prioritizes_selectable_integrations_without_hiding_roadmap() -> None:
+    app = _read("App.jsx")
+    styles = _read("styles.css")
+    assert "const availableMarketplace = useMemo(() => marketplace.filter((item) => item.selectable), [marketplace]);" in app
+    assert "const roadmapMarketplace = useMemo(() => marketplace.filter((item) => !item.selectable), [marketplace]);" in app
+    assert "marketplace.map((item)" not in app
+    assert "availableMarketplace.map((item) => <IntegrationCard" in app
+    assert "roadmapMarketplace.map((item) => <IntegrationCard" in app
+    assert all(token in app for token in ("Можно подключить сейчас", "Что ещё готовится", "Статус каждой берём напрямую из BusinessAIOS."))
+    assert 'details className="roadmap-integrations"' in app
+    assert "disabled={!item.selectable}" in app and "item.availability_label" in app
+    assert "const [roadmapMarketplace" not in app and "setRoadmapMarketplace" not in app
+    assert all(selector in styles for selector in (".integration-section-head", ".roadmap-integrations", ".roadmap-grid"))

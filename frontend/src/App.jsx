@@ -78,6 +78,17 @@ function statusClass(item) {
   return "roadmap";
 }
 
+function IntegrationCard({ item, selected, onToggle }) {
+  return (
+    <button type="button" disabled={!item.selectable} className={`integration-card ${selected ? "selected" : ""} ${!item.selectable ? "disabled" : ""}`} aria-pressed={selected} onClick={item.selectable ? () => onToggle(item) : undefined}>
+      <div className="integration-card-head"><span className="provider-logo">{providerInitial(item.title)}</span>{item.recommended ? <span className="recommended">Рекомендуем</span> : null}</div>
+      <strong>{item.title}</strong>
+      <small>{item.description}</small>
+      <span className={`status-pill ${statusClass(item)}`}>{selected ? "Выбрано ✓" : item.availability_label}</span>
+    </button>
+  );
+}
+
 function connectionIdentityCopy(provider) {
   const key = String(provider?.provider_key || "").toLowerCase();
   if (key.includes("website") || key.includes("wordpress") || key.includes("webflow")) {
@@ -373,6 +384,8 @@ export function App() {
   const [marketError, setMarketError] = useState("");
   const [marketplace, setMarketplace] = useState([]);
   const [selectedProviders, setSelectedProviders] = useState([]);
+  const availableMarketplace = useMemo(() => marketplace.filter((item) => item.selectable), [marketplace]);
+  const roadmapMarketplace = useMemo(() => marketplace.filter((item) => !item.selectable), [marketplace]);
   const [result, setResult] = useState(null);
   const [form, setForm] = useState(() => ({ ...INITIAL_FORM }));
 
@@ -484,7 +497,7 @@ export function App() {
           <p className="lead">Сначала только чтение и анализ. Никаких расходов, сообщений клиентам или публикаций без вашего разрешения.</p>
           <div className="trust-list">
             <div><span>✓</span><p><strong>Безопасный старт</strong><small>Ничего не отправляем и не меняем без вашего разрешения.</small></p></div>
-            <div><span>✓</span><p><strong>Честные статусы</strong><small>Показываем только реально доступные интеграции.</small></p></div>
+            <div><span>✓</span><p><strong>Честные статусы</strong><small>Доступные сейчас отделены от интеграций, которые ещё готовятся.</small></p></div>
             <div><span>✓</span><p><strong>Первый результат на ваших данных</strong><small>Без выдуманных финансовых обещаний.</small></p></div>
           </div>
         </aside>
@@ -496,7 +509,7 @@ export function App() {
 
           {step === 1 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 2</p><h2>Что важнее прямо сейчас?</h2><p>BusinessAIOS начнёт анализ с выбранной бизнес-задачи.</p></div><div className="choice-grid">{GOALS.map((goal) => <button type="button" className={`choice-card ${form.goal === goal.value ? "selected" : ""}`} aria-pressed={form.goal === goal.value} onClick={() => setForm((prev) => ({ ...prev, goal: goal.value }))} key={goal.value}><span className="radio-dot" /><strong>{goal.title}</strong><small>{goal.text}</small></button>)}</div></div> : null}
 
-          {step === 2 ? <div className="step-content integrations-step"><div className="section-heading"><p className="eyebrow">Шаг 3</p><h2>Где уже живут данные бизнеса?</h2><p>Выберите хотя бы один источник. Подключение начнётся в режиме только чтения.</p></div>{marketLoading ? <div className="loading-box">Загружаем доступные интеграции…</div> : null}{marketError && !marketLoading ? <div className="recovery-box" role="alert"><p>{marketError}</p><button type="button" className="ghost" onClick={loadMarketplace}>Повторить загрузку</button></div> : null}<div className="integration-grid">{marketplace.map((item) => { const selected = selectedProviders.includes(item.provider_key); return <button type="button" disabled={!item.selectable} className={`integration-card ${selected ? "selected" : ""} ${!item.selectable ? "disabled" : ""}`} aria-pressed={selected} onClick={() => toggleProvider(item)} key={item.provider_key}><div className="integration-card-head"><span className="provider-logo">{providerInitial(item.title)}</span>{item.recommended ? <span className="recommended">Рекомендуем</span> : null}</div><strong>{item.title}</strong><small>{item.description}</small><span className={`status-pill ${statusClass(item)}`}>{selected ? "Выбрано ✓" : item.availability_label}</span></button>; })}</div><p className="selection-count" aria-live="polite">Выбрано: <strong>{selectedProviders.length}</strong></p></div> : null}
+          {step === 2 ? <div className="step-content integrations-step"><div className="section-heading"><p className="eyebrow">Шаг 3</p><h2>Где уже живут данные бизнеса?</h2><p>Выберите хотя бы один источник. Подключение начнётся в режиме только чтения.</p></div>{marketLoading ? <div className="loading-box">Загружаем доступные интеграции…</div> : null}{marketError && !marketLoading ? <div className="recovery-box" role="alert"><p>{marketError}</p><button type="button" className="ghost" onClick={loadMarketplace}>Повторить загрузку</button></div> : null}{!marketLoading && !marketError ? <><div className="integration-section-head"><strong>Можно подключить сейчас</strong><span>{availableMarketplace.length}</span></div>{availableMarketplace.length ? <div className="integration-grid">{availableMarketplace.map((item) => <IntegrationCard item={item} selected={selectedProviders.includes(item.provider_key)} onToggle={toggleProvider} key={item.provider_key} />)}</div> : <p className="empty-state">Сейчас нет источников, готовых к подключению. Ниже можно посмотреть, что уже готовится.</p>}<p className="selection-count" aria-live="polite">Выбрано: <strong>{selectedProviders.length}</strong></p>{roadmapMarketplace.length ? <details className="roadmap-integrations"><summary><span>Что ещё готовится</span><strong>{roadmapMarketplace.length}</strong></summary><p>Эти интеграции уже есть в каталоге, но пока не доступны для подключения. Статус каждой берём напрямую из BusinessAIOS.</p><div className="integration-grid roadmap-grid">{roadmapMarketplace.map((item) => <IntegrationCard item={item} selected={false} onToggle={toggleProvider} key={item.provider_key} />)}</div></details> : null}</> : null}</div> : null}
 
           {step === 3 ? <div className="step-content"><div className="section-heading"><p className="eyebrow">Шаг 4</p><h2>Сколько свободы дать системе?</h2><p>На старте система всё равно ничего не отправит и не изменит без проверки.</p></div><div className="autonomy-grid">{AUTONOMY.map((mode) => <button type="button" className={`autonomy-card ${form.autonomy_mode === mode.value ? "selected" : ""}`} aria-pressed={form.autonomy_mode === mode.value} onClick={() => setForm((prev) => ({ ...prev, autonomy_mode: mode.value }))} key={mode.value}><span className="mode-badge">{mode.badge}</span><strong>{mode.title}</strong><small>{mode.text}</small></button>)}</div><div className="launch-preview"><span>✓</span><div><strong>После создания кабинета</strong><p>Вы подключите один источник, получите первые реальные данные и сразу увидите подтверждённый результат.</p></div></div></div> : null}
 
