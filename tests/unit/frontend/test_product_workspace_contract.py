@@ -47,12 +47,25 @@ def test_owner_workspace_puts_verified_first_value_before_setup_and_keeps_one_cl
 
 def test_owner_workspace_resumes_server_session_without_persisting_owner_key_in_web_storage() -> None:
     app = _read("App.jsx")
+    planner = _read("AcquisitionPlanner.jsx")
+    visible_copy = app + "\n" + planner
     assert app.count('credentials: "include"') >= 2
     assert "localStorage.setItem" not in app
     assert "sessionStorage.setItem" not in app
     assert "indexedDB.open" not in app
-    assert "Не удалось восстановить защищённый вход" in app
-    assert "Вход в кабинет завершился после перезагрузки страницы" not in app
+    assert "Повторить защищённый вход" in app
+    assert "Обычная перезагрузка сама по себе сессию не завершает" in app
+    assert "вход в кабинет завершился после перезагрузки страницы" not in visible_copy.lower()
+    assert "onRetryAccess={restoreWorkspaceAccess}" in app
+
+
+def test_saved_workspace_network_failure_has_explicit_retry_path() -> None:
+    app = _read("App.jsx")
+    assert "const openSavedWorkspace = useCallback(async (intakeId) =>" in app
+    assert "const savedIntakeId = initialIntakeId();" in app
+    assert "const retrySavedWorkspace = async () =>" in app
+    assert "Повторить открытие кабинета" in app
+    assert "Не удалось открыть сохранённый кабинет бизнеса. Проверьте соединение и повторите попытку." in app
 
 
 def test_owner_workspace_exposes_simple_first_value_acquisition_planner_without_losing_full_model() -> None:
