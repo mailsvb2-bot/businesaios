@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
-from config.env_flags import env_bool, env_str
+from config.env_flags import env_bool, env_csv, env_str
 from entrypoints.api.openapi_tags import OPENAPI_TAGS
 
 if TYPE_CHECKING:  # pragma: no cover
     from fastapi import FastAPI
+
     from adapters.api.fastapi.dependencies import FastAPIDependencyContainer
 else:
     FastAPI = Any  # type: ignore[misc,assignment]
@@ -18,6 +20,9 @@ else:
 API_TITLE = 'BusinesAIOS API'
 API_VERSION = '1.0.0'
 CANON_FASTAPI_APP_FACTORY = True
+DEFAULT_API_CORS_ALLOWED_ORIGINS = ('https://app.businessaios.ru',)
+API_CORS_ALLOWED_METHODS = ('GET', 'POST', 'OPTIONS')
+API_CORS_ALLOWED_HEADERS = ('Content-Type', 'X-API-Key')
 
 
 def _project_root() -> Path:
@@ -40,6 +45,44 @@ def _is_production_env() -> bool:
 
 def _api_docs_enabled() -> bool:
     return env_bool('API_DOCS_ENABLED', default=not _is_production_env())
+
+
+def _normalize_cors_origin(raw_origin: str) -> str:
+    origin = str(raw_origin or '').strip().rstrip('/')
+    if not origin or '*' in origin:
+        raise ValueError('API_CORS_ALLOWED_ORIGINS must contain exact origins and must not use wildcards')
+    parsed = urlsplit(origin)
+    if (
+        parsed.scheme not in {'http', 'https'}
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {'', '/'}
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(f'invalid CORS origin: {raw_origin!r}')
+    if _is_production_env() and parsed.scheme != 'https':
+        raise ValueError('production CORS origins must use https')
+    return f'{parsed.scheme.lower()}://{parsed.netloc.lower()}'
+
+
+def _api_cors_allowed_origins() -> tuple[str, ...]:
+    configured = env_csv('API_CORS_ALLOWED_ORIGINS', '')
+    candidates = configured or list(DEFAULT_API_CORS_ALLOWED_ORIGINS)
+    return tuple(dict.fromkeys(_normalize_cors_origin(origin) for origin in candidates))
+
+
+def _configure_browser_cors(app: object) -> None:
+    from starlette.middleware.cors import CORSMiddleware
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(_api_cors_allowed_origins()),
+        allow_credentials=True,
+        allow_methods=list(API_CORS_ALLOWED_METHODS),
+        allow_headers=list(API_CORS_ALLOWED_HEADERS),
+    )
 
 
 def _validate_inputs(*, application_service: object, dependency_container: object | None) -> None:
@@ -166,8 +209,8 @@ def create_fastapi_app(*, application_service: object, dependency_container: obj
     except ModuleNotFoundError as exc:
         raise RuntimeError('FastAPI is required to create the API app. Install project requirements first.') from exc
     from adapters.api.fastapi.exception_handlers import register_exception_handlers
-    from adapters.api.fastapi.router_adapter import create_api_router
     from adapters.api.fastapi.openapi_security import attach_security_schema
+    from adapters.api.fastapi.router_adapter import create_api_router
 
     _validate_inputs(application_service=application_service, dependency_container=dependency_container)
     docs_enabled = _api_docs_enabled()
@@ -192,6 +235,7 @@ def create_fastapi_app(*, application_service: object, dependency_container: obj
         openapi_url='/openapi.json' if docs_enabled else None,
         lifespan=_lifespan if dependency_container is not None else None,
     )
+    _configure_browser_cors(app)
     app.state.application_service = application_service
     app.state.dependency_container = dependency_container
     register_exception_handlers(app)
