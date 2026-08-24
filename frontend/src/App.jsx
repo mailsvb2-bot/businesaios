@@ -161,8 +161,15 @@ function Workspace({ data, apiBase, onRestart }) {
     .filter((row) => selectedKeys.size === 0 || selectedKeys.has(row.provider_key))
     .sort((left, right) => Number(Boolean(right.connected)) - Number(Boolean(left.connected)));
   const activeProvider = providers.find((row) => row.provider_key === activeKey) || providers[0] || null;
-  const evidenceRows = Object.values(historyByProvider).flatMap((rows) => rows || []);
-  const liveEvidence = evidenceRows.find(isSuccessfulLiveEvidence) || null;
+  const liveEvidenceByProvider = useMemo(() => {
+    const entries = Object.entries(historyByProvider).flatMap(([providerKey, rows]) => {
+      const evidence = (rows || []).find(isSuccessfulLiveEvidence);
+      return evidence ? [[providerKey, evidence]] : [];
+    });
+    return new Map(entries);
+  }, [historyByProvider]);
+  const liveEvidence = Array.from(liveEvidenceByProvider.values())[0] || null;
+  const activeLiveEvidence = activeProvider ? liveEvidenceByProvider.get(activeProvider.provider_key) || null : null;
   const connected = providers.some((row) => row.connected);
   const baseCompleted = Math.min(Number(progress.completed || 0), 4);
   const verifiedCompleted = Math.min(6, baseCompleted + (connected ? 1 : 0) + (liveEvidence ? 1 : 0));
@@ -170,6 +177,9 @@ function Workspace({ data, apiBase, onRestart }) {
   const evidenceProvider = liveEvidence ? catalog.find((row) => row.provider_key === liveEvidence.provider_key) : null;
   const resourceCount = liveEvidence?.parsed_response?.resource_count ?? liveEvidence?.transport_response?.resource_count;
   const identityCopy = connectionIdentityCopy(activeProvider);
+  const syncActionLabel = workspaceBusy === "sync"
+    ? (activeLiveEvidence ? "Обновляем данные…" : "Получаем данные…")
+    : (activeLiveEvidence ? "Обновить данные" : "Получить первые данные");
 
   const runWorkspaceAction = async (name, payload, providerKey = activeProvider?.provider_key) => {
     if (!providerKey) return null;
@@ -179,7 +189,7 @@ function Workspace({ data, apiBase, onRestart }) {
       const result = await postJson(workspaceUrl, { provider_key: providerKey, ...payload }, authHeaders);
       setLastAction({ name, providerKey, result });
       await refreshCatalog();
-      if (name === "sync") await loadHistory(providerKey);
+      if (name === "sync" || name === "probe") await loadHistory(providerKey);
       return result;
     } catch {
       setWorkspaceError("Действие не выполнено. Проверьте подключение и повторите попытку.");
@@ -256,6 +266,11 @@ function Workspace({ data, apiBase, onRestart }) {
               <div className="check-row"><span>✓</span><strong>Данные прочитаны в безопасном режиме</strong></div>
               {resourceCount !== undefined ? <div className="check-row"><span>✓</span><strong>Получено объектов: {resourceCount}</strong></div> : null}
             </>
+          ) : connected ? (
+            <>
+              <div className="check-row"><span>✓</span><strong>Доступ к источнику сохранён</strong></div>
+              <div className="check-row"><span>→</span><strong>Получить первые реальные данные</strong></div>
+            </>
           ) : (preview.checks || []).map((item) => <div className="check-row" key={item}><span>→</span><strong>{item}</strong></div>)}
         </div>
         <div className="truth-note">{liveEvidence ? "Результат подтверждён реальным чтением данных из подключённого источника." : "До первого чтения здесь нет финансовых обещаний или выдуманных выводов. Сначала факты — потом рекомендации."}</div>
@@ -274,7 +289,7 @@ function Workspace({ data, apiBase, onRestart }) {
             {providers.length ? providers.map((item) => (
               <button type="button" className={`connection-row ${activeProvider?.provider_key === item.provider_key ? "selected" : ""}`} aria-current={activeProvider?.provider_key === item.provider_key ? "true" : undefined} onClick={() => { setActiveKey(item.provider_key); setExternalRef(""); setSecrets({}); }} key={item.provider_key} disabled={!item.customer_selectable}>
                 <div className="provider-logo">{providerInitial(item.title)}</div>
-                <div className="connection-copy"><strong>{item.title}</strong><span>{item.connected ? "Подключено для чтения" : item.customer_selectable ? "Можно подключить" : "Пока не доступно"}</span></div>
+                <div className="connection-copy"><strong>{item.title}</strong><span>{liveEvidenceByProvider.has(item.provider_key) ? "Данные получены" : item.connected ? "Доступ сохранён · данные ещё не получены" : item.customer_selectable ? "Можно подключить" : "Пока не доступно"}</span></div>
                 <span className={`dot ${item.connected ? "green" : item.customer_selectable ? "orange" : "gray"}`} />
               </button>
             )) : <p className="empty-state">Для выбранных источников пока нет готового подключения.</p>}
@@ -285,10 +300,10 @@ function Workspace({ data, apiBase, onRestart }) {
               <div className="connection-steps" aria-label="Этапы подключения">
                 <span className="done">1. Источник выбран</span>
                 <span className={activeProvider.connected ? "done" : "active"}>2. Доступ</span>
-                <span className={liveEvidence?.provider_key === activeProvider.provider_key ? "done" : activeProvider.connected ? "active" : ""}>3. Первые данные</span>
+                <span className={activeLiveEvidence ? "done" : activeProvider.connected ? "active" : ""}>3. Первые данные</span>
               </div>
               <div className="step-content workspace-step-content">
-                <div className="section-heading"><h2>{activeProvider.title}</h2><p>{activeProvider.connected ? "Доступ сохранён. Получите первые данные — это главное действие сейчас." : "Нужен только доступ для чтения. Изменения во внешней системе остаются выключены."}</p></div>
+                <div className="section-heading"><h2>{activeProvider.title}</h2><p>{activeLiveEvidence ? "Первые данные из этого источника подтверждены. При необходимости обновите их или проверьте доступ." : activeProvider.connected ? "Доступ сохранён. Получите первые данные — это главное действие сейчас." : "Нужен только доступ для чтения. Изменения во внешней системе остаются выключены."}</p></div>
                 {!activeProvider.connected ? (
                   <div className="form-grid">
                     <label className="full">{identityCopy.label}<input value={externalRef} onChange={(event) => setExternalRef(event.target.value)} placeholder={identityCopy.placeholder} /><small className="input-help">Это идентификатор именно вашего кабинета или проекта — не внутренний ID BusinessAIOS.</small></label>
@@ -300,7 +315,7 @@ function Workspace({ data, apiBase, onRestart }) {
                 ) : (
                   <div className="navigation-row workspace-actions">
                     <button type="button" className="ghost" disabled={Boolean(workspaceBusy)} onClick={probeProvider}>{workspaceBusy === "probe" ? "Проверяем…" : "Проверить доступ"}</button>
-                    <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={syncProvider}>{workspaceBusy === "sync" ? "Получаем данные…" : "Получить первые данные"}</button>
+                    <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={syncProvider}>{syncActionLabel}</button>
                   </div>
                 )}
                 <small className="helper-text">BusinessAIOS сейчас может только читать. Сообщения, публикации, расходы и другие изменения выключены.</small>
