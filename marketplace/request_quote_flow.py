@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 """Canonical marketplace quote-request flow.
 
 This module keeps a *single* user-facing surface while preserving two valid
@@ -13,7 +15,6 @@ states of the system:
 That keeps one boundary and avoids hidden fallback business logic.
 """
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
