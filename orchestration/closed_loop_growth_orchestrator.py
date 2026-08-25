@@ -1,7 +1,7 @@
-from orchestration.signal_opportunity_bridge import SignalToOpportunityFlow
-from orchestration.opportunity_decision_bridge import OpportunityToDecisionFlow
 from execution.decision_execution_bridge import DecisionToExecutionFlow
 from orchestration.execution_feedback_bridge import ExecutionToFeedbackFlow
+from orchestration.opportunity_decision_bridge import OpportunityToDecisionFlow
+from orchestration.signal_opportunity_bridge import SignalToOpportunityFlow
 from orchestration.strategy_feedback_bridge import FeedbackToStrategyFlow
 
 
