@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from importlib import import_module
+from typing import Any
+
+from supply_directory.business_directory import BusinessDirectory
+from supply_directory.business_profile_store import BusinessProfileStore
+
 """Canonical marketplace owner surface.
 
 The package root owns the marketplace public surface directly, while
@@ -7,12 +13,6 @@ The package root owns the marketplace public surface directly, while
 marketplace helper wrappers. Historical leaf-module imports stay stable through
 compat alias modules installed here.
 """
-
-from importlib import import_module
-from typing import Any
-
-from supply_directory.business_directory import BusinessDirectory
-from supply_directory.business_profile_store import BusinessProfileStore
 
 CANON_MARKETPLACE_OWNER = True
 CANON_MARKETPLACE_SUPPLY_ALIAS_NAMESPACE = True
