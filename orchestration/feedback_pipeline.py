@@ -1,6 +1,6 @@
 from __future__ import annotations
-from dataclasses import asdict, is_dataclass
 
+from dataclasses import asdict, is_dataclass
 
 class FeedbackPipeline:
     def run(self, execution_result: object) -> dict:
