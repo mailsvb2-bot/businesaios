@@ -6,7 +6,6 @@ from collections.abc import Mapping
 
 This module keeps a *single* user-facing surface while preserving two valid
 states of the system:
-
 1. When the DecisionCore singleton is wired and exposes canonical
    ``optimize()``, the flow delegates to the marketplace demand pipeline.
 2. When the runtime has not been wired yet, the flow remains explicitly
