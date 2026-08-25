@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Any
+
+from marketplace.demand_pipeline import process_demand
 
 """Canonical marketplace quote-request flow.
 
@@ -13,11 +17,6 @@ states of the system:
 
 That keeps one boundary and avoids hidden fallback business logic.
 """
-
-from dataclasses import dataclass
-from typing import Any
-
-from marketplace.demand_pipeline import process_demand
 
 
 @dataclass(frozen=True)
