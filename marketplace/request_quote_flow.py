@@ -13,8 +13,9 @@ states of the system:
 That keeps one boundary and avoids hidden fallback business logic.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from marketplace.demand_pipeline import process_demand
 
