@@ -34,6 +34,11 @@ def _derive_secret_hash(*, secret: str, pepper: str = '') -> str:
     return hashlib.sha256(f'{pepper}|{secret}'.encode('utf-8')).hexdigest()
 
 
+def _deny(reason: str, *, mechanism: AuthMechanism | None = AuthMechanism.API_KEY) -> AuthVerdict:
+    verdict = AuthVerdict(allowed=False, reason=reason, mechanism=mechanism, challenge='ApiKey')
+    verdict.validate(); return verdict
+
+
 @dataclass(frozen=True)
 class ApiKeyRecord:
     key_id: str
@@ -115,6 +120,17 @@ class InMemoryApiKeyStore:
         self._records[str(key_id)] = updated
         return updated
 
+    def rotate_owner_session(self, *, tenant_id: str, business_id: str, subject: str, display_name: str | None = None, ttl_seconds: int = 3600) -> tuple[ApiKeyRecord, str]:
+        now = utc_now()
+        for record in self.list_records():
+            metadata = dict(record.metadata or {})
+            if record.is_active(now=now) and record.tenant_id == str(tenant_id) and record.subject == str(subject) and str(metadata.get('session_kind') or '') == 'owner_onboarding' and str(metadata.get('business_id') or '') == str(business_id):
+                self._records[record.key_id] = replace(record, revoked_at=now)
+        raw_secret, key_id = secrets.token_urlsafe(32), f'ak_{secrets.token_hex(8)}'
+        record = ApiKeyRecord(key_id=key_id, secret_hash=_derive_secret_hash(secret=raw_secret, pepper=self._pepper), tenant_id=str(tenant_id), subject=str(subject), actor_id=subject, roles=(RoleId.OWNER,), scopes=('provider_control_plane',), display_name=display_name, expires_at=now + timedelta(seconds=int(ttl_seconds)), metadata={'principal_kind': 'user', 'session_kind': 'owner_onboarding', 'business_id': business_id})
+        InMemoryApiKeyStore.register(self, record)
+        return record, f'{key_id}.{raw_secret}'
+
 
 def api_key_store_path() -> Path:
     explicit = os.getenv("BUSINESAIOS_API_KEY_STORE_PATH", "").strip()
@@ -134,6 +150,11 @@ class PersistentApiKeyStore(InMemoryApiKeyStore):
     def path(self) -> Path:
         return self._path
 
+    def get(self, key_id: str) -> ApiKeyRecord | None:
+        with exclusive_file_lock(self._path):
+            self._load()
+            return super().get(key_id)
+
     def register(self, record: ApiKeyRecord) -> ApiKeyRecord:
         with exclusive_file_lock(self._path):
             self._load()
@@ -147,6 +168,13 @@ class PersistentApiKeyStore(InMemoryApiKeyStore):
             updated = super().revoke(key_id, at=at)
             self._flush()
             return updated
+
+    def rotate_owner_session(self, *, tenant_id: str, business_id: str, subject: str, display_name: str | None = None, ttl_seconds: int = 3600) -> tuple[ApiKeyRecord, str]:
+        with exclusive_file_lock(self._path):
+            self._load()
+            result = super().rotate_owner_session(tenant_id=tenant_id, business_id=business_id, subject=subject, display_name=display_name, ttl_seconds=ttl_seconds)
+            self._flush()
+            return result
 
     def _load(self) -> None:
         raw = read_json_or_default(self._path, default={"records": []})
@@ -186,62 +214,27 @@ class ApiKeyPolicy:
             return None
         if str(metadata.get('business_id') or '') != str(business_id) or str(metadata.get('intake_id') or '') != str(intake_id):
             return None
-        return self.issue_owner_session(tenant_id=tenant_id, business_id=business_id, subject=principal.subject, display_name=str(metadata.get('display_name') or '') or None, ttl_seconds=ttl_seconds)
+        return self._store.rotate_owner_session(tenant_id=tenant_id, business_id=business_id, subject=principal.subject, display_name=str(metadata.get('display_name') or '') or None, ttl_seconds=ttl_seconds)
 
     def authenticate(self, request: RequestAuthentication) -> AuthVerdict:
         request.validate()
         token = str(request.api_key or '').strip()
         if not token:
-            verdict = AuthVerdict(allowed=False, reason='missing_api_key', challenge='ApiKey')
-            verdict.validate()
-            return verdict
+            return _deny('missing_api_key', mechanism=None)
         if '.' not in token:
-            verdict = AuthVerdict(allowed=False, reason='malformed_api_key', mechanism=AuthMechanism.API_KEY, challenge='ApiKey')
-            verdict.validate()
-            return verdict
+            return _deny('malformed_api_key')
         key_id, raw_secret = token.split('.', 1)
         record = self._store.get(key_id)
         if record is None:
-            verdict = AuthVerdict(allowed=False, reason='unknown_api_key', mechanism=AuthMechanism.API_KEY, challenge='ApiKey')
-            verdict.validate()
-            return verdict
+            return _deny('unknown_api_key')
         if not record.is_active():
-            verdict = AuthVerdict(allowed=False, reason='inactive_api_key', mechanism=AuthMechanism.API_KEY, challenge='ApiKey')
-            verdict.validate()
-            return verdict
+            return _deny('inactive_api_key')
         if request.tenant_id and str(request.tenant_id) != record.tenant_id:
-            verdict = AuthVerdict(allowed=False, reason='tenant_mismatch', mechanism=AuthMechanism.API_KEY, challenge='ApiKey')
-            verdict.validate()
-            return verdict
+            return _deny('tenant_mismatch')
         if not self._store.verify_secret(key_id=key_id, raw_secret=raw_secret):
-            verdict = AuthVerdict(allowed=False, reason='bad_api_key_secret', mechanism=AuthMechanism.API_KEY, challenge='ApiKey')
-            verdict.validate()
-            return verdict
-        principal = AuthPrincipal(
-            subject=record.subject,
-            tenant_id=record.tenant_id,
-            actor_id=record.actor_id or record.subject,
-            roles=tuple(record.roles),
-            scopes=tuple(record.scopes),
-            metadata={
-                'auth_type': 'api_key',
-                'principal_kind': 'service',
-                'key_id': record.key_id,
-                'display_name': record.display_name,
-                'created_at': record.created_at.isoformat(),
-                'issued_at': record.created_at.isoformat(),
-                'expires_at': record.expires_at.isoformat() if record.expires_at is not None else None,
-                'session_created_at': record.created_at.isoformat(),
-                **dict(record.metadata),
-            },
-        )
-        verdict = AuthVerdict(
-            allowed=True,
-            reason='authenticated',
-            mechanism=AuthMechanism.API_KEY,
-            principal=principal,
-            labels={'key_id': record.key_id},
-        )
+            return _deny('bad_api_key_secret')
+        principal = AuthPrincipal(subject=record.subject, tenant_id=record.tenant_id, actor_id=record.actor_id or record.subject, roles=tuple(record.roles), scopes=tuple(record.scopes), metadata={'auth_type': 'api_key', 'principal_kind': 'service', 'key_id': record.key_id, 'display_name': record.display_name, 'created_at': record.created_at.isoformat(), 'issued_at': record.created_at.isoformat(), 'expires_at': record.expires_at.isoformat() if record.expires_at is not None else None, 'session_created_at': record.created_at.isoformat(), **dict(record.metadata)})
+        verdict = AuthVerdict(allowed=True, reason='authenticated', mechanism=AuthMechanism.API_KEY, principal=principal, labels={'key_id': record.key_id})
         verdict.validate()
         return verdict
 
