@@ -18,9 +18,7 @@ TESTS = [
     "tests/regression/test_regression_gate_formal_invariants_wave31.py",
     "tests/regression/test_regression_gate_formal_model_wave31.py",
     "tests/regression/test_regression_gate_tla_assets_wave31.py",
-    "tests/regression/test_regression_gate_replay_harness_wave31.py",
-    "tests/regression/test_regression_gate_trace_corpus_wave31.py",
-    "tests/regression/test_regression_gate_mutation_strength_wave31.py",
+    "tests/regression/test_regression_gate_replay_contracts.py",
     "tests/regression/test_regression_gate_runner_scripts_wave31.py",
     "tests/regression/test_regression_gate_project_snapshot_bundle_wave31.py",
 ]
