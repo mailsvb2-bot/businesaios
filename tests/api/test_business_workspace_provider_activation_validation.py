@@ -2,7 +2,6 @@ import pytest
 from fastapi import HTTPException, status
 from adapters.api.fastapi.business_workspace_provider_routes import _validated_activation_secrets
 from application.business_autonomy.provider_truth_matrix import provider_truth_map
-
 TRUTH_ROWS = provider_truth_map()
 @pytest.mark.parametrize("provider_key", sorted(TRUTH_ROWS))
 def test_activation_secret_contract_matches_truth_matrix(provider_key: str) -> None:
