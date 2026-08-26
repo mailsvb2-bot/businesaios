@@ -26,6 +26,16 @@ def _truth(provider_key: str):
     return row
 
 
+def _validated_activation_secrets(*, truth, body: Mapping[str, Any]) -> dict[str, str]:
+    raw_secrets = body.get('secrets')
+    if raw_secrets is not None and not isinstance(raw_secrets, Mapping):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='provider_secrets_invalid')
+    secrets = {str(key): str(value) for key, value in dict(raw_secrets or {}).items()}
+    if any(not str(secrets.get(name) or '').strip() for name in tuple(truth.required_credentials)):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='provider_required_credentials_missing')
+    return secrets
+
+
 def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundle, provider_admin_handlers: ProviderAdminRouteHandlers | None = None) -> None:
     handlers = provider_admin_handlers or ProviderAdminRouteHandlers()
 
@@ -49,8 +59,8 @@ def register_business_workspace_provider_routes(*, router: APIRouter, auth_bundl
             external_ref = str(body.get('external_ref') or '').strip()
             if not external_ref:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='external_ref_required')
-            secrets = body.get('secrets') if isinstance(body.get('secrets'), Mapping) else {}
-            return handlers.activate_provider(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'ownership_key': f'owner:{principal.subject}:{provider_key}', 'requested_by': str(principal.actor_id or principal.subject), 'external_ref': external_ref, 'region': body.get('region'), 'metadata': dict(body.get('metadata') or {}) if isinstance(body.get('metadata'), Mapping) else {}, 'secrets': {str(k): str(v) for k, v in dict(secrets).items()}})
+            secrets = _validated_activation_secrets(truth=truth, body=body)
+            return handlers.activate_provider(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'ownership_key': f'owner:{principal.subject}:{provider_key}', 'requested_by': str(principal.actor_id or principal.subject), 'external_ref': external_ref, 'region': body.get('region'), 'metadata': dict(body.get('metadata') or {}) if isinstance(body.get('metadata'), Mapping) else {}, 'secrets': secrets})
         if action == 'read':
             operation, mode = str(body.get('operation') or '').strip(), str(body.get('mode') or 'live').strip() or 'live'
             if mode not in {'dry_run', 'live'} or (operation and operation not in tuple(truth.read_capabilities)):
