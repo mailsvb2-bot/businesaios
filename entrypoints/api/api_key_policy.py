@@ -150,6 +150,11 @@ class PersistentApiKeyStore(InMemoryApiKeyStore):
     def path(self) -> Path:
         return self._path
 
+    def get(self, key_id: str) -> ApiKeyRecord | None:
+        with exclusive_file_lock(self._path):
+            self._load()
+            return super().get(key_id)
+
     def register(self, record: ApiKeyRecord) -> ApiKeyRecord:
         with exclusive_file_lock(self._path):
             self._load()
