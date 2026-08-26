@@ -36,6 +36,20 @@ def test_resume_revokes_only_prior_owner_onboarding_sessions(tmp_path) -> None:
     assert _allowed(policy, other_business)
 
 
+def test_persisted_rotation_is_visible_to_existing_reader(tmp_path) -> None:
+    path = tmp_path / 'keys.json'
+    writer = ApiKeyPolicy(store=PersistentApiKeyStore(path=path, pepper='pep'))
+    _, old = writer.issue_owner_session(tenant_id='tenant-a', business_id='business-a', subject='owner-a')
+    _, resume = writer.issue_owner_resume_session(tenant_id='tenant-a', business_id='business-a', intake_id='intake-a', subject='owner-a')
+    reader = ApiKeyPolicy(store=PersistentApiKeyStore(path=path, pepper='pep'))
+    assert _allowed(reader, old)
+
+    rotated = writer.resume_owner_session(resume_key=resume, intake_id='intake-a', tenant_id='tenant-a', business_id='business-a')
+    assert rotated is not None
+    assert not _allowed(reader, old)
+    assert _allowed(reader, rotated[1])
+
+
 def test_concurrent_resume_leaves_exactly_one_active_owner_session(tmp_path) -> None:
     path = tmp_path / 'keys.json'
     seed = ApiKeyPolicy(store=PersistentApiKeyStore(path=path, pepper='pep'))
