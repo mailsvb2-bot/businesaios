@@ -1,7 +1,12 @@
 from application.business_autonomy.integration_capability_catalog import (
+    CapabilitySurface,
     capability_map,
     list_integration_capability_payloads,
     summarize_integration_capabilities,
+)
+from application.business_autonomy.provider_catalog import (
+    BRIDGE_MESSAGING_PROVIDER_KEYS,
+    MESSAGING_CHANNEL_PROVIDER_KEYS,
 )
 
 
@@ -33,3 +38,31 @@ def test_capability_summary_counts_are_consistent():
     assert summary['connectable'] + summary['roadmap_only'] == summary['total']
     assert summary['by_surface']['acquisition'] > 0
     assert summary['by_surface']['interaction'] > 0
+
+
+def test_every_external_messaging_provider_has_honest_interaction_capability():
+    capabilities = tuple(
+        capability for capability in capability_map().values()
+        if capability.surface is CapabilitySurface.INTERACTION
+    )
+    by_provider: dict[str, list] = {}
+    for capability in capabilities:
+        for provider_key in capability.provider_keys:
+            by_provider.setdefault(provider_key, []).append(capability)
+
+    assert len(MESSAGING_CHANNEL_PROVIDER_KEYS) == 15
+    for channel, provider_key in MESSAGING_CHANNEL_PROVIDER_KEYS.items():
+        matches = by_provider.get(provider_key, [])
+        assert len(matches) == 1, (channel, provider_key, [item.capability_id for item in matches])
+
+    for provider_key in BRIDGE_MESSAGING_PROVIDER_KEYS:
+        capability = by_provider[provider_key][0]
+        assert capability.status.value == 'partial'
+        assert capability.read_supported is True
+        assert capability.write_supported is False
+        assert capability.verify_supported is True
+        assert capability.connectable is True
+
+    catalog = capability_map()
+    assert catalog['interaction.instagram_direct'].provider_keys == ('instagram_messaging',)
+    assert catalog['interaction.facebook_messenger'].provider_keys == ('messenger_messaging',)
