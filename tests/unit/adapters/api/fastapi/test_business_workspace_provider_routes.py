@@ -116,3 +116,51 @@ def test_write_operation_is_rejected_before_provider_runtime(monkeypatch) -> Non
         asyncio.run(_route(router, 'POST')(object()))
     assert exc.value.status_code == 403
     assert handlers.sync_called is False
+
+
+def test_activation_validation_tracks_entire_provider_truth_matrix(monkeypatch) -> None:
+    handlers, router = _Handlers(), APIRouter()
+    workspace.register_business_workspace_provider_routes(router=router, auth_bundle=object(), provider_admin_handlers=handlers)
+    _authenticate_as(monkeypatch, _principal())
+    endpoint, truth_rows = _route(router, 'POST'), workspace.provider_truth_map()
+
+    for provider_key, truth in sorted(truth_rows.items()):
+        ready = bool(truth.read_only_supported) and str(truth.status) in workspace._READY
+        supplied = {name: f'matrix-{provider_key}-{name}' for name in truth.required_credentials}
+        cases = ({}, *({key: value for key, value in supplied.items() if key != missing} for missing in truth.required_credentials))
+        for secrets in cases:
+            handlers.activated = None
+
+            async def fake_json_body(_request, payload={'action': 'activate', 'provider_key': provider_key, 'external_ref': 'matrix-ref', 'secrets': secrets}):
+                return payload
+
+            monkeypatch.setattr(workspace, 'json_body', fake_json_body)
+            if not ready:
+                with pytest.raises(HTTPException) as exc:
+                    asyncio.run(endpoint(object()))
+                assert exc.value.status_code == 409
+            elif truth.required_credentials:
+                with pytest.raises(HTTPException) as exc:
+                    asyncio.run(endpoint(object()))
+                assert (exc.value.status_code, exc.value.detail) == (422, 'provider_required_credentials_missing')
+                assert handlers.activated is None
+            else:
+                assert asyncio.run(endpoint(object()))['ok'] is True
+
+        if ready and truth.required_credentials:
+            async def complete_json_body(_request, payload={'action': 'activate', 'provider_key': provider_key, 'external_ref': 'matrix-ref', 'secrets': supplied}):
+                return payload
+
+            monkeypatch.setattr(workspace, 'json_body', complete_json_body)
+            assert asyncio.run(endpoint(object()))['ok'] is True
+            assert handlers.activated['secrets'] == supplied
+
+    ready_key = next(key for key, truth in truth_rows.items() if truth.read_only_supported and str(truth.status) in workspace._READY)
+
+    async def invalid_json_body(_request):
+        return {'action': 'activate', 'provider_key': ready_key, 'external_ref': 'matrix-ref', 'secrets': ['not', 'a', 'mapping']}
+
+    monkeypatch.setattr(workspace, 'json_body', invalid_json_body)
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(endpoint(object()))
+    assert (exc.value.status_code, exc.value.detail) == (422, 'provider_secrets_invalid')
