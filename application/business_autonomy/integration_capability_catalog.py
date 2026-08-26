@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from application.business_autonomy.provider_catalog import provider_map
+from application.business_autonomy.provider_catalog import BRIDGE_MESSAGING_PROVIDER_KEYS, provider_map
 
 CANON_INTEGRATION_CAPABILITY_CATALOG = True
 
@@ -163,6 +163,54 @@ class IntegrationCapability:
 
 def _e(source: str, claim: str, confidence: float = 1.0) -> CapabilityEvidence:
     return CapabilityEvidence(source=source, claim=claim, confidence=confidence)
+
+
+_BRIDGE_INTERACTION_CAPABILITY_IDS = {
+    'instagram': 'interaction.instagram_direct',
+    'messenger': 'interaction.facebook_messenger',
+}
+
+
+def _bridge_messaging_interaction_capabilities() -> tuple[IntegrationCapability, ...]:
+    providers = provider_map()
+    capabilities: list[IntegrationCapability] = []
+    for provider_key in sorted(BRIDGE_MESSAGING_PROVIDER_KEYS):
+        provider = providers[provider_key]
+        channel = str(provider.messaging_channel or '').strip()
+        capability_id = _BRIDGE_INTERACTION_CAPABILITY_IDS.get(channel, f'interaction.{channel}')
+        capabilities.append(
+            IntegrationCapability(
+                capability_id=capability_id,
+                title=provider.title,
+                surface=CapabilitySurface.INTERACTION,
+                group='Messengers',
+                status=CapabilityStatus.PARTIAL,
+                provider_keys=(provider_key,),
+                registry_sources=(
+                    'application.business_autonomy.provider_catalog',
+                    'runtime.business_autonomy.provider_webhook_messaging_bridge',
+                ),
+                read_supported=True,
+                write_supported=False,
+                verify_supported=True,
+                requires_credentials=True,
+                requires_webhook=True,
+                risk_level='medium',
+                owner_text=(
+                    f'{provider.title} уже имеет signed provider-webhook bridge через единый canonical messaging runtime; '
+                    'native vendor API и outbound ещё не доказаны.'
+                ),
+                next_required_step=(
+                    'Добавить official vendor auth/native transport, live probe, delivery receipts/rate-limit evidence '
+                    'и только затем отдельно сертифицировать guarded writes.'
+                ),
+                evidence=(
+                    _e(f'provider_catalog.{provider_key}', 'provider exists and maps to the canonical messaging channel'),
+                    _e('provider_webhook_messaging_bridge', 'signed inbound bridge uses the canonical messaging decoder'),
+                ),
+            )
+        )
+    return tuple(capabilities)
 
 
 CAPABILITIES: tuple[IntegrationCapability, ...] = (
@@ -455,26 +503,7 @@ CAPABILITIES: tuple[IntegrationCapability, ...] = (
             _e('messaging_ingress.whatsapp', 'accepted inbound messages use canonical multichannel decoding'),
         ),
     ),
-    IntegrationCapability(
-        capability_id='interaction.instagram_direct',
-        title='Instagram Direct',
-        surface=CapabilitySurface.INTERACTION,
-        group='Messengers',
-        status=CapabilityStatus.NOT_FOUND,
-        owner_text='Отдельный Instagram Direct connector не найден в проверенных surfaces.',
-        next_required_step='Добавить official API constraints, inbound/outbound adapter и Conversation Router binding.',
-        evidence=(_e('code_audit', 'instagram direct connector was not found', 0.7),),
-    ),
-    IntegrationCapability(
-        capability_id='interaction.facebook_messenger',
-        title='Facebook Messenger',
-        surface=CapabilitySurface.INTERACTION,
-        group='Messengers',
-        status=CapabilityStatus.NOT_FOUND,
-        owner_text='Отдельный Facebook Messenger connector не найден в проверенных surfaces.',
-        next_required_step='Добавить Messenger adapter через canonical Conversation Router.',
-        evidence=(_e('code_audit', 'facebook messenger connector was not found', 0.7),),
-    ),
+    *_bridge_messaging_interaction_capabilities(),
     IntegrationCapability(
         capability_id='interaction.email',
         title='Email',
