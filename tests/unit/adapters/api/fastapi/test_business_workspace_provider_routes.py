@@ -48,9 +48,9 @@ def _route(router: APIRouter, method: str):
 
 def _truth_rows():
     return {
-        'contract-provider': SimpleNamespace(status='contract_only', read_only_supported=True, read_capabilities=('read',)),
-        'partial-provider': SimpleNamespace(status='partial', read_only_supported=True, read_capabilities=('read',)),
-        'hubspot': SimpleNamespace(status='partial', read_only_supported=True, read_capabilities=('contact_sync', 'deal_sync')),
+        'contract-provider': SimpleNamespace(status='contract_only', read_only_supported=True, read_capabilities=('read',), required_credentials=()),
+        'partial-provider': SimpleNamespace(status='partial', read_only_supported=True, read_capabilities=('read',), required_credentials=()),
+        'hubspot': SimpleNamespace(status='partial', read_only_supported=True, read_capabilities=('contact_sync', 'deal_sync'), required_credentials=('access_token',)),
     }
 
 
