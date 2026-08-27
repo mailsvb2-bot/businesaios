@@ -59,3 +59,10 @@ def test_max_official_webhook_secret_header_is_accepted() -> None:
     runtime = ProviderWebhookRuntime(vault)
     assert 'X-Max-Bot-Api-Secret' in runtime.describe(provider).header_names
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Max-Bot-Api-Secret': 'max-secret'}, body=b'{}') is True
+
+
+def test_vk_max_prepared_transports_remain_bound_when_vault_is_supplied() -> None:
+    transports = build_provider_vendor_transports(InMemorySecretVault())
+    assert {'vk_messaging', 'max_messaging'} <= set(transports)
+    result = transports['vk_messaging'].execute(provider=provider_map()['vk_messaging'], tenant_id='tenant-a', business_id='business-a', operation='health_probe', payload={})
+    assert result['_prepared_only'] is True
