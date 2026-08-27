@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from application.business_autonomy.non_ai_onboarding_mode import NonAiOperatingMode
 from application.business_autonomy.provider_catalog import (
     BRIDGE_MESSAGING_PROVIDER_KEYS,
     MESSAGING_CHANNEL_PROVIDER_KEYS,
@@ -39,6 +40,12 @@ SAMPLES = {
 
 def test_every_external_canonical_messaging_channel_has_provider_control_plane_surface() -> None:
     assert set(CHANNEL_SPECS) == set(MESSAGING_CHANNEL_PROVIDER_KEYS) | set(MESSAGING_INTERNAL_CHANNELS)
+
+
+def test_every_external_messaging_provider_uses_a_canonical_non_ai_mode() -> None:
+    valid = {mode.value for mode in NonAiOperatingMode}
+    providers = provider_map()
+    assert all(providers[key].default_non_ai_mode in valid for key in MESSAGING_CHANNEL_PROVIDER_KEYS.values())
     providers = provider_map()
     for channel, provider_key in MESSAGING_CHANNEL_PROVIDER_KEYS.items():
         assert provider_key in providers
@@ -66,7 +73,7 @@ def test_bridge_providers_are_signed_read_capable_and_write_planned_but_not_publ
         assert plan.read_operations == ('message_read',)
         assert plan.write_operations == ('message_send',)
         assert contract.enabled is True
-        expected_verifier = 'hmac_sha256_hex' if provider_key in {'instagram_messaging', 'messenger_messaging'} else 'shared_secret_header'
+        expected_verifier = 'hmac_sha256_hex' if provider_key in {'instagram_messaging', 'messenger_messaging'} else 'shared_secret_body_or_header' if provider_key == 'vk_messaging' else 'shared_secret_header'
         assert contract.verification_kind == expected_verifier
         assert marketplace[provider_key]['selectable'] is True
         assert marketplace[provider_key]['read_supported'] is True

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -38,7 +37,7 @@ class ProviderWebhookRouteRegistry:
         route = self.describe(provider)
         normalized_headers = {str(k): str(v) for k, v in dict(headers or {}).items()}
         normalized_payload = self.normalizers.normalize_webhook_payload(provider=provider, headers=normalized_headers, body=body)
-        raw_payload = self._try_parse_json(body)
+        raw_payload = self.normalizers.parse_webhook_json(body)
         event_key = self._first(normalized_headers, route['event_key_headers']) or str(normalized_payload.get('event_key_hint') or '') or f"{provider.provider_key}:{hashlib.sha256(bytes(body)).hexdigest()[:24]}"
         topic = self._first(normalized_headers, route['topic_headers']) or str(normalized_payload.get('topic') or '')
         source_ref = self._first(normalized_headers, route.get('source_headers', ())) or str(normalized_payload.get('source_ref') or '')
@@ -51,16 +50,6 @@ class ProviderWebhookRouteRegistry:
             'resource_id': resource_id,
             'messaging_ingress': messaging_ingress_to_metadata(messaging_ingress),
         }
-
-    @staticmethod
-    def _try_parse_json(body: bytes) -> Mapping[str, Any]:
-        if not body:
-            return {}
-        try:
-            value = json.loads(body.decode('utf-8'))
-        except Exception:
-            return {}
-        return value if isinstance(value, Mapping) else {}
 
     @staticmethod
     def _first(headers: Mapping[str, str], names: tuple[str, ...]) -> str:

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookContract
+from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
@@ -24,7 +25,7 @@ class ProviderWebhookRuntime:
         if provider.provider_key == 'telegram_bot':
             return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='bearer_or_shared_secret', header_names=('Authorization', 'X-Telegram-Bot-Api-Secret-Token'), enabled=True, metadata={'secret_field': self._secret_field(provider)})
         if describe_provider_messaging_binding(provider) is not None and any(field.secret_kind == 'signing_secret' for field in provider.secret_fields):
-            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='shared_secret_header', header_names=('Authorization', 'X-BusinessAIOS-Webhook-Secret', *((('X-Max-Bot-Api-Secret',) if provider.provider_key == 'max_messaging' else ()))), enabled=True, metadata={'secret_field': self._secret_field(provider), 'integration_mode': 'provider_webhook_bridge'})
+            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='shared_secret_body_or_header' if provider.provider_key == 'vk_messaging' else 'shared_secret_header', header_names=('Authorization', 'X-BusinessAIOS-Webhook-Secret', *((('X-Max-Bot-Api-Secret',) if provider.provider_key == 'max_messaging' else ()))), enabled=True, metadata={'secret_field': self._secret_field(provider), 'integration_mode': 'provider_webhook_bridge'})
         return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='none', header_names=(), enabled=False, metadata={})
     def verify(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, headers: Mapping[str, str], body: bytes) -> bool:
         contract = self.describe(provider)
@@ -42,9 +43,17 @@ class ProviderWebhookRuntime:
         if contract.verification_kind == 'hmac_sha256_base64':
             expected = base64.b64encode(hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii')
             return any(candidate and hmac.compare_digest(expected, candidate) for candidate in (normalized_headers.get(str(name).lower(), '') for name in contract.header_names))
-        if contract.verification_kind in {'bearer_or_shared_secret', 'shared_secret_header'}:
-            return any(candidate and hmac.compare_digest(secret, candidate) for candidate in [normalized_headers.get('authorization', '').removeprefix('Bearer ').strip()] + [normalized_headers.get(str(name).lower(), '') for name in contract.header_names if str(name).lower() != 'authorization'])
+        if contract.verification_kind in {'bearer_or_shared_secret', 'shared_secret_header', 'shared_secret_body_or_header'}:
+            candidates = [normalized_headers.get('authorization', '').removeprefix('Bearer ').strip()] + [normalized_headers.get(str(name).lower(), '') for name in contract.header_names if str(name).lower() != 'authorization']
+            if contract.verification_kind == 'shared_secret_body_or_header':
+                candidates.append(str(ProviderPayloadNormalizers.parse_webhook_json(body).get('secret') or ''))
+            return any(candidate and hmac.compare_digest(secret, candidate) for candidate in candidates)
         return False
+    def response_body(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, body: bytes) -> str | None:
+        if provider.provider_key != 'vk_messaging':
+            return None
+        event_type = str(ProviderPayloadNormalizers.parse_webhook_json(body).get('type') or '')
+        return self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f'{provider.connector_id}.confirmation_code') if event_type == 'confirmation' else 'ok'
     def verify_challenge(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, mode: str, verify_token: str, challenge: str) -> str | None:
         if provider.provider_key not in {'whatsapp_cloud', 'instagram_messaging', 'messenger_messaging'} or str(mode) != 'subscribe':
             return None

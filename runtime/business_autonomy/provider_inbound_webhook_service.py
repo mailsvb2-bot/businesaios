@@ -98,6 +98,8 @@ class ProviderInboundWebhookService:
         inbound_result = {}
         if decision.accepted and self.inbound_processor is not None and handoff:
             inbound_result = self.inbound_processor.process(handoff=handoff)
+        if decision.accepted and (not handoff or inbound_result):
+            self.complete(provider=provider, tenant_id=tenant_id, business_id=business_id, event_key=event_key, payload_digest=payload_digest, owner_id=decision.owner_id, topic=topic)
         inbound_summary = summarize_provider_webhook_inbound_result(
             handoff=handoff,
             inbound_result=inbound_result,
@@ -113,7 +115,7 @@ class ProviderInboundWebhookService:
             event_key=event_key,
             accepted=decision.accepted,
             status=status,
-            metadata={'decision': dict(decision.metadata), 'owner_id': decision.owner_id, 'topic': topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': route, 'messaging_handoff': handoff, 'messaging_inbound_result': inbound_result, 'messaging_inbound_summary': inbound_summary, 'incident': incident},
+            metadata={'decision': {'resolution': decision.resolution, **dict(decision.metadata)}, 'owner_id': decision.owner_id, 'topic': topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': route, 'messaging_handoff': handoff, 'messaging_inbound_result': inbound_result, 'messaging_inbound_summary': inbound_summary, 'incident': incident},
         )
 
     def complete(
