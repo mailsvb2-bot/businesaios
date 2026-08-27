@@ -21,7 +21,7 @@ Environment=DATA_DIR=/var/lib/businesaios/runtime
 StateDirectory=businesaios/runtime
 StateDirectoryMode=0750
 ExecStartPre=/opt/businesaios/.venv/bin/python -m scripts.server.migrate_before_start
-ExecStart=/usr/bin/env APP_PROFILE=telegram /opt/businesaios/.venv/bin/python -m scripts.server.run_profile
+ExecStart=/usr/bin/env APP_PROFILE=telegram DATA_DIR=/var/lib/businesaios/runtime /opt/businesaios/.venv/bin/python -m scripts.server.run_profile
 Restart=on-failure
 RestartSec=5
 TimeoutStartSec=120

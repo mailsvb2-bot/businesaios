@@ -88,7 +88,7 @@ def test_telegram_is_an_optional_connector_not_a_core_service() -> None:
     assert 'businesaios-worker.service' in installer
     assert 'ENABLE_TELEGRAM_CONNECTOR="${ENABLE_TELEGRAM_CONNECTOR:-0}"' in installer
     assert 'Environment=APP_PROFILE=telegram' in connector
-    assert 'ExecStart=/usr/bin/env APP_PROFILE=telegram /opt/businesaios/.venv/bin/python -m scripts.server.run_profile' in connector
+    assert 'ExecStart=/usr/bin/env APP_PROFILE=telegram DATA_DIR=/var/lib/businesaios/runtime /opt/businesaios/.venv/bin/python -m scripts.server.run_profile' in connector
     assert 'optional polling adapter' in connector
 
 
@@ -109,6 +109,8 @@ def test_systemd_exec_boundary_pins_profile_after_shared_environment_files() -> 
         if profile == 'worker':
             for token in ('HEALTH_HOST=127.0.0.1', 'WORKER_HEALTH_PORT=8087', 'EVOLUTION_HEALTH_PORT=8087', 'EVOLUTION_ENABLED=1'):
                 assert token in exec_start
+        if profile == 'telegram':
+            assert 'DATA_DIR=/var/lib/businesaios/runtime' in exec_start
 
 
 def test_legacy_telegram_centric_units_are_not_shipped() -> None:

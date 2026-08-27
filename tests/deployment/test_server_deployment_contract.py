@@ -31,6 +31,11 @@ def test_systemd_units_define_server_contract() -> None:
             assert 'WORKER_HEALTH_PORT=8087' in exec_start
             assert 'EVOLUTION_HEALTH_PORT=8087' in exec_start
             assert 'EVOLUTION_ENABLED=1' in exec_start
+        elif profile == 'telegram':
+            assert exec_start == (
+                'ExecStart=/usr/bin/env APP_PROFILE=telegram DATA_DIR=/var/lib/businesaios/runtime '
+                '/opt/businesaios/.venv/bin/python -m scripts.server.run_profile'
+            )
         else:
             assert exec_start == (
                 f'ExecStart=/usr/bin/env APP_PROFILE={profile} '
