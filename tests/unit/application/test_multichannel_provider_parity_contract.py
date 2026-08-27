@@ -73,7 +73,7 @@ def test_bridge_providers_are_signed_read_capable_and_write_planned_but_not_publ
         assert plan.read_operations == ('message_read',)
         assert plan.write_operations == ('message_send',)
         assert contract.enabled is True
-        expected_verifier = 'hmac_sha256_hex' if provider_key in {'instagram_messaging', 'messenger_messaging'} else 'shared_secret_header'
+        expected_verifier = 'hmac_sha256_hex' if provider_key in {'instagram_messaging', 'messenger_messaging'} else 'shared_secret_body_or_header' if provider_key == 'vk_messaging' else 'shared_secret_header'
         assert contract.verification_kind == expected_verifier
         assert marketplace[provider_key]['selectable'] is True
         assert marketplace[provider_key]['read_supported'] is True
