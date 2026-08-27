@@ -6,15 +6,15 @@ from typing import Any, Mapping
 from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
 from runtime.business_autonomy.bootstrap import build_business_autonomy_guarded_service
 
-
 CANON_API_PROVIDER_ADMIN_ROUTE_HANDLERS = True
-
 
 @dataclass(frozen=True)
 class ProviderAdminRouteHandlers:
+    service_factory: Any = build_business_autonomy_guarded_service
+
     def _service(self, business_id: str):
-        service = build_business_autonomy_guarded_service(business_id=business_id)
-        return getattr(service, "_provider_admin_service")
+        service = self.service_factory(business_id=business_id)
+        return getattr(service, "_provider_admin_service", service)
 
     def list_provider_catalog(self, *, tenant_id: str, business_id: str) -> dict[str, Any]:
         service = self._service(business_id)
@@ -79,7 +79,6 @@ class ProviderAdminRouteHandlers:
 
     def get_provider_runtime_routes(self, *, provider_key: str) -> dict[str, Any]:
         return self._service('default-business').describe_provider_runtime_routes(provider_key=provider_key)
-
 
     def probe_provider_live(self, *, tenant_id: str, business_id: str, provider_key: str, mode: str = 'dry_run') -> dict[str, Any]:
         return self._service(business_id).probe_provider_live(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, mode=mode)
@@ -197,7 +196,6 @@ class ProviderAdminRouteHandlers:
     def describe_provider_live_client(self, *, provider_key: str) -> dict[str, Any]:
         return self._service('default-business').describe_provider_live_client(provider_key=provider_key)
 
-
     def dispatch_provider_queue(self, *, payload: Mapping[str, Any]) -> dict[str, Any]:
         return self.enqueue_provider_sync(payload=payload)
 
@@ -209,6 +207,5 @@ class ProviderAdminRouteHandlers:
 
     def get_provider_queue_metrics(self, *, tenant_id: str) -> dict[str, Any]:
         return self._service('default-business').get_provider_queue_metrics(tenant_id=tenant_id)
-
 
 __all__ = ["CANON_API_PROVIDER_ADMIN_ROUTE_HANDLERS", "ProviderAdminRouteHandlers"]
