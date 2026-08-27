@@ -21,13 +21,9 @@ class ProviderPayloadNormalizers:
                 return {'chat_id': str(raw.get('chat_id') or '{chat_id}'), 'text': str(raw.get('text') or raw.get('message') or '')}
             return raw
         if key == 'whatsapp_cloud':
-            return {
-                'messaging_product': raw.get('messaging_product') or 'whatsapp',
-                'to': str(raw.get('to') or '{recipient_phone}'),
-                'type': str(raw.get('type') or 'text'),
-                'text': dict(raw.get('text') or {'body': str(raw.get('body') or raw.get('message') or '')}),
-                **{k: v for k, v in raw.items() if k not in {'messaging_product', 'to', 'type', 'text', 'body', 'message'}},
-            }
+            return {'messaging_product': raw.get('messaging_product') or 'whatsapp', 'to': str(raw.get('to') or '{recipient_phone}'), 'type': str(raw.get('type') or 'text'), 'text': dict(raw.get('text') or {'body': str(raw.get('body') or raw.get('message') or '')}), **{k: v for k, v in raw.items() if k not in {'messaging_product', 'to', 'type', 'text', 'body', 'message'}}}
+        if operation in {'communications_write', 'message_send'} and key in {'vk_messaging', 'max_messaging'}:
+            return {'peer_id': str(raw.get('peer_id') or raw.get('chat_id') or '{peer_id}'), 'random_id': int(raw.get('random_id') or 0), 'message': str(raw.get('message') or raw.get('text') or ''), 'group_id': str(raw.get('group_id') or '{group_id}')} if key == 'vk_messaging' else {'chat_id': str(raw.get('chat_id') or ''), 'user_id': str(raw.get('user_id') or ''), 'text': str(raw.get('text') or raw.get('message') or '')}
         if key in {'shopify', 'woocommerce'}:
             if operation.endswith('catalog_sync'):
                 return {'cursor': raw.get('cursor') or '', 'limit': int(raw.get('limit') or 100), **{k: v for k, v in raw.items() if k not in {'cursor', 'limit'}}}
@@ -52,12 +48,7 @@ class ProviderPayloadNormalizers:
         parsed = self._try_parse_json(body)
         key = provider.provider_key
         if key == 'shopify':
-            return {
-                'topic': header_map.get('x-shopify-topic', ''),
-                'source_ref': header_map.get('x-shopify-shop-domain', ''),
-                'resource_id': str(parsed.get('id') or parsed.get('admin_graphql_api_id') or ''),
-                'event_key_hint': header_map.get('x-shopify-webhook-id', ''),
-            }
+            return {'topic': header_map.get('x-shopify-topic', ''), 'source_ref': header_map.get('x-shopify-shop-domain', ''), 'resource_id': str(parsed.get('id') or parsed.get('admin_graphql_api_id') or ''), 'event_key_hint': header_map.get('x-shopify-webhook-id', '')}
         if key == 'telegram_bot':
             message = parsed.get('message') if isinstance(parsed.get('message'), Mapping) else {}
             chat = message.get('chat') if isinstance(message, Mapping) else {}
@@ -77,12 +68,7 @@ class ProviderPayloadNormalizers:
                 'event_key_hint': header_map.get('x-request-id', ''),
             }
         if key in {'generic_website', 'wordpress'}:
-            return {
-                'topic': header_map.get('x-topic', '') or header_map.get('x-webhook-topic', ''),
-                'source_ref': header_map.get('x-origin-site', '') or header_map.get('x-wordpress-site', ''),
-                'resource_id': str(parsed.get('id') or parsed.get('slug') or ''),
-                'event_key_hint': header_map.get('x-event-id', '') or header_map.get('x-wordpress-event-id', ''),
-            }
+            return {'topic': header_map.get('x-topic', '') or header_map.get('x-webhook-topic', ''), 'source_ref': header_map.get('x-origin-site', '') or header_map.get('x-wordpress-site', ''), 'resource_id': str(parsed.get('id') or parsed.get('slug') or ''), 'event_key_hint': header_map.get('x-event-id', '') or header_map.get('x-wordpress-event-id', '')}
         return {'topic': '', 'source_ref': '', 'resource_id': '', 'event_key_hint': ''}
 
     @staticmethod

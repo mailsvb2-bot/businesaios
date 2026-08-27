@@ -70,6 +70,16 @@ class WhatsAppVendorTransport(_PreparedOnlyTransport):
 
 
 @dataclass(frozen=True)
+class NativeMessagingVendorTransport(_PreparedOnlyTransport):
+    def _build_request(self, *, provider: ProviderDefinition, operation: str, payload: Mapping[str, Any], binding: Mapping[str, Any]) -> Mapping[str, Any]:
+        if provider.provider_key == 'max_messaging':
+            recipient = (('chat_id', payload.get('chat_id')) if payload.get('chat_id') else ('message_ids', payload.get('message_ids') or '{message_ids}')) if operation == 'message_read' else (('chat_id', payload.get('chat_id')) if payload.get('chat_id') else ('user_id', payload.get('user_id') or '{user_id}'))
+            return {'method': 'GET' if operation in {'health_probe', 'message_read'} else 'POST', 'url_template': str(binding['base_url']) + ({'health_probe': '/me', 'message_read': '/messages'}.get(operation, '/messages')) + ('' if operation == 'health_probe' else f'?{recipient[0]}={recipient[1]}'), 'headers': {'Authorization': '{access_token}'}, 'json_body': None if operation in {'health_probe', 'message_read'} else {'text': payload.get('text', '')}}
+        endpoint = {'health_probe': 'groups.getById', 'message_read': 'messages.getConversations'}.get(operation, 'messages.send')
+        return {'method': 'POST', 'url_template': str(binding['base_url']) + '/' + endpoint, 'form_body': {**dict(payload or {}), 'access_token': '{access_token}', 'v': '5.199'}}
+
+
+@dataclass(frozen=True)
 class ShopifyVendorTransport(_PreparedOnlyTransport):
     vendor_family: str = 'shopify_admin_api'
 
@@ -129,10 +139,11 @@ class TikTokAdsVendorTransport(_PreparedOnlyTransport):
 def build_provider_vendor_transports(secret_vault: SecretVault | None = None, *, bind_live_network: bool = True) -> dict[str, _PreparedOnlyTransport]:
     if secret_vault is not None:
         from runtime.business_autonomy.provider_http_live_clients import build_live_http_transports
-        return build_live_http_transports(secret_vault, bind_live_network=bind_live_network)
+        return {**build_live_http_transports(secret_vault, bind_live_network=bind_live_network), **{key: NativeMessagingVendorTransport(vendor_family='native_messaging_api') for key in ('vk_messaging', 'max_messaging')}}
     return {
         'telegram_bot': TelegramVendorTransport(),
         'whatsapp_cloud': WhatsAppVendorTransport(),
+        **{key: NativeMessagingVendorTransport(vendor_family='native_messaging_api') for key in ('vk_messaging', 'max_messaging')},
         'shopify': ShopifyVendorTransport(),
         'woocommerce': WooCommerceVendorTransport(),
         'hubspot': HubSpotVendorTransport(),
