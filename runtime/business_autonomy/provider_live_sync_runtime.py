@@ -16,7 +16,7 @@ from runtime.business_autonomy.provider_runtime_observability import ProviderRun
 from runtime.business_autonomy.provider_runtime_write_guard import ProviderRuntimeWriteGuard
 from runtime.business_autonomy.provider_sync_history import ProviderSyncHistory
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
-from runtime.business_autonomy.provider_sync_scheduler import ProviderSyncScheduler
+from runtime.business_autonomy.provider_retry_policy import ProviderRetryPolicy
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 from security.secret_vault import SecretVault
 
@@ -35,7 +35,7 @@ class ProviderLiveSyncRuntime:
     audit_recorder: ProviderRuntimeAuditRecorder = field(default_factory=ProviderRuntimeAuditRecorder.in_memory)
     observability: ProviderRuntimeObservability = field(default_factory=ProviderRuntimeObservability)
     export_bridge: ProviderRuntimeExportBridge = field(default_factory=ProviderRuntimeExportBridge)
-    scheduler: ProviderSyncScheduler = field(default_factory=ProviderSyncScheduler)
+    retry_policy: ProviderRetryPolicy = field(default_factory=ProviderRetryPolicy)
     response_parsers: ProviderResponseParsers = field(default_factory=ProviderResponseParsers)
     sync_history: ProviderSyncHistory = field(default_factory=ProviderSyncHistory)
     incident_registry: FileProviderIncidentRegistry = field(default_factory=FileProviderIncidentRegistry)
@@ -65,12 +65,11 @@ class ProviderLiveSyncRuntime:
             incident = None
         return ProviderSyncRunResult(**{**result.__dict__, 'metadata': {**dict(result.metadata), 'audit_refs': refs, 'export_refs': export_refs, 'history_row': history_row, 'incident': incident}})
 
-    def _retry_metadata(self, *, provider_key: str, operation: str, category: str, retryable: bool, tenant_id: str, business_id: str, attempts: int = 1) -> dict[str, Any]:
-        decision = self.scheduler.retry_policy.evaluate(provider_key=provider_key, category=category, retryable=retryable, attempt=attempts)
-        scheduled = self.scheduler.schedule_retry(provider_key=provider_key, operation=operation, category=category, retryable=retryable, tenant_id=tenant_id, business_id=business_id, attempts=attempts)
-        return {'retry_policy': {'category': decision.category, 'retryable': decision.retryable, 'next_delay_seconds': decision.next_delay_seconds, 'max_attempts': decision.max_attempts, 'metadata': dict(decision.metadata)}, 'scheduled_retry': {'scheduled': scheduled.scheduled, 'status': scheduled.status, 'metadata': dict(scheduled.metadata)}}
+    def _retry_metadata(self, *, provider_key: str, category: str, retryable: bool, attempts: int = 1) -> dict[str, Any]:
+        decision = self.retry_policy.evaluate(provider_key=provider_key, category=category, retryable=retryable, attempt=attempts)
+        return {'retry_policy': {'category': decision.category, 'retryable': decision.retryable, 'next_delay_seconds': decision.next_delay_seconds, 'max_attempts': decision.max_attempts, 'metadata': dict(decision.metadata)}}
 
-    def run(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, operation: str, mode: str = 'dry_run', payload: Mapping[str, Any] | None = None) -> ProviderSyncRunResult:
+    def run(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, operation: str, mode: str = 'dry_run', payload: Mapping[str, Any] | None = None, attempts: int = 1) -> ProviderSyncRunResult:
         planner = ProviderSyncRuntimePlanner().describe(provider)
         normalized_mode = str(mode or 'dry_run').strip().lower() or 'dry_run'
         normalized_operation = str(operation or '').strip()
@@ -105,11 +104,11 @@ class ProviderLiveSyncRuntime:
             if response.pop('_prepared_only', False):
                 result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_prepared_only', accepted=False, metadata={'request_envelope': envelope, 'transport_response': response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider), 'provider_write_guard': write_guard_decision.to_metadata()})
             else:
-                retry_metadata = self._retry_metadata(provider_key=provider.provider_key, operation=normalized_operation, category=str(parsed_response.get('error_category') or 'provider_runtime_error'), retryable=bool(parsed_response.get('retryable')), tenant_id=str(tenant_id), business_id=str(business_id)) if not response_ok else {}
+                retry_metadata = self._retry_metadata(provider_key=provider.provider_key, category=str(parsed_response.get('error_category') or 'provider_runtime_error'), retryable=bool(parsed_response.get('retryable')), attempts=max(1, int(attempts or 1))) if not response_ok else {}
                 result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_executed' if response_ok else 'live_execution_failed', accepted=response_ok, metadata={'request_envelope': envelope, 'transport_response': response, 'parsed_response': parsed_response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider), 'provider_write_guard': write_guard_decision.to_metadata(), **retry_metadata})
         except Exception as exc:
             error_view = self.error_taxonomy.classify(provider_key=provider.provider_key, error=exc)
-            retry_metadata = self._retry_metadata(provider_key=provider.provider_key, operation=normalized_operation, category=error_view.category, retryable=error_view.retryable, tenant_id=str(tenant_id), business_id=str(business_id))
+            retry_metadata = self._retry_metadata(provider_key=provider.provider_key, category=error_view.category, retryable=error_view.retryable, attempts=max(1, int(attempts or 1)))
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_execution_failed', accepted=False, metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata(), 'error': {'category': error_view.category, 'code': error_view.code, 'retryable': error_view.retryable, 'message': error_view.message, 'metadata': dict(error_view.metadata)}, **retry_metadata})
         return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
 
