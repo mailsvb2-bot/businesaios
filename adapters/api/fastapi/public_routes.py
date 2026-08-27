@@ -21,7 +21,6 @@ from entrypoints.api.public_surface_security_guard import PublicSurfaceSecurityG
 from entrypoints.api.request_context import RequestContext
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 
-
 CANON_FASTAPI_PUBLIC_ROUTES_FINAL_OWNER = True
 CANON_PRODUCTION_GUARD_PRINCIPAL_CONTRACT_REQUIRED = True
 
@@ -132,19 +131,21 @@ def register_public_api_routes(
         enforce_public_security=enforce_public_security,
     )
     if dependency_container is not None:
-        @router.get('/providers/webhook/{tenant_id}/{business_id}/whatsapp_cloud', tags=['provider-runtime'])
-        async def whatsapp_webhook_challenge(tenant_id: str, business_id: str, request: Request) -> Response:
-            query = request.query_params
+        @router.get('/providers/webhook/{tenant_id}/{business_id}/{provider_key}', tags=['provider-runtime'])
+        async def provider_webhook_challenge(tenant_id: str, business_id: str, provider_key: str, request: Request) -> Response:
+            provider = provider_map().get(provider_key)
+            if provider is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='provider_not_found')
             challenge = ProviderWebhookRuntime(dependency_container.secret_vault).verify_challenge(
-                provider=provider_map()['whatsapp_cloud'],
+                provider=provider,
                 tenant_id=tenant_id,
                 business_id=business_id,
-                mode=query.get('hub.mode', ''),
-                verify_token=query.get('hub.verify_token', ''),
-                challenge=query.get('hub.challenge', ''),
+                mode=request.query_params.get('hub.mode', ''),
+                verify_token=request.query_params.get('hub.verify_token', ''),
+                challenge=request.query_params.get('hub.challenge', ''),
             )
             if challenge is None:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='whatsapp_webhook_challenge_denied')
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='provider_webhook_challenge_denied')
             return Response(content=challenge, media_type='text/plain')
     register_public_site_routes(router=router, enforce_public_security=enforce_public_security, auth_bundle=auth_bundle, tenant_registry=tenant_registry)
     if auth_bundle is not None:

@@ -3,7 +3,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 
-from application.business_autonomy.provider_catalog import BRIDGE_MESSAGING_PROVIDER_KEYS, MESSAGING_CHANNEL_PROVIDER_KEYS, provider_map
+from application.business_autonomy.provider_catalog import (
+    BRIDGE_MESSAGING_PROVIDER_KEYS,
+    MESSAGING_CHANNEL_PROVIDER_KEYS,
+    provider_map,
+)
 from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
@@ -53,3 +57,48 @@ def test_every_messaging_provider_declares_truthful_inbound_mode() -> None:
         assert binding is not None
         assert binding.inbound_mode == expected.get(channel, "provider_webhook")
     assert all(describe_provider_messaging_binding(providers[key]).inbound_mode == "provider_webhook" for key in BRIDGE_MESSAGING_PROVIDER_KEYS)
+
+
+def test_meta_messaging_webhooks_support_native_hmac_and_challenge() -> None:
+    providers = provider_map()
+    body = b'{"object":"page","entry":[]}'
+    for provider_key in ("instagram_messaging", "messenger_messaging"):
+        provider = providers[provider_key]
+        fields = {field.secret_name: field for field in provider.secret_fields}
+        assert fields["app_secret"].secret_kind == "signing_secret" and fields["app_secret"].required is False
+        assert fields["verify_token"].secret_kind == "config" and fields["verify_token"].required is False
+        vault = InMemorySecretVault()
+        _put(vault, provider, "app_secret", "meta-secret")
+        _put(vault, provider, "verify_token", "verify-meta")
+        runtime = ProviderWebhookRuntime(vault)
+        signature = "sha256=" + hmac.new(b"meta-secret", body, hashlib.sha256).hexdigest()
+        assert runtime.describe(provider).verification_kind == "hmac_sha256_hex"
+        assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="business-a", headers={"X-Hub-Signature-256": signature}, body=body) is True
+        assert runtime.verify_challenge(provider=provider, tenant_id="tenant-a", business_id="business-a", mode="subscribe", verify_token="verify-meta", challenge="42") == "42"
+
+
+
+class _UnreadableAppSecretVault(InMemorySecretVault):
+    def get(self, ref: SecretRef) -> bytes:
+        if ref.secret_name.endswith('.app_secret'):
+            raise RuntimeError('simulated vault read failure')
+        return super().get(ref)
+
+
+def test_meta_app_secret_read_failure_cannot_downgrade_to_bridge_secret() -> None:
+    provider = provider_map()["messenger_messaging"]
+    vault = _UnreadableAppSecretVault()
+    _put(vault, provider, "webhook_secret", "bridge-secret")
+    _put(vault, provider, "app_secret", "native-secret")
+    runtime = ProviderWebhookRuntime(vault)
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="business-a", headers={"X-BusinessAIOS-Webhook-Secret": "bridge-secret"}, body=b'{}') is False
+
+def test_meta_native_secret_prevents_shared_bridge_bypass() -> None:
+    provider = provider_map()["instagram_messaging"]
+    vault = InMemorySecretVault()
+    _put(vault, provider, "webhook_secret", "bridge-secret")
+    runtime = ProviderWebhookRuntime(vault)
+    body = b'{"object":"instagram"}'
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="business-a", headers={"X-BusinessAIOS-Webhook-Secret": "bridge-secret"}, body=body) is True
+    _put(vault, provider, "app_secret", "native-secret")
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="business-a", headers={"X-BusinessAIOS-Webhook-Secret": "bridge-secret"}, body=body) is False

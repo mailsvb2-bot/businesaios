@@ -17,7 +17,7 @@ BRIDGE_MESSAGING_PROVIDER_KEYS = frozenset(MESSAGING_CHANNEL_PROVIDER_KEYS[chann
 
 
 def _bridge_messaging_provider(channel: str, title: str) -> ProviderDefinition:
-    return ProviderDefinition(provider_key=f"{channel}_messaging", title=title, connector_id=f"messaging.{channel}", adapter_key="chatbot.default", channel_kind=ChannelKind.CHATBOT, domain="communications", description=f"{title} signed provider-webhook bridge through the canonical messaging runtime.", secret_fields=(_token("Webhook Secret", "webhook_secret", placeholder=f"{channel}-webhook-secret", kind="signing_secret"),), default_non_ai_mode="delegated", default_action_type="communications_write", messaging_channel=channel, messaging_capabilities={"plain_text": True}, messaging_live_probe_supported=False)
+    return ProviderDefinition(provider_key=f"{channel}_messaging", title=title, connector_id=f"messaging.{channel}", adapter_key="chatbot.default", channel_kind=ChannelKind.CHATBOT, domain="communications", description=f"{title} signed provider-webhook bridge through the canonical messaging runtime.", secret_fields=(_token("Webhook Secret", "webhook_secret", placeholder=f"{channel}-webhook-secret", kind="signing_secret"), *(() if channel not in {"instagram", "messenger"} else (_token("Meta App Secret", "app_secret", placeholder="meta-app-secret", kind="signing_secret", required=False), _token("Meta Verify Token", "verify_token", placeholder="meta-verify-token", kind="config", required=False)))), default_non_ai_mode="delegated", default_action_type="communications_write", messaging_channel=channel, messaging_capabilities={"plain_text": True}, messaging_live_probe_supported=False)
 
 
 PROVIDERS: tuple[ProviderDefinition, ...] = (
