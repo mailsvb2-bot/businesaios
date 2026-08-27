@@ -66,3 +66,12 @@ def test_vk_max_prepared_transports_remain_bound_when_vault_is_supplied() -> Non
     assert {'vk_messaging', 'max_messaging'} <= set(transports)
     result = transports['vk_messaging'].execute(provider=provider_map()['vk_messaging'], tenant_id='tenant-a', business_id='business-a', operation='health_probe', payload={})
     assert result['_prepared_only'] is True
+
+
+def test_max_message_read_uses_only_documented_chat_or_message_ids_queries() -> None:
+    provider = provider_map()['max_messaging']
+    transport = build_provider_vendor_transports()['max_messaging']
+    by_chat = transport.execute(provider=provider, tenant_id='t', business_id='b', operation='message_read', payload={'chat_id': 99})['request']
+    by_ids = transport.execute(provider=provider, tenant_id='t', business_id='b', operation='message_read', payload={'message_ids': 'm1,m2', 'user_id': 7})['request']
+    assert by_chat['url_template'] == 'https://platform-api2.max.ru/messages?chat_id=99'
+    assert by_ids['url_template'] == 'https://platform-api2.max.ru/messages?message_ids=m1,m2'

@@ -73,7 +73,7 @@ class WhatsAppVendorTransport(_PreparedOnlyTransport):
 class NativeMessagingVendorTransport(_PreparedOnlyTransport):
     def _build_request(self, *, provider: ProviderDefinition, operation: str, payload: Mapping[str, Any], binding: Mapping[str, Any]) -> Mapping[str, Any]:
         if provider.provider_key == 'max_messaging':
-            recipient = ('chat_id', payload.get('chat_id')) if payload.get('chat_id') else ('user_id', payload.get('user_id') or '{user_id}')
+            recipient = (('chat_id', payload.get('chat_id')) if payload.get('chat_id') else ('message_ids', payload.get('message_ids') or '{message_ids}')) if operation == 'message_read' else (('chat_id', payload.get('chat_id')) if payload.get('chat_id') else ('user_id', payload.get('user_id') or '{user_id}'))
             return {'method': 'GET' if operation in {'health_probe', 'message_read'} else 'POST', 'url_template': str(binding['base_url']) + ({'health_probe': '/me', 'message_read': '/messages'}.get(operation, '/messages')) + ('' if operation == 'health_probe' else f'?{recipient[0]}={recipient[1]}'), 'headers': {'Authorization': '{access_token}'}, 'json_body': None if operation in {'health_probe', 'message_read'} else {'text': payload.get('text', '')}}
         endpoint = {'health_probe': 'groups.getById', 'message_read': 'messages.getConversations'}.get(operation, 'messages.send')
         return {'method': 'POST', 'url_template': str(binding['base_url']) + '/' + endpoint, 'form_body': {**dict(payload or {}), 'access_token': '{access_token}', 'v': '5.199'}}
