@@ -4,6 +4,7 @@ from application.business_autonomy.provider_admin_contract import ProviderCreden
 from application.business_autonomy.provider_admin_service import ProviderAdminService
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
+from runtime.business_autonomy.provider_queue_execution import _queue_store_path
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import InMemorySecretVault
 
@@ -43,3 +44,9 @@ def test_provider_sync_queue_tick_runs_jobs(tmp_path):
     service.enqueue_provider_sync(tenant_id='tenant-a', business_id='biz-a', provider_key='telegram_bot', operation='communications_write', mode='dry_run', payload={'message': 'hi'})
     report=service.tick_provider_sync_queue(tenant_id='tenant-a')
     assert report['claimed'] >= 1
+
+
+def test_provider_queue_uses_shared_data_dir(tmp_path, monkeypatch):
+    shared = tmp_path / 'shared-runtime'
+    monkeypatch.setenv('DATA_DIR', str(shared))
+    assert _queue_store_path() == shared / 'runtime' / 'queue' / 'provider_sync_jobs.sqlite3'

@@ -17,6 +17,7 @@ Environment=LOG_LEVEL=INFO
 Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime
 Environment=RUNTIME_DIR=/var/lib/businesaios/runtime/connector-telegram
 Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime
+Environment=DATA_DIR=/var/lib/businesaios/runtime
 StateDirectory=businesaios/runtime
 StateDirectoryMode=0750
 ExecStartPre=/opt/businesaios/.venv/bin/python -m scripts.server.migrate_before_start

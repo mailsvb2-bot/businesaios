@@ -15,6 +15,7 @@ services:
       APP_RUNTIME_DATA_DIR: /app/runtime/data
       RUNTIME_DIR: /app/runtime/data/api
       BAIOS_DATA_DIR: /app/runtime/data
+      DATA_DIR: /app/runtime/data
     ports:
       - "${API_PORT:-8000}:${API_PORT:-8000}"
     volumes:
@@ -45,6 +46,7 @@ services:
       APP_RUNTIME_DATA_DIR: /app/runtime/data
       RUNTIME_DIR: /app/runtime/data/worker
       BAIOS_DATA_DIR: /app/runtime/data
+      DATA_DIR: /app/runtime/data
     ports:
       - "127.0.0.1:${WORKER_HEALTH_PORT:-8087}:${WORKER_HEALTH_PORT:-8087}"
     volumes:
@@ -74,6 +76,7 @@ services:
       APP_RUNTIME_DATA_DIR: /app/runtime/data
       RUNTIME_DIR: /app/runtime/data/telegram
       BAIOS_DATA_DIR: /app/runtime/data
+      DATA_DIR: /app/runtime/data
     ports:
       - "127.0.0.1:${TELEGRAM_HEALTH_PORT:-8088}:${TELEGRAM_HEALTH_PORT:-8088}"
     volumes:

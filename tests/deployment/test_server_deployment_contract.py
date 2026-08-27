@@ -45,6 +45,7 @@ def test_systemd_units_define_server_contract() -> None:
         assert 'StateDirectoryMode=0750' in text
         assert 'Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime' in text
         assert 'Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime' in text
+        assert 'Environment=DATA_DIR=/var/lib/businesaios/runtime' in text
 
 
 def test_compose_and_deploy_docs_match_server_profile_contract() -> None:
@@ -60,6 +61,7 @@ def test_compose_and_deploy_docs_match_server_profile_contract() -> None:
     assert 'deploy/Dockerfile' not in compose
     assert 'python -m scripts.server.migrate_before_start' in compose
     assert 'python -m scripts.server.run_profile' in compose
+    assert compose.count('      DATA_DIR: /app/runtime/data') == 3
     assert 'businesaios_evolution:' not in compose
     assert 'businesaios_telegram:' not in compose
 
