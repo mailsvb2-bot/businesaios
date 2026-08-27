@@ -47,33 +47,15 @@ class ProviderQueueExecutionRuntime:
         guard_decision = self.write_guard.evaluate(provider=provider, operation=normalized_operation, mode=normalized_mode)
         if not guard_decision.allowed:
             return ProviderQueueDispatchResult(
-                job_id='',
-                queued=False,
-                status=guard_decision.status,
-                metadata={
-                    'queue_name': str(queue_name),
-                    'job_type': _PROVIDER_JOB_TYPE,
-                    'provider_key': provider.provider_key,
-                    'provider_write_guard': guard_decision.to_metadata(),
-                    'fail_closed_before_queue': True,
-                },
+                job_id='', queued=False, status=guard_decision.status,
+                metadata={'queue_name': str(queue_name), 'job_type': _PROVIDER_JOB_TYPE, 'provider_key': provider.provider_key, 'provider_write_guard': guard_decision.to_metadata(), 'fail_closed_before_queue': True},
             )
-        normalized_payload = {
-            'provider_key': provider.provider_key,
-            'business_id': str(business_id),
-            'operation': normalized_operation,
-            'mode': normalized_mode,
-            'payload': dict(payload or {}),
-            'provider_write_guard': guard_decision.to_metadata(),
-        }
+        normalized_payload = {'provider_key': provider.provider_key, 'business_id': str(business_id), 'operation': normalized_operation, 'mode': normalized_mode, 'payload': dict(payload or {}), 'provider_write_guard': guard_decision.to_metadata()}
         job_id = f"provider-sync-{provider.provider_key}-{uuid4().hex}"
         req = JobDispatchRequest(
-            tenant_id=str(tenant_id),
-            job_id=job_id,
-            queue_name=str(queue_name),
-            job_type=_PROVIDER_JOB_TYPE,
-            payload=normalized_payload,
+            tenant_id=str(tenant_id), job_id=job_id, queue_name=str(queue_name), job_type=_PROVIDER_JOB_TYPE, payload=normalized_payload,
             dedupe_key=f"{provider.provider_key}:{business_id}:{normalized_operation}:{normalized_payload['mode']}:{uuid4().hex[:8]}",
+            max_attempts=6 if provider.provider_key in {'vk_messaging', 'max_messaging'} else 8,
             tags=(f"provider:{provider.provider_key}", f"business:{business_id}"),
         )
         self.store.put(req.to_record())
@@ -99,14 +81,7 @@ class ProviderQueueExecutionRuntime:
     def metrics(self, *, tenant_id: str, queue_name: str = _PROVIDER_QUEUE_NAME) -> Mapping[str, Any]:
         from runtime.queue.job_contract import JobState
         tid = str(tenant_id)
-        return {
-            'tenant_id': tid,
-            'queue_name': str(queue_name),
-            'pending': self.store.count(tenant_id=tid, queue_name=str(queue_name), state=JobState.PENDING),
-            'claimed': self.store.count(tenant_id=tid, queue_name=str(queue_name), state=JobState.CLAIMED),
-            'completed': self.store.count(tenant_id=tid, queue_name=str(queue_name), state=JobState.SUCCEEDED),
-            'failed': self.store.count(tenant_id=tid, queue_name=str(queue_name), state=JobState.FAILED),
-        }
+        return {'tenant_id': tid, 'queue_name': str(queue_name), 'pending': self.store.count(tenant_id=tid, queue_name=str(queue_name), state=JobState.PENDING), 'claimed': self.store.count(tenant_id=tid, queue_name=str(queue_name), state=JobState.CLAIMED), 'completed': self.store.count(tenant_id=tid, queue_name=str(queue_name), state=JobState.SUCCEEDED), 'failed': self.store.count(tenant_id=tid, queue_name=str(queue_name), state=JobState.FAILED)}
 
     def _runner(self, provider_registry: Mapping[str, ProviderDefinition]):
         runtime = self.live_runtime
@@ -114,9 +89,10 @@ class ProviderQueueExecutionRuntime:
             payload = dict(job.payload or {})
             provider_key = str(payload.get('provider_key') or '').strip()
             provider = provider_registry[provider_key]
-            result: ProviderSyncRunResult = runtime.run(provider=provider, tenant_id=job.tenant_id, business_id=str(payload.get('business_id') or ''), operation=str(payload.get('operation') or ''), mode=str(payload.get('mode') or 'live'), payload=dict(payload.get('payload') or {}))
-            ok = bool(result.accepted)
-            return JobResult(ok=ok, status=result.status, job_id=job.job_id, tenant_id=job.tenant_id, attempts=job.attempts, output={'provider_key': result.provider_key, 'operation': result.operation, 'mode': result.mode, 'metadata': dict(result.metadata or {})}, error=None if ok else result.status)
+            result: ProviderSyncRunResult = runtime.run(provider=provider, tenant_id=job.tenant_id, business_id=str(payload.get('business_id') or ''), operation=str(payload.get('operation') or ''), mode=str(payload.get('mode') or 'live'), payload=dict(payload.get('payload') or {}), attempts=max(1, int(job.attempts)))
+            ok, retry = bool(result.accepted), dict(result.metadata.get('retry_policy') or {})
+            retryable, category = bool(retry.get('retryable')), str(retry.get('category') or 'provider_runtime_error')
+            return JobResult(ok=ok, status=result.status, job_id=job.job_id, tenant_id=job.tenant_id, attempts=job.attempts, output={'provider_key': result.provider_key, 'operation': result.operation, 'mode': result.mode, 'metadata': dict(result.metadata or {})}, error=None if ok else (category.upper() if retryable else f'NON_RETRYABLE:{category}'), retry_delay_seconds=int(retry.get('next_delay_seconds') or 0) if retryable else None)
         return _run
 
 
