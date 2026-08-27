@@ -55,7 +55,7 @@ class ProviderConnectorHealthService:
 
     def probe(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, probe_mode: str = 'dry_run') -> ProviderHealthProbeResult:
         mode = str(probe_mode or 'dry_run').strip().lower() or 'dry_run'
-        required = _REQUIRED_BY_PROVIDER.get(provider.provider_key, tuple(field.field_key for field in provider.secret_fields if field.required))
+        required = (*_REQUIRED_BY_PROVIDER.get(provider.provider_key, tuple(field.field_key for field in provider.secret_fields if field.required)), *(('access_token',) if mode == 'live' and provider.provider_key in {'vk_messaging', 'max_messaging'} else ()))
         present, missing = [], []
         for field_key in required:
             value = self._read_optional_secret(

@@ -3,6 +3,7 @@ from __future__ import annotations
 from application.business_autonomy.provider_catalog import provider_map
 from runtime._internal.http_transport import SyncHTTPResult
 from runtime.business_autonomy.provider_http_live_clients import build_live_http_transports
+from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
 from runtime.business_autonomy.provider_live_probe_runtime import ProviderLiveProbeRuntime
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
@@ -102,3 +103,15 @@ def test_max_live_probe_and_read_use_api2_raw_authorization(monkeypatch, tmp_pat
     read = runtime.run(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_read', mode='live', payload={'message_ids': ['m1', 'm2']})
     assert read.status == 'live_executed' and calls[1]['url'] == 'https://platform-api2.max.ru/messages?message_ids=m1%2Cm2'
     assert calls[1]['method'] == 'GET' and read.metadata['transport_response']['request']['headers']['Authorization'] == '***'
+
+
+def test_vk_max_live_health_requires_native_token_but_bridge_dry_run_does_not() -> None:
+    for key in ('vk_messaging', 'max_messaging'):
+        provider, vault = provider_map()[key], InMemorySecretVault()
+        _put(vault, provider, 'biz-a', 'webhook_secret', 'bridge-secret')
+        health = ProviderConnectorHealthService(vault)
+        dry = health.probe(provider=provider, tenant_id='tenant-a', business_id='biz-a', probe_mode='dry_run')
+        live = health.probe(provider=provider, tenant_id='tenant-a', business_id='biz-a', probe_mode='live')
+        assert dry.status == 'ready_for_credentials'
+        assert live.status == 'misconfigured' and live.reason == 'missing_required_secrets'
+        assert live.metadata['missing_fields'] == ('access_token',)
