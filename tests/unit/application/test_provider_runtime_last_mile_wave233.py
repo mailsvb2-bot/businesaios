@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from application.business_autonomy.business_connector_framework import ConnectorOnboardingService, StaticTrustOnboarding
 from application.business_autonomy.distributed_capability_trust_registry import DistributedBusinessRegistry
 from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
@@ -13,6 +15,7 @@ from runtime.business_autonomy.bootstrap import (
 from runtime.business_autonomy.distributed_state import FileDistributedDocumentStore, FileRegionRouteState
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
+from runtime.business_autonomy.provider_sync_scheduler import InMemoryProviderSyncScheduleStore, ProviderSyncScheduler
 from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
 from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
 from security.connector_secret_scope import ConnectorSecretScope
@@ -45,6 +48,16 @@ def test_shopify_vendor_transport_normalizes_catalog_payload(tmp_path):
     result = ProviderLiveSyncRuntime(service.secret_vault, transports=build_provider_vendor_transports()).run(provider=provider, tenant_id='tenant-a', business_id='shop-a', operation='catalog_sync', mode='live', payload={'shop': 'demo-shop', 'limit': '25'})
     response = dict(result.metadata).get('transport_response', {})
     assert response.get('normalized_payload', {}).get('limit') == 25
+
+
+def test_retry_scheduler_honors_attempt_number() -> None:
+    store = InMemoryProviderSyncScheduleStore()
+    result = ProviderSyncScheduler(store=store).schedule_retry(provider_key='max_messaging', operation='message_read', category='rate_limit', retryable=True, tenant_id='tenant-a', business_id='biz-a', attempts=3)
+    job = result.metadata['job']
+    delay = (datetime.fromisoformat(job['run_at']) - datetime.fromisoformat(job['scheduled_at_utc'])).total_seconds()
+    assert result.scheduled is True and job['attempts'] == 3 and 119 <= delay <= 121
+    exhausted = ProviderSyncScheduler(store=store).schedule_retry(provider_key='max_messaging', operation='message_read', category='rate_limit', retryable=True, tenant_id='tenant-a', business_id='biz-a', attempts=7)
+    assert exhausted.scheduled is False and exhausted.status == 'retry_exhausted' and len(store.jobs) == 1
 
 
 def test_webhook_registry_extracts_resource_id_from_shopify_body():
