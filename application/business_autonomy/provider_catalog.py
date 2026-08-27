@@ -11,14 +11,14 @@ def _token(label: str, secret_name: str, *, placeholder: str = "", kind: str = "
 
 
 _BRIDGE_MESSAGING_TITLES = {"vk": "VK", "max": "MAX", "instagram": "Instagram Direct", "messenger": "Facebook Messenger", "slack": "Slack", "discord": "Discord", "viber": "Viber", "line": "LINE", "wechat": "WeChat", "kakaotalk": "KakaoTalk"}
-_BRIDGE_NATIVE_FIELDS = {"vk": (_token("Group Access Token", "access_token", placeholder="vk-group-token", required=False), _token("Group ID", "group_id", placeholder="123456", kind="config", required=False)), "max": (_token("Bot Access Token", "access_token", placeholder="max-bot-token", required=False),), "instagram": (_token("Meta App Secret", "app_secret", placeholder="meta-app-secret", kind="signing_secret", required=False), _token("Meta Verify Token", "verify_token", placeholder="meta-verify-token", kind="config", required=False)), "messenger": (_token("Meta App Secret", "app_secret", placeholder="meta-app-secret", kind="signing_secret", required=False), _token("Meta Verify Token", "verify_token", placeholder="meta-verify-token", kind="config", required=False))}
+_BRIDGE_NATIVE_FIELDS = {"vk": (_token("Group Access Token", "access_token", placeholder="vk-group-token", required=False), _token("Group ID", "group_id", placeholder="123456", kind="config", required=False), _token("Callback Confirmation Code", "confirmation_code", placeholder="vk-confirmation-code", kind="config", required=False)), "max": (_token("Bot Access Token", "access_token", placeholder="max-bot-token", required=False),), "instagram": (_token("Meta App Secret", "app_secret", placeholder="meta-app-secret", kind="signing_secret", required=False), _token("Meta Verify Token", "verify_token", placeholder="meta-verify-token", kind="config", required=False)), "messenger": (_token("Meta App Secret", "app_secret", placeholder="meta-app-secret", kind="signing_secret", required=False), _token("Meta Verify Token", "verify_token", placeholder="meta-verify-token", kind="config", required=False))}
 MESSAGING_INTERNAL_CHANNELS = frozenset({"api"})
 MESSAGING_CHANNEL_PROVIDER_KEYS = {"telegram": "telegram_bot", "whatsapp": "whatsapp_cloud", "email": "email_connector", "sms": "sms_connector", "web_chat": "generic_website", **{channel: f"{channel}_messaging" for channel in _BRIDGE_MESSAGING_TITLES}}
 BRIDGE_MESSAGING_PROVIDER_KEYS = frozenset(MESSAGING_CHANNEL_PROVIDER_KEYS[channel] for channel in _BRIDGE_MESSAGING_TITLES)
 
 
 def _bridge_messaging_provider(channel: str, title: str) -> ProviderDefinition:
-    return ProviderDefinition(provider_key=f"{channel}_messaging", title=title, connector_id=f"messaging.{channel}", adapter_key="chatbot.default", channel_kind=ChannelKind.CHATBOT, domain="communications", description=f"{title} signed provider-webhook bridge through the canonical messaging runtime.", secret_fields=(_token("Webhook Secret", "webhook_secret", placeholder=f"{channel}-webhook-secret", kind="signing_secret"), *_BRIDGE_NATIVE_FIELDS.get(channel, ())), default_non_ai_mode="delegated", default_action_type="communications_write", messaging_channel=channel, messaging_capabilities={"plain_text": True}, messaging_live_probe_supported=channel in {'vk', 'max'})
+    return ProviderDefinition(provider_key=f"{channel}_messaging", title=title, connector_id=f"messaging.{channel}", adapter_key="chatbot.default", channel_kind=ChannelKind.CHATBOT, domain="communications", description=f"{title} signed provider-webhook bridge through the canonical messaging runtime.", secret_fields=(_token("Webhook Secret", "webhook_secret", placeholder=f"{channel}-webhook-secret", kind="signing_secret"), *_BRIDGE_NATIVE_FIELDS.get(channel, ())), default_non_ai_mode="channel_driven", default_action_type="communications_write", messaging_channel=channel, messaging_capabilities={"plain_text": True}, messaging_live_probe_supported=channel in {'vk', 'max'})
 
 
 PROVIDERS: tuple[ProviderDefinition, ...] = (
@@ -31,7 +31,7 @@ PROVIDERS: tuple[ProviderDefinition, ...] = (
         domain="communications",
         description="Подключение бота Telegram как управляемого business channel.",
         secret_fields=(_token("Bot Token", "bot_token", placeholder="123456:ABC..."),),
-        default_non_ai_mode="delegated",
+        default_non_ai_mode="channel_driven",
         default_action_type="communications_write",
         messaging_channel="telegram",
         messaging_capabilities={"plain_text": True, "buttons": True, "attachments": True},
@@ -51,7 +51,7 @@ PROVIDERS: tuple[ProviderDefinition, ...] = (
             _token("App Secret", "app_secret", placeholder="meta-app-secret", kind="signing_secret"),
             _token("Webhook Verify Token", "verify_token", placeholder="whatsapp-verify-token", kind="config"),
         ),
-        default_non_ai_mode="delegated",
+        default_non_ai_mode="channel_driven",
         default_action_type="communications_write",
         messaging_channel="whatsapp",
         messaging_capabilities={"plain_text": True, "buttons": True, "attachments": True},
@@ -69,7 +69,7 @@ PROVIDERS: tuple[ProviderDefinition, ...] = (
             _token("SMTP/API Token", "api_token", placeholder="smtp-or-api-token"),
             _token("From Address", "from_address", placeholder="ops@example.com", kind="config"),
         ),
-        default_non_ai_mode="delegated",
+        default_non_ai_mode="channel_driven",
         default_action_type="communications_write",
         messaging_channel="email",
         messaging_capabilities={"plain_text": True, "html": True, "attachments": True, "subject_line": True},
@@ -87,7 +87,7 @@ PROVIDERS: tuple[ProviderDefinition, ...] = (
             _token("API Token", "api_token", placeholder="sms-token"),
             _token("Sender ID", "sender_id", placeholder="BUSAIOS", kind="config"),
         ),
-        default_non_ai_mode="delegated",
+        default_non_ai_mode="channel_driven",
         default_action_type="communications_write",
         messaging_channel="sms",
         messaging_capabilities={"plain_text": True},

@@ -93,6 +93,16 @@ class FakeHandlerBundle:
         return _handler
 
 
+class FakeProviderWebhookHandler(FakeHandlerBundle):
+    def __init__(self, result: dict[str, object]) -> None:
+        super().__init__("provider_admin")
+        self.result = dict(result)
+
+    def ingest_provider_webhook(self, **kwargs: object) -> dict[str, object]:
+        self.calls.append(("ingest_provider_webhook", dict(kwargs)))
+        return dict(self.result)
+
+
 async def _fake_json_body(_request: object) -> dict[str, object]:
     return {
         "tenant_id": "tenant-demo",
@@ -156,7 +166,7 @@ def _route_kwargs(endpoint: object) -> dict[str, object]:
     return kwargs
 
 
-def _build_router(monkeypatch: pytest.MonkeyPatch, *, deny_security: bool = False) -> tuple[APIRouter, FakeSecurityGuard]:
+def _build_router(monkeypatch: pytest.MonkeyPatch, *, deny_security: bool = False, provider_admin_handlers: object | None = None) -> tuple[APIRouter, FakeSecurityGuard]:
     monkeypatch.setattr(
         control_plane_routes,
         "authorize_request",
@@ -180,7 +190,7 @@ def _build_router(monkeypatch: pytest.MonkeyPatch, *, deny_security: bool = Fals
         "approval_handlers": FakeHandlerBundle("approval"),
         "admin_handlers": FakeHandlerBundle("admin"),
         "connector_admin_handlers": FakeHandlerBundle("connector_admin"),
-        "provider_admin_handlers": FakeHandlerBundle("provider_admin"),
+        "provider_admin_handlers": provider_admin_handlers or FakeHandlerBundle("provider_admin"),
         "metrics_handlers": FakeHandlerBundle("metrics"),
         "webhook_handlers": FakeHandlerBundle("webhook"),
         "queue_ops_handlers": FakeHandlerBundle("queue_ops"),
@@ -233,3 +243,32 @@ async def test_control_plane_security_permission_error_maps_to_http_403(monkeypa
 
     assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
     assert exc_info.value.detail == "denied"
+
+
+@pytest.mark.asyncio
+async def test_vk_native_public_webhook_returns_plain_text_ack(monkeypatch: pytest.MonkeyPatch) -> None:
+    handler = FakeProviderWebhookHandler({'status': 'accepted', 'accepted': True, 'response_body': 'ok'})
+    router, _ = _build_router(monkeypatch, provider_admin_handlers=handler)
+    route = next(route for route in router.routes if getattr(route, 'path', '') == '/providers/webhook/{tenant_id}/{business_id}/{provider_key}' and 'POST' in getattr(route, 'methods', set()))
+    response = await route.endpoint('tenant-demo', 'business-1', 'vk_messaging', FakeRequest())
+    assert response.body == b'ok' and response.media_type == 'text/plain'
+
+
+@pytest.mark.asyncio
+async def test_native_webhook_signature_failure_maps_to_http_403(monkeypatch: pytest.MonkeyPatch) -> None:
+    handler = FakeProviderWebhookHandler({'status': 'invalid_signature', 'accepted': False, 'response_body': None})
+    router, _ = _build_router(monkeypatch, provider_admin_handlers=handler)
+    route = next(route for route in router.routes if getattr(route, 'path', '') == '/providers/webhook/{tenant_id}/{business_id}/{provider_key}' and 'POST' in getattr(route, 'methods', set()))
+    with pytest.raises(HTTPException) as exc_info:
+        await route.endpoint('tenant-demo', 'business-1', 'max_messaging', FakeRequest())
+    assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.asyncio
+async def test_vk_confirmation_without_code_fails_retryably(monkeypatch: pytest.MonkeyPatch) -> None:
+    handler = FakeProviderWebhookHandler({'status': 'accepted', 'accepted': True, 'response_body': None})
+    router, _ = _build_router(monkeypatch, provider_admin_handlers=handler)
+    route = next(route for route in router.routes if getattr(route, 'path', '') == '/providers/webhook/{tenant_id}/{business_id}/{provider_key}' and 'POST' in getattr(route, 'methods', set()))
+    with pytest.raises(HTTPException) as exc_info:
+        await route.endpoint('tenant-demo', 'business-1', 'vk_messaging', FakeRequest())
+    assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE

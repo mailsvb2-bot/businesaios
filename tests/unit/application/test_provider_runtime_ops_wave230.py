@@ -109,6 +109,18 @@ def test_ingest_provider_webhook_emits_acceptance_metric(tmp_path):
 
 
 
+def test_vk_native_callback_is_verified_and_returns_transport_ack(tmp_path) -> None:
+    service = _service(tmp_path)
+    service.activate_provider(ProviderCredentialSubmission(tenant_id='tenant-a', business_id='vk-a', provider_key='vk_messaging', ownership_key='owner:vk-a', requested_by='owner-user', external_ref='vk://123', secrets={'webhook_secret': 'vk-secret', 'confirmation_code': 'confirm-123'}, metadata={'probe_mode': 'dry_run'}))
+    confirmation = b'{"type":"confirmation","group_id":123,"secret":"vk-secret"}'
+    confirmed = service.ingest_provider_webhook(tenant_id='tenant-a', business_id='vk-a', provider_key='vk_messaging', headers={}, body=confirmation, event_key='', topic='')
+    message = service.ingest_provider_webhook(tenant_id='tenant-a', business_id='vk-a', provider_key='vk_messaging', headers={}, body=b'{"type":"message_new","event_id":"evt-1","group_id":123,"secret":"vk-secret","object":{"message":{"id":9,"from_id":7,"peer_id":7,"text":"hello"}}}', event_key='', topic='')
+    denied = service.ingest_provider_webhook(tenant_id='tenant-a', business_id='vk-a', provider_key='vk_messaging', headers={}, body=confirmation.replace(b'vk-secret', b'wrong'), event_key='', topic='')
+    assert confirmed['status'] == 'accepted' and confirmed['response_body'] == 'confirm-123'
+    assert message['status'] == 'accepted' and message['response_body'] == 'ok' and message['metadata']['route_extract']['topic'] == 'message_new'
+    assert denied['status'] == 'invalid_signature' and denied['response_body'] is None
+
+
 def test_secret_history_and_rollback(tmp_path):
     service = _service(tmp_path)
     service.activate_provider(

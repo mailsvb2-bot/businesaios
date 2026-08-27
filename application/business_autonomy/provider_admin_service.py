@@ -431,11 +431,10 @@ class ProviderAdminService:
     def ingest_provider_webhook(self, *, tenant_id: str, business_id: str, provider_key: str, headers: Mapping[str, str], body: bytes, event_key: str, topic: str = '', owner_id: str = 'provider_admin') -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
         ingress = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(self.secret_vault), replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()))
-        route_registry = ProviderWebhookRouteRegistry()
         normalized_headers = {str(k): str(v) for k, v in dict(headers or {}).items()}
-        extracted = route_registry.extract(provider, normalized_headers, bytes(body))
+        extracted = ProviderWebhookRouteRegistry().extract(provider, normalized_headers, bytes(body))
         result = ingress.ingest(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), headers=normalized_headers, body=bytes(body), event_key=str(event_key).strip() or extracted['event_key'], topic=str(topic).strip() or extracted['topic'], owner_id=str(owner_id).strip() or 'provider_admin')
-        return {'provider_key': result.provider_key, 'event_key': result.event_key, 'accepted': result.accepted, 'status': result.status, 'metadata': {**dict(result.metadata or {}), 'route_extract': extracted}}
+        return {'provider_key': result.provider_key, 'event_key': result.event_key, 'accepted': result.accepted, 'status': result.status, 'response_body': ingress.webhook_runtime.response_body(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body) if result.status != 'invalid_signature' else None, 'metadata': {**dict(result.metadata or {}), 'route_extract': extracted}}
 
     def enqueue_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)

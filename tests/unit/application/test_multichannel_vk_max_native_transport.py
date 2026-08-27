@@ -18,7 +18,7 @@ def test_vk_and_max_keep_bridge_onboarding_while_exposing_native_credentials() -
     providers = provider_map()
     vk = {field.secret_name: field for field in providers['vk_messaging'].secret_fields}
     max_fields = {field.secret_name: field for field in providers['max_messaging'].secret_fields}
-    assert vk['webhook_secret'].required is True and vk['access_token'].required is False and vk['group_id'].required is False
+    assert vk['webhook_secret'].required is True and vk['access_token'].required is False and vk['group_id'].required is False and vk['confirmation_code'].required is False
     assert max_fields['webhook_secret'].required is True and max_fields['access_token'].required is False
     assert all('message_send' in ProviderSyncRuntimePlanner().describe(providers[key]).write_operations for key in ('vk_messaging', 'max_messaging'))
 
@@ -50,6 +50,21 @@ def test_vk_max_probe_bindings_are_native_and_live_read_enabled() -> None:
     transports = build_provider_vendor_transports()
     assert transports['vk_messaging'].execute(provider=provider_map()['vk_messaging'], tenant_id='t', business_id='b', operation='health_probe', payload={})['request']['url_template'].endswith('/groups.getById')
     assert transports['max_messaging'].execute(provider=provider_map()['max_messaging'], tenant_id='t', business_id='b', operation='health_probe', payload={})['request']['url_template'].endswith('/me')
+
+
+def test_vk_official_body_secret_and_callback_response_are_supported() -> None:
+    provider = provider_map()['vk_messaging']
+    vault = InMemorySecretVault()
+    _put(vault, provider, 'webhook_secret', 'vk-secret')
+    _put(vault, provider, 'confirmation_code', 'confirm-123')
+    runtime = ProviderWebhookRuntime(vault)
+    confirmation = b'{"type":"confirmation","group_id":123,"secret":"vk-secret"}'
+    message = b'{"type":"message_new","group_id":123,"secret":"vk-secret","object":{"message":{"id":9,"from_id":7,"peer_id":7,"text":"hello"}}}'
+    assert runtime.describe(provider).verification_kind == 'shared_secret_body_or_header'
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={}, body=confirmation) is True
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={}, body=confirmation.replace(b'vk-secret', b'wrong')) is False
+    assert runtime.response_body(provider=provider, tenant_id='tenant-a', business_id='business-a', body=confirmation) == 'confirm-123'
+    assert runtime.response_body(provider=provider, tenant_id='tenant-a', business_id='business-a', body=message) == 'ok'
 
 
 def test_max_official_webhook_secret_header_is_accepted() -> None:

@@ -45,34 +45,24 @@ class ProviderPayloadNormalizers:
 
     def normalize_webhook_payload(self, *, provider: ProviderDefinition, headers: Mapping[str, str], body: bytes) -> dict[str, Any]:
         header_map = {str(k).lower(): str(v) for k, v in dict(headers or {}).items()}
-        parsed = self._try_parse_json(body)
-        key = provider.provider_key
-        if key == 'shopify':
+        parsed = self.parse_webhook_json(body)
+        if (key := provider.provider_key) == 'shopify':
             return {'topic': header_map.get('x-shopify-topic', ''), 'source_ref': header_map.get('x-shopify-shop-domain', ''), 'resource_id': str(parsed.get('id') or parsed.get('admin_graphql_api_id') or ''), 'event_key_hint': header_map.get('x-shopify-webhook-id', '')}
         if key == 'telegram_bot':
             message = parsed.get('message') if isinstance(parsed.get('message'), Mapping) else {}
-            chat = message.get('chat') if isinstance(message, Mapping) else {}
-            return {
-                'topic': 'telegram_update',
-                'source_ref': str((chat or {}).get('id') or ''),
-                'resource_id': str(parsed.get('update_id') or ''),
-                'event_key_hint': str(parsed.get('update_id') or ''),
-            }
+            return {'topic': 'telegram_update', 'source_ref': str((message.get('chat') if isinstance(message.get('chat'), Mapping) else {}).get('id') or ''), 'resource_id': str(parsed.get('update_id') or ''), 'event_key_hint': str(parsed.get('update_id') or '')}
         if key == 'whatsapp_cloud':
             entry = parsed.get('entry') if isinstance(parsed.get('entry'), list) and parsed.get('entry') else {}
             entry0 = entry[0] if isinstance(entry, list) and entry else {}
-            return {
-                'topic': header_map.get('x-hub-topic', '') or 'whatsapp_event',
-                'source_ref': str(entry0.get('id') or ''),
-                'resource_id': str(entry0.get('id') or ''),
-                'event_key_hint': header_map.get('x-request-id', ''),
-            }
+            return {'topic': header_map.get('x-hub-topic', '') or 'whatsapp_event', 'source_ref': str(entry0.get('id') or ''), 'resource_id': str(entry0.get('id') or ''), 'event_key_hint': header_map.get('x-request-id', '')}
+        if key == 'vk_messaging':
+            return {'topic': str(parsed.get('type') or ''), 'source_ref': str(parsed.get('group_id') or ''), 'resource_id': str(parsed.get('event_id') or ''), 'event_key_hint': str(parsed.get('event_id') or '')}
         if key in {'generic_website', 'wordpress'}:
             return {'topic': header_map.get('x-topic', '') or header_map.get('x-webhook-topic', ''), 'source_ref': header_map.get('x-origin-site', '') or header_map.get('x-wordpress-site', ''), 'resource_id': str(parsed.get('id') or parsed.get('slug') or ''), 'event_key_hint': header_map.get('x-event-id', '') or header_map.get('x-wordpress-event-id', '')}
         return {'topic': '', 'source_ref': '', 'resource_id': '', 'event_key_hint': ''}
 
     @staticmethod
-    def _try_parse_json(body: bytes) -> Mapping[str, Any]:
+    def parse_webhook_json(body: bytes) -> Mapping[str, Any]:
         if not body:
             return {}
         try:
