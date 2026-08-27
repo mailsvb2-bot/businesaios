@@ -6,6 +6,7 @@ from runtime.business_autonomy.provider_http_live_clients import build_live_http
 from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
 from runtime.business_autonomy.provider_live_probe_runtime import ProviderLiveProbeRuntime
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
+from runtime.messaging_capability.channel_health_registry import ChannelHealthRegistry
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
 
@@ -115,3 +116,39 @@ def test_vk_max_live_health_requires_native_token_but_bridge_dry_run_does_not() 
         assert dry.status == 'ready_for_credentials'
         assert live.status == 'misconfigured' and live.reason == 'missing_required_secrets'
         assert live.metadata['missing_fields'] == ('access_token',)
+
+
+def test_vk_api_error_body_fails_live_probe_and_read(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    provider, vault = provider_map()['vk_messaging'], InMemorySecretVault()
+    for name, value in {'webhook_secret': 'bridge-secret', 'access_token': 'vk-token', 'group_id': '123'}.items(): _put(vault, provider, 'biz-a', name, value)
+    failure = SyncHTTPResult(status=200, headers={}, json={}, text='{"error":{"error_code":5,"error_msg":"User authorization failed"}}')
+    monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **_kwargs: failure)
+    probe = ProviderLiveProbeRuntime(vault).run(provider=provider, tenant_id='tenant-a', business_id='biz-a', mode='live')
+    read = ProviderLiveSyncRuntime(vault, transports=build_live_http_transports(vault, bind_live_network=True)).run(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_read', mode='live', payload={})
+    assert probe.status == 'probe_live_failed' and probe.ok is False
+    assert read.status == 'live_execution_failed' and read.accepted is False
+    assert read.metadata['parsed_response']['error_code'] == '5'
+
+
+def test_max_http_error_fails_live_probe_and_read(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    provider, vault = provider_map()['max_messaging'], InMemorySecretVault()
+    for name, value in {'webhook_secret': 'bridge-secret', 'access_token': 'max-token'}.items(): _put(vault, provider, 'biz-a', name, value)
+    failure = SyncHTTPResult(status=401, headers={}, json={}, text='{"code":"unauthorized","message":"bad token"}', error_kind='http_error', error_message='401')
+    monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **_kwargs: failure)
+    probe = ProviderLiveProbeRuntime(vault).run(provider=provider, tenant_id='tenant-a', business_id='biz-a', mode='live')
+    read = ProviderLiveSyncRuntime(vault, transports=build_live_http_transports(vault, bind_live_network=True)).run(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_read', mode='live', payload={'chat_id': '1'})
+    assert probe.status == 'probe_live_failed' and probe.ok is False
+    assert read.status == 'live_execution_failed' and read.accepted is False
+
+
+def test_vk_max_live_probe_updates_channel_health_registry(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    for key in ('vk_messaging', 'max_messaging'):
+        provider, vault, registry = provider_map()[key], InMemorySecretVault(), ChannelHealthRegistry()
+        for name, value in {'webhook_secret': 'bridge-secret', 'access_token': 'token'}.items(): _put(vault, provider, 'biz-a', name, value)
+        monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **_kwargs: SyncHTTPResult(status=200, headers={}, json={}, text='{}'))
+        result = ProviderLiveProbeRuntime(vault, channel_health_registry=registry).run(provider=provider, tenant_id='tenant-a', business_id='biz-a', mode='live')
+        assert provider.messaging_live_probe_supported is True and result.status == 'probe_live_ok'
+        assert registry.get(provider.messaging_channel).healthy is True

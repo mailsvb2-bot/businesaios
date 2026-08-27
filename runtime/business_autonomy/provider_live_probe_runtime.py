@@ -63,8 +63,7 @@ class ProviderLiveProbeRuntime:
             result = ProviderLiveProbeResult(provider_key=provider.provider_key, mode=normalized_mode, status='probe_prepared_only', ok=(normalized_mode != 'live'), metadata={'binding': binding, 'response': response, 'health_probe': {'status': health.status, 'reason': health.reason}})
             result = enrich_probe_result_with_messaging_health(registry=self.channel_health_registry, provider=provider, probe_result=result)
             return finalize_probe_result(observability=self.observability, tenant_id=str(tenant_id), provider_key=provider.provider_key, mode=normalized_mode, result=result)
-        http_status = response.get('http_status')
-        ok = http_status is None or 200 <= int(http_status) < 300
+        http_status = response.get('http_status'); ok = bool(response.pop('_response_ok', http_status is None or 200 <= int(http_status) < 300))
         incident = None
         if not ok:
             incident = self.incident_registry.append({'tenant_id': str(tenant_id), 'business_id': str(business_id), 'provider_key': provider.provider_key, 'kind': 'probe', 'status': 'probe_live_failed', 'severity': 'major', 'category': 'probe', 'message': str(response.get('error_message') or 'probe failed'), 'metadata': {'binding': binding, 'response': response}})

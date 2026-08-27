@@ -104,7 +104,7 @@ class ProviderResponseParsers:
         if isinstance(body, dict):
             if isinstance(body.get('error'), dict):
                 err = body['error']
-                return str(err.get('code') or err.get('type') or err.get('status') or '') or None
+                return str(err.get('code') or err.get('error_code') or err.get('type') or err.get('status') or '') or None
             for key in ('code', 'status', 'error_code'):
                 value = body.get(key)
                 if isinstance(value, int | str) and str(value).strip() and (provider_key != 'telegram_bot' or key != 'status'):
@@ -115,7 +115,7 @@ class ProviderResponseParsers:
         if isinstance(body, dict):
             if isinstance(body.get('error'), dict):
                 err = body['error']
-                return str(err.get('message') or err.get('error_user_msg') or '') or None
+                return str(err.get('message') or err.get('error_msg') or err.get('error_user_msg') or '') or None
             for key in ('message', 'description', 'error_description'):
                 value = body.get(key)
                 if isinstance(value, str) and value.strip():

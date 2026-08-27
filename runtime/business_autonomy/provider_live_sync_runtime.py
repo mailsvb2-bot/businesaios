@@ -103,10 +103,11 @@ class ProviderLiveSyncRuntime:
             if not parsed_response and not response.get('_prepared_only'):
                 parsed_response = self.response_parsers.parse(provider=provider, operation=normalized_operation, response=response)
             response['parsed_response'] = parsed_response
+            response_ok = bool(response.pop('_response_ok', parsed_response.get('ok', True))) and not parsed_response.get('error_code')
             if response.pop('_prepared_only', False):
                 result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_prepared_only', accepted=False, metadata={'request_envelope': envelope, 'transport_response': response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider), 'provider_write_guard': write_guard_decision.to_metadata()})
             else:
-                result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_executed', accepted=True, metadata={'request_envelope': envelope, 'transport_response': response, 'parsed_response': parsed_response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider), 'provider_write_guard': write_guard_decision.to_metadata()})
+                result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_executed' if response_ok else 'live_execution_failed', accepted=response_ok, metadata={'request_envelope': envelope, 'transport_response': response, 'parsed_response': parsed_response, 'health_probe': {'status': health.status, 'reason': health.reason}, 'response_parser': self.response_parsers.describe(provider=provider), 'provider_write_guard': write_guard_decision.to_metadata()})
         except Exception as exc:
             error_view = self.error_taxonomy.classify(provider_key=provider.provider_key, error=exc)
             retry_decision = self.retry_policy.evaluate(provider_key=provider.provider_key, category=error_view.category, retryable=error_view.retryable)

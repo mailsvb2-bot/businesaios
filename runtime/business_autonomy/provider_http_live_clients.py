@@ -71,7 +71,7 @@ class VendorHttpLiveTransport:
             'http_status': http_status,
             'response_body': payload_text,
             'request': public_request,
-            'parsed_response': parsed,
+            'parsed_response': parsed, '_response_ok': not result.error_kind and bool(parsed.get('ok')) and not parsed.get('error_code'),
         }
         if result.error_kind:
             response['error_kind'] = result.error_kind
