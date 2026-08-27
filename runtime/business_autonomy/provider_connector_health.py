@@ -55,8 +55,8 @@ class ProviderConnectorHealthService:
 
     def probe(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, probe_mode: str = 'dry_run') -> ProviderHealthProbeResult:
         mode = str(probe_mode or 'dry_run').strip().lower() or 'dry_run'
-        required = (*_REQUIRED_BY_PROVIDER.get(provider.provider_key, tuple(field.field_key for field in provider.secret_fields if field.required)), *(('access_token',) if mode == 'live' and provider.provider_key in {'vk_messaging', 'max_messaging'} else ()))
-        present, missing = [], []
+        binding, present, missing = provider_transport_binding_for_key(provider.provider_key), [], []
+        required = (*_REQUIRED_BY_PROVIDER.get(provider.provider_key, tuple(field.field_key for field in provider.secret_fields if field.required)), *(binding.get('live_required_secrets', ()) if mode == 'live' else ()))
         for field_key in required:
             value = self._read_optional_secret(
                 tenant_id=tenant_id,
@@ -81,7 +81,7 @@ class ProviderConnectorHealthService:
                 probe_mode=mode, reason=shallow[1],
                 metadata={'present_fields': tuple(present)},
             )
-        live_ready = bool(provider_transport_binding_for_key(provider.provider_key).get('live_ready'))
+        live_ready = bool(binding.get('live_ready'))
         if mode == 'live' and not live_ready:
             return ProviderHealthProbeResult(
                 provider_key=provider.provider_key, status='live_probe_unsupported',

@@ -4,8 +4,6 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import urlencode
-
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
@@ -50,7 +48,7 @@ class VendorHttpLiveTransport:
         if native_read_only and '{access_token}' in str(prepared):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_access_token_missing'}
         body, form = prepared.get('json_body'), prepared.get('form_body')
-        raw = urlencode(form).encode('utf-8') if isinstance(form, Mapping) else (None if body is None else json.dumps(body, sort_keys=True).encode('utf-8'))
+        raw = import_internal_attr('runtime._internal.http_transport', 'form_urlencode')(dict(form)) if isinstance(form, Mapping) else (None if body is None else json.dumps(body, sort_keys=True).encode('utf-8'))
         result = _sync_request(
             method=str(prepared.get('method') or 'POST'),
             url=str(prepared['url']),
@@ -117,8 +115,8 @@ class VendorHttpLiveTransport:
         if provider.provider_key == 'vk_messaging':
             return f"{base_url}/{ {'health_probe': 'groups.getById', 'message_read': 'messages.getConversations'}.get(operation, operation) }"
         if provider.provider_key == 'max_messaging':
-            query = urlencode({k: (','.join(map(str, v)) if k == 'message_ids' and isinstance(v, (list, tuple)) else v) for k, v in (('chat_id', payload.get('chat_id')), ('message_ids', payload.get('message_ids'))) if v is not None and v != ''})
-            return f"{base_url}{'/me' if operation == 'health_probe' else '/messages'}{('?' + query) if query and operation == 'message_read' else ''}"
+            query = {k: (','.join(map(str, v)) if k == 'message_ids' and isinstance(v, (list, tuple)) else v) for k, v in (('chat_id', payload.get('chat_id')), ('message_ids', payload.get('message_ids'))) if v is not None and v != ''}
+            return import_internal_attr('runtime._internal.http_transport', 'url_with_params')(url=f"{base_url}{'/me' if operation == 'health_probe' else '/messages'}", params=query if operation == 'message_read' else None)
         if provider.provider_key == 'shopify':
             return f"{base_url.format(shop=str(payload.get('shop') or secrets.get('shop') or '{shop}'))}{path_family.format(operation=operation)}"
         if provider.provider_key == 'woocommerce':
