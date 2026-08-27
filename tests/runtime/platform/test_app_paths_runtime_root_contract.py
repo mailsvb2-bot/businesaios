@@ -46,3 +46,5 @@ def test_telegram_systemd_contract_exposes_shared_runtime_root() -> None:
 
     assert "Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime" in unit
     assert "Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime" in unit
+    assert "Environment=DATA_DIR=/var/lib/businesaios/runtime" in unit
+    assert "ExecStart=/usr/bin/env APP_PROFILE=telegram DATA_DIR=/var/lib/businesaios/runtime " in unit

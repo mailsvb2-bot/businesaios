@@ -31,6 +31,11 @@ def test_systemd_units_define_server_contract() -> None:
             assert 'WORKER_HEALTH_PORT=8087' in exec_start
             assert 'EVOLUTION_HEALTH_PORT=8087' in exec_start
             assert 'EVOLUTION_ENABLED=1' in exec_start
+        elif profile == 'telegram':
+            assert exec_start == (
+                'ExecStart=/usr/bin/env APP_PROFILE=telegram DATA_DIR=/var/lib/businesaios/runtime '
+                '/opt/businesaios/.venv/bin/python -m scripts.server.run_profile'
+            )
         else:
             assert exec_start == (
                 f'ExecStart=/usr/bin/env APP_PROFILE={profile} '
@@ -45,6 +50,7 @@ def test_systemd_units_define_server_contract() -> None:
         assert 'StateDirectoryMode=0750' in text
         assert 'Environment=APP_RUNTIME_DATA_DIR=/var/lib/businesaios/runtime' in text
         assert 'Environment=BAIOS_DATA_DIR=/var/lib/businesaios/runtime' in text
+        assert 'Environment=DATA_DIR=/var/lib/businesaios/runtime' in text
 
 
 def test_compose_and_deploy_docs_match_server_profile_contract() -> None:
@@ -60,6 +66,7 @@ def test_compose_and_deploy_docs_match_server_profile_contract() -> None:
     assert 'deploy/Dockerfile' not in compose
     assert 'python -m scripts.server.migrate_before_start' in compose
     assert 'python -m scripts.server.run_profile' in compose
+    assert compose.count('      DATA_DIR: /app/runtime/data') == 3
     assert 'businesaios_evolution:' not in compose
     assert 'businesaios_telegram:' not in compose
 
