@@ -77,9 +77,9 @@ class ProviderSyncScheduler:
     store: ProviderSyncScheduleStore = field(default_factory=FileProviderSyncScheduleStore.default)
 
     def schedule_retry(self, *, provider_key: str, operation: str, category: str, retryable: bool, tenant_id: str, business_id: str, attempts: int = 1) -> ProviderScheduledSyncResult:
-        decision = self.retry_policy.evaluate(provider_key=provider_key, category=category, retryable=retryable, attempt=attempts)
-        if not decision.retryable or attempts > decision.max_attempts:
-            return ProviderScheduledSyncResult(provider_key=provider_key, operation=operation, scheduled=False, status='retry_exhausted' if decision.retryable else 'retry_rejected', metadata={'category': category, 'attempts': attempts})
+        decision = self.retry_policy.evaluate(provider_key=provider_key, category=category, retryable=retryable)
+        if not decision.retryable:
+            return ProviderScheduledSyncResult(provider_key=provider_key, operation=operation, scheduled=False, status='retry_rejected', metadata={'category': category, 'attempts': attempts})
         run_at = datetime.now(UTC) + timedelta(seconds=int(decision.next_delay_seconds or 0))
         job = self.store.append({'job_id': str(uuid4()), 'provider_key': provider_key, 'operation': operation, 'tenant_id': tenant_id, 'business_id': business_id, 'attempts': attempts, 'run_at': run_at.isoformat(), 'category': category, 'scheduled_at_utc': datetime.now(UTC).isoformat(), 'status': 'scheduled'})
         return ProviderScheduledSyncResult(provider_key=provider_key, operation=operation, scheduled=True, status='retry_scheduled', metadata={'job': job, 'max_attempts': decision.max_attempts})
