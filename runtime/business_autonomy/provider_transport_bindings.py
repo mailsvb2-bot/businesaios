@@ -16,8 +16,8 @@ def _https_host(*parts: str) -> str:
 _BINDINGS: Mapping[str, Mapping[str, Any]] = {
     'telegram_bot': {'auth_scheme': 'bearer_token', 'base_url': _https_host('api', 'telegram', 'org'), 'probe_path': '/bot{token}/getMe', 'sync_path_family': '/bot{token}/{operation}', 'live_ready': True},
     'whatsapp_cloud': {'auth_scheme': 'bearer_token', 'base_url': 'https://graph.facebook.com', 'probe_path': '/v19.0/{phone_number_id}', 'sync_path_family': '/v19.0/{phone_number_id}/{operation}', 'live_ready': True},
-    'vk_messaging': {'auth_scheme': 'vk_group_access_token', 'base_url': 'https://api.vk.com/method', 'probe_path': '/groups.getById', 'sync_path_family': '/{operation}', 'live_ready': False},
-    'max_messaging': {'auth_scheme': 'authorization_token', 'base_url': 'https://platform-api2.max.ru', 'probe_path': '/me', 'sync_path_family': '/{operation}', 'live_ready': False},
+    'vk_messaging': {'auth_scheme': 'vk_group_access_token', 'base_url': 'https://api.vk.com/method', 'probe_path': '/groups.getById', 'sync_path_family': '/{operation}', 'live_required_secrets': ('access_token',), 'live_ready': True},
+    'max_messaging': {'auth_scheme': 'authorization_token', 'base_url': 'https://platform-api2.max.ru', 'probe_path': '/me', 'sync_path_family': '/{operation}', 'live_required_secrets': ('access_token',), 'live_ready': True},
     'email_connector': {'auth_scheme': 'api_token', 'base_url': 'smtp+https://provider', 'probe_path': '/health', 'sync_path_family': '/mail/{operation}', 'live_ready': False},
     'sms_connector': {'auth_scheme': 'api_token', 'base_url': 'https://sms-gateway.example', 'probe_path': '/health', 'sync_path_family': '/sms/{operation}', 'live_ready': False},
     'generic_website': {'auth_scheme': 'api_key', 'base_url': 'configured-per-business', 'probe_path': '/healthz', 'sync_path_family': '/admin/{operation}', 'live_ready': False},

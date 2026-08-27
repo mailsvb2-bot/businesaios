@@ -40,9 +40,10 @@ def _secret_value(field_key: str) -> str:
     return values.get(field_key, f"synthetic-{field_key}")
 
 
-def _seed_required_secrets(vault: InMemorySecretVault, provider: Any) -> None:
+def _seed_required_secrets(vault: InMemorySecretVault, provider: Any, *, live: bool = False) -> None:
+    live_required = set(provider_transport_binding_for_key(provider.provider_key).get("live_required_secrets", ())) if live else set()
     for field in provider.secret_fields:
-        if not field.required:
+        if not field.required and field.field_key not in live_required:
             continue
         ref = SecretRef(
             tenant_id="tenant-probe-matrix",
@@ -138,7 +139,7 @@ def test_every_provider_live_readiness_matches_transport_binding() -> None:
     cases = 0
     for provider in PROVIDERS:
         vault = InMemorySecretVault()
-        _seed_required_secrets(vault, provider)
+        _seed_required_secrets(vault, provider, live=True)
         health = ProviderConnectorHealthService(vault).probe(
             provider=provider,
             tenant_id="tenant-probe-matrix",
