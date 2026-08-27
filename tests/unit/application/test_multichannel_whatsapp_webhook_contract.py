@@ -77,6 +77,22 @@ def test_meta_messaging_webhooks_support_native_hmac_and_challenge() -> None:
         assert runtime.verify_challenge(provider=provider, tenant_id="tenant-a", business_id="business-a", mode="subscribe", verify_token="verify-meta", challenge="42") == "42"
 
 
+
+class _UnreadableAppSecretVault(InMemorySecretVault):
+    def get(self, ref: SecretRef) -> bytes:
+        if ref.secret_name.endswith('.app_secret'):
+            raise RuntimeError('simulated vault read failure')
+        return super().get(ref)
+
+
+def test_meta_app_secret_read_failure_cannot_downgrade_to_bridge_secret() -> None:
+    provider = provider_map()["messenger_messaging"]
+    vault = _UnreadableAppSecretVault()
+    _put(vault, provider, "webhook_secret", "bridge-secret")
+    _put(vault, provider, "app_secret", "native-secret")
+    runtime = ProviderWebhookRuntime(vault)
+    assert runtime.verify(provider=provider, tenant_id="tenant-a", business_id="business-a", headers={"X-BusinessAIOS-Webhook-Secret": "bridge-secret"}, body=b'{}') is False
+
 def test_meta_native_secret_prevents_shared_bridge_bypass() -> None:
     provider = provider_map()["instagram_messaging"]
     vault = InMemorySecretVault()
