@@ -374,9 +374,11 @@ def register_control_plane_routes(*, router: APIRouter, auth_bundle, authz_bundl
         result = provider_admin_handlers.ingest_provider_webhook(payload={'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'headers': headers, 'body': (await request.body()).decode('utf-8', errors='ignore'), 'event_key': event_key, 'topic': str(headers.get('X-Topic') or headers.get('X-Shopify-Topic') or headers.get('X-Webhook-Topic') or '').strip(), 'owner_id': 'public_provider_webhook'})
         if provider_key in {'vk_messaging', 'max_messaging'} and result.get('status') == 'invalid_signature':
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='provider_webhook_signature_denied')
+        if result.get('metadata', {}).get('messaging_handoff') and not result.get('transport_ack_safe'):
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='provider_webhook_processing_incomplete')
         if provider_key == 'vk_messaging':
             if not result.get('response_body'):
-                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='vk_callback_confirmation_unavailable')
+                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='vk_callback_processing_incomplete')
             return Response(content=str(result['response_body']), media_type='text/plain')
         return result
 

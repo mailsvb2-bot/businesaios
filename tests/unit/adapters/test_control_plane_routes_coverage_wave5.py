@@ -272,3 +272,22 @@ async def test_vk_confirmation_without_code_fails_retryably(monkeypatch: pytest.
     with pytest.raises(HTTPException) as exc_info:
         await route.endpoint('tenant-demo', 'business-1', 'vk_messaging', FakeRequest())
     assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+@pytest.mark.asyncio
+async def test_unprocessed_messaging_webhook_fails_retryably(monkeypatch: pytest.MonkeyPatch) -> None:
+    handler = FakeProviderWebhookHandler({'status': 'accepted', 'accepted': True, 'transport_ack_safe': False, 'response_body': None, 'metadata': {'messaging_handoff': {'inbound_message': {'channel': 'max'}}}})
+    router, _ = _build_router(monkeypatch, provider_admin_handlers=handler)
+    route = next(route for route in router.routes if getattr(route, 'path', '') == '/providers/webhook/{tenant_id}/{business_id}/{provider_key}' and 'POST' in getattr(route, 'methods', set()))
+    with pytest.raises(HTTPException) as exc_info:
+        await route.endpoint('tenant-demo', 'business-1', 'max_messaging', FakeRequest())
+    assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+@pytest.mark.asyncio
+async def test_processed_max_webhook_can_ack_with_plain_http_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = {'status': 'accepted', 'accepted': True, 'transport_ack_safe': True, 'response_body': None, 'metadata': {'messaging_handoff': {'inbound_message': {'channel': 'max'}}}}
+    handler = FakeProviderWebhookHandler(payload)
+    router, _ = _build_router(monkeypatch, provider_admin_handlers=handler)
+    route = next(route for route in router.routes if getattr(route, 'path', '') == '/providers/webhook/{tenant_id}/{business_id}/{provider_key}' and 'POST' in getattr(route, 'methods', set()))
+    assert await route.endpoint('tenant-demo', 'business-1', 'max_messaging', FakeRequest()) == payload

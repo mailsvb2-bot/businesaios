@@ -16,6 +16,7 @@ from application.business_autonomy.provider_catalog import provider_map
 from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from application.business_autonomy.provider_messaging_metadata import messaging_binding_to_metadata
 from core.tenancy.normalization import require_tenant_id
+from reliability.idempotency_contract import IdempotencyStore
 from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
 from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
@@ -62,6 +63,8 @@ class ProviderAdminService:
     connector_secret_scope: ConnectorSecretScope
     activation_store: Any
     route_state: Any | None = None
+    idempotency_store: IdempotencyStore = field(default_factory=InMemoryIdempotencyStore)
+    inbound_processor: Any | None = None
     provider_registry: ProviderDefinitionRegistry = field(default_factory=ProviderDefinitionRegistry)
 
     def list_provider_definitions(self) -> tuple[ProviderDefinition, ...]:
@@ -430,11 +433,13 @@ class ProviderAdminService:
 
     def ingest_provider_webhook(self, *, tenant_id: str, business_id: str, provider_key: str, headers: Mapping[str, str], body: bytes, event_key: str, topic: str = '', owner_id: str = 'provider_admin') -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
-        ingress = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(self.secret_vault), replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()))
+        ingress = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(self.secret_vault), replay_guard=ProviderWebhookReplayGuard(self.idempotency_store), inbound_processor=self.inbound_processor)
         normalized_headers = {str(k): str(v) for k, v in dict(headers or {}).items()}
         extracted = ProviderWebhookRouteRegistry().extract(provider, normalized_headers, bytes(body))
         result = ingress.ingest(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), headers=normalized_headers, body=bytes(body), event_key=str(event_key).strip() or extracted['event_key'], topic=str(topic).strip() or extracted['topic'], owner_id=str(owner_id).strip() or 'provider_admin')
-        return {'provider_key': result.provider_key, 'event_key': result.event_key, 'accepted': result.accepted, 'status': result.status, 'response_body': ingress.webhook_runtime.response_body(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body) if result.status != 'invalid_signature' else None, 'metadata': {**dict(result.metadata or {}), 'route_extract': extracted}}
+        metadata = dict(result.metadata or {})
+        ack_safe = not metadata.get('messaging_handoff') or bool(metadata.get('messaging_inbound_result')) or dict(metadata.get('decision') or {}).get('resolution') == 'replay_completed'
+        return {'provider_key': result.provider_key, 'event_key': result.event_key, 'accepted': result.accepted, 'status': result.status, 'transport_ack_safe': ack_safe, 'response_body': ingress.webhook_runtime.response_body(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body) if result.status != 'invalid_signature' and ack_safe else None, 'metadata': {**metadata, 'route_extract': extracted}}
 
     def enqueue_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)

@@ -660,6 +660,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         connector_secret_scope=connector_secret_scope,
         activation_store=activation_store,
         route_state=distributed['region_state'],
+        idempotency_store=distributed['idempotency'],
     )
     return service
 
