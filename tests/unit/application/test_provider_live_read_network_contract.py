@@ -58,5 +58,47 @@ def test_live_write_remains_fail_closed_before_network(monkeypatch, tmp_path) ->
 
 def test_only_proven_read_providers_receive_live_network_binding() -> None:
     transports = build_live_http_transports(InMemorySecretVault(), bind_live_network=True)
-    assert transports['telegram_bot'].bind_live_network is True and transports['hubspot'].bind_live_network is True
-    assert all(not transport.bind_live_network for key, transport in transports.items() if key not in {'telegram_bot', 'hubspot'})
+    assert all(transports[key].bind_live_network is True for key in {'telegram_bot', 'hubspot', 'vk_messaging', 'max_messaging'})
+    assert all(not transport.bind_live_network for key, transport in transports.items() if key not in {'telegram_bot', 'hubspot', 'vk_messaging', 'max_messaging'})
+
+
+def test_vk_live_probe_uses_official_post_form_without_exposing_token(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    provider, vault, calls = provider_map()['vk_messaging'], InMemorySecretVault(), []
+    for name, value in {'webhook_secret': 'bridge-secret', 'access_token': 'vk-token', 'group_id': '123'}.items():
+        _put(vault, provider, 'biz-a', name, value)
+    monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **kwargs: (calls.append(kwargs) or SyncHTTPResult(status=200, headers={}, json={}, text='{"response":[{"id":123}]}')))
+    result = ProviderLiveProbeRuntime(vault).run(provider=provider, tenant_id='tenant-a', business_id='biz-a', mode='live')
+    assert result.status == 'probe_live_ok' and result.ok is True
+    assert calls[0]['method'] == 'POST' and calls[0]['url'] == 'https://api.vk.com/method/groups.getById'
+    assert b'access_token=vk-token' in calls[0]['body'] and b'group_id=123' in calls[0]['body'] and b'v=5.199' in calls[0]['body']
+    assert result.metadata['response']['request']['form_body']['access_token'] == '***'
+
+
+def test_vk_live_read_uses_messages_get_conversations_and_write_stays_fail_closed(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    provider, vault, calls = provider_map()['vk_messaging'], InMemorySecretVault(), []
+    for name, value in {'webhook_secret': 'bridge-secret', 'access_token': 'vk-token', 'group_id': '123'}.items():
+        _put(vault, provider, 'biz-a', name, value)
+    monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **kwargs: (calls.append(kwargs) or SyncHTTPResult(status=200, headers={}, json={}, text='{"response":{"count":0,"items":[]}}')))
+    runtime = ProviderLiveSyncRuntime(vault, transports=build_live_http_transports(vault, bind_live_network=True))
+    read = runtime.run(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_read', mode='live', payload={'count': 10})
+    assert read.status == 'live_executed' and calls[0]['url'].endswith('/messages.getConversations') and b'count=10' in calls[0]['body']
+    before = len(calls)
+    write = runtime.run(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_send', mode='live', payload={'peer_id': 42, 'text': 'no'})
+    assert write.status == 'rejected_provider_write_guard' and len(calls) == before
+
+
+def test_max_live_probe_and_read_use_api2_raw_authorization(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    provider, vault, calls = provider_map()['max_messaging'], InMemorySecretVault(), []
+    for name, value in {'webhook_secret': 'bridge-secret', 'access_token': 'max-token'}.items():
+        _put(vault, provider, 'biz-a', name, value)
+    monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **kwargs: (calls.append(kwargs) or SyncHTTPResult(status=200, headers={}, json={}, text='{"messages":[]}')))
+    probe = ProviderLiveProbeRuntime(vault).run(provider=provider, tenant_id='tenant-a', business_id='biz-a', mode='live')
+    assert probe.status == 'probe_live_ok' and calls[0]['url'] == 'https://platform-api2.max.ru/me'
+    assert calls[0]['headers']['Authorization'] == 'max-token'
+    runtime = ProviderLiveSyncRuntime(vault, transports=build_live_http_transports(vault, bind_live_network=True))
+    read = runtime.run(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_read', mode='live', payload={'message_ids': ['m1', 'm2']})
+    assert read.status == 'live_executed' and calls[1]['url'] == 'https://platform-api2.max.ru/messages?message_ids=m1%2Cm2'
+    assert calls[1]['method'] == 'GET' and read.metadata['transport_response']['request']['headers']['Authorization'] == '***'

@@ -29,7 +29,7 @@ def test_vk_prepared_native_transport_uses_api_519_and_messages_send() -> None:
     request = result['request']
     assert request['url_template'] == 'https://api.vk.com/method/messages.send'
     assert request['form_body'] == {'peer_id': '42', 'random_id': 7, 'message': 'hello', 'group_id': '123', 'access_token': '{access_token}', 'v': '5.199'}
-    assert result['_prepared_only'] is True and result['transport_binding']['live_ready'] is False
+    assert result['_prepared_only'] is True and result['transport_binding']['live_ready'] is True
 
 
 def test_max_prepared_native_transport_uses_current_api2_and_raw_authorization_token() -> None:
@@ -39,14 +39,14 @@ def test_max_prepared_native_transport_uses_current_api2_and_raw_authorization_t
     assert request['url_template'] == 'https://platform-api2.max.ru/messages?chat_id=99'
     assert request['headers']['Authorization'] == '{access_token}'
     assert request['json_body'] == {'text': 'hello'}
-    assert result['_prepared_only'] is True and result['transport_binding']['live_ready'] is False
+    assert result['_prepared_only'] is True and result['transport_binding']['live_ready'] is True
 
 
-def test_vk_max_probe_bindings_are_native_but_not_live_enabled() -> None:
+def test_vk_max_probe_bindings_are_native_and_live_read_enabled() -> None:
     vk = provider_transport_binding_for_key('vk_messaging')
     max_binding = provider_transport_binding_for_key('max_messaging')
-    assert vk['base_url'] == 'https://api.vk.com/method' and vk['probe_path'] == '/groups.getById' and vk['live_ready'] is False
-    assert max_binding['base_url'] == 'https://platform-api2.max.ru' and max_binding['probe_path'] == '/me' and max_binding['live_ready'] is False
+    assert vk['base_url'] == 'https://api.vk.com/method' and vk['probe_path'] == '/groups.getById' and vk['live_ready'] is True
+    assert max_binding['base_url'] == 'https://platform-api2.max.ru' and max_binding['probe_path'] == '/me' and max_binding['live_ready'] is True
     transports = build_provider_vendor_transports()
     assert transports['vk_messaging'].execute(provider=provider_map()['vk_messaging'], tenant_id='t', business_id='b', operation='health_probe', payload={})['request']['url_template'].endswith('/groups.getById')
     assert transports['max_messaging'].execute(provider=provider_map()['max_messaging'], tenant_id='t', business_id='b', operation='health_probe', payload={})['request']['url_template'].endswith('/me')
