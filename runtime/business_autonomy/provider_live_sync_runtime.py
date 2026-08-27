@@ -10,7 +10,6 @@ from runtime.business_autonomy.provider_connector_health import ProviderConnecto
 from runtime.business_autonomy.provider_error_taxonomy import ProviderErrorTaxonomy
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
-from runtime.business_autonomy.provider_retry_policy import ProviderRetryPolicy
 from runtime.business_autonomy.provider_runtime_audit import ProviderRuntimeAuditRecorder
 from runtime.business_autonomy.provider_runtime_export_bridge import ProviderRuntimeExportBridge
 from runtime.business_autonomy.provider_runtime_observability import ProviderRuntimeObservability
@@ -34,7 +33,6 @@ class ProviderLiveSyncRuntime:
     transports: Mapping[str, ProviderTransportPort] = field(default_factory=dict)
     error_taxonomy: ProviderErrorTaxonomy = field(default_factory=ProviderErrorTaxonomy)
     audit_recorder: ProviderRuntimeAuditRecorder = field(default_factory=ProviderRuntimeAuditRecorder.in_memory)
-    retry_policy: ProviderRetryPolicy = field(default_factory=ProviderRetryPolicy)
     observability: ProviderRuntimeObservability = field(default_factory=ProviderRuntimeObservability)
     export_bridge: ProviderRuntimeExportBridge = field(default_factory=ProviderRuntimeExportBridge)
     scheduler: ProviderSyncScheduler = field(default_factory=ProviderSyncScheduler)
@@ -68,7 +66,7 @@ class ProviderLiveSyncRuntime:
         return ProviderSyncRunResult(**{**result.__dict__, 'metadata': {**dict(result.metadata), 'audit_refs': refs, 'export_refs': export_refs, 'history_row': history_row, 'incident': incident}})
 
     def _retry_metadata(self, *, provider_key: str, operation: str, category: str, retryable: bool, tenant_id: str, business_id: str, attempts: int = 1) -> dict[str, Any]:
-        decision = self.retry_policy.evaluate(provider_key=provider_key, category=category, retryable=retryable, attempt=attempts)
+        decision = self.scheduler.retry_policy.evaluate(provider_key=provider_key, category=category, retryable=retryable, attempt=attempts)
         scheduled = self.scheduler.schedule_retry(provider_key=provider_key, operation=operation, category=category, retryable=retryable, tenant_id=tenant_id, business_id=business_id, attempts=attempts)
         return {'retry_policy': {'category': decision.category, 'retryable': decision.retryable, 'next_delay_seconds': decision.next_delay_seconds, 'max_attempts': decision.max_attempts, 'metadata': dict(decision.metadata)}, 'scheduled_retry': {'scheduled': scheduled.scheduled, 'status': scheduled.status, 'metadata': dict(scheduled.metadata)}}
 
