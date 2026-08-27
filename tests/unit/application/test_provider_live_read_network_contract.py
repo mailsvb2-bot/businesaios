@@ -144,6 +144,9 @@ def test_max_http_error_fails_live_probe_and_read(monkeypatch, tmp_path) -> None
     assert probe.status == 'probe_live_failed' and probe.ok is False
     assert read.status == 'live_execution_failed' and read.accepted is False
     assert read.metadata['parsed_response']['error_category'] == 'rate_limit' and read.metadata['parsed_response']['retryable'] is True
+    assert read.metadata['retry_policy']['retryable'] is True and read.metadata['retry_policy']['next_delay_seconds'] == 30
+    retry_job = read.metadata['scheduled_retry']['metadata']['job']
+    assert read.metadata['scheduled_retry']['scheduled'] is True and retry_job['tenant_id'] == 'tenant-a' and retry_job['business_id'] == 'biz-a'
 
 
 def test_vk_max_live_probe_updates_channel_health_registry(monkeypatch, tmp_path) -> None:
