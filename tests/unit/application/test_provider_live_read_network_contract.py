@@ -33,8 +33,7 @@ def test_telegram_live_probe_uses_get_me(monkeypatch, tmp_path) -> None:
     _put(vault, provider, 'biz-a', 'bot_token', '123:abc')
     monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **kwargs: (calls.append(kwargs) or SyncHTTPResult(status=200, headers={}, json={'ok': True, 'result': {'id': 7}}, text='{"ok": true, "result": {"id": 7}}')))
     result = ProviderLiveProbeRuntime(vault).run(provider=provider, tenant_id='tenant-a', business_id='biz-a', mode='live')
-    assert result.status == 'probe_live_ok' and result.ok is True
-    assert calls[0]['url'] == 'https://api.telegram.org/bot123:abc/getMe' and calls[0]['method'] == 'GET'
+    assert result.status == 'probe_live_ok' and result.ok is True and calls[0]['url'] == 'https://api.telegram.org/bot123:abc/getMe' and calls[0]['method'] == 'GET'
 
 
 def test_hubspot_live_read_uses_current_contacts_api_and_nested_cursor(monkeypatch, tmp_path) -> None:
@@ -135,12 +134,13 @@ def test_max_http_error_fails_live_probe_and_read(monkeypatch, tmp_path) -> None
     monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
     provider, vault = provider_map()['max_messaging'], InMemorySecretVault()
     for name, value in {'webhook_secret': 'bridge-secret', 'access_token': 'max-token'}.items(): _put(vault, provider, 'biz-a', name, value)
-    failure = SyncHTTPResult(status=401, headers={}, json={}, text='{"code":"unauthorized","message":"bad token"}', error_kind='http_error', error_message='401')
+    failure = SyncHTTPResult(status=429, headers={}, json={}, text='{"code":"too_many_requests","message":"slow down"}', error_kind='http_error', error_message='429')
     monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **_kwargs: failure)
     probe = ProviderLiveProbeRuntime(vault).run(provider=provider, tenant_id='tenant-a', business_id='biz-a', mode='live')
     read = ProviderLiveSyncRuntime(vault, transports=build_live_http_transports(vault, bind_live_network=True)).run(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_read', mode='live', payload={'chat_id': '1'})
     assert probe.status == 'probe_live_failed' and probe.ok is False
     assert read.status == 'live_execution_failed' and read.accepted is False
+    assert read.metadata['parsed_response']['error_category'] == 'rate_limit' and read.metadata['parsed_response']['retryable'] is True
 
 
 def test_vk_max_live_probe_updates_channel_health_registry(monkeypatch, tmp_path) -> None:
