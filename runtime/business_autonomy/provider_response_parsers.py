@@ -13,10 +13,9 @@ CANON_PROVIDER_RESPONSE_PARSERS = True
 @dataclass(frozen=True)
 class ProviderResponseParsers:
     def parse(self, *, provider: ProviderDefinition, operation: str, response: Mapping[str, Any]) -> dict[str, Any]:
-        provider_key = str(provider.provider_key)
-        status_code = self._coerce_int(response.get('http_status'))
-        raw_body = str(response.get('response_body') or '')
+        provider_key, status_code, raw_body = str(provider.provider_key), self._coerce_int(response.get('http_status')), str(response.get('response_body') or '')
         body = self._parse_json(raw_body)
+        error_code = self._error_code(provider_key=provider_key, body=body)
         normalized = {
             'provider_key': provider_key,
             'operation': str(operation),
@@ -25,8 +24,9 @@ class ProviderResponseParsers:
             'resource_count': self._resource_count(provider_key=provider_key, body=body),
             'resource_id': self._resource_id(provider_key=provider_key, body=body),
             'next_cursor': self._next_cursor(provider_key=provider_key, body=body),
-            'error_code': self._error_code(provider_key=provider_key, body=body),
-            'error_message': self._error_message(provider_key=provider_key, body=body),
+            'error_code': error_code,
+            'error_message': self._error_message(provider_key=provider_key, body=body), 'error_category': 'rate_limit' if status_code == 429 or (provider_key == 'vk_messaging' and error_code == '6') else ('provider_unavailable' if status_code is not None and status_code >= 500 else None),
+            'retryable': status_code == 429 or (provider_key == 'vk_messaging' and error_code == '6') or (status_code is not None and status_code >= 500), 'delivery_state': ('accepted' if 200 <= status_code < 300 and not error_code else 'rejected') if str(operation) in {'message_send', 'communications_write'} and status_code is not None else None,
             'body_keys': tuple(sorted(body.keys())) if isinstance(body, dict) else (),
             'normalized_preview': self._preview(body),
         }
@@ -35,7 +35,7 @@ class ProviderResponseParsers:
     def describe(self, *, provider: ProviderDefinition) -> dict[str, Any]:
         families = {
             'telegram_bot': ('ok', 'result', 'description'),
-            'whatsapp_cloud': ('messages', 'contacts', 'error'),
+            'whatsapp_cloud': ('messages', 'contacts', 'error'), 'vk_messaging': ('response', 'error'), 'max_messaging': ('messages', 'code', 'message'),
             'shopify': ('orders', 'products', 'admin_graphql_api_id', 'errors', 'page_info'),
             'woocommerce': ('id', 'code', 'message', 'data'),
             'hubspot': ('results', 'paging', 'status', 'message'),
