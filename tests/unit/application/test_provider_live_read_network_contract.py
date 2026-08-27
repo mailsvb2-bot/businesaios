@@ -6,6 +6,7 @@ from runtime.business_autonomy.provider_http_live_clients import build_live_http
 from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
 from runtime.business_autonomy.provider_live_probe_runtime import ProviderLiveProbeRuntime
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
+from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
 from runtime.messaging_capability.channel_health_registry import ChannelHealthRegistry
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
@@ -128,6 +129,8 @@ def test_vk_api_error_body_fails_live_probe_and_read(monkeypatch, tmp_path) -> N
     assert probe.status == 'probe_live_failed' and probe.ok is False
     assert read.status == 'live_execution_failed' and read.accepted is False
     assert read.metadata['parsed_response']['error_code'] == '5'
+    rate_limited = ProviderResponseParsers().parse(provider=provider, operation='message_send', response={'http_status': 200, 'response_body': '{"error":{"error_code":6,"error_msg":"Too many requests"}}'})
+    assert rate_limited['error_category'] == 'rate_limit' and rate_limited['retryable'] is True and rate_limited['delivery_state'] == 'rejected'
 
 
 def test_max_http_error_fails_live_probe_and_read(monkeypatch, tmp_path) -> None:
