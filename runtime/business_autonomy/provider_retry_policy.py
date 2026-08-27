@@ -26,7 +26,7 @@ class ProviderRetryPolicy:
         if normalized_category == 'transport_timeout':
             base = 15
             max_attempts = 5
-        elif normalized_category == 'transport_unavailable':
+        elif normalized_category in {'transport_unavailable', 'provider_unavailable', 'rate_limit'}:
             base = 30
             max_attempts = 6
         else:
