@@ -57,6 +57,15 @@ class ProviderPayloadNormalizers:
             return {'topic': header_map.get('x-hub-topic', '') or 'whatsapp_event', 'source_ref': str(entry0.get('id') or ''), 'resource_id': str(entry0.get('id') or ''), 'event_key_hint': header_map.get('x-request-id', '')}
         if key == 'vk_messaging':
             return {'topic': str(parsed.get('type') or ''), 'source_ref': str(parsed.get('group_id') or ''), 'resource_id': str(parsed.get('event_id') or ''), 'event_key_hint': str(parsed.get('event_id') or '')}
+        if key == 'slack_messaging':
+            event = parsed.get('event') if isinstance(parsed.get('event'), Mapping) else {}
+            event_id = str(parsed.get('event_id') or event.get('client_msg_id') or event.get('event_ts') or event.get('ts') or '')
+            return {
+                'topic': str(event.get('type') or parsed.get('type') or ''),
+                'source_ref': str(parsed.get('team_id') or event.get('channel') or ''),
+                'resource_id': event_id,
+                'event_key_hint': event_id,
+            }
         if key in {'generic_website', 'wordpress'}:
             return {'topic': header_map.get('x-topic', '') or header_map.get('x-webhook-topic', ''), 'source_ref': header_map.get('x-origin-site', '') or header_map.get('x-wordpress-site', ''), 'resource_id': str(parsed.get('id') or parsed.get('slug') or ''), 'event_key_hint': header_map.get('x-event-id', '') or header_map.get('x-wordpress-event-id', '')}
         return {'topic': '', 'source_ref': '', 'resource_id': '', 'event_key_hint': ''}
