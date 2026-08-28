@@ -79,3 +79,12 @@ def test_matrix_summary_is_admin_safe_read_only_pilot() -> None:
     assert summary["live_ready"] == 0
     assert "guarded_write" in summary["live_ready_policy"]
     assert summary["admin_visible"] == len(PROVIDERS)
+
+
+def test_vk_and_max_truth_exposes_guarded_native_without_fake_live_ready() -> None:
+    truth = {row.provider_key: row for row in build_provider_truth_matrix()}
+    for provider_key in ('vk_messaging', 'max_messaging'):
+        row = truth[provider_key]
+        assert row.status == 'read_only_ready'
+        assert row.read_only_supported is True and row.write_supported is True
+        assert row.live_ready is False and row._live_ready_false_reason() == 'live_readiness_not_proven'
