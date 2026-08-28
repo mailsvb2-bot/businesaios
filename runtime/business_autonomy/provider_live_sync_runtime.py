@@ -78,10 +78,12 @@ class ProviderLiveSyncRuntime:
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
         binding = ProviderTransportBindings().describe(provider)
         request_base = {'provider_key': provider.provider_key, 'operation': normalized_operation, 'tenant_id': str(tenant_id), 'business_id': str(business_id), 'payload': dict(payload or {}), 'domain': provider.domain, 'adapter_key': provider.adapter_key, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider)}
-        write_guard_decision = self.write_guard.evaluate(provider=provider, operation=normalized_operation, mode=normalized_mode)
+        write_guard_decision = self.write_guard.evaluate(provider=provider, operation=normalized_operation, mode=normalized_mode, tenant_id=str(tenant_id), business_id=str(business_id), payload=dict(payload or {}))
         if not write_guard_decision.allowed:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status=write_guard_decision.status, accepted=False, metadata={'provider_write_guard': write_guard_decision.to_metadata(), 'request_envelope': request_base})
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
+        if normalized_mode == 'live' and write_guard_decision.is_write_operation and not bool(dict(payload or {}).get('_provider_queue_execution')):
+            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='rejected_provider_write_requires_queue', accepted=False, metadata={'provider_write_guard': write_guard_decision.to_metadata(), 'request_envelope': request_base}), payload=dict(payload or {}))
         health = ProviderConnectorHealthService(self.secret_vault).probe(provider=provider, tenant_id=tenant_id, business_id=business_id, probe_mode=normalized_mode)
         if health.status in {'misconfigured', 'invalid_secret_shape'}:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='rejected_misconfigured', accepted=False, metadata={'health_probe': {'status': health.status, 'reason': health.reason, 'metadata': dict(health.metadata or {})}, 'provider_write_guard': write_guard_decision.to_metadata()})
@@ -95,7 +97,8 @@ class ProviderLiveSyncRuntime:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_transport_unbound', accepted=False, metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata()})
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
         try:
-            response = dict(transport.execute(provider=provider, tenant_id=str(tenant_id), business_id=str(business_id), operation=normalized_operation, payload={**dict(payload or {}), '_allow_network': True}) or {})
+            transport_payload = {**dict(payload or {}), '_allow_network': True, '_provider_write_approved': bool(write_guard_decision.allowed and write_guard_decision.is_write_operation)}
+            response = dict(transport.execute(provider=provider, tenant_id=str(tenant_id), business_id=str(business_id), operation=normalized_operation, payload=transport_payload) or {})
             parsed_response = dict(response.get('parsed_response') or {})
             if not parsed_response and not response.get('_prepared_only'):
                 parsed_response = self.response_parsers.parse(provider=provider, operation=normalized_operation, response=response)

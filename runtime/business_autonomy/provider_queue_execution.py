@@ -11,6 +11,7 @@ from application.business_autonomy.provider_runtime_contract import ProviderSync
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
 from runtime.business_autonomy.provider_runtime_write_guard import ProviderRuntimeWriteGuard
 from runtime.queue.job_contract import JobDispatchRequest, JobResult
+from runtime.queue.job_dispatcher import JobDispatcher
 from runtime.queue.job_scheduler import JobScheduler
 from runtime.queue.job_store_sqlite import SqliteJobStore
 from runtime.queue.job_worker import JobWorker
@@ -40,26 +41,28 @@ class ProviderQueueExecutionRuntime:
     live_runtime: ProviderLiveSyncRuntime
     store: SqliteJobStore = field(default_factory=lambda: SqliteJobStore(_queue_store_path()))
     write_guard: ProviderRuntimeWriteGuard = field(default_factory=ProviderRuntimeWriteGuard)
+    idempotency_store: Any | None = None
 
     def enqueue_sync(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None, queue_name: str = _PROVIDER_QUEUE_NAME) -> ProviderQueueDispatchResult:
         normalized_mode = str(mode or 'live').strip().lower() or 'live'
         normalized_operation = str(operation).strip()
-        guard_decision = self.write_guard.evaluate(provider=provider, operation=normalized_operation, mode=normalized_mode)
+        guard_decision = self.write_guard.evaluate(provider=provider, operation=normalized_operation, mode=normalized_mode, tenant_id=str(tenant_id), business_id=str(business_id), payload=dict(payload or {}))
         if not guard_decision.allowed:
             return ProviderQueueDispatchResult(
                 job_id='', queued=False, status=guard_decision.status,
                 metadata={'queue_name': str(queue_name), 'job_type': _PROVIDER_JOB_TYPE, 'provider_key': provider.provider_key, 'provider_write_guard': guard_decision.to_metadata(), 'fail_closed_before_queue': True},
             )
-        normalized_payload = {'provider_key': provider.provider_key, 'business_id': str(business_id), 'operation': normalized_operation, 'mode': normalized_mode, 'payload': dict(payload or {}), 'provider_write_guard': guard_decision.to_metadata()}
-        job_id = f"provider-sync-{provider.provider_key}-{uuid4().hex}"
+        execution_identity = str(dict(guard_decision.metadata.get('approval') or {}).get('subject_fingerprint') or '').strip() if normalized_mode == 'live' and normalized_operation == 'message_send' and provider.provider_key in {'vk_messaging', 'max_messaging'} else uuid4().hex
+        normalized_payload = {'provider_key': provider.provider_key, 'business_id': str(business_id), 'operation': normalized_operation, 'mode': normalized_mode, 'payload': dict(payload or {})}
+        job_id = f"provider-sync-{provider.provider_key}-{execution_identity[:32]}"
         req = JobDispatchRequest(
             tenant_id=str(tenant_id), job_id=job_id, queue_name=str(queue_name), job_type=_PROVIDER_JOB_TYPE, payload=normalized_payload,
-            dedupe_key=f"{provider.provider_key}:{business_id}:{normalized_operation}:{normalized_payload['mode']}:{uuid4().hex[:8]}",
-            max_attempts=6 if provider.provider_key in {'vk_messaging', 'max_messaging'} else 8,
+            dedupe_key=f"{provider.provider_key}-{normalized_operation}-{execution_identity}",
+            max_attempts=1 if normalized_operation == 'message_send' and provider.provider_key in {'vk_messaging', 'max_messaging'} else (6 if provider.provider_key in {'vk_messaging', 'max_messaging'} else 8),
             tags=(f"provider:{provider.provider_key}", f"business:{business_id}"),
         )
-        self.store.put(req.to_record())
-        return ProviderQueueDispatchResult(job_id=job_id, queued=True, status='queued', metadata={'queue_name': str(queue_name), 'job_type': _PROVIDER_JOB_TYPE, 'provider_key': provider.provider_key, 'provider_write_guard': guard_decision.to_metadata()})
+        dispatch = JobDispatcher(store=self.store, idempotency_store=self.idempotency_store).dispatch(req)
+        return ProviderQueueDispatchResult(job_id='' if dispatch.job is None else dispatch.job.job_id, queued=dispatch.accepted, status='queued' if dispatch.reason == 'accepted' else dispatch.reason, metadata={'queue_name': str(queue_name), 'job_type': _PROVIDER_JOB_TYPE, 'provider_key': provider.provider_key, 'provider_write_guard': guard_decision.to_metadata(), 'idempotency_resolution': dispatch.idempotency_resolution})
 
     def tick(self, *, provider_registry: Mapping[str, ProviderDefinition], tenant_id: str, queue_name: str = _PROVIDER_QUEUE_NAME, worker_id: str = 'provider-runtime-worker') -> Mapping[str, Any]:
         scheduler = JobScheduler(store=self.store)
@@ -89,7 +92,7 @@ class ProviderQueueExecutionRuntime:
             payload = dict(job.payload or {})
             provider_key = str(payload.get('provider_key') or '').strip()
             provider = provider_registry[provider_key]
-            result: ProviderSyncRunResult = runtime.run(provider=provider, tenant_id=job.tenant_id, business_id=str(payload.get('business_id') or ''), operation=str(payload.get('operation') or ''), mode=str(payload.get('mode') or 'live'), payload=dict(payload.get('payload') or {}), attempts=max(1, int(job.attempts)))
+            result: ProviderSyncRunResult = runtime.run(provider=provider, tenant_id=job.tenant_id, business_id=str(payload.get('business_id') or ''), operation=str(payload.get('operation') or ''), mode=str(payload.get('mode') or 'live'), payload={**dict(payload.get('payload') or {}), '_provider_queue_execution': True}, attempts=max(1, int(job.attempts)))
             ok, retry = bool(result.accepted), dict(result.metadata.get('retry_policy') or {})
             retryable, category = bool(retry.get('retryable')), str(retry.get('category') or 'provider_runtime_error')
             return JobResult(ok=ok, status=result.status, job_id=job.job_id, tenant_id=job.tenant_id, attempts=job.attempts, output={'provider_key': result.provider_key, 'operation': result.operation, 'mode': result.mode, 'metadata': dict(result.metadata or {})}, error=None if ok else (category.upper() if retryable else f'NON_RETRYABLE:{category}'), retry_delay_seconds=int(retry.get('next_delay_seconds') or 0) if retryable else None)

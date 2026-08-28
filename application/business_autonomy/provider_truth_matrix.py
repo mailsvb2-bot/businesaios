@@ -49,7 +49,8 @@ _PROVIDER_OWNERS: Mapping[str, str] = {
 }
 _HIGH_RISK_DOMAINS = {"ads", "marketplace", "platform_infra"}
 _HIGH_RISK_PROVIDERS = {"sms_connector", "whatsapp_cloud"}
-_GUARDED_WRITE_SUPPORTED: frozenset[str] = frozenset()
+_GUARDED_WRITE_SUPPORTED: frozenset[str] = frozenset({'vk_messaging', 'max_messaging'})
+_GUARDED_WRITE_LIVE_READY: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -128,9 +129,7 @@ def _best_capability_status(provider_key: str, status_map: Mapping[str, list[str
 
 
 def _risk_level(provider: ProviderDefinition, write_capabilities: Iterable[str]) -> str:
-    if provider.domain in _HIGH_RISK_DOMAINS or provider.provider_key in _HIGH_RISK_PROVIDERS:
-        return "high"
-    return "medium" if tuple(write_capabilities) else "low"
+    return "high" if provider.domain in _HIGH_RISK_DOMAINS or provider.provider_key in _HIGH_RISK_PROVIDERS else ("medium" if tuple(write_capabilities) else "low")
 
 
 def _truth_status(*, capability_status: str, has_real_endpoint: bool, has_placeholder_endpoint: bool, read_only_supported: bool, write_supported: bool) -> str:
@@ -144,19 +143,18 @@ def _truth_status(*, capability_status: str, has_real_endpoint: bool, has_placeh
 
 
 def _truth_row(provider: ProviderDefinition, *, planner: ProviderSyncRuntimePlanner, bindings: ProviderTransportBindings, capability_statuses: Mapping[str, list[str]]) -> ProviderTruthRow:
-    binding = bindings.describe(provider)
-    plan = planner.describe(provider)
+    binding, plan = bindings.describe(provider), planner.describe(provider)
     read_capabilities, write_capabilities = tuple(plan.read_operations), tuple(plan.write_operations)
-    required_credentials = _required_credentials(provider)
-    has_placeholder_endpoint, has_real_endpoint = _has_placeholder_endpoint(binding), _has_real_endpoint(binding)
+    required_credentials, truth_binding = _required_credentials(provider), dict(binding)
+    if provider.provider_key in _GUARDED_WRITE_SUPPORTED:
+        truth_binding['sync_path_family'] = str(truth_binding.get('sync_path_family') or '').replace('{operation}', 'operation')
+    has_placeholder_endpoint, has_real_endpoint = _has_placeholder_endpoint(truth_binding), _has_real_endpoint(truth_binding)
     capability_status = _best_capability_status(provider.provider_key, capability_statuses)
     read_only_supported = bool(read_capabilities) and capability_status not in {CapabilityStatus.CONTRACT_ONLY.value, CapabilityStatus.NOT_IMPLEMENTED.value, CapabilityStatus.NOT_FOUND.value}
-    write_supported = provider.provider_key in _GUARDED_WRITE_SUPPORTED
-    status = _truth_status(
-        capability_status=capability_status, has_real_endpoint=has_real_endpoint,
-        has_placeholder_endpoint=has_placeholder_endpoint, read_only_supported=read_only_supported, write_supported=write_supported,
-    )
-    live_ready = status == ProviderTruthStatus.LIVE_READY.value and bool(binding.get("live_ready")) and has_real_endpoint and not has_placeholder_endpoint and write_supported
+    write_supported, proven_live_write = provider.provider_key in _GUARDED_WRITE_SUPPORTED, provider.provider_key in (_GUARDED_WRITE_SUPPORTED & _GUARDED_WRITE_LIVE_READY)
+    status = _truth_status(capability_status=capability_status, has_real_endpoint=has_real_endpoint,
+        has_placeholder_endpoint=has_placeholder_endpoint, read_only_supported=read_only_supported, write_supported=proven_live_write)
+    live_ready = status == ProviderTruthStatus.LIVE_READY.value and bool(binding.get("live_ready")) and has_real_endpoint and not has_placeholder_endpoint and proven_live_write
     return ProviderTruthRow(
         provider_key=provider.provider_key, category=provider.domain, display_name=provider.title,
         auth_scheme=str(binding.get("auth_scheme") or "provider_secret_bundle"), required_credentials=required_credentials,
@@ -167,7 +165,7 @@ def _truth_row(provider: ProviderDefinition, *, planner: ProviderSyncRuntimePlan
         endpoint_source="runtime.business_autonomy.provider_transport_bindings", health_requirements=required_credentials,
         admin_visible=True, owner=_PROVIDER_OWNERS.get(provider.provider_key, "interfaces.messaging_runtime.channel_loader" if provider.messaging_channel else "application.business_autonomy.provider_catalog"),
         risk_level=_risk_level(provider, write_capabilities),
-        evidence=(f"capability_status={capability_status}", f"transport_binding_live_ready={bool(binding.get('live_ready'))}", "write_supported_requires_guarded_contract"),
+        evidence=(f"capability_status={capability_status}", f"transport_binding_live_ready={bool(binding.get('live_ready'))}", f"guarded_write_supported={write_supported}", f"guarded_write_live_ready={proven_live_write}"),
     )
 
 
@@ -195,7 +193,7 @@ def summarize_provider_truth(rows: Iterable[ProviderTruthRow] | None = None) -> 
         "admin_visible": sum(row.admin_visible for row in selected),
         "by_status": {status.value: sum(row.status == status.value for row in selected) for status in ProviderTruthStatus},
         "by_risk_level": {level: sum(row.risk_level == level for row in selected) for level in ("low", "medium", "high")},
-        "live_ready_policy": "read_only_advisory: external writes are not live-ready until approval/evidence guard is explicitly wired",
+        "live_ready_policy": "guarded_write: only explicitly allowlisted providers with approval/evidence guard may be live-write-ready",
     }
 
 

@@ -10,7 +10,7 @@ CANON_PROVIDER_TRUTH_MATRIX_CONTROL_PLANE_ROUTES = True
 PROVIDER_TRUTH_MATRIX_ROUTE = "/control-plane/provider-admin/truth-matrix"
 _RULES = {
     "provider_in_catalog_is_not_implemented": True, "endpoint_is_not_live_ready": True,
-    "placeholder_endpoint_is_never_live_ready": True, "runtime_write_operation_is_not_write_supported": True,
+    "placeholder_endpoint_is_never_live_ready": True, "runtime_write_requires_explicit_guard_allowlist": True,
     "telegram_bot_is_not_telegram_ads": True, "google_maps_inquiry_is_not_google_business_write": True,
     "write_requires_approval_budget_risk_verification_evidence": True,
 }

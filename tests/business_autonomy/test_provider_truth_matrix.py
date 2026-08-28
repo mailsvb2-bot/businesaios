@@ -23,19 +23,23 @@ def test_placeholder_endpoints_are_never_live_ready() -> None:
             assert row.status != "live_ready"
 
 
-def test_transport_live_ready_does_not_create_external_write_support() -> None:
+def test_transport_live_ready_only_creates_write_support_for_guarded_native_messaging() -> None:
     truth = provider_truth_map()
     bindings = ProviderTransportBindings()
     for provider in PROVIDERS:
         binding = bindings.describe(provider)
         if binding.get("live_ready") and provider.domain in {"ads", "marketplace", "communications", "commerce"}:
             row = truth[provider.provider_key]
-            assert row.write_supported is False
-            assert row.live_ready is False
+            if provider.provider_key in {'vk_messaging', 'max_messaging'}:
+                assert row.write_supported is True
+                assert row.live_ready is False
+            else:
+                assert row.write_supported is False
+                assert row.live_ready is False
             assert row.approval_required is True
 
 
-def test_runtime_write_operations_are_not_reported_as_write_supported_without_guard_contract() -> None:
+def test_runtime_write_operations_require_explicit_guard_contract_for_write_support() -> None:
     planner = ProviderSyncRuntimePlanner()
     truth = provider_truth_map()
     providers_with_runtime_writes = {
@@ -47,7 +51,7 @@ def test_runtime_write_operations_are_not_reported_as_write_supported_without_gu
     for provider_key in providers_with_runtime_writes:
         row = truth[provider_key]
         assert row.write_capabilities
-        assert row.write_supported is False
+        assert row.write_supported is (provider_key in {'vk_messaging', 'max_messaging'})
 
 
 def test_ads_are_read_only_or_contract_not_live_write_ready() -> None:
@@ -71,7 +75,7 @@ def test_telegram_bot_is_not_telegram_ads() -> None:
 def test_matrix_summary_is_admin_safe_read_only_pilot() -> None:
     summary = summarize_provider_truth()
     assert summary["total"] == len(PROVIDERS)
-    assert summary["write_supported"] == 0
+    assert summary["write_supported"] == 2
     assert summary["live_ready"] == 0
-    assert "read_only_advisory" in summary["live_ready_policy"]
+    assert "guarded_write" in summary["live_ready_policy"]
     assert summary["admin_visible"] == len(PROVIDERS)
