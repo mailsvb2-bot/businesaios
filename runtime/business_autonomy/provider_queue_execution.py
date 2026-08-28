@@ -64,10 +64,10 @@ class ProviderQueueExecutionRuntime:
         dispatch = JobDispatcher(store=self.store, idempotency_store=self.idempotency_store).dispatch(req)
         return ProviderQueueDispatchResult(job_id='' if dispatch.job is None else dispatch.job.job_id, queued=dispatch.accepted, status='queued' if dispatch.reason == 'accepted' else dispatch.reason, metadata={'queue_name': str(queue_name), 'job_type': _PROVIDER_JOB_TYPE, 'provider_key': provider.provider_key, 'provider_write_guard': guard_decision.to_metadata(), 'idempotency_resolution': dispatch.idempotency_resolution})
 
-    def tick(self, *, provider_registry: Mapping[str, ProviderDefinition], tenant_id: str, queue_name: str = _PROVIDER_QUEUE_NAME, worker_id: str = 'provider-runtime-worker') -> Mapping[str, Any]:
+    def tick(self, *, provider_registry: Mapping[str, ProviderDefinition], tenant_id: str, queue_name: str = _PROVIDER_QUEUE_NAME, worker_id: str = 'provider-runtime-worker', job_id: str | None = None) -> Mapping[str, Any]:
         scheduler = JobScheduler(store=self.store)
         worker = JobWorker(worker_id=str(worker_id).strip() or 'provider-runtime-worker', store=self.store, scheduler=scheduler, runner=self._runner(provider_registry))
-        report = worker.tick(tenant_id=str(tenant_id), queue_name=str(queue_name))
+        report = worker.tick(tenant_id=str(tenant_id), queue_name=str(queue_name), job_id=job_id)
         return {**dict(report.__dict__), 'worker_id': str(worker_id).strip() or 'provider-runtime-worker'}
 
     def list_jobs(self, *, tenant_id: str, business_id: str | None = None, provider_key: str, queue_name: str = _PROVIDER_QUEUE_NAME, limit: int = 50) -> tuple[dict[str, Any], ...]:
@@ -92,7 +92,7 @@ class ProviderQueueExecutionRuntime:
             payload = dict(job.payload or {})
             provider_key = str(payload.get('provider_key') or '').strip()
             provider = provider_registry[provider_key]
-            result: ProviderSyncRunResult = runtime.run(provider=provider, tenant_id=job.tenant_id, business_id=str(payload.get('business_id') or ''), operation=str(payload.get('operation') or ''), mode=str(payload.get('mode') or 'live'), payload={**dict(payload.get('payload') or {}), '_provider_queue_execution': True}, attempts=max(1, int(job.attempts)))
+            result: ProviderSyncRunResult = runtime.run(provider=provider, tenant_id=job.tenant_id, business_id=str(payload.get('business_id') or ''), operation=str(payload.get('operation') or ''), mode=str(payload.get('mode') or 'live'), payload={**dict(payload.get('payload') or {}), '_provider_queue_execution': True, '_provider_queue_job_id': job.job_id}, attempts=max(1, int(job.attempts)))
             ok, retry = bool(result.accepted), dict(result.metadata.get('retry_policy') or {})
             retryable, category = bool(retry.get('retryable')), str(retry.get('category') or 'provider_runtime_error')
             return JobResult(ok=ok, status=result.status, job_id=job.job_id, tenant_id=job.tenant_id, attempts=job.attempts, output={'provider_key': result.provider_key, 'operation': result.operation, 'mode': result.mode, 'metadata': dict(result.metadata or {})}, error=None if ok else (category.upper() if retryable else f'NON_RETRYABLE:{category}'), retry_delay_seconds=int(retry.get('next_delay_seconds') or 0) if retryable else None)

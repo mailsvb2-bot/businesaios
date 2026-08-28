@@ -10,13 +10,13 @@ from runtime.business_autonomy.provider_connector_health import ProviderConnecto
 from runtime.business_autonomy.provider_error_taxonomy import ProviderErrorTaxonomy
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
+from runtime.business_autonomy.provider_retry_policy import ProviderRetryPolicy
 from runtime.business_autonomy.provider_runtime_audit import ProviderRuntimeAuditRecorder
 from runtime.business_autonomy.provider_runtime_export_bridge import ProviderRuntimeExportBridge
 from runtime.business_autonomy.provider_runtime_observability import ProviderRuntimeObservability
 from runtime.business_autonomy.provider_runtime_write_guard import ProviderRuntimeWriteGuard
 from runtime.business_autonomy.provider_sync_history import ProviderSyncHistory
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
-from runtime.business_autonomy.provider_retry_policy import ProviderRetryPolicy
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 from security.secret_vault import SecretVault
 
@@ -55,7 +55,7 @@ class ProviderLiveSyncRuntime:
     def _finalize_result(self, *, tenant_id: str, business_id: str, provider: ProviderDefinition, operation: str, mode: str, result: ProviderSyncRunResult, payload: Mapping[str, Any]) -> ProviderSyncRunResult:
         refs = self.audit_recorder.record_sync_run(tenant_id=tenant_id, business_id=business_id, provider_key=provider.provider_key, operation=operation, mode=mode, status=result.status, accepted=result.accepted, payload=dict(payload or {}), metadata=dict(result.metadata))
         export_refs = self.export_bridge.export_runtime_event(tenant_id=str(tenant_id), business_id=str(business_id), provider_key=provider.provider_key, event_kind='sync', payload={'operation': operation, 'mode': mode, 'status': result.status, 'accepted': result.accepted})
-        history_row = self.sync_history.append({'tenant_id': str(tenant_id), 'business_id': str(business_id), 'provider_key': provider.provider_key, 'operation': operation, 'mode': mode, 'status': result.status, 'accepted': result.accepted, 'recorded_at_utc': refs.get('recorded_at_utc') if isinstance(refs, dict) else None, 'parsed_response': dict(result.metadata.get('parsed_response') or {}), 'transport_response': dict(result.metadata.get('transport_response') or {}), 'error': dict(result.metadata.get('error') or {}), 'retry_policy': dict(result.metadata.get('retry_policy') or {})})
+        history_row = self.sync_history.append({'tenant_id': str(tenant_id), 'business_id': str(business_id), 'provider_key': provider.provider_key, 'operation': operation, 'mode': mode, 'status': result.status, 'accepted': result.accepted, 'queue_job_id': str(dict(payload or {}).get('_provider_queue_job_id') or '') or None, 'recorded_at_utc': refs.get('recorded_at_utc') if isinstance(refs, dict) else None, 'parsed_response': dict(result.metadata.get('parsed_response') or {}), 'transport_response': dict(result.metadata.get('transport_response') or {}), 'error': dict(result.metadata.get('error') or {}), 'retry_policy': dict(result.metadata.get('retry_policy') or {})})
         self.observability.record_sync(tenant_id=str(tenant_id), provider_key=provider.provider_key, operation=operation, status=result.status, accepted=result.accepted, mode=mode)
         if not result.accepted or str(result.status).startswith('live_execution_failed'):
             error_view = dict(result.metadata.get('error') or {})

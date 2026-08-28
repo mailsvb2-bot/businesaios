@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Mapping
+from collections.abc import Mapping
+from datetime import UTC, datetime
+from typing import Any
 
 from governance.control_plane_audit_log import GovernanceAuditEvent, GovernanceAuditLogContract
 
@@ -24,7 +25,7 @@ def safe_int(value: object, *, default: int = 0) -> int:
 
 def safe_iso(value: object) -> str | None:
     if isinstance(value, datetime):
-        return value.astimezone(timezone.utc).isoformat() if value.tzinfo is not None else None
+        return value.astimezone(UTC).isoformat() if value.tzinfo is not None else None
     rendered = text(value)
     return rendered or None
 
@@ -49,14 +50,17 @@ def lifecycle_counts(records: tuple[Mapping[str, Any], ...], *, status_key: str 
 
 def resume_hint(item: Mapping[str, Any]) -> dict[str, object]:
     metadata = safe_dict(item.get('metadata'))
+    action_name = text(item.get('action_name') or metadata.get('action_name'))
+    provider_resume = action_name in {'provider.vk_messaging.message_send', 'provider.max_messaging.message_send'}
     return {
         'execution_id': text(item.get('subject_id') or item.get('execution_id')) or None,
         'decision_id': text(item.get('decision_id') or metadata.get('decision_id')) or None,
-        'action_name': text(item.get('action_name') or metadata.get('action_name')) or None,
+        'action_name': action_name or None,
         'approval_id': text(item.get('approval_id')) or None,
         'override_id': text(item.get('override_id')) or None,
         'subject_fingerprint': text(item.get('subject_fingerprint') or metadata.get('subject_fingerprint')) or None,
         'resume_ready': text(item.get('status')) in {'approved'} or text(safe_dict(item.get('decision')).get('resolution')) in {'approve_once'},
+        'resume_action': '/control-plane/provider-runtime/approval-resume' if provider_resume else None,
     }
 
 

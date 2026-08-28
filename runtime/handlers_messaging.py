@@ -54,19 +54,23 @@ def _resolve_tenant_id(payload: dict, env) -> str:
 
 def _build_send_kwargs(payload: dict, env) -> dict:
     priority, critical = _message_priority_fields(payload)
+    channel = normalize_channel(str(payload.get("channel") or "telegram"))
+    track_payload = dict(payload.get("track_payload") or {})
+    if channel in {"vk", "max"}:
+        track_payload["_provider_native"] = {key: payload.get(key) for key in ("business_id", "approval_id", "peer_id", "chat_id", "random_id") if payload.get(key) not in {None, ""}}
     return {
         "decision_id": env.decision.decision_id,
         "correlation_id": env.decision.correlation_id,
         "tenant_id": _resolve_tenant_id(payload, env),
         "user_id": str(payload["user_id"]),
         "text": str(payload["text"]),
-        "channel": normalize_channel(str(payload.get("channel") or "telegram")),
+        "channel": channel,
         "priority": priority,
         "critical": critical,
         "reply_markup": payload.get("reply_markup"),
         "callback_query_id": payload.get("callback_query_id"),
         "track_event_type": payload.get("track_event_type"),
-        "track_payload": payload.get("track_payload"),
+        "track_payload": track_payload or None,
         "channel_policy": payload.get("channel_policy"),
     }
 

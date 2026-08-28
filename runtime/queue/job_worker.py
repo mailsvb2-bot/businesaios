@@ -104,7 +104,7 @@ class JobWorker:
             if lease_lost.is_set():
                 raise LeaseLostError(f"lease lost while executing job {job.job_id}")
 
-    def tick(self, *, tenant_id: str, queue_name: str, now: datetime | None = None) -> WorkerTickReport:
+    def tick(self, *, tenant_id: str, queue_name: str, now: datetime | None = None, job_id: str | None = None) -> WorkerTickReport:
         moment = normalize_now(now)
         normalized_tenant_id = require_tenant_id(tenant_id)
         normalized_queue_name = str(queue_name or '').strip()
@@ -113,7 +113,7 @@ class JobWorker:
         batch = self._scheduler.select_due_jobs(tenant_id=normalized_tenant_id, queue_name=normalized_queue_name, now=moment)
         report = WorkerTickReport(worker_id=self._worker_id, queue_name=normalized_queue_name, reclaimed_expired_claims=batch.reclaimed_expired_claims)
 
-        for candidate in batch.jobs:
+        for candidate in (batch.jobs if job_id is None else tuple(item for item in batch.jobs if item.job_id == str(job_id).strip())):
             claimed = self._lease_manager.claim(
                 tenant_id=normalized_tenant_id,
                 job_id=candidate.job_id,

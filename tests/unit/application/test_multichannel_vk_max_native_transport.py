@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from application.business_autonomy.provider_catalog import provider_map
+from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
+from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import provider_transport_binding_for_key
 from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
+from runtime.messaging.bootstrap import _NativeProviderQueueAdapter
+from runtime.messaging.outbound_message import OutboundMessage
 from security.secret_contract import SecretRecord, SecretRef, SecretSource
 from security.secret_vault import InMemorySecretVault
 
@@ -90,3 +94,35 @@ def test_max_message_read_uses_only_documented_chat_or_message_ids_queries() -> 
     by_ids = transport.execute(provider=provider, tenant_id='t', business_id='b', operation='message_read', payload={'message_ids': 'm1,m2', 'user_id': 7})['request']
     assert by_chat['url_template'] == 'https://platform-api2.max.ru/messages?chat_id=99'
     assert by_ids['url_template'] == 'https://platform-api2.max.ru/messages?message_ids=m1,m2'
+
+
+def test_vk_user_id_normalizes_to_peer_and_native_receipts_are_external_ids() -> None:
+    providers = provider_map()
+    vk_payload = ProviderPayloadNormalizers().normalize_outbound(provider=providers['vk_messaging'], operation='message_send', payload={'user_id': '42', 'text': 'hello'})
+    assert vk_payload['peer_id'] == '42'
+    parsers = ProviderResponseParsers()
+    assert parsers.parse(provider=providers['vk_messaging'], operation='message_send', response={'http_status': 200, 'response_body': '{"response":321}'})['resource_id'] == '321'
+    assert parsers.parse(provider=providers['max_messaging'], operation='message_send', response={'http_status': 200, 'response_body': '{"message":{"id":"m-1"}}'})['resource_id'] == 'm-1'
+
+
+def test_vk_messaging_adapter_surfaces_provider_approval_without_generic_webhook() -> None:
+    class _Registry:
+        def get(self, key):
+            return provider_map()[key]
+
+    class _Service:
+        provider_registry = _Registry()
+        def __init__(self):
+            self.calls = []
+        def execute_queued_provider_sync(self, **kwargs):
+            self.calls.append(kwargs)
+            return {'dispatch': {'queued': False, 'status': 'rejected_provider_write_guard', 'job_id': '', 'metadata': {'provider_write_guard': {'reason': 'approval_required', 'metadata': {'approval': {'approval_id': 'ap-vk-1', 'approval_required': True, 'reason': 'approval_submitted_awaiting_operator'}}}}}, 'result': None}
+
+    service = _Service()
+    adapter = _NativeProviderQueueAdapter('vk', service_factory=lambda: service)
+    msg = OutboundMessage(decision_id='dec-1', correlation_id='corr-1', tenant_id='tenant-a', user_id='42', channel='vk', text='hello', track_payload={'_provider_native': {'business_id': 'biz-a'}})
+    result = adapter.send(msg)
+    assert result.ok is False and result.mode == 'approval_required' and result.detail['approval_id'] == 'ap-vk-1'
+    sent = service.calls[0]
+    assert sent['provider_key'] == 'vk_messaging' and sent['payload']['peer_id'] == '42'
+    assert sent['payload']['_approval'] == {'decision_id': 'dec-1', 'execution_id': 'dec-1'}
