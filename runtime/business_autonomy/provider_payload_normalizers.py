@@ -4,11 +4,9 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
-
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 
 CANON_PROVIDER_PAYLOAD_NORMALIZERS = True
-
 
 @dataclass(frozen=True)
 class ProviderPayloadNormalizers:
@@ -17,9 +15,7 @@ class ProviderPayloadNormalizers:
         key = provider.provider_key
         operation = str(operation or '').strip()
         if key == 'telegram_bot':
-            if operation == 'communications_write':
-                return {'chat_id': str(raw.get('chat_id') or '{chat_id}'), 'text': str(raw.get('text') or raw.get('message') or '')}
-            return raw
+            return {'chat_id': str(raw.get('chat_id') or '{chat_id}'), 'text': str(raw.get('text') or raw.get('message') or '')} if operation == 'communications_write' else raw
         if key == 'whatsapp_cloud':
             return {'messaging_product': raw.get('messaging_product') or 'whatsapp', 'to': str(raw.get('to') or '{recipient_phone}'), 'type': str(raw.get('type') or 'text'), 'text': dict(raw.get('text') or {'body': str(raw.get('body') or raw.get('message') or '')}), **{k: v for k, v in raw.items() if k not in {'messaging_product', 'to', 'type', 'text', 'body', 'message'}}}
         if operation in {'communications_write', 'message_send'} and key in {'vk_messaging', 'max_messaging'}:
@@ -33,7 +29,7 @@ class ProviderPayloadNormalizers:
         if key == 'hubspot':
             if operation == 'contact_upsert':
                 props = dict(raw.get('properties') or {})
-                return {'properties': props or {'email': raw.get('email') or '{email}'}, **{k: v for k, v in raw.items() if k not in {'properties'}}}
+                return {'properties': props or {'email': raw.get('email') or '{email}'}, **{k: v for k, v in raw.items() if k != 'properties'}}
             return raw
         if key in {'meta_ads', 'google_ads', 'tiktok_ads'}:
             normalized = dict(raw)
@@ -56,7 +52,12 @@ class ProviderPayloadNormalizers:
             entry0 = entry[0] if isinstance(entry, list) and entry else {}
             return {'topic': header_map.get('x-hub-topic', '') or 'whatsapp_event', 'source_ref': str(entry0.get('id') or ''), 'resource_id': str(entry0.get('id') or ''), 'event_key_hint': header_map.get('x-request-id', '')}
         if key == 'vk_messaging':
-            return {'topic': str(parsed.get('type') or ''), 'source_ref': str(parsed.get('group_id') or ''), 'resource_id': str(parsed.get('event_id') or ''), 'event_key_hint': str(parsed.get('event_id') or '')}
+            event_id = str(parsed.get('event_id') or '')
+            return {'topic': str(parsed.get('type') or ''), 'source_ref': str(parsed.get('group_id') or ''), 'resource_id': event_id, 'event_key_hint': event_id}
+        if key == 'slack_messaging':
+            event = parsed.get('event') if isinstance(parsed.get('event'), Mapping) else {}
+            event_id = str(parsed.get('event_id') or event.get('client_msg_id') or event.get('event_ts') or event.get('ts') or '')
+            return {'topic': str(event.get('type') or parsed.get('type') or ''), 'source_ref': str(parsed.get('team_id') or event.get('channel') or ''), 'resource_id': event_id, 'event_key_hint': event_id}
         if key in {'generic_website', 'wordpress'}:
             return {'topic': header_map.get('x-topic', '') or header_map.get('x-webhook-topic', ''), 'source_ref': header_map.get('x-origin-site', '') or header_map.get('x-wordpress-site', ''), 'resource_id': str(parsed.get('id') or parsed.get('slug') or ''), 'event_key_hint': header_map.get('x-event-id', '') or header_map.get('x-wordpress-event-id', '')}
         return {'topic': '', 'source_ref': '', 'resource_id': '', 'event_key_hint': ''}
@@ -70,6 +71,5 @@ class ProviderPayloadNormalizers:
         except Exception:
             return {}
         return value if isinstance(value, Mapping) else {}
-
 
 __all__ = ['CANON_PROVIDER_PAYLOAD_NORMALIZERS', 'ProviderPayloadNormalizers']
