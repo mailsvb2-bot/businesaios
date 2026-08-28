@@ -124,7 +124,7 @@ def _capability_status_by_provider() -> dict[str, list[str]]:
 
 def _best_capability_status(provider_key: str, status_map: Mapping[str, list[str]]) -> str:
     if provider_key in BRIDGE_MESSAGING_PROVIDER_KEYS:
-        return CapabilityStatus.PARTIAL.value
+        return (CapabilityStatus.IMPLEMENTED if provider_key in _GUARDED_WRITE_SUPPORTED else CapabilityStatus.PARTIAL).value
     return max(status_map.get(provider_key) or [CapabilityStatus.NOT_IMPLEMENTED.value], key=lambda value: _STATUS_RANK.get(value, 0))
 
 
