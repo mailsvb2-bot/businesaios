@@ -41,9 +41,12 @@ def test_provider_sync_can_be_queued_and_listed(tmp_path):
 def test_provider_sync_queue_tick_runs_jobs(tmp_path):
     service=_service(tmp_path)
     service.activate_provider(ProviderCredentialSubmission(tenant_id='tenant-a', business_id='biz-a', provider_key='telegram_bot', ownership_key='owner:biz-a', requested_by='tester', external_ref='bot://biz-a', metadata={'verified_owner': True}, secrets={'bot_token': '123:abc'}))
-    service.enqueue_provider_sync(tenant_id='tenant-a', business_id='biz-a', provider_key='telegram_bot', operation='communications_write', mode='dry_run', payload={'message': 'hi'})
-    report=service.tick_provider_sync_queue(tenant_id='tenant-a')
+    queued=service.enqueue_provider_sync(tenant_id='tenant-a', business_id='biz-a', provider_key='telegram_bot', operation='communications_write', mode='dry_run', payload={'message': 'hi'})
+    report=service.tick_provider_sync_queue(tenant_id='tenant-a', worker_id='provider-route-worker')
     assert report['claimed'] >= 1
+    assert report['worker_id'] == 'provider-route-worker'
+    history=service.list_provider_sync_history(tenant_id='tenant-a', business_id='biz-a', provider_key='telegram_bot', limit=100)
+    assert any(row.get('queue_job_id') == queued['job_id'] for row in history)
 
 
 def test_provider_queue_uses_shared_data_dir(tmp_path, monkeypatch):

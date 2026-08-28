@@ -93,7 +93,7 @@ def track_business_event(
     ):
         return
     try:
-        payload = track_payload if isinstance(track_payload, dict) else {}
+        payload = {key: value for key, value in (track_payload.items() if isinstance(track_payload, dict) else ()) if not str(key).startswith('_provider_')}
         _emit_business_event(
             self.event_log,
             user_id=user_id,

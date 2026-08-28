@@ -1,9 +1,7 @@
 """Canonical storage-wiring owner for runtime boot.
-
 This root surface is allowed to build storage adapters, but it must not become
 an alternative runtime assembly path, registry surface, or decision owner.
 """
-
 from __future__ import annotations
 
 from contextlib import ExitStack
@@ -21,7 +19,6 @@ CANON_RUNTIME_WIRING_READINESS_SURFACE = True
 CANON_RUNTIME_WIRING_ADMIN_VISIBLE = True
 CANON_RUNTIME_WIRING_LIVE_SMOKE_SURFACE = True
 _LEGACY_DB_ENGINE_ENV = "ME" + "TRO_DB_ENGINE"
-
 DURABLE_STORE_ROLES = (
     "event_store",
     "ledger",
@@ -30,20 +27,14 @@ DURABLE_STORE_ROLES = (
     "outbox",
     "payment_outbox",
 )
-
-
 @dataclass(frozen=True)
 class StorageConfig:
     env: str
     backend: str  # sqlite | postgres
     postgres_dsn: str | None
     postgres_event_store_enabled: bool = False
-
-
 def _sqlite_path(env_name: str, *, base_dir: str, filename: str) -> str:
     return str(env_path(env_name, str(Path(base_dir) / filename)))
-
-
 def resolve_storage_config() -> StorageConfig:
     env = (env_str("APP_ENV") or env_str("ENV", "dev")).strip().lower() or "dev"
     pg_dsn = (env_str("POSTGRES_DSN").strip() or env_str("DATABASE_URL").strip() or None)
@@ -54,21 +45,17 @@ def resolve_storage_config() -> StorageConfig:
         str(env_str("BUSINESAIOS_ENABLE_POSTGRES_EVENT_STORE", "")).strip().lower()
         in {"1", "true", "yes", "on"}
     )
-
     if env == "prod":
         if backend != "postgres":
             raise RuntimeError(f"PROD_REQUIRES_POSTGRES_STORAGE_BACKEND:{backend}")
         if not pg_dsn:
             raise RuntimeError("PROD_REQUIRES_POSTGRES_DSN")
-
     return StorageConfig(
         env=env,
         backend=backend,
         postgres_dsn=pg_dsn,
         postgres_event_store_enabled=postgres_event_store_enabled,
     )
-
-
 def describe_storage_readiness(storage: StorageConfig) -> dict[str, Any]:
     backend = str(storage.backend or "").strip().lower()
     env = str(storage.env or "").strip().lower() or "dev"
@@ -80,7 +67,6 @@ def describe_storage_readiness(storage: StorageConfig) -> dict[str, Any]:
         blockers.append("PROD_REQUIRES_POSTGRES_DSN")
     if backend == "postgres" and not has_postgres_dsn:
         blockers.append("POSTGRES_BACKEND_REQUIRES_DSN")
-
     return {
         "surface": "runtime.storage.wiring",
         "canonical_owner": "runtime.wiring",
@@ -94,8 +80,6 @@ def describe_storage_readiness(storage: StorageConfig) -> dict[str, Any]:
         "live_ready": not blockers,
         "blockers": blockers,
     }
-
-
 def storage_control_plane_status(storage: StorageConfig) -> dict[str, Any]:
     readiness = describe_storage_readiness(storage)
     status = "ready" if bool(readiness["live_ready"]) else "blocked"
@@ -113,8 +97,6 @@ def storage_control_plane_status(storage: StorageConfig) -> dict[str, Any]:
         "blockers": readiness["blockers"],
         "readiness": readiness,
     }
-
-
 def storage_live_smoke_status(storage: StorageConfig, *, base_dir: str = "data/runtime") -> dict[str, Any]:
     readiness = describe_storage_readiness(storage)
     result: dict[str, Any] = {
@@ -133,7 +115,6 @@ def storage_live_smoke_status(storage: StorageConfig, *, base_dir: str = "data/r
     if result["blockers"]:
         result["status"] = "blocked"
         return result
-
     try:
         with ExitStack() as stack:
             stores = build_durable_stores(stack, base_dir=base_dir, storage=storage)
@@ -152,7 +133,20 @@ def storage_live_smoke_status(storage: StorageConfig, *, base_dir: str = "data/r
         result["error_type"] = type(exc).__name__
         result["error"] = str(exc)
         return result
-
+def load_archived_decision(*, tenant_id: str, decision_id: str):
+    storage = resolve_storage_config()
+    if storage.backend == "postgres":
+        if not storage.postgres_dsn:
+            raise RuntimeError("POSTGRES_BACKEND_REQUIRES_DSN")
+        from observability.platform.decision_archive.postgres_decision_archive import PostgresDecisionArchive
+        with PostgresDecisionArchive(storage.postgres_dsn) as archive:
+            return archive.get(str(decision_id))
+    from observability.platform.decision_archive.sqlite_decision_archive import SqliteDecisionArchive
+    from runtime.tenancy.paths import TenantPaths
+    configured = env_path("DATA_DIR", "")
+    base = str(TenantPaths(tenant_id=str(tenant_id), base_root=configured.resolve() if str(configured) not in {".", ""} else (Path(__file__).resolve().parents[1] / "runtime" / "data").resolve()).data_root)
+    with SqliteDecisionArchive(_sqlite_path("DECISIONS_SQLITE_PATH", base_dir=base, filename="decisions.db")) as archive:
+        return archive.get(str(decision_id))
 
 def build_durable_stores(stack: ExitStack, *, base_dir: str, storage: StorageConfig):
     """Return (event_store, ledger, snapshot_store, decision_archive, outbox, payment_outbox)."""
@@ -218,6 +212,7 @@ __all__ = [
     "StorageConfig",
     "build_behavior_graph_store",
     "build_durable_stores",
+    "load_archived_decision",
     "describe_storage_readiness",
     "resolve_storage_config",
     "storage_control_plane_status",

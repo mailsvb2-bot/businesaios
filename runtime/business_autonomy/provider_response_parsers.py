@@ -81,6 +81,13 @@ class ProviderResponseParsers:
                 value = body['result'].get('message_id') or body['result'].get('id')
                 if value not in {None, ''}:
                     return str(value)
+            if provider_key == 'vk_messaging' and body.get('response') not in {None, ''} and not isinstance(body.get('response'), dict | list):
+                return str(body['response'])
+            if provider_key == 'max_messaging':
+                source = body.get('message') if isinstance(body.get('message'), dict) else (body.get('messages')[0] if isinstance(body.get('messages'), list) and body.get('messages') and isinstance(body.get('messages')[0], dict) else {})
+                value = source.get('message_id') or source.get('id')
+                if value not in {None, ''}:
+                    return str(value)
         return None
 
     def _next_cursor(self, *, provider_key: str, body: Any) -> str | None:

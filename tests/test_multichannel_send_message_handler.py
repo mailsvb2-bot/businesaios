@@ -25,3 +25,9 @@ def test_handle_send_message_passes_channel_through():
     out = handle_send_message({"user_id": "wa:1", "text": "hello", "channel": "whatsapp"}, fx, _Env())
     assert out["ok"] is True
     assert fx.calls[0]["channel"] == "whatsapp"
+
+
+def test_handle_vk_message_binds_native_provider_context():
+    fx = _Effects()
+    handle_send_message({"tenant_id": "tenant-a", "business_id": "biz-a", "approval_id": "ap-1", "user_id": "42", "text": "hello", "channel": "vk"}, fx, _Env())
+    assert fx.calls[0]["track_payload"]["_provider_native"] == {"business_id": "biz-a", "approval_id": "ap-1"}
