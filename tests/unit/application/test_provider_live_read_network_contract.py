@@ -157,3 +157,31 @@ def test_vk_max_live_probe_updates_channel_health_registry(monkeypatch, tmp_path
         result = ProviderLiveProbeRuntime(vault, channel_health_registry=registry).run(provider=provider, tenant_id='tenant-a', business_id='biz-a', mode='live')
         assert provider.messaging_live_probe_supported is True and result.status == 'probe_live_ok'
         assert registry.get(provider.messaging_channel).healthy is True
+
+
+def test_vk_live_send_requires_runtime_approval_marker(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    provider, vault, calls = provider_map()['vk_messaging'], InMemorySecretVault(), []
+    for name, value in {'webhook_secret': 'bridge-secret', 'access_token': 'vk-token', 'group_id': '123'}.items(): _put(vault, provider, 'biz-a', name, value)
+    monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **kwargs: (calls.append(kwargs) or SyncHTTPResult(status=200, headers={}, json={}, text='{"response":777}')))
+    transport = build_live_http_transports(vault, bind_live_network=True)['vk_messaging']
+    blocked = transport.execute(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_send', payload={'peer_id': 42, 'text': 'hello', 'random_id': 7, '_allow_network': True})
+    assert blocked['_prepared_only'] is True and calls == []
+    sent = transport.execute(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_send', payload={'peer_id': 42, 'text': 'hello', 'random_id': 7, '_allow_network': True, '_provider_write_approved': True})
+    assert sent['_response_ok'] is True and calls[0]['url'] == 'https://api.vk.com/method/messages.send' and calls[0]['method'] == 'POST'
+    assert b'peer_id=42' in calls[0]['body'] and b'message=hello' in calls[0]['body'] and b'random_id=7' in calls[0]['body']
+    assert b'_approval' not in calls[0]['body'] and b'_provider_write_approved' not in calls[0]['body']
+
+
+def test_max_live_send_requires_runtime_approval_marker(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    provider, vault, calls = provider_map()['max_messaging'], InMemorySecretVault(), []
+    for name, value in {'webhook_secret': 'bridge-secret', 'access_token': 'max-token'}.items(): _put(vault, provider, 'biz-a', name, value)
+    monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **kwargs: (calls.append(kwargs) or SyncHTTPResult(status=200, headers={}, json={}, text='{"message":{"body":{"mid":"m1"}}}')))
+    transport = build_live_http_transports(vault, bind_live_network=True)['max_messaging']
+    blocked = transport.execute(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_send', payload={'chat_id': 99, 'text': 'hello', '_allow_network': True})
+    assert blocked['_prepared_only'] is True and calls == []
+    sent = transport.execute(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_send', payload={'chat_id': 99, 'text': 'hello', '_approval': {'approval_id': 'secret-internal'}, '_allow_network': True, '_provider_write_approved': True})
+    assert sent['_response_ok'] is True and calls[0]['url'] == 'https://platform-api2.max.ru/messages?chat_id=99' and calls[0]['method'] == 'POST'
+    assert calls[0]['headers']['Authorization'] == 'max-token' and calls[0]['body'] == b'{"text": "hello"}'
+    assert b'_approval' not in calls[0]['body'] and b'_provider_write_approved' not in calls[0]['body']

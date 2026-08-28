@@ -444,7 +444,7 @@ class ProviderAdminService:
     def enqueue_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
         runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault))
-        queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime)
+        queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime, idempotency_store=self.idempotency_store)
         result = queue_runtime.enqueue_sync(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), operation=str(operation).strip(), mode=str(mode or 'live').strip() or 'live', payload=dict(payload or {}))
         return {'job_id': result.job_id, 'queued': result.queued, 'status': result.status, 'metadata': dict(result.metadata)}
 

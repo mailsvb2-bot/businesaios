@@ -34,8 +34,9 @@ class VendorHttpLiveTransport:
         public_request = {**prepared, 'headers': {k: ('***' if str(k).lower() in {'authorization', 'x-shopify-access-token', 'access-token', 'developer-token'} else v) for k, v in dict(prepared.get('headers') or {}).items()}}
         if isinstance(prepared.get('form_body'), Mapping):
             public_request['form_body'] = {k: ('***' if k == 'access_token' else v) for k, v in prepared['form_body'].items()}
-        native_read_only = provider.provider_key in {'vk_messaging', 'max_messaging'}
-        if not self.bind_live_network or not bool(payload.get('_allow_network', False)) or (native_read_only and operation not in {'health_probe', 'message_read'}):
+        native_messaging = provider.provider_key in {'vk_messaging', 'max_messaging'}
+        native_write_approved = operation == 'message_send' and bool(payload.get('_provider_write_approved', False))
+        if not self.bind_live_network or not bool(payload.get('_allow_network', False)) or (native_messaging and operation not in {'health_probe', 'message_read'} and not native_write_approved):
             return {
                 '_prepared_only': True,
                 'provider_key': provider.provider_key,
@@ -45,8 +46,10 @@ class VendorHttpLiveTransport:
                 'transport_binding': binding,
                 'response_parser': self.response_parsers.describe(provider=provider),
             }
-        if native_read_only and '{access_token}' in str(prepared):
+        if native_messaging and '{access_token}' in str(prepared):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_access_token_missing'}
+        if native_write_approved and ((provider.provider_key == 'vk_messaging' and str(normalized_payload.get('peer_id') or '') in {'', '{peer_id}'}) or (provider.provider_key == 'max_messaging' and not (normalized_payload.get('chat_id') or normalized_payload.get('user_id'))) or not str(normalized_payload.get('message') or normalized_payload.get('text') or '').strip()):
+            return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_message_send_payload_invalid'}
         body, form = prepared.get('json_body'), prepared.get('form_body')
         raw = import_internal_attr('runtime._internal.http_transport', 'form_urlencode')(dict(form)) if isinstance(form, Mapping) else (None if body is None else json.dumps(body, sort_keys=True).encode('utf-8'))
         result = _sync_request(
@@ -81,9 +84,15 @@ class VendorHttpLiveTransport:
         url = self._render_url(provider=provider, operation=operation, payload=payload, binding=binding, secrets=secrets)
         headers = self._build_headers(provider=provider, secrets=secrets)
         if provider.provider_key == 'vk_messaging':
-            return {'url': url, 'method': 'POST', 'headers': headers, 'form_body': {**dict(payload or {}), **({'group_id': secrets.get('group_id')} if operation == 'health_probe' and secrets.get('group_id') else {}), 'access_token': secrets.get('access_token', '{access_token}'), 'v': '5.199'}}
+            form_body = dict(payload or {})
+            if operation == 'health_probe' and secrets.get('group_id'):
+                form_body['group_id'] = secrets['group_id']
+            elif operation == 'message_send' and str(form_body.get('group_id') or '') in {'', '{group_id}'}:
+                form_body.pop('group_id', None)
+            return {'url': url, 'method': 'POST', 'headers': headers, 'form_body': {**form_body, 'access_token': secrets.get('access_token', '{access_token}'), 'v': '5.199'}}
         method = 'GET' if operation in {'health_probe', 'message_read', 'contact_profile_read'} or operation.endswith('_sync') else 'POST'
-        return {'url': url, 'method': method, 'headers': headers, 'json_body': None if method == 'GET' else dict(payload or {})}
+        json_body = None if method == 'GET' else ({'text': str(payload.get('text') or '')} if provider.provider_key == 'max_messaging' and operation == 'message_send' else dict(payload or {}))
+        return {'url': url, 'method': method, 'headers': headers, 'json_body': json_body}
 
     def _load_secrets(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str) -> dict[str, str]:
         values = {}
@@ -113,10 +122,11 @@ class VendorHttpLiveTransport:
         if provider.provider_key == 'whatsapp_cloud':
             return f"{base_url}{path_family.format(phone_number_id=secrets.get('phone_number_id', payload.get('phone_number_id','{phone_number_id}')), operation=operation)}"
         if provider.provider_key == 'vk_messaging':
-            return f"{base_url}/{ {'health_probe': 'groups.getById', 'message_read': 'messages.getConversations'}.get(operation, operation) }"
+            return f"{base_url}/{ {'health_probe': 'groups.getById', 'message_read': 'messages.getConversations', 'message_send': 'messages.send'}.get(operation, operation) }"
         if provider.provider_key == 'max_messaging':
-            query = {k: (','.join(map(str, v)) if k == 'message_ids' and isinstance(v, (list, tuple)) else v) for k, v in (('chat_id', payload.get('chat_id')), ('message_ids', payload.get('message_ids'))) if v is not None and v != ''}
-            return import_internal_attr('runtime._internal.http_transport', 'url_with_params')(url=f"{base_url}{'/me' if operation == 'health_probe' else '/messages'}", params=query if operation == 'message_read' else None)
+            candidates = (('chat_id', payload.get('chat_id')), ('message_ids', payload.get('message_ids'))) if operation == 'message_read' else (('chat_id', payload.get('chat_id')), ('user_id', payload.get('user_id'))) if operation == 'message_send' else ()
+            query = {k: (','.join(map(str, v)) if k == 'message_ids' and isinstance(v, (list, tuple)) else v) for k, v in candidates if v is not None and v != ''}
+            return import_internal_attr('runtime._internal.http_transport', 'url_with_params')(url=f"{base_url}{'/me' if operation == 'health_probe' else '/messages'}", params=query or None)
         if provider.provider_key == 'shopify':
             return f"{base_url.format(shop=str(payload.get('shop') or secrets.get('shop') or '{shop}'))}{path_family.format(operation=operation)}"
         if provider.provider_key == 'woocommerce':

@@ -18,9 +18,9 @@ def test_provider_truth_matrix_payload_is_read_only_control_plane_surface() -> N
     assert payload["read_only"] is True
     assert payload["surface"] == "control_plane"
     assert payload["source"] == "application.business_autonomy.provider_truth_matrix"
-    assert "read_only_advisory" in payload["live_ready_policy"]
+    assert "guarded_write" in payload["live_ready_policy"]
     assert payload["summary"]["total"] == len(PROVIDERS)
-    assert payload["summary"]["write_supported"] == 0
+    assert payload["summary"]["write_supported"] == 2
     assert payload["summary"]["live_ready"] == 0
     assert payload["rows"]
 
@@ -65,7 +65,7 @@ def test_provider_truth_matrix_rules_prevent_provider_claim_drift() -> None:
     assert rules["provider_in_catalog_is_not_implemented"] is True
     assert rules["endpoint_is_not_live_ready"] is True
     assert rules["placeholder_endpoint_is_never_live_ready"] is True
-    assert rules["runtime_write_operation_is_not_write_supported"] is True
+    assert rules["runtime_write_requires_explicit_guard_allowlist"] is True
     assert rules["telegram_bot_is_not_telegram_ads"] is True
     assert rules["google_maps_inquiry_is_not_google_business_write"] is True
     assert rules["write_requires_approval_budget_risk_verification_evidence"] is True
