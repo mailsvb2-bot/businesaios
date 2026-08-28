@@ -53,14 +53,16 @@ class ProviderWebhookRuntime:
             if signature or timestamp:
                 if not signature or not timestamp:
                     return False
+                if not timestamp.isascii() or not timestamp.isdecimal() or len(timestamp) > 20:
+                    return False
                 try:
                     request_timestamp = int(timestamp)
-                except ValueError:
+                    max_age = int(contract.metadata.get('max_request_age_seconds') or 300)
+                    if abs(time.time() - request_timestamp) > max_age:
+                        return False
+                    signing_base = b'v0:' + timestamp.encode('ascii') + b':' + bytes(body)
+                except (OverflowError, ValueError, UnicodeEncodeError):
                     return False
-                max_age = int(contract.metadata.get('max_request_age_seconds') or 300)
-                if abs(time.time() - request_timestamp) > max_age:
-                    return False
-                signing_base = b'v0:' + timestamp.encode('ascii') + b':' + bytes(body)
                 expected = 'v0=' + hmac.new(secret.encode('utf-8'), signing_base, hashlib.sha256).hexdigest()
                 return hmac.compare_digest(expected, signature)
             return any(candidate and hmac.compare_digest(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
