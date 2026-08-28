@@ -4,6 +4,8 @@ import hashlib
 import hmac
 import time
 
+import pytest
+
 from application.business_autonomy.provider_catalog import provider_map
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
@@ -60,6 +62,22 @@ def test_slack_native_signature_rejects_stale_requests_even_when_hmac_matches() 
     }
 
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers=headers, body=body) is False
+
+
+@pytest.mark.parametrize('timestamp', ['9' * 309, '１２３４５'])
+def test_slack_native_signature_rejects_malformed_timestamp_without_raising(timestamp: str) -> None:
+    provider = provider_map()['slack_messaging']
+    vault = InMemorySecretVault()
+    _put(vault, value='slack-signing-secret')
+    runtime = ProviderWebhookRuntime(vault)
+
+    assert runtime.verify(
+        provider=provider,
+        tenant_id='tenant-a',
+        business_id='business-a',
+        headers={'X-Slack-Request-Timestamp': timestamp, 'X-Slack-Signature': 'v0=untrusted'},
+        body=b'{}',
+    ) is False
 
 
 def test_slack_bridge_shared_secret_fallback_remains_supported() -> None:
