@@ -6,7 +6,6 @@ import hmac
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
-
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookContract
@@ -15,7 +14,6 @@ from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_WEBHOOK_RUNTIME = True
-
 
 @dataclass(frozen=True)
 class ProviderWebhookRuntime:
@@ -48,23 +46,17 @@ class ProviderWebhookRuntime:
         if not secret:
             return False
         if contract.verification_kind == 'slack_hmac_sha256_v0_or_shared_secret':
-            signature = normalized_headers.get('x-slack-signature', '').strip()
-            timestamp = normalized_headers.get('x-slack-request-timestamp', '').strip()
+            signature, timestamp = normalized_headers.get('x-slack-signature', '').strip(), normalized_headers.get('x-slack-request-timestamp', '').strip()
             if signature or timestamp:
-                if not signature or not timestamp:
-                    return False
-                if not timestamp.isascii() or not timestamp.isdecimal() or len(timestamp) > 20:
+                if not signature or not timestamp or not timestamp.isascii() or not timestamp.isdecimal() or len(timestamp) > 20:
                     return False
                 try:
-                    request_timestamp = int(timestamp)
-                    max_age = int(contract.metadata.get('max_request_age_seconds') or 300)
-                    if abs(time.time() - request_timestamp) > max_age:
+                    if abs(time.time() - int(timestamp)) > int(contract.metadata.get('max_request_age_seconds') or 300):
                         return False
                     signing_base = b'v0:' + timestamp.encode('ascii') + b':' + bytes(body)
                 except (OverflowError, ValueError, UnicodeEncodeError):
                     return False
-                expected = 'v0=' + hmac.new(secret.encode('utf-8'), signing_base, hashlib.sha256).hexdigest()
-                return hmac.compare_digest(expected, signature)
+                return hmac.compare_digest('v0=' + hmac.new(secret.encode('utf-8'), signing_base, hashlib.sha256).hexdigest(), signature)
             return any(candidate and hmac.compare_digest(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
         if contract.verification_kind == 'hmac_sha256_base64':
             expected = base64.b64encode(hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii')
@@ -98,6 +90,5 @@ class ProviderWebhookRuntime:
             return None
         except Exception:
             return ''
-
 
 __all__ = ['CANON_PROVIDER_WEBHOOK_RUNTIME', 'ProviderWebhookRuntime']
