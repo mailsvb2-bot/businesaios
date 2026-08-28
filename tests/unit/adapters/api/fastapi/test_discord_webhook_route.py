@@ -33,7 +33,7 @@ def _request(body: bytes) -> Request:
     return Request({'type': 'http', 'method': 'POST', 'path': '/providers/webhook/tenant-a/business-a/discord_messaging', 'query_string': b'', 'headers': [(b'content-type', b'application/json')]}, receive)
 
 
-@pytest.mark.parametrize(('body', 'expected_status', 'expected_body'), [(b'{"type":0}', 204, b''), (b'{"type":1}', 200, b'{"type":1}')])
+@pytest.mark.parametrize(('body', 'expected_status', 'expected_body'), [(b'{"type":0}', 204, b''), (b'{"type":1}', 200, b'{"type":1}'), (b'{"type":1,"event":{"type":"MESSAGE_CREATE","data":{}}}', 204, b'')])
 def test_discord_ping_is_acknowledged_only_after_accepted_ingest(body: bytes, expected_status: int, expected_body: bytes) -> None:
     handler = _ProviderAdminHandlers({'status': 'accepted', 'metadata': {}, 'transport_ack_safe': True})
     response = asyncio.run(_endpoint(handler)('tenant-a', 'business-a', 'discord_messaging', _request(body)))
