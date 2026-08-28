@@ -30,7 +30,7 @@ def _build_provider_adapter(channel: str):
 class _NativeProviderQueueAdapter:
     def __init__(self, channel: str, service_factory=None) -> None:
         self.channel, self.provider_key = str(channel), _NATIVE_QUEUE_PROVIDERS[str(channel)]
-        self._service_factory, self._cached_service = service_factory, None
+        self._service_factory, self._cached_service, self._fallback = service_factory, None, _build_provider_adapter(self.channel)
     def _service(self):
         if self._cached_service is None:
             if self._service_factory is None:
@@ -40,7 +40,10 @@ class _NativeProviderQueueAdapter:
             self._cached_service = getattr(service, "_provider_admin_service", service)
         return self._cached_service
     def send(self, msg) -> DeliveryResult:
-        context = dict((msg.track_payload or {}).get("_provider_native") or {}) if isinstance(msg.track_payload, dict) else {}
+        native_context = (msg.track_payload or {}).get("_provider_native") if isinstance(msg.track_payload, dict) else None
+        if native_context is None:
+            return self._fallback.send(msg)
+        context = dict(native_context or {})
         business_id = str(context.get("business_id") or "").strip()
         if not business_id:
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_business_id_required"})
@@ -75,10 +78,7 @@ def build_multichannel_dispatcher() -> MultiChannelDispatcher:
             adapters[channel] = _NativeProviderQueueAdapter(channel)
             continue
         if spec.transport_kind not in _PROVIDER_TRANSPORT_KINDS:
-            raise RuntimeError(
-                f"messaging adapter factory missing for {channel}: "
-                f"{spec.transport_kind}"
-            )
+            raise RuntimeError(f"messaging adapter factory missing for {channel}: {spec.transport_kind}")
         adapters[channel] = _build_provider_adapter(channel)
     return MultiChannelDispatcher(adapters=adapters)
 
