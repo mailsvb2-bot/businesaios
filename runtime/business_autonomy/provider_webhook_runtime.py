@@ -6,6 +6,10 @@ import hmac
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
+
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_messaging_binding import describe_provider_messaging_binding
 from application.business_autonomy.provider_runtime_contract import ProviderWebhookContract
@@ -26,10 +30,12 @@ class ProviderWebhookRuntime:
             return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='hmac_sha256_hex', header_names=('X-Hub-Signature-256',), enabled=True, metadata={'secret_field': 'app_secret', 'challenge_secret_field': 'verify_token', **({'fallback_secret_field': 'webhook_secret'} if provider.provider_key != 'whatsapp_cloud' else {})})
         if provider.provider_key == 'slack_messaging':
             return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='slack_hmac_sha256_v0_or_shared_secret', header_names=('X-Slack-Signature', 'X-Slack-Request-Timestamp', 'Authorization', 'X-BusinessAIOS-Webhook-Secret'), enabled=True, metadata={'secret_field': 'webhook_secret', 'integration_mode': 'native_slack_events_or_provider_webhook_bridge', 'max_request_age_seconds': 300})
+        if provider.provider_key == 'discord_messaging':
+            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='discord_ed25519_or_shared_secret', header_names=('X-Signature-Ed25519', 'X-Signature-Timestamp', 'Authorization', 'X-BusinessAIOS-Webhook-Secret'), enabled=True, metadata={'secret_field': 'webhook_secret', 'native_public_key_field': 'application_public_key', 'integration_mode': 'native_discord_http_or_provider_webhook_bridge'})
         if provider.provider_key == 'telegram_bot':
             return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='bearer_or_shared_secret', header_names=('Authorization', 'X-Telegram-Bot-Api-Secret-Token'), enabled=True, metadata={'secret_field': self._secret_field(provider)})
         if describe_provider_messaging_binding(provider) is not None and any(field.secret_kind == 'signing_secret' for field in provider.secret_fields):
-            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='shared_secret_body_or_header' if provider.provider_key == 'vk_messaging' else 'shared_secret_header', header_names=('Authorization', 'X-BusinessAIOS-Webhook-Secret', *((('X-Max-Bot-Api-Secret',) if provider.provider_key == 'max_messaging' else ()))), enabled=True, metadata={'secret_field': self._secret_field(provider), 'integration_mode': 'provider_webhook_bridge'})
+            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='shared_secret_body_or_header' if provider.provider_key == 'vk_messaging' else 'shared_secret_header', header_names=('Authorization', 'X-BusinessAIOS-Webhook-Secret', *(('X-Max-Bot-Api-Secret',) if provider.provider_key == 'max_messaging' else ())), enabled=True, metadata={'secret_field': self._secret_field(provider), 'integration_mode': 'provider_webhook_bridge'})
         return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='none', header_names=(), enabled=False, metadata={})
 
     def verify(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, headers: Mapping[str, str], body: bytes) -> bool:
@@ -42,6 +48,18 @@ class ProviderWebhookRuntime:
             if secret is not None:
                 return bool(secret) and hmac.compare_digest('sha256=' + hmac.new(secret.encode('utf-8'), bytes(body), hashlib.sha256).hexdigest(), normalized_headers.get('x-hub-signature-256', ''))
             secret = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.{contract.metadata.get('fallback_secret_field')}") if contract.metadata.get('fallback_secret_field') else ''
+            return bool(secret) and any(candidate and hmac.compare_digest(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+        if contract.verification_kind == 'discord_ed25519_or_shared_secret':
+            signature, timestamp = normalized_headers.get('x-signature-ed25519', '').strip(), normalized_headers.get('x-signature-timestamp', '').strip()
+            if signature or timestamp:
+                public_key = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.{contract.metadata['native_public_key_field']}")
+                if not signature or not timestamp or not public_key or len(signature) != 128 or len(public_key) != 64:
+                    return False
+                try:
+                    Ed25519PublicKey.from_public_bytes(bytes.fromhex(public_key)).verify(bytes.fromhex(signature), timestamp.encode('utf-8') + bytes(body))
+                except (InvalidSignature, ValueError):
+                    return False
+                return True
             return bool(secret) and any(candidate and hmac.compare_digest(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
         if not secret:
             return False

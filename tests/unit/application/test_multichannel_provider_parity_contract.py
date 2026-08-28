@@ -80,6 +80,8 @@ def test_bridge_providers_are_signed_read_capable_and_write_planned_but_not_publ
             if provider_key == 'vk_messaging'
             else 'slack_hmac_sha256_v0_or_shared_secret'
             if provider_key == 'slack_messaging'
+            else 'discord_ed25519_or_shared_secret'
+            if provider_key == 'discord_messaging'
             else 'shared_secret_header'
         )
         assert contract.verification_kind == expected_verifier
