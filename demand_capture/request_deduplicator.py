@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
-from typing import Mapping
 
 from config.demand_thresholds import DEDUP_WINDOW_MINUTES
 
