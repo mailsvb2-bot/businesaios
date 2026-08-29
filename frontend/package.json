@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "postbuild": "node scripts/generate-release-manifest.mjs",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "test:e2e": "playwright test"
   },
