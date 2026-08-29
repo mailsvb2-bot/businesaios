@@ -75,6 +75,12 @@ class NativeMessagingVendorTransport(_PreparedOnlyTransport):
         if provider.provider_key == 'max_messaging':
             recipient = (('chat_id', payload.get('chat_id')) if payload.get('chat_id') else ('message_ids', payload.get('message_ids') or '{message_ids}')) if operation == 'message_read' else (('chat_id', payload.get('chat_id')) if payload.get('chat_id') else ('user_id', payload.get('user_id') or '{user_id}'))
             return {'method': 'GET' if operation in {'health_probe', 'message_read'} else 'POST', 'url_template': str(binding['base_url']) + ({'health_probe': '/me', 'message_read': '/messages'}.get(operation, '/messages')) + ('' if operation == 'health_probe' else f'?{recipient[0]}={recipient[1]}'), 'headers': {'Authorization': '{access_token}'}, 'json_body': None if operation in {'health_probe', 'message_read'} else {'text': payload.get('text', '')}}
+        if provider.provider_key == 'slack_messaging':
+            channel = str(payload.get('channel') or payload.get('channel_id') or '{channel_id}')
+            return {'method': 'POST' if operation != 'message_read' else 'GET', 'url_template': str(binding['base_url']) + ({'health_probe': '/auth.test', 'message_read': '/conversations.history'}.get(operation, '/chat.postMessage')) + (('?' + _query_string({'channel': channel})) if operation == 'message_read' else ''), 'headers': {'Authorization': 'Bearer {bot_token}'}, 'json_body': {'channel': channel, 'text': str(payload.get('text') or '')} if operation not in {'health_probe', 'message_read'} else None}
+        if provider.provider_key == 'discord_messaging':
+            channel = str(payload.get('channel_id') or '{channel_id}')
+            return {'method': 'GET' if operation in {'health_probe', 'message_read'} else 'POST', 'url_template': str(binding['base_url']) + ('/users/@me' if operation == 'health_probe' else f'/channels/{channel}/messages'), 'headers': {'Authorization': 'Bot {bot_token}'}, 'json_body': None if operation in {'health_probe', 'message_read'} else {'content': str(payload.get('text') or ''), 'allowed_mentions': {'parse': []}}}
         endpoint = {'health_probe': 'groups.getById', 'message_read': 'messages.getConversations'}.get(operation, 'messages.send')
         return {'method': 'POST', 'url_template': str(binding['base_url']) + '/' + endpoint, 'form_body': {**dict(payload or {}), 'access_token': '{access_token}', 'v': '5.199'}}
 
@@ -143,7 +149,7 @@ def build_provider_vendor_transports(secret_vault: SecretVault | None = None, *,
     return {
         'telegram_bot': TelegramVendorTransport(),
         'whatsapp_cloud': WhatsAppVendorTransport(),
-        **{key: NativeMessagingVendorTransport(vendor_family='native_messaging_api') for key in ('vk_messaging', 'max_messaging')},
+        **{key: NativeMessagingVendorTransport(vendor_family='native_messaging_api') for key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging')},
         'shopify': ShopifyVendorTransport(),
         'woocommerce': WooCommerceVendorTransport(),
         'hubspot': HubSpotVendorTransport(),
