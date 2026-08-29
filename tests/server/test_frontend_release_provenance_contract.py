@@ -38,6 +38,8 @@ def test_frontend_build_emits_exact_sha_bound_release_manifest() -> None:
         "BAIOS_FRONTEND_RELEASE_SHA",
         '"rev-parse", "HEAD"',
         'createHash("sha256")',
+        "path.relative(distDir, absolute)",
+        "manifestFiles[relative]",
         "frontend release SHA ${envSha} does not match git HEAD ${gitSha}",
         "exact frontend release SHA is unavailable",
     ):
