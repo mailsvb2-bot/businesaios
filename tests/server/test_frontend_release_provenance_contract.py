@@ -37,6 +37,8 @@ def test_frontend_build_emits_exact_sha_bound_release_manifest() -> None:
         "BAIOS_CI_TARGET_SHA",
         "BAIOS_FRONTEND_RELEASE_SHA",
         '"rev-parse", "HEAD"',
+        '"status", "--porcelain", "--untracked-files=all", "--", "frontend"',
+        "frontend source tree must be clean before release manifest generation",
         'createHash("sha256")',
         "path.relative(distDir, absolute)",
         "manifestFiles[relative]",
