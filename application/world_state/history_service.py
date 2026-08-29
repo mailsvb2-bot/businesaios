@@ -6,14 +6,14 @@ from application.world_state.history_metrics import scalarized_reward_delta, top
 from application.world_state.history_sample import HistorySample
 from application.world_state.history_summary import HistorySummary
 from application.world_state.history_window import HistoryWindow
-from contracts.decisioning.world_state_contract import WorldStateContract
+from contracts.decisioning.decision_context_projection import DecisionContextProjection
 
 
 @dataclass
 class WorldStateHistoryService:
     window: HistoryWindow
 
-    def record(self, world_state: WorldStateContract) -> HistorySummary:
+    def record(self, world_state: DecisionContextProjection) -> HistorySummary:
         self.window.append(HistorySample(created_at_ms=world_state.generated_at_ms, world_state=world_state))
         samples = self.window.all()
         return HistorySummary(

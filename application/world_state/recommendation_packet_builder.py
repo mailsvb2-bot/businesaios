@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+from contracts.decisioning.decision_context_projection import DecisionContextProjection
 from contracts.decisioning.recommendation_packet_contract import RecommendationPacketContract
-from contracts.decisioning.world_state_contract import WorldStateContract
 
 
 def build_recommendation_packet(
     *,
     packet_id: str,
-    world_state: WorldStateContract,
+    world_state: DecisionContextProjection,
     recommendations: tuple[dict[str, object], ...],
     explanation_lines: tuple[str, ...],
 ) -> RecommendationPacketContract:
