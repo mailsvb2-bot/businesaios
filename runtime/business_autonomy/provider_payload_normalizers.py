@@ -18,7 +18,11 @@ class ProviderPayloadNormalizers:
             return {'chat_id': str(raw.get('chat_id') or '{chat_id}'), 'text': str(raw.get('text') or raw.get('message') or '')} if operation == 'communications_write' else raw
         if key == 'whatsapp_cloud':
             return {'messaging_product': raw.get('messaging_product') or 'whatsapp', 'to': str(raw.get('to') or '{recipient_phone}'), 'type': str(raw.get('type') or 'text'), 'text': dict(raw.get('text') or {'body': str(raw.get('body') or raw.get('message') or '')}), **{k: v for k, v in raw.items() if k not in {'messaging_product', 'to', 'type', 'text', 'body', 'message'}}}
-        if operation in {'communications_write', 'message_send'} and key in {'vk_messaging', 'max_messaging'}:
+        if operation in {'communications_write', 'message_send'} and key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging'}:
+            if key == 'slack_messaging':
+                return {'channel': str(raw.get('channel') or raw.get('channel_id') or '{channel_id}'), 'text': str(raw.get('text') or raw.get('message') or '')}
+            if key == 'discord_messaging':
+                return {'channel_id': str(raw.get('channel_id') or '{channel_id}'), 'text': str(raw.get('text') or raw.get('message') or '')}
             return {'peer_id': str(raw.get('peer_id') or raw.get('chat_id') or raw.get('user_id') or '{peer_id}'), 'random_id': int(raw.get('random_id') or 0), 'message': str(raw.get('message') or raw.get('text') or ''), 'group_id': str(raw.get('group_id') or '{group_id}')} if key == 'vk_messaging' else {'chat_id': str(raw.get('chat_id') or ''), 'user_id': str(raw.get('user_id') or ''), 'text': str(raw.get('text') or raw.get('message') or '')}
         if key in {'shopify', 'woocommerce'}:
             if operation.endswith('catalog_sync'):
