@@ -21,7 +21,7 @@ class CapitalState:
 
 
 @dataclass(frozen=True)
-class WorldState:
+class CapitalAllocationContext:
     capital: CapitalState
     ltv: float
     cac: float
@@ -58,7 +58,7 @@ class DefaultRiskModel:
     def __init__(self, policy: CapitalAllocationPolicy | None = None) -> None:
         self._policy = policy or DEFAULT_CAPITAL_ALLOCATION_POLICY
 
-    def estimate(self, world: WorldState) -> float:
+    def estimate(self, world: CapitalAllocationContext) -> float:
         policy = self._policy
         runway_risk = policy.one_value / max(float(world.capital.runway_days), policy.runway_days_floor)
         return min(policy.one_value, max(policy.zero_value, runway_risk + float(world.churn_rate) + float(world.uncertainty)))
@@ -68,7 +68,7 @@ class ConstraintBuilder:
     def __init__(self, policy: CapitalAllocationPolicy | None = None) -> None:
         self._policy = policy or DEFAULT_CAPITAL_ALLOCATION_POLICY
 
-    def from_world(self, world: WorldState) -> Constraints:
+    def from_world(self, world: CapitalAllocationContext) -> Constraints:
         reserve_required = self._policy.reserve_ratio * float(world.capital.cash_balance)
         max_spend = max(self._policy.zero_value, float(world.capital.cash_balance) - reserve_required)
         return Constraints(
@@ -119,7 +119,7 @@ class CapitalAllocationEngine:
 
     def allow_spend(self, decision_cost: float, capital: CapitalState) -> bool:
         zero_value = self._policy.zero_value
-        world = WorldState(
+        world = CapitalAllocationContext(
             capital=capital,
             ltv=zero_value,
             cac=zero_value,
@@ -130,7 +130,7 @@ class CapitalAllocationEngine:
         constraints = self._constraints.from_world(world)
         return float(decision_cost) <= min(constraints.max_spend, float(capital.marketing_budget))
 
-    def allocate(self, world: WorldState) -> CapitalPlan:
+    def allocate(self, world: CapitalAllocationContext) -> CapitalPlan:
         policy = self._policy
         risk = self._risk_model.estimate(world)
         constraints = self._constraints.from_world(world)
@@ -185,9 +185,11 @@ def rank_capital_allocations(
     )
 
 
+WorldState = CapitalAllocationContext
+
 __all__ = [
     "Allocation",
-    "CapitalAllocationEngine",
+    "CapitalAllocationContext", "CapitalAllocationEngine",
     "CapitalPlan",
     "CapitalState",
     "ConstraintBuilder",
