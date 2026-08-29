@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,10 +37,18 @@ function readGitHead() {
 }
 
 function resolveCommitSha() {
-  const envValue = process.env.BAIOS_CI_TARGET_SHA || process.env.BAIOS_FRONTEND_RELEASE_SHA;
-  const envSha = envValue ? normalizeSha(envValue, "frontend release SHA") : null;
-  const gitSha = readGitHead();
+  const ciSha = process.env.BAIOS_CI_TARGET_SHA
+    ? normalizeSha(process.env.BAIOS_CI_TARGET_SHA, "BAIOS_CI_TARGET_SHA")
+    : null;
+  const releaseSha = process.env.BAIOS_FRONTEND_RELEASE_SHA
+    ? normalizeSha(process.env.BAIOS_FRONTEND_RELEASE_SHA, "BAIOS_FRONTEND_RELEASE_SHA")
+    : null;
+  if (ciSha && releaseSha && ciSha !== releaseSha) {
+    throw new Error(`BAIOS_CI_TARGET_SHA ${ciSha} does not match BAIOS_FRONTEND_RELEASE_SHA ${releaseSha}`);
+  }
 
+  const envSha = ciSha || releaseSha;
+  const gitSha = readGitHead();
   if (envSha && gitSha && envSha !== gitSha) {
     throw new Error(`frontend release SHA ${envSha} does not match git HEAD ${gitSha}`);
   }
@@ -71,19 +79,14 @@ async function collectFiles(directory) {
 
 const commitSha = resolveCommitSha();
 const files = (await collectFiles(distDir)).sort((left, right) => left.localeCompare(right));
-if (files.length === 0) {
-  throw new Error("frontend release manifest would be empty");
+const manifestFiles = {};
+for (const absolute of files) {
+  const relative = path.relative(distDir, absolute).split(path.sep).join("/");
+  manifestFiles[relative] = createHash("sha256").update(await readFile(absolute)).digest("hex");
 }
 
-const manifestFiles = [];
-for (const absolute of files) {
-  const bytes = await readFile(absolute);
-  const metadata = await stat(absolute);
-  manifestFiles.push({
-    path: path.relative(rootDir, absolute).split(path.sep).join("/"),
-    size_bytes: metadata.size,
-    sha256: createHash("sha256").update(bytes).digest("hex"),
-  });
+if (!("index.html" in manifestFiles) || !Object.keys(manifestFiles).some((name) => name.startsWith("assets/"))) {
+  throw new Error("frontend release manifest must cover index.html and at least one asset");
 }
 
 const manifest = {
@@ -91,5 +94,5 @@ const manifest = {
   commit_sha: commitSha,
   files: manifestFiles,
 };
-await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`, "utf8");
-console.log(`wrote ${manifestPath} for ${commitSha} with ${manifestFiles.length} file(s)`);
+await writeFile(manifestPath, `${JSON.stringify(manifest, Object.keys(manifest).sort())}\n`, "utf8");
+console.log(`wrote ${manifestPath} for ${commitSha} with ${Object.keys(manifestFiles).length} file(s)`);
