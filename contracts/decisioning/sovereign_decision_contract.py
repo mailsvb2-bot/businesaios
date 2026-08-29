@@ -1,14 +1,10 @@
 from __future__ import annotations
-
 from dataclasses import dataclass
 
 CANON_DECISION_CONTRACTS = True
 
-
 @dataclass(frozen=True)
 class Decision:
-    """Canonical sovereign decision emitted by DecisionCore."""
-
     decision_id: str
     issuer_id: str
     issued_at_ms: int
@@ -23,11 +19,8 @@ class Decision:
     action_schema_version: int
     envelope_version: int = 1
 
-
 @dataclass(frozen=True)
 class DecisionEnvelope:
-    """Signed execution envelope for a canonical sovereign decision."""
-
     decision: Decision
     payload_hash: str
     signature: str
@@ -37,6 +30,5 @@ class DecisionEnvelope:
     rollout_group: str | None = None
     canary_flag: bool = False
     envelope_version: int = 1
-
 
 __all__ = ["CANON_DECISION_CONTRACTS", "Decision", "DecisionEnvelope"]
