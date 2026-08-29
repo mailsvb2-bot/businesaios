@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.economics.capital_allocation_engine import CapitalAllocationEngine, CapitalState, WorldState
+from core.economics.capital_allocation_engine import CapitalAllocationContext, CapitalAllocationEngine, CapitalState, WorldState
 from core.economics.capital_allocation_engine import CapitalPlan as AllocationPlan
 from core.economics.contracts import CapitalScenarioBuilderPort, EconomicsContext
 from core.economics.recommendation_policy import ensure_economics_recommendations
@@ -77,6 +77,7 @@ def build_capital_scenarios(
 
 __all__ = [
     'AllocationPlan',
+    'CapitalAllocationContext',
     'CapitalAllocationEngine',
     'CapitalDecision',
     'CapitalEngine',
