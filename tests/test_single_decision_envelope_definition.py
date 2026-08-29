@@ -6,7 +6,7 @@ def test_single_decision_envelope_definition():
     """There must be exactly one DecisionEnvelope class definition."""
 
     root = Path(__file__).resolve().parents[1]
-    canonical = Path("core/ai/decision_contracts.py")
+    canonical = Path("contracts/decisioning/sovereign_decision_contract.py")
     hits = []
     pat = re.compile(r"^\s*class\s+DecisionEnvelope\s*(\(|:)\s*", re.MULTILINE)
     for path in root.rglob("*.py"):
