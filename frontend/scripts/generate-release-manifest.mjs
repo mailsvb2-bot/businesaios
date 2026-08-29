@@ -94,5 +94,5 @@ const manifest = {
   commit_sha: commitSha,
   files: manifestFiles,
 };
-await writeFile(manifestPath, `${JSON.stringify(manifest, Object.keys(manifest).sort())}\n`, "utf8");
+await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`, "utf8");
 console.log(`wrote ${manifestPath} for ${commitSha} with ${Object.keys(manifestFiles).length} file(s)`);
