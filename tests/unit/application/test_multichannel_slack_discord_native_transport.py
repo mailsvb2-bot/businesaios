@@ -65,11 +65,12 @@ def test_slack_discord_unsupported_live_probe_does_not_require_optional_bot_toke
         assert 'bot_token' not in result.metadata['present_fields']
 
 
-def test_slack_discord_prepared_endpoints_do_not_promote_provider_truth() -> None:
+def test_slack_discord_prepared_endpoints_remain_partial_truth() -> None:
     truth = provider_truth_map()
     for key in ('slack_messaging', 'discord_messaging'):
         row = truth[key]
-        assert row.has_real_endpoint is True
+        assert row.has_real_endpoint is False
+        assert row.has_placeholder_endpoint is True
         assert row.read_only_supported is True
         assert row.status == ProviderTruthStatus.PARTIAL.value
         assert row.live_ready is False
