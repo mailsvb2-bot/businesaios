@@ -90,6 +90,8 @@ def test_host_verifier_and_nginx_match_health_contract() -> None:
     assert '$LOCAL_WORKER_BASE/ready' in verifier
     assert '$PUBLIC_BASE_URL/health' in verifier
     assert '$PUBLIC_BASE_URL/readyz' in verifier
+    assert 'PUBLIC_APP_BASE="https://app.businessaios.ru"' in verifier
+    assert 'curl -fsS "$PUBLIC_APP_BASE/"' in verifier
     assert '/healthz"' not in verifier
 
     nginx = (ROOT / 'deploy/nginx/businesaios-api-status.template.conf').read_text(encoding='utf-8')

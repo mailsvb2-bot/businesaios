@@ -4,6 +4,7 @@ set -Eeuo pipefail
 LOCAL_API_BASE="${LOCAL_API_BASE:-http://127.0.0.1:8000}"
 LOCAL_WORKER_BASE="${LOCAL_WORKER_BASE:-http://127.0.0.1:8087}"
 PUBLIC_STATUS_BASE="${PUBLIC_STATUS_BASE:-https://status.businessaios.ru}"
+PUBLIC_APP_BASE="https://app.businessaios.ru"
 API_SERVICE="${API_SERVICE:-businesaios-api.service}"
 WORKER_SERVICE="${WORKER_SERVICE:-businesaios-worker.service}"
 NGINX_SERVICE="${NGINX_SERVICE:-nginx.service}"
@@ -292,6 +293,63 @@ mark_pass "$CURRENT_CHECK"
 CURRENT_CHECK="public_status"
 step "public status health"
 api_check "$PUBLIC_STATUS_BASE/health"
+mark_pass "$CURRENT_CHECK"
+
+CURRENT_CHECK="public_app"
+step "public product workspace exact-SHA bundle"
+curl -fsS "$PUBLIC_APP_BASE/" >/tmp/businesaios-public-app.html
+curl -fsS "$PUBLIC_APP_BASE/release-manifest.json" >/tmp/businesaios-public-app-manifest.json
+PUBLIC_APP_BASE="$PUBLIC_APP_BASE" EXPECTED_SHA="$EXPECTED_SHA" "$PYTHON_BIN" - <<'PY_FRONTEND'
+import hashlib
+import json
+import os
+from html.parser import HTMLParser
+from pathlib import Path
+from urllib.parse import urljoin, urlsplit
+from urllib.request import urlopen
+
+base = os.environ["PUBLIC_APP_BASE"].rstrip("/") + "/"
+expected_sha = os.environ["EXPECTED_SHA"].strip().lower()
+html_bytes = Path("/tmp/businesaios-public-app.html").read_bytes()
+html = html_bytes.decode("utf-8", errors="replace")
+manifest = json.loads(Path("/tmp/businesaios-public-app-manifest.json").read_text(encoding="utf-8"))
+if manifest.get("schema_version") != 1 or str(manifest.get("commit_sha") or "").strip().lower() != expected_sha:
+    raise SystemExit("public frontend release manifest is not bound to EXPECTED_SHA")
+files = manifest.get("files")
+if not isinstance(files, dict) or files.get("index.html") != hashlib.sha256(html_bytes).hexdigest():
+    raise SystemExit("public frontend index.html does not match release manifest")
+
+class EntryAssets(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.refs = []
+    def handle_starttag(self, tag, attrs):
+        values = dict(attrs)
+        if tag == "script" and values.get("src"):
+            self.refs.append(values["src"])
+        if tag == "link" and values.get("href") and "stylesheet" in str(values.get("rel") or "").lower():
+            self.refs.append(values["href"])
+
+if 'id="root"' not in html:
+    raise SystemExit("public product workspace did not return the expected root shell")
+parser = EntryAssets(); parser.feed(html)
+if not parser.refs:
+    raise SystemExit("public product workspace has no entry assets")
+origin = urlsplit(base)
+for ref in dict.fromkeys(parser.refs):
+    url = urljoin(base, ref)
+    parsed = urlsplit(url)
+    if (parsed.scheme, parsed.netloc) != (origin.scheme, origin.netloc):
+        raise SystemExit(f"frontend entry asset escapes public app origin: {ref!r}")
+    relative = parsed.path.lstrip("/")
+    expected_hash = files.get(relative)
+    if not relative.startswith("assets/") or not expected_hash:
+        raise SystemExit(f"frontend entry asset is not covered by release manifest: {relative!r}")
+    with urlopen(url, timeout=10) as response:
+        payload = response.read()
+    if hashlib.sha256(payload).hexdigest() != str(expected_hash).lower():
+        raise SystemExit(f"public frontend asset hash mismatch: {relative}")
+PY_FRONTEND
 mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="production_verdict"

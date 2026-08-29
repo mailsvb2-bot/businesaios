@@ -88,7 +88,13 @@ def test_bridge_providers_are_signed_read_capable_and_write_planned_but_not_publ
         assert marketplace[provider_key]['selectable'] is True
         assert marketplace[provider_key]['read_supported'] is True
         assert marketplace[provider_key]['write_supported'] is False
-        assert marketplace[provider_key]['connection_mode'] == 'provider_webhook_bridge'
+        expected_connection_mode = {
+            'vk_messaging': 'native_vk_callback_or_provider_webhook_bridge',
+            'max_messaging': 'native_max_api_or_provider_webhook_bridge',
+            'slack_messaging': 'native_slack_events_or_provider_webhook_bridge',
+            'discord_messaging': 'native_discord_http_or_provider_webhook_bridge',
+        }.get(provider_key, 'provider_webhook_bridge')
+        assert marketplace[provider_key]['connection_mode'] == expected_connection_mode
 
 
 def test_marketplace_exposes_channel_specific_connection_modes() -> None:

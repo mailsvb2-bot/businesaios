@@ -31,3 +31,13 @@ def test_self_service_plan_is_truthful_persistent_and_fail_safe(tmp_path):
     assert all(item["write_actions_enabled"] is False for item in result.integration_plan)
     restored = service.get_status(intake_id=result.intake_id)
     assert (restored.business_profile, restored.selected_providers, restored.integration_plan) == (result.business_profile, result.selected_providers, result.integration_plan)
+
+
+def test_native_messaging_connection_modes_are_exposed_truthfully() -> None:
+    rows = {row["provider_key"]: row for row in public_integration_marketplace()}
+    assert rows["vk_messaging"]["connection_mode"] == "native_vk_callback_or_provider_webhook_bridge"
+    assert rows["max_messaging"]["connection_mode"] == "native_max_api_or_provider_webhook_bridge"
+    assert rows["slack_messaging"]["connection_mode"] == "native_slack_events_or_provider_webhook_bridge"
+    assert rows["discord_messaging"]["connection_mode"] == "native_discord_http_or_provider_webhook_bridge"
+    assert rows["slack_messaging"]["credential_labels"] == ["Slack Signing Secret"]
+    assert rows["discord_messaging"]["credential_labels"] == ["Bridge Webhook Secret"]

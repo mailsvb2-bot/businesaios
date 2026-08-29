@@ -54,7 +54,7 @@ def test_contract_contains_all_fail_closed_production_gates() -> None:
                   "PUBLIC_BASE_URL", "BUSINESAIOS_TRUST_PROXY_HEADERS",
                   "BUSINESAIOS_TRUSTED_PROXY_IPS", "production_runtime_bindings",
                   "HEALTH_HOST", "WORKER_HEALTH_PORT", "EVOLUTION_HEALTH_PORT",
-                  "EVOLUTION_ENABLED"):
+                  "EVOLUTION_ENABLED", "PUBLIC_APP_BASE", "public_app", "businesaios-public-app.html"):
         assert token in text
     assert "/etc/businesaios/api.env" in text
     assert '.venv/bin/python' in text and '"$PYTHON_BIN" -' in text

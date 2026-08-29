@@ -163,3 +163,16 @@ def test_onboarding_prioritizes_selectable_integrations_without_hiding_roadmap()
     assert "disabled={!item.selectable}" in app and "item.availability_label" in app
     assert "const [roadmapMarketplace" not in app and "setRoadmapMarketplace" not in app
     assert all(selector in styles for selector in (".integration-section-head", ".roadmap-integrations", ".roadmap-grid"))
+
+
+def test_provider_setup_ui_distinguishes_public_config_from_secrets_and_explains_native_messaging_paths() -> None:
+    app = _read("App.jsx")
+    styles = _read("styles.css")
+    assert all(token in app for token in (
+        "PROVIDER_CONNECTION_GUIDANCE", "vk_messaging", "max_messaging", "slack_messaging", "discord_messaging",
+        "credentialInputType", "secret_kind", 'type={credentialInputType(field)}', "Webhook URL", "Application Public Key",
+        "Slack Signing Secret", "Bridge Webhook Secret", "Что реально доступно", "Gateway-подключение и отправка сообщений",
+    ))
+    assert 'new Set(["config", "url", "username", "oauth_client"])' in app
+    assert 'input type="password" autoComplete="off"' not in app
+    assert all(selector in styles for selector in (".provider-truth-card", ".field-label-row", ".readonly-value"))
