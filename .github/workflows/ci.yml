@@ -139,10 +139,36 @@ jobs:
       - name: Rebuild canonical production frontend bundle
         working-directory: frontend
         run: env -u VITE_API_BASE npm run build
+      - name: Bind production frontend bundle to exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          BAIOS_FRONTEND_SHA="$BAIOS_CI_TARGET_SHA" python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          dist = Path("frontend/dist")
+          sha = os.environ["BAIOS_FRONTEND_SHA"].strip().lower()
+          if len(sha) != 40 or any(ch not in "0123456789abcdef" for ch in sha):
+              raise SystemExit("BAIOS_CI_TARGET_SHA must be a full lowercase git SHA")
+          files = {
+              path.relative_to(dist).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in sorted(dist.rglob("*"))
+              if path.is_file() and path.name != "release-manifest.json"
+          }
+          if "index.html" not in files or not any(name.startswith("assets/") for name in files):
+              raise SystemExit("frontend bundle must contain index.html and at least one asset")
+          manifest = {"schema_version": 1, "commit_sha": sha, "files": files}
+          (dist / "release-manifest.json").write_text(json.dumps(manifest, sort_keys=True) + "\n", encoding="utf-8")
+          PY
       - name: Verify production bundle
         shell: bash
         run: |
           test -s frontend/dist/index.html
+          test -s frontend/dist/release-manifest.json
+          grep -F -q "$BAIOS_CI_TARGET_SHA" frontend/dist/release-manifest.json
           grep -R -F -q "https://api.businessaios.ru" frontend/dist
       - name: Upload frontend bundle
         if: success()
