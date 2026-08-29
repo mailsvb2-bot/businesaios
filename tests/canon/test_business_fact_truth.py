@@ -1,6 +1,6 @@
 import pytest
 
-from contracts.event_store import BUSINESS_FACT_EVENT_TYPE, BusinessFactV1
+from contracts.event_store import BUSINESS_FACT_EVENT_TYPE, BusinessFactV1, normalize_append_event
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
@@ -39,6 +39,21 @@ def test_business_fact_uses_existing_event_store_and_preserves_truth_metadata() 
     assert event["payload"]["provenance"]["record_id"] == "r-1"
 
 
+def test_business_fact_nested_truth_is_snapshotted() -> None:
+    source_payload = {"profile": {"tags": ["active"]}}
+    source_provenance = {"origin": {"record_ids": ["r-1"]}}
+    fact = _fact(payload=source_payload, provenance=source_provenance)
+    store = MemoryEventStore()
+    store.append_event(fact.as_event())
+    source_payload["profile"]["tags"].append("mutated")
+    source_provenance["origin"]["record_ids"].append("r-2")
+    [event] = list(store.iter_events(tenant_id="tenant-1", start_ms=0))
+    assert fact.payload == {"profile": {"tags": ["active"]}}
+    assert fact.provenance == {"origin": {"record_ids": ["r-1"]}}
+    assert event["payload"]["payload"] == {"profile": {"tags": ["active"]}}
+    assert event["payload"]["provenance"] == {"origin": {"record_ids": ["r-1"]}}
+
+
 def test_business_fact_correction_is_append_only() -> None:
     store = MemoryEventStore()
     store.append_event(_fact().as_event())
@@ -46,6 +61,12 @@ def test_business_fact_correction_is_append_only() -> None:
     events = list(store.iter_events(tenant_id="tenant-1", start_ms=0))
     assert [event["event_id"] for event in events] == ["fact-1", "fact-2"]
     assert events[1]["payload"]["supersedes_fact_id"] == "fact-1"
+
+
+def test_explicit_zero_timestamp_is_preserved_by_append_normalization() -> None:
+    normalized = normalize_append_event(_fact(observed_at_ms=0).as_event())
+    assert normalized.timestamp_ms == 0
+    assert normalized.payload["observed_at_ms"] == 0
 
 
 @pytest.mark.parametrize("field", ["fact_id", "tenant_id", "business_id", "fact_type", "entity_id", "source"])
