@@ -22,12 +22,47 @@ RUNTIME_USER="businesaios"
 RUNTIME_GROUP="businesaios"
 RUNTIME_API_DIR="/var/lib/businesaios/runtime/api"
 FRONTEND_DIST="$BUSINESAIOS_DEPLOY_ROOT/frontend/dist"
+FRONTEND_MANIFEST="$FRONTEND_DIST/release-manifest.json"
 
 fail() { echo "$*" >&2; exit 1; }
 
 publish_frontend_access() {
-  [[ -d "$FRONTEND_DIST" ]] || return 0
-  [[ -s "$FRONTEND_DIST/index.html" ]] || fail "production frontend dist exists but index.html is missing or empty"
+  [[ -d "$FRONTEND_DIST" ]] || fail "production frontend dist is missing: $FRONTEND_DIST"
+  [[ -s "$FRONTEND_DIST/index.html" ]] || fail "production frontend index.html is missing or empty"
+  [[ -s "$FRONTEND_MANIFEST" ]] || fail "production frontend release manifest is missing or empty"
+  EXPECTED_SHA="$EXPECTED_SHA" FRONTEND_DIST="$FRONTEND_DIST" "$PYTHON_BIN" - <<'PY_FRONTEND'
+import hashlib
+import json
+import os
+from pathlib import Path, PurePosixPath
+
+dist = Path(os.environ["FRONTEND_DIST"]).resolve()
+expected_sha = os.environ["EXPECTED_SHA"].strip().lower()
+manifest_path = dist / "release-manifest.json"
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+if manifest.get("schema_version") != 1:
+    raise SystemExit("frontend release manifest schema_version must be 1")
+if str(manifest.get("commit_sha") or "").strip().lower() != expected_sha:
+    raise SystemExit("frontend release manifest commit_sha does not match EXPECTED_SHA")
+files = manifest.get("files")
+if not isinstance(files, dict) or "index.html" not in files or not any(str(name).startswith("assets/") for name in files):
+    raise SystemExit("frontend release manifest must cover index.html and at least one asset")
+actual_files = {p.relative_to(dist).as_posix() for p in dist.rglob("*") if p.is_file() and p != manifest_path}
+if set(files) != actual_files:
+    raise SystemExit("frontend dist files do not exactly match release manifest")
+for relative, expected_hash in files.items():
+    rel = PurePosixPath(str(relative))
+    if rel.is_absolute() or ".." in rel.parts or not rel.parts:
+        raise SystemExit(f"unsafe frontend manifest path: {relative!r}")
+    path = dist.joinpath(*rel.parts).resolve()
+    if path.parent != dist and dist not in path.parents:
+        raise SystemExit(f"frontend manifest path escapes dist: {relative!r}")
+    if not path.is_file():
+        raise SystemExit(f"frontend manifest file is missing: {relative}")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest != str(expected_hash).lower():
+        raise SystemExit(f"frontend manifest hash mismatch: {relative}")
+PY_FRONTEND
   find "$FRONTEND_DIST" -type d -exec chmod 0755 {} +
   find "$FRONTEND_DIST" -type f -exec chmod 0644 {} +
 }
@@ -197,8 +232,8 @@ for service in "${SERVICES[@]}"; do
   cmp -s "$canonical" "$fragment" || fail "installed systemd unit does not match deployed SHA for $service; run deploy/systemd/install.sh before production bootstrap"
 done
 
-# nginx serves only generated frontend artifacts. Publish them after exact-SHA,
-# production-binding and systemd-contract preflight, before credential rotation.
+# Publish only a complete exact-SHA frontend artifact. The CI-produced manifest
+# binds every served file to the release commit before permissions are opened.
 publish_frontend_access
 
 echo "== canonical production control-plane + pricing bootstrap =="
