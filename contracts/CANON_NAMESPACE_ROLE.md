@@ -20,4 +20,4 @@ Rule:
 - `schemas/` owns **validation and serialization helpers around those truths**.
 - `interfaces/` owns **boundary adapters, connectors, and delivery surfaces**.
 - sovereign `Decision` / signed `DecisionEnvelope` definitions are owned by `contracts/decisioning/sovereign_decision_contract.py`; `core/ai/decision_contracts.py` is compatibility-only and must not redefine them.
-- future versioned `BusinessFact`, `ActionIntent`, `Execution`, `Outcome` / `Evaluation`, capability and delegated-authority contracts must extend this canonical surface instead of creating parallel semantic owners.
+- `DecisionContextProjection` is advisory input only; the sovereign world state remains `kernel.world_state.WorldStateV1`. Future versioned `BusinessFact`, `ActionIntent`, `Execution`, `Outcome` / `Evaluation`, capability and delegated-authority contracts extend this surface instead of creating parallel semantic owners.

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from contracts.decisioning.world_state_contract import WorldStateContract
+from contracts.decisioning.decision_context_projection import DecisionContextProjection
 
 
-def extract_world_state_features(world_state: WorldStateContract) -> dict[str, float]:
+def extract_world_state_features(world_state: DecisionContextProjection) -> dict[str, float]:
     features: dict[str, float] = {}
 
     for key, value in world_state.user_state.items():

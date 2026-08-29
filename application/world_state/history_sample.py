@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from contracts.decisioning.world_state_contract import WorldStateContract
+from contracts.decisioning.decision_context_projection import DecisionContextProjection
 
 
 @dataclass(frozen=True)
 class HistorySample:
     created_at_ms: int
-    world_state: WorldStateContract
+    world_state: DecisionContextProjection

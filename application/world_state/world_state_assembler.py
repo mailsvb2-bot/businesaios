@@ -16,8 +16,8 @@ from application.world_state.market_state_builder import build_market_state
 from application.world_state.reward_state_builder import build_reward_state
 from application.world_state.state_id import build_state_id
 from application.world_state.user_state_builder import build_user_state
+from contracts.decisioning.decision_context_projection import DecisionContextProjection
 from contracts.decisioning.reward_signal_contract import RewardSignalContract
-from contracts.decisioning.world_state_contract import WorldStateContract
 from core.creative_intelligence.models import CreativeIntelligenceSnapshot
 from runtime.market.market_snapshot import MarketSnapshot
 
@@ -36,13 +36,13 @@ def assemble_world_state(
     history_summary: HistorySummary | None = None,
     advisory_flags: dict[str, str] | None = None,
     notes: tuple[str, ...] = (),
-) -> WorldStateContract:
+) -> DecisionContextProjection:
     assert_world_state_boundary(dict(advisory_flags or {}))
     state_id = build_state_id(
         generated_at_ms=generated_at_ms,
         salt=str(generated_at_ms),
     )
-    return WorldStateContract(
+    return DecisionContextProjection(
         state_id=state_id,
         generated_at_ms=generated_at_ms,
         user_state=build_user_state(user_observables),
