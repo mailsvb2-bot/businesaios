@@ -345,6 +345,10 @@ def test_host_lifecycle_is_sha_bound_and_chains_bootstrap_restart_and_canonical_
         "API_READY=0",
         "attempt<=60",
         "curl -fsS --max-time 2",
+        'FRONTEND_DIST="$BUSINESAIOS_DEPLOY_ROOT/frontend/dist"',
+        'chmod 0755',
+        'chmod 0644',
+        'publish_frontend_access',
     ):
         assert token in text
     assert "${BUSINESAIOS_DEPLOY_ROOT:-" not in text
@@ -352,7 +356,9 @@ def test_host_lifecycle_is_sha_bound_and_chains_bootstrap_restart_and_canonical_
     assert "${API_SERVICE:-" not in text
     assert "--env-file" not in text
     assert "deployed SHA $OBSERVED_SHA != expected SHA $EXPECTED_SHA" in text
-    assert text.index('export PYTHONPATH="$BUSINESAIOS_DEPLOY_ROOT"') < text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"")
+    sha_guard_index = text.index("deployed SHA $OBSERVED_SHA != expected SHA $EXPECTED_SHA")
+    publish_call_index = text.index("\npublish_frontend_access\n", sha_guard_index)
+    assert sha_guard_index < publish_call_index < text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"")
     assert text.index("\"$PYTHON_BIN\" \"$BOOTSTRAP\"") < text.index("systemctl restart")
     assert text.index("systemctl restart") < text.index("API_READY=0")
     assert text.index("API_READY=0") < text.rindex("\"$VERIFY\"")

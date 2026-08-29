@@ -89,8 +89,16 @@ function IntegrationCard({ item, selected, onToggle }) {
   );
 }
 
+const PROVIDER_CONNECTION_GUIDANCE = {
+  vk_messaging: { label: "Сообщество VK", placeholder: "Например, ID или ссылка на сообщество", truth: "Чтение сообщений VK готово. Отправка сообщений остаётся выключенной, пока вы отдельно её не разрешите.", help: "Для нативного чтения укажите Group Access Token. Group ID и Callback Confirmation Code — обычные настройки; Bridge Webhook Secret нужен для совместимого защищённого bridge-пути." },
+  max_messaging: { label: "Бот MAX", placeholder: "Например, ID или имя бота", truth: "Чтение сообщений MAX готово. Отправка сообщений остаётся выключенной, пока вы отдельно её не разрешите.", help: "Укажите Bot Access Token для нативного чтения. Bridge Webhook Secret сохраняет совместимость с защищённым webhook-путём." },
+  slack_messaging: { label: "Рабочее пространство Slack", placeholder: "Например, имя или ID workspace", truth: "Входящие события Slack принимаются с проверкой подлинности. Отправка сообщений выключена.", help: "В Slack Event Subscriptions укажите Webhook URL ниже. Поле Slack Signing Secret хранится как секрет и используется для проверки каждого входящего запроса." },
+  discord_messaging: { label: "Приложение Discord", placeholder: "Например, Application ID или имя сервера", truth: "Входящие HTTP-события Discord принимаются с проверкой подлинности. Постоянное Gateway-подключение и отправка сообщений этим подключением пока не включены.", help: "В Discord Developer Portal укажите Webhook URL ниже. Application Public Key — публичная настройка для Ed25519; Bridge Webhook Secret остаётся обязательным для совместимого bridge-пути." }
+};
+
 function connectionIdentityCopy(provider) {
   const key = String(provider?.provider_key || "").toLowerCase();
+  if (PROVIDER_CONNECTION_GUIDANCE[key]) return PROVIDER_CONNECTION_GUIDANCE[key];
   if (key.includes("website") || key.includes("wordpress") || key.includes("webflow")) {
     return { label: "Сайт или проект", placeholder: "Например, https://example.ru" };
   }
@@ -98,6 +106,31 @@ function connectionIdentityCopy(provider) {
     return { label: "Кабинет или магазин", placeholder: "Например, ID кабинета продавца" };
   }
   return { label: "Аккаунт или кабинет", placeholder: "Например, ID аккаунта или адрес кабинета" };
+}
+
+function credentialInputType(field) {
+  return new Set(["config", "url", "username", "oauth_client"]).has(String(field?.secret_kind || "").toLowerCase()) ? "text" : "password";
+}
+
+function credentialLabel(provider, field) {
+  const key = String(provider?.provider_key || "").toLowerCase();
+  if (field?.secret_name === "webhook_secret" && key === "slack_messaging") return "Slack Signing Secret";
+  if (field?.secret_name === "webhook_secret" && ["vk_messaging", "max_messaging", "discord_messaging"].includes(key)) return "Bridge Webhook Secret";
+  return field?.label || field?.secret_name || "Поле доступа";
+}
+
+function providerTruthCopy(provider) {
+  const key = String(provider?.provider_key || "").toLowerCase();
+  if (PROVIDER_CONNECTION_GUIDANCE[key]?.truth) return PROVIDER_CONNECTION_GUIDANCE[key].truth;
+  if (provider?.truth_status === "read_only_ready" || provider?.live_ready) return "Чтение готово. Изменения во внешней системе выключены.";
+  if (provider?.customer_selectable) return "Источник доступен для безопасного анализа в режиме чтения.";
+  return "Подключение ещё готовится.";
+}
+
+function providerWebhookUrl(apiBase, data, provider) {
+  const key = String(provider?.provider_key || "").toLowerCase();
+  if (!PROVIDER_CONNECTION_GUIDANCE[key] || !data?.tenant_id || !data?.business_id) return "";
+  return `${String(apiBase || "").replace(/\/$/, "")}/providers/webhook/${encodeURIComponent(data.tenant_id)}/${encodeURIComponent(data.business_id)}/${encodeURIComponent(key)}`;
 }
 
 function isSuccessfulLiveEvidence(row) {
@@ -189,6 +222,7 @@ function Workspace({ data, apiBase, onRestart, onRetryAccess }) {
   const evidenceProvider = liveEvidence ? catalog.find((row) => row.provider_key === liveEvidence.provider_key) : null;
   const resourceCount = liveEvidence?.parsed_response?.resource_count ?? liveEvidence?.transport_response?.resource_count;
   const identityCopy = connectionIdentityCopy(activeProvider);
+  const webhookUrl = providerWebhookUrl(baseApi, data, activeProvider);
   const syncActionLabel = workspaceBusy === "sync"
     ? (activeLiveEvidence ? "Обновляем данные…" : "Получаем данные…")
     : (activeLiveEvidence ? "Обновить данные" : "Получить первые данные");
@@ -330,11 +364,13 @@ function Workspace({ data, apiBase, onRestart, onRetryAccess }) {
               </div>
               <div className="step-content workspace-step-content">
                 <div className="section-heading"><h2>{activeProvider.title}</h2><p>{activeLiveEvidence ? "Первые данные из этого источника подтверждены. При необходимости обновите их или проверьте доступ." : activeProvider.connected ? "Доступ сохранён. Получите первые данные — это главное действие сейчас." : "Нужен только доступ для чтения. Изменения во внешней системе остаются выключены."}</p></div>
+                <div className="provider-truth-card"><strong>Что реально доступно</strong><span>{providerTruthCopy(activeProvider)}</span>{identityCopy.help ? <small>{identityCopy.help}</small> : null}</div>
                 {!activeProvider.connected ? (
                   <div className="form-grid">
                     <label className="full">{identityCopy.label}<input value={externalRef} onChange={(event) => setExternalRef(event.target.value)} placeholder={identityCopy.placeholder} /><small className="input-help">Это идентификатор именно вашего кабинета или проекта — не внутренний ID BusinessAIOS.</small></label>
+                    {webhookUrl ? <label className="full">Webhook URL<input className="readonly-value" type="text" readOnly value={webhookUrl} onFocus={(event) => event.target.select()} /><small className="input-help">Скопируйте этот адрес в настройки входящих событий провайдера. Адрес не содержит секретов.</small></label> : null}
                     {(activeProvider.secret_fields || []).map((field) => (
-                      <label className={field.multiline ? "full" : ""} key={field.secret_name}>{field.label}{field.multiline ? <textarea value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} /> : <input type="password" autoComplete="off" value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} />}</label>
+                      <label className={field.multiline ? "full" : ""} key={field.secret_name}><span className="field-label-row"><span>{credentialLabel(activeProvider, field)}</span>{!field.required ? <small>Необязательно</small> : null}</span>{field.multiline ? <textarea value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} /> : <input type={credentialInputType(field)} autoComplete="off" value={secrets[field.secret_name] || ""} onChange={(event) => setSecrets((previous) => ({ ...previous, [field.secret_name]: event.target.value }))} placeholder={field.placeholder || ""} />}{credentialInputType(field) === "text" ? <small className="input-help">Обычная настройка, не пароль. Значение передаётся только на защищённый сервер BusinessAIOS.</small> : null}</label>
                     ))}
                     <button type="button" className="primary" disabled={Boolean(workspaceBusy)} onClick={activateProvider}>{workspaceBusy === "activate" ? "Сохраняем доступ…" : "Подключить для чтения"}</button>
                   </div>

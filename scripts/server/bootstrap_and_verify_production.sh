@@ -21,8 +21,16 @@ LOCAL_TELEGRAM_READINESS_URL="http://127.0.0.1:8088/readyz"
 RUNTIME_USER="businesaios"
 RUNTIME_GROUP="businesaios"
 RUNTIME_API_DIR="/var/lib/businesaios/runtime/api"
+FRONTEND_DIST="$BUSINESAIOS_DEPLOY_ROOT/frontend/dist"
 
 fail() { echo "$*" >&2; exit 1; }
+
+publish_frontend_access() {
+  [[ -d "$FRONTEND_DIST" ]] || return 0
+  [[ -s "$FRONTEND_DIST/index.html" ]] || fail "production frontend dist exists but index.html is missing or empty"
+  find "$FRONTEND_DIST" -type d -exec chmod 0755 {} +
+  find "$FRONTEND_DIST" -type f -exec chmod 0644 {} +
+}
 
 [[ "${EUID:-$(id -u)}" -eq 0 ]] || fail "production bootstrap must run as root"
 [[ "${EXPECTED_SHA:-}" =~ ^[0-9a-fA-F]{40}$ ]] || fail "EXPECTED_SHA must be a full 40-character git SHA"
@@ -188,6 +196,10 @@ for service in "${SERVICES[@]}"; do
   [[ -f "$canonical" ]] || fail "deployed canonical systemd unit is missing: $canonical"
   cmp -s "$canonical" "$fragment" || fail "installed systemd unit does not match deployed SHA for $service; run deploy/systemd/install.sh before production bootstrap"
 done
+
+# nginx serves only generated frontend artifacts. Publish them after exact-SHA,
+# production-binding and systemd-contract preflight, before credential rotation.
+publish_frontend_access
 
 echo "== canonical production control-plane + pricing bootstrap =="
 "$PYTHON_BIN" "$BOOTSTRAP" \

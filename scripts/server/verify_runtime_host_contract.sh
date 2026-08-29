@@ -4,6 +4,7 @@ set -Eeuo pipefail
 LOCAL_API_BASE="${LOCAL_API_BASE:-http://127.0.0.1:8000}"
 LOCAL_WORKER_BASE="${LOCAL_WORKER_BASE:-http://127.0.0.1:8087}"
 PUBLIC_STATUS_BASE="${PUBLIC_STATUS_BASE:-https://status.businessaios.ru}"
+PUBLIC_APP_BASE="https://app.businessaios.ru"
 API_SERVICE="${API_SERVICE:-businesaios-api.service}"
 WORKER_SERVICE="${WORKER_SERVICE:-businesaios-worker.service}"
 NGINX_SERVICE="${NGINX_SERVICE:-nginx.service}"
@@ -292,6 +293,16 @@ mark_pass "$CURRENT_CHECK"
 CURRENT_CHECK="public_status"
 step "public status health"
 api_check "$PUBLIC_STATUS_BASE/health"
+mark_pass "$CURRENT_CHECK"
+CURRENT_CHECK="public_app"
+step "public product workspace"
+curl -fsS "$PUBLIC_APP_BASE/" >/tmp/businesaios-public-app.html
+"$PYTHON_BIN" - <<'PY'
+from pathlib import Path
+html = Path('/tmp/businesaios-public-app.html').read_text(encoding='utf-8', errors='replace')
+if 'id="root"' not in html or '/assets/' not in html:
+    raise SystemExit('public product workspace did not return the expected frontend shell')
+PY
 mark_pass "$CURRENT_CHECK"
 
 CURRENT_CHECK="production_verdict"
