@@ -3,10 +3,12 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Iterable
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 EventRecord = dict[str, Any]
+BUSINESS_FACT_EVENT_TYPE = "business_fact.v1"
 
 class EventAppendProtocol(Protocol):
     def append(self, event: dict[str, Any]) -> object: ...
@@ -22,6 +24,32 @@ class AppendEvent:
     decision_id: Any
     correlation_id: Any
     payload: dict[str, Any]
+
+@dataclass(frozen=True)
+class BusinessFactV1:
+    fact_id: str
+    tenant_id: str
+    business_id: str
+    fact_type: str
+    entity_id: str
+    event_time_ms: int
+    observed_at_ms: int
+    source: str
+    payload: dict[str, Any] | None = None
+    provenance: dict[str, Any] | None = None
+    supersedes_fact_id: str | None = None
+    decision_id: str | None = None
+    correlation_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not all(str(getattr(self, name) or "").strip() for name in ("fact_id", "tenant_id", "business_id", "fact_type", "entity_id", "source")):
+            raise ValueError("BusinessFactV1 identity and source fields are required")
+        object.__setattr__(self, "payload", deepcopy(self.payload or {}))
+        object.__setattr__(self, "provenance", deepcopy(self.provenance or {}))
+
+    def as_event(self) -> EventRecord:
+        payload = {"schema_version": 1, "business_id": self.business_id, "fact_type": self.fact_type, "entity_id": self.entity_id, "event_time_ms": int(self.event_time_ms), "observed_at_ms": int(self.observed_at_ms), "payload": deepcopy(self.payload), "provenance": deepcopy(self.provenance), "supersedes_fact_id": self.supersedes_fact_id}
+        return {"event_id": self.fact_id, "tenant_id": self.tenant_id, "source": self.source, "event_type": BUSINESS_FACT_EVENT_TYPE, "timestamp_ms": int(self.observed_at_ms), "decision_id": self.decision_id, "correlation_id": self.correlation_id, "payload": payload}
 
 def normalize_append_event(event: dict | None) -> AppendEvent:
     e = dict(event or {})
@@ -39,13 +67,14 @@ def normalize_append_event(event: dict | None) -> AppendEvent:
         payload_obj = {k: v for k, v in e.items() if k not in excluded}
     if not isinstance(payload_obj, dict):
         payload_obj = {"value": payload_obj}
+    timestamp_ms = e.get("timestamp_ms")
     return AppendEvent(
         event_id=event_id,
         tenant_id=tenant_id,
         user_id=e.get("user_id"),
         source=source,
         event_type=event_type,
-        timestamp_ms=int(e.get("timestamp_ms") or int(time.time() * 1000)),
+        timestamp_ms=int(time.time() * 1000) if timestamp_ms is None else int(timestamp_ms),
         decision_id=e.get("decision_id") or e.get("decision") or e.get("decision_ref"),
         correlation_id=e.get("correlation_id") or e.get("correlation") or e.get("trace_id"),
         payload=dict(payload_obj),
