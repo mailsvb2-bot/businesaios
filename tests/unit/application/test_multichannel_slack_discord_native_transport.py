@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from application.business_autonomy.provider_admin_service import ProviderAdminService
 from application.business_autonomy.provider_catalog import provider_map
+from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import provider_transport_binding_for_key
 from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
+from security.secret_contract import SecretRef
 from security.secret_vault import InMemorySecretVault
 
 
@@ -39,6 +41,27 @@ def test_discord_prepared_native_transport_matches_v10_bot_contract() -> None:
     assert probe == {'method': 'GET', 'url_template': 'https://discord.com/api/v10/users/@me', 'headers': {'Authorization': 'Bot {bot_token}'}, 'json_body': None}
     assert read == {'method': 'GET', 'url_template': 'https://discord.com/api/v10/channels/123/messages', 'headers': {'Authorization': 'Bot {bot_token}'}, 'json_body': None}
     assert send == {'method': 'POST', 'url_template': 'https://discord.com/api/v10/channels/123/messages', 'headers': {'Authorization': 'Bot {bot_token}'}, 'json_body': {'content': 'hello', 'allowed_mentions': {'parse': []}}}
+
+
+def test_slack_discord_unsupported_live_probe_does_not_require_optional_bot_token() -> None:
+    vault = InMemorySecretVault()
+    health = ProviderConnectorHealthService(vault)
+    for key in ('slack_messaging', 'discord_messaging'):
+        provider = provider_map()[key]
+        vault.seed_plaintext(
+            ref=SecretRef(
+                tenant_id='t',
+                connector_id=provider.connector_id,
+                scope='b',
+                secret_name=f'{provider.connector_id}.webhook_secret',
+            ),
+            plaintext='bridge-webhook-secret',
+        )
+        result = health.probe(provider=provider, tenant_id='t', business_id='b', probe_mode='live')
+        assert result.status == 'live_probe_unsupported'
+        assert result.reason == 'live_transport_not_ready'
+        assert result.metadata['live_probe_supported'] is False
+        assert 'bot_token' not in result.metadata['present_fields']
 
 
 def test_slack_discord_prepared_transports_stay_out_of_live_control_plane() -> None:
