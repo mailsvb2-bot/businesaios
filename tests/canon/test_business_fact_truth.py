@@ -1,6 +1,6 @@
 import pytest
 
-from contracts.business_fact import BUSINESS_FACT_EVENT_TYPE, BusinessFactV1
+from contracts.event_store import BUSINESS_FACT_EVENT_TYPE, BusinessFactV1
 from runtime.platform.event_store.memory_event_store import MemoryEventStore
 
 
@@ -32,6 +32,7 @@ def test_business_fact_uses_existing_event_store_and_preserves_truth_metadata() 
     assert event["timestamp_ms"] == 200
     assert event["decision_id"] == "decision-1"
     assert event["correlation_id"] == "correlation-1"
+    assert event["payload"]["schema_version"] == 1
     assert event["payload"]["event_time_ms"] == 100
     assert event["payload"]["observed_at_ms"] == 200
     assert event["payload"]["payload"] == {"status": "active"}
@@ -51,5 +52,5 @@ def test_business_fact_correction_is_append_only() -> None:
 def test_business_fact_identity_fails_closed(field: str) -> None:
     values = _fact().__dict__.copy()
     values[field] = ""
-    with pytest.raises(ValueError, match=f"{field} is required"):
+    with pytest.raises(ValueError, match="identity and source fields are required"):
         BusinessFactV1(**values)
