@@ -27,6 +27,23 @@ def test_frontend_release_is_sha_bound_before_publication() -> None:
     )
 
 
+def test_frontend_build_emits_exact_sha_bound_release_manifest() -> None:
+    package = (ROOT / "frontend/package.json").read_text(encoding="utf-8")
+    generator = (ROOT / "frontend/scripts/generate-release-manifest.mjs").read_text(encoding="utf-8")
+
+    assert '"postbuild": "node scripts/generate-release-manifest.mjs"' in package
+    for token in (
+        "release-manifest.json",
+        "BAIOS_CI_TARGET_SHA",
+        "BAIOS_FRONTEND_RELEASE_SHA",
+        '"rev-parse", "HEAD"',
+        'createHash("sha256")',
+        "frontend release SHA ${envSha} does not match git HEAD ${gitSha}",
+        "exact frontend release SHA is unavailable",
+    ):
+        assert token in generator
+
+
 def test_public_frontend_verifier_fetches_and_hashes_entry_assets() -> None:
     verifier = (ROOT / "scripts/server/verify_runtime_host_contract.sh").read_text(encoding="utf-8")
 
