@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from application.business_autonomy.provider_admin_service import ProviderAdminService
 from application.business_autonomy.provider_catalog import provider_map
+from application.business_autonomy.provider_truth_matrix import ProviderTruthStatus, provider_truth_map
 from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
@@ -62,6 +63,16 @@ def test_slack_discord_unsupported_live_probe_does_not_require_optional_bot_toke
         assert result.reason == 'live_transport_not_ready'
         assert result.metadata['live_probe_supported'] is False
         assert 'bot_token' not in result.metadata['present_fields']
+
+
+def test_slack_discord_prepared_endpoints_do_not_promote_provider_truth() -> None:
+    truth = provider_truth_map()
+    for key in ('slack_messaging', 'discord_messaging'):
+        row = truth[key]
+        assert row.has_real_endpoint is True
+        assert row.read_only_supported is True
+        assert row.status == ProviderTruthStatus.PARTIAL.value
+        assert row.live_ready is False
 
 
 def test_slack_discord_prepared_transports_stay_out_of_live_control_plane() -> None:
