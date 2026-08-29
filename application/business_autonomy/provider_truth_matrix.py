@@ -132,12 +132,12 @@ def _risk_level(provider: ProviderDefinition, write_capabilities: Iterable[str])
     return "high" if provider.domain in _HIGH_RISK_DOMAINS or provider.provider_key in _HIGH_RISK_PROVIDERS else ("medium" if tuple(write_capabilities) else "low")
 
 
-def _truth_status(*, capability_status: str, has_real_endpoint: bool, has_placeholder_endpoint: bool, read_only_supported: bool, write_supported: bool, transport_live_ready: bool) -> str:
+def _truth_status(*, capability_status: str, has_real_endpoint: bool, has_placeholder_endpoint: bool, read_only_supported: bool, write_supported: bool) -> str:
     if capability_status in {CapabilityStatus.NOT_IMPLEMENTED.value, CapabilityStatus.NOT_FOUND.value}:
         return ProviderTruthStatus.NOT_IMPLEMENTED.value
     if capability_status == CapabilityStatus.CONTRACT_ONLY.value:
         return ProviderTruthStatus.CONTRACT_ONLY.value
-    if has_real_endpoint and not has_placeholder_endpoint and read_only_supported and transport_live_ready:
+    if has_real_endpoint and not has_placeholder_endpoint and read_only_supported:
         return ProviderTruthStatus.LIVE_READY.value if write_supported else ProviderTruthStatus.READ_ONLY_READY.value
     return ProviderTruthStatus.IMPLEMENTED.value if capability_status == CapabilityStatus.IMPLEMENTED.value else ProviderTruthStatus.PARTIAL.value
 
@@ -153,7 +153,7 @@ def _truth_row(provider: ProviderDefinition, *, planner: ProviderSyncRuntimePlan
     read_only_supported = bool(read_capabilities) and capability_status not in {CapabilityStatus.CONTRACT_ONLY.value, CapabilityStatus.NOT_IMPLEMENTED.value, CapabilityStatus.NOT_FOUND.value}
     write_supported, proven_live_write = provider.provider_key in _GUARDED_WRITE_SUPPORTED, provider.provider_key in (_GUARDED_WRITE_SUPPORTED & _GUARDED_WRITE_LIVE_READY)
     status = _truth_status(capability_status=capability_status, has_real_endpoint=has_real_endpoint,
-        has_placeholder_endpoint=has_placeholder_endpoint, read_only_supported=read_only_supported, write_supported=proven_live_write, transport_live_ready=bool(binding.get("live_ready")))
+        has_placeholder_endpoint=has_placeholder_endpoint, read_only_supported=read_only_supported, write_supported=proven_live_write)
     live_ready = status == ProviderTruthStatus.LIVE_READY.value and bool(binding.get("live_ready")) and has_real_endpoint and not has_placeholder_endpoint and proven_live_write
     return ProviderTruthRow(
         provider_key=provider.provider_key, category=provider.domain, display_name=provider.title,
