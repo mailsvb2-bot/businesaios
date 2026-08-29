@@ -36,6 +36,20 @@ function readGitHead() {
   }
 }
 
+function assertFrontendSourceClean() {
+  const status = execFileSync(
+    "git",
+    ["-C", rootDir, "status", "--porcelain", "--untracked-files=all", "--", "frontend"],
+    {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    },
+  ).trim();
+  if (status) {
+    throw new Error(`frontend source tree must be clean before release manifest generation:\n${status}`);
+  }
+}
+
 function resolveCommitSha() {
   const ciSha = process.env.BAIOS_CI_TARGET_SHA
     ? normalizeSha(process.env.BAIOS_CI_TARGET_SHA, "BAIOS_CI_TARGET_SHA")
@@ -49,6 +63,9 @@ function resolveCommitSha() {
 
   const envSha = ciSha || releaseSha;
   const gitSha = readGitHead();
+  if (gitSha) {
+    assertFrontendSourceClean();
+  }
   if (envSha && gitSha && envSha !== gitSha) {
     throw new Error(`frontend release SHA ${envSha} does not match git HEAD ${gitSha}`);
   }
