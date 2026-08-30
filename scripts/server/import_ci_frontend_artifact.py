@@ -114,13 +114,14 @@ def _validate_and_extract(zip_bytes: bytes, expected_sha: str, destination: Path
 
 
 def main() -> int:
+    production_checkout = DIST.parents[1] == PRODUCTION_ROOT
+    if not production_checkout:
+        return 0
+
     zip_exists = ARTIFACT_ZIP.exists()
     id_exists = ARTIFACT_ID.exists()
-    production_checkout = DIST.parents[1] == PRODUCTION_ROOT
     if not zip_exists and not id_exists:
-        if production_checkout:
-            raise _fail("canonical production build requires a staged frontend-dist artifact and artifact id")
-        return 0
+        raise _fail("canonical production build requires a staged frontend-dist artifact and artifact id")
     if zip_exists != id_exists:
         raise _fail("staged artifact zip/id pair is incomplete")
     if ARTIFACT_ZIP.is_symlink() or ARTIFACT_ID.is_symlink():
