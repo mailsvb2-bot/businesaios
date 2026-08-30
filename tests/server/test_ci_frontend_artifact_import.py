@@ -155,3 +155,36 @@ def test_public_http_get_uses_lightweight_sealed_transport(monkeypatch: pytest.M
         lambda: (_ for _ in ()).throw(AssertionError("full Effects runtime must not load")),
     )
     assert runtime_effects.http_get(url="https://api.github.com/example", headers={}) is sentinel
+
+
+def test_prepare_serving_permissions_before_publish(tmp_path: Path) -> None:
+    root = tmp_path / "staged"
+    assets = root / "assets"
+    assets.mkdir(parents=True)
+    index = root / "index.html"
+    asset = assets / "app.js"
+    index.write_text("ok", encoding="utf-8")
+    asset.write_text("ok", encoding="utf-8")
+    root.chmod(0o700)
+    assets.chmod(0o700)
+    index.chmod(0o600)
+    asset.chmod(0o600)
+    importer._prepare_serving_permissions(root)
+    assert root.stat().st_mode & 0o777 == 0o755
+    assert assets.stat().st_mode & 0o777 == 0o755
+    assert index.stat().st_mode & 0o777 == 0o644
+    assert asset.stat().st_mode & 0o777 == 0o644
+
+
+def test_exchange_directories_is_atomic_namespace_swap(tmp_path: Path) -> None:
+    if importer.os.name != "posix":
+        pytest.skip("renameat2 exchange is a POSIX production primitive")
+    staged = tmp_path / "staged"
+    live = tmp_path / "live"
+    staged.mkdir()
+    live.mkdir()
+    (staged / "marker").write_text("new", encoding="utf-8")
+    (live / "marker").write_text("old", encoding="utf-8")
+    importer._exchange_directories(staged, live)
+    assert (live / "marker").read_text(encoding="utf-8") == "new"
+    assert (staged / "marker").read_text(encoding="utf-8") == "old"
