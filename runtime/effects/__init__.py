@@ -84,7 +84,10 @@ def telegram_method_url(token: str, method: str) -> str:
 
 
 def http_get(*, url: str, headers: dict, params: dict | None = None, timeout_s: int = 30):
-    return _effects_impl().http_get(url=url, headers=headers, params=params, timeout_s=timeout_s)
+    transport = _http_transport_module()
+    if transport.runtime_network_mode() != "enabled":
+        raise RuntimeError("network_disabled_in_this_runtime")
+    return transport.sync_get(url=url, headers=headers, params=params, timeout_s=timeout_s)
 
 
 def http_post(*, url: str, headers: dict, data: dict | None = None, timeout_s: int = 30):
