@@ -279,3 +279,16 @@ def test_live_read_requires_explicit_binding_readiness_even_when_transport_is_bo
     result = runtime.run(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_read', mode='live', payload={})
     assert result.status == 'live_read_unsupported' and result.accepted is False
     assert result.metadata['reason'] == 'live_read_transport_not_ready'
+
+
+
+def test_native_messaging_truth_health_requirements_include_live_only_tokens() -> None:
+    from application.business_autonomy.provider_truth_matrix import provider_truth_map
+
+    rows = provider_truth_map()
+    assert rows['vk_messaging'].required_credentials == ('webhook_secret',)
+    assert rows['vk_messaging'].health_requirements == ('webhook_secret', 'access_token')
+    assert rows['max_messaging'].required_credentials == ('webhook_secret',)
+    assert rows['max_messaging'].health_requirements == ('webhook_secret', 'access_token')
+    assert rows['slack_messaging'].health_requirements == ('webhook_secret', 'bot_token')
+    assert rows['discord_messaging'].health_requirements == ('webhook_secret', 'bot_token')

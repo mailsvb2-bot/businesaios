@@ -135,7 +135,7 @@ def test_every_provider_reaches_declared_dry_run_state_without_network(
     assert not (tmp_path / "data").exists()
 
 
-def test_every_provider_live_readiness_matches_transport_binding() -> None:
+def test_every_provider_live_probe_readiness_matches_transport_binding() -> None:
     cases = 0
     for provider in PROVIDERS:
         vault = InMemorySecretVault()
@@ -146,11 +146,10 @@ def test_every_provider_live_readiness_matches_transport_binding() -> None:
             business_id="business-probe-matrix",
             probe_mode="live",
         )
-        live_ready = bool(
-            provider_transport_binding_for_key(provider.provider_key).get("live_ready")
-        )
-        expected = "ready_for_live_probe" if live_ready else "live_probe_unsupported"
+        binding = provider_transport_binding_for_key(provider.provider_key)
+        live_probe_ready = bool(binding.get("live_probe_ready", binding.get("live_ready")))
+        expected = "ready_for_live_probe" if live_probe_ready else "live_probe_unsupported"
         assert health.status == expected, provider.provider_key
-        assert bool(health.metadata.get("live_probe_supported")) is live_ready
+        assert bool(health.metadata.get("live_probe_supported")) is live_probe_ready
         cases += 1
     assert cases == len(PROVIDERS)

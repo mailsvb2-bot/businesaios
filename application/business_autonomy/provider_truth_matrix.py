@@ -146,6 +146,7 @@ def _truth_row(provider: ProviderDefinition, *, planner: ProviderSyncRuntimePlan
     binding, plan = bindings.describe(provider), planner.describe(provider)
     read_capabilities, write_capabilities = tuple(plan.read_operations), tuple(plan.write_operations)
     required_credentials, truth_binding = _required_credentials(provider), dict(binding)
+    health_requirements = tuple(dict.fromkeys((*required_credentials, *tuple(str(value) for value in binding.get('live_required_secrets', ()) if str(value).strip()))))
     if provider.provider_key in _GUARDED_WRITE_SUPPORTED:
         truth_binding['sync_path_family'] = str(truth_binding.get('sync_path_family') or '').replace('{operation}', 'operation')
     has_placeholder_endpoint, has_real_endpoint = _has_placeholder_endpoint(truth_binding), _has_real_endpoint(truth_binding)
@@ -162,7 +163,7 @@ def _truth_row(provider: ProviderDefinition, *, planner: ProviderSyncRuntimePlan
         read_only_supported=read_only_supported, write_supported=write_supported,
         approval_required=bool(write_capabilities) or provider.domain in _HIGH_RISK_DOMAINS,
         has_real_endpoint=has_real_endpoint, has_placeholder_endpoint=has_placeholder_endpoint,
-        endpoint_source="runtime.business_autonomy.provider_transport_bindings", health_requirements=required_credentials,
+        endpoint_source="runtime.business_autonomy.provider_transport_bindings", health_requirements=health_requirements,
         admin_visible=True, owner=_PROVIDER_OWNERS.get(provider.provider_key, "interfaces.messaging_runtime.channel_loader" if provider.messaging_channel else "application.business_autonomy.provider_catalog"),
         risk_level=_risk_level(provider, write_capabilities),
         evidence=(f"capability_status={capability_status}", f"transport_binding_live_ready={bool(binding.get('live_ready'))}", f"guarded_write_supported={write_supported}", f"guarded_write_live_ready={proven_live_write}"),

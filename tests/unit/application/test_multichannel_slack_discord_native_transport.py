@@ -69,6 +69,8 @@ def test_slack_discord_prepared_endpoints_remain_partial_truth() -> None:
         assert row.read_only_supported is True
         assert row.status == ProviderTruthStatus.PARTIAL.value
         assert row.live_ready is False
+        assert row.required_credentials == ('webhook_secret',)
+        assert row.health_requirements == ('webhook_secret', 'bot_token')
 
 
 def test_slack_discord_live_read_transport_enters_control_plane_without_claiming_live_write() -> None:
