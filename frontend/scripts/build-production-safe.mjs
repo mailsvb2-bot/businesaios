@@ -10,12 +10,13 @@ const canonicalProductionRoot = "/opt/businesaios";
 export function resolveProductionExpectedSha({
   productionCheckout,
   expectedSha,
+  expectedShaProvided = expectedSha !== undefined,
   repositoryRoot: checkoutRoot,
   runGit = spawnSync,
 }) {
   const normalizedExpectedSha =
     typeof expectedSha === "string" ? expectedSha.trim().toLowerCase() : expectedSha;
-  if (!productionCheckout || normalizedExpectedSha) {
+  if (!productionCheckout || expectedShaProvided) {
     return normalizedExpectedSha;
   }
 
@@ -56,9 +57,11 @@ export function runBuildProductionSafe({
   runCommand = spawnSync,
 } = {}) {
   const productionCheckout = resolvedRepositoryRoot === canonicalRoot;
+  const expectedShaProvided = Object.prototype.hasOwnProperty.call(environment, "EXPECTED_SHA");
   const expectedSha = resolveProductionExpectedSha({
     productionCheckout,
     expectedSha: environment.EXPECTED_SHA,
+    expectedShaProvided,
     repositoryRoot: repositoryPath,
     runGit: runCommand,
   });
