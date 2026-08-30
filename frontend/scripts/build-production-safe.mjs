@@ -44,30 +44,39 @@ export function buildProductionImportEnv(baseEnv, expectedSha) {
   };
 }
 
-function main() {
-  const productionCheckout = realpathSync(repositoryRoot) === canonicalProductionRoot;
+export function runBuildProductionSafe({
+  environment = process.env,
+  resolvedRepositoryRoot = realpathSync(repositoryRoot),
+  canonicalRoot = canonicalProductionRoot,
+  repositoryPath = repositoryRoot,
+  frontendPath = frontendRoot,
+  runtimeExecPath = process.execPath,
+  runCommand = spawnSync,
+} = {}) {
+  const productionCheckout = resolvedRepositoryRoot === canonicalRoot;
   const expectedSha = resolveProductionExpectedSha({
     productionCheckout,
-    expectedSha: process.env.EXPECTED_SHA,
-    repositoryRoot,
+    expectedSha: environment.EXPECTED_SHA,
+    repositoryRoot: repositoryPath,
+    runGit: runCommand,
   });
 
   const command = productionCheckout
-    ? resolve(repositoryRoot, ".venv", "bin", "python")
-    : process.execPath;
+    ? resolve(repositoryPath, ".venv", "bin", "python")
+    : runtimeExecPath;
   const args = productionCheckout
     ? ["-m", "scripts.server.import_ci_frontend_artifact"]
-    : [resolve(frontendRoot, "node_modules", "vite", "bin", "vite.js"), "build"];
-  const cwd = productionCheckout ? repositoryRoot : frontendRoot;
-  const env = productionCheckout ? buildProductionImportEnv(process.env, expectedSha) : process.env;
+    : [resolve(frontendPath, "node_modules", "vite", "bin", "vite.js"), "build"];
+  const cwd = productionCheckout ? repositoryPath : frontendPath;
+  const env = productionCheckout ? buildProductionImportEnv(environment, expectedSha) : environment;
 
-  const result = spawnSync(command, args, { cwd, env, stdio: "inherit" });
+  const result = runCommand(command, args, { cwd, env, stdio: "inherit" });
   if (result.error) {
     throw result.error;
   }
-  process.exit(result.status ?? 1);
+  return result.status ?? 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main();
+  process.exit(runBuildProductionSafe());
 }
