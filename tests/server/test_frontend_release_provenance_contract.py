@@ -81,6 +81,24 @@ assert.equal(suppliedCalls.length, 1);
 assert.equal(suppliedCalls[0].command, "/opt/businesaios/.venv/bin/python");
 assert.equal(suppliedCalls[0].options.env.EXPECTED_SHA, validSha);
 
+let blankCalls = 0;
+assert.throws(
+  () => runBuildProductionSafe({{
+    environment: {{ EXPECTED_SHA: "   " }},
+    resolvedRepositoryRoot: "/opt/businesaios",
+    canonicalRoot: "/opt/businesaios",
+    repositoryPath: "/opt/businesaios",
+    frontendPath: "/unused/frontend",
+    runtimeExecPath: "/unused/node",
+    runCommand() {{
+      blankCalls += 1;
+      return {{ status: 0 }};
+    }},
+  }}),
+  /production EXPECTED_SHA is not a full git SHA/,
+);
+assert.equal(blankCalls, 0);
+
 let invalidCalls = 0;
 assert.throws(
   () => runBuildProductionSafe({{
