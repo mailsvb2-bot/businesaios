@@ -4,6 +4,7 @@ from application.business_autonomy.provider_admin_service import ProviderAdminSe
 from application.business_autonomy.provider_catalog import provider_map
 from application.business_autonomy.provider_truth_matrix import ProviderTruthStatus, provider_truth_map
 from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
+from runtime.business_autonomy.provider_http_live_clients import build_live_http_transports
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import provider_transport_binding_for_key
@@ -97,3 +98,27 @@ def test_slack_discord_live_read_transport_enters_control_plane_without_claiming
         live_client = admin.describe_provider_live_client(provider_key=key)
         assert live_client['network_capable'] is True
         assert live_client['transport_type'] == 'VendorHttpLiveTransport'
+
+
+def test_discord_live_read_rejects_unsafe_channel_path_before_network(monkeypatch) -> None:
+    provider = provider_map()['discord_messaging']
+    vault = InMemorySecretVault()
+    vault.seed_plaintext(
+        ref=SecretRef(tenant_id='t', connector_id=provider.connector_id, scope='b', secret_name=f'{provider.connector_id}.bot_token'),
+        plaintext='discord-bot-token',
+    )
+    monkeypatch.setattr(
+        'runtime.business_autonomy.provider_http_live_clients._sync_request',
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError('network must stay closed')),
+    )
+    transport = build_live_http_transports(vault, bind_live_network=True)['discord_messaging']
+    result = transport.execute(
+        provider=provider,
+        tenant_id='t',
+        business_id='b',
+        operation='message_read',
+        payload={'channel_id': '123#', '_allow_network': True},
+    )
+    assert result['_prepared_only'] is True
+    assert result['network_capable'] is False
+    assert result['reason'] == 'native_message_read_payload_invalid'
