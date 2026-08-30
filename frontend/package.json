@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "postbuild": "cd .. && python -m scripts.server.import_ci_frontend_artifact",
+    "build": "node ./scripts/build-production-safe.mjs",
     "preview": "vite preview --host 0.0.0.0 --port 4173",
     "test:e2e": "playwright test"
   },
