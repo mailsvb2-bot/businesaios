@@ -10,7 +10,7 @@ import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from runtime._internal.http_transport import sync_get
+from runtime.effects import http_get
 
 REPOSITORY = "mailsvb2-bot/businesaios"
 REPOSITORY_ID = 1231282346
@@ -26,7 +26,7 @@ def _fail(message: str) -> RuntimeError:
 
 
 def _json_get(url: str) -> dict[str, object]:
-    response = sync_get(
+    response = http_get(
         url=url,
         headers={"Accept": "application/vnd.github+json"},
         timeout_s=15,
