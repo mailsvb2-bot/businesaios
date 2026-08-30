@@ -92,6 +92,14 @@ def test_validate_metadata_requires_successful_exact_main_ci(monkeypatch: pytest
         importer._validate_metadata(artifact_id, SHA, bundle)
 
 
+def test_expected_sha_requires_explicit_deploy_sha(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("EXPECTED_SHA", raising=False)
+    with pytest.raises(RuntimeError, match="EXPECTED_SHA must expose"):
+        importer._expected_sha()
+    monkeypatch.setenv("EXPECTED_SHA", SHA)
+    assert importer._expected_sha() == SHA
+
+
 def test_main_requires_staged_pair_in_canonical_production(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
