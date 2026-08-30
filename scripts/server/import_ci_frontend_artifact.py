@@ -37,11 +37,49 @@ def _json_get(url: str) -> dict[str, object]:
     return response.json
 
 
-def _expected_sha() -> str:
-    sha = os.environ.get("EXPECTED_SHA", "").strip().lower()
+def _validate_sha(value: str, *, label: str) -> str:
+    sha = value.strip().lower()
     if len(sha) != 40 or any(ch not in "0123456789abcdef" for ch in sha):
-        raise _fail("EXPECTED_SHA must expose the full lowercase deployed SHA")
+        raise _fail(f"{label} must expose a full 40-character git SHA")
     return sha
+
+
+def _expected_sha() -> str:
+    return _validate_sha(os.environ.get("EXPECTED_SHA", ""), label="EXPECTED_SHA")
+
+
+def _production_checkout_sha() -> str:
+    git_dir = PRODUCTION_ROOT / ".git"
+    if git_dir.is_file():
+        marker = git_dir.read_text(encoding="utf-8").strip()
+        prefix = "gitdir: "
+        if not marker.startswith(prefix):
+            raise _fail("production checkout .git file is invalid")
+        git_dir = Path(marker[len(prefix):])
+        if not git_dir.is_absolute():
+            git_dir = (PRODUCTION_ROOT / git_dir).resolve()
+    if not git_dir.is_dir():
+        raise _fail("production checkout git metadata is missing")
+
+    head = (git_dir / "HEAD").read_text(encoding="ascii").strip()
+    if not head.startswith("ref: "):
+        return _validate_sha(head, label="production checkout HEAD")
+
+    ref = head[5:].strip()
+    common_dir = git_dir
+    common_dir_file = git_dir / "commondir"
+    if common_dir_file.is_file():
+        common_dir = (git_dir / common_dir_file.read_text(encoding="utf-8").strip()).resolve()
+    ref_path = common_dir / ref
+    if ref_path.is_file():
+        return _validate_sha(ref_path.read_text(encoding="ascii"), label="production checkout ref")
+    packed_refs = common_dir / "packed-refs"
+    if packed_refs.is_file():
+        suffix = f" {ref}"
+        for line in packed_refs.read_text(encoding="ascii").splitlines():
+            if line and not line.startswith(("#", "^")) and line.endswith(suffix):
+                return _validate_sha(line.split(" ", 1)[0], label="production checkout packed ref")
+    raise _fail(f"production checkout ref is unresolved: {ref}")
 
 
 def _prepare_serving_permissions(root: Path) -> None:
@@ -154,6 +192,9 @@ def main() -> int:
         raise _fail("staged artifact inputs must not be symlinks")
 
     expected_sha = _expected_sha()
+    checkout_sha = _production_checkout_sha()
+    if checkout_sha != expected_sha:
+        raise _fail(f"production checkout SHA {checkout_sha} does not match EXPECTED_SHA {expected_sha}")
     artifact_id_text = ARTIFACT_ID.read_text(encoding="ascii").strip()
     if not artifact_id_text.isdecimal():
         raise _fail("artifact id must be decimal")

@@ -157,6 +157,44 @@ def test_public_http_get_uses_lightweight_sealed_transport(monkeypatch: pytest.M
     assert runtime_effects.http_get(url="https://api.github.com/example", headers={}) is sentinel
 
 
+def test_production_checkout_sha_reads_symbolic_head(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    root = tmp_path / "checkout"
+    git_dir = root / ".git"
+    ref = git_dir / "refs" / "heads" / "main"
+    ref.parent.mkdir(parents=True)
+    (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="ascii")
+    ref.write_text(f"{SHA}\n", encoding="ascii")
+    monkeypatch.setattr(importer, "PRODUCTION_ROOT", root)
+    assert importer._production_checkout_sha() == SHA
+
+
+def test_production_checkout_sha_reads_packed_ref(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    root = tmp_path / "checkout"
+    git_dir = root / ".git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="ascii")
+    (git_dir / "packed-refs").write_text(f"{SHA} refs/heads/main\n", encoding="ascii")
+    monkeypatch.setattr(importer, "PRODUCTION_ROOT", root)
+    assert importer._production_checkout_sha() == SHA
+
+
+def test_main_rejects_expected_sha_different_from_checkout(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    artifact_zip = tmp_path / "frontend-dist.zip"
+    artifact_id = tmp_path / "frontend-dist.artifact-id"
+    artifact_zip.write_bytes(b"staged")
+    artifact_id.write_text("123", encoding="ascii")
+    monkeypatch.setattr(importer, "DIST", importer.PRODUCTION_ROOT / "frontend" / "dist")
+    monkeypatch.setattr(importer, "ARTIFACT_ZIP", artifact_zip)
+    monkeypatch.setattr(importer, "ARTIFACT_ID", artifact_id)
+    monkeypatch.setenv("EXPECTED_SHA", SHA)
+    monkeypatch.setattr(importer, "_production_checkout_sha", lambda: "b" * 40)
+    monkeypatch.setattr(importer, "_validate_metadata", lambda *_args: pytest.fail("metadata must not run"))
+    with pytest.raises(RuntimeError, match="does not match EXPECTED_SHA"):
+        importer.main()
+
+
 def test_prepare_serving_permissions_before_publish(tmp_path: Path) -> None:
     root = tmp_path / "staged"
     assets = root / "assets"
