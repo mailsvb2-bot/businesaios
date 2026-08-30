@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import io
 import json
-import os
 import zipfile
 from pathlib import Path
 
@@ -159,28 +157,62 @@ def test_public_http_get_uses_lightweight_sealed_transport(monkeypatch: pytest.M
     assert runtime_effects.http_get(url="https://api.github.com/example", headers={}) is sentinel
 
 
-def test_assert_deploy_lock_accepts_expected_locked_fd(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def _write_proc_process(
+    proc_root: Path,
+    pid: int,
+    *,
+    ppid: int,
+    cmdline: str,
+    fd9_target: Path | None = None,
+    locked: bool = False,
+) -> None:
+    proc_dir = proc_root / str(pid)
+    (proc_dir / "fd").mkdir(parents=True)
+    (proc_dir / "fdinfo").mkdir()
+    (proc_dir / "status").write_text(f"Name:\ttest\nPPid:\t{ppid}\n", encoding="utf-8")
+    (proc_dir / "cmdline").write_bytes(cmdline.encode("utf-8") + b"\0")
+    if fd9_target is not None:
+        (proc_dir / "fd" / "9").symlink_to(fd9_target)
+        lock_line = "lock:\t1: FLOCK  ADVISORY  WRITE 123 08:01:456 0 EOF\n" if locked else ""
+        (proc_dir / "fdinfo" / "9").write_text(f"pos:\t0\n{lock_line}", encoding="utf-8")
+
+
+def test_assert_deploy_lock_recovers_bridge_ancestor_across_npm_hop(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     lock_path = tmp_path / "deploy.lock"
-    fd = os.open(lock_path, os.O_CREAT | os.O_WRONLY, 0o600)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        monkeypatch.setattr(importer, "DEPLOY_LOCK", lock_path)
-        importer._assert_deploy_lock(fd)
-    finally:
-        os.close(fd)
+    lock_path.touch()
+    proc_root = tmp_path / "proc"
+    _write_proc_process(proc_root, 100, ppid=200, cmdline="npm run build")
+    _write_proc_process(
+        proc_root,
+        200,
+        ppid=1,
+        cmdline=f"/usr/bin/env bash {importer.DEPLOY_BRIDGE}",
+        fd9_target=lock_path,
+        locked=True,
+    )
+    monkeypatch.setattr(importer, "DEPLOY_LOCK", lock_path)
+    importer._assert_deploy_lock(proc_root=proc_root, start_pid=100)
 
 
-def test_assert_deploy_lock_rejects_wrong_fd_target(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    expected = tmp_path / "expected.lock"
-    expected.touch()
-    other = tmp_path / "other.lock"
-    fd = os.open(other, os.O_CREAT | os.O_WRONLY, 0o600)
-    try:
-        monkeypatch.setattr(importer, "DEPLOY_LOCK", expected)
-        with pytest.raises(RuntimeError, match="does not reference"):
-            importer._assert_deploy_lock(fd)
-    finally:
-        os.close(fd)
+def test_assert_deploy_lock_rejects_unlocked_or_non_bridge_ancestor(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    lock_path = tmp_path / "deploy.lock"
+    lock_path.touch()
+    proc_root = tmp_path / "proc"
+    _write_proc_process(
+        proc_root,
+        200,
+        ppid=1,
+        cmdline="/usr/bin/env bash /tmp/not-the-deploy-bridge",
+        fd9_target=lock_path,
+        locked=True,
+    )
+    monkeypatch.setattr(importer, "DEPLOY_LOCK", lock_path)
+    with pytest.raises(RuntimeError, match="ancestor deployment bridge"):
+        importer._assert_deploy_lock(proc_root=proc_root, start_pid=200)
 
 
 def test_production_checkout_sha_reads_symbolic_head(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
