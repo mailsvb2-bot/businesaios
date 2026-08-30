@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from runtime import effects as runtime_effects
 from scripts.server import import_ci_frontend_artifact as importer
 
 SHA = "a" * 40
@@ -117,3 +118,25 @@ def test_main_allows_noop_outside_canonical_production(
     monkeypatch.setattr(importer, "ARTIFACT_ZIP", tmp_path / "missing.zip")
     monkeypatch.setattr(importer, "ARTIFACT_ID", tmp_path / "missing.id")
     assert importer.main() == 0
+
+
+def test_public_http_get_uses_lightweight_sealed_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+    sentinel = object()
+
+    class FakeTransport:
+        @staticmethod
+        def runtime_network_mode() -> str:
+            return "enabled"
+
+        @staticmethod
+        def sync_get(**kwargs):
+            assert kwargs["url"] == "https://api.github.com/example"
+            return sentinel
+
+    monkeypatch.setattr(runtime_effects, "_http_transport_module", lambda: FakeTransport)
+    monkeypatch.setattr(
+        runtime_effects,
+        "_effects_impl",
+        lambda: (_ for _ in ()).throw(AssertionError("full Effects runtime must not load")),
+    )
+    assert runtime_effects.http_get(url="https://api.github.com/example", headers={}) is sentinel
