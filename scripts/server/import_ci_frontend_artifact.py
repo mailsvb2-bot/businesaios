@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ctypes
-import fcntl
 import hashlib
 import io
 import json
@@ -22,7 +21,7 @@ ARTIFACT_ZIP = REQUEST_DIR / "frontend-dist.zip"
 ARTIFACT_ID = REQUEST_DIR / "frontend-dist.artifact-id"
 DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 DEPLOY_LOCK = Path("/run/lock/businesaios-rdc-deploy.lock")
-DEPLOY_LOCK_FD = 9
+DEPLOY_BRIDGE = Path("/usr/local/sbin/businesaios-rdc-deploy")
 
 
 def _fail(message: str) -> RuntimeError:
@@ -51,19 +50,37 @@ def _expected_sha() -> str:
     return _validate_sha(os.environ.get("EXPECTED_SHA", ""), label="EXPECTED_SHA")
 
 
-def _assert_deploy_lock(fd: int = DEPLOY_LOCK_FD) -> None:
-    fd_link = Path(f"/proc/self/fd/{fd}")
-    try:
-        observed = Path(os.readlink(fd_link)).resolve()
-        expected = DEPLOY_LOCK.resolve(strict=True)
-    except OSError as exc:
-        raise _fail("canonical deployment lock fd is missing") from exc
-    if observed != expected:
-        raise _fail(f"deployment lock fd does not reference {DEPLOY_LOCK}")
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError as exc:
-        raise _fail("canonical deployment lock is not held by this importer") from exc
+def _parent_pid(proc_dir: Path) -> int:
+    for line in (proc_dir / "status").read_text(encoding="utf-8").splitlines():
+        if line.startswith("PPid:"):
+            return int(line.split(":", 1)[1].strip())
+    return 0
+
+
+def _assert_deploy_lock(*, proc_root: Path = Path("/proc"), start_pid: int | None = None) -> None:
+    expected = DEPLOY_LOCK.resolve(strict=True)
+    pid = os.getppid() if start_pid is None else start_pid
+    for _ in range(16):
+        if pid <= 1:
+            break
+        proc_dir = proc_root / str(pid)
+        try:
+            cmdline = (proc_dir / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace")
+            target = Path(os.readlink(proc_dir / "fd" / "9")).resolve()
+            fdinfo = (proc_dir / "fdinfo" / "9").read_text(encoding="utf-8")
+            if (
+                str(DEPLOY_BRIDGE) in cmdline
+                and target == expected
+                and any("FLOCK" in line and "WRITE" in line for line in fdinfo.splitlines() if line.startswith("lock:"))
+            ):
+                return
+            pid = _parent_pid(proc_dir)
+        except (OSError, ValueError):
+            try:
+                pid = _parent_pid(proc_dir)
+            except (OSError, ValueError):
+                break
+    raise _fail("canonical deployment lock is not held by an ancestor deployment bridge")
 
 
 def _production_checkout_sha() -> str:
