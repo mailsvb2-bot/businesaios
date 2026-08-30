@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import fcntl
 import hashlib
 import io
 import json
@@ -20,6 +21,8 @@ REQUEST_DIR = Path("/var/lib/businesaios/rdc-deploy-request")
 ARTIFACT_ZIP = REQUEST_DIR / "frontend-dist.zip"
 ARTIFACT_ID = REQUEST_DIR / "frontend-dist.artifact-id"
 DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+DEPLOY_LOCK = Path("/run/lock/businesaios-rdc-deploy.lock")
+DEPLOY_LOCK_FD = 9
 
 
 def _fail(message: str) -> RuntimeError:
@@ -48,6 +51,21 @@ def _expected_sha() -> str:
     return _validate_sha(os.environ.get("EXPECTED_SHA", ""), label="EXPECTED_SHA")
 
 
+def _assert_deploy_lock(fd: int = DEPLOY_LOCK_FD) -> None:
+    fd_link = Path(f"/proc/self/fd/{fd}")
+    try:
+        observed = Path(os.readlink(fd_link)).resolve()
+        expected = DEPLOY_LOCK.resolve(strict=True)
+    except OSError as exc:
+        raise _fail("canonical deployment lock fd is missing") from exc
+    if observed != expected:
+        raise _fail(f"deployment lock fd does not reference {DEPLOY_LOCK}")
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        raise _fail("canonical deployment lock is not held by this importer") from exc
+
+
 def _production_checkout_sha() -> str:
     git_dir = PRODUCTION_ROOT / ".git"
     if git_dir.is_file():
@@ -66,6 +84,10 @@ def _production_checkout_sha() -> str:
         return _validate_sha(head, label="production checkout HEAD")
 
     ref = head[5:].strip()
+    worktree_ref_path = git_dir / ref
+    if worktree_ref_path.is_file():
+        return _validate_sha(worktree_ref_path.read_text(encoding="ascii"), label="production checkout worktree ref")
+
     common_dir = git_dir
     common_dir_file = git_dir / "commondir"
     if common_dir_file.is_file():
@@ -191,6 +213,7 @@ def main() -> int:
     if ARTIFACT_ZIP.is_symlink() or ARTIFACT_ID.is_symlink():
         raise _fail("staged artifact inputs must not be symlinks")
 
+    _assert_deploy_lock()
     expected_sha = _expected_sha()
     checkout_sha = _production_checkout_sha()
     if checkout_sha != expected_sha:
@@ -207,6 +230,11 @@ def main() -> int:
     try:
         _validate_and_extract(zip_bytes, expected_sha, temp)
         _prepare_serving_permissions(temp)
+        publication_sha = _production_checkout_sha()
+        if publication_sha != expected_sha:
+            raise _fail(
+                f"production checkout SHA changed to {publication_sha} before frontend publication; expected {expected_sha}"
+            )
         if DIST.is_symlink():
             raise _fail("production frontend dist must be a real directory")
         if DIST.exists():
