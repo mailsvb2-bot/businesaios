@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 
 REPOSITORY = "mailsvb2-bot/businesaios"
 REPOSITORY_ID = 1231282346
+PRODUCTION_ROOT = Path("/opt/businesaios")
 REQUEST_DIR = Path("/var/lib/businesaios/rdc-deploy-request")
 ARTIFACT_ZIP = REQUEST_DIR / "frontend-dist.zip"
 ARTIFACT_ID = REQUEST_DIR / "frontend-dist.artifact-id"
@@ -116,7 +117,10 @@ def _validate_and_extract(zip_bytes: bytes, expected_sha: str, destination: Path
 def main() -> int:
     zip_exists = ARTIFACT_ZIP.exists()
     id_exists = ARTIFACT_ID.exists()
+    production_checkout = DIST.parents[1] == PRODUCTION_ROOT
     if not zip_exists and not id_exists:
+        if production_checkout:
+            raise _fail("canonical production build requires a staged frontend-dist artifact and artifact id")
         return 0
     if zip_exists != id_exists:
         raise _fail("staged artifact zip/id pair is incomplete")
