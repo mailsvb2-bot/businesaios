@@ -81,8 +81,8 @@ class ProviderConnectorHealthService:
                 probe_mode=mode, reason=shallow[1],
                 metadata={'present_fields': tuple(present)},
             )
-        live_ready = bool(binding.get('live_ready'))
-        if mode == 'live' and not live_ready:
+        live_probe_ready = bool(binding.get('live_probe_ready', binding.get('live_ready')))
+        if mode == 'live' and not live_probe_ready:
             return ProviderHealthProbeResult(
                 provider_key=provider.provider_key, status='live_probe_unsupported',
                 probe_mode=mode, reason='live_transport_not_ready',
@@ -91,7 +91,7 @@ class ProviderConnectorHealthService:
         return ProviderHealthProbeResult(
             provider_key=provider.provider_key, status='ready_for_live_probe' if mode == 'live' else 'ready_for_credentials',
             probe_mode=mode, reason='validated_secret_shape',
-            metadata={'present_fields': tuple(present), 'live_probe_supported': live_ready},
+            metadata={'present_fields': tuple(present), 'live_probe_supported': live_probe_ready},
         )
 
     def _shallow_validate(self, *, provider_key: str, tenant_id: str, connector_id: str, business_id: str) -> tuple[bool, str]:

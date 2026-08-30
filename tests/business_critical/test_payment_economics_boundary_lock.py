@@ -27,7 +27,7 @@ def _relative(path: Path) -> str:
 
 
 def test_existing_product_contract_remains_economics_and_offer_boundary() -> None:
-    contract = ProductContract(tenant_id="tenant", product_id="product", domain="metrotherapy")
+    contract = ProductContract(tenant_id="tenant", product_id="product", domain="sample_business")
 
     assert isinstance(contract.offer_catalog, OfferCatalog)
     assert isinstance(contract.economics, EconomicsConfigV1)

@@ -46,7 +46,7 @@ class ProviderLiveSyncRuntime:
         binding = ProviderTransportBindings().describe(provider)
         return {
             'provider_key': provider.provider_key, 'transport_bound': provider.provider_key in self.transports,
-            'dry_run_supported': True, 'live_run_supported': provider.provider_key in self.transports,
+            'dry_run_supported': True, 'live_run_supported': provider.provider_key in self.transports, 'live_read_supported': provider.provider_key in self.transports and bool(binding.get('live_read_ready', binding.get('live_ready'))),
             'operations': list(planner.operations), 'read_operations': list(planner.read_operations), 'write_operations': list(planner.write_operations),
             'write_guard': {'enabled': True, 'source': 'runtime.business_autonomy.provider_runtime_write_guard', 'truth_source': 'application.business_autonomy.provider_truth_matrix', 'fail_closed': True},
             'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider),
@@ -78,6 +78,8 @@ class ProviderLiveSyncRuntime:
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=dict(payload or {}))
         binding = ProviderTransportBindings().describe(provider)
         request_base = {'provider_key': provider.provider_key, 'operation': normalized_operation, 'tenant_id': str(tenant_id), 'business_id': str(business_id), 'payload': dict(payload or {}), 'domain': provider.domain, 'adapter_key': provider.adapter_key, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider)}
+        if normalized_mode == 'live' and normalized_operation in planner.read_operations and not bool(binding.get('live_read_ready', binding.get('live_ready'))):
+            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_read_unsupported', accepted=False, metadata={'request_envelope': request_base, 'reason': 'live_read_transport_not_ready'}), payload=dict(payload or {}))
         write_guard_decision = self.write_guard.evaluate(provider=provider, operation=normalized_operation, mode=normalized_mode, tenant_id=str(tenant_id), business_id=str(business_id), payload=dict(payload or {}))
         if not write_guard_decision.allowed:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status=write_guard_decision.status, accepted=False, metadata={'provider_write_guard': write_guard_decision.to_metadata(), 'request_envelope': request_base})
