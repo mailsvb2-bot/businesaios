@@ -6,11 +6,11 @@ import json
 import os
 import shutil
 import stat
-import subprocess
 import tempfile
-import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
+
+from runtime._internal.http_transport import sync_get
 
 REPOSITORY = "mailsvb2-bot/businesaios"
 REPOSITORY_ID = 1231282346
@@ -26,21 +26,20 @@ def _fail(message: str) -> RuntimeError:
 
 
 def _json_get(url: str) -> dict[str, object]:
-    request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
-    with urllib.request.urlopen(request, timeout=15) as response:  # noqa: S310 - fixed GitHub API origin
-        payload = json.load(response)
-    if not isinstance(payload, dict):
-        raise _fail("GitHub metadata response is not an object")
-    return payload
+    response = sync_get(
+        url=url,
+        headers={"Accept": "application/vnd.github+json"},
+        timeout_s=15,
+    )
+    if response.status != 200 or not isinstance(response.json, dict):
+        raise _fail(f"GitHub metadata request failed with status {response.status}")
+    return response.json
 
 
 def _expected_sha() -> str:
-    sha = subprocess.check_output(
-        ["git", "-C", str(DIST.parents[1]), "rev-parse", "HEAD"],
-        text=True,
-    ).strip().lower()
+    sha = os.environ.get("EXPECTED_SHA", "").strip().lower()
     if len(sha) != 40 or any(ch not in "0123456789abcdef" for ch in sha):
-        raise _fail("production checkout does not expose a full lowercase SHA")
+        raise _fail("EXPECTED_SHA must expose the full lowercase deployed SHA")
     return sha
 
 
