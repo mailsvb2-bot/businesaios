@@ -27,6 +27,21 @@ def test_frontend_release_is_sha_bound_before_publication() -> None:
     )
 
 
+def test_production_frontend_wrapper_derives_expected_sha_from_checkout() -> None:
+    wrapper = (ROOT / "frontend/scripts/build-production-safe.mjs").read_text(encoding="utf-8")
+
+    for token in (
+        "let expectedSha = process.env.EXPECTED_SHA;",
+        "if (productionCheckout && !expectedSha)",
+        'spawnSync("git", ["rev-parse", "HEAD"]',
+        "expectedSha = resolvedHead.stdout.trim().toLowerCase();",
+        '/^[0-9a-f]{40}$/.test(expectedSha)',
+        "EXPECTED_SHA: expectedSha",
+    ):
+        assert token in wrapper
+    assert wrapper.index('spawnSync("git", ["rev-parse", "HEAD"]') < wrapper.index("EXPECTED_SHA: expectedSha")
+
+
 def test_public_frontend_verifier_fetches_and_hashes_entry_assets() -> None:
     verifier = (ROOT / "scripts/server/verify_runtime_host_contract.sh").read_text(encoding="utf-8")
 
