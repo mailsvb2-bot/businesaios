@@ -120,6 +120,21 @@ def test_main_allows_noop_outside_canonical_production(
     assert importer.main() == 0
 
 
+def test_main_does_not_consume_staged_pair_outside_production(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    artifact_zip = tmp_path / "frontend-dist.zip"
+    artifact_id = tmp_path / "frontend-dist.artifact-id"
+    artifact_zip.write_bytes(b"staged")
+    artifact_id.write_text("123", encoding="ascii")
+    monkeypatch.setattr(importer, "DIST", tmp_path / "checkout" / "frontend" / "dist")
+    monkeypatch.setattr(importer, "ARTIFACT_ZIP", artifact_zip)
+    monkeypatch.setattr(importer, "ARTIFACT_ID", artifact_id)
+    assert importer.main() == 0
+    assert artifact_zip.read_bytes() == b"staged"
+    assert artifact_id.read_text(encoding="ascii") == "123"
+
+
 def test_public_http_get_uses_lightweight_sealed_transport(monkeypatch: pytest.MonkeyPatch) -> None:
     sentinel = object()
 
