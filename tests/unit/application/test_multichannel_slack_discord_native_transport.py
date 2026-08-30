@@ -113,10 +113,7 @@ def test_discord_live_read_rejects_unsafe_channel_path_before_network(monkeypatc
     )
     transport = build_live_http_transports(vault, bind_live_network=True)['discord_messaging']
     result = transport.execute(
-        provider=provider,
-        tenant_id='t',
-        business_id='b',
-        operation='message_read',
+        provider=provider, tenant_id='t', business_id='b', operation='message_read',
         payload={'channel_id': '123#', '_allow_network': True},
     )
     assert result['_prepared_only'] is True
