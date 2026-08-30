@@ -90,3 +90,22 @@ def test_validate_metadata_requires_successful_exact_main_ci(monkeypatch: pytest
     artifact["workflow_run"]["head_sha"] = "b" * 40
     with pytest.raises(RuntimeError, match="exact deployed main SHA"):
         importer._validate_metadata(artifact_id, SHA, bundle)
+
+
+def test_main_requires_staged_pair_in_canonical_production(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(importer, "DIST", importer.PRODUCTION_ROOT / "frontend" / "dist")
+    monkeypatch.setattr(importer, "ARTIFACT_ZIP", tmp_path / "missing.zip")
+    monkeypatch.setattr(importer, "ARTIFACT_ID", tmp_path / "missing.id")
+    with pytest.raises(RuntimeError, match="canonical production build requires"):
+        importer.main()
+
+
+def test_main_allows_noop_outside_canonical_production(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(importer, "DIST", tmp_path / "checkout" / "frontend" / "dist")
+    monkeypatch.setattr(importer, "ARTIFACT_ZIP", tmp_path / "missing.zip")
+    monkeypatch.setattr(importer, "ARTIFACT_ID", tmp_path / "missing.id")
+    assert importer.main() == 0
