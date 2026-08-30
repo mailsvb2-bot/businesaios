@@ -63,6 +63,24 @@ assert.deepEqual(calls[1].args, ["-m", "scripts.server.import_ci_frontend_artifa
 assert.equal(calls[1].options.env.EXPECTED_SHA, validSha);
 assert.equal(calls[1].options.env.BUSINESAIOS_ALLOW_NETWORK, "1");
 
+const suppliedCalls = [];
+const suppliedStatus = runBuildProductionSafe({{
+  environment: {{ EXPECTED_SHA: `  ${{validSha.toUpperCase()}}  ` }},
+  resolvedRepositoryRoot: "/opt/businesaios",
+  canonicalRoot: "/opt/businesaios",
+  repositoryPath: "/opt/businesaios",
+  frontendPath: "/unused/frontend",
+  runtimeExecPath: "/unused/node",
+  runCommand(command, args, options) {{
+    suppliedCalls.push({{ command, args, options }});
+    return {{ status: 0 }};
+  }},
+}});
+assert.equal(suppliedStatus, 0);
+assert.equal(suppliedCalls.length, 1);
+assert.equal(suppliedCalls[0].command, "/opt/businesaios/.venv/bin/python");
+assert.equal(suppliedCalls[0].options.env.EXPECTED_SHA, validSha);
+
 let invalidCalls = 0;
 assert.throws(
   () => runBuildProductionSafe({{
