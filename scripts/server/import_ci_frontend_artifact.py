@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import io
 import json
@@ -41,6 +42,31 @@ def _expected_sha() -> str:
     if len(sha) != 40 or any(ch not in "0123456789abcdef" for ch in sha):
         raise _fail("EXPECTED_SHA must expose the full lowercase deployed SHA")
     return sha
+
+
+def _prepare_serving_permissions(root: Path) -> None:
+    root.chmod(0o755)
+    for path in root.rglob("*"):
+        if path.is_dir():
+            path.chmod(0o755)
+        elif path.is_file():
+            path.chmod(0o644)
+
+
+def _exchange_directories(staged: Path, live: Path) -> None:
+    if os.name != "posix":
+        raise _fail("atomic production dist exchange requires POSIX renameat2")
+    libc = ctypes.CDLL(None, use_errno=True)
+    renameat2 = getattr(libc, "renameat2", None)
+    if renameat2 is None:
+        raise _fail("atomic production dist exchange requires renameat2")
+    renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    renameat2.restype = ctypes.c_int
+    at_fdcwd = -100
+    rename_exchange = 2
+    if renameat2(at_fdcwd, os.fsencode(staged), at_fdcwd, os.fsencode(live), rename_exchange) != 0:
+        error = ctypes.get_errno()
+        raise OSError(error, os.strerror(error), f"{staged} <-> {live}")
 
 
 def _validate_metadata(artifact_id: int, expected_sha: str, zip_bytes: bytes) -> None:
@@ -137,16 +163,19 @@ def main() -> int:
 
     parent = DIST.parent
     temp = Path(tempfile.mkdtemp(prefix=".dist-ci-import-", dir=parent))
-    backup = parent / f".dist-pre-ci-{os.getpid()}"
     try:
         _validate_and_extract(zip_bytes, expected_sha, temp)
+        _prepare_serving_permissions(temp)
+        if DIST.is_symlink():
+            raise _fail("production frontend dist must be a real directory")
         if DIST.exists():
-            DIST.rename(backup)
-        temp.rename(DIST)
-        shutil.rmtree(backup, ignore_errors=True)
+            if not DIST.is_dir():
+                raise _fail("production frontend dist must be a real directory")
+            _exchange_directories(temp, DIST)
+            shutil.rmtree(temp, ignore_errors=True)
+        else:
+            temp.rename(DIST)
     except Exception:
-        if not DIST.exists() and backup.exists():
-            backup.rename(DIST)
         shutil.rmtree(temp, ignore_errors=True)
         raise
 
