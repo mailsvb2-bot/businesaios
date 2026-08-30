@@ -13,8 +13,10 @@ export function resolveProductionExpectedSha({
   repositoryRoot: checkoutRoot,
   runGit = spawnSync,
 }) {
-  if (!productionCheckout || expectedSha) {
-    return expectedSha;
+  const normalizedExpectedSha =
+    typeof expectedSha === "string" ? expectedSha.trim().toLowerCase() : expectedSha;
+  if (!productionCheckout || normalizedExpectedSha) {
+    return normalizedExpectedSha;
   }
 
   const resolvedHead = runGit("git", ["rev-parse", "HEAD"], {
