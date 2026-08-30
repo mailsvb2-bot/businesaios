@@ -1,3 +1,5 @@
+import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -27,19 +29,67 @@ def test_frontend_release_is_sha_bound_before_publication() -> None:
     )
 
 
-def test_production_frontend_wrapper_derives_expected_sha_from_checkout() -> None:
-    wrapper = (ROOT / "frontend/scripts/build-production-safe.mjs").read_text(encoding="utf-8")
+def test_production_frontend_wrapper_executes_fail_closed_sha_fallback() -> None:
+    node = shutil.which("node")
+    assert node is not None, "Node.js is required to verify the production frontend wrapper"
+    wrapper_uri = (ROOT / "frontend/scripts/build-production-safe.mjs").as_uri()
+    probe = f"""
+import assert from "node:assert/strict";
+import {{ runBuildProductionSafe }} from {wrapper_uri!r};
 
-    for token in (
-        "let expectedSha = process.env.EXPECTED_SHA;",
-        "if (productionCheckout && !expectedSha)",
-        'spawnSync("git", ["rev-parse", "HEAD"]',
-        "expectedSha = resolvedHead.stdout.trim().toLowerCase();",
-        '/^[0-9a-f]{40}$/.test(expectedSha)',
-        "EXPECTED_SHA: expectedSha",
-    ):
-        assert token in wrapper
-    assert wrapper.index('spawnSync("git", ["rev-parse", "HEAD"]') < wrapper.index("EXPECTED_SHA: expectedSha")
+const validSha = "a".repeat(40);
+const calls = [];
+const status = runBuildProductionSafe({{
+  environment: {{}},
+  resolvedRepositoryRoot: "/opt/businesaios",
+  canonicalRoot: "/opt/businesaios",
+  repositoryPath: "/opt/businesaios",
+  frontendPath: "/unused/frontend",
+  runtimeExecPath: "/unused/node",
+  runCommand(command, args, options) {{
+    calls.push({{ command, args, options }});
+    if (command === "git") {{
+      return {{ status: 0, stdout: `${{validSha}}\\n` }};
+    }}
+    return {{ status: 0 }};
+  }},
+}});
+assert.equal(status, 0);
+assert.equal(calls.length, 2);
+assert.equal(calls[0].command, "git");
+assert.deepEqual(calls[0].args, ["rev-parse", "HEAD"]);
+assert.equal(calls[1].command, "/opt/businesaios/.venv/bin/python");
+assert.deepEqual(calls[1].args, ["-m", "scripts.server.import_ci_frontend_artifact"]);
+assert.equal(calls[1].options.env.EXPECTED_SHA, validSha);
+assert.equal(calls[1].options.env.BUSINESAIOS_ALLOW_NETWORK, "1");
+
+let invalidCalls = 0;
+assert.throws(
+  () => runBuildProductionSafe({{
+    environment: {{}},
+    resolvedRepositoryRoot: "/opt/businesaios",
+    canonicalRoot: "/opt/businesaios",
+    repositoryPath: "/opt/businesaios",
+    frontendPath: "/unused/frontend",
+    runtimeExecPath: "/unused/node",
+    runCommand(command) {{
+      invalidCalls += 1;
+      assert.equal(command, "git");
+      return {{ status: 0, stdout: "not-a-full-sha\\n" }};
+    }},
+  }}),
+  /production checkout HEAD is not a full git SHA/,
+);
+assert.equal(invalidCalls, 1);
+"""
+    completed = subprocess.run(
+        [node, "--input-type=module", "--eval", probe],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr or completed.stdout
 
 
 def test_public_frontend_verifier_fetches_and_hashes_entry_assets() -> None:
