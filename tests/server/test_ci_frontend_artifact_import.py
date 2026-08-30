@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import io
 import json
+import os
 import zipfile
 from pathlib import Path
 
@@ -157,6 +159,30 @@ def test_public_http_get_uses_lightweight_sealed_transport(monkeypatch: pytest.M
     assert runtime_effects.http_get(url="https://api.github.com/example", headers={}) is sentinel
 
 
+def test_assert_deploy_lock_accepts_expected_locked_fd(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    lock_path = tmp_path / "deploy.lock"
+    fd = os.open(lock_path, os.O_CREAT | os.O_WRONLY, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        monkeypatch.setattr(importer, "DEPLOY_LOCK", lock_path)
+        importer._assert_deploy_lock(fd)
+    finally:
+        os.close(fd)
+
+
+def test_assert_deploy_lock_rejects_wrong_fd_target(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    expected = tmp_path / "expected.lock"
+    expected.touch()
+    other = tmp_path / "other.lock"
+    fd = os.open(other, os.O_CREAT | os.O_WRONLY, 0o600)
+    try:
+        monkeypatch.setattr(importer, "DEPLOY_LOCK", expected)
+        with pytest.raises(RuntimeError, match="does not reference"):
+            importer._assert_deploy_lock(fd)
+    finally:
+        os.close(fd)
+
+
 def test_production_checkout_sha_reads_symbolic_head(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     root = tmp_path / "checkout"
     git_dir = root / ".git"
@@ -164,6 +190,25 @@ def test_production_checkout_sha_reads_symbolic_head(monkeypatch: pytest.MonkeyP
     ref.parent.mkdir(parents=True)
     (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="ascii")
     ref.write_text(f"{SHA}\n", encoding="ascii")
+    monkeypatch.setattr(importer, "PRODUCTION_ROOT", root)
+    assert importer._production_checkout_sha() == SHA
+
+
+def test_production_checkout_sha_reads_linked_worktree_private_ref(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "checkout"
+    common = tmp_path / "repo.git"
+    git_dir = common / "worktrees" / "prod"
+    git_dir.mkdir(parents=True)
+    common.mkdir(exist_ok=True)
+    root.mkdir()
+    (root / ".git").write_text(f"gitdir: {git_dir}\n", encoding="utf-8")
+    (git_dir / "HEAD").write_text("ref: refs/worktree/prod\n", encoding="ascii")
+    (git_dir / "commondir").write_text("../..\n", encoding="utf-8")
+    private_ref = git_dir / "refs" / "worktree" / "prod"
+    private_ref.parent.mkdir(parents=True)
+    private_ref.write_text(f"{SHA}\n", encoding="ascii")
     monkeypatch.setattr(importer, "PRODUCTION_ROOT", root)
     assert importer._production_checkout_sha() == SHA
 
@@ -189,9 +234,35 @@ def test_main_rejects_expected_sha_different_from_checkout(
     monkeypatch.setattr(importer, "ARTIFACT_ZIP", artifact_zip)
     monkeypatch.setattr(importer, "ARTIFACT_ID", artifact_id)
     monkeypatch.setenv("EXPECTED_SHA", SHA)
+    monkeypatch.setattr(importer, "_assert_deploy_lock", lambda: None)
     monkeypatch.setattr(importer, "_production_checkout_sha", lambda: "b" * 40)
     monkeypatch.setattr(importer, "_validate_metadata", lambda *_args: pytest.fail("metadata must not run"))
     with pytest.raises(RuntimeError, match="does not match EXPECTED_SHA"):
+        importer.main()
+
+
+def test_main_revalidates_checkout_immediately_before_publication(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    root = tmp_path / "prod"
+    dist = root / "frontend" / "dist"
+    dist.mkdir(parents=True)
+    artifact_zip = tmp_path / "frontend-dist.zip"
+    artifact_id = tmp_path / "frontend-dist.artifact-id"
+    artifact_zip.write_bytes(b"staged")
+    artifact_id.write_text("123", encoding="ascii")
+    monkeypatch.setattr(importer, "PRODUCTION_ROOT", root)
+    monkeypatch.setattr(importer, "DIST", dist)
+    monkeypatch.setattr(importer, "ARTIFACT_ZIP", artifact_zip)
+    monkeypatch.setattr(importer, "ARTIFACT_ID", artifact_id)
+    monkeypatch.setenv("EXPECTED_SHA", SHA)
+    observed = iter((SHA, "b" * 40))
+    monkeypatch.setattr(importer, "_production_checkout_sha", lambda: next(observed))
+    monkeypatch.setattr(importer, "_assert_deploy_lock", lambda: None)
+    monkeypatch.setattr(importer, "_validate_metadata", lambda *_args: None)
+    monkeypatch.setattr(importer, "_validate_and_extract", lambda *_args: None)
+    monkeypatch.setattr(importer, "_exchange_directories", lambda *_args: pytest.fail("swap must not run"))
+    with pytest.raises(RuntimeError, match="changed .* before frontend publication"):
         importer.main()
 
 
