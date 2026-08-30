@@ -19,10 +19,7 @@ const env = productionCheckout
   ? { ...process.env, BUSINESAIOS_ALLOW_NETWORK: "1" }
   : process.env;
 
-const stdio = productionCheckout
-  ? ["inherit", "inherit", "inherit", ...Array(6).fill("ignore"), 9]
-  : "inherit";
-const result = spawnSync(command, args, { cwd, env, stdio });
+const result = spawnSync(command, args, { cwd, env, stdio: "inherit" });
 if (result.error) {
   throw result.error;
 }
