@@ -64,6 +64,7 @@ def test_line_native_signature_uses_raw_body_and_cannot_downgrade_to_bridge() ->
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': signature}, body=body) is True
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': signature}, body=body + b' ') is False
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is True
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': '   ', 'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is False
     missing_native = InMemorySecretVault(); _put(missing_native, provider, 'webhook_secret', 'bridge-secret')
     assert ProviderWebhookRuntime(missing_native).verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': signature, 'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is False
 
@@ -79,6 +80,7 @@ def test_viber_native_signature_uses_auth_token_and_cannot_downgrade_to_bridge()
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Viber-Content-Signature': signature}, body=body) is True
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Viber-Content-Signature': 'bad', 'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is False
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is True
+    assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Viber-Content-Signature': '', 'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is False
 
 
 def test_line_viber_webhook_identity_uses_vendor_event_ids_for_canonical_idempotency() -> None:
@@ -99,6 +101,9 @@ def test_line_viber_prepared_outbound_matches_vendor_shape_but_remains_non_live(
     viber = transports['viber_messaging'].execute(provider=providers['viber_messaging'], tenant_id='t', business_id='b', operation='message_send', payload={'user_id': 'V1', 'sender_name': 'Owner', 'text': 'hello'})['request']
     assert line == {'method': 'POST', 'url_template': 'https://api.line.me/v2/bot/message/push', 'headers': {'Authorization': 'Bearer {channel_access_token}'}, 'json_body': {'to': 'U1', 'messages': [{'type': 'text', 'text': 'hello'}]}}
     assert viber == {'method': 'POST', 'url_template': 'https://chatapi.viber.com/pa/send_message', 'headers': {'X-Viber-Auth-Token': '{auth_token}'}, 'json_body': {'receiver': 'V1', 'type': 'text', 'sender': {'name': 'Owner'}, 'text': 'hello'}}
+    vault = InMemorySecretVault(); _put(vault, providers['viber_messaging'], 'auth_token', 'viber-token'); _put(vault, providers['viber_messaging'], 'sender_name', 'Configured Owner')
+    prepared = build_live_http_transports(vault, bind_live_network=False)['viber_messaging'].execute(provider=providers['viber_messaging'], tenant_id='tenant-a', business_id='business-a', operation='message_send', payload={'user_id': 'V1', 'text': 'hello'})['request']
+    assert prepared['json_body']['sender']['name'] == 'Configured Owner'
     for key in ('line_messaging', 'viber_messaging'):
         assert provider_truth_map()[key].write_supported is False
 

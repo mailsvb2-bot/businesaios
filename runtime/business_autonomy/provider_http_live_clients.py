@@ -96,7 +96,7 @@ class VendorHttpLiveTransport:
         if provider.provider_key == 'line_messaging':
             return {'url': url, 'method': 'GET' if operation == 'health_probe' else 'POST', 'headers': headers, 'json_body': None if operation == 'health_probe' else dict(payload or {})}
         if provider.provider_key == 'viber_messaging':
-            body = dict(payload or {}); sender = dict(body.get('sender') or {}); sender['name'] = str(sender.get('name') or secrets.get('sender_name') or '{sender_name}'); body['sender'] = sender
+            body = dict(payload or {}); sender = dict(body.get('sender') or {}); sender['name'] = str(secrets.get('sender_name') or '{sender_name}') if str(sender.get('name') or '') in {'', '{sender_name}'} else str(sender['name']); body['sender'] = sender
             return {'url': url, 'method': 'POST', 'headers': headers, 'json_body': {} if operation == 'health_probe' else body}
         if provider.provider_key == 'vk_messaging':
             form_body = dict(payload or {})

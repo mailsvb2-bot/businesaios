@@ -65,9 +65,9 @@ class ProviderWebhookRuntime:
             return bool(secret) and any(candidate and hmac.compare_digest(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
         if contract.verification_kind in {'line_hmac_sha256_base64_or_shared_secret', 'viber_hmac_sha256_hex_or_shared_secret'}:
             header_name = 'x-line-signature' if provider.provider_key == 'line_messaging' else 'x-viber-content-signature'
-            if signature := normalized_headers.get(header_name, '').strip():
-                native_secret = self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.{contract.metadata['native_secret_field']}")
-                if not native_secret:
+            if header_name in normalized_headers:
+                signature, native_secret = normalized_headers.get(header_name, '').strip(), self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.{contract.metadata['native_secret_field']}")
+                if not signature or not native_secret:
                     return False
                 expected = base64.b64encode(hmac.new(native_secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii') if provider.provider_key == 'line_messaging' else hmac.new(native_secret.encode('utf-8'), bytes(body), hashlib.sha256).hexdigest()
                 return hmac.compare_digest(expected, signature)
