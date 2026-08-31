@@ -41,4 +41,9 @@ def test_enrich_uses_existing_feedback_and_does_not_reexecute() -> None:
     assert artifacts.feedback["verified"] is True
     assert artifacts.feedback["verification_status"] == "verified"
     assert artifacts.feedback["persisted_outcome"]["intent_id"] == "intent:dec-1"
+    memory_outcome = artifacts.cycle_result.persisted_memory_evidence["persisted_outcome"]
+    assert memory_outcome["intent_id"] == "intent:dec-1"
+    assert memory_outcome["tenant_id"] == "tenant-1"
+    assert memory_outcome["business_id"] == "biz-1"
+    assert artifacts.feedback["memory_evidence_patch"]["persisted_outcome"] == memory_outcome
     assert artifacts.feedback["next_tier_context"]["ceiling_tier"] in {"supervised", "bounded_autonomy", "full_autonomy"}
