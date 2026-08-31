@@ -58,3 +58,24 @@ def test_canonical_contract_shapes_are_consistent() -> None:
     assert persisted["business_id"] == world_row["business_id"] == "business-1"
     assert artifact["execution_feedback"]["decision_id"] == "dec-1"
     assert artifact["payload"] == {"x": 1}
+
+
+def test_feedback_rebuild_preserves_existing_tenant_business_scope() -> None:
+    rebuilt = canonical_execution_feedback(
+        feedback={
+            "attempted": True,
+            "executed": True,
+            "execution_feedback": {
+                "tenant_id": "tenant-1",
+                "business_id": "business-1",
+            },
+        },
+        action={
+            "action_type": "crm.write_record",
+            "action_id": "act-1",
+            "decision_id": "dec-1",
+            "correlation_id": "corr-1",
+        },
+    )
+    assert rebuilt["tenant_id"] == "tenant-1"
+    assert rebuilt["business_id"] == "business-1"
