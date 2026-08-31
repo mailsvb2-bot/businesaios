@@ -134,6 +134,10 @@ class EvidencePersistenceService:
         context = _safe_dict(verification_payload.get('context'))
         action_payload = _safe_dict(action) or _safe_dict(context.get('action'))
         execution_payload = _safe_dict(execution_receipt) or _safe_dict(context.get('execution_receipt'))
+        step_index_value = action_payload.get('step_index')
+        if step_index_value is None:
+            step_index_value = execution_payload.get('step_index')
+        step_index = int(step_index_value or 0)
         persisted_outcome = _compact_verification_payload(
             verification_payload,
             action=action_payload,
@@ -145,6 +149,7 @@ class EvidencePersistenceService:
                 tenant_id=_text(action_payload.get('tenant_id') or execution_payload.get('tenant_id')),
                 business_id=_text(action_payload.get('business_id') or execution_payload.get('business_id')),
                 run_id=_text(action_payload.get('run_id') or action_payload.get('decision_id') or execution_payload.get('decision_id')),
+                step_index=step_index,
                 outcome=persisted_outcome,
             ),
             'persisted_at': _utc_now().isoformat(),
@@ -156,7 +161,7 @@ class EvidencePersistenceService:
                 tenant_id=_text(action_payload.get('tenant_id') or execution_payload.get('tenant_id')) or self._tenant_default,
                 business_id=_text(action_payload.get('business_id') or execution_payload.get('business_id')),
                 run_id=_text(action_payload.get('run_id') or action_payload.get('decision_id') or execution_payload.get('decision_id')) or 'feedback-artifacts',
-                step_index=0,
+                step_index=step_index,
                 action_id=_text(persisted_outcome.get('action_id')),
                 action_type=_text(persisted_outcome.get('action_type')),
                 verification_result=verification_payload,

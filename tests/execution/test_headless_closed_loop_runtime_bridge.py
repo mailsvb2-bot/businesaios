@@ -33,6 +33,7 @@ def test_headless_closed_loop_reads_router_result_from_feedback_contract() -> No
         action_result=ActionResult(action_id="act-1", status="executed", message="submitted", payload={"attempted": True, "executed": True, "verified": False, "operator_required": False}),
         execution_result=_ExecutionResult(output={"message": "submitted"}), autonomy_decision=_AutonomyDecision(),
         feedback={"evidence": {"source": "effect_router", "action_type": "website.publish_page", "status": "verified", "summary": "page live", "external_refs": ["page:42"], "confidence": 1.0, "payload": {"status": "success", "ok": True}}},
+        run_id="run-1", step_index=1,
     )
     assert result.feedback["verified"] is True
     assert result.feedback["verification_status"] == "verified"

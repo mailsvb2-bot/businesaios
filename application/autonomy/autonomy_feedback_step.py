@@ -93,6 +93,8 @@ class AutonomyFeedbackStep:
                 execution_result=result,
                 autonomy_decision=autonomy_decision,
                 feedback=feedback,
+                run_id=str(trace.run_id),
+                step_index=int(step_index),
             )
             action_result = closed_loop_artifacts.action_result
             feedback = dict(closed_loop_artifacts.feedback)

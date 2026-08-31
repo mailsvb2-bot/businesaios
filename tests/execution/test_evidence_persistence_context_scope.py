@@ -13,6 +13,7 @@ def test_feedback_artifacts_scope_reliability_from_verification_context() -> Non
                 "tenant_id": "tenant-1",
                 "business_id": "business-1",
                 "run_id": "run-1",
+                "step_index": 3,
                 "intent_id": "intent:dec-1",
                 "decision_id": "dec-1",
                 "action_id": "action:dec-1",
@@ -20,6 +21,8 @@ def test_feedback_artifacts_scope_reliability_from_verification_context() -> Non
             },
             "execution_receipt": {
                 "executed": True,
+                "run_id": "run-1",
+                "step_index": 3,
                 "action_id": "action:dec-1",
                 "action_type": "send_message",
             },
@@ -40,4 +43,6 @@ def test_feedback_artifacts_scope_reliability_from_verification_context() -> Non
     assert message.run_id == "run-1"
     assert message.payload["business_id"] == "business-1"
     assert message.payload["run_id"] == "run-1"
+    assert message.payload["step_index"] == 3
+    assert ":run-1:3:" in message.message_id
     assert message.payload["action_id"] == "action:dec-1"
