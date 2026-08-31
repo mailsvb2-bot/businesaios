@@ -35,7 +35,7 @@ class ProviderResponseParsers:
     def describe(self, *, provider: ProviderDefinition) -> dict[str, Any]:
         families = {
             'telegram_bot': ('ok', 'result', 'description'),
-            'whatsapp_cloud': ('messages', 'contacts', 'error'), 'vk_messaging': ('response', 'error'), 'max_messaging': ('messages', 'code', 'message'),
+            'whatsapp_cloud': ('messages', 'contacts', 'error'), 'vk_messaging': ('response', 'error'), 'max_messaging': ('messages', 'code', 'message'), 'line_messaging': ('userId', 'basicId', 'displayName', 'message'), 'viber_messaging': ('status', 'status_message', 'id', 'message_token'),
             'shopify': ('orders', 'products', 'admin_graphql_api_id', 'errors', 'page_info'),
             'woocommerce': ('id', 'code', 'message', 'data'),
             'hubspot': ('results', 'paging', 'status', 'message'),
@@ -109,6 +109,8 @@ class ProviderResponseParsers:
 
     def _error_code(self, *, provider_key: str, body: Any) -> str | None:
         if isinstance(body, dict):
+            if provider_key == 'viber_messaging' and body.get('status') not in {None, 0, '0'}:
+                return str(body.get('status'))
             if provider_key == 'slack_messaging' and body.get('ok') is False:
                 return str(body.get('error') or 'slack_api_error')
             if isinstance(body.get('error'), dict):
@@ -116,7 +118,7 @@ class ProviderResponseParsers:
                 return str(err.get('code') or err.get('error_code') or err.get('type') or err.get('status') or '') or None
             for key in ('code', 'status', 'error_code'):
                 value = body.get(key)
-                if isinstance(value, int | str) and str(value).strip() and (provider_key != 'telegram_bot' or key != 'status'):
+                if isinstance(value, int | str) and str(value).strip() and (provider_key not in {'telegram_bot', 'viber_messaging'} or key != 'status'):
                     return str(value)
         return None
 

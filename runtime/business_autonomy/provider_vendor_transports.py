@@ -72,6 +72,12 @@ class WhatsAppVendorTransport(_PreparedOnlyTransport):
 @dataclass(frozen=True)
 class NativeMessagingVendorTransport(_PreparedOnlyTransport):
     def _build_request(self, *, provider: ProviderDefinition, operation: str, payload: Mapping[str, Any], binding: Mapping[str, Any]) -> Mapping[str, Any]:
+        if provider.provider_key == 'line_messaging':
+            if operation == 'message_read': raise ValueError('LINE message reads are webhook-driven')
+            return {'method': 'GET' if operation == 'health_probe' else 'POST', 'url_template': str(binding['base_url']) + ('/v2/bot/info' if operation == 'health_probe' else '/v2/bot/message/push'), 'headers': {'Authorization': 'Bearer {channel_access_token}'}, 'json_body': None if operation == 'health_probe' else dict(payload or {})}
+        if provider.provider_key == 'viber_messaging':
+            if operation == 'message_read': raise ValueError('Viber message reads are webhook-driven')
+            return {'method': 'POST', 'url_template': str(binding['base_url']) + ('/get_account_info' if operation == 'health_probe' else '/send_message'), 'headers': {'X-Viber-Auth-Token': '{auth_token}'}, 'json_body': {} if operation == 'health_probe' else dict(payload or {})}
         if provider.provider_key == 'max_messaging':
             recipient = (('chat_id', payload.get('chat_id')) if payload.get('chat_id') else ('message_ids', payload.get('message_ids') or '{message_ids}')) if operation == 'message_read' else (('chat_id', payload.get('chat_id')) if payload.get('chat_id') else ('user_id', payload.get('user_id') or '{user_id}'))
             return {'method': 'GET' if operation in {'health_probe', 'message_read'} else 'POST', 'url_template': str(binding['base_url']) + ({'health_probe': '/me', 'message_read': '/messages'}.get(operation, '/messages')) + ('' if operation == 'health_probe' else f'?{recipient[0]}={recipient[1]}'), 'headers': {'Authorization': '{access_token}'}, 'json_body': None if operation in {'health_probe', 'message_read'} else {'text': payload.get('text', '')}}
@@ -149,7 +155,7 @@ def build_provider_vendor_transports(secret_vault: SecretVault | None = None, *,
     return {
         'telegram_bot': TelegramVendorTransport(),
         'whatsapp_cloud': WhatsAppVendorTransport(),
-        **{key: NativeMessagingVendorTransport(vendor_family='native_messaging_api') for key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging')},
+        **{key: NativeMessagingVendorTransport(vendor_family='native_messaging_api') for key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'line_messaging', 'viber_messaging')},
         'shopify': ShopifyVendorTransport(),
         'woocommerce': WooCommerceVendorTransport(),
         'hubspot': HubSpotVendorTransport(),

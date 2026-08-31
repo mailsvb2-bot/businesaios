@@ -18,6 +18,8 @@ class ProviderPayloadNormalizers:
             return {'chat_id': str(raw.get('chat_id') or '{chat_id}'), 'text': str(raw.get('text') or raw.get('message') or '')} if operation == 'communications_write' else raw
         if key == 'whatsapp_cloud':
             return {'messaging_product': raw.get('messaging_product') or 'whatsapp', 'to': str(raw.get('to') or '{recipient_phone}'), 'type': str(raw.get('type') or 'text'), 'text': dict(raw.get('text') or {'body': str(raw.get('body') or raw.get('message') or '')}), **{k: v for k, v in raw.items() if k not in {'messaging_product', 'to', 'type', 'text', 'body', 'message'}}}
+        if operation in {'communications_write', 'message_send'} and key in {'line_messaging', 'viber_messaging'}:
+            return {'to': str(raw.get('to') or raw.get('user_id') or '{recipient_id}'), 'messages': [{'type': 'text', 'text': str(raw.get('text') or raw.get('message') or '')}]} if key == 'line_messaging' else {'receiver': str(raw.get('receiver') or raw.get('user_id') or '{recipient_id}'), 'type': 'text', 'sender': {'name': str(raw.get('sender_name') or '{sender_name}')}, 'text': str(raw.get('text') or raw.get('message') or '')}
         if operation in {'communications_write', 'message_send'} and key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging'}:
             if key == 'slack_messaging':
                 return {'channel': str(raw.get('channel') or raw.get('channel_id') or '{channel_id}'), 'text': str(raw.get('text') or raw.get('message') or '')}
@@ -62,6 +64,12 @@ class ProviderPayloadNormalizers:
             event = parsed.get('event') if isinstance(parsed.get('event'), Mapping) else {}
             event_id = str(parsed.get('event_id') or event.get('client_msg_id') or event.get('event_ts') or event.get('ts') or '')
             return {'topic': str(event.get('type') or parsed.get('type') or ''), 'source_ref': str(parsed.get('team_id') or event.get('channel') or ''), 'resource_id': event_id, 'event_key_hint': event_id}
+        if key == 'line_messaging':
+            event = parsed.get('events')[0] if isinstance(parsed.get('events'), list) and parsed.get('events') and isinstance(parsed.get('events')[0], Mapping) else {}; source = event.get('source') if isinstance(event.get('source'), Mapping) else {}; message = event.get('message') if isinstance(event.get('message'), Mapping) else {}; event_id = str(event.get('webhookEventId') or message.get('id') or '')
+            return {'topic': str(event.get('type') or ''), 'source_ref': str(source.get('userId') or source.get('groupId') or source.get('roomId') or ''), 'resource_id': event_id, 'event_key_hint': event_id}
+        if key == 'viber_messaging':
+            source = parsed.get('sender') if isinstance(parsed.get('sender'), Mapping) else parsed.get('user') if isinstance(parsed.get('user'), Mapping) else {}; event_id = str(parsed.get('message_token') or parsed.get('timestamp') or '')
+            return {'topic': str(parsed.get('event') or ''), 'source_ref': str(source.get('id') or parsed.get('user_id') or ''), 'resource_id': event_id, 'event_key_hint': event_id}
         if key in {'generic_website', 'wordpress'}:
             return {'topic': header_map.get('x-topic', '') or header_map.get('x-webhook-topic', ''), 'source_ref': header_map.get('x-origin-site', '') or header_map.get('x-wordpress-site', ''), 'resource_id': str(parsed.get('id') or parsed.get('slug') or ''), 'event_key_hint': header_map.get('x-event-id', '') or header_map.get('x-wordpress-event-id', '')}
         return {'topic': '', 'source_ref': '', 'resource_id': '', 'event_key_hint': ''}
