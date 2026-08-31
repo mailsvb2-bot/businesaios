@@ -20,7 +20,7 @@ _PUBLIC_PROVIDERS = (
     "ebay_marketplace", "etsy_marketplace", "google_ads", "meta_ads", "tiktok_ads", "call_tracking",
 )
 _RECOMMENDED = {"telegram_bot", "generic_website", "hubspot", "ozon_marketplace", "wildberries_marketplace"}
-_CONNECTION_MODES = {"telegram_bot": "provider_native_api", "whatsapp_cloud": "provider_webhook_and_cloud_api", "email_connector": "mailbox_or_provider_api", "sms_connector": "sms_gateway", "generic_website": "web_ingress", "vk_messaging": "native_vk_callback_or_provider_webhook_bridge", "max_messaging": "native_max_api_or_provider_webhook_bridge", "slack_messaging": "native_slack_events_or_provider_webhook_bridge", "discord_messaging": "native_discord_http_or_provider_webhook_bridge"}
+_CONNECTION_MODES = {"telegram_bot": "provider_native_api", "whatsapp_cloud": "provider_webhook_and_cloud_api", "email_connector": "mailbox_or_provider_api", "sms_connector": "sms_gateway", "generic_website": "web_ingress", "vk_messaging": "native_vk_callback_or_provider_webhook_bridge", "max_messaging": "native_max_api_or_provider_webhook_bridge", "slack_messaging": "native_slack_events_or_provider_webhook_bridge", "discord_messaging": "native_discord_http_or_provider_webhook_bridge", "line_messaging": "native_line_messaging_api_or_provider_webhook_bridge", "viber_messaging": "native_viber_bot_api_or_provider_webhook_bridge"}
 _GOAL_CHECKS = {
     "growth": ("потерянные лиды", "каналы с лучшей конверсией", "точки роста повторных продаж"),
     "retention": ("клиенты без повторной покупки", "незавершённые диалоги", "сегменты для реактивации"),

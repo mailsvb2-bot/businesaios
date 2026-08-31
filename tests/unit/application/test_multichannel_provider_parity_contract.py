@@ -82,6 +82,10 @@ def test_bridge_providers_are_signed_read_capable_and_write_planned_but_not_publ
             if provider_key == 'slack_messaging'
             else 'discord_ed25519_or_shared_secret'
             if provider_key == 'discord_messaging'
+            else 'line_hmac_sha256_base64_or_shared_secret'
+            if provider_key == 'line_messaging'
+            else 'viber_hmac_sha256_hex_or_shared_secret'
+            if provider_key == 'viber_messaging'
             else 'shared_secret_header'
         )
         assert contract.verification_kind == expected_verifier
@@ -93,6 +97,8 @@ def test_bridge_providers_are_signed_read_capable_and_write_planned_but_not_publ
             'max_messaging': 'native_max_api_or_provider_webhook_bridge',
             'slack_messaging': 'native_slack_events_or_provider_webhook_bridge',
             'discord_messaging': 'native_discord_http_or_provider_webhook_bridge',
+            'line_messaging': 'native_line_messaging_api_or_provider_webhook_bridge',
+            'viber_messaging': 'native_viber_bot_api_or_provider_webhook_bridge',
         }.get(provider_key, 'provider_webhook_bridge')
         assert marketplace[provider_key]['connection_mode'] == expected_connection_mode
 

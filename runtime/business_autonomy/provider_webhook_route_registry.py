@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -33,22 +34,38 @@ class ProviderWebhookRouteRegistry:
         headers = dict(_PROVIDER_HEADERS.get(provider.provider_key) or {'event_key_headers': ('X-Event-Id', 'X-Request-Id'), 'topic_headers': ('X-Topic', 'X-Webhook-Topic'), 'source_headers': ()})
         return {'provider_key': provider.provider_key, 'route_family': 'provider_webhook_ingress', 'path_template': path, 'method': 'POST', **headers}
 
-    def extract(self, provider: ProviderDefinition, headers: Mapping[str, str], body: bytes) -> dict[str, str]:
+    def extract(self, provider: ProviderDefinition, headers: Mapping[str, str], body: bytes) -> dict[str, Any]:
+        return self.extract_many(provider, headers, body)[0]
+
+    def extract_many(self, provider: ProviderDefinition, headers: Mapping[str, str], body: bytes) -> tuple[dict[str, Any], ...]:
+        raw_payload = self.normalizers.parse_webhook_json(body)
+        if provider.provider_key == 'line_messaging' and isinstance(raw_payload.get('events'), list):
+            event_payloads = [dict(raw_payload, events=[event]) for event in raw_payload['events'] if isinstance(event, Mapping)]
+            if event_payloads:
+                routes = []
+                for payload in event_payloads:
+                    route = self._extract(provider, headers, json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8'))
+                    stable_event = dict(payload['events'][0]); stable_event.pop('deliveryContext', None)
+                    route['payload_digest'] = hashlib.sha256(json.dumps(dict(payload, events=[stable_event]), sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')).hexdigest()
+                    routes.append(route)
+                return tuple(routes)
+        return (self._extract(provider, headers, body),)
+
+    def _extract(self, provider: ProviderDefinition, headers: Mapping[str, str], body: bytes) -> dict[str, Any]:
         route = self.describe(provider)
         normalized_headers = {str(k): str(v) for k, v in dict(headers or {}).items()}
         normalized_payload = self.normalizers.normalize_webhook_payload(provider=provider, headers=normalized_headers, body=body)
         raw_payload = self.normalizers.parse_webhook_json(body)
-        event_key = self._first(normalized_headers, route['event_key_headers']) or str(normalized_payload.get('event_key_hint') or '') or f"{provider.provider_key}:{hashlib.sha256(bytes(body)).hexdigest()[:24]}"
-        topic = self._first(normalized_headers, route['topic_headers']) or str(normalized_payload.get('topic') or '')
-        source_ref = self._first(normalized_headers, route.get('source_headers', ())) or str(normalized_payload.get('source_ref') or '')
-        resource_id = str(normalized_payload.get('resource_id') or '')
-        messaging_ingress = resolve_provider_webhook_messaging_ingress(provider=provider, normalized_payload=raw_payload)
+        event_hint = str(normalized_payload.get('event_key_hint') or '')
+        event_key = (event_hint or self._first(normalized_headers, route['event_key_headers'])) if provider.provider_key in {'line_messaging', 'viber_messaging'} else (self._first(normalized_headers, route['event_key_headers']) or event_hint)
+        event_key = event_key or f"{provider.provider_key}:{hashlib.sha256(bytes(body)).hexdigest()[:24]}"
         return {
             'event_key': event_key,
-            'topic': topic,
-            'source_ref': source_ref,
-            'resource_id': resource_id,
-            'messaging_ingress': messaging_ingress_to_metadata(messaging_ingress),
+            'topic': self._first(normalized_headers, route['topic_headers']) or str(normalized_payload.get('topic') or ''),
+            'source_ref': self._first(normalized_headers, route.get('source_headers', ())) or str(normalized_payload.get('source_ref') or ''),
+            'resource_id': str(normalized_payload.get('resource_id') or ''),
+            'payload_digest': hashlib.sha256(bytes(body)).hexdigest(),
+            'messaging_ingress': messaging_ingress_to_metadata(resolve_provider_webhook_messaging_ingress(provider=provider, normalized_payload=raw_payload)),
         }
 
     @staticmethod

@@ -18,6 +18,7 @@ from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_WEBHOOK_RUNTIME = True
+RAW_SIGNATURE_FIRST_PROVIDER_KEYS = frozenset({'line_messaging', 'viber_messaging'})
 
 @dataclass(frozen=True)
 class ProviderWebhookRuntime:
@@ -32,6 +33,8 @@ class ProviderWebhookRuntime:
             return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='slack_hmac_sha256_v0_or_shared_secret', header_names=('X-Slack-Signature', 'X-Slack-Request-Timestamp', 'Authorization', 'X-BusinessAIOS-Webhook-Secret'), enabled=True, metadata={'secret_field': 'webhook_secret', 'integration_mode': 'native_slack_events_or_provider_webhook_bridge', 'max_request_age_seconds': 300})
         if provider.provider_key == 'discord_messaging':
             return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='discord_ed25519_or_shared_secret', header_names=('X-Signature-Ed25519', 'X-Signature-Timestamp', 'Authorization', 'X-BusinessAIOS-Webhook-Secret'), enabled=True, metadata={'secret_field': 'webhook_secret', 'native_public_key_field': 'application_public_key', 'integration_mode': 'native_discord_http_or_provider_webhook_bridge'})
+        if provider.provider_key in {'line_messaging', 'viber_messaging'}:
+            return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='line_hmac_sha256_base64_or_shared_secret' if provider.provider_key == 'line_messaging' else 'viber_hmac_sha256_hex_or_shared_secret', header_names=(('X-Line-Signature' if provider.provider_key == 'line_messaging' else 'X-Viber-Content-Signature'), 'Authorization', 'X-BusinessAIOS-Webhook-Secret'), enabled=True, metadata={'secret_field': 'webhook_secret', 'native_secret_field': 'channel_secret' if provider.provider_key == 'line_messaging' else 'auth_token', 'integration_mode': 'native_line_messaging_api_or_provider_webhook_bridge' if provider.provider_key == 'line_messaging' else 'native_viber_bot_api_or_provider_webhook_bridge'})
         if provider.provider_key == 'telegram_bot':
             return ProviderWebhookContract(provider_key=provider.provider_key, verification_kind='bearer_or_shared_secret', header_names=('Authorization', 'X-Telegram-Bot-Api-Secret-Token'), enabled=True, metadata={'secret_field': self._secret_field(provider)})
         if describe_provider_messaging_binding(provider) is not None and any(field.secret_kind == 'signing_secret' for field in provider.secret_fields):
@@ -60,6 +63,15 @@ class ProviderWebhookRuntime:
                 except (InvalidSignature, ValueError):
                     return False
                 return True
+            return bool(secret) and any(candidate and hmac.compare_digest(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
+        if contract.verification_kind in {'line_hmac_sha256_base64_or_shared_secret', 'viber_hmac_sha256_hex_or_shared_secret'}:
+            header_name = 'x-line-signature' if provider.provider_key == 'line_messaging' else 'x-viber-content-signature'
+            if header_name in normalized_headers:
+                signature, native_secret = normalized_headers.get(header_name, '').strip(), self._read_secret(tenant_id=tenant_id, connector_id=provider.connector_id, business_id=business_id, secret_name=f"{provider.connector_id}.{contract.metadata['native_secret_field']}")
+                if not signature or not native_secret:
+                    return False
+                expected = base64.b64encode(hmac.new(native_secret.encode('utf-8'), bytes(body), hashlib.sha256).digest()).decode('ascii') if provider.provider_key == 'line_messaging' else hmac.new(native_secret.encode('utf-8'), bytes(body), hashlib.sha256).hexdigest()
+                return hmac.compare_digest(expected, signature)
             return bool(secret) and any(candidate and hmac.compare_digest(secret, candidate) for candidate in (normalized_headers.get('authorization', '').removeprefix('Bearer ').strip(), normalized_headers.get('x-businessaios-webhook-secret', '')))
         if not secret:
             return False
@@ -109,4 +121,4 @@ class ProviderWebhookRuntime:
         except Exception:
             return ''
 
-__all__ = ['CANON_PROVIDER_WEBHOOK_RUNTIME', 'ProviderWebhookRuntime']
+__all__ = ['CANON_PROVIDER_WEBHOOK_RUNTIME', 'ProviderWebhookRuntime', 'RAW_SIGNATURE_FIRST_PROVIDER_KEYS']

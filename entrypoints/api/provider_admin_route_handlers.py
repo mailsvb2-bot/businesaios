@@ -156,7 +156,7 @@ class ProviderAdminRouteHandlers:
     def ingest_provider_webhook(self, *, payload: Mapping[str, Any]) -> dict[str, Any]:
         data = dict(payload or {})
         headers = {str(k): str(v) for k, v in dict(data.get('headers') or {}).items()}
-        body = str(data.get('body') or '').encode('utf-8')
+        body = bytes(raw) if isinstance((raw := data.get('body') or b''), (bytes, bytearray)) else str(raw).encode('utf-8')
         return self._service(str(data.get('business_id') or '').strip()).ingest_provider_webhook(tenant_id=str(data.get('tenant_id') or '').strip(), business_id=str(data.get('business_id') or '').strip(), provider_key=str(data.get('provider_key') or '').strip(), headers=headers, body=body, event_key=str(data.get('event_key') or '').strip(), topic=str(data.get('topic') or '').strip(), owner_id=str(data.get('owner_id') or 'provider_admin').strip() or 'provider_admin')
     def enqueue_provider_sync(self, *, payload: Mapping[str, Any]) -> dict[str, Any]:
         data = dict(payload or {})
