@@ -130,14 +130,16 @@ class EvidencePersistenceService:
         action: Mapping[str, Any] | None = None,
         execution_receipt: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        action_payload = _safe_dict(action)
-        execution_payload = _safe_dict(execution_receipt)
+        verification_payload = _safe_dict(verification_result)
+        context = _safe_dict(verification_payload.get('context'))
+        action_payload = _safe_dict(action) or _safe_dict(context.get('action'))
+        execution_payload = _safe_dict(execution_receipt) or _safe_dict(context.get('execution_receipt'))
         persisted_outcome = _compact_verification_payload(
-            verification_result,
+            verification_payload,
             action=action_payload,
             execution_receipt=execution_payload,
         )
-        persisted_evidence = _compact_evidence_payload(verification_result)
+        persisted_evidence = _compact_evidence_payload(verification_payload)
         receipt = {
             'persistence_key': _persistence_key(
                 tenant_id=_text(action_payload.get('tenant_id') or execution_payload.get('tenant_id')),
@@ -157,12 +159,12 @@ class EvidencePersistenceService:
                 step_index=0,
                 action_id=_text(persisted_outcome.get('action_id')),
                 action_type=_text(persisted_outcome.get('action_type')),
-                verification_result=verification_result,
+                verification_result=verification_payload,
                 execution_result=execution_payload,
                 receipt=receipt,
             ),
         }
-        verification = _safe_dict(_safe_dict(verification_result).get('verification'))
+        verification = _safe_dict(verification_payload.get('verification'))
         engine = _safe_dict(verification.get('engine'))
         persistence = _safe_dict(engine.get('persistence'))
         if persistence:
