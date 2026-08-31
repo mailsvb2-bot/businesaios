@@ -265,6 +265,27 @@ async def test_native_webhook_signature_failure_maps_to_http_403(monkeypatch: py
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('provider_key', ['line_messaging', 'viber_messaging'])
+async def test_line_viber_native_signature_failure_maps_to_http_403(monkeypatch: pytest.MonkeyPatch, provider_key: str) -> None:
+    handler = FakeProviderWebhookHandler({'status': 'invalid_signature', 'accepted': False, 'response_body': None})
+    router, _ = _build_router(monkeypatch, provider_admin_handlers=handler)
+    route = next(route for route in router.routes if getattr(route, 'path', '') == '/providers/webhook/{tenant_id}/{business_id}/{provider_key}' and 'POST' in getattr(route, 'methods', set()))
+    with pytest.raises(HTTPException) as exc_info:
+        await route.endpoint('tenant-demo', 'business-1', provider_key, FakeRequest())
+    assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.asyncio
+async def test_line_batch_is_retryable_until_every_event_is_processed(monkeypatch: pytest.MonkeyPatch) -> None:
+    handler = FakeProviderWebhookHandler({'status': 'accepted', 'accepted': True, 'transport_ack_safe': False, 'response_body': None, 'metadata': {'batch_results': ({'event_key': 'line-1'}, {'event_key': 'line-2'})}})
+    router, _ = _build_router(monkeypatch, provider_admin_handlers=handler)
+    route = next(route for route in router.routes if getattr(route, 'path', '') == '/providers/webhook/{tenant_id}/{business_id}/{provider_key}' and 'POST' in getattr(route, 'methods', set()))
+    with pytest.raises(HTTPException) as exc_info:
+        await route.endpoint('tenant-demo', 'business-1', 'line_messaging', FakeRequest())
+    assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+@pytest.mark.asyncio
 async def test_vk_confirmation_without_code_fails_retryably(monkeypatch: pytest.MonkeyPatch) -> None:
     handler = FakeProviderWebhookHandler({'status': 'accepted', 'accepted': True, 'response_body': None})
     router, _ = _build_router(monkeypatch, provider_admin_handlers=handler)

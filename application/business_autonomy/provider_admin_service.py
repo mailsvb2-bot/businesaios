@@ -411,7 +411,7 @@ class ProviderAdminService:
         extracted = ProviderWebhookRouteRegistry().extract(provider, normalized_headers, bytes(body))
         result = ingress.ingest(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), headers=normalized_headers, body=bytes(body), event_key=str(event_key).strip() or extracted['event_key'], topic=str(topic).strip() or extracted['topic'], owner_id=str(owner_id).strip() or 'provider_admin')
         metadata = dict(result.metadata or {})
-        ack_safe = not metadata.get('messaging_handoff') or bool(metadata.get('messaging_inbound_result')) or dict(metadata.get('decision') or {}).get('resolution') == 'replay_completed'
+        ack_safe = bool(metadata.get('batch_transport_ack_safe')) if 'batch_transport_ack_safe' in metadata else ingress.transport_ack_safe(result)
         return {'provider_key': result.provider_key, 'event_key': result.event_key, 'accepted': result.accepted, 'status': result.status, 'transport_ack_safe': ack_safe, 'response_body': ingress.webhook_runtime.response_body(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body) if result.status != 'invalid_signature' and ack_safe else None, 'metadata': {**metadata, 'route_extract': extracted}}
     def enqueue_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)

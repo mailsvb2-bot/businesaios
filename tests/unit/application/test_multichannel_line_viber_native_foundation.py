@@ -8,15 +8,18 @@ import json
 from application.business_autonomy.provider_catalog import provider_map
 from application.business_autonomy.provider_truth_matrix import provider_truth_map
 from application.public_site.cta_intake import public_integration_marketplace
+from reliability.idempotency_store import InMemoryIdempotencyStore
 from runtime._internal.http_transport import SyncHTTPResult
 from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
 from runtime.business_autonomy.provider_http_live_clients import build_live_http_transports
+from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
 from runtime.business_autonomy.provider_live_probe_runtime import ProviderLiveProbeRuntime
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
 from runtime.business_autonomy.provider_transport_bindings import provider_transport_binding_for_key
 from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
+from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
 from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
 from security.secret_contract import SecretRef
@@ -83,6 +86,43 @@ def test_viber_native_signature_uses_auth_token_and_cannot_downgrade_to_bridge()
     assert runtime.verify(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Viber-Content-Signature': '', 'X-BusinessAIOS-Webhook-Secret': 'bridge-secret'}, body=body) is False
 
 
+class _CaptureInboundProcessor:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def process(self, *, handoff):
+        self.calls.append(dict(handoff['inbound_message']))
+        return {'accepted': True, 'decision_envelope': {'decision_id': f"line-{len(self.calls)}"}}
+
+
+class _MemoryIncidents:
+    def append(self, row):
+        return dict(row)
+
+
+def test_line_batch_processes_every_event_and_rebatch_replays_safely(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    provider, vault, processor = provider_map()['line_messaging'], InMemorySecretVault(), _CaptureInboundProcessor()
+    _put(vault, provider, 'webhook_secret', 'bridge-secret'); _put(vault, provider, 'channel_secret', 'line-channel-secret')
+    service = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(vault), replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()), inbound_processor=processor, incident_registry=_MemoryIncidents())
+    events = [
+        {'type': 'message', 'webhookEventId': 'evt-line-1', 'deliveryContext': {'isRedelivery': False}, 'source': {'userId': 'U1'}, 'message': {'id': 'm1', 'type': 'text', 'text': 'one'}},
+        {'type': 'message', 'webhookEventId': 'evt-line-2', 'deliveryContext': {'isRedelivery': False}, 'source': {'userId': 'U2'}, 'message': {'id': 'm2', 'type': 'text', 'text': 'two'}},
+    ]
+    body = json.dumps({'destination': 'BOT', 'events': events}, separators=(',', ':')).encode()
+    signature = base64.b64encode(hmac.new(b'line-channel-secret', body, hashlib.sha256).digest()).decode('ascii')
+    result = service.ingest(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': signature}, body=body, event_key='payload-digest-fallback')
+    assert [(row['text'], row['transport_message_id']) for row in processor.calls] == [('one', 'm1'), ('two', 'm2')]
+    assert result.status == 'accepted' and result.metadata['batch_event_count'] == 2 and result.metadata['batch_transport_ack_safe'] is True
+    assert tuple(row['event_key'] for row in result.metadata['batch_results']) == ('evt-line-1', 'evt-line-2')
+    redelivery = [dict(event, deliveryContext={'isRedelivery': True}) for event in reversed(events)]
+    replay_body = json.dumps({'destination': 'BOT', 'events': redelivery}, separators=(',', ':')).encode()
+    replay_signature = base64.b64encode(hmac.new(b'line-channel-secret', replay_body, hashlib.sha256).digest()).decode('ascii')
+    replay = service.ingest(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': replay_signature}, body=replay_body, event_key='payload-digest-fallback')
+    assert len(processor.calls) == 2 and replay.status == 'replayed' and replay.metadata['batch_transport_ack_safe'] is True
+    assert all(row['status'] == 'replayed' for row in replay.metadata['batch_results'])
+
+
 def test_line_viber_webhook_identity_uses_vendor_event_ids_for_canonical_idempotency() -> None:
     normalizer, routes, providers = ProviderPayloadNormalizers(), ProviderWebhookRouteRegistry(), provider_map()
     line_body = json.dumps({'events': [{'type': 'message', 'webhookEventId': 'evt-line-1', 'source': {'userId': 'U1'}, 'message': {'id': 'm-line', 'text': 'hello'}}]}).encode()
@@ -92,7 +132,9 @@ def test_line_viber_webhook_identity_uses_vendor_event_ids_for_canonical_idempot
     assert line == {'topic': 'message', 'source_ref': 'U1', 'resource_id': 'evt-line-1', 'event_key_hint': 'evt-line-1'}
     assert viber == {'topic': 'message', 'source_ref': 'V1', 'resource_id': '991', 'event_key_hint': '991'}
     assert routes.extract(providers['line_messaging'], {}, line_body)['event_key'] == 'evt-line-1'
-    assert routes.extract(providers['viber_messaging'], {}, viber_body)['event_key'] == '991'
+    batch = json.dumps({'events': [json.loads(line_body)['events'][0], {'type': 'message', 'webhookEventId': 'evt-line-2', 'source': {'userId': 'U2'}, 'message': {'id': 'm2', 'text': 'two'}}]}).encode()
+    assert tuple(row['event_key'] for row in routes.extract_many(providers['line_messaging'], {'X-Request-Id': 'callback-1'}, batch)) == ('evt-line-1', 'evt-line-2')
+    assert routes.extract(providers['viber_messaging'], {'X-Request-Id': 'callback-2'}, viber_body)['event_key'] == '991'
 
 
 def test_line_viber_prepared_outbound_matches_vendor_shape_but_remains_non_live() -> None:
