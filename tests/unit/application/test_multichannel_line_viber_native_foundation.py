@@ -100,6 +100,17 @@ class _MemoryIncidents:
         return dict(row)
 
 
+def test_line_invalid_signature_is_rejected_before_batch_expansion(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    provider, vault = provider_map()['line_messaging'], InMemorySecretVault()
+    _put(vault, provider, 'webhook_secret', 'bridge-secret'); _put(vault, provider, 'channel_secret', 'line-channel-secret')
+    service = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(vault), replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()), incident_registry=_MemoryIncidents())
+    body = json.dumps({'destination': 'BOT', 'padding': 'x' * 10000, 'events': [{'type': 'message', 'webhookEventId': f'evt-{index}', 'source': {'userId': f'U{index}'}, 'message': {'id': f'm{index}', 'type': 'text', 'text': 'hello'}} for index in range(20)]}, separators=(',', ':')).encode()
+    monkeypatch.setattr(ProviderWebhookRouteRegistry, 'extract_many', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('batch expansion ran before signature verification')))
+    result = service.ingest(provider=provider, tenant_id='tenant-a', business_id='business-a', headers={'X-Line-Signature': 'invalid'}, body=body, event_key='payload-digest-fallback')
+    assert result.status == 'invalid_signature' and result.accepted is False
+
+
 def test_line_batch_processes_every_event_and_rebatch_replays_safely(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
     provider, vault, processor = provider_map()['line_messaging'], InMemorySecretVault(), _CaptureInboundProcessor()

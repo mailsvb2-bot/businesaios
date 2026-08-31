@@ -44,8 +44,8 @@ class ProviderInboundWebhookService:
     ) -> ProviderWebhookIngressResult:
         raw_digest = hashlib.sha256(bytes(body)).hexdigest()
         requested_event_key = str(event_key or '').strip()
-        routes = ProviderWebhookRouteRegistry().extract_many(provider, headers, body)
-        first_route = routes[0]
+        route_registry = ProviderWebhookRouteRegistry()
+        first_route = route_registry.extract_unexpanded(provider, headers, body)
         route_event_key = str(first_route.get('event_key') or f'{provider.provider_key}:{raw_digest[:24]}')
         effective_event_key = route_event_key if provider.provider_key in {'line_messaging', 'viber_messaging'} else (requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback' else route_event_key)
         effective_topic = str(topic or '').strip() or str(first_route.get('topic') or '')
@@ -57,6 +57,8 @@ class ProviderInboundWebhookService:
             incident = self.incident_registry.append({'tenant_id': str(tenant_id), 'business_id': str(business_id), 'provider_key': provider.provider_key, 'kind': 'webhook', 'status': 'invalid_signature', 'severity': 'major', 'category': 'webhook_signature', 'message': 'invalid webhook signature', 'metadata': {'topic': effective_topic}})
             handoff = build_provider_webhook_inbound_handoff(tenant_id=tenant_id, business_id=business_id, provider_key=provider.provider_key, messaging_ingress=first_route.get('messaging_ingress'), route_metadata=first_route)
             return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=effective_event_key, accepted=False, status='invalid_signature', metadata={'topic': effective_topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': first_route, 'messaging_handoff': handoff, 'messaging_inbound_result': {}, 'incident': incident})
+        routes = route_registry.extract_many(provider, headers, body)
+        first_route = routes[0]
         if len(routes) == 1:
             return self._ingest_verified_route(provider=provider, tenant_id=tenant_id, business_id=business_id, route=first_route, event_key=effective_event_key, topic=effective_topic, owner_id=owner_id)
         results = tuple(self._ingest_verified_route(provider=provider, tenant_id=tenant_id, business_id=business_id, route=route, event_key=str(route.get('event_key') or ''), topic=str(route.get('topic') or ''), owner_id=owner_id) for route in routes)
