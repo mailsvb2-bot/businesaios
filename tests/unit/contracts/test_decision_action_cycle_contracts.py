@@ -36,6 +36,7 @@ def test_action_intent_is_non_effectful_identity_between_decision_and_execution(
     )
     assert intent.intent_id == "intent:dec-1"
     assert intent.tenant_id == "tenant-1" and intent.business_id == "business-1"
+    assert len(intent.payload_hash) == 64
     assert action.intent_id == intent.intent_id
     assert action.decision_id == intent.decision_id
     assert action.action_type == intent.action_type
@@ -88,6 +89,17 @@ def test_executable_projection_rejects_mismatched_intent_payload() -> None:
             decision_id=intent.decision_id, correlation_id=intent.correlation_id, decided_action_type=intent.action_type,
             channel=intent.channel, payload={"recipient": {"id": "customer-2"}}, capability_plan=_capability(),
             enforce_capability_plan=True, action_intent=intent,
+        )
+
+
+def test_executable_projection_rejects_mutated_issued_intent_payload() -> None:
+    intent = _intent(payload={"recipient": {"id": "customer-1"}})
+    intent.payload["recipient"]["id"] = "customer-2"
+    with pytest.raises(ValueError, match="action intent payload integrity check failed"):
+        project_executable_action(
+            decision_id=intent.decision_id, correlation_id=intent.correlation_id, decided_action_type=intent.action_type,
+            channel=intent.channel, payload=intent.payload, capability_plan=_capability(), enforce_capability_plan=True,
+            action_intent=intent,
         )
 
 
