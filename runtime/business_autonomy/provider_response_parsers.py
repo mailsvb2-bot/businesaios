@@ -20,7 +20,7 @@ class ProviderResponseParsers:
             'provider_key': provider_key,
             'operation': str(operation),
             'http_status': status_code,
-            'ok': status_code is not None and 200 <= status_code < 300,
+            'ok': status_code is not None and 200 <= status_code < 300 and not error_code,
             'resource_count': self._resource_count(provider_key=provider_key, body=body),
             'resource_id': self._resource_id(provider_key=provider_key, body=body),
             'next_cursor': self._next_cursor(provider_key=provider_key, body=body),
@@ -109,6 +109,8 @@ class ProviderResponseParsers:
 
     def _error_code(self, *, provider_key: str, body: Any) -> str | None:
         if isinstance(body, dict):
+            if provider_key == 'slack_messaging' and body.get('ok') is False:
+                return str(body.get('error') or 'slack_api_error')
             if isinstance(body.get('error'), dict):
                 err = body['error']
                 return str(err.get('code') or err.get('error_code') or err.get('type') or err.get('status') or '') or None
