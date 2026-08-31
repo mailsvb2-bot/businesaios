@@ -31,6 +31,7 @@ class ActionIntentV1:
     action_type: str
     channel: str
     payload: Mapping[str, Any] = field(default_factory=dict)
+    payload_hash: str = ""
     objective_name: str = "profit_adjusted_growth"
     estimated_cost: float | None = None
     expected_value: float | None = None
@@ -52,6 +53,8 @@ class ActionIntentV1:
             if not str(getattr(self, name) or "").strip()
             or str(getattr(self, name)).strip() != str(getattr(self, name))
         ]
+        if len(self.payload_hash) != 64 or any(ch not in "0123456789abcdef" for ch in self.payload_hash):
+            issues.append("invalid:payload_hash")
         if self.objective_name != "profit_adjusted_growth":
             issues.append("invalid:objective_name")
         if self.schema_version != 1:
@@ -66,11 +69,12 @@ class ActionIntentV1:
     def from_projection(
         cls, *, intent_id: str, tenant_id: str, business_id: str, decision_id: str,
         correlation_id: str, action_type: str, channel: str, payload: Mapping[str, Any],
-        requested_by: str = "decision_core",
+        payload_hash: str, requested_by: str = "decision_core",
     ) -> ActionIntentV1:
         data = dict(payload or {})
         intent = cls(
             intent_id, tenant_id, business_id, decision_id, correlation_id, action_type, channel, data,
+            payload_hash=str(payload_hash or "").strip(),
             estimated_cost=_finite(data.get("estimated_cost"), "estimated_cost"),
             expected_value=_finite(data.get("expected_value"), "expected_value"),
             confidence=_finite(data.get("confidence"), "confidence"),
