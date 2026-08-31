@@ -40,6 +40,7 @@ def canonical_execution_feedback(
     outcome = _safe_dict(verification.get('outcome'))
     evidence_bundle = _safe_dict(verification_payload.get('evidence_bundle'))
     router_result = _safe_dict(_safe_dict(feedback_payload.get('evidence')).get('router_result'))
+    prior_snapshot = _safe_dict(feedback_payload.get('execution_feedback'))
 
     action_type = _text(
         action_payload.get('action_type')
@@ -59,8 +60,8 @@ def canonical_execution_feedback(
     )
     intent_id = _text(action_payload.get('intent_id') or receipt_payload.get('intent_id') or feedback_payload.get('intent_id'))
     decision_id = _text(action_payload.get('decision_id') or receipt_payload.get('decision_id') or feedback_payload.get('decision_id'))
-    tenant_id = _text(action_payload.get('tenant_id') or receipt_payload.get('tenant_id') or feedback_payload.get('tenant_id'))
-    business_id = _text(action_payload.get('business_id') or receipt_payload.get('business_id') or feedback_payload.get('business_id'))
+    tenant_id = _text(action_payload.get('tenant_id') or receipt_payload.get('tenant_id') or feedback_payload.get('tenant_id') or prior_snapshot.get('tenant_id'))
+    business_id = _text(action_payload.get('business_id') or receipt_payload.get('business_id') or feedback_payload.get('business_id') or prior_snapshot.get('business_id'))
     correlation_id = _text(action_payload.get('correlation_id') or receipt_payload.get('correlation_id') or feedback_payload.get('correlation_id'))
 
     attempted = bool(feedback_payload.get('attempted', receipt_payload.get('attempted', False)))
