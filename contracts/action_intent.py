@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from copy import deepcopy
 from dataclasses import dataclass, field
 from math import isfinite
 from typing import Any
@@ -39,7 +40,7 @@ class ActionIntentV1:
     schema_version: int = 1
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "payload", dict(self.payload or {}))
+        object.__setattr__(self, "payload", deepcopy(dict(self.payload or {})))
 
     def validate_contract(self) -> list[str]:
         identity = (
