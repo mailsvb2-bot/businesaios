@@ -5,6 +5,7 @@ from dataclasses import asdict
 from typing import Any
 
 from contracts.action_result import ActionResult
+from contracts.business_outcome import BusinessOutcomeV1
 from contracts.executable_action import ExecutableAction
 from execution.canonical_autonomy_safety import canonical_autonomy_safety_decision
 from execution.canonical_operator_handoff import canonical_operator_handoff
@@ -53,6 +54,7 @@ class AutonomyFeedbackStep:
             step_index=step_index,
             payload={
                 "decision_id": envelope.decision.decision_id,
+                "intent_id": str(getattr(executable_action, "intent_id", "") or ""),
                 "ok": bool(result.ok),
                 "error": result.error,
                 "correlation_id": result.correlation_id,
@@ -60,6 +62,8 @@ class AutonomyFeedbackStep:
                 "normalized_outcome": dict(normalized_outcome),
                 "retry_classification": asdict(retry_info),
                 "autonomy_decision": {
+                    "intent_id": str(getattr(autonomy_decision, "intent_id", "") or ""),
+                    "verdict": str(getattr(autonomy_decision, "verdict", "") or ""),
                     "tier": autonomy_decision.tier,
                     "action_class": autonomy_decision.action_class,
                     "allowed": autonomy_decision.allowed,
@@ -102,6 +106,7 @@ class AutonomyFeedbackStep:
             )
         feedback.setdefault("policy_explanation", asdict(explanation))
         feedback.setdefault("action_type", str(executable_action.action_type or ""))
+        feedback.setdefault("intent_id", str(getattr(executable_action, "intent_id", "") or ""))
         feedback.setdefault("decision_id", str(getattr(envelope.decision, "decision_id", "") or ""))
         feedback.setdefault("correlation_id", str(getattr(envelope.decision, "correlation_id", "") or getattr(result, "correlation_id", "") or ""))
         feedback.setdefault("normalized_outcome", dict(normalized_outcome))
@@ -223,6 +228,16 @@ class AutonomyFeedbackStep:
             )
             return None, True
 
+        decision_id = str(envelope.decision.decision_id)
+        tenant_id = str(getattr(request, "tenant_id", "") or executable_action.payload.get("tenant_id") or "").strip()
+        business_id = str(getattr(request, "business_id", "") or executable_action.payload.get("business_id") or "").strip()
+        if tenant_id and business_id:
+            feedback["business_outcome"] = BusinessOutcomeV1.from_feedback(
+                tenant_id=tenant_id, business_id=business_id, run_id=str(trace.run_id),
+                intent_id=str(getattr(executable_action, "intent_id", "") or f"intent:{decision_id}"),
+                decision_id=decision_id, action_id=str(executable_action.action_id), action_type=str(executable_action.action_type),
+                goal=str(getattr(request, "goal", "") or ""), status=str(action_result.status), feedback=feedback,
+            ).as_dict()
         step = self._contract._step_builder.build(
             step_index=step_index,
             action=executable_action,
@@ -299,6 +314,7 @@ class AutonomyFeedbackStep:
                 "goal": request.goal,
                 "step_index": int(step_index),
                 "decision_id": envelope.decision.decision_id,
+                "intent_id": str(getattr(executable_action, "intent_id", "") or ""),
                 "action_id": executable_action.action_id,
                 "action": executable_action.action_type,
                 "ok": bool(action_result.executed),

@@ -57,7 +57,10 @@ def canonical_execution_feedback(
         or evidence_bundle.get('action_id')
         or feedback_payload.get('action_id')
     )
+    intent_id = _text(action_payload.get('intent_id') or receipt_payload.get('intent_id') or feedback_payload.get('intent_id'))
     decision_id = _text(action_payload.get('decision_id') or receipt_payload.get('decision_id') or feedback_payload.get('decision_id'))
+    tenant_id = _text(action_payload.get('tenant_id') or receipt_payload.get('tenant_id') or feedback_payload.get('tenant_id'))
+    business_id = _text(action_payload.get('business_id') or receipt_payload.get('business_id') or feedback_payload.get('business_id'))
     correlation_id = _text(action_payload.get('correlation_id') or receipt_payload.get('correlation_id') or feedback_payload.get('correlation_id'))
 
     attempted = bool(feedback_payload.get('attempted', receipt_payload.get('attempted', False)))
@@ -108,7 +111,10 @@ def canonical_execution_feedback(
     return {
         'action_type': action_type,
         'action_id': action_id,
+        'intent_id': intent_id,
         'decision_id': decision_id,
+        'tenant_id': tenant_id,
+        'business_id': business_id,
         'correlation_id': correlation_id,
         'attempted': attempted,
         'executed': executed,
@@ -143,7 +149,10 @@ def canonical_persisted_outcome(snapshot: Mapping[str, Any] | None) -> dict[str,
         'external_refs': list(_safe_list(payload.get('external_refs'))),
         'action_type': _text(payload.get('action_type')),
         'action_id': _text(payload.get('action_id')),
+        'intent_id': _text(payload.get('intent_id')),
         'decision_id': _text(payload.get('decision_id')),
+        'tenant_id': _text(payload.get('tenant_id')),
+        'business_id': _text(payload.get('business_id')),
         'correlation_id': _text(payload.get('correlation_id')),
         'attempted': bool(payload.get('attempted', False)),
         'executed': bool(payload.get('executed', False)),
@@ -163,7 +172,10 @@ def canonical_world_state_row(snapshot: Mapping[str, Any] | None) -> dict[str, A
     return {
         'action_type': _text(payload.get('action_type')),
         'action_id': _text(payload.get('action_id')),
+        'intent_id': _text(payload.get('intent_id')),
         'decision_id': _text(payload.get('decision_id')),
+        'tenant_id': _text(payload.get('tenant_id')),
+        'business_id': _text(payload.get('business_id')),
         'correlation_id': _text(payload.get('correlation_id')),
         'verified': outcome_is_verified(status, verified=payload.get('verified'), retryable=payload.get('retryable')),
         'verification_status': status,

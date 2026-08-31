@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import logging
-from threading import Lock, Thread
 from collections.abc import Mapping
+from threading import Lock, Thread
 from typing import Any
 
 from application.decision_policy.pricing import allowed_price_band, band_rank, merge_price_constraints
 from application.decision_runtime.run import run_decision
+from contracts.action_intent import ActionIntentV1
 from contracts.executable_action import ExecutableAction
 from core.decision_core_contract import CANONICAL_DECISION_CORE_IMPORT_PATH
 from kernel.decision_signer import DecisionSigner
@@ -36,6 +37,21 @@ def _non_effectful_capability_patch(payload_patch: Mapping[str, Any]) -> dict[st
     return {key: value for key, value in payload_patch.items() if key in preserved_keys}
 
 
+
+def project_action_intent(
+    *, decision_id: str, correlation_id: str, decided_action_type: str, channel: str,
+    tenant_id: str, business_id: str, payload: Mapping[str, Any], requested_by: str = "decision_core",
+) -> ActionIntentV1:
+    """Project a signed sovereign decision into the canonical non-effectful intent contract."""
+
+    normalized_decision_id = str(decision_id or "").strip()
+    return ActionIntentV1.from_projection(
+        intent_id=f"intent:{normalized_decision_id}", tenant_id=str(tenant_id or "").strip(),
+        business_id=str(business_id or "").strip(), decision_id=normalized_decision_id,
+        correlation_id=str(correlation_id or "").strip(), action_type=str(decided_action_type or "").strip(),
+        channel=str(channel or "").strip(), payload=payload, requested_by=str(requested_by or "decision_core").strip(),
+    )
+
 def project_executable_action(
     *,
     decision_id: str,
@@ -45,6 +61,7 @@ def project_executable_action(
     payload: Mapping[str, Any],
     capability_plan: Any,
     enforce_capability_plan: bool,
+    action_intent: ActionIntentV1 | None = None,
 ) -> ExecutableAction:
     """Project the signed decision into the sole executable-action contract.
 
@@ -66,6 +83,11 @@ def project_executable_action(
     if not normalized_channel:
         raise ValueError("channel is required")
 
+    if action_intent is not None:
+        if action_intent.decision_id != normalized_decision_id or action_intent.correlation_id != normalized_correlation_id:
+            raise ValueError("action intent identity does not match executable projection")
+        if action_intent.action_type != normalized_action_type or action_intent.channel != normalized_channel:
+            raise ValueError("action intent action/channel does not match executable projection")
     projected_payload = dict(payload)
     projected_payload["capability_planning"] = capability_plan.to_dict()
     payload_patch = dict(capability_plan.payload_patch)
@@ -94,6 +116,7 @@ def project_executable_action(
         decision_id=normalized_decision_id,
         correlation_id=normalized_correlation_id,
         objective_name="profit_adjusted_growth",
+        intent_id="" if action_intent is None else action_intent.intent_id,
     )
     issues = action.validate_contract()
     if issues:
@@ -197,5 +220,6 @@ __all__ = [
     "DecisionCore",
     "ENVELOPE_VERSION",
     "SOVEREIGN_DECISION_CORE",
+    "project_action_intent",
     "project_executable_action",
 ]

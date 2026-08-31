@@ -42,7 +42,10 @@ def test_canonical_contract_shapes_are_consistent() -> None:
         },
         action={
             "action_type": "crm.write_record",
+            "intent_id": "intent:dec-1",
             "decision_id": "dec-1",
+            "tenant_id": "tenant-1",
+            "business_id": "business-1",
             "correlation_id": "corr-1",
         },
     )
@@ -51,5 +54,7 @@ def test_canonical_contract_shapes_are_consistent() -> None:
     artifact = canonical_headless_step_artifact(feedback={**snapshot}, action={"payload": {"x": 1}})
     assert persisted["status"] == world_row["verification_status"] == "verified"
     assert persisted["action_type"] == world_row["action_type"] == "crm.write_record"
+    assert persisted["intent_id"] == world_row["intent_id"] == "intent:dec-1"
+    assert persisted["business_id"] == world_row["business_id"] == "business-1"
     assert artifact["execution_feedback"]["decision_id"] == "dec-1"
     assert artifact["payload"] == {"x": 1}

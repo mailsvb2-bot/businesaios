@@ -31,7 +31,7 @@ def test_enrich_uses_existing_feedback_and_does_not_reexecute() -> None:
     service = _build_service()
     calls = {"count": 0}
     feedback = {"verified": True, "verification_status": "verified", "verification_confidence": 1.0, "external_refs": ["ext-1"], "evidence": {"router_result": {"verified": True, "status": "verified", "code": "verified", "message": "ok", "confidence": 1.0, "external_refs": ["ext-1"]}}}
-    action = ExecutableAction(action_id="act-1", action_type="publish_page", channel="headless", decision_id="dec-1", correlation_id="corr-1", objective_name="publish", payload={})
+    action = ExecutableAction(action_id="act-1", action_type="publish_page", channel="headless", decision_id="dec-1", correlation_id="corr-1", objective_name="publish", intent_id="intent:dec-1", payload={})
     execution_result = _ExecutionResult(output={"message": "submitted"})
     def executor_should_not_run(*args, **kwargs):
         calls["count"] += 1
@@ -40,4 +40,5 @@ def test_enrich_uses_existing_feedback_and_does_not_reexecute() -> None:
     assert calls["count"] == 0
     assert artifacts.feedback["verified"] is True
     assert artifacts.feedback["verification_status"] == "verified"
+    assert artifacts.feedback["persisted_outcome"]["intent_id"] == "intent:dec-1"
     assert artifacts.feedback["next_tier_context"]["ceiling_tier"] in {"supervised", "bounded_autonomy", "full_autonomy"}
