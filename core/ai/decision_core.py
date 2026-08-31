@@ -90,9 +90,10 @@ def project_executable_action(
             raise ValueError("action intent identity does not match executable projection")
         if action_intent.action_type != normalized_action_type or action_intent.channel != normalized_channel:
             raise ValueError("action intent action/channel does not match executable projection")
-        if canonical_payload_hash(dict(action_intent.payload)) != action_intent.payload_hash:
+        issued_payload = action_intent.payload_copy()
+        if canonical_payload_hash(issued_payload) != action_intent.payload_hash:
             raise ValueError("action intent payload integrity check failed")
-        if dict(action_intent.payload) != dict(payload):
+        if issued_payload != dict(payload):
             raise ValueError("action intent payload does not match executable projection")
     projected_payload = dict(payload)
     projected_payload["capability_planning"] = capability_plan.to_dict()
