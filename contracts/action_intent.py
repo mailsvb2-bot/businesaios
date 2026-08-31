@@ -1,12 +1,28 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from copy import deepcopy
 from dataclasses import dataclass, field
 from math import isfinite
+from types import MappingProxyType
 from typing import Any
 
 CANON_ACTION_INTENT_CONTRACT = True
+
+
+def _freeze(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: _freeze(item) for key, item in value.items()})
+    if isinstance(value, list | tuple):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
+def _thaw(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {key: _thaw(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw(item) for item in value]
+    return value
 
 
 def _finite(value: object, name: str) -> float | None:
@@ -41,7 +57,10 @@ class ActionIntentV1:
     schema_version: int = 1
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "payload", deepcopy(dict(self.payload or {})))
+        object.__setattr__(self, "payload", _freeze(dict(self.payload or {})))
+
+    def payload_copy(self) -> dict[str, Any]:
+        return _thaw(self.payload)
 
     def validate_contract(self) -> list[str]:
         identity = (
