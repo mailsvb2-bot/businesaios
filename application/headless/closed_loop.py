@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -57,10 +57,15 @@ class HeadlessClosedLoopService:
                 blast_radius_allowed=not bool(getattr(autonomy_decision, "blocked_by_policy", False)),
             )
         )
-        return HeadlessClosedLoopArtifacts(
-            action_result=action_result, cycle_result=cycle,
-            feedback=self._merge_feedback(dict(normalized or {}), cycle, original_feedback=original, action=action_payload, execution_receipt=execution_receipt),
+        merged_feedback = self._merge_feedback(
+            dict(normalized or {}), cycle, original_feedback=original,
+            action=action_payload, execution_receipt=execution_receipt,
         )
+        scoped_memory = {**dict(cycle.persisted_memory_evidence or {}), "persisted_outcome": dict(merged_feedback["persisted_outcome"])}
+        cycle = replace(cycle, persisted_memory_evidence=scoped_memory)
+        merged_feedback["evidence"]["persisted_memory_evidence"] = dict(scoped_memory)
+        merged_feedback["memory_evidence_patch"] = dict(scoped_memory)
+        return HeadlessClosedLoopArtifacts(action_result=action_result, cycle_result=cycle, feedback=merged_feedback)
 
     @staticmethod
     def _build_action_payload(*, request: Any, executable_action: ExecutableAction, autonomy_decision: Any) -> dict[str, Any]:
