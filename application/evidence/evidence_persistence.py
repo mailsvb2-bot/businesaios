@@ -6,9 +6,17 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from application.effects.effect_outcome_vocabulary import normalize_outcome_status, outcome_is_verified
-from application.evidence.evidence_feedback_state import apply_feedback_to_world_state as _apply_feedback_world_state
-from execution.canonical_persistence_vocabulary import canonical_memory_record, canonical_persistence_outcome_record
+from application.effects.effect_outcome_vocabulary import (
+    normalize_outcome_status,
+    outcome_is_verified,
+)
+from application.evidence.evidence_feedback_state import (
+    apply_feedback_to_world_state as _apply_feedback_world_state,
+)
+from execution.canonical_persistence_vocabulary import (
+    canonical_memory_record,
+    canonical_persistence_outcome_record,
+)
 from execution.evidence_persistence_feedback import (
     compact_evidence_payload as _compact_evidence_payload,
     compact_verification_payload as _compact_verification_payload,
