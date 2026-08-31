@@ -19,8 +19,14 @@ from execution.canonical_persistence_vocabulary import (
 )
 from execution.evidence_persistence_feedback import (
     compact_evidence_payload as _compact_evidence_payload,
+)
+from execution.evidence_persistence_feedback import (
     compact_verification_payload as _compact_verification_payload,
+)
+from execution.evidence_persistence_feedback import (
     persistence_key as _persistence_key,
+)
+from execution.evidence_persistence_feedback import (
     refs_from_verification as _refs_from_verification,
 )
 from execution.evidence_persistence_reliability import EvidencePersistenceReliabilitySupport
