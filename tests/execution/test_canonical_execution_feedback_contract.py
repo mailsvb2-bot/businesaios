@@ -5,6 +5,7 @@ from application.effects.canonical_execution_feedback import (
     canonical_world_state_row,
 )
 from application.effects.effect_verification_bridge import normalize_feedback_contract
+from execution.world_state_updater import WorldStateUpdater
 
 
 def test_normalized_feedback_exposes_canonical_execution_feedback() -> None:
@@ -79,3 +80,30 @@ def test_feedback_rebuild_preserves_existing_tenant_business_scope() -> None:
     )
     assert rebuilt["tenant_id"] == "tenant-1"
     assert rebuilt["business_id"] == "business-1"
+
+
+def test_world_state_history_preserves_scoped_execution_identity() -> None:
+    action = {
+        "action_type": "crm.write_record",
+        "action_id": "act-1",
+        "intent_id": "intent:dec-1",
+        "decision_id": "dec-1",
+        "tenant_id": "tenant-1",
+        "business_id": "business-1",
+        "correlation_id": "corr-1",
+    }
+    verification = {
+        "verified": True,
+        "verification": {
+            "status": "verified",
+            "external_refs": ["proof://1"],
+            "source_of_truth": "provider_receipt",
+        },
+    }
+    updater = WorldStateUpdater()
+    state = updater.apply(world_state={"meta": {}}, update=updater.build_update(verification_result=verification, action=action))
+    row = state["meta"]["execution_closed_loop"]["last_verification"]
+    assert row["intent_id"] == "intent:dec-1"
+    assert row["tenant_id"] == "tenant-1"
+    assert row["business_id"] == "business-1"
+    assert state["meta"]["execution_closed_loop"]["execution_history"][0]["intent_id"] == "intent:dec-1"
