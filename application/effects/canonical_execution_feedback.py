@@ -195,15 +195,21 @@ def canonical_headless_step_artifact(
     feedback: Mapping[str, Any] | None = None,
     action: Mapping[str, Any] | None = None,
     execution_receipt: Mapping[str, Any] | None = None,
+    executable_payload: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     snapshot = canonical_execution_feedback(
         feedback=feedback,
         action=action,
         execution_receipt=execution_receipt,
     )
+    payload = (
+        _safe_dict(executable_payload)
+        if executable_payload is not None
+        else _safe_dict(_safe_dict(action).get('payload'))
+    )
     return {
         'execution_feedback': dict(snapshot),
-        'payload': dict(_safe_dict(action).get('payload') or {}),
+        'payload': payload,
     }
 
 

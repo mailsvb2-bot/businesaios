@@ -51,10 +51,11 @@ def test_enrich_uses_existing_feedback_and_does_not_reexecute() -> None:
 
 def test_enrich_preserves_explicit_run_and_step_scope() -> None:
     service = _build_service()
-    action = ExecutableAction(action_id="act-2", action_type="publish_page", channel="headless", decision_id="dec-2", correlation_id="corr-2", objective_name="publish", payload={})
+    action = ExecutableAction(action_id="act-2", action_type="publish_page", channel="headless", decision_id="dec-2", correlation_id="corr-2", objective_name="publish", payload={"recipient": {"id": "customer-9"}, "message": "hello"})
     artifacts = service.enrich(request=_Request(), state={"meta": {}}, executable_action=action, action_result=ActionResult(action_id="act-2", status="executed", message="submitted", payload={"attempted": True, "executed": True, "verified": False, "operator_required": False}), execution_result=_ExecutionResult(output={"message": "submitted"}), autonomy_decision=_AutonomyDecision(), feedback={}, run_id="trace-run-9", step_index=4)
     context = artifacts.cycle_result.verification_result["context"]
     assert context["action"]["run_id"] == "trace-run-9"
     assert context["action"]["step_index"] == 4
     assert context["execution_receipt"]["run_id"] == "trace-run-9"
     assert context["execution_receipt"]["step_index"] == 4
+    assert artifacts.feedback["headless_step_artifact"]["payload"] == {"recipient": {"id": "customer-9"}, "message": "hello"}

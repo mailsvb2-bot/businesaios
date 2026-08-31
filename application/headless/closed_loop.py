@@ -65,7 +65,7 @@ class HeadlessClosedLoopService:
         )
         return HeadlessClosedLoopArtifacts(
             action_result=action_result, cycle_result=cycle,
-            feedback=self._merge_feedback(dict(normalized or {}), cycle, original_feedback=original, action=action_payload, execution_receipt=execution_receipt),
+            feedback=self._merge_feedback(dict(normalized or {}), cycle, original_feedback=original, action=action_payload, execution_receipt=execution_receipt, executable_payload=dict(executable_action.payload or {})),
         )
 
     @staticmethod
@@ -91,6 +91,7 @@ class HeadlessClosedLoopService:
     def _merge_feedback(
         feedback: dict[str, Any], cycle_result: ClosedLoopCycleResult, *, original_feedback: Mapping[str, Any] | None = None,
         action: Mapping[str, Any] | None = None, execution_receipt: Mapping[str, Any] | None = None,
+        executable_payload: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
         from application.effects.canonical_execution_feedback import (
             canonical_execution_feedback,
@@ -115,7 +116,7 @@ class HeadlessClosedLoopService:
         feedback["execution_feedback"] = snapshot
         feedback["persisted_outcome"] = canonical_persisted_outcome(snapshot)
         feedback["world_state_row"] = canonical_world_state_row(snapshot)
-        feedback["headless_step_artifact"] = canonical_headless_step_artifact(feedback=feedback, action=action, execution_receipt=execution_receipt)
+        feedback["headless_step_artifact"] = canonical_headless_step_artifact(feedback=feedback, action=action, execution_receipt=execution_receipt, executable_payload=executable_payload)
         return feedback
 
 
