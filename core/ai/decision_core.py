@@ -10,6 +10,7 @@ from application.decision_runtime.run import run_decision
 from contracts.action_intent import ActionIntentV1
 from contracts.executable_action import ExecutableAction
 from core.decision_core_contract import CANONICAL_DECISION_CORE_IMPORT_PATH
+from core.utils.canonical import payload_hash as canonical_payload_hash
 from kernel.decision_signer import DecisionSigner
 from ports.world_model import DecisionWorldModelPort
 
@@ -49,7 +50,8 @@ def project_action_intent(
         intent_id=f"intent:{normalized_decision_id}", tenant_id=str(tenant_id or "").strip(),
         business_id=str(business_id or "").strip(), decision_id=normalized_decision_id,
         correlation_id=str(correlation_id or "").strip(), action_type=str(decided_action_type or "").strip(),
-        channel=str(channel or "").strip(), payload=payload, requested_by=str(requested_by or "decision_core").strip(),
+        channel=str(channel or "").strip(), payload=payload, payload_hash=canonical_payload_hash(dict(payload)),
+        requested_by=str(requested_by or "decision_core").strip(),
     )
 
 def project_executable_action(
@@ -88,6 +90,8 @@ def project_executable_action(
             raise ValueError("action intent identity does not match executable projection")
         if action_intent.action_type != normalized_action_type or action_intent.channel != normalized_channel:
             raise ValueError("action intent action/channel does not match executable projection")
+        if canonical_payload_hash(dict(action_intent.payload)) != action_intent.payload_hash:
+            raise ValueError("action intent payload integrity check failed")
         if dict(action_intent.payload) != dict(payload):
             raise ValueError("action intent payload does not match executable projection")
     projected_payload = dict(payload)
