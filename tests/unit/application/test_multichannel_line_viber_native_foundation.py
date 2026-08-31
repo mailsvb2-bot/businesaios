@@ -143,8 +143,8 @@ def test_line_viber_webhook_identity_uses_vendor_event_ids_for_canonical_idempot
     assert line == {'topic': 'message', 'source_ref': 'U1', 'resource_id': 'evt-line-1', 'event_key_hint': 'evt-line-1'}
     assert viber == {'topic': 'message', 'source_ref': 'V1', 'resource_id': '991', 'event_key_hint': '991'}
     assert routes.extract(providers['line_messaging'], {}, line_body)['event_key'] == 'evt-line-1'
-    batch = json.dumps({'events': [json.loads(line_body)['events'][0], {'type': 'message', 'webhookEventId': 'evt-line-2', 'source': {'userId': 'U2'}, 'message': {'id': 'm2', 'text': 'two'}}]}).encode()
-    assert tuple(row['event_key'] for row in routes.extract_many(providers['line_messaging'], {'X-Request-Id': 'callback-1'}, batch)) == ('evt-line-1', 'evt-line-2')
+    batch = json.dumps({'events': [json.loads(line_body)['events'][0], {'type': 'message', 'webhookEventId': 'evt-line-2', 'source': {'groupId': 'G2'}, 'message': {'id': 'm2', 'text': 'two'}}, {'type': 'message', 'webhookEventId': 'evt-line-3', 'source': {'roomId': 'R3'}, 'message': {'id': 'm3', 'text': 'three'}}]}).encode(); batch_routes = routes.extract_many(providers['line_messaging'], {'X-Request-Id': 'callback-1'}, batch)
+    assert tuple(row['event_key'] for row in batch_routes) == ('evt-line-1', 'evt-line-2', 'evt-line-3') and tuple(row['messaging_ingress']['user_id'] for row in batch_routes[1:]) == ('G2', 'R3')
     assert routes.extract(providers['viber_messaging'], {'X-Request-Id': 'callback-2'}, viber_body)['event_key'] == '991'
 
 
