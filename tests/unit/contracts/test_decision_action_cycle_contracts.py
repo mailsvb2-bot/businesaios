@@ -41,6 +41,15 @@ def test_action_intent_is_non_effectful_identity_between_decision_and_execution(
     assert action.action_type == intent.action_type
 
 
+def test_action_intent_deep_snapshots_nested_payload() -> None:
+    source = {"recipient": {"id": "customer-1"}, "tags": ["retention"]}
+    intent = _intent(payload=source)
+    source["recipient"]["id"] = "customer-2"
+    source["tags"].append("tampered")
+    assert intent.payload["recipient"]["id"] == "customer-1"
+    assert intent.payload["tags"] == ["retention"]
+
+
 def test_policy_decision_is_canonical_owner_and_binds_intent_identity() -> None:
     intent = _intent()
     decision = evaluate_autonomy_transition(
@@ -69,6 +78,16 @@ def test_executable_projection_rejects_mismatched_intent_identity() -> None:
         project_executable_action(
             decision_id="dec-other", correlation_id=intent.correlation_id, decided_action_type=intent.action_type,
             channel=intent.channel, payload=intent.payload, capability_plan=_capability(), enforce_capability_plan=True, action_intent=intent,
+        )
+
+
+def test_executable_projection_rejects_mismatched_intent_payload() -> None:
+    intent = _intent(payload={"recipient": {"id": "customer-1"}})
+    with pytest.raises(ValueError, match="action intent payload does not match executable projection"):
+        project_executable_action(
+            decision_id=intent.decision_id, correlation_id=intent.correlation_id, decided_action_type=intent.action_type,
+            channel=intent.channel, payload={"recipient": {"id": "customer-2"}}, capability_plan=_capability(),
+            enforce_capability_plan=True, action_intent=intent,
         )
 
 
