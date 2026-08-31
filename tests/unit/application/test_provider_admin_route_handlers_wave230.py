@@ -101,3 +101,20 @@ def test_provider_admin_route_handlers_expose_secret_history_and_runtime_routes(
     routes = handlers.get_provider_runtime_routes(provider_key='shopify')
     assert routes['transport_binding']['provider_key'] == 'shopify'
     assert 'path_template' in routes['webhook_route']
+
+class _WebhookCaptureService:
+    def __init__(self) -> None:
+        self.bodies = []
+
+    def ingest_provider_webhook(self, **kwargs):
+        self.bodies.append(kwargs['body'])
+        return {'status': 'accepted'}
+
+
+def test_provider_admin_route_handler_preserves_raw_bytes_and_text_compatibility():
+    service = _WebhookCaptureService()
+    handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: service)
+    base = {'tenant_id': 'tenant-a', 'business_id': 'business-a', 'provider_key': 'line_messaging', 'headers': {}, 'event_key': '', 'topic': ''}
+    handlers.ingest_provider_webhook(payload={**base, 'body': b'\xffraw'})
+    handlers.ingest_provider_webhook(payload={**base, 'body': 'текст'})
+    assert service.bodies == [b'\xffraw', 'текст'.encode('utf-8')]

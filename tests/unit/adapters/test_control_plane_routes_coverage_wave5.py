@@ -285,6 +285,7 @@ async def test_line_viber_http_boundary_does_not_parse_before_native_signature_v
     with pytest.raises(HTTPException) as exc_info:
         await route.endpoint('tenant-demo', 'business-1', provider_key, FakeRequest())
     assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+    assert handler.calls[-1][1]['payload']['body'] == b'{\"ok\": true}'
 
 
 @pytest.mark.asyncio
