@@ -44,8 +44,8 @@ def compact_verification_payload(
 ) -> dict[str, Any]:
     payload = _safe_dict(verification_result)
     context = _safe_dict(payload.get('context'))
-    resolved_action = _safe_dict(action) if action is not None else _safe_dict(context.get('action'))
-    resolved_receipt = _safe_dict(execution_receipt) if execution_receipt is not None else _safe_dict(context.get('execution_receipt'))
+    resolved_action = _safe_dict(action) or _safe_dict(context.get('action'))
+    resolved_receipt = _safe_dict(execution_receipt) or _safe_dict(context.get('execution_receipt'))
     snapshot = canonical_execution_feedback(
         verification_result=payload,
         action=resolved_action,
