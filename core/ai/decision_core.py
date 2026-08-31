@@ -41,7 +41,7 @@ def _non_effectful_capability_patch(payload_patch: Mapping[str, Any]) -> dict[st
 
 def project_action_intent(
     *, decision_id: str, correlation_id: str, decided_action_type: str, channel: str,
-    tenant_id: str, business_id: str, payload: Mapping[str, Any], requested_by: str = "decision_core",
+    tenant_id: str, business_id: str, payload: Mapping[str, Any], requested_by: str = "sovereign_decision",
 ) -> ActionIntentV1:
     """Project a signed sovereign decision into the canonical non-effectful intent contract."""
 
@@ -51,7 +51,7 @@ def project_action_intent(
         business_id=str(business_id or "").strip(), decision_id=normalized_decision_id,
         correlation_id=str(correlation_id or "").strip(), action_type=str(decided_action_type or "").strip(),
         channel=str(channel or "").strip(), payload=payload, payload_hash=canonical_payload_hash(dict(payload)),
-        requested_by=str(requested_by or "decision_core").strip(),
+        requested_by=str(requested_by or "sovereign_decision").strip(),
     )
 
 def project_executable_action(
