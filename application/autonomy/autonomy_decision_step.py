@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -111,7 +110,7 @@ class AutonomyDecisionStep:
         self, *, request: Any, state: Any, envelope: Any, action_intent: Any | None = None,
     ) -> executable_action_contract.ExecutableAction:
         action_intent = action_intent or self._project_action_intent(request=request, envelope=envelope)
-        payload = deepcopy(dict(action_intent.payload))
+        payload = action_intent.payload_copy()
         action_type = str(action_intent.action_type)
         capability_plan = self._contract._capability_aware_planner.plan_action(
             request=request,
