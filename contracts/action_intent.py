@@ -53,7 +53,7 @@ class ActionIntentV1:
     expected_value: float | None = None
     confidence: float | None = None
     reversible: bool | None = None
-    requested_by: str = "decision_core"
+    requested_by: str = "sovereign_decision"
     schema_version: int = 1
 
     def __post_init__(self) -> None:
@@ -88,7 +88,7 @@ class ActionIntentV1:
     def from_projection(
         cls, *, intent_id: str, tenant_id: str, business_id: str, decision_id: str,
         correlation_id: str, action_type: str, channel: str, payload: Mapping[str, Any],
-        payload_hash: str, requested_by: str = "decision_core",
+        payload_hash: str, requested_by: str = "sovereign_decision",
     ) -> ActionIntentV1:
         data = dict(payload or {})
         intent = cls(
