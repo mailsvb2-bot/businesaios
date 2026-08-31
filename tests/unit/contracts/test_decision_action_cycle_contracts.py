@@ -32,7 +32,7 @@ def test_action_intent_is_non_effectful_identity_between_decision_and_execution(
     intent = _intent()
     action = project_executable_action(
         decision_id=intent.decision_id, correlation_id=intent.correlation_id, decided_action_type=intent.action_type,
-        channel=intent.channel, payload=intent.payload, capability_plan=_capability(), enforce_capability_plan=True, action_intent=intent,
+        channel=intent.channel, payload=intent.payload_copy(), capability_plan=_capability(), enforce_capability_plan=True, action_intent=intent,
     )
     assert intent.intent_id == "intent:dec-1"
     assert intent.tenant_id == "tenant-1" and intent.business_id == "business-1"
@@ -48,7 +48,8 @@ def test_action_intent_deep_snapshots_nested_payload() -> None:
     source["recipient"]["id"] = "customer-2"
     source["tags"].append("tampered")
     assert intent.payload["recipient"]["id"] == "customer-1"
-    assert intent.payload["tags"] == ["retention"]
+    assert intent.payload["tags"] == ("retention",)
+    assert intent.payload_copy()["tags"] == ["retention"]
 
 
 def test_policy_decision_is_canonical_owner_and_binds_intent_identity() -> None:
@@ -78,7 +79,7 @@ def test_executable_projection_rejects_mismatched_intent_identity() -> None:
     with pytest.raises(ValueError, match="action intent identity does not match executable projection"):
         project_executable_action(
             decision_id="dec-other", correlation_id=intent.correlation_id, decided_action_type=intent.action_type,
-            channel=intent.channel, payload=intent.payload, capability_plan=_capability(), enforce_capability_plan=True, action_intent=intent,
+            channel=intent.channel, payload=intent.payload_copy(), capability_plan=_capability(), enforce_capability_plan=True, action_intent=intent,
         )
 
 
@@ -92,15 +93,19 @@ def test_executable_projection_rejects_mismatched_intent_payload() -> None:
         )
 
 
-def test_executable_projection_rejects_mutated_issued_intent_payload() -> None:
+def test_issued_intent_payload_is_recursively_immutable() -> None:
     intent = _intent(payload={"recipient": {"id": "customer-1"}})
-    intent.payload["recipient"]["id"] = "customer-2"
-    with pytest.raises(ValueError, match="action intent payload integrity check failed"):
-        project_executable_action(
-            decision_id=intent.decision_id, correlation_id=intent.correlation_id, decided_action_type=intent.action_type,
-            channel=intent.channel, payload=intent.payload, capability_plan=_capability(), enforce_capability_plan=True,
-            action_intent=intent,
-        )
+    with pytest.raises(TypeError):
+        intent.payload["recipient"]["id"] = "customer-2"
+    payload_copy = intent.payload_copy()
+    payload_copy["recipient"]["id"] = "customer-2"
+    assert intent.payload["recipient"]["id"] == "customer-1"
+    action = project_executable_action(
+        decision_id=intent.decision_id, correlation_id=intent.correlation_id, decided_action_type=intent.action_type,
+        channel=intent.channel, payload=intent.payload_copy(), capability_plan=_capability(), enforce_capability_plan=True,
+        action_intent=intent,
+    )
+    assert action.intent_id == intent.intent_id
 
 
 def test_business_outcome_binds_action_to_goal_and_economic_evidence() -> None:
