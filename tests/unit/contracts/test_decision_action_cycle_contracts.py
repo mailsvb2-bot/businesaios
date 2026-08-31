@@ -93,6 +93,22 @@ def test_executable_projection_rejects_mismatched_intent_payload() -> None:
         )
 
 
+@pytest.mark.parametrize("candidate_value", [True, 1.0])
+def test_executable_projection_rejects_json_type_payload_substitution(candidate_value: object) -> None:
+    intent = _intent(payload={"value": 1})
+    with pytest.raises(ValueError, match="action intent payload does not match executable projection"):
+        project_executable_action(
+            decision_id=intent.decision_id,
+            correlation_id=intent.correlation_id,
+            decided_action_type=intent.action_type,
+            channel=intent.channel,
+            payload={"value": candidate_value},
+            capability_plan=_capability(),
+            enforce_capability_plan=True,
+            action_intent=intent,
+        )
+
+
 def test_issued_intent_payload_is_recursively_immutable() -> None:
     intent = _intent(payload={"recipient": {"id": "customer-1"}})
     with pytest.raises(TypeError):
