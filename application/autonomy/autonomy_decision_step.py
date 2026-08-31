@@ -83,7 +83,7 @@ class AutonomyDecisionStep:
             decided_action_type=str(envelope.decision.action),
             channel=str(request.channel), tenant_id=str(getattr(request, "tenant_id", "") or ""),
             business_id=str(getattr(request, "business_id", "") or ""), payload=payload,
-            requested_by=str(getattr(envelope.decision, "issuer_id", "decision_core") or "decision_core"),
+            requested_by=str(getattr(envelope.decision, "issuer_id", "sovereign_decision") or "sovereign_decision"),
         )
 
     @staticmethod
