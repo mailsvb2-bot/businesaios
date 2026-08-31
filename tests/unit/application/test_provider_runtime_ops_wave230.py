@@ -96,7 +96,9 @@ def test_admin_line_invalid_signature_never_pre_expands_batch(tmp_path, monkeypa
     service = _service(tmp_path)
     service.activate_provider(ProviderCredentialSubmission(tenant_id='tenant-a', business_id='line-a', provider_key='line_messaging', ownership_key='owner:line-a', requested_by='owner-user', external_ref='line://bot', secrets={'webhook_secret': 'bridge-secret', 'channel_secret': 'line-secret'}, metadata={'probe_mode': 'dry_run'}))
     body = ('{\"destination\":\"BOT\",\"events\":[' + ','.join('{\"type\":\"message\",\"webhookEventId\":\"evt-%d\",\"source\":{\"userId\":\"U%d\"},\"message\":{\"id\":\"m%d\",\"type\":\"text\",\"text\":\"hello\"}}' % (i, i, i) for i in range(20)) + '],\"padding\":\"' + 'x' * 10000 + '\"}').encode()
-    monkeypatch.setattr(ProviderWebhookRouteRegistry, 'extract_many', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('admin pre-expanded LINE before signature verification')))
+    fail = lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('LINE route extraction ran before signature verification'))
+    monkeypatch.setattr(ProviderWebhookRouteRegistry, '_extract', fail)
+    monkeypatch.setattr(ProviderWebhookRouteRegistry, 'extract_many', fail)
     result = service.ingest_provider_webhook(tenant_id='tenant-a', business_id='line-a', provider_key='line_messaging', headers={'X-Line-Signature': 'invalid'}, body=body, event_key='', topic='')
     assert result['status'] == 'invalid_signature' and result['accepted'] is False
 

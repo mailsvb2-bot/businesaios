@@ -15,7 +15,7 @@ from runtime.business_autonomy.provider_webhook_inbound_processor import Provide
 from runtime.business_autonomy.provider_webhook_inbound_result_summary import summarize_provider_webhook_inbound_result
 from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
 from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
-from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
+from runtime.business_autonomy.provider_webhook_runtime import RAW_SIGNATURE_FIRST_PROVIDER_KEYS, ProviderWebhookRuntime
 
 CANON_PROVIDER_INBOUND_WEBHOOK_SERVICE = True
 
@@ -45,11 +45,12 @@ class ProviderInboundWebhookService:
         raw_digest = hashlib.sha256(bytes(body)).hexdigest()
         requested_event_key = str(event_key or '').strip()
         route_registry = ProviderWebhookRouteRegistry()
-        first_route = route_registry.extract_unexpanded(provider, headers, body)
+        contract = self.webhook_runtime.describe(provider)
+        signature_first = provider.provider_key in RAW_SIGNATURE_FIRST_PROVIDER_KEYS
+        first_route = {'event_key': requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback' else f'{provider.provider_key}:{raw_digest[:24]}', 'topic': str(topic or '').strip(), 'source_ref': '', 'resource_id': '', 'payload_digest': raw_digest, 'messaging_ingress': {}} if signature_first else route_registry.extract(provider, headers, body)
         route_event_key = str(first_route.get('event_key') or f'{provider.provider_key}:{raw_digest[:24]}')
         effective_event_key = route_event_key if provider.provider_key in {'line_messaging', 'viber_messaging'} else (requested_event_key if requested_event_key and requested_event_key != 'payload-digest-fallback' else route_event_key)
         effective_topic = str(topic or '').strip() or str(first_route.get('topic') or '')
-        contract = self.webhook_runtime.describe(provider)
         if contract.enabled and not self.webhook_runtime.verify(provider=provider, tenant_id=tenant_id, business_id=business_id, headers=headers, body=body):
             refs = self.audit_recorder.record_webhook_event(tenant_id=tenant_id, business_id=business_id, provider_key=provider.provider_key, event_key=effective_event_key, status='invalid_signature', accepted=False, metadata={'topic': effective_topic, 'verification_kind': contract.verification_kind})
             export_refs = self.export_bridge.export_runtime_event(tenant_id=str(tenant_id), business_id=str(business_id), provider_key=provider.provider_key, event_kind='webhook', payload={'status': 'invalid_signature', 'accepted': False, 'topic': effective_topic})
@@ -59,6 +60,7 @@ class ProviderInboundWebhookService:
             return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=effective_event_key, accepted=False, status='invalid_signature', metadata={'topic': effective_topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': first_route, 'messaging_handoff': handoff, 'messaging_inbound_result': {}, 'incident': incident})
         routes = route_registry.extract_many(provider, headers, body)
         first_route = routes[0]
+        if signature_first: effective_event_key, effective_topic = str(first_route.get('event_key') or f'{provider.provider_key}:{raw_digest[:24]}'), str(topic or '').strip() or str(first_route.get('topic') or '')
         if len(routes) == 1:
             return self._ingest_verified_route(provider=provider, tenant_id=tenant_id, business_id=business_id, route=first_route, event_key=effective_event_key, topic=effective_topic, owner_id=owner_id)
         results = tuple(self._ingest_verified_route(provider=provider, tenant_id=tenant_id, business_id=business_id, route=route, event_key=str(route.get('event_key') or ''), topic=str(route.get('topic') or ''), owner_id=owner_id) for route in routes)

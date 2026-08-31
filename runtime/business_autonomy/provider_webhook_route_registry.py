@@ -37,9 +37,6 @@ class ProviderWebhookRouteRegistry:
     def extract(self, provider: ProviderDefinition, headers: Mapping[str, str], body: bytes) -> dict[str, Any]:
         return self.extract_many(provider, headers, body)[0]
 
-    def extract_unexpanded(self, provider: ProviderDefinition, headers: Mapping[str, str], body: bytes) -> dict[str, Any]:
-        return self._extract(provider, headers, body)
-
     def extract_many(self, provider: ProviderDefinition, headers: Mapping[str, str], body: bytes) -> tuple[dict[str, Any], ...]:
         raw_payload = self.normalizers.parse_webhook_json(body)
         if provider.provider_key == 'line_messaging' and isinstance(raw_payload.get('events'), list):

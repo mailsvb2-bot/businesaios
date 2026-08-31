@@ -18,6 +18,7 @@ from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_WEBHOOK_RUNTIME = True
+RAW_SIGNATURE_FIRST_PROVIDER_KEYS = frozenset({'line_messaging', 'viber_messaging'})
 
 @dataclass(frozen=True)
 class ProviderWebhookRuntime:
@@ -120,4 +121,4 @@ class ProviderWebhookRuntime:
         except Exception:
             return ''
 
-__all__ = ['CANON_PROVIDER_WEBHOOK_RUNTIME', 'ProviderWebhookRuntime']
+__all__ = ['CANON_PROVIDER_WEBHOOK_RUNTIME', 'ProviderWebhookRuntime', 'RAW_SIGNATURE_FIRST_PROVIDER_KEYS']

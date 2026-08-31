@@ -276,6 +276,18 @@ async def test_line_viber_native_signature_failure_maps_to_http_403(monkeypatch:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('provider_key', ['line_messaging', 'viber_messaging'])
+async def test_line_viber_http_boundary_does_not_parse_before_native_signature_verdict(monkeypatch: pytest.MonkeyPatch, provider_key: str) -> None:
+    handler = FakeProviderWebhookHandler({'status': 'invalid_signature', 'accepted': False, 'response_body': None})
+    monkeypatch.setattr('adapters.api.fastapi.provider_webhook_routes.ProviderPayloadNormalizers.parse_webhook_json', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('raw-signed webhook parsed before signature verdict')))
+    router, _ = _build_router(monkeypatch, provider_admin_handlers=handler)
+    route = next(route for route in router.routes if getattr(route, 'path', '') == '/providers/webhook/{tenant_id}/{business_id}/{provider_key}' and 'POST' in getattr(route, 'methods', set()))
+    with pytest.raises(HTTPException) as exc_info:
+        await route.endpoint('tenant-demo', 'business-1', provider_key, FakeRequest())
+    assert exc_info.value.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.asyncio
 async def test_line_batch_is_retryable_until_every_event_is_processed(monkeypatch: pytest.MonkeyPatch) -> None:
     handler = FakeProviderWebhookHandler({'status': 'accepted', 'accepted': True, 'transport_ack_safe': False, 'response_body': None, 'metadata': {'batch_results': ({'event_key': 'line-1'}, {'event_key': 'line-2'})}})
     router, _ = _build_router(monkeypatch, provider_admin_handlers=handler)
