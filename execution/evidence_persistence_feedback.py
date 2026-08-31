@@ -42,10 +42,14 @@ def compact_verification_payload(
     action: Mapping[str, Any] | None = None,
     execution_receipt: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    payload = _safe_dict(verification_result)
+    context = _safe_dict(payload.get('context'))
+    resolved_action = _safe_dict(action) if action is not None else _safe_dict(context.get('action'))
+    resolved_receipt = _safe_dict(execution_receipt) if execution_receipt is not None else _safe_dict(context.get('execution_receipt'))
     snapshot = canonical_execution_feedback(
-        verification_result=verification_result,
-        action=action,
-        execution_receipt=execution_receipt,
+        verification_result=payload,
+        action=resolved_action,
+        execution_receipt=resolved_receipt,
     )
     return canonical_persisted_outcome(snapshot)
 
