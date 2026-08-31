@@ -21,6 +21,7 @@ from runtime.business_autonomy.distributed_state import FileDistributedDocumentS
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
 from runtime.business_autonomy.provider_runtime_observability import ProviderRuntimeObservability
+from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_vault import InMemorySecretVault
 
@@ -89,6 +90,15 @@ def test_rotate_provider_secrets_and_sync_retry_metadata(tmp_path):
     assert int(retry.get('next_delay_seconds') or 0) > 0
     metric = observability.metrics_registry.metric_snapshot(tenant_id='tenant-a', metric_name='provider_runtime.sync_total')
     assert metric is not None
+
+
+def test_admin_line_invalid_signature_never_pre_expands_batch(tmp_path, monkeypatch) -> None:
+    service = _service(tmp_path)
+    service.activate_provider(ProviderCredentialSubmission(tenant_id='tenant-a', business_id='line-a', provider_key='line_messaging', ownership_key='owner:line-a', requested_by='owner-user', external_ref='line://bot', secrets={'webhook_secret': 'bridge-secret', 'channel_secret': 'line-secret'}, metadata={'probe_mode': 'dry_run'}))
+    body = ('{\"destination\":\"BOT\",\"events\":[' + ','.join('{\"type\":\"message\",\"webhookEventId\":\"evt-%d\",\"source\":{\"userId\":\"U%d\"},\"message\":{\"id\":\"m%d\",\"type\":\"text\",\"text\":\"hello\"}}' % (i, i, i) for i in range(20)) + '],\"padding\":\"' + 'x' * 10000 + '\"}').encode()
+    monkeypatch.setattr(ProviderWebhookRouteRegistry, 'extract_many', lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError('admin pre-expanded LINE before signature verification')))
+    result = service.ingest_provider_webhook(tenant_id='tenant-a', business_id='line-a', provider_key='line_messaging', headers={'X-Line-Signature': 'invalid'}, body=body, event_key='', topic='')
+    assert result['status'] == 'invalid_signature' and result['accepted'] is False
 
 
 def test_ingest_provider_webhook_emits_acceptance_metric(tmp_path):
