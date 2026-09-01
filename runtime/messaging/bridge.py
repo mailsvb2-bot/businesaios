@@ -21,11 +21,20 @@ def _bind_native_provider_context(msg: OutboundMessage) -> OutboundMessage:
     track_payload = dict(msg.track_payload or {})
     existing = track_payload.get("_provider_native")
     context = dict(existing) if isinstance(existing, Mapping) else {}
+    provider_key = f"{channel}_messaging"
+    source_provider = str(context.get("provider_key") or "").strip()
+    provider_changed = bool(source_provider and source_provider != provider_key)
+    if provider_changed:
+        for key in ("peer_id", "chat_id", "random_id", "channel_id", "approval_id"):
+            context.pop(key, None)
+    if not isinstance(existing, Mapping) or source_provider:
+        context["provider_key"] = provider_key
     context.setdefault("business_id", str(track_payload.get("business_id") or track_payload.get("tenant_id") or msg.tenant_id).strip())
-    if track_payload.get("approval_id") and not context.get("approval_id"):
+    if track_payload.get("approval_id") and not context.get("approval_id") and not provider_changed:
         context["approval_id"] = str(track_payload["approval_id"])
     recipient_key = {"vk": "peer_id", "max": "chat_id", "slack": "channel_id", "discord": "channel_id"}[channel]
-    context.setdefault(recipient_key, str(track_payload.get(recipient_key) or msg.user_id).strip())
+    recipient = str(msg.user_id if provider_changed else (track_payload.get(recipient_key) or msg.user_id)).strip()
+    context.setdefault(recipient_key, recipient)
     track_payload["_provider_native"] = context
     return replace(msg, track_payload=track_payload)
 

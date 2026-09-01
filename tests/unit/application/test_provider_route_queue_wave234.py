@@ -88,7 +88,7 @@ def test_slack_discord_approval_resume_replays_exact_approved_subject_after_fall
         envelope = SimpleNamespace(
             decision=SimpleNamespace(
                 decision_id="dec-1",
-                action="send_message@v1",
+                action="profit_sprint_onboarding_start@v1",
                 payload={
                     "tenant_id": "tenant-a",
                     "business_id": "biz-archive",
@@ -144,3 +144,36 @@ def test_native_approval_resume_rejects_tampered_stored_provider_identity():
         assert str(exc) == "provider_approval_resume_provider_mismatch"
     else:
         raise AssertionError("tampered provider resume context must fail closed")
+
+
+def test_legacy_provider_resume_still_rejects_non_send_message_archived_action():
+    class _Store:
+        def get(self, approval_id):
+            return SimpleNamespace(
+                status=SimpleNamespace(value="approved"),
+                request=SimpleNamespace(
+                    approval_id=approval_id,
+                    tenant_id="tenant-a",
+                    subject_id="dec-1",
+                    metadata={
+                        "action_name": "provider.slack_messaging.message_send",
+                        "decision_id": "dec-1",
+                    },
+                ),
+            )
+
+    envelope = SimpleNamespace(
+        decision=SimpleNamespace(
+            decision_id="dec-1",
+            action="profit_sprint_onboarding_start@v1",
+            payload={"tenant_id": "tenant-a", "business_id": "biz-a", "channel": "slack", "channel_id": "C123", "text": "hello"},
+        )
+    )
+    handlers = ProviderAdminRouteHandlers(approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope)
+
+    try:
+        handlers.resume_approved_message(tenant_id="tenant-a", approval_id="ap-1")
+    except RuntimeError as exc:
+        assert str(exc) == "provider_approval_resume_requires_send_message_v1"
+    else:
+        raise AssertionError("legacy approval without bound resume context must retain archive-action restriction")

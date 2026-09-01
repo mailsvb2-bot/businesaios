@@ -180,12 +180,12 @@ class ProviderAdminRouteHandlers:
         decision = getattr(envelope, 'decision', None)
         if decision is None or str(getattr(decision, 'decision_id', '') or '') != decision_id:
             raise RuntimeError('provider_approval_decision_archive_mismatch')
-        if str(getattr(decision, 'action', '') or '') != 'send_message@v1':
-            raise RuntimeError('provider_approval_resume_requires_send_message_v1')
         archived_payload = dict(getattr(decision, 'payload', {}) or {})
         if str(archived_payload.get('tenant_id') or tenant_id) != str(tenant_id):
             raise RuntimeError('provider_approval_resume_tenant_mismatch')
         resume_context = request_metadata.get('approval_resume_context')
+        if not isinstance(resume_context, Mapping) and str(getattr(decision, 'action', '') or '') != 'send_message@v1':
+            raise RuntimeError('provider_approval_resume_requires_send_message_v1')
         provider_payload: dict[str, Any] | None = None
         if isinstance(resume_context, Mapping):
             context = dict(resume_context)
