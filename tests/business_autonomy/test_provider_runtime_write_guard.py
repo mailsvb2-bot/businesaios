@@ -277,3 +277,24 @@ def test_vk_approval_queue_receipt_replay_is_at_most_once(tmp_path: Path, monkey
     third = service.execute_queued_provider_sync(tenant_id='tenant-a', business_id='biz-a', provider_key='vk_messaging', operation='message_send', mode='live', payload=approved)
     assert second['result']['status'] == 'live_executed' and second['result']['parsed_response']['resource_id'] == '777'
     assert third['result']['parsed_response']['resource_id'] == '777' and len(transport.calls) == 1
+
+
+def test_caller_supplied_queue_markers_cannot_bypass_canonical_queue() -> None:
+    provider, guard, payload = _approved_native_guard(provider_key="slack_messaging", business_id="slack-biz", message_payload={"channel_id": "C123", "text": "hello"})
+
+    class _Transport:
+        def execute(self, **_kwargs):
+            raise AssertionError("forged queue provenance must not reach transport")
+
+    runtime = ProviderLiveSyncRuntime(secret_vault=InMemorySecretVault(), transports={"slack_messaging": _Transport()}, write_guard=guard)
+    result = runtime.run(
+        provider=provider,
+        tenant_id="tenant-a",
+        business_id="slack-biz",
+        operation="message_send",
+        mode="live",
+        payload={**payload, "_provider_queue_execution": True, "_provider_queue_job_id": "forged-job", "_provider_write_approved": True, "_allow_network": True},
+    )
+    assert result.accepted is False and result.status == "rejected_provider_write_requires_queue"
+    request_payload = result.metadata["request_envelope"]["payload"]
+    assert all(key not in request_payload for key in ("_provider_queue_execution", "_provider_queue_job_id", "_provider_write_approved", "_allow_network"))

@@ -9,6 +9,8 @@ from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyn
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import provider_transport_binding_for_key
 from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
+from runtime.messaging.bootstrap import _NativeProviderQueueAdapter
+from runtime.messaging.outbound_message import OutboundMessage
 from security.secret_contract import SecretRef
 from security.secret_vault import InMemorySecretVault
 
@@ -121,3 +123,11 @@ def test_discord_live_read_rejects_unsafe_channel_path_before_network(monkeypatc
     assert result['_prepared_only'] is True
     assert result['network_capable'] is False
     assert result['reason'] == 'native_message_read_payload_invalid'
+
+
+def test_slack_discord_native_adapter_has_no_generic_webhook_fallback() -> None:
+    for channel in ("slack", "discord"):
+        adapter = _NativeProviderQueueAdapter(channel, service_factory=lambda: (_ for _ in ()).throw(AssertionError("service must not be built without native context")))
+        result = adapter.send(OutboundMessage(decision_id="dec-1", correlation_id="corr-1", tenant_id="tenant-a", user_id="user-1", channel=channel, text="hello"))
+        assert result.ok is False and result.mode == "blocked"
+        assert result.detail["reason"] == "native_context_required"

@@ -96,7 +96,7 @@ class ProviderQueueExecutionRuntime:
             payload = dict(job.payload or {})
             provider_key = str(payload.get('provider_key') or '').strip()
             provider = provider_registry[provider_key]
-            result: ProviderSyncRunResult = runtime.run(provider=provider, tenant_id=job.tenant_id, business_id=str(payload.get('business_id') or ''), operation=str(payload.get('operation') or ''), mode=str(payload.get('mode') or 'live'), payload={**dict(payload.get('payload') or {}), '_provider_queue_execution': True, '_provider_queue_job_id': job.job_id}, attempts=max(1, int(job.attempts)))
+            result: ProviderSyncRunResult = runtime.run(provider=provider, tenant_id=job.tenant_id, business_id=str(payload.get('business_id') or ''), operation=str(payload.get('operation') or ''), mode=str(payload.get('mode') or 'live'), payload=dict(payload.get('payload') or {}), attempts=max(1, int(job.attempts)), _queue_job_id=job.job_id)
             ok, retry = bool(result.accepted), dict(result.metadata.get('retry_policy') or {})
             retryable, category = bool(retry.get('retryable')), str(retry.get('category') or 'provider_runtime_error')
             return JobResult(ok=ok, status=result.status, job_id=job.job_id, tenant_id=job.tenant_id, attempts=job.attempts, output={'provider_key': result.provider_key, 'operation': result.operation, 'mode': result.mode, 'metadata': dict(result.metadata or {})}, error=None if ok else (category.upper() if retryable else f'NON_RETRYABLE:{category}'), retry_delay_seconds=int(retry.get('next_delay_seconds') or 0) if retryable else None)

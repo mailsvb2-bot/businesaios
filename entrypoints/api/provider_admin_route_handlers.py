@@ -156,7 +156,7 @@ class ProviderAdminRouteHandlers:
     def ingest_provider_webhook(self, *, payload: Mapping[str, Any]) -> dict[str, Any]:
         data = dict(payload or {})
         headers = {str(k): str(v) for k, v in dict(data.get('headers') or {}).items()}
-        body = bytes(raw) if isinstance((raw := data.get('body') or b''), (bytes, bytearray)) else str(raw).encode('utf-8')
+        body = bytes(raw) if isinstance((raw := data.get('body') or b''), bytes | bytearray) else str(raw).encode('utf-8')
         return self._service(str(data.get('business_id') or '').strip()).ingest_provider_webhook(tenant_id=str(data.get('tenant_id') or '').strip(), business_id=str(data.get('business_id') or '').strip(), provider_key=str(data.get('provider_key') or '').strip(), headers=headers, body=body, event_key=str(data.get('event_key') or '').strip(), topic=str(data.get('topic') or '').strip(), owner_id=str(data.get('owner_id') or 'provider_admin').strip() or 'provider_admin')
     def enqueue_provider_sync(self, *, payload: Mapping[str, Any]) -> dict[str, Any]:
         data = dict(payload or {})
@@ -170,7 +170,7 @@ class ProviderAdminRouteHandlers:
         if str(getattr(record.status, 'value', record.status)) != 'approved':
             raise RuntimeError(f'provider_approval_not_approved:{getattr(record.status, "value", record.status)}')
         action_name, decision_id = str(dict(record.request.metadata or {}).get('action_name') or '').strip(), str(dict(record.request.metadata or {}).get('decision_id') or '').strip()
-        provider_key = {'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging'}.get(action_name)
+        provider_key = {'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging', 'provider.slack_messaging.message_send': 'slack_messaging', 'provider.discord_messaging.message_send': 'discord_messaging'}.get(action_name)
         if provider_key is None:
             raise RuntimeError(f'approval_not_provider_message_send:{action_name}')
         if not decision_id:
@@ -182,15 +182,18 @@ class ProviderAdminRouteHandlers:
         if str(getattr(decision, 'action', '') or '') != 'send_message@v1':
             raise RuntimeError('provider_approval_resume_requires_send_message_v1')
         payload = dict(getattr(decision, 'payload', {}) or {})
-        expected_channel, business_id = ('vk' if provider_key == 'vk_messaging' else 'max'), str(payload.get('business_id') or '').strip()
+        expected_channel = {'vk_messaging': 'vk', 'max_messaging': 'max', 'slack_messaging': 'slack', 'discord_messaging': 'discord'}[provider_key]
+        business_id = str(payload.get('business_id') or '').strip()
         if str(payload.get('tenant_id') or tenant_id) != str(tenant_id):
             raise RuntimeError('provider_approval_resume_tenant_mismatch')
         if normalize_channel(str(payload.get('channel') or '')) != expected_channel:
             raise RuntimeError('provider_approval_resume_channel_mismatch')
         if not business_id:
             raise RuntimeError('provider_approval_resume_business_id_missing')
+        if provider_key in {'slack_messaging', 'discord_messaging'} and not str(payload.get('channel_id') or '').strip():
+            raise RuntimeError('provider_approval_resume_channel_id_missing')
         service = self._service(business_id)
-        provider_payload = {**ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(provider_key), operation='message_send', payload={'user_id': str(payload.get('user_id') or ''), 'text': str(payload.get('text') or ''), **{key: payload[key] for key in ('peer_id', 'chat_id', 'random_id') if payload.get(key) not in {None, ''}}}), '_approval': {'decision_id': decision_id, 'execution_id': str(record.request.subject_id), 'approval_id': str(record.request.approval_id)}}
+        provider_payload = {**ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(provider_key), operation='message_send', payload={'user_id': str(payload.get('user_id') or ''), 'text': str(payload.get('text') or ''), **{key: payload[key] for key in ('peer_id', 'chat_id', 'random_id', 'channel_id') if payload.get(key) not in {None, ''}}}), '_approval': {'decision_id': decision_id, 'execution_id': str(record.request.subject_id), 'approval_id': str(record.request.approval_id)}}
         execution = service.execute_queued_provider_sync(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, operation='message_send', mode='live', payload=provider_payload, worker_id='provider-approval-resume')
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'approval_id': record.request.approval_id, 'decision_id': decision_id, 'execution': execution}
     def tick_provider_sync_queue(self, *, tenant_id: str, worker_id: str = 'provider-runtime-worker') -> dict[str, Any]:
