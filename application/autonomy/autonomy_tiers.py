@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
+from contracts.policy_decision import PolicyDecisionV1
 from execution.action_catalog import classify_action_type, normalize_action_type
 
 CANON_HEADLESS_AUTONOMY_TIERS = True
@@ -16,15 +16,7 @@ ALLOWED_AUTONOMY_TIERS: tuple[str, ...] = (
 )
 
 
-@dataclass(frozen=True)
-class AutonomyDecision:
-    tier: str
-    action_type: str
-    action_class: str
-    allowed: bool
-    approval_required: bool
-    blocked_by_policy: bool
-    handoff_reason: str | None = None
+AutonomyDecision = PolicyDecisionV1  # compatibility alias; semantic owner is contracts.policy_decision
 
 
 _TIER_POLICY: dict[str, dict[str, set[str]]] = {

@@ -31,13 +31,31 @@ def test_enrich_uses_existing_feedback_and_does_not_reexecute() -> None:
     service = _build_service()
     calls = {"count": 0}
     feedback = {"verified": True, "verification_status": "verified", "verification_confidence": 1.0, "external_refs": ["ext-1"], "evidence": {"router_result": {"verified": True, "status": "verified", "code": "verified", "message": "ok", "confidence": 1.0, "external_refs": ["ext-1"]}}}
-    action = ExecutableAction(action_id="act-1", action_type="publish_page", channel="headless", decision_id="dec-1", correlation_id="corr-1", objective_name="publish", payload={})
+    action = ExecutableAction(action_id="act-1", action_type="publish_page", channel="headless", decision_id="dec-1", correlation_id="corr-1", objective_name="publish", intent_id="intent:dec-1", payload={})
     execution_result = _ExecutionResult(output={"message": "submitted"})
     def executor_should_not_run(*args, **kwargs):
         calls["count"] += 1
         raise AssertionError("should not re-execute")
-    artifacts = service.enrich(request=_Request(), state={"meta": {}}, executable_action=action, action_result=ActionResult(action_id="act-1", status="executed", message="submitted", payload={"attempted": True, "executed": True, "verified": False, "operator_required": False}), execution_result=execution_result, autonomy_decision=_AutonomyDecision(), feedback=feedback)
+    artifacts = service.enrich(request=_Request(), state={"meta": {}}, executable_action=action, action_result=ActionResult(action_id="act-1", status="executed", message="submitted", payload={"attempted": True, "executed": True, "verified": False, "operator_required": False}), execution_result=execution_result, autonomy_decision=_AutonomyDecision(), feedback=feedback, run_id="run-1", step_index=2)
     assert calls["count"] == 0
     assert artifacts.feedback["verified"] is True
     assert artifacts.feedback["verification_status"] == "verified"
+    assert artifacts.feedback["persisted_outcome"]["intent_id"] == "intent:dec-1"
+    memory_outcome = artifacts.cycle_result.persisted_memory_evidence["persisted_outcome"]
+    assert memory_outcome["intent_id"] == "intent:dec-1"
+    assert memory_outcome["tenant_id"] == "tenant-1"
+    assert memory_outcome["business_id"] == "biz-1"
+    assert artifacts.feedback["memory_evidence_patch"]["persisted_outcome"] == memory_outcome
     assert artifacts.feedback["next_tier_context"]["ceiling_tier"] in {"supervised", "bounded_autonomy", "full_autonomy"}
+
+
+def test_enrich_preserves_explicit_run_and_step_scope() -> None:
+    service = _build_service()
+    action = ExecutableAction(action_id="act-2", action_type="publish_page", channel="headless", decision_id="dec-2", correlation_id="corr-2", objective_name="publish", payload={"recipient": {"id": "customer-9"}, "message": "hello"})
+    artifacts = service.enrich(request=_Request(), state={"meta": {}}, executable_action=action, action_result=ActionResult(action_id="act-2", status="executed", message="submitted", payload={"attempted": True, "executed": True, "verified": False, "operator_required": False}), execution_result=_ExecutionResult(output={"message": "submitted"}), autonomy_decision=_AutonomyDecision(), feedback={}, run_id="trace-run-9", step_index=4)
+    context = artifacts.cycle_result.verification_result["context"]
+    assert context["action"]["run_id"] == "trace-run-9"
+    assert context["action"]["step_index"] == 4
+    assert context["execution_receipt"]["run_id"] == "trace-run-9"
+    assert context["execution_receipt"]["step_index"] == 4
+    assert artifacts.feedback["headless_step_artifact"]["payload"] == {"recipient": {"id": "customer-9"}, "message": "hello"}

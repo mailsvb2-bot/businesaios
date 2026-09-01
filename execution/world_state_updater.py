@@ -46,7 +46,10 @@ def _sanitize_history_row(row: Mapping[str, Any], *, updated_at: str) -> dict[st
     sanitized = {
         'action_type': str(row.get('action_type') or '').strip(),
         'action_id': str(row.get('action_id') or '').strip(),
+        'intent_id': str(row.get('intent_id') or '').strip(),
         'decision_id': str(row.get('decision_id') or '').strip(),
+        'tenant_id': str(row.get('tenant_id') or '').strip(),
+        'business_id': str(row.get('business_id') or '').strip(),
         'correlation_id': str(row.get('correlation_id') or '').strip(),
         'verified': bool(row.get('verified', False)),
         'verification_status': str(row.get('verification_status') or row.get('status') or '').strip(),
@@ -65,11 +68,14 @@ def _sanitize_history_row(row: Mapping[str, Any], *, updated_at: str) -> dict[st
     return sanitized
 
 
-def _history_row_key(row: Mapping[str, Any]) -> tuple[str, str, str, str, str, str]:
+def _history_row_key(row: Mapping[str, Any]) -> tuple[str, str, str, str, str, str, str, str, str]:
     return (
         str(row.get("action_type") or ""),
         str(row.get("action_id") or ""),
+        str(row.get("intent_id") or ""),
         str(row.get("decision_id") or ""),
+        str(row.get("tenant_id") or ""),
+        str(row.get("business_id") or ""),
         str(row.get("correlation_id") or ""),
         str(row.get("verification_status") or row.get("status") or ""),
         str(row.get("external_ref") or ""),
@@ -78,7 +84,7 @@ def _history_row_key(row: Mapping[str, Any]) -> tuple[str, str, str, str, str, s
 
 def _compact_history(history: list[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
     deduped: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str, str, str, str]] = set()
+    seen: set[tuple[str, str, str, str, str, str, str, str, str]] = set()
     for item in history:
         row = _safe_dict(item)
         if not row:

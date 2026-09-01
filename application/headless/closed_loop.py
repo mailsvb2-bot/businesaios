@@ -32,20 +32,28 @@ class HeadlessClosedLoopService:
     def __init__(self, *, orchestrator: ClosedLoopOrchestrator) -> None:
         self._orchestrator = orchestrator
 
-    def enrich(self, *, request: Any, state: Any, executable_action: ExecutableAction, action_result: ActionResult, execution_result: Any, autonomy_decision: Any, feedback: Mapping[str, Any]) -> HeadlessClosedLoopArtifacts:
+    def enrich(self, *, request: Any, state: Any, executable_action: ExecutableAction, action_result: ActionResult, execution_result: Any, autonomy_decision: Any, feedback: Mapping[str, Any], run_id: str, step_index: int) -> HeadlessClosedLoopArtifacts:
         from application.effects.effect_verification_bridge import (
             extract_router_result_from_feedback,
             normalize_feedback_contract,
         )
         from execution.closed_loop_orchestrator import ClosedLoopCycleInput
 
+        resolved_run_id = str(run_id or "").strip()
+        if not resolved_run_id:
+            raise ValueError("run_id is required")
+        resolved_step_index = int(step_index)
+        if resolved_step_index < 0:
+            raise ValueError("step_index must be >= 0")
         original = dict(feedback or {})
         normalized = normalize_feedback_contract(feedback)
+        action_payload = self._build_action_payload(request=request, executable_action=executable_action, autonomy_decision=autonomy_decision, run_id=resolved_run_id, step_index=resolved_step_index)
+        execution_receipt = self._build_execution_receipt(executable_action=executable_action, execution_result=execution_result, action_result=action_result, autonomy_decision=autonomy_decision, run_id=resolved_run_id, step_index=resolved_step_index)
         cycle = self._orchestrator.run_cycle(
             cycle_input=ClosedLoopCycleInput(
-                action=self._build_action_payload(request=request, executable_action=executable_action, autonomy_decision=autonomy_decision),
+                action=action_payload,
                 world_state=state,
-                execution_receipt=self._build_execution_receipt(executable_action=executable_action, execution_result=execution_result, action_result=action_result, autonomy_decision=autonomy_decision),
+                execution_receipt=execution_receipt,
                 feedback=normalized,
                 router_evidence=extract_router_result_from_feedback(normalized),
                 requested_tier=getattr(request, "autonomy_tier", "supervised"),
@@ -55,10 +63,13 @@ class HeadlessClosedLoopService:
                 blast_radius_allowed=not bool(getattr(autonomy_decision, "blocked_by_policy", False)),
             )
         )
-        return HeadlessClosedLoopArtifacts(action_result=action_result, cycle_result=cycle, feedback=self._merge_feedback(dict(normalized or {}), cycle, original_feedback=original))
+        return HeadlessClosedLoopArtifacts(
+            action_result=action_result, cycle_result=cycle,
+            feedback=self._merge_feedback(dict(normalized or {}), cycle, original_feedback=original, action=action_payload, execution_receipt=execution_receipt, executable_payload=dict(executable_action.payload or {})),
+        )
 
     @staticmethod
-    def _build_action_payload(*, request: Any, executable_action: ExecutableAction, autonomy_decision: Any) -> dict[str, Any]:
+    def _build_action_payload(*, request: Any, executable_action: ExecutableAction, autonomy_decision: Any, run_id: str, step_index: int) -> dict[str, Any]:
         from execution.action_catalog import get_action_spec
         from execution.action_verification_policy import determine_external_confirmation_mode
 
@@ -69,15 +80,19 @@ class HeadlessClosedLoopService:
         category = str(payload.get("action_category") or payload.get("effect_category") or payload.get("execution_category") or action_class or ("advisory" if action_class == "advisory" else "effectful"))
         verification_seed = {"action_type": executable_action.action_type, "action_category": category, "external_confirmation_mode": payload.get("external_confirmation_mode")}
         external_confirmation_mode = determine_external_confirmation_mode(verification_seed, default_mode="required")
-        return {**payload, "action_id": executable_action.action_id, "action_type": executable_action.action_type, "channel": executable_action.channel, "decision_id": executable_action.decision_id, "correlation_id": executable_action.correlation_id, "objective_name": executable_action.objective_name, "tenant_id": getattr(request, "tenant_id", ""), "business_id": getattr(request, "business_id", ""), "action_category": category, "external_confirmation_mode": external_confirmation_mode}
+        return {**payload, "action_id": executable_action.action_id, "intent_id": str(getattr(executable_action, "intent_id", "") or ""), "action_type": executable_action.action_type, "channel": executable_action.channel, "decision_id": executable_action.decision_id, "correlation_id": executable_action.correlation_id, "objective_name": executable_action.objective_name, "tenant_id": getattr(request, "tenant_id", ""), "business_id": getattr(request, "business_id", ""), "run_id": run_id, "step_index": int(step_index), "action_category": category, "external_confirmation_mode": external_confirmation_mode}
 
     @staticmethod
-    def _build_execution_receipt(*, executable_action: ExecutableAction, execution_result: Any, action_result: ActionResult, autonomy_decision: Any) -> dict[str, Any]:
+    def _build_execution_receipt(*, executable_action: ExecutableAction, execution_result: Any, action_result: ActionResult, autonomy_decision: Any, run_id: str, step_index: int) -> dict[str, Any]:
         output = _safe_dict(getattr(execution_result, "output", None))
-        return {"action_id": executable_action.action_id, "action_type": executable_action.action_type, "decision_id": executable_action.decision_id, "correlation_id": executable_action.correlation_id, "status": action_result.status, "summary": str(getattr(execution_result, "error", None) or output.get("message") or action_result.message or ""), "ok": bool(getattr(execution_result, "ok", False)), "error": getattr(execution_result, "error", None), "output": output, "attempted": action_result.attempted, "executed": action_result.executed, "verified": action_result.verified, "operator_required": action_result.operator_required, "autonomy_tier": str(getattr(autonomy_decision, "tier", "") or ""), "approval_required": bool(getattr(autonomy_decision, "approval_required", False)), "blocked_by_policy": bool(getattr(autonomy_decision, "blocked_by_policy", False))}
+        return {"action_id": executable_action.action_id, "intent_id": str(getattr(executable_action, "intent_id", "") or ""), "action_type": executable_action.action_type, "decision_id": executable_action.decision_id, "correlation_id": executable_action.correlation_id, "run_id": run_id, "step_index": int(step_index), "status": action_result.status, "summary": str(getattr(execution_result, "error", None) or output.get("message") or action_result.message or ""), "ok": bool(getattr(execution_result, "ok", False)), "error": getattr(execution_result, "error", None), "output": output, "attempted": action_result.attempted, "executed": action_result.executed, "verified": action_result.verified, "operator_required": action_result.operator_required, "autonomy_tier": str(getattr(autonomy_decision, "tier", "") or ""), "approval_required": bool(getattr(autonomy_decision, "approval_required", False)), "blocked_by_policy": bool(getattr(autonomy_decision, "blocked_by_policy", False))}
 
     @staticmethod
-    def _merge_feedback(feedback: dict[str, Any], cycle_result: ClosedLoopCycleResult, *, original_feedback: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    def _merge_feedback(
+        feedback: dict[str, Any], cycle_result: ClosedLoopCycleResult, *, original_feedback: Mapping[str, Any] | None = None,
+        action: Mapping[str, Any] | None = None, execution_receipt: Mapping[str, Any] | None = None,
+        executable_payload: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
         from application.effects.canonical_execution_feedback import (
             canonical_execution_feedback,
             canonical_headless_step_artifact,
@@ -97,11 +112,11 @@ class HeadlessClosedLoopService:
         feedback["next_tier_context"] = dict(cycle_result.next_tier_context or {})
         feedback["opportunity_signals"] = list(cycle_result.opportunity_signals or [])
         feedback["memory_evidence_patch"] = dict(cycle_result.persisted_memory_evidence or {})
-        snapshot = canonical_execution_feedback(feedback=feedback)
+        snapshot = canonical_execution_feedback(feedback=feedback, action=action, execution_receipt=execution_receipt)
         feedback["execution_feedback"] = snapshot
         feedback["persisted_outcome"] = canonical_persisted_outcome(snapshot)
         feedback["world_state_row"] = canonical_world_state_row(snapshot)
-        feedback["headless_step_artifact"] = canonical_headless_step_artifact(feedback=feedback)
+        feedback["headless_step_artifact"] = canonical_headless_step_artifact(feedback=feedback, action=action, execution_receipt=execution_receipt, executable_payload=executable_payload)
         return feedback
 
 

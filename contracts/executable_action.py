@@ -13,6 +13,7 @@ class ExecutableAction:
     decision_id: str = ''
     correlation_id: str = ''
     objective_name: str = 'profit_adjusted_growth'
+    intent_id: str = ''
 
     def validate_contract(self) -> list[str]:
         issues: list[str] = []
@@ -41,4 +42,5 @@ class ExecutableAction:
             'decision_id': self.decision_id,
             'correlation_id': self.correlation_id,
             'objective_name': self.objective_name,
+            'intent_id': self.intent_id,
         }

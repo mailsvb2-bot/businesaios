@@ -6,9 +6,17 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from application.effects.effect_outcome_vocabulary import normalize_outcome_status, outcome_is_verified
-from application.evidence.evidence_feedback_state import apply_feedback_to_world_state as _apply_feedback_world_state
-from execution.canonical_persistence_vocabulary import canonical_memory_record, canonical_persistence_outcome_record
+from application.effects.effect_outcome_vocabulary import (
+    normalize_outcome_status,
+    outcome_is_verified,
+)
+from application.evidence.evidence_feedback_state import (
+    apply_feedback_to_world_state as _apply_feedback_world_state,
+)
+from execution.canonical_persistence_vocabulary import (
+    canonical_memory_record,
+    canonical_persistence_outcome_record,
+)
 from execution.evidence_persistence_feedback import (
     compact_evidence_payload as _compact_evidence_payload,
 )
@@ -40,7 +48,6 @@ def _text(value: object) -> str:
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
-
 
 
 @dataclass(frozen=True)
@@ -116,29 +123,53 @@ class EvidencePersistenceService:
             logger=logger,
         )
 
-    def build_feedback_artifacts(self, *, verification_result: Mapping[str, Any] | None) -> dict[str, Any]:
-        persisted_outcome = _compact_verification_payload(verification_result)
-        persisted_evidence = _compact_evidence_payload(verification_result)
+    def build_feedback_artifacts(
+        self,
+        *,
+        verification_result: Mapping[str, Any] | None,
+        action: Mapping[str, Any] | None = None,
+        execution_receipt: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        verification_payload = _safe_dict(verification_result)
+        context = _safe_dict(verification_payload.get('context'))
+        action_payload = _safe_dict(action) or _safe_dict(context.get('action'))
+        execution_payload = _safe_dict(execution_receipt) or _safe_dict(context.get('execution_receipt'))
+        step_index_value = action_payload.get('step_index')
+        if step_index_value is None:
+            step_index_value = execution_payload.get('step_index')
+        step_index = int(step_index_value or 0)
+        persisted_outcome = _compact_verification_payload(
+            verification_payload,
+            action=action_payload,
+            execution_receipt=execution_payload,
+        )
+        persisted_evidence = _compact_evidence_payload(verification_payload)
         receipt = {
-            'persistence_key': _persistence_key(outcome=persisted_outcome),
+            'persistence_key': _persistence_key(
+                tenant_id=_text(action_payload.get('tenant_id') or execution_payload.get('tenant_id')),
+                business_id=_text(action_payload.get('business_id') or execution_payload.get('business_id')),
+                run_id=_text(action_payload.get('run_id') or action_payload.get('decision_id') or execution_payload.get('decision_id')),
+                step_index=step_index,
+                outcome=persisted_outcome,
+            ),
             'persisted_at': _utc_now().isoformat(),
         }
         payload = {
             'persisted_outcome': persisted_outcome,
             'persisted_evidence': persisted_evidence,
             'persistence_receipt': self._attach_reliability_receipt(
-                tenant_id=self._tenant_default,
-                business_id='',
-                run_id='feedback-artifacts',
-                step_index=0,
+                tenant_id=_text(action_payload.get('tenant_id') or execution_payload.get('tenant_id')) or self._tenant_default,
+                business_id=_text(action_payload.get('business_id') or execution_payload.get('business_id')),
+                run_id=_text(action_payload.get('run_id') or action_payload.get('decision_id') or execution_payload.get('decision_id')) or 'feedback-artifacts',
+                step_index=step_index,
                 action_id=_text(persisted_outcome.get('action_id')),
                 action_type=_text(persisted_outcome.get('action_type')),
-                verification_result=verification_result,
-                execution_result={},
+                verification_result=verification_payload,
+                execution_result=execution_payload,
                 receipt=receipt,
             ),
         }
-        verification = _safe_dict(_safe_dict(verification_result).get('verification'))
+        verification = _safe_dict(verification_payload.get('verification'))
         engine = _safe_dict(verification.get('engine'))
         persistence = _safe_dict(engine.get('persistence'))
         if persistence:
@@ -270,6 +301,7 @@ class EvidencePersistenceService:
         )
         return PersistenceArtifacts(evidence_records=evidence_records, outcome_record=outcome_record, memory_record=memory_record, persistence_receipt=receipt)
 
+
 def apply_feedback_to_world_state(
     *,
     world_state: Any,
@@ -290,11 +322,9 @@ def apply_feedback_to_world_state(
     )
 
 
-
 __all__ = [
     'CANON_EVIDENCE_PERSISTENCE',
     'EvidencePersistenceService',
     'PersistenceArtifacts',
     'apply_feedback_to_world_state',
 ]
-

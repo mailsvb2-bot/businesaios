@@ -36,8 +36,21 @@ def refs_from_verification(verification_result: Mapping[str, Any] | None) -> lis
     return [str(item) for item in refs if str(item).strip()]
 
 
-def compact_verification_payload(verification_result: Mapping[str, Any] | None) -> dict[str, Any]:
-    snapshot = canonical_execution_feedback(verification_result=verification_result)
+def compact_verification_payload(
+    verification_result: Mapping[str, Any] | None,
+    *,
+    action: Mapping[str, Any] | None = None,
+    execution_receipt: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = _safe_dict(verification_result)
+    context = _safe_dict(payload.get('context'))
+    resolved_action = _safe_dict(action) or _safe_dict(context.get('action'))
+    resolved_receipt = _safe_dict(execution_receipt) or _safe_dict(context.get('execution_receipt'))
+    snapshot = canonical_execution_feedback(
+        verification_result=payload,
+        action=resolved_action,
+        execution_receipt=resolved_receipt,
+    )
     return canonical_persisted_outcome(snapshot)
 
 
