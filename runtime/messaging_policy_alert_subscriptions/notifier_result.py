@@ -7,3 +7,4 @@ from dataclasses import dataclass
 class AlertNotifierResult:
     notifications_total: int
     notifications_sent: int
+    pending_approval_ids: tuple[str, ...] = ()

@@ -9,7 +9,4 @@ class TenantScopedDedupStoreFactory:
         self._settings_gateway = settings_gateway
 
     def for_tenant(self, *, tenant_id: str):
-        return PersistentAlertNotificationDedupStore(
-            settings_gateway=self._settings_gateway,
-            tenant_id=normalize_tenant_scope(tenant_id, allow_unknown=True),
-        )
+        return PersistentAlertNotificationDedupStore(settings_gateway=self._settings_gateway, tenant_id=normalize_tenant_scope(tenant_id, allow_unknown=True))

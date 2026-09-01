@@ -177,3 +177,37 @@ def test_legacy_provider_resume_still_rejects_non_send_message_archived_action()
         assert str(exc) == "provider_approval_resume_requires_send_message_v1"
     else:
         raise AssertionError("legacy approval without bound resume context must retain archive-action restriction")
+
+
+def test_provider_approval_resume_finalizes_alert_dedup_only_after_verified_delivery():
+    completed = []
+
+    class _Store:
+        def get(self, approval_id):
+            return SimpleNamespace(status=SimpleNamespace(value='approved'), request=SimpleNamespace(approval_id=approval_id, tenant_id='tenant-a', subject_id='dec-1', metadata={'action_name': 'provider.slack_messaging.message_send', 'decision_id': 'dec-1', 'approval_resume_context': {'provider_key': 'slack_messaging', 'business_id': 'biz-a', 'operation': 'message_send', 'payload': {'channel': 'C1', 'text': 'hello'}}}))
+
+    class _Service:
+        def execute_queued_provider_sync(self, **kwargs):
+            return {'result': {'accepted': True, 'status': 'live_executed', 'parsed_response': {'resource_id': 'msg-1'}}}
+
+    envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='domain_action@v1', payload={'tenant_id': 'tenant-a'}))
+    handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: _Service(), approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope, approval_completion_handler=lambda **kwargs: completed.append(kwargs))
+    handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
+    assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1'}]
+
+
+def test_provider_approval_resume_does_not_finalize_alert_dedup_without_delivery_receipt():
+    completed = []
+
+    class _Store:
+        def get(self, approval_id):
+            return SimpleNamespace(status=SimpleNamespace(value='approved'), request=SimpleNamespace(approval_id=approval_id, tenant_id='tenant-a', subject_id='dec-1', metadata={'action_name': 'provider.slack_messaging.message_send', 'decision_id': 'dec-1', 'approval_resume_context': {'provider_key': 'slack_messaging', 'business_id': 'biz-a', 'operation': 'message_send', 'payload': {'channel': 'C1', 'text': 'hello'}}}))
+
+    class _Service:
+        def execute_queued_provider_sync(self, **kwargs):
+            return {'result': {'accepted': False, 'status': 'provider_queue_failed', 'error': {'category': 'failed'}}}
+
+    envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='domain_action@v1', payload={'tenant_id': 'tenant-a'}))
+    handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: _Service(), approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope, approval_completion_handler=lambda **kwargs: completed.append(kwargs))
+    handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
+    assert completed == []

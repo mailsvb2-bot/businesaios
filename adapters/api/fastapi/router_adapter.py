@@ -203,7 +203,13 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     approval_handlers = ApprovalRouteHandlers()
     admin_handlers = AdminRouteHandlers(tenant_registry=tenant_registry, tenant_policy_store=tenant_policy_store)
     connector_admin_handlers = ConnectorAdminRouteHandlers()
-    provider_admin_handlers = ProviderAdminRouteHandlers()
+    runtime_infra = _resolve_runtime_infra(dependency_container.boot_result) if dependency_container is not None else None
+    approval_completion_handler = None
+    if runtime_infra is not None and getattr(runtime_infra, 'settings_gateway', None) is not None:
+        from runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service import TenantAwareAlertNotificationMarkSentService
+        from runtime.messaging_policy_alert_dedup_persistent.tenant_store_factory import TenantScopedDedupStoreFactory
+        approval_completion_handler = TenantAwareAlertNotificationMarkSentService(store_factory=TenantScopedDedupStoreFactory(settings_gateway=runtime_infra.settings_gateway)).finalize_approval
+    provider_admin_handlers = ProviderAdminRouteHandlers(approval_completion_handler=approval_completion_handler)
     metrics_handlers = MetricsRouteHandlers(metrics=resolve_metrics(dependency_container=dependency_container))
     webhook_handlers = WebhookRouteHandlers(
         verifier=build_webhook_verifier(),
@@ -216,7 +222,6 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     analytics_manifest_chain_db_path = str(dependency_container.analytics_manifest_chain_db_path()) if dependency_container is not None else 'runtime/data/analytics_manifest_chain.sqlite3'
     analytics_export_root = str(dependency_container.analytics_export_root()) if dependency_container is not None else 'runtime/data/analytics_exports'
     analytics_handlers = AnalyticsRouteHandlers(event_store=telemetry_event_store, snapshot_db_path=analytics_snapshot_db_path) if telemetry_event_store is not None else None
-    runtime_infra = _resolve_runtime_infra(dependency_container.boot_result) if dependency_container is not None else None
     queue_dispatcher = getattr(runtime_infra, 'job_dispatcher', None) if runtime_infra is not None else None
     queue_bridge = None
     if queue_dispatcher is not None:

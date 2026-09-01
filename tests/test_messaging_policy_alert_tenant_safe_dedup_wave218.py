@@ -38,3 +38,18 @@ def test_tenant_aware_suppression_uses_tenant_scoped_state(monkeypatch):
     _, d2 = svc.evaluate(tenant_id='tenant-2', recipient_user_id='ceo', channel='telegram', alert_code='a1', affected_user_id='u1')
     assert d1.should_send is False
     assert d2.should_send is True
+
+
+def test_tenant_mark_service_finalizes_pending_approval(monkeypatch):
+    from runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service import TenantAwareAlertNotificationMarkSentService
+    import runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service as mod
+
+    monkeypatch.setattr(mod, 'now_epoch_s', lambda: 200)
+    gw = _GW()
+    factory = TenantScopedDedupStoreFactory(settings_gateway=gw)
+    mark = TenantAwareAlertNotificationMarkSentService(store_factory=factory)
+    mark.mark_pending(tenant_id='tenant-1', dedup_key='tenant-1|biz-a|ceo|slack|a1|u1', approval_id='ap-1')
+    assert mark.finalize_approval(tenant_id='tenant-1', approval_id='ap-1') is True
+    rec = factory.for_tenant(tenant_id='tenant-1').get(dedup_key='tenant-1|biz-a|ceo|slack|a1|u1')
+    assert rec is not None and rec.sent_at_epoch_s == 200 and not rec.is_pending
+    assert mark.finalize_approval(tenant_id='tenant-2', approval_id='ap-1') is False

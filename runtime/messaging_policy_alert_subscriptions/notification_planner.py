@@ -16,5 +16,5 @@ class AlertNotificationPlanner:
             alert_item = by_code.get(str(item.alert_code))
             if alert_item is None:
                 continue
-            items.append(AlertNotificationItem(tenant_id=tenant_scope, recipient_user_id=item.recipient_user_id, channel=item.channel, text=build_alert_notification_text(alert_item=alert_item, tenant_id=tenant_scope, affected_user_id=str(affected_user_id or ""), date_from=str(date_from or ""), date_to=str(date_to or "")), alert_code=item.alert_code, alert_level=item.alert_level, affected_user_id=item.affected_user_id, business_id=item.business_id))
+            items.append(AlertNotificationItem(tenant_id=tenant_scope, recipient_user_id=item.recipient_user_id, channel=item.channel, text=build_alert_notification_text(alert_item=alert_item, tenant_id=tenant_scope, affected_user_id=str(affected_user_id or ""), date_from=str(date_from or ""), date_to=str(date_to or "")), alert_code=item.alert_code, alert_level=item.alert_level, affected_user_id=item.affected_user_id, business_id=str(getattr(item, "business_id", "") or "")))
         return AlertNotificationPlan(items=tuple(items))

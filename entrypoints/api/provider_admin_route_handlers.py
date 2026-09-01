@@ -17,6 +17,7 @@ class ProviderAdminRouteHandlers:
     service_factory: Any = build_business_autonomy_guarded_service
     approval_store_factory: Any = build_default_approval_store
     decision_loader: Any = load_archived_decision
+    approval_completion_handler: Any = None
     def _service(self, business_id: str):
         service = self.service_factory(business_id=business_id)
         return getattr(service, "_provider_admin_service", service)
@@ -214,6 +215,10 @@ class ProviderAdminRouteHandlers:
             provider_payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(provider_key), operation='message_send', payload={'user_id': str(archived_payload.get('user_id') or ''), 'text': str(archived_payload.get('text') or ''), **{key: archived_payload[key] for key in ('peer_id', 'chat_id', 'random_id', 'channel_id') if archived_payload.get(key) not in {None, ''}}})
         provider_payload = {**provider_payload, '_approval': {'decision_id': decision_id, 'execution_id': str(record.request.subject_id), 'approval_id': str(record.request.approval_id)}}
         execution = service.execute_queued_provider_sync(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, operation='message_send', mode='live', payload=provider_payload, worker_id='provider-approval-resume')
+        result = dict(execution.get('result') or {})
+        delivered = bool(result.get('accepted')) and str(result.get('status') or '') == 'live_executed' and bool(str(dict(result.get('parsed_response') or {}).get('resource_id') or '').strip())
+        if delivered and callable(self.approval_completion_handler):
+            self.approval_completion_handler(tenant_id=str(tenant_id), approval_id=str(record.request.approval_id))
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'approval_id': record.request.approval_id, 'decision_id': decision_id, 'execution': execution}
     def tick_provider_sync_queue(self, *, tenant_id: str, worker_id: str = 'provider-runtime-worker') -> dict[str, Any]:
         return self._service('default-business').tick_provider_sync_queue(tenant_id=tenant_id, worker_id=worker_id)
