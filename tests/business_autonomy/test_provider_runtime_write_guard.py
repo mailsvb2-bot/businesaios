@@ -151,6 +151,12 @@ def _approved_native_guard(*, provider_key: str, business_id: str, message_paylo
     approval_id = str(evidence['approval_id'])
     record = workflow.get(approval_id)
     assert record is not None and record.request.metadata['approval_request_fingerprint']
+    assert record.request.metadata['approval_resume_context'] == {
+        'provider_key': provider_key,
+        'business_id': business_id,
+        'operation': 'message_send',
+        'payload': message_payload,
+    }
     workflow.evaluate(ApprovalDecision(approval_id=approval_id, tenant_id='tenant-a', actor_id='owner-approver', role_id=RoleId.OWNER, outcome=ApprovalOutcome.APPROVE, rationale='approved'))
     payload['_approval'] = {**approval, 'approval_id': approval_id}
     return provider, guard, payload

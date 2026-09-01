@@ -61,8 +61,10 @@ class ProviderRuntimeWriteGuard:
         if not str(tenant_id or "").strip() or not str(business_id or "").strip() or not decision_id or not execution_id:
             return {"allowed": False, "reason": "approval_context_missing", "required_fields": ["tenant_id", "business_id", "_approval.decision_id", "_approval.execution_id", "_approval.approval_id"]}
         action_name, gate = f"provider.{provider.provider_key}.{operation}", self.approval_gate or build_default_approval_execution_gate()
-        ctx = ActionExecutionContext(tenant_id=str(tenant_id).strip(), user_id=None, action_name=action_name, payload={"provider_key": provider.provider_key, "business_id": str(business_id).strip(), "operation": operation, "payload": visible}, metadata={"decision_id": decision_id}, execution_id=execution_id)
-        impact = ActionImpact(action_name=action_name, category=ActionCategory.OUTBOUND, outbound_count=1, requires_human_approval=True, dimensions={"provider_key": provider.provider_key, "business_id": str(business_id).strip()})
+        business_scope = str(business_id).strip()
+        resume_context = {"provider_key": provider.provider_key, "business_id": business_scope, "operation": operation, "payload": visible}
+        ctx = ActionExecutionContext(tenant_id=str(tenant_id).strip(), user_id=None, action_name=action_name, payload={"provider_key": provider.provider_key, "business_id": business_scope, "operation": operation, "payload": visible}, metadata={"decision_id": decision_id, "approval_resume_context": resume_context}, execution_id=execution_id)
+        impact = ActionImpact(action_name=action_name, category=ActionCategory.OUTBOUND, outbound_count=1, requires_human_approval=True, dimensions={"provider_key": provider.provider_key, "business_id": business_scope})
         verdict = gate.evaluate(ctx=ctx, impact=impact, autonomy_tier="supervised", external_confirmation_mode="required", approval_policy={"force_human_approval": True, "allow_operator_override": False, "auto_submit_approval": True}, metadata={"decision_id": decision_id, "requires_manual_review": True, "tags": ["provider_outbound", provider.provider_key]}, approval_id=str(approval.get("approval_id") or "").strip() or None, requested_by="provider_runtime")
         evidence = verdict.to_dict()
         if verdict.allowed:

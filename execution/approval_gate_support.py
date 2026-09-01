@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any
 from collections.abc import Mapping
+from copy import deepcopy
+from typing import Any
 from uuid import uuid4
 
 from contracts.action_impact_contract import ActionExecutionContext, ActionImpact
-from execution.approval_policy_engine import ApprovalPolicyDecision
 from execution.approval_gate_fingerprint import _impact_summary
+from execution.approval_policy_engine import ApprovalPolicyDecision
 from execution.canonical_operator_handoff import canonical_operator_handoff
 from governance.approval_contract import ApprovalRecord, ApprovalRequest
 
@@ -103,6 +104,8 @@ def build_approval_request(*, ctx: ActionExecutionContext, impact: ActionImpact,
         required_role_groups=policy.required_role_groups,
         min_distinct_approvers=policy.min_distinct_approvers,
     )
+    resume_context = _safe_dict(ctx.metadata).get('approval_resume_context')
+    persisted_resume_context = deepcopy(dict(resume_context)) if isinstance(resume_context, Mapping) else None
     return ApprovalRequest(
         approval_id=approval_id,
         tenant_id=ctx.tenant_id,
@@ -123,6 +126,7 @@ def build_approval_request(*, ctx: ActionExecutionContext, impact: ActionImpact,
             'external_confirmation_mode': external_confirmation_mode,
             'impact_summary': _impact_summary(impact),
             'policy': dict(policy.to_dict()),
+            **({'approval_resume_context': persisted_resume_context} if persisted_resume_context is not None else {}),
         },
     )
 

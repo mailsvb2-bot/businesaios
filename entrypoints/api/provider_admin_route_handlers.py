@@ -169,7 +169,8 @@ class ProviderAdminRouteHandlers:
             raise RuntimeError('cross_tenant_provider_approval_resume_forbidden')
         if str(getattr(record.status, 'value', record.status)) != 'approved':
             raise RuntimeError(f'provider_approval_not_approved:{getattr(record.status, "value", record.status)}')
-        action_name, decision_id = str(dict(record.request.metadata or {}).get('action_name') or '').strip(), str(dict(record.request.metadata or {}).get('decision_id') or '').strip()
+        request_metadata = dict(record.request.metadata or {})
+        action_name, decision_id = str(request_metadata.get('action_name') or '').strip(), str(request_metadata.get('decision_id') or '').strip()
         provider_key = {'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging', 'provider.slack_messaging.message_send': 'slack_messaging', 'provider.discord_messaging.message_send': 'discord_messaging'}.get(action_name)
         if provider_key is None:
             raise RuntimeError(f'approval_not_provider_message_send:{action_name}')
@@ -181,19 +182,37 @@ class ProviderAdminRouteHandlers:
             raise RuntimeError('provider_approval_decision_archive_mismatch')
         if str(getattr(decision, 'action', '') or '') != 'send_message@v1':
             raise RuntimeError('provider_approval_resume_requires_send_message_v1')
-        payload = dict(getattr(decision, 'payload', {}) or {})
-        expected_channel = {'vk_messaging': 'vk', 'max_messaging': 'max', 'slack_messaging': 'slack', 'discord_messaging': 'discord'}[provider_key]
-        business_id = str(payload.get('business_id') or '').strip()
-        if str(payload.get('tenant_id') or tenant_id) != str(tenant_id):
+        archived_payload = dict(getattr(decision, 'payload', {}) or {})
+        if str(archived_payload.get('tenant_id') or tenant_id) != str(tenant_id):
             raise RuntimeError('provider_approval_resume_tenant_mismatch')
-        if normalize_channel(str(payload.get('channel') or '')) != expected_channel:
-            raise RuntimeError('provider_approval_resume_channel_mismatch')
+        resume_context = request_metadata.get('approval_resume_context')
+        provider_payload: dict[str, Any] | None = None
+        if isinstance(resume_context, Mapping):
+            context = dict(resume_context)
+            if str(context.get('provider_key') or '').strip() != provider_key:
+                raise RuntimeError('provider_approval_resume_provider_mismatch')
+            if str(context.get('operation') or '').strip() != 'message_send':
+                raise RuntimeError('provider_approval_resume_operation_mismatch')
+            business_id = str(context.get('business_id') or '').strip()
+            approved_payload = context.get('payload')
+            if not isinstance(approved_payload, Mapping):
+                raise RuntimeError('provider_approval_resume_payload_missing')
+            provider_payload = dict(approved_payload)
+            if any(str(key).startswith('_') for key in provider_payload):
+                raise RuntimeError('provider_approval_resume_payload_contains_internal_controls')
+        else:
+            expected_channel = {'vk_messaging': 'vk', 'max_messaging': 'max', 'slack_messaging': 'slack', 'discord_messaging': 'discord'}[provider_key]
+            business_id = str(archived_payload.get('business_id') or '').strip()
+            if normalize_channel(str(archived_payload.get('channel') or '')) != expected_channel:
+                raise RuntimeError('provider_approval_resume_channel_mismatch')
+            if provider_key in {'slack_messaging', 'discord_messaging'} and not str(archived_payload.get('channel_id') or '').strip():
+                raise RuntimeError('provider_approval_resume_channel_id_missing')
         if not business_id:
             raise RuntimeError('provider_approval_resume_business_id_missing')
-        if provider_key in {'slack_messaging', 'discord_messaging'} and not str(payload.get('channel_id') or '').strip():
-            raise RuntimeError('provider_approval_resume_channel_id_missing')
         service = self._service(business_id)
-        provider_payload = {**ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(provider_key), operation='message_send', payload={'user_id': str(payload.get('user_id') or ''), 'text': str(payload.get('text') or ''), **{key: payload[key] for key in ('peer_id', 'chat_id', 'random_id', 'channel_id') if payload.get(key) not in {None, ''}}}), '_approval': {'decision_id': decision_id, 'execution_id': str(record.request.subject_id), 'approval_id': str(record.request.approval_id)}}
+        if provider_payload is None:
+            provider_payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(provider_key), operation='message_send', payload={'user_id': str(archived_payload.get('user_id') or ''), 'text': str(archived_payload.get('text') or ''), **{key: archived_payload[key] for key in ('peer_id', 'chat_id', 'random_id', 'channel_id') if archived_payload.get(key) not in {None, ''}}})
+        provider_payload = {**provider_payload, '_approval': {'decision_id': decision_id, 'execution_id': str(record.request.subject_id), 'approval_id': str(record.request.approval_id)}}
         execution = service.execute_queued_provider_sync(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, operation='message_send', mode='live', payload=provider_payload, worker_id='provider-approval-resume')
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'approval_id': record.request.approval_id, 'decision_id': decision_id, 'execution': execution}
     def tick_provider_sync_queue(self, *, tenant_id: str, worker_id: str = 'provider-runtime-worker') -> dict[str, Any]:
