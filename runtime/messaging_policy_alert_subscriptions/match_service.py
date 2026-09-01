@@ -10,5 +10,5 @@ class AlertSubscriptionMatchService:
         for subscription in tuple(subscriptions or ()):
             for alert_item in tuple(alerts or ()):
                 if subscription_matches(subscription=subscription, alert_item=alert_item, affected_user_id=str(affected_user_id or "")):
-                    out.append(MatchedSubscription(recipient_user_id=subscription.recipient_user_id, channel=subscription.channel, alert_code=str(alert_item.code), alert_level=str(alert_item.level), affected_user_id=str(affected_user_id or "")))
+                    out.append(MatchedSubscription(recipient_user_id=subscription.recipient_user_id, channel=subscription.channel, alert_code=str(alert_item.code), alert_level=str(alert_item.level), affected_user_id=str(affected_user_id or ""), business_id=subscription.business_id))
         return tuple(out)

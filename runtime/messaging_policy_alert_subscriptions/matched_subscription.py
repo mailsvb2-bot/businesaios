@@ -10,3 +10,4 @@ class MatchedSubscription:
     alert_code: str
     alert_level: str
     affected_user_id: str
+    business_id: str = ""
