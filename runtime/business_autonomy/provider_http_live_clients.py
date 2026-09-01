@@ -36,11 +36,11 @@ class VendorHttpLiveTransport:
         public_request = {**prepared, 'headers': {k: ('***' if str(k).lower() in {'authorization', 'x-shopify-access-token', 'access-token', 'developer-token', 'x-viber-auth-token'} else v) for k, v in dict(prepared.get('headers') or {}).items()}}
         if isinstance(prepared.get('form_body'), Mapping):
             public_request['form_body'] = {k: ('***' if k == 'access_token' else v) for k, v in prepared['form_body'].items()}
-        guarded_native_write = provider.provider_key in {'vk_messaging', 'max_messaging'}
-        read_only_native = provider.provider_key in {'slack_messaging', 'discord_messaging'}
+        guarded_native_write = provider.provider_key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging'}
+        bot_token_native = provider.provider_key in {'slack_messaging', 'discord_messaging'}
         probe_only_native = provider.provider_key in {'line_messaging', 'viber_messaging'}
         native_write_approved = operation == 'message_send' and bool(payload.get('_provider_write_approved', False))
-        if not self.bind_live_network or not bool(payload.get('_allow_network', False)) or (guarded_native_write and operation not in {'health_probe', 'message_read'} and not native_write_approved) or (read_only_native and operation not in {'health_probe', 'message_read'}) or (probe_only_native and operation != 'health_probe'):
+        if not self.bind_live_network or not bool(payload.get('_allow_network', False)) or (guarded_native_write and operation not in {'health_probe', 'message_read'} and not native_write_approved) or (probe_only_native and operation != 'health_probe'):
             return {
                 '_prepared_only': True,
                 'provider_key': provider.provider_key,
@@ -54,12 +54,20 @@ class VendorHttpLiveTransport:
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_access_token_missing'}
         if probe_only_native and (('{channel_access_token}' in str(prepared)) or ('{auth_token}' in str(prepared))):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_probe_token_missing'}
-        if read_only_native and '{bot_token}' in str(prepared):
+        if bot_token_native and '{bot_token}' in str(prepared):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_bot_token_missing'}
-        if read_only_native and operation == 'message_read' and (((channel_id := str(normalized_payload.get('channel') or normalized_payload.get('channel_id') or '')) in {'', '{channel_id}'}) or (provider.provider_key == 'discord_messaging' and not (channel_id.isascii() and channel_id.isdigit()))):
+        if bot_token_native and operation == 'message_read' and (((channel_id := str(normalized_payload.get('channel') or normalized_payload.get('channel_id') or '')) in {'', '{channel_id}'}) or (provider.provider_key == 'discord_messaging' and not (channel_id.isascii() and channel_id.isdigit()))):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_message_read_payload_invalid'}
-        if native_write_approved and ((provider.provider_key == 'vk_messaging' and str(normalized_payload.get('peer_id') or '') in {'', '{peer_id}'}) or (provider.provider_key == 'max_messaging' and not (normalized_payload.get('chat_id') or normalized_payload.get('user_id'))) or not str(normalized_payload.get('message') or normalized_payload.get('text') or '').strip()):
-            return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_message_send_payload_invalid'}
+        if native_write_approved and operation == 'message_send':
+            channel_id = str(normalized_payload.get('channel') or normalized_payload.get('channel_id') or '')
+            invalid_recipient = (
+                (provider.provider_key == 'vk_messaging' and str(normalized_payload.get('peer_id') or '') in {'', '{peer_id}'})
+                or (provider.provider_key == 'max_messaging' and not (normalized_payload.get('chat_id') or normalized_payload.get('user_id')))
+                or (provider.provider_key == 'slack_messaging' and channel_id in {'', '{channel_id}'})
+                or (provider.provider_key == 'discord_messaging' and not (channel_id.isascii() and channel_id.isdigit()))
+            )
+            if invalid_recipient or not str(normalized_payload.get('message') or normalized_payload.get('text') or '').strip():
+                return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_message_send_payload_invalid'}
         body, form = prepared.get('json_body'), prepared.get('form_body')
         raw = import_internal_attr('runtime._internal.http_transport', 'form_urlencode')(dict(form)) if isinstance(form, Mapping) else (None if body is None else json.dumps(body, sort_keys=True).encode('utf-8'))
         result = _sync_request(
@@ -71,16 +79,22 @@ class VendorHttpLiveTransport:
         )
         http_status = int(result.status or 599)
         payload_text = str(result.text or '')[:2000]
+        response_headers = {
+            str(key): str(value)
+            for key, value in dict(result.headers or {}).items()
+            if str(key).lower().startswith('x-ratelimit-') or str(key).lower() == 'retry-after'
+        }
         parsed = self.response_parsers.parse(
             provider=provider,
             operation=operation,
-            response={'http_status': http_status, 'response_body': payload_text, 'error_kind': result.error_kind},
+            response={'http_status': http_status, 'response_body': payload_text, 'response_headers': response_headers, 'error_kind': result.error_kind},
         )
         response: dict[str, Any] = {
             'provider_key': provider.provider_key,
             'network_capable': True,
             'http_status': http_status,
             'response_body': payload_text,
+            'response_headers': response_headers,
             'request': public_request,
             'parsed_response': parsed, '_response_ok': not result.error_kind and bool(parsed.get('ok')) and not parsed.get('error_code'),
         }
@@ -96,7 +110,10 @@ class VendorHttpLiveTransport:
         if provider.provider_key == 'line_messaging':
             return {'url': url, 'method': 'GET' if operation == 'health_probe' else 'POST', 'headers': headers, 'json_body': None if operation == 'health_probe' else dict(payload or {})}
         if provider.provider_key == 'viber_messaging':
-            body = dict(payload or {}); sender = dict(body.get('sender') or {}); sender['name'] = str(secrets.get('sender_name') or '{sender_name}') if str(sender.get('name') or '') in {'', '{sender_name}'} else str(sender['name']); body['sender'] = sender
+            body = dict(payload or {})
+            sender = dict(body.get('sender') or {})
+            sender['name'] = str(secrets.get('sender_name') or '{sender_name}') if str(sender.get('name') or '') in {'', '{sender_name}'} else str(sender['name'])
+            body['sender'] = sender
             return {'url': url, 'method': 'POST', 'headers': headers, 'json_body': {} if operation == 'health_probe' else body}
         if provider.provider_key == 'vk_messaging':
             form_body = dict(payload or {})

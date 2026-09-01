@@ -61,20 +61,21 @@ def test_slack_discord_live_probe_requires_bot_token_without_changing_dry_run() 
         assert live.metadata['missing_fields'] == ('bot_token',)
 
 
-def test_slack_discord_prepared_endpoints_remain_partial_truth() -> None:
+def test_slack_discord_guarded_write_truth_stays_non_live_without_external_proof() -> None:
     truth = provider_truth_map()
     for key in ('slack_messaging', 'discord_messaging'):
         row = truth[key]
-        assert row.has_real_endpoint is False
-        assert row.has_placeholder_endpoint is True
+        assert row.has_real_endpoint is True
+        assert row.has_placeholder_endpoint is False
         assert row.read_only_supported is True
-        assert row.status == ProviderTruthStatus.PARTIAL.value
+        assert row.write_supported is True
+        assert row.status == ProviderTruthStatus.READ_ONLY_READY.value
         assert row.live_ready is False
         assert row.required_credentials == ('webhook_secret',)
         assert row.health_requirements == ('webhook_secret', 'bot_token')
 
 
-def test_slack_discord_live_read_transport_enters_control_plane_without_claiming_live_write() -> None:
+def test_slack_discord_live_transport_enters_control_plane_without_claiming_unconditional_live_write() -> None:
     slack = provider_transport_binding_for_key('slack_messaging')
     discord = provider_transport_binding_for_key('discord_messaging')
     for binding in (slack, discord):
@@ -94,7 +95,8 @@ def test_slack_discord_live_read_transport_enters_control_plane_without_claiming
         assert runner['transport_bound'] is True
         assert runner['live_run_supported'] is True
         assert runner['live_read_supported'] is True
-        assert provider_truth_map()[key].write_supported is False
+        assert provider_truth_map()[key].write_supported is True
+        assert provider_truth_map()[key].live_ready is False
         live_client = admin.describe_provider_live_client(provider_key=key)
         assert live_client['network_capable'] is True
         assert live_client['transport_type'] == 'VendorHttpLiveTransport'

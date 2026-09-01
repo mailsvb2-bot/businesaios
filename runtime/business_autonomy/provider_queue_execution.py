@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderSyncRunResult
+from application.business_autonomy.provider_truth_matrix import provider_truth_map
 from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyncRuntime
 from runtime.business_autonomy.provider_runtime_write_guard import ProviderRuntimeWriteGuard
 from runtime.queue.job_contract import JobDispatchRequest, JobResult
@@ -52,13 +53,16 @@ class ProviderQueueExecutionRuntime:
                 job_id='', queued=False, status=guard_decision.status,
                 metadata={'queue_name': str(queue_name), 'job_type': _PROVIDER_JOB_TYPE, 'provider_key': provider.provider_key, 'provider_write_guard': guard_decision.to_metadata(), 'fail_closed_before_queue': True},
             )
-        execution_identity = str(dict(guard_decision.metadata.get('approval') or {}).get('subject_fingerprint') or '').strip() if normalized_mode == 'live' and normalized_operation == 'message_send' and provider.provider_key in {'vk_messaging', 'max_messaging'} else uuid4().hex
+        truth = provider_truth_map().get(provider.provider_key)
+        guarded_message_send = normalized_mode == 'live' and normalized_operation == 'message_send' and bool(truth and truth.write_supported and truth.approval_required)
+        approval_fingerprint = str(dict(guard_decision.metadata.get('approval') or {}).get('subject_fingerprint') or '').strip()
+        execution_identity = approval_fingerprint if guarded_message_send and approval_fingerprint else uuid4().hex
         normalized_payload = {'provider_key': provider.provider_key, 'business_id': str(business_id), 'operation': normalized_operation, 'mode': normalized_mode, 'payload': dict(payload or {})}
         job_id = f"provider-sync-{provider.provider_key}-{execution_identity[:32]}"
         req = JobDispatchRequest(
             tenant_id=str(tenant_id), job_id=job_id, queue_name=str(queue_name), job_type=_PROVIDER_JOB_TYPE, payload=normalized_payload,
             dedupe_key=f"{provider.provider_key}-{normalized_operation}-{execution_identity}",
-            max_attempts=1 if normalized_operation == 'message_send' and provider.provider_key in {'vk_messaging', 'max_messaging'} else (6 if provider.provider_key in {'vk_messaging', 'max_messaging'} else 8),
+            max_attempts=1 if guarded_message_send else (6 if provider.provider_key in {'vk_messaging', 'max_messaging'} else 8),
             tags=(f"provider:{provider.provider_key}", f"business:{business_id}"),
         )
         dispatch = JobDispatcher(store=self.store, idempotency_store=self.idempotency_store).dispatch(req)

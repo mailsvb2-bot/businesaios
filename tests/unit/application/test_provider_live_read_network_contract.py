@@ -212,10 +212,46 @@ def test_slack_discord_live_probe_and_read_use_native_bot_auth(monkeypatch, tmp_
         assert read.metadata['transport_response']['request']['headers']['Authorization'] == '***'
 
 
-def test_slack_discord_direct_send_stays_prepared_only_even_with_internal_write_marker(monkeypatch, tmp_path) -> None:
+def test_slack_discord_native_send_requires_internal_write_marker_and_preserves_delivery_evidence(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
+    cases = {
+        'slack_messaging': ({'channel_id': 'C123', 'text': 'hello'}, '{"ok":true,"channel":"C123","ts":"1700.0001"}', '1700.0001'),
+        'discord_messaging': ({'channel_id': '123', 'text': 'hello'}, '{"id":"999","channel_id":"123","content":"hello"}', '999'),
+    }
+    for key, (payload, response_body, resource_id) in cases.items():
+        provider, vault, calls = provider_map()[key], InMemorySecretVault(), []
+        _put(vault, provider, 'biz-a', 'webhook_secret', 'bridge-secret')
+        _put(vault, provider, 'biz-a', 'bot_token', 'token')
+        monkeypatch.setattr(
+            'runtime.business_autonomy.provider_http_live_clients._sync_request',
+            lambda **kwargs: (calls.append(kwargs) or SyncHTTPResult(status=200, headers={'X-RateLimit-Remaining': '49'}, json={}, text=response_body)),
+        )
+        transport = build_live_http_transports(vault, bind_live_network=True)[key]
+        blocked = transport.execute(
+            provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_send',
+            payload={**payload, '_allow_network': True},
+        )
+        assert blocked['_prepared_only'] is True and calls == []
+        sent = transport.execute(
+            provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_send',
+            payload={**payload, '_allow_network': True, '_provider_write_approved': True, '_provider_queue_execution': True},
+        )
+        assert sent['_response_ok'] is True and sent['parsed_response']['resource_id'] == resource_id
+        assert sent['parsed_response']['delivery_state'] == 'accepted'
+        assert sent['response_headers'] == {'X-RateLimit-Remaining': '49'}
+        assert b'_provider_write_approved' not in (calls[0]['body'] or b'') and b'_provider_queue_execution' not in (calls[0]['body'] or b'')
+
+
+def test_slack_discord_native_send_rejects_invalid_recipient_or_empty_text_before_network(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv('DATA_DIR', str(tmp_path / 'data'))
     monkeypatch.setattr('runtime.business_autonomy.provider_http_live_clients._sync_request', lambda **_kwargs: (_ for _ in ()).throw(AssertionError('network called')))
-    for key, payload in (('slack_messaging', {'channel_id': 'C123', 'text': 'hello'}), ('discord_messaging', {'channel_id': '123', 'text': 'hello'})):
+    cases = (
+        ('slack_messaging', {'channel_id': '', 'text': 'hello'}),
+        ('slack_messaging', {'channel_id': 'C123', 'text': ''}),
+        ('discord_messaging', {'channel_id': '123#', 'text': 'hello'}),
+        ('discord_messaging', {'channel_id': '123', 'text': ''}),
+    )
+    for key, payload in cases:
         provider, vault = provider_map()[key], InMemorySecretVault()
         _put(vault, provider, 'biz-a', 'webhook_secret', 'bridge-secret')
         _put(vault, provider, 'biz-a', 'bot_token', 'token')
@@ -223,7 +259,23 @@ def test_slack_discord_direct_send_stays_prepared_only_even_with_internal_write_
             provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_send',
             payload={**payload, '_allow_network': True, '_provider_write_approved': True},
         )
-        assert result['_prepared_only'] is True
+        assert result['_prepared_only'] is True and result['network_capable'] is False
+        assert result['reason'] == 'native_message_send_payload_invalid'
+
+
+def test_slack_discord_rate_limit_parser_preserves_retry_after_evidence() -> None:
+    providers, parsers = provider_map(), ProviderResponseParsers()
+    slack = parsers.parse(
+        provider=providers['slack_messaging'], operation='message_send',
+        response={'http_status': 200, 'response_headers': {'Retry-After': '2.2'}, 'response_body': '{"ok":false,"error":"ratelimited"}'},
+    )
+    discord = parsers.parse(
+        provider=providers['discord_messaging'], operation='message_send',
+        response={'http_status': 429, 'response_headers': {'Retry-After': '4'}, 'response_body': '{"message":"rate limited","retry_after":1.25,"global":false}'},
+    )
+    assert slack['error_category'] == 'rate_limit' and slack['retryable'] is True and slack['retry_after_seconds'] == 3
+    assert discord['error_category'] == 'rate_limit' and discord['retryable'] is True and discord['retry_after_seconds'] == 2
+    assert slack['delivery_state'] == discord['delivery_state'] == 'rejected'
 
 
 
