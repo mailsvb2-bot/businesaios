@@ -9,6 +9,7 @@ def test_parse_alert_subscriptions_form():
                     "recipient_user_id": "ceo-1",
                     "channel": "email",
                     "min_level": "critical",
+                    "business_id": "business-a",
                     "enabled": True,
                     "code_filters": ["low_success_rate"],
                     "user_scope": ["user-42"],
@@ -19,3 +20,4 @@ def test_parse_alert_subscriptions_form():
     assert len(out) == 1
     assert out[0]["channel"] == "email"
     assert out[0]["min_level"] == "critical"
+    assert out[0]["business_id"] == "business-a"

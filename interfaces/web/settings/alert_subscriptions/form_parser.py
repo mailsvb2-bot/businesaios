@@ -33,6 +33,7 @@ def _parse_subscription_item(value) -> dict | None:
         "recipient_user_id": recipient_user_id,
         "channel": normalize_channel(str(value.get("channel") or "telegram")),
         "min_level": normalize_min_level(str(value.get("min_level") or "warn")),
+        "business_id": str(value.get("business_id") or "").strip(),
         "enabled": bool(value.get("enabled", True)),
         "code_filters": list(_parse_csv_list(value.get("code_filters") or ())),
         "user_scope": list(_parse_csv_list(value.get("user_scope") or ())),

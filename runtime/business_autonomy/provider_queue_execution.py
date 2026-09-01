@@ -66,13 +66,27 @@ class ProviderQueueExecutionRuntime:
             tags=(f"provider:{provider.provider_key}", f"business:{business_id}"),
         )
         dispatch = JobDispatcher(store=self.store, idempotency_store=self.idempotency_store).dispatch(req)
-        return ProviderQueueDispatchResult(job_id='' if dispatch.job is None else dispatch.job.job_id, queued=dispatch.accepted, status='queued' if dispatch.reason == 'accepted' else dispatch.reason, metadata={'queue_name': str(queue_name), 'job_type': _PROVIDER_JOB_TYPE, 'provider_key': provider.provider_key, 'provider_write_guard': guard_decision.to_metadata(), 'idempotency_resolution': dispatch.idempotency_resolution})
+        job = dispatch.job
+        job_metadata = {} if job is None else {
+            'job_state': job.state.value,
+            'job_attempts': int(job.attempts),
+            'job_max_attempts': int(job.max_attempts),
+            'job_last_error': job.last_error,
+        }
+        return ProviderQueueDispatchResult(job_id='' if job is None else job.job_id, queued=dispatch.accepted, status='queued' if dispatch.reason == 'accepted' else dispatch.reason, metadata={'queue_name': str(queue_name), 'job_type': _PROVIDER_JOB_TYPE, 'provider_key': provider.provider_key, 'provider_write_guard': guard_decision.to_metadata(), 'idempotency_resolution': dispatch.idempotency_resolution, **job_metadata})
 
     def tick(self, *, provider_registry: Mapping[str, ProviderDefinition], tenant_id: str, queue_name: str = _PROVIDER_QUEUE_NAME, worker_id: str = 'provider-runtime-worker', job_id: str | None = None) -> Mapping[str, Any]:
         scheduler = JobScheduler(store=self.store)
         worker = JobWorker(worker_id=str(worker_id).strip() or 'provider-runtime-worker', store=self.store, scheduler=scheduler, runner=self._runner(provider_registry))
         report = worker.tick(tenant_id=str(tenant_id), queue_name=str(queue_name), job_id=job_id)
-        return {**dict(report.__dict__), 'worker_id': str(worker_id).strip() or 'provider-runtime-worker'}
+        job = self.store.get(tenant_id=str(tenant_id), job_id=str(job_id)) if job_id else None
+        job_metadata = {} if job is None else {
+            'job_state': job.state.value,
+            'job_attempts': int(job.attempts),
+            'job_max_attempts': int(job.max_attempts),
+            'job_last_error': job.last_error,
+        }
+        return {**dict(report.__dict__), 'worker_id': str(worker_id).strip() or 'provider-runtime-worker', **job_metadata}
 
     def list_jobs(self, *, tenant_id: str, business_id: str | None = None, provider_key: str, queue_name: str = _PROVIDER_QUEUE_NAME, limit: int = 50) -> tuple[dict[str, Any], ...]:
         rows = self.store.list_due(tenant_id=str(tenant_id), queue_name=str(queue_name), limit=int(limit))

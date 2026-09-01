@@ -424,15 +424,37 @@ class ProviderAdminService:
         queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime)
         registry = {item.provider_key: item for item in self.provider_registry.list()}
         return queue_runtime.tick(provider_registry=registry, tenant_id=require_tenant_id(tenant_id), worker_id=worker_id, job_id=job_id)
+    @staticmethod
+    def _terminal_queue_result(dispatch: Mapping[str, Any]) -> dict[str, Any] | None:
+        metadata = dict(dispatch.get('metadata') or {})
+        state = str(metadata.get('job_state') or '').strip()
+        if state not in {'succeeded', 'failed', 'dead_letter', 'cancelled'}:
+            return None
+        last_error = str(metadata.get('job_last_error') or '').strip()
+        ambiguous = state == 'dead_letter' and last_error == 'expired_claim_attempts_exhausted_ambiguous_delivery'
+        category = 'ambiguous_delivery' if ambiguous else ('provider_queue_receipt_missing' if state == 'succeeded' else f'provider_queue_{state}')
+        return {
+            'accepted': False,
+            'status': 'ambiguous_delivery' if ambiguous else f'provider_queue_{state}_without_history',
+            'error': {'category': category, 'message': last_error or category},
+            'queue_state': state,
+            'attempts': int(metadata.get('job_attempts') or 0),
+            'max_attempts': int(metadata.get('job_max_attempts') or 0),
+        }
+
     def execute_queued_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None, worker_id: str = 'provider-runtime-worker') -> dict[str, Any]:
         dispatch = self.enqueue_provider_sync(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, operation=operation, mode=mode, payload=payload)
         job_id, worker = str(dispatch.get('job_id') or '').strip(), None
         result = next((row for row in (self.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=100) if bool(dispatch.get('queued')) and job_id else ()) if str(row.get('queue_job_id') or '') == job_id), None)
+        if result is None:
+            result = self._terminal_queue_result(dispatch)
         if bool(dispatch.get('queued')) and job_id and result is None:
             worker = self.tick_provider_sync_queue(tenant_id=tenant_id, worker_id=worker_id, job_id=job_id)
             result = next((row for row in self.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=100) if str(row.get('queue_job_id') or '') == job_id), None)
+            if result is None:
+                result = self._terminal_queue_result({'metadata': worker})
         elif result is not None:
-            worker = {'worker_id': worker_id, 'replayed_from_history': True}
+            worker = {'worker_id': worker_id, 'replayed_from_history': 'queue_state' not in result}
         return {'dispatch': dispatch, 'worker': worker, 'result': result}
 
     def list_provider_queue_jobs(self, *, tenant_id: str, business_id: str | None = None, provider_key: str, limit: int = 50) -> tuple[dict[str, Any], ...]:

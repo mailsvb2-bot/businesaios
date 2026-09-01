@@ -9,6 +9,7 @@ def page_to_dict(model) -> dict:
                 "recipient_user_id": item.recipient_user_id,
                 "channel": item.channel,
                 "min_level": item.min_level,
+                "business_id": item.business_id,
                 "enabled": item.enabled,
                 "code_filters": list(item.code_filters),
                 "user_scope": list(item.user_scope),

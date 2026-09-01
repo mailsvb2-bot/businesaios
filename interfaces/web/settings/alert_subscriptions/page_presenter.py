@@ -11,6 +11,7 @@ class AlertSubscriptionItemViewModel:
     recipient_user_id: str
     channel: str
     min_level: str
+    business_id: str
     enabled: bool
     code_filters: tuple[str, ...]
     user_scope: tuple[str, ...]
@@ -35,6 +36,8 @@ _CHANNELS = (
     OptionViewModel("whatsapp", "WhatsApp"),
     OptionViewModel("sms", "SMS"),
     OptionViewModel("email", "Email"),
+    OptionViewModel("slack", "Slack"),
+    OptionViewModel("discord", "Discord"),
 )
 
 _LEVELS = (
@@ -49,6 +52,7 @@ def _present_item(item) -> AlertSubscriptionItemViewModel:
         recipient_user_id=item.recipient_user_id,
         channel=item.channel,
         min_level=item.min_level,
+        business_id=item.business_id,
         enabled=bool(item.enabled),
         code_filters=tuple(item.code_filters),
         user_scope=tuple(item.user_scope),

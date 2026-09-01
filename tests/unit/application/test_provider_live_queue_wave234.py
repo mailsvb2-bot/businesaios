@@ -80,3 +80,34 @@ def test_targeted_provider_queue_tick_never_executes_unrelated_due_jobs(tmp_path
     assert [call['business_id'] for call in live.calls] == ['biz-target']
     assert store.get(tenant_id='tenant-a', job_id=target.job_id).state is JobState.SUCCEEDED
     assert store.get(tenant_id='tenant-a', job_id=unrelated.job_id).state is JobState.PENDING
+
+
+def test_execute_queued_provider_sync_surfaces_exhausted_ambiguous_replay(tmp_path, monkeypatch):
+    service = _service(tmp_path)
+    monkeypatch.setattr(ProviderAdminService, 'enqueue_provider_sync', lambda self, **kwargs: {
+        'job_id': 'provider-sync-slack-one-shot',
+        'queued': True,
+        'status': 'dedupe_existing',
+        'metadata': {'job_state': 'claimed', 'job_attempts': 1, 'job_max_attempts': 1, 'job_last_error': None},
+    })
+    monkeypatch.setattr(ProviderAdminService, 'list_provider_sync_history', lambda self, **kwargs: ())
+    monkeypatch.setattr(ProviderAdminService, 'tick_provider_sync_queue', lambda self, **kwargs: {
+        'worker_id': 'replacement',
+        'job_state': 'dead_letter',
+        'job_attempts': 1,
+        'job_max_attempts': 1,
+        'job_last_error': 'expired_claim_attempts_exhausted_ambiguous_delivery',
+    })
+
+    outcome = service.execute_queued_provider_sync(
+        tenant_id='tenant-a',
+        business_id='business-a',
+        provider_key='slack_messaging',
+        operation='message_send',
+        payload={'channel_id': 'C123', 'text': 'hello'},
+    )
+
+    assert outcome['result']['accepted'] is False
+    assert outcome['result']['status'] == 'ambiguous_delivery'
+    assert outcome['result']['error']['category'] == 'ambiguous_delivery'
+    assert outcome['result']['queue_state'] == 'dead_letter'
