@@ -20,3 +20,4 @@ def test_alert_subscriptions_client_preserves_business_scope():
     script = (Path(__file__).parents[1] / "interfaces/web/settings/alert_subscriptions/static/alert_subscriptions.js").read_text(encoding="utf-8")
     assert "Business id" in script
     assert 'business_id: item.business_id || ""' in script
+    assert "Business id is required for Slack/Discord." in script

@@ -157,6 +157,13 @@
     const status = el("div", "as-status");
 
     saveBtn.addEventListener("click", async function () {
+      const missingNativeBusiness = state.items.some(function (item) {
+        return (item.channel === "slack" || item.channel === "discord") && !(item.business_id || "").trim();
+      });
+      if (missingNativeBusiness) {
+        status.textContent = "Business id is required for Slack/Discord.";
+        return;
+      }
       status.textContent = "Saving...";
       const res = await fetch(cfg.saveEndpoint, {
         method: "POST",
