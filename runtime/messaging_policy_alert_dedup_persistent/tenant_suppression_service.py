@@ -9,7 +9,7 @@ from runtime.messaging_policy_alert_dedup.time_now import now_epoch_s
 
 class TenantAwareAlertNotificationSuppressionService:
     def __init__(self, *, store_factory, cooldown_s: int = DEFAULT_ALERT_NOTIFICATION_COOLDOWN_S, tenant_id: str = '', approval_status_resolver=None):
-        self._store_factory = store_factory
+        self._store_factory, self._store = store_factory, store_factory.for_tenant(tenant_id=tenant_id)
         self._cooldown_s = int(cooldown_s)
         self._approval_status_resolver = approval_status_resolver or _approval_is_pending
 
