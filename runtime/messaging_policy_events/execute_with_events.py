@@ -9,6 +9,13 @@ def _execution_blocked(meta: object) -> bool:
     return isinstance(meta, dict) and str(meta.get("mode") or "").strip().casefold() == "blocked"
 
 
+def _execution_pending(meta: object) -> str:
+    if not isinstance(meta, dict):
+        return ""
+    mode = str(meta.get("mode") or "").strip().casefold()
+    return mode if mode in {"approval_required", "in_progress"} else ""
+
+
 
 def execute_policy_plan_with_events(
     *,
@@ -57,6 +64,26 @@ def execute_policy_plan_with_events(
 
         if recorder is not None:
             recorder.record_attempt(msg=msg, ok=bool(ok), meta=meta)
+
+        pending_mode = _execution_pending(meta)
+        if pending_mode:
+            if recorder is not None:
+                recorder.record_finished(
+                    msg=base_message,
+                    plan=plan,
+                    selected_channel='',
+                    terminal_reason=pending_mode,
+                    attempts_count=len(attempts),
+                )
+            out = dict(meta)
+            out['policy'] = {
+                'ordered_channels': list(plan.ordered_channels),
+                'reason_codes': list(plan.reason_codes),
+                'terminal_reason': pending_mode,
+                'attempts': attempts,
+                'selected_channel': '',
+            }
+            return False, out
 
         if ok:
             if recorder is not None:

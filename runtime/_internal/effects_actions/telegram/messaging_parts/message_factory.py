@@ -15,11 +15,12 @@ def resolve_tenant_id(*, tenant_id: str | None, track_payload: dict | None) -> s
     return "unknown_tenant"
 
 
-def build_outbound_message(*, decision_id: str, correlation_id: str, user_id: str, text: str, tenant_id: str, reply_markup: dict | None, callback_query_id: str | None, track_event_type: str | None, track_payload: dict | None, channel: str, priority, critical: bool, transport_guard=None) -> OutboundMessage:
+def build_outbound_message(*, decision_id: str, correlation_id: str, user_id: str, text: str, tenant_id: str, business_id: str = "", reply_markup: dict | None, callback_query_id: str | None, track_event_type: str | None, track_payload: dict | None, channel: str, priority, critical: bool, transport_guard=None) -> OutboundMessage:
     return OutboundMessage(
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
         tenant_id=resolve_tenant_id(tenant_id=tenant_id, track_payload=track_payload),
+        business_id=str(business_id or "").strip(),
         user_id=str(user_id),
         channel=str(channel or "telegram"),
         text=str(text or ""),

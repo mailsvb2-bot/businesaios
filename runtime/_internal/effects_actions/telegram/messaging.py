@@ -11,6 +11,15 @@ from runtime._internal.effects_actions.telegram.messaging_parts import (
     track_business_event,
     track_delivery,
 )
+from runtime.execution.context import current_execution_business_id
+
+
+def _resolve_business_scope(explicit_business_id: str) -> str:
+    explicit = str(explicit_business_id or "").strip()
+    bound = current_execution_business_id()
+    if explicit and bound and explicit != bound:
+        raise RuntimeError("BUSINESS_SCOPE_MISMATCH")
+    return explicit or bound
 
 
 def send_message_effect(
@@ -21,6 +30,7 @@ def send_message_effect(
     user_id: str,
     text: str,
     tenant_id: str = "",
+    business_id: str = "",
     reply_markup: dict | None = None,
     callback_query_id: str | None = None,
     track_event_type: str | None = None,
@@ -31,12 +41,14 @@ def send_message_effect(
     channel_policy: dict | None = None,
     transport_guard: Any = None,
 ) -> Any:
+    resolved_business_id = _resolve_business_scope(business_id)
     msg = build_outbound_message(
         decision_id=decision_id,
         correlation_id=correlation_id,
         user_id=user_id,
         text=text,
         tenant_id=tenant_id,
+        business_id=resolved_business_id,
         reply_markup=reply_markup,
         callback_query_id=callback_query_id,
         track_event_type=track_event_type,

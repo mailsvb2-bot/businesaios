@@ -50,3 +50,19 @@ def test_failed_message_delivery_never_emits_positive_evidence() -> None:
 
     assert evidence["status"] == "failed"
     assert evidence["confidence"] == 0.0
+
+
+def test_message_business_scope_uses_bound_execution_scope_and_rejects_mismatch() -> None:
+    import pytest
+
+    from runtime._internal.effects_actions.telegram.messaging import _resolve_business_scope
+    from runtime.execution.context import execution_business_scope
+
+    with execution_business_scope("business-a"):
+        assert _resolve_business_scope("") == "business-a"
+        assert _resolve_business_scope("business-a") == "business-a"
+        with pytest.raises(RuntimeError, match="BUSINESS_SCOPE_MISMATCH"):
+            _resolve_business_scope("business-b")
+
+    assert _resolve_business_scope("") == ""
+    assert _resolve_business_scope("business-explicit") == "business-explicit"

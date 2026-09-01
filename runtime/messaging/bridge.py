@@ -29,7 +29,9 @@ def _bind_native_provider_context(msg: OutboundMessage) -> OutboundMessage:
             context.pop(key, None)
     if not isinstance(existing, Mapping) or source_provider:
         context["provider_key"] = provider_key
-    context.setdefault("business_id", str(track_payload.get("business_id") or track_payload.get("tenant_id") or msg.tenant_id).strip())
+    business_id = str(context.get("business_id") or msg.business_id or track_payload.get("business_id") or "").strip()
+    if business_id:
+        context["business_id"] = business_id
     if track_payload.get("approval_id") and not context.get("approval_id") and not provider_changed:
         context["approval_id"] = str(track_payload["approval_id"])
     recipient_key = {"vk": "peer_id", "max": "chat_id", "slack": "channel_id", "discord": "channel_id"}[channel]

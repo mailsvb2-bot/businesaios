@@ -62,6 +62,7 @@ def _build_send_kwargs(payload: dict, env) -> dict:
         "decision_id": env.decision.decision_id,
         "correlation_id": env.decision.correlation_id,
         "tenant_id": _resolve_tenant_id(payload, env),
+        "business_id": str(payload.get("business_id") or "").strip(),
         "user_id": str(payload["user_id"]),
         "text": str(payload["text"]),
         "channel": channel,

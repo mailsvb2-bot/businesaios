@@ -14,6 +14,7 @@ class EffectsCommsPort(Protocol):
         user_id: str,
         text: str,
         tenant_id: str = "",
+        business_id: str = "",
         reply_markup: Optional[Dict[str, Any]] = None,
         callback_query_id: Optional[str] = None,
         track_event_type: Optional[str] = None,

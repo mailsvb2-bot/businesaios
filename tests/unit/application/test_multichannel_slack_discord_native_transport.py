@@ -131,3 +131,16 @@ def test_slack_discord_native_adapter_has_no_generic_webhook_fallback() -> None:
         result = adapter.send(OutboundMessage(decision_id="dec-1", correlation_id="corr-1", tenant_id="tenant-a", user_id="user-1", channel=channel, text="hello"))
         assert result.ok is False and result.mode == "blocked"
         assert result.detail["reason"] == "native_context_required"
+
+
+def test_slack_discord_native_adapter_rejects_missing_business_scope_before_service_build():
+    for channel in ("slack", "discord"):
+        adapter = _NativeProviderQueueAdapter(channel, service_factory=lambda: (_ for _ in ()).throw(AssertionError("service must not be built without business scope")))
+        result = adapter.send(
+            OutboundMessage(
+                decision_id="dec-1", correlation_id="corr-1", tenant_id="tenant-a", user_id="C123" if channel == "slack" else "123",
+                channel=channel, text="hello", track_payload={"_provider_native": {"provider_key": f"{channel}_messaging", "channel_id": "C123" if channel == "slack" else "123"}},
+            )
+        )
+        assert result.ok is False and result.mode == "blocked"
+        assert result.detail["reason"] == "native_business_id_required"

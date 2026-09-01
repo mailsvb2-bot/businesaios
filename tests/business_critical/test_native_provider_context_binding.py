@@ -19,11 +19,12 @@ class _RecordingDispatcher:
         return DeliveryResult(False, msg.channel, "blocked", "", {"reason": "test"})
 
 
-def _message(*, channel: str, user_id: str, track_payload: dict | None = None) -> OutboundMessage:
+def _message(*, channel: str, user_id: str, track_payload: dict | None = None, business_id: str = "business-a") -> OutboundMessage:
     return OutboundMessage(
         decision_id="dec-1",
         correlation_id="corr-1",
-        tenant_id="business-a",
+        tenant_id="tenant-a",
+        business_id=business_id,
         user_id=user_id,
         channel=channel,
         text="hello",
@@ -46,6 +47,20 @@ def test_shared_effect_bridge_binds_native_context_for_direct_and_fallback_sends
     native = dispatcher.messages[0].track_payload["_provider_native"]
     assert native["business_id"] == "business-a"
     assert native[recipient_key] == user_id
+
+
+@pytest.mark.lock
+def test_shared_effect_bridge_never_infers_business_scope_from_tenant(monkeypatch):
+    dispatcher = _RecordingDispatcher()
+    monkeypatch.setattr(bridge_module, "build_multichannel_dispatcher", lambda: dispatcher)
+    bridge = MultiChannelEffectsBridge()
+
+    bridge.send(_message(channel="slack", user_id="C123", business_id="", track_payload={"tenant_id": "tenant-a"}))
+
+    native = dispatcher.messages[0].track_payload["_provider_native"]
+    assert native["provider_key"] == "slack_messaging"
+    assert native["channel_id"] == "C123"
+    assert "business_id" not in native
 
 
 @pytest.mark.lock
