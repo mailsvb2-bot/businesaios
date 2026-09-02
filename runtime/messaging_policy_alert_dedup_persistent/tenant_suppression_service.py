@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from runtime.messaging_policy_alert_dedup.cooldown_seconds import DEFAULT_ALERT_NOTIFICATION_COOLDOWN_S
+from runtime.messaging_policy_alert_dedup import cooldown_seconds
 from runtime.messaging_policy_alert_dedup.dedup_key import build_alert_notification_dedup_key
 from runtime.messaging_policy_alert_dedup.suppression_decision import AlertSuppressionDecision
 from runtime.messaging_policy_alert_dedup.suppression_service import _approval_is_pending
@@ -8,9 +8,9 @@ from runtime.messaging_policy_alert_dedup.time_now import now_epoch_s
 
 
 class TenantAwareAlertNotificationSuppressionService:
-    def __init__(self, *, store_factory, cooldown_s: int = DEFAULT_ALERT_NOTIFICATION_COOLDOWN_S, tenant_id: str = '', approval_status_resolver=None):
+    def __init__(self, *, store_factory, cooldown_s: int = cooldown_seconds.DEFAULT_ALERT_NOTIFICATION_COOLDOWN_S, reservation_lease_s: int = cooldown_seconds.DEFAULT_ALERT_RESERVATION_LEASE_S, tenant_id: str = '', approval_status_resolver=None):
         self._store_factory, self._store = store_factory, store_factory.for_tenant(tenant_id=tenant_id)
-        self._cooldown_s = int(cooldown_s)
+        self._cooldown_s, self._reservation_lease_s = int(cooldown_s), max(1, int(reservation_lease_s))
         self._approval_status_resolver = approval_status_resolver or _approval_is_pending
 
     def evaluate(self, *, tenant_id: str, recipient_user_id: str, channel: str, alert_code: str, affected_user_id: str, business_id: str = "", include_record: bool = False):
@@ -19,9 +19,9 @@ class TenantAwareAlertNotificationSuppressionService:
         if record is None:
             decision = AlertSuppressionDecision(should_send=True, reason='first_send')
         elif record.is_pending:
-            pending_id = str(record.pending_approval_id)
-            active = pending_id.startswith('reservation:') or bool(self._approval_status_resolver(pending_id))
-            decision = AlertSuppressionDecision(should_send=not active, reason='approval_pending' if active else 'approval_terminal')
+            reservation = (pending_id := str(record.pending_approval_id)).startswith('reservation:')
+            active = (int(record.sent_at_epoch_s) > 0 and max(0, int(now_epoch_s()) - int(record.sent_at_epoch_s)) < self._reservation_lease_s) if reservation else bool(self._approval_status_resolver(pending_id))
+            decision = AlertSuppressionDecision(should_send=not active, reason=(('reservation_active' if active else 'reservation_expired') if reservation else ('approval_pending' if active else 'approval_terminal')))
         elif int(now_epoch_s()) - int(record.sent_at_epoch_s) < int(self._cooldown_s):
             decision = AlertSuppressionDecision(should_send=False, reason='cooldown_active')
         else:

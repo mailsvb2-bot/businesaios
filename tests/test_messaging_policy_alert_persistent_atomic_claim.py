@@ -104,3 +104,36 @@ def test_new_pending_lifecycle_does_not_depend_on_separate_approval_index_write(
     assert mark.finalize_approval(tenant_id="tenant-a", approval_id="ap-1", dedup_key=dedup_key, reservation_id="res-1", delivered=False) is True
     assert factory.for_tenant(tenant_id="tenant-a").get(dedup_key=dedup_key) is None
     assert mark.reserve(tenant_id="tenant-a", dedup_key=dedup_key, expected_record=None, reservation_id="res-2") is True
+
+
+def test_abandoned_reservation_expires_and_can_be_atomically_reclaimed(monkeypatch):
+    import runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service as mark_module
+    import runtime.messaging_policy_alert_dedup_persistent.tenant_suppression_service as suppression_module
+
+    class _Gateway:
+        def __init__(self):
+            self.items = {}
+        def get_value(self, *, tenant_id: str, key: str):
+            return self.items.get((tenant_id, key))
+        def set_value(self, *, tenant_id: str, key: str, value):
+            self.items[(tenant_id, key)] = dict(value)
+        def compare_and_set_value(self, *, tenant_id: str, key: str, expected, value) -> bool:
+            slot = (tenant_id, key)
+            if self.items.get(slot) != expected:
+                return False
+            self.items[slot] = dict(value)
+            return True
+
+    gateway = _Gateway()
+    factory = TenantScopedDedupStoreFactory(settings_gateway=gateway)
+    mark = TenantAwareAlertNotificationMarkSentService(store_factory=factory)
+    monkeypatch.setattr(mark_module, 'now_epoch_s', lambda: 100)
+    assert mark.reserve(tenant_id='tenant-a', dedup_key='tenant-a|biz-a|ceo|slack|a1|u1', expected_record=None, reservation_id='dead-worker') is True
+    monkeypatch.setattr(suppression_module, 'now_epoch_s', lambda: 500)
+    suppression = TenantAwareAlertNotificationSuppressionService(store_factory=factory, cooldown_s=60, reservation_lease_s=300)
+    dedup_key, decision, stale = suppression.evaluate(tenant_id='tenant-a', recipient_user_id='ceo', channel='slack', alert_code='a1', affected_user_id='u1', business_id='biz-a', include_record=True)
+    assert decision.should_send is True and decision.reason == 'reservation_expired'
+    monkeypatch.setattr(mark_module, 'now_epoch_s', lambda: 500)
+    assert mark.reserve(tenant_id='tenant-a', dedup_key=dedup_key, expected_record=stale, reservation_id='replacement-worker') is True
+    current = factory.for_tenant(tenant_id='tenant-a').get(dedup_key=dedup_key)
+    assert current is not None and current.pending_approval_id == 'reservation:replacement-worker' and current.sent_at_epoch_s == 500

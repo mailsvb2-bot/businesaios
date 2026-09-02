@@ -431,12 +431,10 @@ class ProviderAdminService:
         if state not in {'succeeded', 'failed', 'dead_letter', 'cancelled'}:
             return None
         last_error = str(metadata.get('job_last_error') or '').strip()
-        ambiguous = state == 'dead_letter' and last_error == 'expired_claim_attempts_exhausted_ambiguous_delivery'
-        category = 'ambiguous_delivery' if ambiguous else ('provider_queue_receipt_missing' if state == 'succeeded' else f'provider_queue_{state}')
         return {
             'accepted': False,
-            'status': 'ambiguous_delivery' if ambiguous else f'provider_queue_{state}_without_history',
-            'error': {'category': category, 'message': last_error or category},
+            'status': 'ambiguous_delivery',
+            'error': {'category': 'ambiguous_delivery', 'message': last_error or f'provider_queue_{state}_without_history'},
             'queue_state': state,
             'attempts': int(metadata.get('job_attempts') or 0),
             'max_attempts': int(metadata.get('job_max_attempts') or 0),

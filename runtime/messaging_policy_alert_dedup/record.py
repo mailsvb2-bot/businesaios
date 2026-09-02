@@ -11,4 +11,4 @@ class AlertNotificationDedupRecord:
 
     @property
     def is_pending(self) -> bool:
-        return bool(str(self.pending_approval_id or "").strip()) and int(self.sent_at_epoch_s) <= 0
+        return bool(str(self.pending_approval_id or "").strip())

@@ -14,7 +14,7 @@ class TenantAwareAlertNotificationMarkSentService:
 
     def reserve(self, *, tenant_id: str, dedup_key: str, expected_record, reservation_id: str) -> bool:
         store = self._store_factory.for_tenant(tenant_id=tenant_id)
-        target = AlertNotificationDedupRecord(dedup_key=str(dedup_key), sent_at_epoch_s=0, pending_approval_id=self._reservation_id(reservation_id))
+        target = AlertNotificationDedupRecord(dedup_key=str(dedup_key), sent_at_epoch_s=int(now_epoch_s()), pending_approval_id=self._reservation_id(reservation_id))
         return store.compare_and_set(expected=expected_record, record=target)
 
     def mark_sent(self, *, tenant_id: str, dedup_key: str, reservation_id: str = "") -> bool:

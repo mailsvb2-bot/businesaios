@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from application.business_autonomy.provider_admin_service import ProviderAdminService
 from application.business_autonomy.provider_catalog import provider_map
 from entrypoints.api.approval_route_support import resume_hint
 from entrypoints.api.provider_admin_route_handlers import ProviderAdminRouteHandlers
@@ -206,13 +207,38 @@ def test_provider_approval_resume_releases_alert_dedup_after_terminal_non_delive
 
     class _Service:
         def execute_queued_provider_sync(self, **kwargs):
-            return {'result': {'accepted': False, 'status': 'provider_queue_failed', 'error': {'category': 'failed'}}}
+            return {'result': {'accepted': False, 'status': 'live_execution_failed', 'parsed_response': {'error_code': 'invalid_auth'}, 'error': {'category': 'provider_rejected'}}}
 
     envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='domain_action@v1', payload={'tenant_id': 'tenant-a'}))
     handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: _Service(), approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope, approval_completion_handler=lambda **kwargs: completed.append(kwargs))
     handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
     assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1', 'dedup_key': 'dedup-1', 'reservation_id': 'res-1', 'delivered': False}]
 
+
+
+def test_provider_approval_resume_keeps_alert_reservation_for_receiptless_queue_failure():
+    completed = []
+
+    class _Store:
+        def get(self, approval_id):
+            metadata = {'action_name': 'provider.slack_messaging.message_send', 'decision_id': 'dec-1', 'approval_resume_context': {'provider_key': 'slack_messaging', 'business_id': 'biz-a', 'operation': 'message_send', 'payload': {'channel': 'C1', 'text': 'hello'}}, 'approval_completion_context': {'dedup_key': 'dedup-1', 'reservation_id': 'res-1'}}
+            return SimpleNamespace(status=SimpleNamespace(value='approved'), request=SimpleNamespace(approval_id=approval_id, tenant_id='tenant-a', subject_id='dec-1', metadata=metadata))
+
+    class _Service:
+        def execute_queued_provider_sync(self, **kwargs):
+            return {'result': {'accepted': False, 'status': 'provider_queue_failed_without_history', 'error': {'category': 'provider_queue_failed'}}}
+
+    envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='domain_action@v1', payload={'tenant_id': 'tenant-a'}))
+    handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: _Service(), approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope, approval_completion_handler=lambda **kwargs: completed.append(kwargs))
+    handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
+    assert completed == []
+
+
+def test_receiptless_terminal_queue_state_is_ambiguous():
+    result = ProviderAdminService._terminal_queue_result({'metadata': {'job_state': 'failed', 'job_last_error': 'RuntimeError:bookkeeping failed after transport', 'job_attempts': 1, 'job_max_attempts': 1}})
+    assert result is not None
+    assert result['status'] == 'ambiguous_delivery'
+    assert result['error']['category'] == 'ambiguous_delivery'
 
 def test_provider_approval_resume_keeps_alert_reservation_on_ambiguous_delivery():
     completed = []
