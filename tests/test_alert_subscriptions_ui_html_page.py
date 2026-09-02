@@ -21,3 +21,4 @@ def test_alert_subscriptions_client_preserves_business_scope():
     assert "Business id" in script
     assert 'business_id: item.business_id || ""' in script
     assert "Business id is required for guarded native channels." in script
+    assert '["slack", "discord", "instagram", "messenger", "line", "viber"].includes(item.channel)' in script
