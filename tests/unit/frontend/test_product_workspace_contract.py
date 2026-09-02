@@ -169,9 +169,9 @@ def test_provider_setup_ui_distinguishes_public_config_from_secrets_and_explains
     app = _read("App.jsx")
     styles = _read("styles.css")
     assert all(token in app for token in (
-        "PROVIDER_CONNECTION_GUIDANCE", "vk_messaging", "max_messaging", "slack_messaging", "discord_messaging",
+        "PROVIDER_CONNECTION_GUIDANCE", "vk_messaging", "max_messaging", "slack_messaging", "discord_messaging", "instagram_messaging", "messenger_messaging",
         "credentialInputType", "secret_kind", 'type={credentialInputType(field)}', "Webhook URL", "Application Public Key",
-        "Slack Signing Secret", "Bridge Webhook Secret", "Что реально доступно", "Gateway-подключение и отправка сообщений",
+        "Slack Signing Secret", "Bridge Webhook Secret", "Instagram Access Token", "Page Access Token", "Что реально доступно", "Gateway-подключение и отправка сообщений",
     ))
     assert 'new Set(["config", "url", "username", "oauth_client"])' in app
     assert 'input type="password" autoComplete="off"' not in app

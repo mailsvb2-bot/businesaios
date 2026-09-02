@@ -99,6 +99,8 @@ def test_bridge_providers_are_signed_read_capable_and_write_planned_but_not_publ
             'discord_messaging': 'native_discord_http_or_provider_webhook_bridge',
             'line_messaging': 'native_line_messaging_api_or_provider_webhook_bridge',
             'viber_messaging': 'native_viber_bot_api_or_provider_webhook_bridge',
+            'instagram_messaging': 'native_instagram_send_api_or_provider_webhook_bridge',
+            'messenger_messaging': 'native_messenger_send_api_or_provider_webhook_bridge',
         }.get(provider_key, 'provider_webhook_bridge')
         assert marketplace[provider_key]['connection_mode'] == expected_connection_mode
 

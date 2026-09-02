@@ -27,7 +27,7 @@ def _parse_subscription_item(value) -> dict | None:
         return None
     channel = normalize_channel(str(value.get("channel") or "telegram"))
     business_id = str(value.get("business_id") or "").strip()
-    if channel in {"slack", "discord"} and not business_id:
+    if channel in {"slack", "discord", "instagram", "messenger"} and not business_id:
         raise ValueError(f"business_id is required for {channel} alert subscriptions")
     return {
         "recipient_user_id": recipient_user_id,

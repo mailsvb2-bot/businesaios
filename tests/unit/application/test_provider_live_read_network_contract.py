@@ -60,7 +60,7 @@ def test_live_write_remains_fail_closed_before_network(monkeypatch, tmp_path) ->
 
 def test_only_proven_read_or_probe_providers_receive_live_network_binding() -> None:
     transports = build_live_http_transports(InMemorySecretVault(), bind_live_network=True)
-    native = {'telegram_bot', 'hubspot', 'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'line_messaging', 'viber_messaging'}
+    native = {'telegram_bot', 'hubspot', 'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'}
     assert all(transports[key].bind_live_network is True for key in native)
     assert all(not transport.bind_live_network for key, transport in transports.items() if key not in native)
 

@@ -39,7 +39,7 @@ class ProviderResponseParsers:
     def describe(self, *, provider: ProviderDefinition) -> dict[str, Any]:
         families = {
             'telegram_bot': ('ok', 'result', 'description'),
-            'whatsapp_cloud': ('messages', 'contacts', 'error'), 'vk_messaging': ('response', 'error'), 'max_messaging': ('messages', 'code', 'message'), 'slack_messaging': ('ok', 'channel', 'ts', 'message', 'error'), 'discord_messaging': ('id', 'channel_id', 'content', 'code', 'message'), 'line_messaging': ('userId', 'basicId', 'displayName', 'message'), 'viber_messaging': ('status', 'status_message', 'id', 'message_token'),
+            'whatsapp_cloud': ('messages', 'contacts', 'error'), 'instagram_messaging': ('recipient_id', 'message_id', 'error'), 'messenger_messaging': ('recipient_id', 'message_id', 'error'), 'vk_messaging': ('response', 'error'), 'max_messaging': ('messages', 'code', 'message'), 'slack_messaging': ('ok', 'channel', 'ts', 'message', 'error'), 'discord_messaging': ('id', 'channel_id', 'content', 'code', 'message'), 'line_messaging': ('userId', 'basicId', 'displayName', 'message'), 'viber_messaging': ('status', 'status_message', 'id', 'message_token'),
             'shopify': ('orders', 'products', 'admin_graphql_api_id', 'errors', 'page_info'),
             'woocommerce': ('id', 'code', 'message', 'data'),
             'hubspot': ('results', 'paging', 'status', 'message'),

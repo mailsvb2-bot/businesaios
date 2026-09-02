@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from runtime.messaging.bridge import stamp_native_provider_provenance
+from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.messaging.outbound_message import transport_guard_blocks
 from runtime.messaging_capability import (
     MessagingCapabilityRouter,
@@ -47,11 +48,7 @@ def _with_health_feedback(self, *, send_once):
         ok, meta = send_once(selected_msg)
         details = dict(meta or {})
         if not _execution_blocked(details):
-            updater.record_delivery_outcome(
-                channel=str(selected_msg.channel),
-                ok=bool(ok),
-                meta=details,
-            )
+            updater.record_delivery_outcome(channel=str(selected_msg.channel), ok=bool(ok), meta=details)
         return ok, meta
     return _observed
 def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
@@ -81,6 +78,9 @@ def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
         plan = ensure_policy_plan_disciplined(
             _apply_capability_routing(self, ordered_channels=plan.ordered_channels, disciplined_policy=disciplined_policy)
         )
+    source_channel = normalize_channel(msg.channel)
+    if plan.ordered_channels and (safe_channels := tuple(channel for channel in plan.ordered_channels if channel not in {"instagram", "messenger"} or channel == source_channel)) != plan.ordered_channels:
+        plan = PolicyPlan(ordered_channels=safe_channels, reason_codes=tuple(dict.fromkeys((*plan.reason_codes, "scoped_recipient_fallback_blocked"))), terminal_reason=plan.terminal_reason if safe_channels else "no_eligible_channel_after_scoped_recipient_guard")
     recorder = build_policy_event_recorder_from_runtime(self)
     guard = getattr(msg, "transport_guard", None)
     return execute_policy_plan_with_events(

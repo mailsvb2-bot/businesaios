@@ -172,7 +172,7 @@ class ProviderAdminRouteHandlers:
             raise RuntimeError(f'provider_approval_not_approved:{getattr(record.status, "value", record.status)}')
         request_metadata = dict(record.request.metadata or {})
         action_name, decision_id = str(request_metadata.get('action_name') or '').strip(), str(request_metadata.get('decision_id') or '').strip()
-        provider_key = {'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging', 'provider.slack_messaging.message_send': 'slack_messaging', 'provider.discord_messaging.message_send': 'discord_messaging'}.get(action_name)
+        provider_key = {'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging', 'provider.slack_messaging.message_send': 'slack_messaging', 'provider.discord_messaging.message_send': 'discord_messaging', 'provider.instagram_messaging.message_send': 'instagram_messaging', 'provider.messenger_messaging.message_send': 'messenger_messaging'}.get(action_name)
         if provider_key is None:
             raise RuntimeError(f'approval_not_provider_message_send:{action_name}')
         if not decision_id:
@@ -202,7 +202,7 @@ class ProviderAdminRouteHandlers:
             if any(str(key).startswith('_') for key in provider_payload):
                 raise RuntimeError('provider_approval_resume_payload_contains_internal_controls')
         else:
-            expected_channel = {'vk_messaging': 'vk', 'max_messaging': 'max', 'slack_messaging': 'slack', 'discord_messaging': 'discord'}[provider_key]
+            expected_channel = {'vk_messaging': 'vk', 'max_messaging': 'max', 'slack_messaging': 'slack', 'discord_messaging': 'discord', 'instagram_messaging': 'instagram', 'messenger_messaging': 'messenger'}[provider_key]
             business_id = str(archived_payload.get('business_id') or '').strip()
             if normalize_channel(str(archived_payload.get('channel') or '')) != expected_channel:
                 raise RuntimeError('provider_approval_resume_channel_mismatch')

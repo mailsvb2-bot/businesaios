@@ -28,7 +28,6 @@ class VendorHttpLiveTransport:
     timeout_seconds: float = 10.0
     normalizers: ProviderPayloadNormalizers = field(default_factory=ProviderPayloadNormalizers)
     response_parsers: ProviderResponseParsers = field(default_factory=ProviderResponseParsers)
-
     def execute(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, operation: str, payload: Mapping[str, Any]) -> Mapping[str, Any]:
         binding = ProviderTransportBindings().describe(provider)
         normalized_payload = self.normalizers.normalize_outbound(provider=provider, operation=operation, payload={k: v for k, v in payload.items() if not str(k).startswith('_')})
@@ -36,11 +35,12 @@ class VendorHttpLiveTransport:
         public_request = {**prepared, 'headers': {k: ('***' if str(k).lower() in {'authorization', 'x-shopify-access-token', 'access-token', 'developer-token', 'x-viber-auth-token'} else v) for k, v in dict(prepared.get('headers') or {}).items()}}
         if isinstance(prepared.get('form_body'), Mapping):
             public_request['form_body'] = {k: ('***' if k == 'access_token' else v) for k, v in prepared['form_body'].items()}
-        guarded_native_write = provider.provider_key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging'}
+        guarded_native_write = provider.provider_key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging'}
         bot_token_native = provider.provider_key in {'slack_messaging', 'discord_messaging'}
         probe_only_native = provider.provider_key in {'line_messaging', 'viber_messaging'}
+        outbound_only_native = provider.provider_key in {'instagram_messaging', 'messenger_messaging'}
         native_write_approved = operation == 'message_send' and bool(payload.get('_provider_write_approved', False))
-        if not self.bind_live_network or not bool(payload.get('_allow_network', False)) or (guarded_native_write and operation not in {'health_probe', 'message_read'} and not native_write_approved) or (probe_only_native and operation != 'health_probe'):
+        if not self.bind_live_network or not bool(payload.get('_allow_network', False)) or (guarded_native_write and operation not in {'health_probe', 'message_read'} and not native_write_approved) or (probe_only_native and operation != 'health_probe') or (outbound_only_native and operation != 'message_send'):
             return {
                 '_prepared_only': True,
                 'provider_key': provider.provider_key,
@@ -56,6 +56,8 @@ class VendorHttpLiveTransport:
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_probe_token_missing'}
         if bot_token_native and '{bot_token}' in str(prepared):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_bot_token_missing'}
+        if outbound_only_native and ('{access_token}' in str(prepared) or any(token in str(prepared) for token in ('{ig_user_id}', '{page_id}'))):
+            return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_meta_credentials_missing'}
         if bot_token_native and operation == 'message_read' and (((channel_id := str(normalized_payload.get('channel') or normalized_payload.get('channel_id') or '')) in {'', '{channel_id}'}) or (provider.provider_key == 'discord_messaging' and not (channel_id.isascii() and channel_id.isdigit()))):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_message_read_payload_invalid'}
         if native_write_approved and operation == 'message_send':
@@ -65,6 +67,7 @@ class VendorHttpLiveTransport:
                 or (provider.provider_key == 'max_messaging' and not (normalized_payload.get('chat_id') or normalized_payload.get('user_id')))
                 or (provider.provider_key == 'slack_messaging' and channel_id in {'', '{channel_id}'})
                 or (provider.provider_key == 'discord_messaging' and not (channel_id.isascii() and channel_id.isdigit()))
+                or (provider.provider_key in {'instagram_messaging', 'messenger_messaging'} and str(normalized_payload.get('recipient_id') or '') in {'', '{recipient_id}'})
             )
             if invalid_recipient or not str(normalized_payload.get('message') or normalized_payload.get('text') or '').strip():
                 return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_message_send_payload_invalid'}
@@ -82,7 +85,7 @@ class VendorHttpLiveTransport:
         response_headers = {
             str(key): str(value)
             for key, value in dict(result.headers or {}).items()
-            if str(key).lower().startswith('x-ratelimit-') or str(key).lower() == 'retry-after'
+            if str(key).lower().startswith('x-ratelimit-') or str(key).lower() in {'retry-after', 'x-business-use-case-usage', 'x-app-usage', 'x-page-usage', 'x-fb-request-id'}
         }
         parsed = self.response_parsers.parse(
             provider=provider,
@@ -102,11 +105,13 @@ class VendorHttpLiveTransport:
             response['error_kind'] = result.error_kind
             response['error_message'] = result.error_message or ''
         return response
-
     def _prepare_request(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, operation: str, payload: Mapping[str, Any], binding: Mapping[str, Any]) -> Mapping[str, Any]:
         secrets = self._load_secrets(provider=provider, tenant_id=tenant_id, business_id=business_id)
         url = self._render_url(provider=provider, operation=operation, payload=payload, binding=binding, secrets=secrets)
         headers = self._build_headers(provider=provider, secrets=secrets)
+        if provider.provider_key in {'instagram_messaging', 'messenger_messaging'}:
+            body = {'recipient': {'id': str(payload.get('recipient_id') or '')}, **({'messaging_type': 'RESPONSE'} if provider.provider_key == 'messenger_messaging' else {}), 'message': {'text': str(payload.get('text') or '')}}
+            return {'url': url, 'method': 'POST', 'headers': headers, 'json_body': body}
         if provider.provider_key == 'line_messaging':
             return {'url': url, 'method': 'GET' if operation == 'health_probe' else 'POST', 'headers': headers, 'json_body': None if operation == 'health_probe' else dict(payload or {})}
         if provider.provider_key == 'viber_messaging':
@@ -131,7 +136,6 @@ class VendorHttpLiveTransport:
         method = 'GET' if operation in {'health_probe', 'message_read', 'contact_profile_read'} or operation.endswith('_sync') else 'POST'
         json_body = None if method == 'GET' else ({'text': str(payload.get('text') or '')} if provider.provider_key == 'max_messaging' and operation == 'message_send' else dict(payload or {}))
         return {'url': url, 'method': method, 'headers': headers, 'json_body': json_body}
-
     def _load_secrets(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str) -> dict[str, str]:
         values = {}
         for secret_field in provider.secret_fields:
@@ -141,20 +145,20 @@ class VendorHttpLiveTransport:
             except Exception:
                 continue
         return values
-
     def _build_headers(self, *, provider: ProviderDefinition, secrets: Mapping[str, str]) -> Mapping[str, str]:
         key = provider.provider_key
-        auth = {'whatsapp_cloud': ('Authorization', f"Bearer {secrets.get('access_token','{access_token}')}"), 'max_messaging': ('Authorization', secrets.get('access_token', '{access_token}')), 'slack_messaging': ('Authorization', f"Bearer {secrets.get('bot_token','{bot_token}')}"), 'discord_messaging': ('Authorization', f"Bot {secrets.get('bot_token','{bot_token}')}"), 'line_messaging': ('Authorization', f"Bearer {secrets.get('channel_access_token','{channel_access_token}')}"), 'viber_messaging': ('X-Viber-Auth-Token', secrets.get('auth_token', '{auth_token}')), 'shopify': ('X-Shopify-Access-Token', secrets.get('admin_access_token', '{admin_access_token}')), 'hubspot': ('Authorization', f"Bearer {secrets.get('private_app_token','{private_app_token}')}"), 'meta_ads': ('Authorization', f"Bearer {secrets.get('access_token','{access_token}')}"), 'tiktok_ads': ('Access-Token', secrets.get('access_token', '{access_token}'))}.get(key)
+        auth = {'whatsapp_cloud': ('Authorization', f"Bearer {secrets.get('access_token','{access_token}')}"), 'max_messaging': ('Authorization', secrets.get('access_token', '{access_token}')), 'slack_messaging': ('Authorization', f"Bearer {secrets.get('bot_token','{bot_token}')}"), 'discord_messaging': ('Authorization', f"Bot {secrets.get('bot_token','{bot_token}')}"), 'instagram_messaging': ('Authorization', f"Bearer {secrets.get('access_token','{access_token}')}"), 'messenger_messaging': ('Authorization', f"Bearer {secrets.get('access_token','{access_token}')}"), 'line_messaging': ('Authorization', f"Bearer {secrets.get('channel_access_token','{channel_access_token}')}"), 'viber_messaging': ('X-Viber-Auth-Token', secrets.get('auth_token', '{auth_token}')), 'shopify': ('X-Shopify-Access-Token', secrets.get('admin_access_token', '{admin_access_token}')), 'hubspot': ('Authorization', f"Bearer {secrets.get('private_app_token','{private_app_token}')}"), 'meta_ads': ('Authorization', f"Bearer {secrets.get('access_token','{access_token}')}"), 'tiktok_ads': ('Access-Token', secrets.get('access_token', '{access_token}'))}.get(key)
         headers = {'Content-Type': 'application/x-www-form-urlencoded' if key == 'vk_messaging' else 'application/json'}
         if auth:
             headers[auth[0]] = auth[1]
         if key == 'google_ads':
             headers.update({'Authorization': f"Bearer {secrets.get('access_token','{access_token}')}", 'developer-token': secrets.get('developer_token', '{developer_token}')})
         return headers
-
     def _render_url(self, *, provider: ProviderDefinition, operation: str, payload: Mapping[str, Any], binding: Mapping[str, Any], secrets: Mapping[str, str]) -> str:
         base_url = str(binding.get('base_url') or '')
         path_family = str(binding.get('sync_path_family') or '')
+        if provider.provider_key in {'instagram_messaging', 'messenger_messaging'}:
+            return f"{base_url}{path_family.format(**({'ig_user_id': secrets.get('ig_user_id') or payload.get('ig_user_id') or '{ig_user_id}'} if provider.provider_key == 'instagram_messaging' else {'page_id': secrets.get('page_id') or payload.get('page_id') or '{page_id}'}))}"
         if provider.provider_key == 'line_messaging':
             return f"{base_url}{'/v2/bot/info' if operation == 'health_probe' else '/v2/bot/message/push'}"
         if provider.provider_key == 'viber_messaging':
@@ -194,8 +198,8 @@ class VendorHttpLiveTransport:
 
 
 def build_live_http_transports(secret_vault: SecretVault, *, bind_live_network: bool = False) -> dict[str, VendorHttpLiveTransport]:
-    providers = ('telegram_bot','whatsapp_cloud','vk_messaging','max_messaging','slack_messaging','discord_messaging','line_messaging','viber_messaging','shopify','woocommerce','hubspot','meta_ads','google_ads','tiktok_ads')
-    live_network_keys = {'telegram_bot','hubspot','vk_messaging','max_messaging','slack_messaging','discord_messaging','line_messaging','viber_messaging'}
+    providers = ('telegram_bot','whatsapp_cloud','vk_messaging','max_messaging','slack_messaging','discord_messaging','instagram_messaging','messenger_messaging','line_messaging','viber_messaging','shopify','woocommerce','hubspot','meta_ads','google_ads','tiktok_ads')
+    live_network_keys = {'telegram_bot','hubspot','vk_messaging','max_messaging','slack_messaging','discord_messaging','instagram_messaging','messenger_messaging','line_messaging','viber_messaging'}
     return {key: VendorHttpLiveTransport(secret_vault=secret_vault, provider_key=key, bind_live_network=bind_live_network and key in live_network_keys) for key in providers}
 
 
