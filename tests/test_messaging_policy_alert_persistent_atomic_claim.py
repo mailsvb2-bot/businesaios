@@ -175,3 +175,39 @@ def test_ambiguous_delivery_becomes_nonexpiring_fail_closed_state(monkeypatch):
     _, decision, record = suppression.evaluate(tenant_id='tenant-a', recipient_user_id='C1', channel='slack', alert_code='a1', affected_user_id='u1', business_id='biz-a', include_record=True)
     assert record is not None and record.pending_approval_id.startswith('ambiguous:')
     assert decision.should_send is False and decision.reason == 'ambiguous_delivery'
+
+
+def test_expired_reservation_recovers_durable_approval_created_before_crash(monkeypatch):
+    from types import SimpleNamespace
+
+    import runtime.messaging_policy_alert_dedup.suppression_service as approval_module
+    import runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service as mark_module
+    import runtime.messaging_policy_alert_dedup_persistent.tenant_suppression_service as suppression_module
+
+    class _Gateway:
+        def __init__(self): self.items = {}
+        def get_value(self, *, tenant_id: str, key: str): return self.items.get((tenant_id, key))
+        def set_value(self, *, tenant_id: str, key: str, value): self.items[(tenant_id, key)] = dict(value)
+        def compare_and_set_value(self, *, tenant_id: str, key: str, expected, value) -> bool:
+            slot = (tenant_id, key)
+            if self.items.get(slot) != expected:
+                return False
+            self.items[slot] = dict(value)
+            return True
+
+    dedup_key, reservation_id = 'tenant-a|biz-a|ceo|slack|a1|u1', 'dead-worker'
+    approval = SimpleNamespace(status=SimpleNamespace(value='requested'), request=SimpleNamespace(metadata={'approval_completion_context': {'dedup_key': dedup_key, 'reservation_id': reservation_id}}))
+    def approval_store_factory():
+        return SimpleNamespace(list_for_tenant=lambda **_: (approval,))
+    assert approval_module._approval_is_pending(f'reservation:{reservation_id}', approval_store_factory=approval_store_factory, tenant_id='tenant-a', dedup_key=dedup_key) is True
+    monkeypatch.setattr(suppression_module, '_approval_is_pending', lambda approval_id, **kwargs: approval_module._approval_is_pending(approval_id, approval_store_factory=approval_store_factory, **kwargs))
+    gateway = _Gateway()
+    factory = TenantScopedDedupStoreFactory(settings_gateway=gateway)
+    mark = TenantAwareAlertNotificationMarkSentService(store_factory=factory)
+    monkeypatch.setattr(mark_module, 'now_epoch_s', lambda: 100)
+    assert mark.reserve(tenant_id='tenant-a', dedup_key=dedup_key, expected_record=None, reservation_id=reservation_id) is True
+    monkeypatch.setattr(suppression_module, 'now_epoch_s', lambda: 500)
+    suppression = TenantAwareAlertNotificationSuppressionService(store_factory=factory, reservation_lease_s=300)
+    _, decision, record = suppression.evaluate(tenant_id='tenant-a', recipient_user_id='ceo', channel='slack', alert_code='a1', affected_user_id='u1', business_id='biz-a', include_record=True)
+    assert record is not None and record.pending_approval_id == 'reservation:dead-worker'
+    assert decision.should_send is False and decision.reason == 'reservation_active'

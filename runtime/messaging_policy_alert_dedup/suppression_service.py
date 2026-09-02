@@ -10,15 +10,16 @@ from runtime.messaging_policy_alert_dedup.suppression_decision import AlertSuppr
 from runtime.messaging_policy_alert_dedup.time_now import now_epoch_s
 
 
-def _approval_is_pending(approval_id: str, *, approval_store_factory=build_default_approval_store) -> bool:
+def _approval_is_pending(approval_id: str, *, approval_store_factory=build_default_approval_store, tenant_id: str = "", dedup_key: str = "") -> bool:
     try:
-        record = approval_store_factory().get(str(approval_id))
+        store, key = approval_store_factory(), str(approval_id)
+        if key.startswith("reservation:"):
+            reservation_id = key.removeprefix("reservation:")
+            return any(str((ctx := dict(row.request.metadata).get("approval_completion_context") or {}).get("dedup_key") or "") == str(dedup_key) and str(ctx.get("reservation_id") or "") == reservation_id and str(getattr(row.status, "value", row.status)).casefold() in {"requested", "approved"} for row in store.list_for_tenant(tenant_id=tenant_id))
+        record = store.get(key)
     except Exception:
         return True
-    if record is None:
-        return False
-    status = str(getattr(getattr(record, "status", ""), "value", getattr(record, "status", ""))).strip().casefold()
-    return status in {"requested", "approved"}
+    return bool(record) and str(getattr(record.status, "value", record.status)).strip().casefold() in {"requested", "approved"}
 
 
 class AlertNotificationSuppressionService:

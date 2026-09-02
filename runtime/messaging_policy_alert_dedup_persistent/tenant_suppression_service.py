@@ -20,7 +20,7 @@ class TenantAwareAlertNotificationSuppressionService:
             decision = AlertSuppressionDecision(should_send=True, reason='first_send')
         elif record.is_pending:
             reservation, ambiguous = (pending_id := str(record.pending_approval_id)).startswith('reservation:'), pending_id.startswith('ambiguous:')
-            active = (int(record.sent_at_epoch_s) > 0 and max(0, int(now_epoch_s()) - int(record.sent_at_epoch_s)) < self._reservation_lease_s) if reservation else (True if ambiguous else bool(self._approval_status_resolver(pending_id)))
+            active = ((int(record.sent_at_epoch_s) > 0 and max(0, int(now_epoch_s()) - int(record.sent_at_epoch_s)) < self._reservation_lease_s) or _approval_is_pending(pending_id, tenant_id=tenant_id, dedup_key=dedup_key)) if reservation else (True if ambiguous else bool(self._approval_status_resolver(pending_id)))
             decision = AlertSuppressionDecision(should_send=not active, reason=(('reservation_active' if active else 'reservation_expired') if reservation else ('ambiguous_delivery' if ambiguous else ('approval_pending' if active else 'approval_terminal'))))
         elif int(now_epoch_s()) - int(record.sent_at_epoch_s) < int(self._cooldown_s):
             decision = AlertSuppressionDecision(should_send=False, reason='cooldown_active')
