@@ -21,7 +21,7 @@ def _message(channel: str) -> OutboundMessage:
 
 
 @pytest.mark.lock
-@pytest.mark.parametrize("source,target", (("whatsapp", "instagram"), ("slack", "messenger")))
+@pytest.mark.parametrize("source,target", (("whatsapp", "instagram"), ("slack", "messenger"), ("whatsapp", "line"), ("slack", "viber")))
 def test_policy_drops_meta_fallback_without_channel_scoped_recipient(monkeypatch, source, target):
     runtime = SimpleNamespace(settings_gateway=None)
     monkeypatch.setattr(
@@ -69,7 +69,7 @@ def test_policy_drops_meta_fallback_without_channel_scoped_recipient(monkeypatch
 
 
 @pytest.mark.lock
-@pytest.mark.parametrize("channel", ("instagram", "messenger"))
+@pytest.mark.parametrize("channel", ("instagram", "messenger", "line", "viber"))
 def test_policy_keeps_direct_meta_channel(monkeypatch, channel):
     runtime = SimpleNamespace(settings_gateway=None)
     monkeypatch.setattr(
