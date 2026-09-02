@@ -79,7 +79,7 @@ def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
             _apply_capability_routing(self, ordered_channels=plan.ordered_channels, disciplined_policy=disciplined_policy)
         )
     source_channel = normalize_channel(msg.channel)
-    if plan.ordered_channels and (safe_channels := tuple(channel for channel in plan.ordered_channels if channel not in {"instagram", "messenger"} or channel == source_channel)) != plan.ordered_channels:
+    if plan.ordered_channels and (safe_channels := tuple(channel for channel in plan.ordered_channels if channel not in {"instagram", "messenger", "line", "viber"} or channel == source_channel)) != plan.ordered_channels:
         plan = PolicyPlan(ordered_channels=safe_channels, reason_codes=tuple(dict.fromkeys((*plan.reason_codes, "scoped_recipient_fallback_blocked"))), terminal_reason=plan.terminal_reason if safe_channels else "no_eligible_channel_after_scoped_recipient_guard")
     recorder = build_policy_event_recorder_from_runtime(self)
     guard = getattr(msg, "transport_guard", None)

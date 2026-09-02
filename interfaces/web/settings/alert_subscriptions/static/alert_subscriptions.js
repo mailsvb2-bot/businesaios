@@ -158,7 +158,7 @@
 
     saveBtn.addEventListener("click", async function () {
       const missingNativeBusiness = state.items.some(function (item) {
-        return (["slack", "discord", "instagram", "messenger"].includes(item.channel)) && !(item.business_id || "").trim();
+        return (["slack", "discord", "instagram", "messenger", "line", "viber"].includes(item.channel)) && !(item.business_id || "").trim();
       });
       if (missingNativeBusiness) {
         status.textContent = "Business id is required for guarded native channels.";

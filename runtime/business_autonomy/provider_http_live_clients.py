@@ -35,12 +35,12 @@ class VendorHttpLiveTransport:
         public_request = {**prepared, 'headers': {k: ('***' if str(k).lower() in {'authorization', 'x-shopify-access-token', 'access-token', 'developer-token', 'x-viber-auth-token'} else v) for k, v in dict(prepared.get('headers') or {}).items()}}
         if isinstance(prepared.get('form_body'), Mapping):
             public_request['form_body'] = {k: ('***' if k == 'access_token' else v) for k, v in prepared['form_body'].items()}
-        guarded_native_write = provider.provider_key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging'}
+        guarded_native_write = provider.provider_key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'}
         bot_token_native = provider.provider_key in {'slack_messaging', 'discord_messaging'}
-        probe_only_native = provider.provider_key in {'line_messaging', 'viber_messaging'}
+        webhook_read_native = provider.provider_key in {'line_messaging', 'viber_messaging'}
         outbound_only_native = provider.provider_key in {'instagram_messaging', 'messenger_messaging'}
         native_write_approved = operation == 'message_send' and bool(payload.get('_provider_write_approved', False))
-        if not self.bind_live_network or not bool(payload.get('_allow_network', False)) or (guarded_native_write and operation not in {'health_probe', 'message_read'} and not native_write_approved) or (probe_only_native and operation != 'health_probe') or (outbound_only_native and operation != 'message_send'):
+        if not self.bind_live_network or not bool(payload.get('_allow_network', False)) or (guarded_native_write and operation not in {'health_probe', 'message_read'} and not native_write_approved) or (webhook_read_native and operation not in {'health_probe', 'message_send'}) or (outbound_only_native and operation != 'message_send'):
             return {
                 '_prepared_only': True,
                 'provider_key': provider.provider_key,
@@ -52,7 +52,7 @@ class VendorHttpLiveTransport:
             }
         if guarded_native_write and '{access_token}' in str(prepared):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_access_token_missing'}
-        if probe_only_native and (('{channel_access_token}' in str(prepared)) or ('{auth_token}' in str(prepared))):
+        if webhook_read_native and (('{channel_access_token}' in str(prepared)) or ('{auth_token}' in str(prepared))):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_probe_token_missing'}
         if bot_token_native and '{bot_token}' in str(prepared):
             return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_bot_token_missing'}
@@ -67,9 +67,9 @@ class VendorHttpLiveTransport:
                 or (provider.provider_key == 'max_messaging' and not (normalized_payload.get('chat_id') or normalized_payload.get('user_id')))
                 or (provider.provider_key == 'slack_messaging' and channel_id in {'', '{channel_id}'})
                 or (provider.provider_key == 'discord_messaging' and not (channel_id.isascii() and channel_id.isdigit()))
-                or (provider.provider_key in {'instagram_messaging', 'messenger_messaging'} and str(normalized_payload.get('recipient_id') or '') in {'', '{recipient_id}'})
+                or (provider.provider_key in {'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'} and (str(normalized_payload.get({'instagram_messaging': 'recipient_id', 'messenger_messaging': 'recipient_id', 'line_messaging': 'to', 'viber_messaging': 'receiver'}[provider.provider_key]) or '') in {'', '{recipient_id}'} or (provider.provider_key == 'viber_messaging' and str(dict(dict(prepared.get('json_body') or {}).get('sender') or {}).get('name') or '') in {'', '{sender_name}'})))
             )
-            if invalid_recipient or not str(normalized_payload.get('message') or normalized_payload.get('text') or '').strip():
+            if invalid_recipient or not str(next((item.get('text') for item in (normalized_payload.get('messages') or ()) if isinstance(item, Mapping) and item.get('text')), '') or normalized_payload.get('message') or normalized_payload.get('text') or '').strip():
                 return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_message_send_payload_invalid'}
         body, form = prepared.get('json_body'), prepared.get('form_body')
         raw = import_internal_attr('runtime._internal.http_transport', 'form_urlencode')(dict(form)) if isinstance(form, Mapping) else (None if body is None else json.dumps(body, sort_keys=True).encode('utf-8'))
@@ -85,7 +85,7 @@ class VendorHttpLiveTransport:
         response_headers = {
             str(key): str(value)
             for key, value in dict(result.headers or {}).items()
-            if str(key).lower().startswith('x-ratelimit-') or str(key).lower() in {'retry-after', 'x-business-use-case-usage', 'x-app-usage', 'x-page-usage', 'x-fb-request-id'}
+            if str(key).lower().startswith('x-ratelimit-') or str(key).lower() in {'retry-after', 'x-business-use-case-usage', 'x-app-usage', 'x-page-usage', 'x-fb-request-id', 'x-line-request-id', 'x-line-accepted-request-id'}
         }
         parsed = self.response_parsers.parse(
             provider=provider,

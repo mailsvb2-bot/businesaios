@@ -51,7 +51,7 @@ def lifecycle_counts(records: tuple[Mapping[str, Any], ...], *, status_key: str 
 def resume_hint(item: Mapping[str, Any]) -> dict[str, object]:
     metadata = safe_dict(item.get('metadata'))
     action_name = text(item.get('action_name') or metadata.get('action_name'))
-    provider_resume = action_name in {'provider.vk_messaging.message_send', 'provider.max_messaging.message_send', 'provider.slack_messaging.message_send', 'provider.discord_messaging.message_send', 'provider.instagram_messaging.message_send', 'provider.messenger_messaging.message_send'}
+    provider_resume = action_name in {'provider.vk_messaging.message_send', 'provider.max_messaging.message_send', 'provider.slack_messaging.message_send', 'provider.discord_messaging.message_send', 'provider.instagram_messaging.message_send', 'provider.messenger_messaging.message_send', 'provider.line_messaging.message_send', 'provider.viber_messaging.message_send'}
     return {
         'execution_id': text(item.get('subject_id') or item.get('execution_id')) or None,
         'decision_id': text(item.get('decision_id') or metadata.get('decision_id')) or None,

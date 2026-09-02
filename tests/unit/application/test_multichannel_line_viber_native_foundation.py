@@ -53,7 +53,7 @@ def test_line_viber_native_credentials_extend_bridge_without_replacing_it() -> N
         assert binding['live_read_ready'] is False
         assert binding['live_ready'] is False
         truth = provider_truth_map()[key]
-        assert truth.write_supported is False and truth.live_ready is False
+        assert truth.write_supported is True and truth.approval_required is True and truth.live_ready is False
 
 
 def test_line_native_signature_uses_raw_body_and_cannot_downgrade_to_bridge() -> None:
@@ -158,7 +158,7 @@ def test_line_viber_prepared_outbound_matches_vendor_shape_but_remains_non_live(
     prepared = build_live_http_transports(vault, bind_live_network=False)['viber_messaging'].execute(provider=providers['viber_messaging'], tenant_id='tenant-a', business_id='business-a', operation='message_send', payload={'user_id': 'V1', 'text': 'hello'})['request']
     assert prepared['json_body']['sender']['name'] == 'Configured Owner'
     for key in ('line_messaging', 'viber_messaging'):
-        assert provider_truth_map()[key].write_supported is False
+        assert provider_truth_map()[key].write_supported is True and provider_truth_map()[key].live_ready is False
 
 
 def test_line_viber_live_health_uses_official_probe_only(monkeypatch, tmp_path) -> None:

@@ -25,7 +25,7 @@ WEBHOOK_CHANNELS = tuple(
     for channel, spec in CHANNEL_SPECS.items()
     if spec.mode_default == "webhook"
 )
-NATIVE_GUARDED_CHANNELS = frozenset({"vk", "max", "slack", "discord", "instagram", "messenger"})
+NATIVE_GUARDED_CHANNELS = frozenset({"vk", "max", "slack", "discord", "instagram", "messenger", "line", "viber"})
 GENERIC_WEBHOOK_DISPATCH_CHANNELS = tuple(
     channel for channel in WEBHOOK_CHANNELS if channel not in NATIVE_GUARDED_CHANNELS
 )

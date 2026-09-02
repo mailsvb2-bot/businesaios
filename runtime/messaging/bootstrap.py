@@ -18,7 +18,7 @@ _SPECIAL_ADAPTER_FACTORIES = {
     "api": APIGatewayAdapter,
 }
 _PROVIDER_TRANSPORT_KINDS = frozenset({"provider_webhook", "smtp"})
-_NATIVE_QUEUE_PROVIDERS = {"vk": "vk_messaging", "max": "max_messaging", "slack": "slack_messaging", "discord": "discord_messaging", "instagram": "instagram_messaging", "messenger": "messenger_messaging"}
+_NATIVE_QUEUE_PROVIDERS = {"vk": "vk_messaging", "max": "max_messaging", "slack": "slack_messaging", "discord": "discord_messaging", "instagram": "instagram_messaging", "messenger": "messenger_messaging", "line": "line_messaging", "viber": "viber_messaging"}
 def _build_provider_adapter(channel: str):
     spec = CHANNEL_SPECS[channel]
     runner_type = make_channel_runner(
@@ -51,10 +51,10 @@ class _NativeProviderQueueAdapter:
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_business_id_required"})
         if self.provider_key in {"slack_messaging", "discord_messaging"} and not str(context.get("channel_id") or "").strip():
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_channel_id_required"})
-        if self.provider_key in {"instagram_messaging", "messenger_messaging"} and not str(context.get("recipient_id") or "").strip():
+        if (recipient_key := {"instagram_messaging": "recipient_id", "messenger_messaging": "recipient_id", "line_messaging": "to", "viber_messaging": "receiver"}.get(self.provider_key)) and not str(context.get(recipient_key) or "").strip():
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_recipient_id_required"})
         service = self._service()
-        payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(self.provider_key), operation="message_send", payload={"user_id": msg.user_id, "text": msg.text, **{key: context[key] for key in ("peer_id", "chat_id", "random_id", "channel_id", "recipient_id") if key in context}})
+        payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(self.provider_key), operation="message_send", payload={"user_id": msg.user_id, "text": msg.text, **{key: context[key] for key in ("peer_id", "chat_id", "random_id", "channel_id", "recipient_id", "to", "receiver") if key in context}})
         payload["_approval"] = {"decision_id": str(msg.decision_id), "execution_id": str(msg.decision_id), **({"approval_id": str(context["approval_id"])} if context.get("approval_id") else {})}
         dedup_context = (msg.track_payload or {}).get("_alert_dedup") if isinstance(msg.track_payload, dict) else None
         completion_context = {key: str(dedup_context.get(key) or "").strip() for key in ("dedup_key", "reservation_id")} if isinstance(dedup_context, Mapping) else {}

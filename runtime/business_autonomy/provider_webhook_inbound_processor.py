@@ -29,7 +29,8 @@ class ProviderWebhookInboundProcessor:
             text=str(payload.get('text') or ''),
             correlation_id=str(payload.get('correlation_id') or ''),
             transport_message_id=str(payload.get('transport_message_id') or ''),
-            metadata={'source': 'provider_webhook_handoff', **dict(payload.get('metadata') or {})},
+            external_user_ref=str(payload.get('external_user_ref') or payload.get('user_id') or ''),
+            metadata={'source': 'provider_webhook_handoff', 'chat_id': str(payload.get('chat_id') or ''), **dict(payload.get('metadata') or {})},
         )
         # Provider webhook handoff must not issue decisions directly. The
         # inbound gateway owns the canonical bridge to DecisionCore.

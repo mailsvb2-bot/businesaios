@@ -180,7 +180,7 @@ def test_native_messaging_live_write_requires_exact_approved_subject() -> None:
 
 
 def test_native_messaging_live_write_truth_is_guarded_not_publicly_unconditional() -> None:
-    for provider_key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging'):
+    for provider_key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'):
         provider = provider_map()[provider_key]
         denied = ProviderRuntimeWriteGuard().evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload={'text': 'hello'})
         assert denied.allowed is False and denied.reason == 'approval_context_missing'
