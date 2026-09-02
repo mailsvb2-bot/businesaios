@@ -10,10 +10,7 @@ CANON_PROVIDER_WEBHOOK_INBOUND_HANDOFF = True
 
 
 def build_provider_webhook_inbound_handoff(
-    *,
-    tenant_id: str,
-    business_id: str,
-    provider_key: str,
+    *, tenant_id: str, business_id: str, provider_key: str,
     messaging_ingress: Mapping[str, Any] | None,
     route_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -22,20 +19,12 @@ def build_provider_webhook_inbound_handoff(
         return {}
 
     message = InboundMessage(
-        tenant_id=str(tenant_id),
-        channel=str(ingress.get('channel') or ''),
-        user_id=str(ingress.get('user_id') or ''),
-        text=str(ingress.get('text') or ''),
-        correlation_id=str(ingress.get('correlation_id') or ''),
-        transport_message_id=str(ingress.get('transport_message_id') or ''),
-        external_user_ref=str(ingress.get('external_user_ref') or ingress.get('user_id') or ''),
-        payload=dict(route_metadata or {}),
+        tenant_id=str(tenant_id), channel=str(ingress.get('channel') or ''), user_id=str(ingress.get('user_id') or ''),
+        text=str(ingress.get('text') or ''), correlation_id=str(ingress.get('correlation_id') or ''), transport_message_id=str(ingress.get('transport_message_id') or ''),
+        external_user_ref=str(ingress.get('external_user_ref') or ingress.get('user_id') or ''), payload=dict(route_metadata or {}),
         metadata={
-            'provider_key': str(provider_key),
-            'business_id': str(business_id),
-            'chat_id': str(ingress.get('chat_id') or ''),
-            'route_metadata': dict(route_metadata or {}),
-            'source': 'provider_webhook',
+            'provider_key': str(provider_key), 'business_id': str(business_id), 'chat_id': str(ingress.get('chat_id') or ''),
+            'route_metadata': dict(route_metadata or {}), 'source': 'provider_webhook',
         },
     )
     world_state_input = map_inbound_to_world_state(message)
