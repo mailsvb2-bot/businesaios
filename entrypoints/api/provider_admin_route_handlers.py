@@ -221,10 +221,10 @@ class ProviderAdminRouteHandlers:
         status = str(result.get('status') or '').strip()
         error_category = str(dict(result.get('error') or {}).get('category') or '').strip()
         delivered = bool(result.get('accepted')) and status == 'live_executed' and bool(str(dict(result.get('parsed_response') or {}).get('resource_id') or '').strip())
-        ambiguous = status in {'', 'ambiguous_delivery', 'in_progress'} or error_category == 'ambiguous_delivery'
+        ambiguous = status in {'', 'ambiguous_delivery', 'in_progress'} or status.startswith('provider_queue_') or error_category == 'ambiguous_delivery'
         terminal_non_delivery = (not delivered and not ambiguous and (status in {'rejected_misconfigured', 'rejected_provider_write_guard', 'rejected_provider_write_requires_queue', 'live_transport_unbound', 'unsupported_operation'} or (status == 'live_execution_failed' and bool(dict(result.get('parsed_response') or {}).get('error_code')))))
-        if callable(self.approval_completion_handler) and (delivered or terminal_non_delivery):
-            self.approval_completion_handler(tenant_id=str(tenant_id), approval_id=str(record.request.approval_id), dedup_key=str(completion.get('dedup_key') or ''), reservation_id=str(completion.get('reservation_id') or ''), delivered=delivered)
+        if callable(self.approval_completion_handler) and (delivered or terminal_non_delivery or ambiguous):
+            self.approval_completion_handler(tenant_id=str(tenant_id), approval_id=str(record.request.approval_id), dedup_key=str(completion.get('dedup_key') or ''), reservation_id=str(completion.get('reservation_id') or ''), delivered=delivered, ambiguous=ambiguous)
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'approval_id': record.request.approval_id, 'decision_id': decision_id, 'execution': execution}
     def tick_provider_sync_queue(self, *, tenant_id: str, worker_id: str = 'provider-runtime-worker') -> dict[str, Any]:
         return self._service('default-business').tick_provider_sync_queue(tenant_id=tenant_id, worker_id=worker_id)

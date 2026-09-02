@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
-from threading import Barrier, Lock, Thread
+from threading import Barrier, BrokenBarrierError, Lock, Thread
 
 from runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service import (
     TenantAwareAlertNotificationMarkSentService,
@@ -16,6 +16,7 @@ from runtime.messaging_policy_alert_dedup_persistent.tenant_suppression_service 
 from runtime.messaging_policy_alert_subscriptions.notification_item import AlertNotificationItem
 from runtime.messaging_policy_alert_subscriptions.notification_plan import AlertNotificationPlan
 from runtime.messaging_policy_alert_subscriptions.notifier_result import AlertNotifierResult
+from runtime.platform.event_store.memory_event_store import MemoryEventStore
 from runtime.platform.event_store.sqlite_event_store import SqliteEventStore
 from runtime.settings.event_store_gateway import build_event_store_settings_gateway
 
@@ -211,3 +212,44 @@ def test_expired_reservation_recovers_durable_approval_created_before_crash(monk
     _, decision, record = suppression.evaluate(tenant_id='tenant-a', recipient_user_id='ceo', channel='slack', alert_code='a1', affected_user_id='u1', business_id='biz-a', include_record=True)
     assert record is not None and record.pending_approval_id == 'reservation:dead-worker'
     assert decision.should_send is False and decision.reason == 'reservation_active'
+
+
+def test_approval_completion_converts_ambiguous_outcome_to_durable_state():
+    gateway = _IndexFailingGateway()
+    factory = TenantScopedDedupStoreFactory(settings_gateway=gateway)
+    mark = TenantAwareAlertNotificationMarkSentService(store_factory=factory)
+    dedup_key = "tenant-a|biz-a|ceo|slack|a1|u1"
+    assert mark.reserve(tenant_id="tenant-a", dedup_key=dedup_key, expected_record=None, reservation_id="res-1")
+    assert mark.mark_pending(tenant_id="tenant-a", dedup_key=dedup_key, approval_id="ap-1", reservation_id="res-1")
+    assert mark.finalize_approval(tenant_id="tenant-a", approval_id="ap-1", dedup_key=dedup_key, reservation_id="res-1", delivered=False, ambiguous=True)
+    record = factory.for_tenant(tenant_id="tenant-a").get(dedup_key=dedup_key)
+    assert record is not None and record.sent_at_epoch_s == 0 and record.pending_approval_id == "ambiguous:res-1"
+
+
+def test_memory_event_store_compare_and_set_setting_is_atomic_across_workers():
+    barrier = Barrier(2)
+
+    class _RacySettings(dict):
+        def get(self, key, default=None):
+            current = super().get(key, default)
+            try:
+                barrier.wait(timeout=0.1)
+            except BrokenBarrierError:
+                pass
+            return current
+
+    store = MemoryEventStore()
+    store._settings = _RacySettings({("tenant-a", "key"): {"value": 0}})
+    results = []
+
+    def _run(value: int):
+        results.append(store.compare_and_set_setting(tenant_id="tenant-a", key="key", expected={"value": 0}, value={"value": value}))
+
+    threads = [Thread(target=_run, args=(value,)) for value in (1, 2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=2)
+        assert not thread.is_alive()
+    assert sorted(results) == [False, True]
+    assert store.get_setting(tenant_id="tenant-a", key="key") in ({"value": 1}, {"value": 2})

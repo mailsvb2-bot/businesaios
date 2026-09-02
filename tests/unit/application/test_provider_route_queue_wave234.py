@@ -195,7 +195,7 @@ def test_provider_approval_resume_finalizes_alert_dedup_only_after_verified_deli
     envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='domain_action@v1', payload={'tenant_id': 'tenant-a'}))
     handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: _Service(), approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope, approval_completion_handler=lambda **kwargs: completed.append(kwargs))
     handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
-    assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1', 'dedup_key': 'dedup-1', 'reservation_id': 'res-1', 'delivered': True}]
+    assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1', 'dedup_key': 'dedup-1', 'reservation_id': 'res-1', 'delivered': True, 'ambiguous': False}]
 
 
 def test_provider_approval_resume_releases_alert_dedup_after_terminal_non_delivery():
@@ -212,11 +212,11 @@ def test_provider_approval_resume_releases_alert_dedup_after_terminal_non_delive
     envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='domain_action@v1', payload={'tenant_id': 'tenant-a'}))
     handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: _Service(), approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope, approval_completion_handler=lambda **kwargs: completed.append(kwargs))
     handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
-    assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1', 'dedup_key': 'dedup-1', 'reservation_id': 'res-1', 'delivered': False}]
+    assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1', 'dedup_key': 'dedup-1', 'reservation_id': 'res-1', 'delivered': False, 'ambiguous': False}]
 
 
 
-def test_provider_approval_resume_keeps_alert_reservation_for_receiptless_queue_failure():
+def test_provider_approval_resume_persists_ambiguous_alert_for_receiptless_queue_failure():
     completed = []
 
     class _Store:
@@ -231,7 +231,7 @@ def test_provider_approval_resume_keeps_alert_reservation_for_receiptless_queue_
     envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='domain_action@v1', payload={'tenant_id': 'tenant-a'}))
     handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: _Service(), approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope, approval_completion_handler=lambda **kwargs: completed.append(kwargs))
     handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
-    assert completed == []
+    assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1', 'dedup_key': 'dedup-1', 'reservation_id': 'res-1', 'delivered': False, 'ambiguous': True}]
 
 
 def test_receiptless_terminal_queue_state_is_ambiguous():
@@ -240,7 +240,7 @@ def test_receiptless_terminal_queue_state_is_ambiguous():
     assert result['status'] == 'ambiguous_delivery'
     assert result['error']['category'] == 'ambiguous_delivery'
 
-def test_provider_approval_resume_keeps_alert_reservation_on_ambiguous_delivery():
+def test_provider_approval_resume_persists_ambiguous_alert_on_ambiguous_delivery():
     completed = []
 
     class _Store:
@@ -255,4 +255,4 @@ def test_provider_approval_resume_keeps_alert_reservation_on_ambiguous_delivery(
     envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='domain_action@v1', payload={'tenant_id': 'tenant-a'}))
     handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: _Service(), approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope, approval_completion_handler=lambda **kwargs: completed.append(kwargs))
     handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
-    assert completed == []
+    assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1', 'dedup_key': 'dedup-1', 'reservation_id': 'res-1', 'delivered': False, 'ambiguous': True}]

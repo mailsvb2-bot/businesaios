@@ -48,8 +48,7 @@ class TenantAwareAlertNotificationMarkSentService:
         if current is None or str(current.pending_approval_id) not in allowed:
             return False
         return store.compare_and_set(expected=current, record=AlertNotificationDedupRecord(dedup_key=str(dedup_key), sent_at_epoch_s=0, pending_approval_id=f'ambiguous:{reservation_id}' if ambiguous else ''))
-
-    def finalize_approval(self, *, tenant_id: str, approval_id: str, dedup_key: str = "", reservation_id: str = "", delivered: bool = True) -> bool:
+    def finalize_approval(self, *, tenant_id: str, approval_id: str, dedup_key: str = "", reservation_id: str = "", delivered: bool = True, ambiguous: bool = False) -> bool:
         approval_key = str(approval_id or "").strip()
         store = self._store_factory.for_tenant(tenant_id=tenant_id)
         key = str(dedup_key or '').strip() or store.dedup_key_for_approval(approval_id=approval_key)
@@ -57,5 +56,5 @@ class TenantAwareAlertNotificationMarkSentService:
         allowed = {approval_key, self._reservation_id(reservation_id) if reservation_id else ''}
         if current is None or str(current.pending_approval_id) not in allowed:
             return False
-        target = AlertNotificationDedupRecord(dedup_key=key, sent_at_epoch_s=int(now_epoch_s()) if delivered else 0)
+        target = AlertNotificationDedupRecord(dedup_key=key, sent_at_epoch_s=int(now_epoch_s()) if delivered else 0, pending_approval_id=f'ambiguous:{reservation_id or approval_key}' if ambiguous else '')
         return store.compare_and_set(expected=current, record=target)

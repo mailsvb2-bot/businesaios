@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from copy import deepcopy
+from threading import RLock
 
 
 class _MemoryStoredEvent(dict):
@@ -17,6 +19,7 @@ class MemoryEventStore(list):
     def __init__(self, rows: Iterable[dict] = ()) -> None:
         super().__init__()
         self._next_append_seq = 0
+        self._settings_lock = RLock()
         self.extend(rows)
     def append(self, event: dict) -> None:
         self._next_append_seq += 1
@@ -142,27 +145,26 @@ class MemoryEventStore(list):
         super().extend(kept)
         return int(before - len(self))
     def get_setting(self, *, tenant_id: str, key: str):
-        store = getattr(self, "_settings", None)
-        if store is None:
-            return None
-        value = store.get((str(tenant_id), str(key)))
-        from copy import deepcopy
-        return deepcopy(value)
+        with self._settings_lock:
+            store = getattr(self, "_settings", None)
+            if store is None:
+                return None
+            return deepcopy(store.get((str(tenant_id), str(key))))
     def set_setting(self, *, tenant_id: str, key: str, value) -> None:
-        store = getattr(self, "_settings", None)
-        if store is None:
-            store = {}
-            self._settings = store
-        from copy import deepcopy
-        store[(str(tenant_id), str(key))] = deepcopy(value)
+        with self._settings_lock:
+            store = getattr(self, "_settings", None)
+            if store is None:
+                store = {}
+                self._settings = store
+            store[(str(tenant_id), str(key))] = deepcopy(value)
     def compare_and_set_setting(self, *, tenant_id: str, key: str, expected, value) -> bool:
-        store = getattr(self, "_settings", None)
-        if store is None:
-            store = {}
-            self._settings = store
-        slot = (str(tenant_id), str(key))
-        if store.get(slot) != expected:
-            return False
-        from copy import deepcopy
-        store[slot] = deepcopy(value)
-        return True
+        with self._settings_lock:
+            store = getattr(self, "_settings", None)
+            if store is None:
+                store = {}
+                self._settings = store
+            slot = (str(tenant_id), str(key))
+            if store.get(slot) != expected:
+                return False
+            store[slot] = deepcopy(value)
+            return True
