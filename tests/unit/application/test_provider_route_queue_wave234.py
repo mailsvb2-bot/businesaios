@@ -216,6 +216,24 @@ def test_provider_approval_resume_releases_alert_dedup_after_terminal_non_delive
 
 
 
+def test_provider_approval_resume_persists_ambiguous_alert_for_receiptless_transport_timeout():
+    completed = []
+
+    class _Store:
+        def get(self, approval_id):
+            metadata = {'action_name': 'provider.slack_messaging.message_send', 'decision_id': 'dec-1', 'approval_resume_context': {'provider_key': 'slack_messaging', 'business_id': 'biz-a', 'operation': 'message_send', 'payload': {'channel': 'C1', 'text': 'hello'}}, 'approval_completion_context': {'dedup_key': 'dedup-1', 'reservation_id': 'res-1'}}
+            return SimpleNamespace(status=SimpleNamespace(value='approved'), request=SimpleNamespace(approval_id=approval_id, tenant_id='tenant-a', subject_id='dec-1', metadata=metadata))
+
+    class _Service:
+        def execute_queued_provider_sync(self, **kwargs):
+            return {'result': {'accepted': False, 'status': 'live_execution_failed', 'error': {'category': 'transport_timeout', 'code': 'transport_timeout', 'retryable': True}}}
+
+    envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='domain_action@v1', payload={'tenant_id': 'tenant-a'}))
+    handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: _Service(), approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope, approval_completion_handler=lambda **kwargs: completed.append(kwargs))
+    handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
+    assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1', 'dedup_key': 'dedup-1', 'reservation_id': 'res-1', 'delivered': False, 'ambiguous': True}]
+
+
 def test_provider_approval_resume_persists_ambiguous_alert_for_receiptless_queue_failure():
     completed = []
 
