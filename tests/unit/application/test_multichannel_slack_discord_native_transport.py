@@ -9,6 +9,8 @@ from runtime.business_autonomy.provider_live_sync_runtime import ProviderLiveSyn
 from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimePlanner
 from runtime.business_autonomy.provider_transport_bindings import provider_transport_binding_for_key
 from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
+from runtime.messaging.bootstrap import _NativeProviderQueueAdapter
+from runtime.messaging.outbound_message import OutboundMessage
 from security.secret_contract import SecretRef
 from security.secret_vault import InMemorySecretVault
 
@@ -61,20 +63,21 @@ def test_slack_discord_live_probe_requires_bot_token_without_changing_dry_run() 
         assert live.metadata['missing_fields'] == ('bot_token',)
 
 
-def test_slack_discord_prepared_endpoints_remain_partial_truth() -> None:
+def test_slack_discord_guarded_write_truth_stays_non_live_without_external_proof() -> None:
     truth = provider_truth_map()
     for key in ('slack_messaging', 'discord_messaging'):
         row = truth[key]
-        assert row.has_real_endpoint is False
-        assert row.has_placeholder_endpoint is True
+        assert row.has_real_endpoint is True
+        assert row.has_placeholder_endpoint is False
         assert row.read_only_supported is True
-        assert row.status == ProviderTruthStatus.PARTIAL.value
+        assert row.write_supported is True
+        assert row.status == ProviderTruthStatus.READ_ONLY_READY.value
         assert row.live_ready is False
         assert row.required_credentials == ('webhook_secret',)
         assert row.health_requirements == ('webhook_secret', 'bot_token')
 
 
-def test_slack_discord_live_read_transport_enters_control_plane_without_claiming_live_write() -> None:
+def test_slack_discord_live_transport_enters_control_plane_without_claiming_unconditional_live_write() -> None:
     slack = provider_transport_binding_for_key('slack_messaging')
     discord = provider_transport_binding_for_key('discord_messaging')
     for binding in (slack, discord):
@@ -94,7 +97,8 @@ def test_slack_discord_live_read_transport_enters_control_plane_without_claiming
         assert runner['transport_bound'] is True
         assert runner['live_run_supported'] is True
         assert runner['live_read_supported'] is True
-        assert provider_truth_map()[key].write_supported is False
+        assert provider_truth_map()[key].write_supported is True
+        assert provider_truth_map()[key].live_ready is False
         live_client = admin.describe_provider_live_client(provider_key=key)
         assert live_client['network_capable'] is True
         assert live_client['transport_type'] == 'VendorHttpLiveTransport'
@@ -119,3 +123,46 @@ def test_discord_live_read_rejects_unsafe_channel_path_before_network(monkeypatc
     assert result['_prepared_only'] is True
     assert result['network_capable'] is False
     assert result['reason'] == 'native_message_read_payload_invalid'
+
+
+def test_slack_discord_native_adapter_has_no_generic_webhook_fallback() -> None:
+    for channel in ("slack", "discord"):
+        adapter = _NativeProviderQueueAdapter(channel, service_factory=lambda: (_ for _ in ()).throw(AssertionError("service must not be built without native context")))
+        result = adapter.send(OutboundMessage(decision_id="dec-1", correlation_id="corr-1", tenant_id="tenant-a", user_id="user-1", channel=channel, text="hello"))
+        assert result.ok is False and result.mode == "blocked"
+        assert result.detail["reason"] == "native_context_required"
+
+
+def test_slack_discord_native_adapter_rejects_missing_business_scope_before_service_build():
+    for channel in ("slack", "discord"):
+        adapter = _NativeProviderQueueAdapter(channel, service_factory=lambda: (_ for _ in ()).throw(AssertionError("service must not be built without business scope")))
+        result = adapter.send(
+            OutboundMessage(
+                decision_id="dec-1", correlation_id="corr-1", tenant_id="tenant-a", user_id="C123" if channel == "slack" else "123",
+                channel=channel, text="hello", track_payload={"_provider_native": {"provider_key": f"{channel}_messaging", "channel_id": "C123" if channel == "slack" else "123"}},
+            )
+        )
+        assert result.ok is False and result.mode == "blocked"
+        assert result.detail["reason"] == "native_business_id_required"
+
+
+def test_native_adapter_threads_internal_alert_completion_context_to_queue_only() -> None:
+    calls = []
+
+    class _Registry:
+        def get(self, key):
+            return provider_map()[key]
+
+    class _Service:
+        provider_registry = _Registry()
+
+        def execute_queued_provider_sync(self, **kwargs):
+            calls.append(kwargs)
+            return {'dispatch': {'queued': False, 'status': 'rejected_provider_write_guard', 'metadata': {'provider_write_guard': {'reason': 'approval_required', 'metadata': {'approval': {'reason': 'approval_submitted_awaiting_operator', 'approval_id': 'ap-1', 'approval_required': True}}}}}, 'result': None}
+
+    adapter = _NativeProviderQueueAdapter('slack', service_factory=lambda: _Service())
+    msg = OutboundMessage(decision_id='dec-1', correlation_id='corr-1', tenant_id='tenant-a', business_id='biz-a', user_id='C123', channel='slack', text='hello', track_payload={'_provider_native': {'provider_key': 'slack_messaging', 'business_id': 'biz-a', 'channel_id': 'C123'}, '_alert_dedup': {'dedup_key': 'dedup-1', 'reservation_id': 'res-1'}})
+    result = adapter.send(msg)
+    assert result.mode == 'approval_required' and result.detail['approval_id'] == 'ap-1'
+    assert calls[0]['approval_completion_context'] == {'dedup_key': 'dedup-1', 'reservation_id': 'res-1'}
+    assert '_alert_dedup' not in calls[0]['payload']

@@ -33,19 +33,26 @@ def reap_expired_claims_sqlite(*, db, tenant_id: str, queue_name: str, now=None)
     moment = normalize_now(now)
     rows = db.execute(
         """
-        SELECT job_id, updated_at FROM runtime_queue_jobs
+        SELECT job_id, updated_at, attempts, max_attempts, last_error FROM runtime_queue_jobs
         WHERE tenant_id = ? AND queue_name = ? AND state = ? AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
         """,
         (tenant_id, queue_name, JobState.CLAIMED.value, iso_datetime(moment)),
     ).fetchall()
     for row in rows:
+        exhausted = int(row["attempts"]) >= int(row["max_attempts"])
         db.execute(
             """
             UPDATE runtime_queue_jobs
-            SET state = ?, updated_at = ?, lease_owner_id = NULL, lease_fencing_token = 0, lease_claimed_at = NULL, lease_expires_at = NULL
+            SET state = ?, updated_at = ?, last_error = ?, lease_owner_id = NULL, lease_fencing_token = 0, lease_claimed_at = NULL, lease_expires_at = NULL
             WHERE tenant_id = ? AND job_id = ?
             """,
-            (JobState.PENDING.value, iso_datetime(max(moment, from_iso_datetime(row["updated_at"]) or moment)), tenant_id, str(row["job_id"])),
+            (
+                JobState.DEAD_LETTER.value if exhausted else JobState.PENDING.value,
+                iso_datetime(max(moment, from_iso_datetime(row["updated_at"]) or moment)),
+                "expired_claim_attempts_exhausted_ambiguous_delivery" if exhausted else row["last_error"],
+                tenant_id,
+                str(row["job_id"]),
+            ),
         )
     return len(rows)
 

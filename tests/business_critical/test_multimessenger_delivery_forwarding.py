@@ -11,16 +11,6 @@ from interfaces.messaging_runtime.capabilities import (
 )
 from interfaces.messaging_runtime.channel_aliases import canonical_channel_name
 from interfaces.messaging_runtime.channel_loader import BINDING_BUILDERS
-from runtime.handlers.delivery_contract import (
-    CANON_DELIVERY_METADATA_FORWARDER,
-    delivery_kwargs,
-)
-from runtime.handlers.profit_sprint_onboarding import handle_onboarding_start
-from runtime.handlers.platform_effects import (
-    handle_apply_offer_patch,
-    handle_enqueue_evolution_job,
-    handle_suggest_offer_patch,
-)
 from runtime.handler_impl.domains.admin_ops import handle_admin_set_role
 from runtime.handler_impl.domains.payment_ops import (
     handle_create_payment_and_send_link,
@@ -31,8 +21,18 @@ from runtime.handler_impl.domains.user_ops import (
     handle_send_weather,
     handle_set_user_setting,
 )
+from runtime.handlers.delivery_contract import (
+    CANON_DELIVERY_METADATA_FORWARDER,
+    delivery_kwargs,
+)
+from runtime.handlers.platform_effects import (
+    handle_apply_offer_patch,
+    handle_enqueue_evolution_job,
+    handle_suggest_offer_patch,
+)
+from runtime.handlers.profit_sprint_onboarding import handle_onboarding_start
 from runtime.messaging import CHANNEL_SPECS
-from runtime.messaging.bootstrap import build_multichannel_dispatcher
+from runtime.messaging.bootstrap import _NativeProviderQueueAdapter, build_multichannel_dispatcher
 from runtime.messaging.channel_types import ALL_CHANNELS, CHANNEL_TELEGRAM
 from runtime.ports.effects_admin import EffectsAdminPort
 from runtime.ports.effects_comms import EffectsCommsPort
@@ -120,6 +120,7 @@ def test_every_canonical_nontelegram_channel_has_a_real_dispatch_adapter() -> No
     assert set(CHANNEL_SPECS) == set(ALL_CHANNELS)
     assert set(dispatcher.adapters) == expected_nontelegram
     assert {"slack", "discord"}.issubset(dispatcher.adapters)
+    assert all(isinstance(dispatcher.adapters[channel], _NativeProviderQueueAdapter) for channel in ("vk", "max", "slack", "discord"))
 
 
 @pytest.mark.lock

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from interfaces.messaging.channel_common import (
     make_channel_adapter,
     make_channel_runner,
@@ -16,7 +18,7 @@ _SPECIAL_ADAPTER_FACTORIES = {
     "api": APIGatewayAdapter,
 }
 _PROVIDER_TRANSPORT_KINDS = frozenset({"provider_webhook", "smtp"})
-_NATIVE_QUEUE_PROVIDERS = {"vk": "vk_messaging", "max": "max_messaging"}
+_NATIVE_QUEUE_PROVIDERS = {"vk": "vk_messaging", "max": "max_messaging", "slack": "slack_messaging", "discord": "discord_messaging"}
 def _build_provider_adapter(channel: str):
     spec = CHANNEL_SPECS[channel]
     runner_type = make_channel_runner(
@@ -30,7 +32,7 @@ def _build_provider_adapter(channel: str):
 class _NativeProviderQueueAdapter:
     def __init__(self, channel: str, service_factory=None) -> None:
         self.channel, self.provider_key = str(channel), _NATIVE_QUEUE_PROVIDERS[str(channel)]
-        self._service_factory, self._cached_service, self._fallback = service_factory, None, _build_provider_adapter(self.channel)
+        self._service_factory, self._cached_service = service_factory, None
     def _service(self):
         if self._cached_service is None:
             if self._service_factory is None:
@@ -42,15 +44,19 @@ class _NativeProviderQueueAdapter:
     def send(self, msg) -> DeliveryResult:
         native_context = (msg.track_payload or {}).get("_provider_native") if isinstance(msg.track_payload, dict) else None
         if native_context is None:
-            return self._fallback.send(msg)
+            return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_context_required"})
         context = dict(native_context or {})
         business_id = str(context.get("business_id") or "").strip()
         if not business_id:
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_business_id_required"})
+        if self.provider_key in {"slack_messaging", "discord_messaging"} and not str(context.get("channel_id") or "").strip():
+            return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_channel_id_required"})
         service = self._service()
-        payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(self.provider_key), operation="message_send", payload={"user_id": msg.user_id, "text": msg.text, **{key: context[key] for key in ("peer_id", "chat_id", "random_id") if key in context}})
+        payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(self.provider_key), operation="message_send", payload={"user_id": msg.user_id, "text": msg.text, **{key: context[key] for key in ("peer_id", "chat_id", "random_id", "channel_id") if key in context}})
         payload["_approval"] = {"decision_id": str(msg.decision_id), "execution_id": str(msg.decision_id), **({"approval_id": str(context["approval_id"])} if context.get("approval_id") else {})}
-        outcome = service.execute_queued_provider_sync(tenant_id=msg.tenant_id, business_id=business_id, provider_key=self.provider_key, operation="message_send", mode="live", payload=payload, worker_id="provider-messaging-effect")
+        dedup_context = (msg.track_payload or {}).get("_alert_dedup") if isinstance(msg.track_payload, dict) else None
+        completion_context = {key: str(dedup_context.get(key) or "").strip() for key in ("dedup_key", "reservation_id")} if isinstance(dedup_context, Mapping) else {}
+        outcome = service.execute_queued_provider_sync(tenant_id=msg.tenant_id, business_id=business_id, provider_key=self.provider_key, operation="message_send", mode="live", payload=payload, worker_id="provider-messaging-effect", approval_completion_context=completion_context if all(completion_context.values()) else None)
         dispatch, result = dict(outcome.get("dispatch") or {}), outcome.get("result")
         if not bool(dispatch.get("queued")):
             guard = dict(dict(dispatch.get("metadata") or {}).get("provider_write_guard") or {})
@@ -63,7 +69,6 @@ class _NativeProviderQueueAdapter:
             return DeliveryResult(True, self.channel, "accepted", external_id, {"provider": self.provider_key, "accepted": True, "delivered": False, "job_id": dispatch.get("job_id"), "provider_status": result.get("status")})
         reason = "provider_receipt_missing" if bool(result.get("accepted")) else str(dict(result.get("error") or {}).get("category") or result.get("status") or "provider_send_failed")
         return DeliveryResult(False, self.channel, "failed", "", {"provider": self.provider_key, "reason": reason, "job_id": dispatch.get("job_id"), "provider_status": result.get("status")})
-
 
 def build_multichannel_dispatcher() -> MultiChannelDispatcher:
     adapters = {}
@@ -81,6 +86,5 @@ def build_multichannel_dispatcher() -> MultiChannelDispatcher:
             raise RuntimeError(f"messaging adapter factory missing for {channel}: {spec.transport_kind}")
         adapters[channel] = _build_provider_adapter(channel)
     return MultiChannelDispatcher(adapters=adapters)
-
 
 __all__ = ["_NativeProviderQueueAdapter", "build_multichannel_dispatcher"]

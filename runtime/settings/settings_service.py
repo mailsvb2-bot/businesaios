@@ -17,8 +17,7 @@ class SettingsService:
         )
 
     def set(self, *, tenant_id: str, key: str, value):
-        self._writer.set(
-            tenant_id=str(tenant_id),
-            key=str(key),
-            value=value,
-        )
+        self._writer.set(tenant_id=str(tenant_id), key=str(key), value=value)
+
+    def compare_and_set(self, *, tenant_id: str, key: str, expected, value) -> bool:
+        return bool(self._writer.compare_and_set(tenant_id=str(tenant_id), key=str(key), expected=expected, value=value))

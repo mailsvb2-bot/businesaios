@@ -3,8 +3,9 @@ from interfaces.web.settings.alert_subscriptions.api_handlers import AlertSubscr
 
 def test_api_handlers_return_page_model():
     api = AlertSubscriptionsAPIHandlers()
-    out = api.get_page_model([], tenant_id="t1")
+    out = api.get_page_model([{"recipient_user_id": "C123", "channel": "slack", "business_id": "business-a"}], tenant_id="t1")
     assert out["setting_key"] == "messaging_policy:alert_subscriptions"
+    assert out["items"][0]["business_id"] == "business-a"
     assert isinstance(out["items"], list)
     assert isinstance(out["channels"], list)
     assert isinstance(out["levels"], list)
@@ -19,6 +20,7 @@ def test_api_handlers_save_subscriptions():
                     "recipient_user_id": "ceo-1",
                     "channel": "telegram",
                     "min_level": "warn",
+                    "business_id": "business-a",
                     "enabled": True,
                     "code_filters": [],
                     "user_scope": [],
@@ -28,3 +30,4 @@ def test_api_handlers_save_subscriptions():
     )
     assert out["setting_key"] == "messaging_policy:alert_subscriptions"
     assert out["saved_value"][0]["recipient_user_id"] == "ceo-1"
+    assert out["saved_value"][0]["business_id"] == "business-a"

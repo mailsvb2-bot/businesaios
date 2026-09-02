@@ -26,6 +26,7 @@ from runtime.business_autonomy.provider_runtime_write_guard import (
 from runtime.queue.job_contract import JobState, utc_now
 from runtime.queue.job_store_sqlite import SqliteJobStore
 from security.connector_secret_scope import ConnectorSecretScope
+from security.secret_contract import SecretRef
 from security.secret_vault import InMemorySecretVault
 
 
@@ -150,15 +151,23 @@ def _approved_native_guard(*, provider_key: str, business_id: str, message_paylo
     approval_id = str(evidence['approval_id'])
     record = workflow.get(approval_id)
     assert record is not None and record.request.metadata['approval_request_fingerprint']
+    assert record.request.metadata['approval_resume_context'] == {
+        'provider_key': provider_key,
+        'business_id': business_id,
+        'operation': 'message_send',
+        'payload': message_payload,
+    }
     workflow.evaluate(ApprovalDecision(approval_id=approval_id, tenant_id='tenant-a', actor_id='owner-approver', role_id=RoleId.OWNER, outcome=ApprovalOutcome.APPROVE, rationale='approved'))
     payload['_approval'] = {**approval, 'approval_id': approval_id}
     return provider, guard, payload
 
 
-def test_vk_max_live_write_requires_exact_approved_subject() -> None:
+def test_native_messaging_live_write_requires_exact_approved_subject() -> None:
     for provider_key, business_id, message_payload in (
         ('vk_messaging', 'vk-biz', {'peer_id': 42, 'text': 'hello'}),
         ('max_messaging', 'max-biz', {'chat_id': 99, 'text': 'hello'}),
+        ('slack_messaging', 'slack-biz', {'channel_id': 'C123', 'text': 'hello'}),
+        ('discord_messaging', 'discord-biz', {'channel_id': '123', 'text': 'hello'}),
     ):
         provider, guard, payload = _approved_native_guard(provider_key=provider_key, business_id=business_id, message_payload=message_payload)
         allowed = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id=business_id, payload=payload)
@@ -168,8 +177,8 @@ def test_vk_max_live_write_requires_exact_approved_subject() -> None:
         assert rejected.allowed is False and rejected.reason == 'approval_subject_mismatch'
 
 
-def test_vk_max_live_write_truth_is_guarded_not_publicly_unconditional() -> None:
-    for provider_key in ('vk_messaging', 'max_messaging'):
+def test_native_messaging_live_write_truth_is_guarded_not_publicly_unconditional() -> None:
+    for provider_key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging'):
         provider = provider_map()[provider_key]
         denied = ProviderRuntimeWriteGuard().evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload={'text': 'hello'})
         assert denied.allowed is False and denied.reason == 'approval_context_missing'
@@ -183,6 +192,50 @@ def test_approved_vk_write_requires_canonical_queue_before_transport() -> None:
     result = runtime.run(provider=provider, tenant_id='tenant-a', business_id='vk-biz', operation='message_send', mode='live', payload=payload)
     assert result.accepted is False and result.status == 'rejected_provider_write_requires_queue'
     assert 'transport_response' not in result.metadata
+
+
+def test_slack_discord_approved_write_requires_canonical_queue_before_transport() -> None:
+    for provider_key, business_id, message_payload in (
+        ('slack_messaging', 'slack-biz', {'channel_id': 'C123', 'text': 'hello'}),
+        ('discord_messaging', 'discord-biz', {'channel_id': '123', 'text': 'hello'}),
+    ):
+        provider, guard, payload = _approved_native_guard(provider_key=provider_key, business_id=business_id, message_payload=message_payload)
+        runtime = ProviderLiveSyncRuntime(secret_vault=InMemorySecretVault(), transports={provider_key: object()}, write_guard=guard)
+        result = runtime.run(provider=provider, tenant_id='tenant-a', business_id=business_id, operation='message_send', mode='live', payload=payload)
+        assert result.accepted is False and result.status == 'rejected_provider_write_requires_queue'
+        assert 'transport_response' not in result.metadata
+
+
+def test_slack_discord_approved_queue_execution_is_one_shot_and_replay_safe(tmp_path: Path) -> None:
+    for provider_key, business_id, message_payload, response_body, resource_id in (
+        ('slack_messaging', 'slack-biz', {'channel_id': 'C123', 'text': 'hello'}, '{"ok":true,"channel":"C123","ts":"1700.0001"}', '1700.0001'),
+        ('discord_messaging', 'discord-biz', {'channel_id': '123', 'text': 'hello'}, '{"id":"999","channel_id":"123","content":"hello"}', '999'),
+    ):
+        provider, guard, payload = _approved_native_guard(provider_key=provider_key, business_id=business_id, message_payload=message_payload)
+        vault = InMemorySecretVault()
+        for name, value in (('webhook_secret', 'bridge-secret'), ('bot_token', 'bot-token')):
+            vault.seed_plaintext(
+                ref=SecretRef(tenant_id='tenant-a', connector_id=provider.connector_id, scope=business_id, secret_name=f'{provider.connector_id}.{name}'),
+                plaintext=value,
+            )
+        class _Transport:
+            def __init__(self):
+                self.calls = []
+            def execute(self, **kwargs):
+                self.calls.append(kwargs)
+                return {'http_status': 200, 'response_body': response_body}
+        transport = _Transport()
+        store = SqliteJobStore(tmp_path / f'{provider_key}.sqlite3')
+        runtime = ProviderLiveSyncRuntime(vault, transports={provider_key: transport}, write_guard=guard)
+        queue = ProviderQueueExecutionRuntime(vault, live_runtime=runtime, store=store, write_guard=guard, idempotency_store=InMemoryIdempotencyStore())
+        first = queue.enqueue_sync(provider=provider, tenant_id='tenant-a', business_id=business_id, operation='message_send', mode='live', payload=payload)
+        duplicate = queue.enqueue_sync(provider=provider, tenant_id='tenant-a', business_id=business_id, operation='message_send', mode='live', payload=payload)
+        assert first.queued is True and duplicate.job_id == first.job_id and duplicate.status == 'dedupe_existing'
+        assert store.get(tenant_id='tenant-a', job_id=first.job_id).max_attempts == 1
+        report = queue.tick(provider_registry={provider_key: provider}, tenant_id='tenant-a', job_id=first.job_id)
+        assert report['succeeded'] == 1 and len(transport.calls) == 1
+        history = runtime.sync_history.list_for_provider(tenant_id='tenant-a', business_id=business_id, provider_key=provider_key, limit=10)
+        assert history and history[0]['parsed_response']['resource_id'] == resource_id
 
 
 def test_vk_approved_execution_is_one_shot_across_queue_replays_and_retention(tmp_path: Path) -> None:
@@ -230,3 +283,65 @@ def test_vk_approval_queue_receipt_replay_is_at_most_once(tmp_path: Path, monkey
     third = service.execute_queued_provider_sync(tenant_id='tenant-a', business_id='biz-a', provider_key='vk_messaging', operation='message_send', mode='live', payload=approved)
     assert second['result']['status'] == 'live_executed' and second['result']['parsed_response']['resource_id'] == '777'
     assert third['result']['parsed_response']['resource_id'] == '777' and len(transport.calls) == 1
+
+
+def test_caller_supplied_queue_markers_cannot_bypass_canonical_queue() -> None:
+    provider, guard, payload = _approved_native_guard(provider_key="slack_messaging", business_id="slack-biz", message_payload={"channel_id": "C123", "text": "hello"})
+
+    class _Transport:
+        def execute(self, **_kwargs):
+            raise AssertionError("forged queue provenance must not reach transport")
+
+    runtime = ProviderLiveSyncRuntime(secret_vault=InMemorySecretVault(), transports={"slack_messaging": _Transport()}, write_guard=guard)
+    result = runtime.run(
+        provider=provider,
+        tenant_id="tenant-a",
+        business_id="slack-biz",
+        operation="message_send",
+        mode="live",
+        payload={**payload, "_provider_queue_execution": True, "_provider_queue_job_id": "forged-job", "_provider_write_approved": True, "_allow_network": True},
+    )
+    assert result.accepted is False and result.status == "rejected_provider_write_requires_queue"
+    request_payload = result.metadata["request_envelope"]["payload"]
+    assert all(key not in request_payload for key in ("_provider_queue_execution", "_provider_queue_job_id", "_provider_write_approved", "_allow_network"))
+
+
+def test_native_guard_persists_internal_completion_context_without_binding_it_to_replay_subject() -> None:
+    store = InMemoryApprovalStore()
+    workflow = ApprovalWorkflow(store=store)
+    gate = ApprovalExecutionGate(approval_policy_engine=ApprovalPolicyEngine(change_control_policy=ChangeControlPolicy()), approval_workflow=workflow)
+    guard = ProviderRuntimeWriteGuard(approval_gate=gate, approval_store=store)
+    provider = provider_map()['slack_messaging']
+    payload = {'channel_id': 'C123', 'text': 'hello', '_approval': {'decision_id': 'dec-slack', 'execution_id': 'exec-slack'}}
+    completion = {'dedup_key': 'tenant-a|biz-a|ceo|slack|a1|u1', 'reservation_id': 'res-1'}
+    denied = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload=payload, approval_completion_context=completion)
+    approval_id = str(denied.metadata['approval']['approval_id'])
+    record = workflow.get(approval_id)
+    assert record is not None and record.request.metadata['approval_completion_context'] == completion
+    completion['dedup_key'] = 'mutated-after-submit'
+    assert record.request.metadata['approval_completion_context']['dedup_key'].startswith('tenant-a|biz-a|')
+    workflow.evaluate(ApprovalDecision(approval_id=approval_id, tenant_id='tenant-a', actor_id='owner-approver', role_id=RoleId.OWNER, outcome=ApprovalOutcome.APPROVE, rationale='approved'))
+    replay_payload = {**payload, '_approval': {**payload['_approval'], 'approval_id': approval_id}}
+    allowed = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload=replay_payload)
+    assert allowed.allowed is True and allowed.reason == 'approval_satisfied'
+
+
+def test_native_approval_completion_context_is_fingerprint_bound_across_resume() -> None:
+    store = InMemoryApprovalStore()
+    workflow = ApprovalWorkflow(store=store)
+    gate = ApprovalExecutionGate(approval_policy_engine=ApprovalPolicyEngine(change_control_policy=ChangeControlPolicy()), approval_workflow=workflow)
+    guard = ProviderRuntimeWriteGuard(approval_gate=gate, approval_store=store)
+    provider = provider_map()['slack_messaging']
+    completion = {'dedup_key': 'dedup-1', 'reservation_id': 'res-1'}
+    payload = {'channel_id': 'C123', 'text': 'hello', '_approval': {'decision_id': 'dec-alert', 'execution_id': 'exec-alert'}}
+    denied = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload=payload, approval_completion_context=completion)
+    approval_id = str(denied.metadata['approval']['approval_id'])
+    workflow.evaluate(ApprovalDecision(approval_id=approval_id, tenant_id='tenant-a', actor_id='owner-approver', role_id=RoleId.OWNER, outcome=ApprovalOutcome.APPROVE, rationale='approve alert'))
+    approved = {**payload, '_approval': {**payload['_approval'], 'approval_id': approval_id}}
+    allowed = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload=approved, approval_completion_context=completion)
+    missing_context = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload=approved)
+    record = workflow.get(approval_id)
+    assert record is not None and record.request.metadata['approval_completion_context'] == completion
+    assert allowed.allowed is True and allowed.reason == 'approval_satisfied'
+    assert missing_context.allowed is True
+    assert missing_context.metadata['approval']['subject_fingerprint'] == allowed.metadata['approval']['subject_fingerprint']

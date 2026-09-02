@@ -413,33 +413,50 @@ class ProviderAdminService:
         ack_safe = bool(metadata.get('batch_transport_ack_safe')) if 'batch_transport_ack_safe' in metadata else ingress.transport_ack_safe(result)
         route_extract = metadata.get('route') or next((dict(row.get('metadata') or {}).get('route') for row in metadata.get('batch_results', ()) if dict(row.get('metadata') or {}).get('route')), {})
         return {'provider_key': result.provider_key, 'event_key': result.event_key, 'accepted': result.accepted, 'status': result.status, 'transport_ack_safe': ack_safe, 'response_body': ingress.webhook_runtime.response_body(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body) if result.status != 'invalid_signature' and ack_safe else None, 'metadata': {**metadata, 'route_extract': route_extract}}
-    def enqueue_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    def enqueue_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None, approval_completion_context: Mapping[str, Any] | None = None) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
         runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault))
         queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime, idempotency_store=self.idempotency_store)
-        result = queue_runtime.enqueue_sync(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), operation=str(operation).strip(), mode=str(mode or 'live').strip() or 'live', payload=dict(payload or {}))
+        result = queue_runtime.enqueue_sync(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), operation=str(operation).strip(), mode=str(mode or 'live').strip() or 'live', payload=dict(payload or {}), approval_completion_context=approval_completion_context)
         return {'job_id': result.job_id, 'queued': result.queued, 'status': result.status, 'metadata': dict(result.metadata)}
     def tick_provider_sync_queue(self, *, tenant_id: str, worker_id: str = 'provider-runtime-worker', job_id: str | None = None) -> dict[str, Any]:
         runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault))
         queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime)
         registry = {item.provider_key: item for item in self.provider_registry.list()}
         return queue_runtime.tick(provider_registry=registry, tenant_id=require_tenant_id(tenant_id), worker_id=worker_id, job_id=job_id)
-    def execute_queued_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None, worker_id: str = 'provider-runtime-worker') -> dict[str, Any]:
-        dispatch = self.enqueue_provider_sync(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, operation=operation, mode=mode, payload=payload)
+    @staticmethod
+    def _terminal_queue_result(dispatch: Mapping[str, Any]) -> dict[str, Any] | None:
+        metadata = dict(dispatch.get('metadata') or {})
+        state = str(metadata.get('job_state') or '').strip()
+        if state not in {'succeeded', 'failed', 'dead_letter', 'cancelled'}:
+            return None
+        last_error = str(metadata.get('job_last_error') or '').strip()
+        return {
+            'accepted': False,
+            'status': 'ambiguous_delivery',
+            'error': {'category': 'ambiguous_delivery', 'message': last_error or f'provider_queue_{state}_without_history'},
+            'queue_state': state,
+            'attempts': int(metadata.get('job_attempts') or 0),
+            'max_attempts': int(metadata.get('job_max_attempts') or 0),
+        }
+    def execute_queued_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None, worker_id: str = 'provider-runtime-worker', approval_completion_context: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        dispatch = self.enqueue_provider_sync(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, operation=operation, mode=mode, payload=payload, approval_completion_context=approval_completion_context)
         job_id, worker = str(dispatch.get('job_id') or '').strip(), None
         result = next((row for row in (self.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=100) if bool(dispatch.get('queued')) and job_id else ()) if str(row.get('queue_job_id') or '') == job_id), None)
+        if result is None:
+            result = self._terminal_queue_result(dispatch)
         if bool(dispatch.get('queued')) and job_id and result is None:
             worker = self.tick_provider_sync_queue(tenant_id=tenant_id, worker_id=worker_id, job_id=job_id)
             result = next((row for row in self.list_provider_sync_history(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, limit=100) if str(row.get('queue_job_id') or '') == job_id), None)
+            if result is None:
+                result = self._terminal_queue_result({'metadata': worker})
         elif result is not None:
-            worker = {'worker_id': worker_id, 'replayed_from_history': True}
+            worker = {'worker_id': worker_id, 'replayed_from_history': 'queue_state' not in result}
         return {'dispatch': dispatch, 'worker': worker, 'result': result}
-
     def list_provider_queue_jobs(self, *, tenant_id: str, business_id: str | None = None, provider_key: str, limit: int = 50) -> tuple[dict[str, Any], ...]:
         runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault))
         queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime)
         return queue_runtime.list_jobs(tenant_id=require_tenant_id(tenant_id), business_id=None if business_id in {None, ''} else str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
-
     def describe_provider_live_client(self, *, provider_key: str) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
         transport = build_provider_vendor_transports(self.secret_vault).get(provider.provider_key)
@@ -458,6 +475,5 @@ class ProviderAdminService:
             'incidents_endpoint': '/control-plane/provider-runtime/incidents',
             'queue_metrics_endpoint': '/control-plane/provider-runtime/queue-metrics',
         }
-
 
 __all__ = ["CANON_PROVIDER_ADMIN_SERVICE", "ProviderAdminService", "ProviderDefinitionRegistry"]

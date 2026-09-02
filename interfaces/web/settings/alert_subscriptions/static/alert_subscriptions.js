@@ -84,6 +84,10 @@
       state.items[index].min_level = v;
     }));
 
+    grid.appendChild(textInput("Business id", item.business_id, function (v) {
+      state.items[index].business_id = v;
+    }));
+
     grid.appendChild(checkboxField("Enabled", item.enabled, function (v) {
       state.items[index].enabled = v;
     }));
@@ -115,6 +119,7 @@
           recipient_user_id: item.recipient_user_id || "",
           channel: item.channel || "telegram",
           min_level: item.min_level || "warn",
+          business_id: item.business_id || "",
           enabled: !!item.enabled,
           code_filters: typeof item.code_filters === "string"
             ? item.code_filters.split(",").map(function (x) { return x.trim(); }).filter(Boolean)
@@ -140,6 +145,7 @@
         recipient_user_id: "",
         channel: "telegram",
         min_level: "warn",
+        business_id: "",
         enabled: true,
         code_filters: [],
         user_scope: []
@@ -151,6 +157,13 @@
     const status = el("div", "as-status");
 
     saveBtn.addEventListener("click", async function () {
+      const missingNativeBusiness = state.items.some(function (item) {
+        return (item.channel === "slack" || item.channel === "discord") && !(item.business_id || "").trim();
+      });
+      if (missingNativeBusiness) {
+        status.textContent = "Business id is required for Slack/Discord.";
+        return;
+      }
       status.textContent = "Saving...";
       const res = await fetch(cfg.saveEndpoint, {
         method: "POST",

@@ -20,11 +20,14 @@ from runtime.messaging.bootstrap import build_multichannel_dispatcher
 from runtime.messaging.delivery_result import DeliveryResult
 from runtime.messaging.outbound_message import OutboundMessage
 
-
 WEBHOOK_CHANNELS = tuple(
     channel
     for channel, spec in CHANNEL_SPECS.items()
     if spec.mode_default == "webhook"
+)
+NATIVE_GUARDED_CHANNELS = frozenset({"vk", "max", "slack", "discord"})
+GENERIC_WEBHOOK_DISPATCH_CHANNELS = tuple(
+    channel for channel in WEBHOOK_CHANNELS if channel not in NATIVE_GUARDED_CHANNELS
 )
 
 
@@ -161,8 +164,8 @@ def test_every_webhook_channel_requires_and_preserves_provider_receipt(
 
 
 @pytest.mark.lock
-@pytest.mark.parametrize("channel", WEBHOOK_CHANNELS)
-def test_every_webhook_dispatch_adapter_reaches_receipt_backed_transport(
+@pytest.mark.parametrize("channel", GENERIC_WEBHOOK_DISPATCH_CHANNELS)
+def test_every_generic_webhook_dispatch_adapter_reaches_receipt_backed_transport(
     monkeypatch: pytest.MonkeyPatch,
     channel: str,
 ) -> None:
@@ -190,6 +193,34 @@ def test_every_webhook_dispatch_adapter_reaches_receipt_backed_transport(
     assert result.channel == channel
     assert result.mode == "accepted"
     assert result.external_id == receipt
+
+
+@pytest.mark.lock
+@pytest.mark.parametrize("channel", sorted(NATIVE_GUARDED_CHANNELS))
+def test_native_guarded_dispatch_channels_do_not_fall_back_to_generic_webhook(
+    monkeypatch: pytest.MonkeyPatch,
+    channel: str,
+) -> None:
+    spec = CHANNEL_SPECS[channel]
+    monkeypatch.setenv(f"{spec.provider_env_prefix}_MODE", "webhook")
+    monkeypatch.setenv(
+        f"{spec.provider_env_prefix}_ENDPOINT",
+        "https://gateway.example.test/messages",
+    )
+    monkeypatch.setattr(
+        outbound_sender.urllib_request,
+        "urlopen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("native guarded channel must not reach generic webhook")
+        ),
+    )
+
+    result = build_multichannel_dispatcher().send(_message(channel=channel))
+
+    assert result.ok is False
+    assert result.channel == channel
+    assert result.mode == "blocked"
+    assert result.detail["reason"] == "native_context_required"
 
 
 @pytest.mark.lock

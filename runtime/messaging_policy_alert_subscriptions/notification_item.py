@@ -12,3 +12,6 @@ class AlertNotificationItem:
     alert_code: str
     alert_level: str
     affected_user_id: str
+    business_id: str = ""
+    dedup_key: str = ""
+    dedup_reservation_id: str = ""

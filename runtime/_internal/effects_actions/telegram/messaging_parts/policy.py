@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from runtime.messaging.bridge import stamp_native_provider_provenance
 from runtime.messaging.outbound_message import transport_guard_blocks
 from runtime.messaging_capability import (
     MessagingCapabilityRouter,
@@ -38,15 +39,10 @@ def _apply_capability_routing(self, *, ordered_channels: tuple[str, ...], discip
         reason_codes=tuple(dict.fromkeys(tuple(routed.reason_codes) + ("capability_route_applied",))),
         terminal_reason="no_eligible_channel_after_capability_health_filter",
     )
-
-
 def _execution_blocked(meta: object) -> bool:
     return isinstance(meta, dict) and str(meta.get("mode") or "").strip().casefold() == "blocked"
-
-
 def _with_health_feedback(self, *, send_once):
     updater = resolve_capability_telemetry_updater(self)
-
     def _observed(selected_msg):
         ok, meta = send_once(selected_msg)
         details = dict(meta or {})
@@ -57,10 +53,7 @@ def _with_health_feedback(self, *, send_once):
                 meta=details,
             )
         return ok, meta
-
     return _observed
-
-
 def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
     disciplined_policy = ensure_policy_input_disciplined(channel_policy)
     preference = load_channel_preference(
@@ -97,9 +90,8 @@ def execute_with_policy(self, *, msg, channel_policy: dict, send_once):
         recorder=recorder,
         attempt_guard=guard if callable(guard) else None,
     )
-
-
 def execute_delivery_path(self, *, msg, channel_policy, send_once):
+    msg = stamp_native_provider_provenance(msg)
     if isinstance(channel_policy, dict) and channel_policy:
         try:
             return execute_with_policy(self, msg=msg, channel_policy=channel_policy, send_once=send_once)

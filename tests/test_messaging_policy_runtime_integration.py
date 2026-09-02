@@ -56,3 +56,45 @@ def test_execute_policy_plan_with_events_records_history():
     assert rebuilt.failed == ('whatsapp',)
     assert rebuilt.delivered == ('sms',)
     assert rebuilt.last_selected_channel == 'sms'
+
+
+def test_pending_provider_attempt_is_terminal_and_preserves_approval_metadata():
+    attempts = []
+
+    def send_once(msg):
+        attempts.append(msg.channel)
+        if msg.channel == "slack":
+            return False, {"mode": "approval_required", "approval_id": "ap-1", "reason": "approval_submitted_awaiting_operator"}
+        return True, {"mode": "accepted", "external_id": "email-1"}
+
+    ok, meta = execute_policy_plan_with_events(
+        plan=PolicyPlan(ordered_channels=("slack", "email"), reason_codes=("fallback",), terminal_reason=""),
+        base_message=OutboundMessage(decision_id="d2", correlation_id="c2", tenant_id="tenant-a", business_id="business-a", user_id="C123", channel="slack", text="hello"),
+        send_once=send_once,
+    )
+
+    assert ok is False
+    assert attempts == ["slack"]
+    assert meta["approval_id"] == "ap-1"
+    assert meta["policy"]["terminal_reason"] == "approval_required"
+    assert meta["policy"]["selected_channel"] == ""
+    assert [attempt["channel"] for attempt in meta["policy"]["attempts"]] == ["slack"]
+
+
+def test_queued_provider_attempt_is_terminal_before_fallback():
+    attempts = []
+
+    def send_once(msg):
+        attempts.append(msg.channel)
+        return False, {"mode": "in_progress", "job_id": "job-1"}
+
+    ok, meta = execute_policy_plan_with_events(
+        plan=PolicyPlan(ordered_channels=("discord", "email"), reason_codes=("fallback",), terminal_reason=""),
+        base_message=OutboundMessage(decision_id="d3", correlation_id="c3", tenant_id="tenant-a", business_id="business-a", user_id="123", channel="discord", text="hello"),
+        send_once=send_once,
+    )
+
+    assert ok is False
+    assert attempts == ["discord"]
+    assert meta["job_id"] == "job-1"
+    assert meta["policy"]["terminal_reason"] == "in_progress"

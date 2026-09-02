@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from runtime.execution.context import execution_business_scope
+
 CANON_RUNTIME_EXECUTION_ENTRYPOINT_CONTEXT = True
 
 
@@ -28,8 +30,10 @@ def run_with_bound_execution_context(
         correlation_id=str(env.decision.correlation_id),
         decision_id=str(env.decision.decision_id),
     )
+    payload = env.decision.payload if isinstance(env.decision.payload, dict) else {}
+    business_id = str(payload.get("business_id") or "").strip()
     try:
-        with executor_context_cm(context_name):
+        with executor_context_cm(context_name), execution_business_scope(business_id):
             return callback()
     finally:
         clear()

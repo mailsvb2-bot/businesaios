@@ -23,3 +23,13 @@ def test_persistent_store_put_and_get():
     assert rec is not None
     assert rec.dedup_key == "k1"
     assert rec.sent_at_epoch_s == 123
+
+
+def test_persistent_store_indexes_pending_approval_and_round_trips_state():
+    gw = _GW()
+    store = PersistentAlertNotificationDedupStore(settings_gateway=gw, tenant_id="t1")
+    store.put(AlertNotificationDedupRecord(dedup_key="k-pending", sent_at_epoch_s=0, pending_approval_id="ap-1"))
+    store.bind_pending_approval(approval_id="ap-1", dedup_key="k-pending")
+    rec = store.get(dedup_key="k-pending")
+    assert rec is not None and rec.is_pending and rec.pending_approval_id == "ap-1"
+    assert store.dedup_key_for_approval(approval_id="ap-1") == "k-pending"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from math import ceil
 from typing import Any
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
@@ -15,7 +16,10 @@ class ProviderResponseParsers:
     def parse(self, *, provider: ProviderDefinition, operation: str, response: Mapping[str, Any]) -> dict[str, Any]:
         provider_key, status_code, raw_body = str(provider.provider_key), self._coerce_int(response.get('http_status')), str(response.get('response_body') or '')
         body = self._parse_json(raw_body)
+        headers = {str(key).lower(): str(value) for key, value in dict(response.get('response_headers') or {}).items()} if isinstance(response.get('response_headers'), Mapping) else {}
         error_code = self._error_code(provider_key=provider_key, body=body)
+        rate_limited = status_code == 429 or (provider_key == 'vk_messaging' and error_code == '6') or (provider_key == 'slack_messaging' and error_code in {'rate_limited', 'ratelimited'})
+        retry_after_seconds = self._retry_after_seconds(headers=headers, body=body)
         normalized = {
             'provider_key': provider_key,
             'operation': str(operation),
@@ -25,8 +29,8 @@ class ProviderResponseParsers:
             'resource_id': self._resource_id(provider_key=provider_key, body=body),
             'next_cursor': self._next_cursor(provider_key=provider_key, body=body),
             'error_code': error_code,
-            'error_message': self._error_message(provider_key=provider_key, body=body), 'error_category': 'rate_limit' if status_code == 429 or (provider_key == 'vk_messaging' and error_code == '6') else ('provider_unavailable' if status_code is not None and status_code >= 500 else None),
-            'retryable': status_code == 429 or (provider_key == 'vk_messaging' and error_code == '6') or (status_code is not None and status_code >= 500), 'delivery_state': ('accepted' if 200 <= status_code < 300 and not error_code else 'rejected') if str(operation) in {'message_send', 'communications_write'} and status_code is not None else None,
+            'error_message': self._error_message(provider_key=provider_key, body=body), 'error_category': 'rate_limit' if rate_limited else ('provider_unavailable' if status_code is not None and status_code >= 500 else None),
+            'retryable': rate_limited or (status_code is not None and status_code >= 500), 'retry_after_seconds': retry_after_seconds, 'delivery_state': ('accepted' if 200 <= status_code < 300 and not error_code else 'rejected') if str(operation) in {'message_send', 'communications_write'} and status_code is not None else None,
             'body_keys': tuple(sorted(body.keys())) if isinstance(body, dict) else (),
             'normalized_preview': self._preview(body),
         }
@@ -35,7 +39,7 @@ class ProviderResponseParsers:
     def describe(self, *, provider: ProviderDefinition) -> dict[str, Any]:
         families = {
             'telegram_bot': ('ok', 'result', 'description'),
-            'whatsapp_cloud': ('messages', 'contacts', 'error'), 'vk_messaging': ('response', 'error'), 'max_messaging': ('messages', 'code', 'message'), 'line_messaging': ('userId', 'basicId', 'displayName', 'message'), 'viber_messaging': ('status', 'status_message', 'id', 'message_token'),
+            'whatsapp_cloud': ('messages', 'contacts', 'error'), 'vk_messaging': ('response', 'error'), 'max_messaging': ('messages', 'code', 'message'), 'slack_messaging': ('ok', 'channel', 'ts', 'message', 'error'), 'discord_messaging': ('id', 'channel_id', 'content', 'code', 'message'), 'line_messaging': ('userId', 'basicId', 'displayName', 'message'), 'viber_messaging': ('status', 'status_message', 'id', 'message_token'),
             'shopify': ('orders', 'products', 'admin_graphql_api_id', 'errors', 'page_info'),
             'woocommerce': ('id', 'code', 'message', 'data'),
             'hubspot': ('results', 'paging', 'status', 'message'),
@@ -88,6 +92,11 @@ class ProviderResponseParsers:
                 value = source.get('message_id') or source.get('id')
                 if value not in {None, ''}:
                     return str(value)
+            if provider_key == 'slack_messaging':
+                source = body.get('message') if isinstance(body.get('message'), dict) else {}
+                value = body.get('ts') or source.get('ts')
+                if value not in {None, ''}:
+                    return str(value)
         return None
 
     def _next_cursor(self, *, provider_key: str, body: Any) -> str | None:
@@ -132,6 +141,15 @@ class ProviderResponseParsers:
                 if isinstance(value, str) and value.strip():
                     return value.strip()
         return None
+
+    def _retry_after_seconds(self, *, headers: Mapping[str, str], body: Any) -> int | None:
+        value = body.get('retry_after') if isinstance(body, dict) else None
+        if value in {None, ''}:
+            value = headers.get('retry-after')
+        try:
+            return max(0, int(ceil(float(value)))) if value not in {None, ''} else None
+        except (TypeError, ValueError):
+            return None
 
     def _preview(self, body: Any) -> Any:
         if isinstance(body, dict):

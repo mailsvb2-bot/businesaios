@@ -8,3 +8,4 @@ class DedupAlertNotifierResult:
     notifications_total: int
     notifications_sent: int
     notifications_suppressed: int
+    notifications_pending: int = 0

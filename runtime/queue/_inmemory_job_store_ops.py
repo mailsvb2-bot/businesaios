@@ -190,7 +190,18 @@ def reap_expired_claim_jobs(*, jobs: JobMap, tenant_id: str, queue_name: str, no
             continue
         if current.state is not JobState.CLAIMED or current.lease is None or not current.lease.is_expired(now=moment):
             continue
-        jobs[key] = replace(current, state=JobState.PENDING, lease=None, updated_at=max(moment, current.updated_at))
+        exhausted = int(current.attempts) >= int(current.max_attempts)
+        jobs[key] = replace(
+            current,
+            state=JobState.DEAD_LETTER if exhausted else JobState.PENDING,
+            lease=None,
+            last_error=(
+                "expired_claim_attempts_exhausted_ambiguous_delivery"
+                if exhausted
+                else current.last_error
+            ),
+            updated_at=max(moment, current.updated_at),
+        )
         changed += 1
     return changed
 

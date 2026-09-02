@@ -5,3 +5,7 @@ from runtime.messaging_policy_alert_dedup_persistent.settings_prefix import DEDU
 
 def build_settings_key(*, dedup_key: str) -> str:
     return f"{DEDUP_SETTINGS_PREFIX}{str(dedup_key)}"
+
+
+def build_approval_index_key(*, approval_id: str) -> str:
+    return f"{DEDUP_SETTINGS_PREFIX}__approval__:{str(approval_id)}"

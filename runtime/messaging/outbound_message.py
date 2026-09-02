@@ -28,6 +28,7 @@ class OutboundMessage:
     user_id: str
     channel: str
     text: str
+    business_id: str = ""
     reply_markup: dict | None = None
     callback_query_id: str | None = None
     track_event_type: str | None = None
@@ -51,6 +52,7 @@ class OutboundMessage:
         object.__setattr__(self, "channel", str(self.channel or "telegram"))
         object.__setattr__(self, "priority", str(self.priority or "normal"))
         object.__setattr__(self, "text", str(self.text or ""))
+        object.__setattr__(self, "business_id", str(self.business_id or "").strip())
 
     @property
     def payload_digest(self) -> str:
@@ -62,6 +64,7 @@ class OutboundMessage:
             "decision_id": str(self.decision_id or ""),
             "correlation_id": str(self.correlation_id or ""),
             "tenant_id": str(self.tenant_id or ""),
+            "business_id": str(self.business_id or ""),
             "user_id": str(self.user_id or ""),
             "channel": str(self.channel or ""),
             "text": str(self.text or ""),

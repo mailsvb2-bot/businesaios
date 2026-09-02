@@ -195,3 +195,28 @@ def test_gate_returns_request_fingerprint_and_expiry_on_auto_submit() -> None:
     assert verdict.allowed is False
     assert verdict.metadata['approval_request_fingerprint']
     assert verdict.metadata['expires_at']
+
+
+def test_gate_snapshots_explicit_resume_context_without_aliasing_caller_data() -> None:
+    gate, _workflow, store = _gate()
+    resume_context = {
+        'provider_key': 'slack_messaging',
+        'business_id': 'business-a',
+        'operation': 'message_send',
+        'payload': {'channel': 'C123', 'text': 'hello'},
+    }
+    ctx = ActionExecutionContext(
+        tenant_id='tenant-a',
+        user_id='user-1',
+        action_name='send_email',
+        payload={'email': 'x@example.com'},
+        metadata={'decision_id': 'dec-1', 'tags': ['ops'], 'approval_resume_context': resume_context},
+        execution_id='exec-1',
+    )
+    verdict = gate.evaluate(ctx=ctx, impact=_impact(), metadata={'decision_id': 'dec-1'})
+
+    assert verdict.approval_id is not None
+    resume_context['payload']['text'] = 'mutated after submission'
+    record = store.get(verdict.approval_id)
+    assert record is not None
+    assert record.request.metadata['approval_resume_context']['payload']['text'] == 'hello'

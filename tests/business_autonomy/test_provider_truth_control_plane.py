@@ -20,7 +20,7 @@ def test_provider_truth_matrix_payload_is_read_only_control_plane_surface() -> N
     assert payload["source"] == "application.business_autonomy.provider_truth_matrix"
     assert "guarded_write" in payload["live_ready_policy"]
     assert payload["summary"]["total"] == len(PROVIDERS)
-    assert payload["summary"]["write_supported"] == 2
+    assert payload["summary"]["write_supported"] == 4
     assert payload["summary"]["live_ready"] == 0
     assert payload["rows"]
 

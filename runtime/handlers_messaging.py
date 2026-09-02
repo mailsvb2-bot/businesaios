@@ -56,12 +56,13 @@ def _build_send_kwargs(payload: dict, env) -> dict:
     priority, critical = _message_priority_fields(payload)
     channel = normalize_channel(str(payload.get("channel") or "telegram"))
     track_payload = dict(payload.get("track_payload") or {})
-    if channel in {"vk", "max"}:
-        track_payload["_provider_native"] = {key: payload.get(key) for key in ("business_id", "approval_id", "peer_id", "chat_id", "random_id") if payload.get(key) not in {None, ""}}
+    if channel in {"vk", "max", "slack", "discord"}:
+        track_payload["_provider_native"] = {"provider_key": f"{channel}_messaging", **{key: payload.get(key) for key in ("business_id", "approval_id", "peer_id", "chat_id", "random_id", "channel_id") if payload.get(key) not in {None, ""}}}
     return {
         "decision_id": env.decision.decision_id,
         "correlation_id": env.decision.correlation_id,
         "tenant_id": _resolve_tenant_id(payload, env),
+        "business_id": str(payload.get("business_id") or "").strip(),
         "user_id": str(payload["user_id"]),
         "text": str(payload["text"]),
         "channel": channel,

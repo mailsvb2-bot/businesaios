@@ -7,11 +7,8 @@ from runtime.messaging_policy_alert_subscriptions.subscription_level import norm
 def _parse_csv_list(value) -> tuple[str, ...]:
     if isinstance(value, str):
         parts = value.split(",")
-    elif isinstance(value, list | tuple | set):
-        parts = value
     else:
-        parts = []
-
+        parts = value if isinstance(value, list | tuple | set) else []
     out: list[str] = []
     for item in parts:
         text = str(item or "").strip()
@@ -28,11 +25,15 @@ def _parse_subscription_item(value) -> dict | None:
     recipient_user_id = str(value.get("recipient_user_id") or "").strip()
     if not recipient_user_id:
         return None
-
+    channel = normalize_channel(str(value.get("channel") or "telegram"))
+    business_id = str(value.get("business_id") or "").strip()
+    if channel in {"slack", "discord"} and not business_id:
+        raise ValueError(f"business_id is required for {channel} alert subscriptions")
     return {
         "recipient_user_id": recipient_user_id,
-        "channel": normalize_channel(str(value.get("channel") or "telegram")),
+        "channel": channel,
         "min_level": normalize_min_level(str(value.get("min_level") or "warn")),
+        "business_id": business_id,
         "enabled": bool(value.get("enabled", True)),
         "code_filters": list(_parse_csv_list(value.get("code_filters") or ())),
         "user_scope": list(_parse_csv_list(value.get("user_scope") or ())),
