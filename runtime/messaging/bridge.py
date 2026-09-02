@@ -8,7 +8,7 @@ from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.messaging.delivery_result import DeliveryResult
 from runtime.messaging.outbound_message import OutboundMessage
 
-_NATIVE_PROVIDER_CHANNELS = frozenset({"vk", "max", "slack", "discord"})
+_NATIVE_PROVIDER_CHANNELS = frozenset({"vk", "max", "slack", "discord", "instagram", "messenger"})
 
 def stamp_native_provider_provenance(msg: OutboundMessage) -> OutboundMessage:
     try:
@@ -38,7 +38,7 @@ def _bind_native_provider_context(msg: OutboundMessage) -> OutboundMessage:
     provider_key = f"{channel}_messaging"
     provider_changed = bool((source_provider := str(context.get("provider_key") or "").strip()) and source_provider != provider_key)
     if provider_changed:
-        for key in ("peer_id", "chat_id", "random_id", "channel_id", "approval_id"):
+        for key in ("peer_id", "chat_id", "random_id", "channel_id", "recipient_id", "approval_id"):
             context.pop(key, None)
     context["provider_key"] = provider_key
     business_id = str(context.get("business_id") or msg.business_id or track_payload.get("business_id") or "").strip()
@@ -48,7 +48,7 @@ def _bind_native_provider_context(msg: OutboundMessage) -> OutboundMessage:
         context["business_id"] = business_id
     if track_payload.get("approval_id") and not context.get("approval_id") and not provider_changed:
         context["approval_id"] = str(track_payload["approval_id"])
-    recipient_key = {"vk": "peer_id", "max": "chat_id", "slack": "channel_id", "discord": "channel_id"}[channel]
+    recipient_key = {"vk": "peer_id", "max": "chat_id", "slack": "channel_id", "discord": "channel_id", "instagram": "recipient_id", "messenger": "recipient_id"}[channel]
     recipient = str(msg.user_id if provider_changed else (track_payload.get(recipient_key) or msg.user_id)).strip()
     context.setdefault(recipient_key, recipient)
     track_payload["_provider_native"] = context

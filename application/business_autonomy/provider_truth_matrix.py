@@ -49,7 +49,7 @@ _PROVIDER_OWNERS: Mapping[str, str] = {
 }
 _HIGH_RISK_DOMAINS = {"ads", "marketplace", "platform_infra"}
 _HIGH_RISK_PROVIDERS = {"sms_connector", "whatsapp_cloud"}
-_GUARDED_WRITE_SUPPORTED: frozenset[str] = frozenset({'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging'})
+_GUARDED_WRITE_SUPPORTED: frozenset[str] = frozenset({'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging'})
 _GUARDED_WRITE_LIVE_READY: frozenset[str] = frozenset()
 
 
@@ -75,7 +75,6 @@ class ProviderTruthRow:
     owner: str
     risk_level: str
     evidence: tuple[str, ...] = field(default_factory=tuple)
-
     def to_payload(self) -> dict[str, Any]:
         payload = {name: getattr(self, name) for name in (
             "provider_key", "category", "display_name", "auth_scheme", "status", "live_ready", "read_only_supported",
@@ -91,7 +90,6 @@ class ProviderTruthRow:
             "live_ready_false_reason": None if self.live_ready else self._live_ready_false_reason(),
         })
         return payload
-
     def _live_ready_false_reason(self) -> str:
         if self.has_placeholder_endpoint:
             return "placeholder_endpoint"
@@ -148,7 +146,7 @@ def _truth_row(provider: ProviderDefinition, *, planner: ProviderSyncRuntimePlan
     required_credentials, truth_binding = _required_credentials(provider), dict(binding)
     health_requirements = tuple(dict.fromkeys((*required_credentials, *tuple(str(value) for value in binding.get('live_required_secrets', ()) if str(value).strip()))))
     if provider.provider_key in _GUARDED_WRITE_SUPPORTED:
-        truth_binding['sync_path_family'] = str(truth_binding.get('sync_path_family') or '').replace('{operation}', 'operation').replace('{channel_id}', 'channel_id')
+        truth_binding['sync_path_family'] = str(truth_binding.get('sync_path_family') or '').replace('{operation}', 'operation').replace('{channel_id}', 'channel_id').replace('{ig_user_id}', 'ig_user_id').replace('{page_id}', 'page_id')
     has_placeholder_endpoint, has_real_endpoint = _has_placeholder_endpoint(truth_binding), _has_real_endpoint(truth_binding)
     capability_status = _best_capability_status(provider.provider_key, capability_statuses)
     read_only_supported = bool(read_capabilities) and capability_status not in {CapabilityStatus.CONTRACT_ONLY.value, CapabilityStatus.NOT_IMPLEMENTED.value, CapabilityStatus.NOT_FOUND.value}

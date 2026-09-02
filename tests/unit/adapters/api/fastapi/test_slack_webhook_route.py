@@ -25,7 +25,7 @@ def _endpoint(handler: _ProviderAdminHandlers):
     return next(route.endpoint for route in router.routes if route.path == '/providers/webhook/{tenant_id}/{business_id}/{provider_key}')
 
 
-def _request(body: bytes) -> Request:
+def _request(body: bytes, provider_key: str = 'slack_messaging') -> Request:
     sent = False
 
     async def receive() -> dict:
@@ -39,7 +39,7 @@ def _request(body: bytes) -> Request:
         {
             'type': 'http',
             'method': 'POST',
-            'path': '/providers/webhook/tenant-a/business-a/slack_messaging',
+            'path': f'/providers/webhook/tenant-a/business-a/{provider_key}',
             'query_string': b'',
             'headers': [(b'content-type', b'application/json')],
         },
@@ -70,7 +70,8 @@ def test_slack_url_verification_returns_plain_challenge_after_accepted_ingest() 
     assert handler.payload['body'] == body.decode()
 
 
-def test_slack_invalid_signature_is_denied_before_url_verification_ack() -> None:
+@pytest.mark.parametrize('provider_key', ['slack_messaging', 'whatsapp_cloud', 'instagram_messaging', 'messenger_messaging'])
+def test_signed_provider_invalid_signature_is_denied_before_ack(provider_key: str) -> None:
     handler = _ProviderAdminHandlers(
         {'status': 'invalid_signature', 'metadata': {}, 'transport_ack_safe': False}
     )
@@ -81,8 +82,8 @@ def test_slack_invalid_signature_is_denied_before_url_verification_ack() -> None
             _endpoint(handler)(
                 'tenant-a',
                 'business-a',
-                'slack_messaging',
-                _request(body),
+                provider_key,
+                _request(body, provider_key),
             )
         )
 

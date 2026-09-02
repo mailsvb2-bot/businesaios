@@ -168,6 +168,8 @@ def test_native_messaging_live_write_requires_exact_approved_subject() -> None:
         ('max_messaging', 'max-biz', {'chat_id': 99, 'text': 'hello'}),
         ('slack_messaging', 'slack-biz', {'channel_id': 'C123', 'text': 'hello'}),
         ('discord_messaging', 'discord-biz', {'channel_id': '123', 'text': 'hello'}),
+        ('instagram_messaging', 'instagram-biz', {'recipient_id': 'ig-user-1', 'text': 'hello'}),
+        ('messenger_messaging', 'messenger-biz', {'recipient_id': 'psid-1', 'text': 'hello'}),
     ):
         provider, guard, payload = _approved_native_guard(provider_key=provider_key, business_id=business_id, message_payload=message_payload)
         allowed = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id=business_id, payload=payload)
@@ -178,7 +180,7 @@ def test_native_messaging_live_write_requires_exact_approved_subject() -> None:
 
 
 def test_native_messaging_live_write_truth_is_guarded_not_publicly_unconditional() -> None:
-    for provider_key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging'):
+    for provider_key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging'):
         provider = provider_map()[provider_key]
         denied = ProviderRuntimeWriteGuard().evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload={'text': 'hello'})
         assert denied.allowed is False and denied.reason == 'approval_context_missing'
@@ -194,10 +196,12 @@ def test_approved_vk_write_requires_canonical_queue_before_transport() -> None:
     assert 'transport_response' not in result.metadata
 
 
-def test_slack_discord_approved_write_requires_canonical_queue_before_transport() -> None:
+def test_guarded_native_approved_write_requires_canonical_queue_before_transport() -> None:
     for provider_key, business_id, message_payload in (
         ('slack_messaging', 'slack-biz', {'channel_id': 'C123', 'text': 'hello'}),
         ('discord_messaging', 'discord-biz', {'channel_id': '123', 'text': 'hello'}),
+        ('instagram_messaging', 'instagram-biz', {'recipient_id': 'ig-user-1', 'text': 'hello'}),
+        ('messenger_messaging', 'messenger-biz', {'recipient_id': 'psid-1', 'text': 'hello'}),
     ):
         provider, guard, payload = _approved_native_guard(provider_key=provider_key, business_id=business_id, message_payload=message_payload)
         runtime = ProviderLiveSyncRuntime(secret_vault=InMemorySecretVault(), transports={provider_key: object()}, write_guard=guard)

@@ -51,7 +51,7 @@ def test_runtime_write_operations_require_explicit_guard_contract_for_write_supp
     for provider_key in providers_with_runtime_writes:
         row = truth[provider_key]
         assert row.write_capabilities
-        assert row.write_supported is (provider_key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging'})
+        assert row.write_supported is (provider_key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging'})
 
 
 def test_ads_are_read_only_or_contract_not_live_write_ready() -> None:
@@ -75,7 +75,7 @@ def test_telegram_bot_is_not_telegram_ads() -> None:
 def test_matrix_summary_is_admin_safe_guarded_write_pilot() -> None:
     summary = summarize_provider_truth()
     assert summary["total"] == len(PROVIDERS)
-    assert summary["write_supported"] == 4
+    assert summary["write_supported"] == 6
     assert summary["live_ready"] == 0
     assert "guarded_write" in summary["live_ready_policy"]
     assert summary["admin_visible"] == len(PROVIDERS)
@@ -83,7 +83,7 @@ def test_matrix_summary_is_admin_safe_guarded_write_pilot() -> None:
 
 def test_guarded_native_messaging_truth_never_claims_unproven_live_ready() -> None:
     truth = {row.provider_key: row for row in build_provider_truth_matrix()}
-    for provider_key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging'):
+    for provider_key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging'):
         row = truth[provider_key]
         assert row.status == 'read_only_ready'
         assert row.read_only_supported is True and row.write_supported is True
