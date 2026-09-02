@@ -33,17 +33,17 @@ def _bind_native_provider_context(msg: OutboundMessage) -> OutboundMessage:
         return msg
     if channel not in _NATIVE_PROVIDER_CHANNELS:
         return msg
-    track_payload = dict(msg.track_payload or {})
-    existing = track_payload.get("_provider_native")
+    existing = (track_payload := dict(msg.track_payload or {})).get("_provider_native")
     context = dict(existing) if isinstance(existing, Mapping) else {}
     provider_key = f"{channel}_messaging"
-    source_provider = str(context.get("provider_key") or "").strip()
-    provider_changed = bool(source_provider and source_provider != provider_key)
+    provider_changed = bool((source_provider := str(context.get("provider_key") or "").strip()) and source_provider != provider_key)
     if provider_changed:
         for key in ("peer_id", "chat_id", "random_id", "channel_id", "approval_id"):
             context.pop(key, None)
     context["provider_key"] = provider_key
     business_id = str(context.get("business_id") or msg.business_id or track_payload.get("business_id") or "").strip()
+    if msg.business_id and business_id and msg.business_id != business_id:
+        raise RuntimeError("BUSINESS_SCOPE_MISMATCH")
     if business_id:
         context["business_id"] = business_id
     if track_payload.get("approval_id") and not context.get("approval_id") and not provider_changed:

@@ -64,13 +64,25 @@ def test_shared_effect_bridge_never_infers_business_scope_from_tenant(monkeypatc
 
 
 @pytest.mark.lock
+def test_shared_effect_bridge_rejects_native_business_scope_mismatch(monkeypatch):
+    dispatcher = _RecordingDispatcher()
+    monkeypatch.setattr(bridge_module, "build_multichannel_dispatcher", lambda: dispatcher)
+    bridge = MultiChannelEffectsBridge()
+
+    with pytest.raises(RuntimeError, match="BUSINESS_SCOPE_MISMATCH"):
+        bridge.send(_message(channel="slack", user_id="C123", business_id="business-a", track_payload={"_provider_native": {"business_id": "business-b", "channel_id": "C123"}}))
+
+    assert dispatcher.messages == []
+
+
+@pytest.mark.lock
 def test_shared_effect_bridge_stamps_legacy_native_provider_and_preserves_recipient(monkeypatch):
     dispatcher = _RecordingDispatcher()
     monkeypatch.setattr(bridge_module, "build_multichannel_dispatcher", lambda: dispatcher)
     bridge = MultiChannelEffectsBridge()
     original = {"business_id": "business-explicit", "approval_id": "ap-1", "channel_id": "C999"}
 
-    bridge.send(_message(channel="slack", user_id="C123", track_payload={"_provider_native": original}))
+    bridge.send(_message(channel="slack", user_id="C123", business_id="business-explicit", track_payload={"_provider_native": original}))
 
     native = dispatcher.messages[0].track_payload["_provider_native"]
     assert native == {**original, "provider_key": "slack_messaging"}
