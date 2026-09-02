@@ -32,6 +32,5 @@ class TenantAwareDedupingMessagingPolicyAlertNotifier:
                 pending += 1
                 self._mark_sent_service.mark_pending(tenant_id=item.tenant_id, dedup_key=dedup_key, approval_id=str(pending_ids[0]), reservation_id=reservation_id)
                 continue
-            if int(getattr(result, 'notifications_ambiguous', 0)) <= 0:
-                self._mark_sent_service.release(tenant_id=item.tenant_id, dedup_key=dedup_key, reservation_id=reservation_id)
+            self._mark_sent_service.release(tenant_id=item.tenant_id, dedup_key=dedup_key, reservation_id=reservation_id, ambiguous=int(getattr(result, 'notifications_ambiguous', 0)) > 0)
         return DedupAlertNotifierResult(notifications_total=total, notifications_sent=sent, notifications_suppressed=suppressed, notifications_pending=pending)

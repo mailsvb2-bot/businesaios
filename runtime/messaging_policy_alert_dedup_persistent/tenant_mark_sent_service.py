@@ -41,13 +41,13 @@ class TenantAwareAlertNotificationMarkSentService:
         current_id = "" if current is None else str(current.pending_approval_id)
         return current_id == approval_key or bool(current and current_id == expected and store.compare_and_set(expected=current, record=target))
 
-    def release(self, *, tenant_id: str, dedup_key: str, approval_id: str = "", reservation_id: str = "") -> bool:
+    def release(self, *, tenant_id: str, dedup_key: str, approval_id: str = "", reservation_id: str = "", ambiguous: bool = False) -> bool:
         store = self._store_factory.for_tenant(tenant_id=tenant_id)
         current = store.get(dedup_key=str(dedup_key))
         allowed = {str(approval_id or '').strip(), self._reservation_id(reservation_id) if reservation_id else ''}
         if current is None or str(current.pending_approval_id) not in allowed:
             return False
-        return store.compare_and_set(expected=current, record=AlertNotificationDedupRecord(dedup_key=str(dedup_key), sent_at_epoch_s=0))
+        return store.compare_and_set(expected=current, record=AlertNotificationDedupRecord(dedup_key=str(dedup_key), sent_at_epoch_s=0, pending_approval_id=f'ambiguous:{reservation_id}' if ambiguous else ''))
 
     def finalize_approval(self, *, tenant_id: str, approval_id: str, dedup_key: str = "", reservation_id: str = "", delivered: bool = True) -> bool:
         approval_key = str(approval_id or "").strip()

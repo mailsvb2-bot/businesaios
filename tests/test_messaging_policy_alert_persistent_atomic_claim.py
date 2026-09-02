@@ -137,3 +137,41 @@ def test_abandoned_reservation_expires_and_can_be_atomically_reclaimed(monkeypat
     assert mark.reserve(tenant_id='tenant-a', dedup_key=dedup_key, expected_record=stale, reservation_id='replacement-worker') is True
     current = factory.for_tenant(tenant_id='tenant-a').get(dedup_key=dedup_key)
     assert current is not None and current.pending_approval_id == 'reservation:replacement-worker' and current.sent_at_epoch_s == 500
+
+
+def test_ambiguous_delivery_becomes_nonexpiring_fail_closed_state(monkeypatch):
+    import runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service as mark_module
+    import runtime.messaging_policy_alert_dedup_persistent.tenant_suppression_service as suppression_module
+
+    class _Gateway:
+        def __init__(self):
+            self.items = {}
+        def get_value(self, *, tenant_id: str, key: str):
+            return self.items.get((tenant_id, key))
+        def set_value(self, *, tenant_id: str, key: str, value):
+            self.items[(tenant_id, key)] = dict(value)
+        def compare_and_set_value(self, *, tenant_id: str, key: str, expected, value) -> bool:
+            slot = (tenant_id, key)
+            if self.items.get(slot) != expected:
+                return False
+            self.items[slot] = dict(value)
+            return True
+
+    gateway = _Gateway()
+    factory = TenantScopedDedupStoreFactory(settings_gateway=gateway)
+    suppression = TenantAwareAlertNotificationSuppressionService(store_factory=factory, cooldown_s=60, reservation_lease_s=300)
+    mark = TenantAwareAlertNotificationMarkSentService(store_factory=factory)
+    plan = AlertNotificationPlan(items=(AlertNotificationItem(tenant_id='tenant-a', business_id='biz-a', recipient_user_id='C1', channel='slack', text='alert', alert_code='a1', alert_level='critical', affected_user_id='u1'),))
+
+    class _AmbiguousNotifier:
+        def notify(self, **_kwargs):
+            return AlertNotifierResult(notifications_total=1, notifications_sent=0, notifications_ambiguous=1)
+
+    monkeypatch.setattr(mark_module, 'now_epoch_s', lambda: 100)
+    notifier = TenantAwareDedupingMessagingPolicyAlertNotifier(base_notifier=_AmbiguousNotifier(), suppression_service=suppression, mark_sent_service=mark)
+    result = notifier.notify(plan=plan, effects=None, decision_id='d1', correlation_id='c1')
+    assert result.notifications_sent == 0
+    monkeypatch.setattr(suppression_module, 'now_epoch_s', lambda: 10_000)
+    _, decision, record = suppression.evaluate(tenant_id='tenant-a', recipient_user_id='C1', channel='slack', alert_code='a1', affected_user_id='u1', business_id='biz-a', include_record=True)
+    assert record is not None and record.pending_approval_id.startswith('ambiguous:')
+    assert decision.should_send is False and decision.reason == 'ambiguous_delivery'
