@@ -144,3 +144,25 @@ def test_slack_discord_native_adapter_rejects_missing_business_scope_before_serv
         )
         assert result.ok is False and result.mode == "blocked"
         assert result.detail["reason"] == "native_business_id_required"
+
+
+def test_native_adapter_threads_internal_alert_completion_context_to_queue_only() -> None:
+    calls = []
+
+    class _Registry:
+        def get(self, key):
+            return provider_map()[key]
+
+    class _Service:
+        provider_registry = _Registry()
+
+        def execute_queued_provider_sync(self, **kwargs):
+            calls.append(kwargs)
+            return {'dispatch': {'queued': False, 'status': 'rejected_provider_write_guard', 'metadata': {'provider_write_guard': {'reason': 'approval_required', 'metadata': {'approval': {'reason': 'approval_submitted_awaiting_operator', 'approval_id': 'ap-1', 'approval_required': True}}}}}, 'result': None}
+
+    adapter = _NativeProviderQueueAdapter('slack', service_factory=lambda: _Service())
+    msg = OutboundMessage(decision_id='dec-1', correlation_id='corr-1', tenant_id='tenant-a', business_id='biz-a', user_id='C123', channel='slack', text='hello', track_payload={'_provider_native': {'provider_key': 'slack_messaging', 'business_id': 'biz-a', 'channel_id': 'C123'}, '_alert_dedup': {'dedup_key': 'dedup-1', 'reservation_id': 'res-1'}})
+    result = adapter.send(msg)
+    assert result.mode == 'approval_required' and result.detail['approval_id'] == 'ap-1'
+    assert calls[0]['approval_completion_context'] == {'dedup_key': 'dedup-1', 'reservation_id': 'res-1'}
+    assert '_alert_dedup' not in calls[0]['payload']

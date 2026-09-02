@@ -10,8 +10,23 @@ from runtime.messaging.outbound_message import OutboundMessage
 
 _NATIVE_PROVIDER_CHANNELS = frozenset({"vk", "max", "slack", "discord"})
 
+def stamp_native_provider_provenance(msg: OutboundMessage) -> OutboundMessage:
+    try:
+        channel = normalize_channel(msg.channel)
+    except ValueError:
+        return msg
+    if channel not in _NATIVE_PROVIDER_CHANNELS or not isinstance(msg.track_payload, dict):
+        return msg
+    existing = msg.track_payload.get("_provider_native")
+    if not isinstance(existing, Mapping) or str(existing.get("provider_key") or "").strip():
+        return msg
+    track_payload, context = dict(msg.track_payload), dict(existing)
+    context["provider_key"] = f"{channel}_messaging"
+    track_payload["_provider_native"] = context
+    return replace(msg, track_payload=track_payload)
 
 def _bind_native_provider_context(msg: OutboundMessage) -> OutboundMessage:
+    msg = stamp_native_provider_provenance(msg)
     try:
         channel = normalize_channel(msg.channel)
     except ValueError:
@@ -27,8 +42,7 @@ def _bind_native_provider_context(msg: OutboundMessage) -> OutboundMessage:
     if provider_changed:
         for key in ("peer_id", "chat_id", "random_id", "channel_id", "approval_id"):
             context.pop(key, None)
-    if not isinstance(existing, Mapping) or source_provider:
-        context["provider_key"] = provider_key
+    context["provider_key"] = provider_key
     business_id = str(context.get("business_id") or msg.business_id or track_payload.get("business_id") or "").strip()
     if business_id:
         context["business_id"] = business_id
@@ -40,17 +54,13 @@ def _bind_native_provider_context(msg: OutboundMessage) -> OutboundMessage:
     track_payload["_provider_native"] = context
     return replace(msg, track_payload=track_payload)
 
-
 class MultiChannelEffectsBridge:
     def __init__(self) -> None:
         self._dispatcher = build_multichannel_dispatcher()
-
     def send(self, msg: OutboundMessage) -> DeliveryResult:
         return self._dispatcher.send(_bind_native_provider_context(msg))
 
-
 _BRIDGE: MultiChannelEffectsBridge | None = None
-
 
 def get_multichannel_effects_bridge() -> MultiChannelEffectsBridge:
     global _BRIDGE

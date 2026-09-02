@@ -64,7 +64,7 @@ def test_shared_effect_bridge_never_infers_business_scope_from_tenant(monkeypatc
 
 
 @pytest.mark.lock
-def test_shared_effect_bridge_preserves_explicit_native_approval_and_recipient(monkeypatch):
+def test_shared_effect_bridge_stamps_legacy_native_provider_and_preserves_recipient(monkeypatch):
     dispatcher = _RecordingDispatcher()
     monkeypatch.setattr(bridge_module, "build_multichannel_dispatcher", lambda: dispatcher)
     bridge = MultiChannelEffectsBridge()
@@ -73,7 +73,8 @@ def test_shared_effect_bridge_preserves_explicit_native_approval_and_recipient(m
     bridge.send(_message(channel="slack", user_id="C123", track_payload={"_provider_native": original}))
 
     native = dispatcher.messages[0].track_payload["_provider_native"]
-    assert native == original
+    assert native == {**original, "provider_key": "slack_messaging"}
+    assert "provider_key" not in original
 
 
 @pytest.mark.lock
@@ -119,7 +120,7 @@ def test_policy_fallback_binds_native_context_after_final_channel_selection(monk
 
     ok, meta = execute_policy_plan_with_events(
         plan=PolicyPlan(ordered_channels=("whatsapp", "slack"), reason_codes=("fallback",), terminal_reason=""),
-        base_message=base,
+        base_message=bridge_module.stamp_native_provider_provenance(base),
         send_once=_send_once,
     )
 
@@ -148,7 +149,6 @@ def test_policy_fallback_rebinds_shared_channel_id_when_native_provider_changes(
         track_payload={
             "tenant_id": "business-a",
             "_provider_native": {
-                "provider_key": "slack_messaging",
                 "business_id": "business-a",
                 "approval_id": "ap-slack",
                 "channel_id": "C999",
@@ -162,7 +162,7 @@ def test_policy_fallback_rebinds_shared_channel_id_when_native_provider_changes(
 
     ok, meta = execute_policy_plan_with_events(
         plan=PolicyPlan(ordered_channels=("slack", "discord"), reason_codes=("fallback",), terminal_reason=""),
-        base_message=base,
+        base_message=bridge_module.stamp_native_provider_provenance(base),
         send_once=_send_once,
     )
 

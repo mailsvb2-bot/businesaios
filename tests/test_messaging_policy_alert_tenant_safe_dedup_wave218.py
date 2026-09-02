@@ -15,6 +15,13 @@ class _GW:
     def set_value(self, *, tenant_id: str, key: str, value: dict):
         self.items[(tenant_id, key)] = dict(value)
 
+    def compare_and_set_value(self, *, tenant_id: str, key: str, expected, value) -> bool:
+        slot = (tenant_id, key)
+        if self.items.get(slot) != expected:
+            return False
+        self.items[slot] = dict(value)
+        return True
+
 
 def test_tenant_scoped_store_factory_isolates_state_between_tenants():
     gw = _GW()
@@ -41,8 +48,10 @@ def test_tenant_aware_suppression_uses_tenant_scoped_state(monkeypatch):
 
 
 def test_tenant_mark_service_finalizes_pending_approval(monkeypatch):
-    from runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service import TenantAwareAlertNotificationMarkSentService
     import runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service as mod
+    from runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service import (
+        TenantAwareAlertNotificationMarkSentService,
+    )
 
     monkeypatch.setattr(mod, 'now_epoch_s', lambda: 200)
     gw = _GW()

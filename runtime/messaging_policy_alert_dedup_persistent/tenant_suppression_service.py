@@ -13,15 +13,17 @@ class TenantAwareAlertNotificationSuppressionService:
         self._cooldown_s = int(cooldown_s)
         self._approval_status_resolver = approval_status_resolver or _approval_is_pending
 
-    def evaluate(self, *, tenant_id: str, recipient_user_id: str, channel: str, alert_code: str, affected_user_id: str, business_id: str = ""):
+    def evaluate(self, *, tenant_id: str, recipient_user_id: str, channel: str, alert_code: str, affected_user_id: str, business_id: str = "", include_record: bool = False):
         dedup_key = build_alert_notification_dedup_key(tenant_id=tenant_id, recipient_user_id=recipient_user_id, channel=channel, alert_code=alert_code, affected_user_id=affected_user_id, business_id=business_id)
         record = self._store_factory.for_tenant(tenant_id=tenant_id).get(dedup_key=dedup_key)
         if record is None:
-            return dedup_key, AlertSuppressionDecision(should_send=True, reason='first_send')
-        if record.is_pending:
-            if bool(self._approval_status_resolver(str(record.pending_approval_id))):
-                return dedup_key, AlertSuppressionDecision(should_send=False, reason='approval_pending')
-            return dedup_key, AlertSuppressionDecision(should_send=True, reason='approval_terminal')
-        if int(now_epoch_s()) - int(record.sent_at_epoch_s) < int(self._cooldown_s):
-            return dedup_key, AlertSuppressionDecision(should_send=False, reason='cooldown_active')
-        return dedup_key, AlertSuppressionDecision(should_send=True, reason='cooldown_elapsed')
+            decision = AlertSuppressionDecision(should_send=True, reason='first_send')
+        elif record.is_pending:
+            pending_id = str(record.pending_approval_id)
+            active = pending_id.startswith('reservation:') or bool(self._approval_status_resolver(pending_id))
+            decision = AlertSuppressionDecision(should_send=not active, reason='approval_pending' if active else 'approval_terminal')
+        elif int(now_epoch_s()) - int(record.sent_at_epoch_s) < int(self._cooldown_s):
+            decision = AlertSuppressionDecision(should_send=False, reason='cooldown_active')
+        else:
+            decision = AlertSuppressionDecision(should_send=True, reason='cooldown_elapsed')
+        return (dedup_key, decision, record) if include_record else (dedup_key, decision)

@@ -7,22 +7,17 @@ class _MemoryStoredEvent(dict):
     def __init__(self, event: dict, *, append_seq: int) -> None:
         super().__init__(event)
         self.append_seq = int(append_seq)
-
-
 class MemoryEventStore(list):
     """Append-only in-memory event store for dev/tests.
-
     Strict tenant contract:
     - caller must pass tenant_id explicitly
     - events are filtered by tenant_id
     - append sequences never move backwards after retention
     """
-
     def __init__(self, rows: Iterable[dict] = ()) -> None:
         super().__init__()
         self._next_append_seq = 0
         self.extend(rows)
-
     def append(self, event: dict) -> None:
         self._next_append_seq += 1
         super().append(
@@ -31,18 +26,15 @@ class MemoryEventStore(list):
                 append_seq=self._next_append_seq,
             )
         )
-
     def extend(self, rows: Iterable[dict]) -> None:
         for row in rows:
             self.append(row)
-
     def append_event(self, event: dict):
         e = dict(event or {})
         tid = str(e.get("tenant_id") or "").strip()
         if not tid:
             raise ValueError("tenant_id is required (strict)")
         self.append(e)
-
     def latest_append_seq(self, *, tenant_id: str) -> int:
         tid = str(tenant_id or "").strip()
         if not tid:
@@ -55,7 +47,6 @@ class MemoryEventStore(list):
             ),
             default=0,
         )
-
     def iter_events(
         self,
         *,
@@ -102,7 +93,6 @@ class MemoryEventStore(list):
             emitted += 1
             if limit is not None and emitted >= max(1, int(limit)):
                 return
-
     def count_events(
         self,
         *,
@@ -113,7 +103,6 @@ class MemoryEventStore(list):
         event_type: str | None = None,
     ) -> int:
         return sum(1 for _ in self.iter_events(tenant_id=tenant_id, start_ms=start_ms, end_ms=end_ms, user_id=user_id, event_type=event_type))
-
     def sum_event_payload_int(
         self,
         *,
@@ -132,7 +121,6 @@ class MemoryEventStore(list):
             except Exception:
                 continue
         return int(total)
-
     def delete_user_events(self, *, tenant_id: str, user_id: str) -> int:
         """Delete all events for a user without renumbering retained rows."""
         tid = str(tenant_id or "").strip()
@@ -153,7 +141,6 @@ class MemoryEventStore(list):
         super().clear()
         super().extend(kept)
         return int(before - len(self))
-
     def get_setting(self, *, tenant_id: str, key: str):
         store = getattr(self, "_settings", None)
         if store is None:
@@ -161,7 +148,6 @@ class MemoryEventStore(list):
         value = store.get((str(tenant_id), str(key)))
         from copy import deepcopy
         return deepcopy(value)
-
     def set_setting(self, *, tenant_id: str, key: str, value) -> None:
         store = getattr(self, "_settings", None)
         if store is None:
@@ -169,3 +155,14 @@ class MemoryEventStore(list):
             self._settings = store
         from copy import deepcopy
         store[(str(tenant_id), str(key))] = deepcopy(value)
+    def compare_and_set_setting(self, *, tenant_id: str, key: str, expected, value) -> bool:
+        store = getattr(self, "_settings", None)
+        if store is None:
+            store = {}
+            self._settings = store
+        slot = (str(tenant_id), str(key))
+        if store.get(slot) != expected:
+            return False
+        from copy import deepcopy
+        store[slot] = deepcopy(value)
+        return True

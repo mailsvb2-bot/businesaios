@@ -14,19 +14,13 @@ from execution.canonical_operator_handoff import canonical_operator_handoff
 from governance.approval_contract import ApprovalRecord, ApprovalRequest
 
 CANON_APPROVAL_GATE_SUPPORT = True
-
-
 def _safe_dict(value: object) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
     return {}
-
-
 def _text(value: object, *, default: str = '') -> str:
     text = str(value or '').strip()
     return text or default
-
-
 def build_approval_request_fingerprint(*, tenant_id: str, subject_fingerprint: str, required_role_groups: tuple[tuple[Any, ...], ...], min_distinct_approvers: int) -> str:
     raw = json.dumps(
         {
@@ -40,19 +34,13 @@ def build_approval_request_fingerprint(*, tenant_id: str, subject_fingerprint: s
         separators=(",", ":"),
     )
     return hashlib.sha256(raw.encode('utf-8')).hexdigest()
-
-
 def require_execution_id(ctx: ActionExecutionContext) -> str:
     execution_id = _text(ctx.execution_id or _safe_dict(ctx.metadata).get('execution_id'))
     if not execution_id:
         raise RuntimeError('approval_gate_requires_explicit_execution_id')
     return execution_id
-
-
 def new_approval_id(*, ctx: ActionExecutionContext, execution_id: str) -> str:
     return f"ap-{_text(ctx.tenant_id, default='tenant')}-{execution_id}-{uuid4().hex[:10]}"
-
-
 def approval_matches_execution(*, record: ApprovalRecord, ctx: ActionExecutionContext, decision_id: str, subject_fingerprint: str) -> bool:
     request = record.request
     metadata = _safe_dict(request.metadata)
@@ -64,8 +52,6 @@ def approval_matches_execution(*, record: ApprovalRecord, ctx: ActionExecutionCo
         and _text(metadata.get('action_name')) == ctx.action_name
         and _text(metadata.get('subject_fingerprint')) == subject_fingerprint
     )
-
-
 def build_handoff(*, ctx: ActionExecutionContext, execution_id: str, decision_id: str, autonomy_tier: str, reason: str, approval_id: str | None, policy: Mapping[str, object]) -> dict[str, object]:
     normalized_policy = _safe_dict(policy)
     return canonical_operator_handoff(
@@ -95,8 +81,6 @@ def build_handoff(*, ctx: ActionExecutionContext, execution_id: str, decision_id
         },
         opportunity_signals=[],
     )
-
-
 def build_approval_request(*, ctx: ActionExecutionContext, impact: ActionImpact, policy: ApprovalPolicyDecision, requested_by: str, execution_id: str, decision_id: str, autonomy_tier: str, external_confirmation_mode: str, subject_fingerprint: str, approval_id: str, expires_at: Any) -> ApprovalRequest:
     request_fingerprint = build_approval_request_fingerprint(
         tenant_id=ctx.tenant_id,
@@ -105,7 +89,9 @@ def build_approval_request(*, ctx: ActionExecutionContext, impact: ActionImpact,
         min_distinct_approvers=policy.min_distinct_approvers,
     )
     resume_context = _safe_dict(ctx.metadata).get('approval_resume_context')
+    completion_context = _safe_dict(ctx.metadata).get('approval_completion_context')
     persisted_resume_context = deepcopy(dict(resume_context)) if isinstance(resume_context, Mapping) else None
+    persisted_completion_context = deepcopy(dict(completion_context)) if isinstance(completion_context, Mapping) else None
     return ApprovalRequest(
         approval_id=approval_id,
         tenant_id=ctx.tenant_id,
@@ -127,10 +113,9 @@ def build_approval_request(*, ctx: ActionExecutionContext, impact: ActionImpact,
             'impact_summary': _impact_summary(impact),
             'policy': dict(policy.to_dict()),
             **({'approval_resume_context': persisted_resume_context} if persisted_resume_context is not None else {}),
+            **({'approval_completion_context': persisted_completion_context} if persisted_completion_context is not None else {}),
         },
     )
-
-
 __all__ = [
     'CANON_APPROVAL_GATE_SUPPORT',
     'approval_matches_execution',

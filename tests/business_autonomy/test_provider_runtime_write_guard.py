@@ -304,3 +304,44 @@ def test_caller_supplied_queue_markers_cannot_bypass_canonical_queue() -> None:
     assert result.accepted is False and result.status == "rejected_provider_write_requires_queue"
     request_payload = result.metadata["request_envelope"]["payload"]
     assert all(key not in request_payload for key in ("_provider_queue_execution", "_provider_queue_job_id", "_provider_write_approved", "_allow_network"))
+
+
+def test_native_guard_persists_internal_completion_context_without_binding_it_to_replay_subject() -> None:
+    store = InMemoryApprovalStore()
+    workflow = ApprovalWorkflow(store=store)
+    gate = ApprovalExecutionGate(approval_policy_engine=ApprovalPolicyEngine(change_control_policy=ChangeControlPolicy()), approval_workflow=workflow)
+    guard = ProviderRuntimeWriteGuard(approval_gate=gate, approval_store=store)
+    provider = provider_map()['slack_messaging']
+    payload = {'channel_id': 'C123', 'text': 'hello', '_approval': {'decision_id': 'dec-slack', 'execution_id': 'exec-slack'}}
+    completion = {'dedup_key': 'tenant-a|biz-a|ceo|slack|a1|u1', 'reservation_id': 'res-1'}
+    denied = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload=payload, approval_completion_context=completion)
+    approval_id = str(denied.metadata['approval']['approval_id'])
+    record = workflow.get(approval_id)
+    assert record is not None and record.request.metadata['approval_completion_context'] == completion
+    completion['dedup_key'] = 'mutated-after-submit'
+    assert record.request.metadata['approval_completion_context']['dedup_key'].startswith('tenant-a|biz-a|')
+    workflow.evaluate(ApprovalDecision(approval_id=approval_id, tenant_id='tenant-a', actor_id='owner-approver', role_id=RoleId.OWNER, outcome=ApprovalOutcome.APPROVE, rationale='approved'))
+    replay_payload = {**payload, '_approval': {**payload['_approval'], 'approval_id': approval_id}}
+    allowed = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload=replay_payload)
+    assert allowed.allowed is True and allowed.reason == 'approval_satisfied'
+
+
+def test_native_approval_completion_context_is_fingerprint_bound_across_resume() -> None:
+    store = InMemoryApprovalStore()
+    workflow = ApprovalWorkflow(store=store)
+    gate = ApprovalExecutionGate(approval_policy_engine=ApprovalPolicyEngine(change_control_policy=ChangeControlPolicy()), approval_workflow=workflow)
+    guard = ProviderRuntimeWriteGuard(approval_gate=gate, approval_store=store)
+    provider = provider_map()['slack_messaging']
+    completion = {'dedup_key': 'dedup-1', 'reservation_id': 'res-1'}
+    payload = {'channel_id': 'C123', 'text': 'hello', '_approval': {'decision_id': 'dec-alert', 'execution_id': 'exec-alert'}}
+    denied = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload=payload, approval_completion_context=completion)
+    approval_id = str(denied.metadata['approval']['approval_id'])
+    workflow.evaluate(ApprovalDecision(approval_id=approval_id, tenant_id='tenant-a', actor_id='owner-approver', role_id=RoleId.OWNER, outcome=ApprovalOutcome.APPROVE, rationale='approve alert'))
+    approved = {**payload, '_approval': {**payload['_approval'], 'approval_id': approval_id}}
+    allowed = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload=approved, approval_completion_context=completion)
+    missing_context = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload=approved)
+    record = workflow.get(approval_id)
+    assert record is not None and record.request.metadata['approval_completion_context'] == completion
+    assert allowed.allowed is True and allowed.reason == 'approval_satisfied'
+    assert missing_context.allowed is True
+    assert missing_context.metadata['approval']['subject_fingerprint'] == allowed.metadata['approval']['subject_fingerprint']
