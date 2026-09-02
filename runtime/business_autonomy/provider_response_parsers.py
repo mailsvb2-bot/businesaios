@@ -26,7 +26,7 @@ class ProviderResponseParsers:
             'http_status': status_code,
             'ok': status_code is not None and 200 <= status_code < 300 and not error_code,
             'resource_count': self._resource_count(provider_key=provider_key, body=body),
-            'resource_id': self._resource_id(provider_key=provider_key, body=body),
+            'resource_id': self._resource_id(provider_key=provider_key, body=body, headers=headers),
             'next_cursor': self._next_cursor(provider_key=provider_key, body=body),
             'error_code': error_code,
             'error_message': self._error_message(provider_key=provider_key, body=body), 'error_category': 'rate_limit' if rate_limited else ('provider_unavailable' if status_code is not None and status_code >= 500 else None),
@@ -75,9 +75,9 @@ class ProviderResponseParsers:
             return len(body)
         return None
 
-    def _resource_id(self, *, provider_key: str, body: Any) -> str | None:
+    def _resource_id(self, *, provider_key: str, body: Any, headers: Mapping[str, str] | None = None) -> str | None:
         if isinstance(body, dict):
-            for key in ('id', 'admin_graphql_api_id', 'message_id', 'campaign_id'):
+            for key in ('id', 'admin_graphql_api_id', 'message_id', 'message_token', 'campaign_id'):
                 value = body.get(key)
                 if value not in {None, ''}:
                     return str(value)
@@ -97,7 +97,7 @@ class ProviderResponseParsers:
                 value = body.get('ts') or source.get('ts')
                 if value not in {None, ''}:
                     return str(value)
-        return None
+        return (str(headers.get('x-line-accepted-request-id') or headers.get('x-line-request-id') or '') or None) if provider_key == 'line_messaging' and isinstance(headers, Mapping) else None
 
     def _next_cursor(self, *, provider_key: str, body: Any) -> str | None:
         if isinstance(body, dict):
