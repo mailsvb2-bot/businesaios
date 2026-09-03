@@ -46,7 +46,7 @@ class OutboundMessage:
         if not base_payload:
             base_payload = {
                 "text": str(self.text or ""),
-                "attachments": [dict(item) for item in normalized_attachments],
+                **({"attachments": [dict(item) for item in normalized_attachments]} if normalized_attachments else {}),
                 "reply_markup": self.reply_markup,
                 "track_event_type": self.track_event_type,
                 "track_payload": dict(self.track_payload or {}),

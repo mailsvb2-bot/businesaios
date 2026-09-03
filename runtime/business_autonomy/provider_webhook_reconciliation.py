@@ -22,7 +22,7 @@ def _sync_request(**kwargs: Any) -> Any:
     return import_internal_attr('runtime._internal.http_transport', 'sync_request')(**kwargs)
 
 
-def _form_urlencode(data: Mapping[str, Any]) -> bytes:
+def _form_body(data: Mapping[str, Any]) -> bytes:
     return import_internal_attr('runtime._internal.http_transport', 'form_urlencode')(dict(data))
 
 
@@ -176,7 +176,7 @@ class ProviderWebhookReconciler:
             method='POST',
             url=url,
             headers={'Content-Type': 'application/x-www-form-urlencoded'},
-            body=_form_urlencode(payload),
+            body=_form_body(payload),
             timeout_s=20,
         )
         return _require_http_success(result, operation='provider_webhook_reconcile')
