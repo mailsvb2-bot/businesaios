@@ -29,6 +29,7 @@ class OutboundMessage:
     channel: str
     text: str
     business_id: str = ""
+    attachments: tuple[dict[str, Any], ...] = field(default_factory=tuple)
     reply_markup: dict | None = None
     callback_query_id: str | None = None
     track_event_type: str | None = None
@@ -39,10 +40,13 @@ class OutboundMessage:
     transport_guard: Callable[[OutboundMessage], str] | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        normalized_attachments = tuple(dict(item) for item in self.attachments if isinstance(item, dict))
+        object.__setattr__(self, "attachments", normalized_attachments)
         base_payload = dict(self.payload or {})
         if not base_payload:
             base_payload = {
                 "text": str(self.text or ""),
+                "attachments": [dict(item) for item in normalized_attachments],
                 "reply_markup": self.reply_markup,
                 "track_event_type": self.track_event_type,
                 "track_payload": dict(self.track_payload or {}),
@@ -68,6 +72,7 @@ class OutboundMessage:
             "user_id": str(self.user_id or ""),
             "channel": str(self.channel or ""),
             "text": str(self.text or ""),
+            "attachments": [dict(item) for item in self.attachments],
             "reply_markup": self.reply_markup,
             "callback_query_id": str(self.callback_query_id or ""),
             "payload_digest": self.payload_digest,

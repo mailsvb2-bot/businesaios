@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from typing import Any
 
-from runtime.queue.job_contract import JobLease, JobRecord, JobState, normalize_now
+from runtime.queue.job_contract import JobClaimExpiryPolicy, JobLease, JobRecord, JobState, normalize_now
 
 CANON_RUNTIME_QUEUE_SQLITE_JOB_STORE_CODEC = True
 
@@ -70,6 +70,7 @@ def row_to_job(row: Any) -> JobRecord:
         state=JobState(str(row["state"])),
         attempts=int(row["attempts"]),
         max_attempts=int(row["max_attempts"]),
+        claim_expiry_policy=JobClaimExpiryPolicy(str(row["claim_expiry_policy"])),
         last_error=None if row["last_error"] is None else str(row["last_error"]),
         correlation_id=None if row["correlation_id"] is None else str(row["correlation_id"]),
         causation_id=None if row["causation_id"] is None else str(row["causation_id"]),
@@ -84,7 +85,7 @@ def write_full_row(db: Any, job: JobRecord) -> None:
     db.execute(
         """
         UPDATE runtime_queue_jobs
-        SET queue_name = ?, job_type = ?, payload_json = ?, payload_hash = ?, dedupe_key = ?, run_at = ?, created_at = ?, updated_at = ?, priority = ?, state = ?, attempts = ?, max_attempts = ?, last_error = ?, correlation_id = ?, causation_id = ?, lease_owner_id = ?, lease_fencing_token = ?, lease_claimed_at = ?, lease_expires_at = ?, tags_json = ?
+        SET queue_name = ?, job_type = ?, payload_json = ?, payload_hash = ?, dedupe_key = ?, run_at = ?, created_at = ?, updated_at = ?, priority = ?, state = ?, attempts = ?, max_attempts = ?, claim_expiry_policy = ?, last_error = ?, correlation_id = ?, causation_id = ?, lease_owner_id = ?, lease_fencing_token = ?, lease_claimed_at = ?, lease_expires_at = ?, tags_json = ?
         WHERE tenant_id = ? AND job_id = ?
         """,
         (
@@ -100,6 +101,7 @@ def write_full_row(db: Any, job: JobRecord) -> None:
             job.state.value,
             int(job.attempts),
             int(job.max_attempts),
+            job.claim_expiry_policy.value,
             job.last_error,
             job.correlation_id,
             job.causation_id,

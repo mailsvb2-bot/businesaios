@@ -6,14 +6,29 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
+from runtime.business_autonomy.provider_max_media_http import execute_max_media_message
+from runtime.business_autonomy.provider_media import ProviderMediaPreparationCoordinator, public_provider_media_payload
 from runtime.business_autonomy.provider_payload_normalizers import ProviderPayloadNormalizers
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
+from runtime.business_autonomy.provider_vk_media_http import prepare_vk_audio_attachment
 from runtime.handler_loader import import_internal_attr
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_HTTP_LIVE_CLIENTS = True
+
+
+def _public_request_view(prepared: Mapping[str, Any]) -> dict[str, Any]:
+    public = {**dict(prepared), 'headers': {k: ('***' if str(k).lower() in {'authorization', 'x-shopify-access-token', 'access-token', 'developer-token', 'x-viber-auth-token'} else v) for k, v in dict(prepared.get('headers') or {}).items()}}
+    for body_key in ('form_body', 'json_body'):
+        body = prepared.get(body_key)
+        if isinstance(body, Mapping):
+            safe = public_provider_media_payload(dict(body))
+            if body_key == 'form_body' and 'access_token' in safe:
+                safe['access_token'] = '***'
+            public[body_key] = safe
+    return public
 
 
 def _sync_request(*args: Any, **kwargs: Any) -> Any:
@@ -28,13 +43,13 @@ class VendorHttpLiveTransport:
     timeout_seconds: float = 10.0
     normalizers: ProviderPayloadNormalizers = field(default_factory=ProviderPayloadNormalizers)
     response_parsers: ProviderResponseParsers = field(default_factory=ProviderResponseParsers)
+    media_preparation: ProviderMediaPreparationCoordinator | None = None
     def execute(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str, operation: str, payload: Mapping[str, Any]) -> Mapping[str, Any]:
         binding = ProviderTransportBindings().describe(provider)
+        queue_job_id = str(payload.get('_provider_queue_job_id') or '').strip()
         normalized_payload = self.normalizers.normalize_outbound(provider=provider, operation=operation, payload={k: v for k, v in payload.items() if not str(k).startswith('_')})
         prepared = self._prepare_request(provider=provider, tenant_id=tenant_id, business_id=business_id, operation=operation, payload=normalized_payload, binding=binding)
-        public_request = {**prepared, 'headers': {k: ('***' if str(k).lower() in {'authorization', 'x-shopify-access-token', 'access-token', 'developer-token', 'x-viber-auth-token'} else v) for k, v in dict(prepared.get('headers') or {}).items()}}
-        if isinstance(prepared.get('form_body'), Mapping):
-            public_request['form_body'] = {k: ('***' if k == 'access_token' else v) for k, v in prepared['form_body'].items()}
+        public_request = _public_request_view(prepared)
         guarded_native_write = provider.provider_key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'}
         bot_token_native = provider.provider_key in {'slack_messaging', 'discord_messaging'}
         webhook_read_native = provider.provider_key in {'line_messaging', 'viber_messaging'}
@@ -69,8 +84,31 @@ class VendorHttpLiveTransport:
                 or (provider.provider_key == 'discord_messaging' and not (channel_id.isascii() and channel_id.isdigit()))
                 or (provider.provider_key in {'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'} and (str(normalized_payload.get({'instagram_messaging': 'recipient_id', 'messenger_messaging': 'recipient_id', 'line_messaging': 'to', 'viber_messaging': 'receiver'}[provider.provider_key]) or '') in {'', '{recipient_id}'} or (provider.provider_key == 'viber_messaging' and str(dict(dict(prepared.get('json_body') or {}).get('sender') or {}).get('name') or '') in {'', '{sender_name}'})))
             )
-            if invalid_recipient or not str(next((item.get('text') for item in (normalized_payload.get('messages') or ()) if isinstance(item, Mapping) and item.get('text')), '') or normalized_payload.get('message') or normalized_payload.get('text') or '').strip():
+            has_text = bool(str(next((item.get('text') for item in (normalized_payload.get('messages') or ()) if isinstance(item, Mapping) and item.get('text')), '') or normalized_payload.get('message') or normalized_payload.get('text') or '').strip())
+            has_attachments = isinstance(normalized_payload.get('attachments'), list) and bool(normalized_payload.get('attachments'))
+            if invalid_recipient or not (has_text or has_attachments):
                 return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': normalized_payload, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'native_message_send_payload_invalid'}
+        if provider.provider_key == 'vk_messaging' and operation == 'message_send' and normalized_payload.get('attachments'):
+            if self.media_preparation is None or not queue_job_id:
+                return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': {**normalized_payload, 'attachments': '[redacted-media-source]'}, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'canonical_media_preparation_unavailable'}
+            secrets = self._load_secrets(provider=provider, tenant_id=tenant_id, business_id=business_id)
+            attachment = prepare_vk_audio_attachment(tenant_id=tenant_id, business_id=business_id, queue_job_id=queue_job_id, peer_id=str(normalized_payload.get('peer_id') or ''), payload=normalized_payload, access_token=str(secrets.get('access_token') or ''), media_preparation=self.media_preparation, timeout_seconds=float(self.timeout_seconds), provider_base_url=str(binding.get('base_url') or ''))
+            if attachment:
+                normalized_payload = {k: v for k, v in normalized_payload.items() if k != 'attachments'}
+                normalized_payload['attachment'] = attachment
+                prepared = self._prepare_request(provider=provider, tenant_id=tenant_id, business_id=business_id, operation=operation, payload=normalized_payload, binding=binding)
+                public_request = _public_request_view(prepared)
+        if provider.provider_key == 'max_messaging' and operation == 'message_send' and normalized_payload.get('attachments'):
+            if self.media_preparation is None or not queue_job_id:
+                return {'_prepared_only': True, 'provider_key': provider.provider_key, 'network_capable': False, 'request': public_request, 'normalized_payload': {**normalized_payload, 'attachments': '[redacted-media-source]'}, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider), 'reason': 'canonical_media_preparation_unavailable'}
+            access_token = str(self._load_secrets(provider=provider, tenant_id=tenant_id, business_id=business_id).get('access_token') or '').strip()
+            media_response = execute_max_media_message(tenant_id=tenant_id, business_id=business_id, queue_job_id=queue_job_id, payload=normalized_payload, access_token=access_token, media_preparation=self.media_preparation, timeout_seconds=float(self.timeout_seconds), provider_base_url=str(binding.get('base_url') or ''))
+            if media_response is not None:
+                response = dict(media_response)
+                parsed = dict(response.get('parsed_response') or self.response_parsers.parse(provider=provider, operation=operation, response=response))
+                response['parsed_response'] = parsed
+                response['_response_ok'] = bool(response.pop('_response_ok', not response.get('error_kind') and bool(parsed.get('ok')) and not parsed.get('error_code')))
+                return response
         body, form = prepared.get('json_body'), prepared.get('form_body')
         raw = import_internal_attr('runtime._internal.http_transport', 'form_urlencode')(dict(form)) if isinstance(form, Mapping) else (None if body is None else json.dumps(body, sort_keys=True).encode('utf-8'))
         result = _sync_request(
@@ -197,10 +235,10 @@ class VendorHttpLiveTransport:
         return f"{base_url}{path_family.format(operation=operation)}"
 
 
-def build_live_http_transports(secret_vault: SecretVault, *, bind_live_network: bool = False) -> dict[str, VendorHttpLiveTransport]:
+def build_live_http_transports(secret_vault: SecretVault, *, bind_live_network: bool = False, media_preparation: ProviderMediaPreparationCoordinator | None = None) -> dict[str, VendorHttpLiveTransport]:
     providers = ('telegram_bot','whatsapp_cloud','vk_messaging','max_messaging','slack_messaging','discord_messaging','instagram_messaging','messenger_messaging','line_messaging','viber_messaging','shopify','woocommerce','hubspot','meta_ads','google_ads','tiktok_ads')
     live_network_keys = {'telegram_bot','hubspot','vk_messaging','max_messaging','slack_messaging','discord_messaging','instagram_messaging','messenger_messaging','line_messaging','viber_messaging'}
-    return {key: VendorHttpLiveTransport(secret_vault=secret_vault, provider_key=key, bind_live_network=bind_live_network and key in live_network_keys) for key in providers}
+    return {key: VendorHttpLiveTransport(secret_vault=secret_vault, provider_key=key, bind_live_network=bind_live_network and key in live_network_keys, media_preparation=media_preparation) for key in providers}
 
 
 __all__ = ['CANON_PROVIDER_HTTP_LIVE_CLIENTS', 'VendorHttpLiveTransport', 'build_live_http_transports']

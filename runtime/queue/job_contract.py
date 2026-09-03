@@ -12,7 +12,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 from core.tenancy.normalization import require_tenant_id
@@ -77,7 +77,12 @@ def _serialized_mapping_payload(payload: Mapping[str, Any]) -> str:
     return json.dumps(dict(payload), sort_keys=True, default=str, separators=(",", ":"))
 
 
-class JobState(str, Enum):
+class JobClaimExpiryPolicy(StrEnum):
+    RETRY_IF_BUDGET = "retry_if_budget"
+    DEAD_LETTER_AMBIGUOUS = "dead_letter_ambiguous"
+
+
+class JobState(StrEnum):
     PENDING = "pending"
     CLAIMED = "claimed"
     SUCCEEDED = "succeeded"
@@ -136,6 +141,7 @@ class JobRecord:
     state: JobState = JobState.PENDING
     attempts: int = 0
     max_attempts: int = 8
+    claim_expiry_policy: JobClaimExpiryPolicy = JobClaimExpiryPolicy.RETRY_IF_BUDGET
     last_error: str | None = None
     correlation_id: str | None = None
     causation_id: str | None = None
@@ -152,6 +158,7 @@ class JobRecord:
         object.__setattr__(self, "created_at", _normalize_datetime(self.created_at, field_name="created_at"))
         object.__setattr__(self, "updated_at", _normalize_datetime(self.updated_at, field_name="updated_at"))
         object.__setattr__(self, "tags", _normalize_tags(self.tags))
+        object.__setattr__(self, "claim_expiry_policy", JobClaimExpiryPolicy(self.claim_expiry_policy))
         object.__setattr__(self, "last_error", _normalize_error(self.last_error))
         if self.correlation_id is not None:
             object.__setattr__(self, "correlation_id", _require_text(self.correlation_id, field_name="correlation_id", max_length=MAX_ID_LENGTH))
@@ -212,8 +219,10 @@ class JobDispatchRequest:
     payload: Mapping[str, Any]
     dedupe_key: str
     delay_seconds: int = 0
+    not_before: datetime | None = None
     priority: int = int(JobPriority.NORMAL)
     max_attempts: int = 8
+    claim_expiry_policy: JobClaimExpiryPolicy = JobClaimExpiryPolicy.RETRY_IF_BUDGET
     correlation_id: str | None = None
     causation_id: str | None = None
     tags: tuple[str, ...] = field(default_factory=tuple)
@@ -225,8 +234,10 @@ class JobDispatchRequest:
         object.__setattr__(self, "job_type", _require_text(self.job_type, field_name="job_type", max_length=MAX_JOB_TYPE_LENGTH))
         object.__setattr__(self, "dedupe_key", _require_text(self.dedupe_key, field_name="dedupe_key", max_length=MAX_ID_LENGTH))
         object.__setattr__(self, "delay_seconds", max(0, int(self.delay_seconds)))
+        object.__setattr__(self, "not_before", _normalize_optional_datetime(self.not_before, field_name="not_before"))
         object.__setattr__(self, "priority", int(self.priority))
         object.__setattr__(self, "max_attempts", int(self.max_attempts))
+        object.__setattr__(self, "claim_expiry_policy", JobClaimExpiryPolicy(self.claim_expiry_policy))
         if not isinstance(self.payload, Mapping):
             raise TypeError("payload must be a mapping")
         object.__setattr__(self, "tags", _normalize_tags(self.tags))
@@ -243,6 +254,8 @@ class JobDispatchRequest:
 
     def to_record(self, *, now: datetime | None = None) -> JobRecord:
         moment = normalize_now(now)
+        delayed = moment + timedelta(seconds=self.delay_seconds)
+        run_at = delayed if self.not_before is None else max(delayed, self.not_before)
         return JobRecord(
             tenant_id=self.tenant_id,
             job_id=self.job_id,
@@ -250,11 +263,12 @@ class JobDispatchRequest:
             job_type=self.job_type,
             payload=dict(self.payload),
             dedupe_key=self.dedupe_key,
-            run_at=moment + timedelta(seconds=self.delay_seconds),
+            run_at=run_at,
             created_at=moment,
             updated_at=moment,
             priority=self.priority,
             max_attempts=self.max_attempts,
+            claim_expiry_policy=self.claim_expiry_policy,
             correlation_id=self.correlation_id,
             causation_id=self.causation_id,
             tags=self.tags,
@@ -290,6 +304,7 @@ class JobResult:
 
 __all__ = [
     "CANON_RUNTIME_QUEUE_CONTRACT",
+    "JobClaimExpiryPolicy",
     "JobDispatchRequest",
     "JobLease",
     "JobPriority",

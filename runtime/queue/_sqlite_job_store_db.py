@@ -13,7 +13,7 @@ from runtime.queue.job_fencing import validate_fencing_token
 sqlite3 = importlib.import_module("sqlite3")
 
 CANON_RUNTIME_QUEUE_SQLITE_JOB_STORE_DB = True
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 TERMINAL_REPLACEABLE_DEDUPE_STATES = {
     JobState.FAILED.value,
     JobState.DEAD_LETTER.value,
@@ -70,6 +70,7 @@ def init_sqlite_job_store_schema(*, path: Path, busy_timeout_ms: int) -> None:
                 state TEXT NOT NULL,
                 attempts INTEGER NOT NULL,
                 max_attempts INTEGER NOT NULL,
+                claim_expiry_policy TEXT NOT NULL DEFAULT 'retry_if_budget',
                 last_error TEXT,
                 correlation_id TEXT,
                 causation_id TEXT,
@@ -91,6 +92,8 @@ def init_sqlite_job_store_schema(*, path: Path, busy_timeout_ms: int) -> None:
             db.execute("ALTER TABLE runtime_queue_jobs ADD COLUMN lease_fencing_token INTEGER NOT NULL DEFAULT 0")
         if "claim_token_counter" not in existing:
             db.execute("ALTER TABLE runtime_queue_jobs ADD COLUMN claim_token_counter INTEGER NOT NULL DEFAULT 0")
+        if "claim_expiry_policy" not in existing:
+            db.execute("ALTER TABLE runtime_queue_jobs ADD COLUMN claim_expiry_policy TEXT NOT NULL DEFAULT 'retry_if_budget'")
         db.execute(
             "INSERT INTO runtime_queue_meta (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (str(SCHEMA_VERSION),),

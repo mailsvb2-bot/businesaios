@@ -15,12 +15,13 @@ def resolve_tenant_id(*, tenant_id: str | None, track_payload: dict | None) -> s
     return "unknown_tenant"
 
 
-def build_outbound_message(*, decision_id: str, correlation_id: str, user_id: str, text: str, tenant_id: str, business_id: str = "", reply_markup: dict | None, callback_query_id: str | None, track_event_type: str | None, track_payload: dict | None, channel: str, priority, critical: bool, transport_guard=None) -> OutboundMessage:
+def build_outbound_message(*, decision_id: str, correlation_id: str, user_id: str, text: str, tenant_id: str, business_id: str = "", attachments: tuple[dict, ...] = (), reply_markup: dict | None, callback_query_id: str | None, track_event_type: str | None, track_payload: dict | None, channel: str, priority, critical: bool, transport_guard=None) -> OutboundMessage:
     return OutboundMessage(
         decision_id=str(decision_id),
         correlation_id=str(correlation_id),
         tenant_id=resolve_tenant_id(tenant_id=tenant_id, track_payload=track_payload),
         business_id=str(business_id or "").strip(),
+        attachments=tuple(dict(item) for item in attachments),
         user_id=str(user_id),
         channel=str(channel or "telegram"),
         text=str(text or ""),
@@ -33,6 +34,7 @@ def build_outbound_message(*, decision_id: str, correlation_id: str, user_id: st
         transport_guard=transport_guard,
         payload={
             "text": str(text or ""),
+            "attachments": [dict(item) for item in attachments],
             "reply_markup": reply_markup,
             "track_event_type": track_event_type,
             "track_payload": dict(track_payload or {}),

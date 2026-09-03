@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from contracts.messaging_event_identity import stable_transport_message_id
@@ -106,14 +106,24 @@ _PROVIDER_PATHS: dict[str, dict[str, tuple[FieldPath, ...]]] = {
         "user_id": (
             ("object", "message", "from_id"),
             ("object", "message", "user_id"),
+            ("object", "user_id"),
+            ("object", "from_id"),
         ),
         "chat_id": (
             ("object", "message", "peer_id"),
             ("object", "message", "conversation_message_id"),
+            ("object", "peer_id"),
         ),
-        "text": (("object", "message", "text"),),
+        "text": (
+            ("object", "payload", "callback_data"),
+            ("object", "payload", "command"),
+            ("object", "message", "payload", "callback_data"),
+            ("object", "message", "payload", "command"),
+            ("object", "message", "text"),
+        ),
         "message_id": (
             ("event_id",),
+            ("object", "event_id"),
             ("object", "message", "id"),
             ("object", "message", "conversation_message_id"),
         ),
@@ -228,7 +238,7 @@ def _path_value(payload: Any, path: FieldPath) -> Any:
     current = payload
     for part in path:
         if isinstance(part, int):
-            if not isinstance(current, Sequence) or isinstance(current, (str, bytes)):
+            if not isinstance(current, Sequence) or isinstance(current, str | bytes):
                 return None
             if part < 0 or part >= len(current):
                 return None
@@ -241,7 +251,7 @@ def _path_value(payload: Any, path: FieldPath) -> Any:
 
 
 def _scalar_value(value: Any) -> Any:
-    if value is None or isinstance(value, (Mapping, list, tuple, set)):
+    if value is None or isinstance(value, Mapping | list | tuple | set):
         return None
     return value
 
@@ -270,7 +280,7 @@ def _nested_mappings(payload: Mapping[str, Any], *, limit: int = 256):
             for value in current.values():
                 if isinstance(value, Mapping):
                     queue.append(value)
-                elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+                elif isinstance(value, Sequence) and not isinstance(value, str | bytes):
                     queue.extend(item for item in value if isinstance(item, Mapping))
 
 
@@ -297,7 +307,7 @@ def _timestamp_ms(value: Any, *, already_ms: bool = False) -> int:
         except ValueError:
             return 0
         if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
+            parsed = parsed.replace(tzinfo=UTC)
         return int(parsed.timestamp() * 1000)
     if numeric < 0:
         return 0

@@ -23,7 +23,13 @@ class ProviderRetryPolicy:
         normalized_category = str(category or 'provider_runtime_error').strip() or 'provider_runtime_error'
         if not retryable:
             return ProviderRetryDecision(provider_key=provider_key, category=normalized_category, retryable=False, next_delay_seconds=0, max_attempts=1, metadata={'attempt': normalized_attempt, 'policy': 'fail_closed'})
-        if normalized_category == 'transport_timeout':
+        if normalized_category in {'media_preparation', 'media_not_ready'}:
+            base = 1
+            max_attempts = 6
+        elif normalized_category == 'media_token_rejected':
+            base = 2
+            max_attempts = 6
+        elif normalized_category == 'transport_timeout':
             base = 15
             max_attempts = 5
         elif normalized_category in {'transport_unavailable', 'provider_unavailable', 'rate_limit'}:

@@ -19,7 +19,10 @@ class ProviderResponseParsers:
         headers = {str(key).lower(): str(value) for key, value in dict(response.get('response_headers') or {}).items()} if isinstance(response.get('response_headers'), Mapping) else {}
         error_code = self._error_code(provider_key=provider_key, body=body)
         rate_limited = status_code == 429 or (provider_key == 'vk_messaging' and error_code == '6') or (provider_key == 'slack_messaging' and error_code in {'rate_limited', 'ratelimited'})
+        max_media_not_ready = provider_key == 'max_messaging' and str(error_code or '').casefold() in {'attachment.not.ready', 'media.prepared'}
+        max_media_token_rejected = provider_key == 'max_messaging' and str(error_code or '').casefold() in {'attachment.invalid', 'attachment.not.found', 'attachment.not_found', 'invalid_attachment', 'invalid_token', 'media.not.found'}
         retry_after_seconds = self._retry_after_seconds(headers=headers, body=body)
+        error_category = 'rate_limit' if rate_limited else ('media_preparation' if str(error_code or '').casefold() == 'media.prepared' else ('media_not_ready' if max_media_not_ready else ('media_token_rejected' if max_media_token_rejected else ('provider_unavailable' if status_code is not None and status_code >= 500 else None))))
         normalized = {
             'provider_key': provider_key,
             'operation': str(operation),
@@ -29,8 +32,8 @@ class ProviderResponseParsers:
             'resource_id': self._resource_id(provider_key=provider_key, body=body, headers=headers),
             'next_cursor': self._next_cursor(provider_key=provider_key, body=body),
             'error_code': error_code,
-            'error_message': self._error_message(provider_key=provider_key, body=body), 'error_category': 'rate_limit' if rate_limited else ('provider_unavailable' if status_code is not None and status_code >= 500 else None),
-            'retryable': rate_limited or (status_code is not None and status_code >= 500), 'retry_after_seconds': retry_after_seconds, 'delivery_state': ('accepted' if 200 <= status_code < 300 and not error_code else 'rejected') if str(operation) in {'message_send', 'communications_write'} and status_code is not None else None,
+            'error_message': self._error_message(provider_key=provider_key, body=body), 'error_category': error_category,
+            'retryable': rate_limited or max_media_not_ready or max_media_token_rejected or (status_code is not None and status_code >= 500), 'retry_after_seconds': retry_after_seconds, 'delivery_state': ('accepted' if 200 <= status_code < 300 and not error_code else 'rejected') if str(operation) in {'message_send', 'communications_write'} and status_code is not None else None,
             'body_keys': tuple(sorted(body.keys())) if isinstance(body, dict) else (),
             'normalized_preview': self._preview(body),
         }

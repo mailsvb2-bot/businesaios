@@ -8,10 +8,17 @@ from runtime._internal.effect_types import EffectActionType
 from runtime._internal.effects_actions.telegram.delivery_evidence import (
     build_delivery_evidence,
 )
+from runtime._internal.effects_actions.telegram.messaging_parts import (
+    build_outbound_message,
+    build_single_sender,
+    execute_delivery_path,
+)
 from runtime._internal.effects_actions.telegram.transport import (
     telegram_send_audio_transport,
 )
 from runtime._internal.effects_tenant import assert_event_log_tenant
+from runtime.execution.context import current_execution_business_id
+from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.observability.error_handling import swallow
 from runtime.security.runtime_asserts import assert_called_from_executor
 
@@ -87,11 +94,11 @@ def _existing_receipt(state: Any, *, audio_id: str) -> dict[str, Any] | None:
     return dict(receipt or {}) if isinstance(receipt, Mapping) else None
 
 
-def _result(*, ok: bool, meta: Mapping[str, Any]) -> dict[str, Any]:
+def _result(*, ok: bool, meta: Mapping[str, Any], action_type: str = str(EffectActionType.TELEGRAM_SEND_AUDIO)) -> dict[str, Any]:
     evidence = build_delivery_evidence(
         ok=bool(ok),
         meta=dict(meta or {}),
-        action_type=str(EffectActionType.TELEGRAM_SEND_AUDIO),
+        action_type=str(action_type),
     )
     verified = bool(evidence.get("verified"))
     return {
@@ -103,12 +110,22 @@ def _result(*, ok: bool, meta: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+
+def _resolve_business_scope(explicit_business_id: str) -> str:
+    explicit = str(explicit_business_id or "").strip()
+    bound = current_execution_business_id()
+    if explicit and bound and explicit != bound:
+        raise RuntimeError("BUSINESS_SCOPE_MISMATCH")
+    return explicit or bound
+
+
 def send_audio_effect(
     effects: Any,
     *,
     decision_id: str,
     correlation_id: str,
     tenant_id: str,
+    business_id: str = "",
     user_id: str,
     path: str,
     kind: str = "voice",
@@ -122,18 +139,25 @@ def send_audio_effect(
         tenant_id=str(tenant_id),
         operation="send_audio",
     )
-    selected_channel = str(channel or "telegram").strip().casefold()
-    if selected_channel != "telegram":
+    try:
+        selected_channel = normalize_channel(str(channel or "telegram"))
+    except ValueError:
+        selected_channel = str(channel or "").strip().casefold()
+    if selected_channel not in {"telegram", "vk", "max"}:
         return _result(
             ok=False,
-            meta={
-                "channel": selected_channel,
-                "error": "UNSUPPORTED_AUDIO_CHANNEL",
-                "delivery_finalized": False,
-            },
+            meta={"channel": selected_channel, "error": "UNSUPPORTED_AUDIO_CHANNEL", "delivery_finalized": False},
+            action_type="messaging.send_audio",
+        )
+    resolved_business_id = _resolve_business_scope(business_id)
+    if selected_channel != "telegram" and not resolved_business_id:
+        return _result(
+            ok=False,
+            meta={"channel": selected_channel, "error": "NATIVE_BUSINESS_ID_REQUIRED", "delivery_finalized": False},
+            action_type="messaging.send_audio",
         )
 
-    if isinstance(callback_query_id, str) and callback_query_id.strip():
+    if selected_channel == "telegram" and isinstance(callback_query_id, str) and callback_query_id.strip():
         try:
             effects._telegram_answer_callback(
                 callback_query_id.strip(),
@@ -145,7 +169,7 @@ def send_audio_effect(
             swallow(__name__, "send_audio.answer_callback")
 
     try:
-        if effects._audio_lock is not None and effects._last_audio_sent_at is not None:
+        if selected_channel == "telegram" and effects._audio_lock is not None and effects._last_audio_sent_at is not None:
             with effects._audio_lock:
                 last = float(effects._last_audio_sent_at.get(str(user_id), 0.0))
                 delay = float(effects._min_audio_interval_s or 0.0) - (
@@ -158,19 +182,34 @@ def send_audio_effect(
     except Exception:
         swallow(__name__, "send_audio.rate_limit")
 
-    audio_id = (
-        f"telegram_audio:{tenant}:{user_id}:{decision_id}:"
-        f"{str(kind or 'voice')}:{str(path)}"
-    )
+    audio_id = f"{selected_channel}_audio:{tenant}:{user_id}:{decision_id}:{str(kind or 'voice')}:{str(path)}"
 
     def _deliver() -> tuple[bool, dict[str, Any]]:
-        return telegram_send_audio_transport(
-            effects,
-            chat_id=str(user_id),
-            audio_url=str(path),
-            caption=caption,
+        if selected_channel == "telegram":
+            return telegram_send_audio_transport(
+                effects,
+                chat_id=str(user_id),
+                audio_url=str(path),
+                caption=caption,
+                priority="normal",
+            )
+        msg = build_outbound_message(
+            decision_id=decision_id,
+            correlation_id=correlation_id,
+            user_id=user_id,
+            text=str(caption or ""),
+            tenant_id=tenant,
+            business_id=resolved_business_id,
+            attachments=({"kind": str(kind or "voice"), "source": str(path)},),
+            reply_markup=None,
+            callback_query_id=None,
+            track_event_type=None,
+            track_payload=None,
+            channel=selected_channel,
             priority="normal",
+            critical=True,
         )
+        return execute_delivery_path(effects, msg=msg, channel_policy=None, send_once=build_single_sender(effects))
 
     if (
         effects.delivery_state is None
@@ -253,4 +292,4 @@ def send_audio_effect(
             "meta": dict(meta or {}),
         },
     )
-    return _result(ok=bool(ok), meta=dict(meta or {}))
+    return _result(ok=bool(ok), meta=dict(meta or {}), action_type=str(EffectActionType.TELEGRAM_SEND_AUDIO) if selected_channel == "telegram" else "messaging.send_audio")

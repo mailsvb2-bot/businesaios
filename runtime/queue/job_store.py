@@ -23,13 +23,14 @@ from runtime.queue._inmemory_job_store_ops import (
     require_job,
     require_transitionable,
     reschedule_job,
+    set_claim_expiry_policy,
     validate_claim_guard,
 )
 from runtime.queue._json_job_store_persistence import (
     runtime_queue_store_path,
 )
 from runtime.queue._persistent_job_store_support import build_default_job_store as build_default_queue_job_store
-from runtime.queue.job_contract import JobRecord, JobState
+from runtime.queue.job_contract import JobClaimExpiryPolicy, JobRecord, JobState
 from runtime.queue.job_store_backend import JobStoreBackend
 from runtime.queue.job_store_sqlite import SqliteJobStore, runtime_queue_sqlite_store_path
 from runtime.queue.queue_store_policy import DEFAULT_QUEUE_STORE_POLICY
@@ -121,6 +122,13 @@ class InMemoryJobStore(JobStoreBackend):
     def reap_expired_claims(self, *, tenant_id: str, queue_name: str, now: datetime | None = None) -> int:
         with self._lock:
             return reap_expired_claim_jobs(jobs=self._jobs, tenant_id=tenant_id, queue_name=queue_name, now=now)
+
+    def set_claim_expiry_policy(self, *, tenant_id: str, job_id: str, policy: JobClaimExpiryPolicy, owner_id: str | None = None, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord:
+        with self._lock:
+            return set_claim_expiry_policy(
+                jobs=self._jobs, tenant_id=tenant_id, job_id=job_id, policy=policy,
+                owner_id=owner_id, fencing_token=fencing_token, now=now,
+            )
 
     def mark_succeeded(self, *, tenant_id: str, job_id: str, owner_id: str | None = None, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord:
         with self._lock:
@@ -215,6 +223,7 @@ class PersistentJobStore(InMemoryJobStore):
     renew_lease = _persistent_job_store_methods.renew_lease
     release_claim = _persistent_job_store_methods.release_claim
     reap_expired_claims = _persistent_job_store_methods.reap_expired_claims
+    set_claim_expiry_policy = _persistent_job_store_methods.set_claim_expiry_policy
     mark_succeeded = _persistent_job_store_methods.mark_succeeded
     reschedule = _persistent_job_store_methods.reschedule
     mark_failed = _persistent_job_store_methods.mark_failed

@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import timedelta
 
 from runtime.queue._sqlite_job_store_codec import from_iso_datetime, iso_datetime, write_full_row
-from runtime.queue.job_contract import JobState, normalize_now
+from runtime.queue.job_contract import JobClaimExpiryPolicy, JobState, normalize_now
 
 
 def release_claim_sqlite(*, db, fetch_job, tenant_id: str, job_id: str, owner_id: str, fencing_token: int | None = None, now=None):
@@ -33,13 +33,15 @@ def reap_expired_claims_sqlite(*, db, tenant_id: str, queue_name: str, now=None)
     moment = normalize_now(now)
     rows = db.execute(
         """
-        SELECT job_id, updated_at, attempts, max_attempts, last_error FROM runtime_queue_jobs
+        SELECT job_id, updated_at, attempts, max_attempts, claim_expiry_policy, last_error FROM runtime_queue_jobs
         WHERE tenant_id = ? AND queue_name = ? AND state = ? AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?
         """,
         (tenant_id, queue_name, JobState.CLAIMED.value, iso_datetime(moment)),
     ).fetchall()
     for row in rows:
+        ambiguous = str(row["claim_expiry_policy"]) == JobClaimExpiryPolicy.DEAD_LETTER_AMBIGUOUS.value
         exhausted = int(row["attempts"]) >= int(row["max_attempts"])
+        dead_letter = ambiguous or exhausted
         db.execute(
             """
             UPDATE runtime_queue_jobs
@@ -47,9 +49,9 @@ def reap_expired_claims_sqlite(*, db, tenant_id: str, queue_name: str, now=None)
             WHERE tenant_id = ? AND job_id = ?
             """,
             (
-                JobState.DEAD_LETTER.value if exhausted else JobState.PENDING.value,
+                JobState.DEAD_LETTER.value if dead_letter else JobState.PENDING.value,
                 iso_datetime(max(moment, from_iso_datetime(row["updated_at"]) or moment)),
-                "expired_claim_attempts_exhausted_ambiguous_delivery" if exhausted else row["last_error"],
+                "expired_claim_ambiguous_delivery" if ambiguous else "expired_claim_attempts_exhausted_ambiguous_delivery" if exhausted else row["last_error"],
                 tenant_id,
                 str(row["job_id"]),
             ),

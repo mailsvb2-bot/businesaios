@@ -33,6 +33,7 @@ def handle_send_audio(payload, effects, env):
         decision_id=env.decision.decision_id,
         correlation_id=env.decision.correlation_id,
         tenant_id=required_str(payload, "tenant_id"),
+        business_id=optional_str(payload, "business_id") or "",
         user_id=required_str(payload, "user_id"),
         path=required_str(payload, "path"),
         kind=str(payload.get("kind") or "voice"),

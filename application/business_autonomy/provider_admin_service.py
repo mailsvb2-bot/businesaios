@@ -31,6 +31,10 @@ from runtime.business_autonomy.provider_sync_runtime import ProviderSyncRuntimeP
 from runtime.business_autonomy.provider_sync_scheduler import ProviderSyncScheduler
 from runtime.business_autonomy.provider_transport_bindings import ProviderTransportBindings
 from runtime.business_autonomy.provider_vendor_transports import build_provider_vendor_transports
+from runtime.business_autonomy.provider_webhook_reconciliation import (
+    ProviderWebhookOperationalResponder,
+    ProviderWebhookReconciler,
+)
 from runtime.business_autonomy.provider_webhook_replay_guard import ProviderWebhookReplayGuard
 from runtime.business_autonomy.provider_webhook_route_registry import ProviderWebhookRouteRegistry
 from runtime.business_autonomy.provider_webhook_runtime import ProviderWebhookRuntime
@@ -60,7 +64,37 @@ class ProviderAdminService:
     idempotency_store: IdempotencyStore = field(default_factory=InMemoryIdempotencyStore)
     inbound_processor: Any | None = None
     customer_registry: Any | None = None
+    provider_pacing: Any | None = None
+    provider_media: Any | None = None
     provider_registry: ProviderDefinitionRegistry = field(default_factory=ProviderDefinitionRegistry)
+    def _live_transports(self):
+        if self.provider_media is None:
+            return build_provider_vendor_transports(self.secret_vault)
+        return build_provider_vendor_transports(self.secret_vault, media_preparation=self.provider_media)
+    def _reconcile_provider_webhook(self, *, provider: ProviderDefinition, tenant_id: str, business_id: str) -> dict[str, Any]:
+        try:
+            result = ProviderWebhookReconciler(self.secret_vault).reconcile(
+                provider=provider, tenant_id=tenant_id, business_id=business_id
+            )
+            return {
+                'status': result.status,
+                'ready': result.ready,
+                'callback_url': result.callback_url,
+                **dict(result.metadata or {}),
+            }
+        except Exception as exc:
+            return {
+                'status': 'failed',
+                'ready': False,
+                'callback_url': None,
+                'error': exc.__class__.__name__,
+                'reason': str(exc)[:240],
+            }
+
+    @staticmethod
+    def _webhook_reconciliation_blocks_connection(metadata: Mapping[str, Any]) -> bool:
+        return str(metadata.get('status') or '') == 'failed'
+
     def list_provider_definitions(self) -> tuple[ProviderDefinition, ...]:
         return self.provider_registry.list()
     def get_activation_status(self, *, tenant_id: str, business_id: str, provider_key: str) -> ProviderActivationStatus | None:
@@ -90,9 +124,9 @@ class ProviderAdminService:
     def list_provider_retry_jobs(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 20) -> tuple[dict[str, Any], ...]:
         return ProviderSyncScheduler().list_jobs(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
     def list_provider_export_history(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 20) -> tuple[dict[str, Any], ...]:
-        return ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault)).export_bridge.list_history(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
+        return ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports()).export_bridge.list_history(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
     def list_provider_sync_history(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 20) -> tuple[dict[str, Any], ...]:
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault))
+        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports())
         return runtime.sync_history.list_for_provider(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
     def list_provider_runtime_incidents(self, *, tenant_id: str, business_id: str, provider_key: str, limit: int = 50) -> tuple[dict[str, Any], ...]:
         return FileProviderIncidentRegistry().list_for_provider(tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
@@ -106,7 +140,7 @@ class ProviderAdminService:
         return {'provider_key': result.provider_key, 'mode': result.mode, 'status': result.status, 'ok': result.ok, 'metadata': dict(result.metadata or {})}
     def paginate_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'dry_run', payload: Mapping[str, Any] | None = None, max_pages: int = 3) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault))
+        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports())
         walker = ProviderPaginationWalkers(runtime=runtime)
         result = walker.walk(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), operation=str(operation).strip(), mode=str(mode or 'dry_run').strip() or 'dry_run', payload=dict(payload or {}), max_pages=max_pages)
         return {'provider_key': result.provider_key, 'operation': result.operation, 'mode': result.mode, 'status': result.status, 'accepted': result.accepted, 'metadata': dict(result.metadata or {})}
@@ -221,7 +255,23 @@ class ProviderAdminService:
         )
         runtime_plan = ProviderSyncRuntimePlanner().describe(provider)
         webhook_contract = ProviderWebhookRuntime(self.secret_vault).describe(provider)
-        live_sync_runner = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault)).describe_runner(provider)
+        live_sync_runner = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports()).describe_runner(provider)
+        webhook_reconciliation = self._reconcile_provider_webhook(
+            provider=provider, tenant_id=normalized_tenant, business_id=normalized_business
+        )
+        derived_secret_names = tuple(webhook_reconciliation.get('derived_secret_names') or ())
+        if derived_secret_names:
+            secret_names.extend(name for name in derived_secret_names if name not in secret_names)
+            self.connector_secret_scope.register(
+                SecretScopeBinding(
+                    tenant_id=normalized_tenant,
+                    connector_id=provider.connector_id,
+                    allowed_secret_names=tuple(sorted(secret_names)),
+                    allowed_secret_kinds=tuple(sorted({field.secret_kind for field in provider.secret_fields})),
+                    allowed_operations=(SecretAccessOperation.READ, SecretAccessOperation.WRITE, SecretAccessOperation.ROTATE),
+                    metadata={'provider_key': provider.provider_key, 'business_id': normalized_business},
+                )
+            )
         messaging_binding = describe_provider_messaging_binding(provider)
         webhook_replay_guard = {
             'enabled': bool(webhook_contract.enabled),
@@ -242,7 +292,10 @@ class ProviderAdminService:
             tenant_id=normalized_tenant,
             business_id=normalized_business,
             provider_key=provider.provider_key,
-            connected=True,
+            connected=(
+                health_probe.status not in {'missing_required_secrets', 'invalid_secret_shape', 'misconfigured'}
+                and not self._webhook_reconciliation_blocks_connection(webhook_reconciliation)
+            ),
             connector_id=provider.connector_id,
             title=provider.title,
             channel_kind=provider.channel_kind.value,
@@ -250,7 +303,11 @@ class ProviderAdminService:
             last_updated_utc=datetime.now(UTC).isoformat(),
             governance_enabled=governance_enabled,
             persistent_surfaces=persistent_surfaces,
-            onboarding_ready=onboarding_ready,
+            onboarding_ready=(
+                onboarding_ready
+                and health_probe.status not in {'missing_required_secrets', 'invalid_secret_shape', 'misconfigured'}
+                and not self._webhook_reconciliation_blocks_connection(webhook_reconciliation)
+            ),
             metadata={
                 "domain": provider.domain,
                 "description": provider.description,
@@ -280,6 +337,7 @@ class ProviderAdminService:
                 } if webhook_contract is not None else {},
                 "live_sync_runner": dict(live_sync_runner or {}),
                 "webhook_replay_guard": dict(webhook_replay_guard or {}),
+                "webhook_reconciliation": dict(webhook_reconciliation or {}),
                 "transport_binding": transport_binding,
                 "messaging_binding": messaging_binding_to_metadata(messaging_binding),
                 "webhook_route": webhook_route,
@@ -329,7 +387,23 @@ class ProviderAdminService:
         health_probe = ProviderConnectorHealthService(self.secret_vault).probe(provider=provider, tenant_id=normalized_tenant, business_id=normalized_business, probe_mode=probe_mode)
         runtime_plan = ProviderSyncRuntimePlanner().describe(provider)
         webhook_contract = ProviderWebhookRuntime(self.secret_vault).describe(provider)
-        live_sync_runner = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault)).describe_runner(provider)
+        live_sync_runner = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports()).describe_runner(provider)
+        webhook_reconciliation = self._reconcile_provider_webhook(
+            provider=provider, tenant_id=normalized_tenant, business_id=normalized_business
+        )
+        derived_secret_names = tuple(webhook_reconciliation.get('derived_secret_names') or ())
+        bound_secret_names = tuple(sorted(set((*current.secret_fields_bound, *derived_secret_names))))
+        if derived_secret_names:
+            self.connector_secret_scope.register(
+                SecretScopeBinding(
+                    tenant_id=normalized_tenant,
+                    connector_id=provider.connector_id,
+                    allowed_secret_names=bound_secret_names,
+                    allowed_secret_kinds=tuple(sorted({field.secret_kind for field in provider.secret_fields})),
+                    allowed_operations=(SecretAccessOperation.READ, SecretAccessOperation.WRITE, SecretAccessOperation.ROTATE),
+                    metadata={'provider_key': provider.provider_key, 'business_id': normalized_business},
+                )
+            )
         messaging_binding = describe_provider_messaging_binding(provider)
         runtime_activation = {}
         if provider.domain == 'platform_infra' or activate_runtime:
@@ -345,12 +419,16 @@ class ProviderAdminService:
             'transport_binding': transport_binding,
             'messaging_binding': messaging_binding_to_metadata(messaging_binding),
             'webhook_route': webhook_route,
+            'webhook_reconciliation': dict(webhook_reconciliation or {}),
             'secret_versioning': {'enabled': True, 'list_endpoint': '/control-plane/provider-admin/secret-history', 'rollback_endpoint': '/control-plane/provider-admin/secret-rollback'},
             'live_probe': {'endpoint': '/control-plane/provider-runtime/live-probe', 'supported': True},
             'pagination': {'endpoint': '/control-plane/provider-runtime/paginate', 'supported': True},
             'secret_lifecycle': {'last_action': 'reconnected', 'requested_by': str(requested_by).strip() or 'admin_console'},
         }
-        connected = health_probe.status not in {'missing_required_secrets', 'invalid_secret_shape', 'misconfigured'}
+        connected = (
+            health_probe.status not in {'missing_required_secrets', 'invalid_secret_shape', 'misconfigured'}
+            and not self._webhook_reconciliation_blocks_connection(webhook_reconciliation)
+        )
         status = ProviderActivationStatus(
             tenant_id=current.tenant_id,
             business_id=current.business_id,
@@ -359,7 +437,7 @@ class ProviderAdminService:
             connector_id=current.connector_id,
             title=current.title,
             channel_kind=current.channel_kind,
-            secret_fields_bound=current.secret_fields_bound,
+            secret_fields_bound=bound_secret_names,
             last_updated_utc=datetime.now(UTC).isoformat(),
             governance_enabled=current.governance_enabled,
             persistent_surfaces=current.persistent_surfaces,
@@ -402,12 +480,12 @@ class ProviderAdminService:
         return self.activation_store.put(status)
     def trigger_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'dry_run', payload: Mapping[str, Any] | None = None) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault))
+        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports())
         result = runtime.run(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), operation=str(operation).strip(), mode=str(mode or 'dry_run').strip() or 'dry_run', payload=dict(payload or {}))
         return {'provider_key': result.provider_key, 'operation': result.operation, 'mode': result.mode, 'status': result.status, 'accepted': result.accepted, 'metadata': dict(result.metadata or {})}
     def ingest_provider_webhook(self, *, tenant_id: str, business_id: str, provider_key: str, headers: Mapping[str, str], body: bytes, event_key: str, topic: str = '', owner_id: str = 'provider_admin') -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
-        ingress = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(self.secret_vault), replay_guard=ProviderWebhookReplayGuard(self.idempotency_store), inbound_processor=self.inbound_processor, customer_registry=self.customer_registry)
+        ingress = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(self.secret_vault), replay_guard=ProviderWebhookReplayGuard(self.idempotency_store), inbound_processor=self.inbound_processor, customer_registry=self.customer_registry, operational_responder=ProviderWebhookOperationalResponder(self.secret_vault))
         normalized_headers = {str(k): str(v) for k, v in dict(headers or {}).items()}
         result = ingress.ingest(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), headers=normalized_headers, body=bytes(body), event_key=str(event_key).strip(), topic=str(topic).strip(), owner_id=str(owner_id).strip() or 'provider_admin')
         metadata = dict(result.metadata or {})
@@ -416,13 +494,13 @@ class ProviderAdminService:
         return {'provider_key': result.provider_key, 'event_key': result.event_key, 'accepted': result.accepted, 'status': result.status, 'transport_ack_safe': ack_safe, 'response_body': ingress.webhook_runtime.response_body(provider=provider, tenant_id=tenant_id, business_id=business_id, body=body) if result.status != 'invalid_signature' and ack_safe else None, 'metadata': {**metadata, 'route_extract': route_extract}}
     def enqueue_provider_sync(self, *, tenant_id: str, business_id: str, provider_key: str, operation: str, mode: str = 'live', payload: Mapping[str, Any] | None = None, approval_completion_context: Mapping[str, Any] | None = None) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault))
-        queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime, idempotency_store=self.idempotency_store)
+        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports())
+        queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime, idempotency_store=self.idempotency_store, pacing_coordinator=self.provider_pacing, media_preparation=self.provider_media)
         result = queue_runtime.enqueue_sync(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), operation=str(operation).strip(), mode=str(mode or 'live').strip() or 'live', payload=dict(payload or {}), approval_completion_context=approval_completion_context)
         return {'job_id': result.job_id, 'queued': result.queued, 'status': result.status, 'metadata': dict(result.metadata)}
     def tick_provider_sync_queue(self, *, tenant_id: str, worker_id: str = 'provider-runtime-worker', job_id: str | None = None) -> dict[str, Any]:
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault))
-        queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime)
+        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports())
+        queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime, pacing_coordinator=self.provider_pacing, media_preparation=self.provider_media)
         registry = {item.provider_key: item for item in self.provider_registry.list()}
         return queue_runtime.tick(provider_registry=registry, tenant_id=require_tenant_id(tenant_id), worker_id=worker_id, job_id=job_id)
     @staticmethod
@@ -455,12 +533,12 @@ class ProviderAdminService:
             worker = {'worker_id': worker_id, 'replayed_from_history': 'queue_state' not in result}
         return {'dispatch': dispatch, 'worker': worker, 'result': result}
     def list_provider_queue_jobs(self, *, tenant_id: str, business_id: str | None = None, provider_key: str, limit: int = 50) -> tuple[dict[str, Any], ...]:
-        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=build_provider_vendor_transports(self.secret_vault))
-        queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime)
+        runtime = ProviderLiveSyncRuntime(self.secret_vault, transports=self._live_transports())
+        queue_runtime = ProviderQueueExecutionRuntime(self.secret_vault, live_runtime=runtime, pacing_coordinator=self.provider_pacing, media_preparation=self.provider_media)
         return queue_runtime.list_jobs(tenant_id=require_tenant_id(tenant_id), business_id=None if business_id in {None, ''} else str(business_id).strip(), provider_key=str(provider_key).strip(), limit=limit)
     def describe_provider_live_client(self, *, provider_key: str) -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
-        transport = build_provider_vendor_transports(self.secret_vault).get(provider.provider_key)
+        transport = self._live_transports().get(provider.provider_key)
         return {
             'provider_key': provider.provider_key,
             'network_capable': transport is not None,

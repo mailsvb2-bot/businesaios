@@ -7,6 +7,7 @@ import application.business_autonomy.provider_admin_service as provider_admin_mo
 from application.business_autonomy.provider_admin_contract import ProviderCredentialSubmission
 from application.business_autonomy.provider_admin_service import ProviderAdminService
 from application.business_autonomy.provider_catalog import provider_map
+from application.business_autonomy.provider_runtime_contract import ProviderSyncRunResult
 from execution.approval_execution_gate import ApprovalExecutionGate
 from execution.approval_policy_engine import ApprovalPolicyEngine
 from governance.approval_contract import ApprovalDecision, ApprovalOutcome
@@ -23,7 +24,7 @@ from runtime.business_autonomy.provider_runtime_write_guard import (
     PROVIDER_WRITE_BLOCK_STATUS,
     ProviderRuntimeWriteGuard,
 )
-from runtime.queue.job_contract import JobState, utc_now
+from runtime.queue.job_contract import JobClaimExpiryPolicy, JobState, utc_now
 from runtime.queue.job_store_sqlite import SqliteJobStore
 from security.connector_secret_scope import ConnectorSecretScope
 from security.secret_contract import SecretRef
@@ -250,7 +251,8 @@ def test_vk_approved_execution_is_one_shot_across_queue_replays_and_retention(tm
     second = queue.enqueue_sync(provider=provider, tenant_id='tenant-a', business_id='vk-biz', operation='message_send', mode='live', payload=payload)
     assert first.queued is True and second.job_id == first.job_id and second.status == 'dedupe_existing'
     stored = store.get(tenant_id='tenant-a', job_id=first.job_id)
-    assert stored is not None and stored.max_attempts == 1
+    assert stored is not None and stored.max_attempts == 6
+    assert stored.claim_expiry_policy is JobClaimExpiryPolicy.RETRY_IF_BUDGET
     store.mark_dead_letter(tenant_id='tenant-a', job_id=first.job_id, error='ambiguous_delivery')
     terminal_replay = queue.enqueue_sync(provider=provider, tenant_id='tenant-a', business_id='vk-biz', operation='message_send', mode='live', payload=payload)
     assert terminal_replay.job_id == first.job_id and terminal_replay.status == 'idempotency_replay'
@@ -349,3 +351,354 @@ def test_native_approval_completion_context_is_fingerprint_bound_across_resume()
     assert allowed.allowed is True and allowed.reason == 'approval_satisfied'
     assert missing_context.allowed is True
     assert missing_context.metadata['approval']['subject_fingerprint'] == allowed.metadata['approval']['subject_fingerprint']
+
+
+class _ProviderResultRuntime:
+    def __init__(self, result: ProviderSyncRunResult) -> None:
+        self.result = result
+        self.calls: list[dict[str, object]] = []
+
+    def run(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.result
+
+
+def test_max_guarded_429_retries_same_canonical_job_without_relaxing_claim_expiry(tmp_path: Path) -> None:
+    provider, guard, payload = _approved_native_guard(
+        provider_key='max_messaging',
+        business_id='max-biz',
+        message_payload={'chat_id': '99', 'text': 'hello'},
+    )
+    runtime = _ProviderResultRuntime(
+        ProviderSyncRunResult(
+            provider_key='max_messaging',
+            operation='message_send',
+            mode='live',
+            status='live_execution_failed',
+            accepted=False,
+            metadata={
+                'parsed_response': {
+                    'http_status': 429,
+                    'delivery_state': 'rejected',
+                    'error_category': 'rate_limit',
+                    'retryable': True,
+                },
+                'retry_policy': {
+                    'category': 'rate_limit',
+                    'retryable': True,
+                    'next_delay_seconds': 37,
+                    'max_attempts': 6,
+                },
+            },
+        )
+    )
+    store = SqliteJobStore(tmp_path / 'max-rate-limit.sqlite3')
+    queue = ProviderQueueExecutionRuntime(
+        InMemorySecretVault(),
+        live_runtime=runtime,
+        store=store,
+        write_guard=guard,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    dispatched = queue.enqueue_sync(
+        provider=provider,
+        tenant_id='tenant-a',
+        business_id='max-biz',
+        operation='message_send',
+        mode='live',
+        payload=payload,
+    )
+    queued = store.get(tenant_id='tenant-a', job_id=dispatched.job_id)
+    assert queued is not None and queued.max_attempts == 6
+    assert queued.claim_expiry_policy is JobClaimExpiryPolicy.DEAD_LETTER_AMBIGUOUS
+
+    report = queue.tick(provider_registry={'max_messaging': provider}, tenant_id='tenant-a', job_id=dispatched.job_id)
+    retried = store.get(tenant_id='tenant-a', job_id=dispatched.job_id)
+    assert report['retried'] == 1 and report['dead_lettered'] == 0
+    assert retried is not None and retried.state is JobState.PENDING and retried.attempts == 1
+    assert retried.claim_expiry_policy is JobClaimExpiryPolicy.RETRY_IF_BUDGET
+    assert 36 <= (retried.run_at - retried.updated_at).total_seconds() <= 38
+
+
+def test_max_definitive_rejection_flips_claim_policy_before_worker_reschedule(tmp_path: Path) -> None:
+    provider, guard, payload = _approved_native_guard(
+        provider_key='max_messaging',
+        business_id='max-biz',
+        message_payload={'chat_id': '99', 'text': 'hello'},
+    )
+    runtime = _ProviderResultRuntime(
+        ProviderSyncRunResult(
+            provider_key='max_messaging',
+            operation='message_send',
+            mode='live',
+            status='live_execution_failed',
+            accepted=False,
+            metadata={
+                'parsed_response': {
+                    'http_status': 429,
+                    'delivery_state': 'rejected',
+                    'error_category': 'rate_limit',
+                    'retryable': True,
+                },
+                'retry_policy': {
+                    'category': 'rate_limit',
+                    'retryable': True,
+                    'next_delay_seconds': 37,
+                    'max_attempts': 6,
+                },
+            },
+        )
+    )
+    store = SqliteJobStore(tmp_path / 'max-crash-window.sqlite3')
+    queue = ProviderQueueExecutionRuntime(
+        InMemorySecretVault(), live_runtime=runtime, store=store, write_guard=guard,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    dispatched = queue.enqueue_sync(
+        provider=provider, tenant_id='tenant-a', business_id='max-biz',
+        operation='message_send', mode='live', payload=payload,
+    )
+    claimed = store.claim(
+        tenant_id='tenant-a', job_id=dispatched.job_id, owner_id='worker-a', lease_seconds=30,
+    )
+    assert claimed is not None and claimed.claim_expiry_policy is JobClaimExpiryPolicy.DEAD_LETTER_AMBIGUOUS
+
+    result = queue._runner({'max_messaging': provider})(claimed)
+
+    assert result.ok is False and result.retry_delay_seconds == 37
+    after_provider_result = store.get(tenant_id='tenant-a', job_id=dispatched.job_id)
+    assert after_provider_result is not None
+    assert after_provider_result.state is JobState.CLAIMED
+    assert after_provider_result.claim_expiry_policy is JobClaimExpiryPolicy.RETRY_IF_BUDGET
+
+
+def test_max_guarded_5xx_is_ambiguous_and_never_automatically_replayed(tmp_path: Path) -> None:
+    provider, guard, payload = _approved_native_guard(
+        provider_key='max_messaging',
+        business_id='max-biz',
+        message_payload={'chat_id': '99', 'text': 'hello'},
+    )
+    runtime = _ProviderResultRuntime(
+        ProviderSyncRunResult(
+            provider_key='max_messaging',
+            operation='message_send',
+            mode='live',
+            status='live_execution_failed',
+            accepted=False,
+            metadata={
+                'parsed_response': {
+                    'http_status': 503,
+                    'delivery_state': 'rejected',
+                    'error_category': 'provider_unavailable',
+                    'retryable': True,
+                },
+                'retry_policy': {
+                    'category': 'provider_unavailable',
+                    'retryable': True,
+                    'next_delay_seconds': 30,
+                    'max_attempts': 6,
+                },
+            },
+        )
+    )
+    store = SqliteJobStore(tmp_path / 'max-ambiguous.sqlite3')
+    queue = ProviderQueueExecutionRuntime(
+        InMemorySecretVault(),
+        live_runtime=runtime,
+        store=store,
+        write_guard=guard,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    dispatched = queue.enqueue_sync(
+        provider=provider,
+        tenant_id='tenant-a',
+        business_id='max-biz',
+        operation='message_send',
+        mode='live',
+        payload=payload,
+    )
+    report = queue.tick(provider_registry={'max_messaging': provider}, tenant_id='tenant-a', job_id=dispatched.job_id)
+    terminal = store.get(tenant_id='tenant-a', job_id=dispatched.job_id)
+    assert report['dead_lettered'] == 1 and report['retried'] == 0
+    assert terminal is not None and terminal.state is JobState.DEAD_LETTER
+    assert 'ambiguous_delivery' in str(terminal.last_error)
+
+
+def test_guarded_max_claim_crash_dead_letters_even_with_safe_retry_budget(tmp_path: Path) -> None:
+    provider, guard, payload = _approved_native_guard(
+        provider_key='max_messaging',
+        business_id='max-biz',
+        message_payload={'chat_id': '99', 'text': 'hello'},
+    )
+    runtime = _ProviderResultRuntime(
+        ProviderSyncRunResult(
+            provider_key='max_messaging',
+            operation='message_send',
+            mode='live',
+            status='live_executed',
+            accepted=True,
+            metadata={},
+        )
+    )
+    store = SqliteJobStore(tmp_path / 'max-expired-claim.sqlite3')
+    queue = ProviderQueueExecutionRuntime(
+        InMemorySecretVault(),
+        live_runtime=runtime,
+        store=store,
+        write_guard=guard,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    dispatched = queue.enqueue_sync(
+        provider=provider,
+        tenant_id='tenant-a',
+        business_id='max-biz',
+        operation='message_send',
+        mode='live',
+        payload=payload,
+    )
+    now = utc_now()
+    claimed = store.claim(
+        tenant_id='tenant-a',
+        job_id=dispatched.job_id,
+        owner_id='crashed-provider-worker',
+        lease_seconds=1,
+        now=now,
+    )
+    assert claimed is not None and claimed.attempts == 1 and claimed.max_attempts == 6
+    store.reap_expired_claims(tenant_id='tenant-a', queue_name='provider_sync', now=now + timedelta(seconds=2))
+    terminal = store.get(tenant_id='tenant-a', job_id=dispatched.job_id)
+    assert terminal is not None and terminal.state is JobState.DEAD_LETTER
+    assert terminal.last_error == 'expired_claim_ambiguous_delivery'
+
+
+def test_vk_queue_identity_derives_stable_nonzero_provider_random_id() -> None:
+    provider, guard, payload = _approved_native_guard(
+        provider_key='vk_messaging',
+        business_id='vk-biz',
+        message_payload={'peer_id': '42', 'text': 'hello', 'random_id': 0},
+    )
+    vault = InMemorySecretVault()
+    for name, value in (('webhook_secret', 'bridge-secret'), ('access_token', 'group-token')):
+        vault.seed_plaintext(
+            ref=SecretRef(
+                tenant_id='tenant-a',
+                connector_id=provider.connector_id,
+                scope='vk-biz',
+                secret_name=f'{provider.connector_id}.{name}',
+            ),
+            plaintext=value,
+        )
+
+    class _Transport:
+        def __init__(self) -> None:
+            self.random_ids: list[int] = []
+
+        def execute(self, **kwargs):
+            self.random_ids.append(int(kwargs['payload']['random_id']))
+            return {
+                'http_status': 200,
+                'response_body': '{"response":777}',
+                'parsed_response': {
+                    'http_status': 200,
+                    'ok': True,
+                    'resource_id': '777',
+                    'error_code': None,
+                    'retryable': False,
+                    'delivery_state': 'accepted',
+                },
+                '_response_ok': True,
+            }
+
+    transport = _Transport()
+    runtime = ProviderLiveSyncRuntime(vault, transports={'vk_messaging': transport}, write_guard=guard)
+    for job_id in ('provider-sync-vk-stable', 'provider-sync-vk-stable', 'provider-sync-vk-other'):
+        result = runtime.run(
+            provider=provider,
+            tenant_id='tenant-a',
+            business_id='vk-biz',
+            operation='message_send',
+            mode='live',
+            payload=payload,
+            _queue_job_id=job_id,
+        )
+        assert result.accepted is True
+    first, replay, other = transport.random_ids
+    assert first == replay
+    assert first != other
+    assert 0 < first <= 2_147_483_647
+    assert 0 < other <= 2_147_483_647
+
+
+def test_native_media_approval_binds_exact_file_bytes_and_rejects_path_content_swap(tmp_path: Path) -> None:
+    source = tmp_path / 'approved-voice.ogg'
+    source.write_bytes(b'approved-bytes')
+    approval_store = InMemoryApprovalStore()
+    workflow = ApprovalWorkflow(store=approval_store)
+    gate = ApprovalExecutionGate(
+        approval_policy_engine=ApprovalPolicyEngine(change_control_policy=ChangeControlPolicy()),
+        approval_workflow=workflow,
+    )
+    guard = ProviderRuntimeWriteGuard(approval_gate=gate, approval_store=approval_store)
+    provider = provider_map()['max_messaging']
+    store = SqliteJobStore(tmp_path / 'media-approval.sqlite3')
+    queue = ProviderQueueExecutionRuntime(
+        InMemorySecretVault(), live_runtime=_ProviderResultRuntime(
+            ProviderSyncRunResult(provider_key='max_messaging', operation='message_send', mode='live', status='unused', accepted=False)
+        ), store=store, write_guard=guard, idempotency_store=InMemoryIdempotencyStore(),
+    )
+    approval = {'decision_id': 'dec-media', 'execution_id': 'exec-media'}
+    payload = {
+        'chat_id': '99', 'text': 'listen',
+        'attachments': [{'kind': 'voice', 'source': str(source)}],
+        '_approval': approval,
+    }
+    first = queue.enqueue_sync(
+        provider=provider, tenant_id='tenant-a', business_id='max-biz',
+        operation='message_send', mode='live', payload=payload,
+    )
+    evidence = dict(first.metadata['provider_write_guard']['metadata']['approval'])
+    approval_id = str(evidence['approval_id'])
+    record = workflow.get(approval_id)
+    assert record is not None
+    approved_attachment = record.request.metadata['approval_resume_context']['payload']['attachments'][0]
+    assert approved_attachment['source'] == str(source)
+    assert len(approved_attachment['source_digest']) == 64
+    workflow.evaluate(
+        ApprovalDecision(
+            approval_id=approval_id, tenant_id='tenant-a', actor_id='owner-approver',
+            role_id=RoleId.OWNER, outcome=ApprovalOutcome.APPROVE, rationale='approve exact media bytes',
+        )
+    )
+    source.write_bytes(b'changed-after-approval')
+    resumed = {
+        **payload,
+        '_approval': {**approval, 'approval_id': approval_id},
+    }
+    second = queue.enqueue_sync(
+        provider=provider, tenant_id='tenant-a', business_id='max-biz',
+        operation='message_send', mode='live', payload=resumed,
+    )
+    assert second.queued is False
+    guard_view = dict(second.metadata['provider_write_guard'])
+    assert guard_view['reason'] == 'approval_subject_mismatch'
+    assert store.count(tenant_id='tenant-a', queue_name='provider_sync') == 0
+
+
+def test_native_media_missing_source_fails_before_approval_or_queue(tmp_path: Path) -> None:
+    provider = provider_map()['vk_messaging']
+    queue = ProviderQueueExecutionRuntime(
+        InMemorySecretVault(),
+        live_runtime=_ProviderResultRuntime(
+            ProviderSyncRunResult(provider_key='vk_messaging', operation='message_send', mode='live', status='unused', accepted=False)
+        ),
+        store=SqliteJobStore(tmp_path / 'missing-media.sqlite3'),
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    missing = tmp_path / 'does-not-exist.ogg'
+    result = queue.enqueue_sync(
+        provider=provider, tenant_id='tenant-a', business_id='vk-biz', operation='message_send', mode='live',
+        payload={'peer_id': '42', 'text': 'listen', 'attachments': [{'kind': 'voice', 'source': str(missing)}], '_approval': {'decision_id': 'd', 'execution_id': 'e'}},
+    )
+    assert result.queued is False and result.status == 'canonical_media_source_invalid'
+    assert str(missing) not in repr(result.metadata)
+    assert result.metadata['fail_closed_before_queue'] is True

@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta
 
 from core.tenancy.normalization import require_tenant_id
-from runtime.queue.job_contract import JobLease, JobRecord, JobState, normalize_now
+from runtime.queue.job_contract import JobClaimExpiryPolicy, JobLease, JobRecord, JobState, normalize_now
 from runtime.queue.job_fencing import validate_fencing_token
 
 CANON_RUNTIME_QUEUE_INMEMORY_JOB_STORE_OPS = True
@@ -190,13 +190,17 @@ def reap_expired_claim_jobs(*, jobs: JobMap, tenant_id: str, queue_name: str, no
             continue
         if current.state is not JobState.CLAIMED or current.lease is None or not current.lease.is_expired(now=moment):
             continue
+        ambiguous = current.claim_expiry_policy is JobClaimExpiryPolicy.DEAD_LETTER_AMBIGUOUS
         exhausted = int(current.attempts) >= int(current.max_attempts)
+        dead_letter = ambiguous or exhausted
         jobs[key] = replace(
             current,
-            state=JobState.DEAD_LETTER if exhausted else JobState.PENDING,
+            state=JobState.DEAD_LETTER if dead_letter else JobState.PENDING,
             lease=None,
             last_error=(
-                "expired_claim_attempts_exhausted_ambiguous_delivery"
+                "expired_claim_ambiguous_delivery"
+                if ambiguous
+                else "expired_claim_attempts_exhausted_ambiguous_delivery"
                 if exhausted
                 else current.last_error
             ),
@@ -217,6 +221,14 @@ def require_transitionable(*, jobs: JobMap, tenant_id: str, job_id: str, allowed
         allowed = ", ".join(item.value for item in allowed_from)
         raise ValueError(f"invalid state transition from {current.state.value}; allowed from: {allowed}")
     return current
+
+def set_claim_expiry_policy(*, jobs: JobMap, tenant_id: str, job_id: str, policy: JobClaimExpiryPolicy, owner_id: str | None = None, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord:
+    current = require_transitionable(jobs=jobs, tenant_id=tenant_id, job_id=job_id, allowed_from=(JobState.CLAIMED,))
+    validate_claim_guard(current, owner_id, fencing_token)
+    moment = normalize_now(now)
+    updated = replace(current, claim_expiry_policy=JobClaimExpiryPolicy(policy), updated_at=max(moment, current.updated_at))
+    jobs[(updated.tenant_id, updated.job_id)] = updated
+    return updated
 
 def mark_succeeded(*, jobs: JobMap, tenant_id: str, job_id: str, owner_id: str | None = None, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord:
     current = require_transitionable(jobs=jobs, tenant_id=tenant_id, job_id=job_id, allowed_from=(JobState.CLAIMED,))
@@ -312,5 +324,6 @@ __all__ = [
     "require_job",
     "require_transitionable",
     "reschedule_job",
+    "set_claim_expiry_policy",
     "validate_claim_guard",
 ]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -391,3 +392,70 @@ def test_queue_callable_ok_without_mapping_result_and_signature_failure(monkeypa
         meta={},
         fn=lambda: None,
     ) is False
+
+
+def test_local_audio_uses_multipart_transport_not_json(tmp_path: Path, monkeypatch, env):
+    audio = tmp_path / "private.ogg"
+    audio.write_bytes(b"private-audio")
+    c = client()
+    multipart = Mock(return_value={"ok": True, "result": {"message_id": 71}})
+    post = Mock(side_effect=AssertionError("local audio must not use JSON sendAudio"))
+    monkeypatch.setattr(sut, "http_multipart_file", multipart)
+    monkeypatch.setattr(c, "_http_post", post)
+
+    result = c._http_audio_post(
+        url="https://telegram.invalid/bottoken/sendAudio",
+        payload={"chat_id": "7", "audio": str(audio), "caption": "cap", "parse_mode": "HTML"},
+        timeout_s=60,
+    )
+
+    assert result["ok"] is True
+    post.assert_not_called()
+    assert multipart.call_args.kwargs["path"] == str(audio)
+    assert multipart.call_args.kwargs["field_name"] == "audio"
+    assert multipart.call_args.kwargs["fields"] == {"chat_id": "7", "caption": "cap", "parse_mode": "HTML"}
+
+
+def test_remote_audio_preserves_json_transport(monkeypatch, env):
+    c = client()
+    post = Mock(return_value={"ok": True, "result": {"message_id": 72}})
+    multipart = Mock(side_effect=AssertionError("remote Telegram media must preserve JSON/file-id path"))
+    monkeypatch.setattr(c, "_http_post", post)
+    monkeypatch.setattr(sut, "http_multipart_file", multipart)
+
+    result = c._http_audio_post(
+        url="https://telegram.invalid/bottoken/sendAudio",
+        payload={"chat_id": "7", "audio": "https://cdn.example/audio.ogg"},
+        timeout_s=60,
+    )
+
+    assert result["ok"] is True
+    post.assert_called_once()
+    multipart.assert_not_called()
+
+
+def test_audio_queue_callable_uses_bound_multipart_request(tmp_path: Path, monkeypatch, env):
+    audio = tmp_path / "queued.ogg"
+    audio.write_bytes(b"queued-audio")
+    c = client(state="state")
+    multipart = Mock(return_value={"ok": True, "result": {"message_id": 73}})
+    monkeypatch.setattr(c, "_http_audio_post", multipart)
+    delivered = Mock()
+    monkeypatch.setattr(sut, "mark_transport_delivered", delivered)
+    payload = {"chat_id": "7", "audio": str(audio)}
+    run = c._queue_callable(
+        url="https://telegram.invalid/bottoken/sendAudio",
+        payload=payload,
+        timeout_s=60,
+        delivery_key="audio-key",
+        payload_digest="audio-digest",
+        request_fn=lambda: c._http_audio_post(
+            url="https://telegram.invalid/bottoken/sendAudio",
+            payload=payload,
+            timeout_s=60,
+        ),
+    )
+
+    assert run()["ok"] is True
+    multipart.assert_called_once()
+    assert delivered.call_args.kwargs["external_id"] == "73"

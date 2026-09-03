@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from datetime import timedelta
 
 from runtime.queue.job_contract import JobDispatchRequest, utc_now
@@ -92,3 +93,27 @@ def test_sqlite_store_rejects_stale_fencing_token_even_with_same_owner(tmp_path)
         assert "fencing token mismatch" in str(exc)
     else:
         raise AssertionError("expected stale fencing token to be rejected")
+
+
+def test_sqlite_schema_migrates_legacy_jobs_to_default_claim_expiry_policy(tmp_path) -> None:
+    path = tmp_path / "legacy.sqlite3"
+    with sqlite3.connect(path) as db:
+        db.executescript(
+            """
+            CREATE TABLE runtime_queue_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE runtime_queue_jobs (
+                tenant_id TEXT NOT NULL, job_id TEXT NOT NULL, queue_name TEXT NOT NULL, job_type TEXT NOT NULL,
+                payload_json TEXT NOT NULL, payload_hash TEXT NOT NULL, dedupe_key TEXT NOT NULL, run_at TEXT NOT NULL,
+                created_at TEXT NOT NULL, updated_at TEXT NOT NULL, priority INTEGER NOT NULL, state TEXT NOT NULL,
+                attempts INTEGER NOT NULL, max_attempts INTEGER NOT NULL, last_error TEXT, correlation_id TEXT, causation_id TEXT,
+                lease_owner_id TEXT, lease_fencing_token INTEGER NOT NULL DEFAULT 0, lease_claimed_at TEXT, lease_expires_at TEXT,
+                claim_token_counter INTEGER NOT NULL DEFAULT 0, tags_json TEXT NOT NULL, PRIMARY KEY (tenant_id, job_id)
+            );
+            """
+        )
+    store = SqliteJobStore(path)
+    columns = {row[1] for row in sqlite3.connect(path).execute("PRAGMA table_info(runtime_queue_jobs)").fetchall()}
+    assert "claim_expiry_policy" in columns
+    inserted = store.put(_request().to_record(now=utc_now()))
+    assert inserted.claim_expiry_policy.value == "retry_if_budget"
+    store.close()
