@@ -34,11 +34,18 @@ def _class_definitions() -> dict[str, list[Path]]:
     return definitions
 
 
-def test_new_semantic_contracts_have_one_physical_owner() -> None:
-    assert _class_definitions() == {
-        name: [owner]
-        for name, owner in SEMANTIC_CLASS_OWNERS.items()
+def semantic_contract_owner_mismatches() -> dict[str, tuple[list[Path], list[Path]]]:
+    actual = _class_definitions()
+    expected = {name: [owner] for name, owner in SEMANTIC_CLASS_OWNERS.items()}
+    return {
+        name: (actual[name], expected[name])
+        for name in SEMANTIC_CLASS_OWNERS
+        if actual[name] != expected[name]
     }
+
+
+def test_new_semantic_contracts_have_one_physical_owner() -> None:
+    assert not semantic_contract_owner_mismatches()
 
 
 def test_compatibility_surfaces_preserve_owner_identity() -> None:
