@@ -79,18 +79,18 @@ def _direct_cicd_contract_lock() -> tuple[bool, str]:
 
 
 def _direct_second_brain_surface_lock() -> tuple[bool, str]:
+    from tests.arch.test_action_intent_policy_contract_ownership import semantic_contract_owner_mismatches
     from tests.arch.test_agi_no_second_brain_surfaces import FORBIDDEN_SURFACES
 
     offenders = [rel for rel in FORBIDDEN_SURFACES if (repo_root() / rel).exists()]
-    if offenders:
-        return False, "forbidden second-brain surfaces exist: " + ", ".join(offenders)
-    return True, "second-brain surface lock passed"
+    owner_drift = semantic_contract_owner_mismatches()
+    if offenders or owner_drift:
+        return False, f"second-brain/semantic owner violation: surfaces={offenders}, owners={owner_drift}"
+    return True, "second-brain surface and semantic owner locks passed"
 
 
 def _direct_multimessenger_runtime_lock() -> tuple[bool, str]:
-    from scripts.ci.multimessenger_contract import (
-        verify_multimessenger_runtime_contract,
-    )
+    from scripts.ci.multimessenger_contract import verify_multimessenger_runtime_contract
 
     return verify_multimessenger_runtime_contract()
 
