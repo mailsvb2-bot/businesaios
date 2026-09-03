@@ -59,6 +59,7 @@ class ProviderAdminService:
     route_state: Any | None = None
     idempotency_store: IdempotencyStore = field(default_factory=InMemoryIdempotencyStore)
     inbound_processor: Any | None = None
+    customer_registry: Any | None = None
     provider_registry: ProviderDefinitionRegistry = field(default_factory=ProviderDefinitionRegistry)
     def list_provider_definitions(self) -> tuple[ProviderDefinition, ...]:
         return self.provider_registry.list()
@@ -406,7 +407,7 @@ class ProviderAdminService:
         return {'provider_key': result.provider_key, 'operation': result.operation, 'mode': result.mode, 'status': result.status, 'accepted': result.accepted, 'metadata': dict(result.metadata or {})}
     def ingest_provider_webhook(self, *, tenant_id: str, business_id: str, provider_key: str, headers: Mapping[str, str], body: bytes, event_key: str, topic: str = '', owner_id: str = 'provider_admin') -> dict[str, Any]:
         provider = self.provider_registry.get(provider_key)
-        ingress = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(self.secret_vault), replay_guard=ProviderWebhookReplayGuard(self.idempotency_store), inbound_processor=self.inbound_processor)
+        ingress = ProviderInboundWebhookService(webhook_runtime=ProviderWebhookRuntime(self.secret_vault), replay_guard=ProviderWebhookReplayGuard(self.idempotency_store), inbound_processor=self.inbound_processor, customer_registry=self.customer_registry)
         normalized_headers = {str(k): str(v) for k, v in dict(headers or {}).items()}
         result = ingress.ingest(provider=provider, tenant_id=require_tenant_id(tenant_id), business_id=str(business_id).strip(), headers=normalized_headers, body=bytes(body), event_key=str(event_key).strip(), topic=str(topic).strip(), owner_id=str(owner_id).strip() or 'provider_admin')
         metadata = dict(result.metadata or {})

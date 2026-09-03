@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -51,7 +52,14 @@ def test_router_and_factory_consume_final_owner_surfaces() -> None:
     assert "from adapters.api.fastapi.dependencies import FastAPIDependencyContainer" in router
     assert "from adapters.api.fastapi.public_routes import register_public_api_routes" in router
     assert "from adapters.api.fastapi.control_plane_routes import register_control_plane_routes" in router
-    assert "from adapters.api.fastapi.router_support import build_auth_bundle, build_webhook_verifier, resolve_metrics, tenant_registry_has_records" in router
+    tree = ast.parse(router)
+    router_support_imports = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module == "adapters.api.fastapi.router_support"
+        for alias in node.names
+    }
+    assert {"build_auth_bundle", "build_webhook_verifier", "resolve_metrics", "tenant_registry_has_records"} <= router_support_imports
     assert "from entrypoints.api.governance_route_handlers import GovernanceRouteHandlers" in router
     assert "from entrypoints.api.metrics_route_handlers import MetricsRouteHandlers" in router
     assert "from adapters.api.fastapi.dependencies import FastAPIDependencyContainer" in factory

@@ -378,6 +378,7 @@ def _business_autonomy_state_root() -> str:
 
 def _business_autonomy_state_path() -> Path:
     from os import getenv
+
     from application.business_autonomy.persistence import business_autonomy_runtime_dir
 
     explicit = str(getenv('BUSINESAIOS_BUSINESS_AUTONOMY_STATE_DB', '') or '').strip()
@@ -498,7 +499,7 @@ def _build_typed_channel_registry() -> TypedChannelAdapterRegistry:
     return registry
 
 
-def build_business_autonomy_guarded_service(*, business_id: str = 'external_business', seed_admin_read_model: bool = False) -> BusinessAutonomyGuardedService:
+def build_business_autonomy_guarded_service(*, business_id: str = 'external_business', seed_admin_read_model: bool = False, customer_event_store: Any | None = None) -> BusinessAutonomyGuardedService:
     admin_dependencies = build_business_autonomy_admin_dependencies()
     distributed = admin_dependencies['distributed']
     typed_registry = admin_dependencies['typed_registry']
@@ -654,6 +655,10 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
     service._typed_channel_registry = typed_registry
     service._operator_admin_plane = UnifiedOperatorAdminPlane(BusinessAutonomyFleetReadModel(distributed_registry))
     service._execution_runtime = build_execution_runtime(route_state=distributed['region_state'])
+    customer_registry = None
+    if customer_event_store is not None:
+        from crm import CustomerRegistry
+        customer_registry = CustomerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'], pii_vault=secret_vault)
     service._provider_admin_service = ProviderAdminService(
         onboarding_service=onboarding,
         secret_vault=secret_vault,
@@ -661,6 +666,7 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         activation_store=activation_store,
         route_state=distributed['region_state'],
         idempotency_store=distributed['idempotency'],
+        customer_registry=customer_registry,
     )
     return service
 
