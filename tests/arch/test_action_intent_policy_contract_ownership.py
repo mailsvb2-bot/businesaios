@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import re
+import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,11 +15,7 @@ SEMANTIC_CLASS_OWNERS = {
     "ExecutableAction": Path("contracts/executable_action.py"),
     "BusinessOutcomeV1": Path("contracts/business_outcome.py"),
 }
-_CLASS_DEF = re.compile(
-    r"^\s*class\s+(Decision|DecisionEnvelope|WorldStateV1|BusinessFactV1|"
-    r"ActionIntentV1|PolicyDecisionV1|ExecutableAction|BusinessOutcomeV1)\s*(?:\(|:)",
-    re.MULTILINE,
-)
+_SEMANTIC_CLASS_NAMES = frozenset(SEMANTIC_CLASS_OWNERS)
 
 
 def _class_definitions() -> dict[str, list[Path]]:
@@ -29,8 +25,12 @@ def _class_definitions() -> dict[str, list[Path]]:
         if "tests" in rel.parts or ".git" in rel.parts:
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
-        for match in _CLASS_DEF.finditer(text):
-            definitions[match.group(1)].append(rel)
+        if not any(name in text for name in _SEMANTIC_CLASS_NAMES):
+            continue
+        tree = ast.parse(text, filename=str(rel))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name in definitions:
+                definitions[node.name].append(rel)
     return definitions
 
 
