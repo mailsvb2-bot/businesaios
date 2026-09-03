@@ -72,6 +72,8 @@ _OWNER_MAP = {
     'CrmContactVerifier': ('crm.verification.crm_contact_verifier', 'CrmContactVerifier'),
     'CrmDealVerifier': ('crm.verification.crm_deal_verifier', 'CrmDealVerifier'),
     'CrmWriteVerifier': ('crm.verification.crm_write_verifier', 'CrmWriteVerifier'),
+    'CustomerRegistry': ('crm.customer_registry', 'CustomerRegistry'),
+    'CustomerTimelineProjector': ('crm.customer_timeline', 'CustomerTimelineProjector'),
     'CrmWebhookIngestionService': ('crm.webhooks.crm_webhook_ingestion_service', 'CrmWebhookIngestionService'),
 }
 

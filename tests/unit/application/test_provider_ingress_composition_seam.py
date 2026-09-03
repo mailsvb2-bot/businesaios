@@ -36,3 +36,17 @@ def test_provider_webhook_registrar_owns_only_canonical_public_post_route() -> N
     register_provider_webhook_routes(router=router, provider_admin_handlers=object())
     routes = [(route.path, tuple(sorted(route.methods))) for route in router.routes]
     assert routes == [('/providers/webhook/{tenant_id}/{business_id}/{provider_key}', ('POST',))]
+
+
+def test_provider_admin_handlers_forward_customer_event_store_only_when_wired() -> None:
+    service = _ProviderService()
+    event_store = object()
+    seen = []
+
+    def factory(**kwargs):
+        seen.append(kwargs)
+        return service
+
+    handlers = ProviderAdminRouteHandlers(service_factory=factory, customer_event_store=event_store)
+    handlers.list_provider_runtime_incidents(tenant_id='tenant-a', business_id='business-a', provider_key='vk_messaging')
+    assert seen == [{'business_id': 'business-a', 'customer_event_store': event_store}]

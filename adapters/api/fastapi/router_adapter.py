@@ -10,7 +10,12 @@ from adapters.api.fastapi.dependencies import FastAPIDependencyContainer, _resol
 from adapters.api.fastapi.network_side_effects_routes import register_network_side_effects_routes
 from adapters.api.fastapi.provider_truth_matrix_routes import register_provider_truth_matrix_routes
 from adapters.api.fastapi.public_routes import register_public_api_routes
-from adapters.api.fastapi.router_support import build_auth_bundle, build_webhook_verifier, resolve_metrics, tenant_registry_has_records
+from adapters.api.fastapi.router_support import (
+    build_auth_bundle,
+    build_webhook_verifier,
+    resolve_metrics,
+    tenant_registry_has_records,
+)
 from entrypoints.api.admin_route_handlers import AdminRouteHandlers
 from entrypoints.api.analytics_ops_route_handlers import AnalyticsOpsRouteHandlers
 from entrypoints.api.analytics_route_handlers import AnalyticsRouteHandlers
@@ -206,10 +211,12 @@ def create_api_router(*, application_service: object, dependency_container: Fast
     runtime_infra = _resolve_runtime_infra(dependency_container.boot_result) if dependency_container is not None else None
     approval_completion_handler = None
     if runtime_infra is not None and getattr(runtime_infra, 'settings_gateway', None) is not None:
-        from runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service import TenantAwareAlertNotificationMarkSentService
+        from runtime.messaging_policy_alert_dedup_persistent.tenant_mark_sent_service import (
+            TenantAwareAlertNotificationMarkSentService,
+        )
         from runtime.messaging_policy_alert_dedup_persistent.tenant_store_factory import TenantScopedDedupStoreFactory
         approval_completion_handler = TenantAwareAlertNotificationMarkSentService(store_factory=TenantScopedDedupStoreFactory(settings_gateway=runtime_infra.settings_gateway)).finalize_approval
-    provider_admin_handlers = ProviderAdminRouteHandlers(approval_completion_handler=approval_completion_handler)
+    provider_admin_handlers = ProviderAdminRouteHandlers(approval_completion_handler=approval_completion_handler, customer_event_store=getattr(runtime_infra, 'event_store', None) if runtime_infra is not None else None)
     metrics_handlers = MetricsRouteHandlers(metrics=resolve_metrics(dependency_container=dependency_container))
     webhook_handlers = WebhookRouteHandlers(
         verifier=build_webhook_verifier(),

@@ -18,8 +18,12 @@ class ProviderAdminRouteHandlers:
     approval_store_factory: Any = build_default_approval_store
     decision_loader: Any = load_archived_decision
     approval_completion_handler: Any = None
+    customer_event_store: Any = None
     def _service(self, business_id: str):
-        service = self.service_factory(business_id=business_id)
+        kwargs = {"business_id": business_id}
+        if self.customer_event_store is not None:
+            kwargs["customer_event_store"] = self.customer_event_store
+        service = self.service_factory(**kwargs)
         return getattr(service, "_provider_admin_service", service)
     def list_provider_catalog(self, *, tenant_id: str, business_id: str) -> dict[str, Any]:
         service = self._service(business_id)

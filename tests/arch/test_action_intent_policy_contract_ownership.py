@@ -14,6 +14,11 @@ SEMANTIC_CLASS_OWNERS = {
     "PolicyDecisionV1": Path("contracts/policy_decision.py"),
     "ExecutableAction": Path("contracts/executable_action.py"),
     "BusinessOutcomeV1": Path("contracts/business_outcome.py"),
+    "Customer": Path("contracts/customer.py"),
+    "CustomerIdentity": Path("contracts/customer.py"),
+    "CustomerTimeline": Path("contracts/customer.py"),
+    "CustomerRegistry": Path("crm/customer_registry.py"),
+    "CustomerTimelineProjector": Path("crm/customer_timeline.py"),
 }
 _SEMANTIC_CLASS_NAMES = frozenset(SEMANTIC_CLASS_OWNERS)
 
@@ -72,7 +77,7 @@ def test_compatibility_surfaces_preserve_owner_identity() -> None:
 
 def test_new_contract_owners_remain_declared_by_canon() -> None:
     role = (ROOT / "contracts/CANON_NAMESPACE_ROLE.md").read_text(encoding="utf-8")
-    for name in ("BusinessFactV1", "ActionIntentV1", "PolicyDecisionV1", "BusinessOutcomeV1"):
+    for name in ("BusinessFactV1", "ActionIntentV1", "PolicyDecisionV1", "BusinessOutcomeV1", "Customer", "CustomerIdentity", "CustomerTimeline"):
         assert name in role
     assert "kernel.world_state.WorldStateV1" in role
     assert "contracts/decisioning/sovereign_decision_contract.py" in role
@@ -85,3 +90,20 @@ def test_decision_core_remains_the_only_intent_projection_owner() -> None:
     assert "AutonomyDecision = PolicyDecisionV1" in autonomy
     assert "def project_action_intent(" in decision_core
     assert "ExecutableAction(" in decision_core
+
+
+def test_customer_runtime_extends_existing_owners_without_second_semantic_store() -> None:
+    registry = (ROOT / "crm/customer_registry.py").read_text(encoding="utf-8")
+    timeline = (ROOT / "crm/customer_timeline.py").read_text(encoding="utf-8")
+    bootstrap = (ROOT / "runtime/business_autonomy/bootstrap.py").read_text(encoding="utf-8")
+    router = (ROOT / "adapters/api/fastapi/router_adapter.py").read_text(encoding="utf-8")
+    provider_admin = (ROOT / "application/business_autonomy/provider_admin_service.py").read_text(encoding="utf-8")
+    assert "BusinessFactV1(" in registry
+    assert "build_idempotency_key(" in registry
+    assert "SecretVault" in registry
+    assert "CustomerRegistry(event_store=customer_event_store, idempotency_store=distributed['idempotency'], pii_vault=secret_vault)" in bootstrap
+    assert "customer_event_store=getattr(runtime_infra, 'event_store', None)" in router
+    assert "customer_registry=self.customer_registry" in provider_admin
+    assert "append_event(" not in timeline
+    assert "IdempotencyStore" not in timeline
+    assert "CustomerTimelineProjector" in timeline
