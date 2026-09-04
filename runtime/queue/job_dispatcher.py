@@ -107,7 +107,9 @@ class JobDispatcher:
                 'payload': dict(request.payload),
                 'priority': int(request.priority),
                 'delay_seconds': int(request.delay_seconds),
+                'not_before': None if request.not_before is None else request.not_before.isoformat(),
                 'max_attempts': int(request.max_attempts),
+                'claim_expiry_policy': request.claim_expiry_policy.value,
             },
         )
         return self._idempotency_store.reserve(
@@ -134,7 +136,9 @@ class JobDispatcher:
                 'payload': dict(request.payload),
                 'priority': int(request.priority),
                 'delay_seconds': int(request.delay_seconds),
+                'not_before': None if request.not_before is None else request.not_before.isoformat(),
                 'max_attempts': int(request.max_attempts),
+                'claim_expiry_policy': request.claim_expiry_policy.value,
             },
         )
         self._idempotency_store.mark_completed(

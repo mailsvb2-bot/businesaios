@@ -103,3 +103,66 @@ def test_invalid_signature_never_projects_customer(monkeypatch):
     out = service.ingest(provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body, event_key='evt-invalid', topic='telegram_update', owner_id='provider_admin')
     assert out.status == 'invalid_signature'
     assert list(events.iter_events(tenant_id='t1', start_ms=0)) == []
+
+
+class _VkAckResponder:
+    def __init__(self, *, ok: bool = True) -> None:
+        self.calls = []
+        self.ok = ok
+
+    def acknowledge(self, **kwargs):
+        self.calls.append(kwargs)
+        return {
+            'required': True,
+            'ok': self.ok,
+            'kind': 'vk_message_event_answer',
+            **({} if self.ok else {'reason': 'provider_rejected'}),
+        }
+
+
+def test_vk_message_event_is_acknowledged_after_processing_and_on_completed_replay(monkeypatch):
+    provider = provider_map()['vk_messaging']
+    monkeypatch.setattr(ProviderWebhookRuntime, 'verify', lambda self, **kwargs: True)
+    processor = _Processor()
+    responder = _VkAckResponder()
+    service = ProviderInboundWebhookService(
+        webhook_runtime=ProviderWebhookRuntime(None),
+        replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
+        inbound_processor=processor,
+        operational_responder=responder,
+    )
+    body = b'{"type":"message_event","group_id":123,"object":{"event_id":"evt-vk","user_id":42,"peer_id":42,"payload":{"callback_data":"menu:open"}}}'
+    first = service.ingest(
+        provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body,
+        event_key='evt-vk', topic='message_event', owner_id='provider_admin',
+    )
+    replay = service.ingest(
+        provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body,
+        event_key='evt-vk', topic='message_event', owner_id='provider_admin',
+    )
+    assert first.metadata['provider_ack']['ok'] is True
+    assert replay.metadata['decision']['resolution'] == 'replay_completed'
+    assert replay.metadata['provider_ack']['ok'] is True
+    assert service.transport_ack_safe(first) is True
+    assert service.transport_ack_safe(replay) is True
+    assert processor.calls == 1
+    assert len(responder.calls) == 2
+
+
+def test_vk_message_event_ack_failure_keeps_http_transport_fail_closed(monkeypatch):
+    provider = provider_map()['vk_messaging']
+    monkeypatch.setattr(ProviderWebhookRuntime, 'verify', lambda self, **kwargs: True)
+    service = ProviderInboundWebhookService(
+        webhook_runtime=ProviderWebhookRuntime(None),
+        replay_guard=ProviderWebhookReplayGuard(InMemoryIdempotencyStore()),
+        inbound_processor=_Processor(),
+        operational_responder=_VkAckResponder(ok=False),
+    )
+    body = b'{"type":"message_event","group_id":123,"object":{"event_id":"evt-vk-fail","user_id":42,"peer_id":42,"payload":{"callback_data":"menu:open"}}}'
+    out = service.ingest(
+        provider=provider, tenant_id='t1', business_id='b1', headers={}, body=body,
+        event_key='evt-vk-fail', topic='message_event', owner_id='provider_admin',
+    )
+    assert out.metadata['provider_ack']['required'] is True
+    assert out.metadata['provider_ack']['ok'] is False
+    assert service.transport_ack_safe(out) is False

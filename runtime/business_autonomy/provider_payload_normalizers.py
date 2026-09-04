@@ -9,6 +9,79 @@ from application.business_autonomy.provider_admin_contract import ProviderDefini
 
 CANON_PROVIDER_PAYLOAD_NORMALIZERS = True
 
+VK_MAX_BUTTONS_PER_ROW = 5
+VK_MAX_BUTTON_ROWS = 6
+VK_MAX_INLINE_CALLBACK_BUTTONS = 10
+
+
+def _vk_button_payload(callback_data: object) -> str:
+    value = str(callback_data or '').strip()
+    if not value:
+        raise ValueError('VK callback button requires callback_data')
+    return json.dumps({'callback_data': value}, ensure_ascii=False, separators=(',', ':'))
+
+
+def _vk_keyboard_from_reply_markup(reply_markup: object) -> str | None:
+    if not isinstance(reply_markup, Mapping):
+        return None
+    raw_rows = reply_markup.get('inline_keyboard')
+    if not isinstance(raw_rows, list):
+        return None
+    buttons: list[dict[str, Any]] = []
+    row_sizes: list[int] = []
+    for raw_row in raw_rows:
+        if not isinstance(raw_row, list):
+            continue
+        row_count = 0
+        for raw_button in raw_row:
+            if not isinstance(raw_button, Mapping):
+                continue
+            label = str(raw_button.get('text') or '').strip()
+            if not label:
+                raise ValueError('VK button label is required')
+            callback_data = raw_button.get('callback_data')
+            url = raw_button.get('url')
+            if not url and isinstance(raw_button.get('web_app'), Mapping):
+                url = raw_button['web_app'].get('url')
+            if callback_data is not None:
+                buttons.append({'kind': 'callback', 'label': label, 'payload': _vk_button_payload(callback_data)})
+            elif url:
+                buttons.append({'kind': 'open_link', 'label': label, 'link': str(url).strip()})
+            else:
+                raise ValueError('VK button requires callback_data or url')
+            row_count += 1
+        if row_count:
+            row_sizes.append(row_count)
+    if not buttons:
+        return None
+    if len(buttons) > VK_MAX_BUTTONS_PER_ROW * VK_MAX_BUTTON_ROWS:
+        raise ValueError('VK keyboard exceeds provider button capacity')
+    callback_count = sum(1 for button in buttons if button['kind'] == 'callback')
+    inline = callback_count <= VK_MAX_INLINE_CALLBACK_BUTTONS
+    if inline and len(row_sizes) <= VK_MAX_BUTTON_ROWS and all(size <= VK_MAX_BUTTONS_PER_ROW for size in row_sizes):
+        sizes = row_sizes
+    else:
+        width = 2 if len(buttons) > VK_MAX_INLINE_CALLBACK_BUTTONS else VK_MAX_BUTTONS_PER_ROW
+        sizes = [min(width, len(buttons) - index) for index in range(0, len(buttons), width)]
+        if len(sizes) > VK_MAX_BUTTON_ROWS:
+            width = VK_MAX_BUTTONS_PER_ROW
+            sizes = [min(width, len(buttons) - index) for index in range(0, len(buttons), width)]
+        if len(sizes) > VK_MAX_BUTTON_ROWS:
+            raise ValueError('VK keyboard exceeds provider row capacity')
+    rows: list[list[dict[str, Any]]] = []
+    offset = 0
+    for size in sizes:
+        row: list[dict[str, Any]] = []
+        for button in buttons[offset : offset + size]:
+            if button['kind'] == 'open_link':
+                action = {'type': 'open_link', 'label': button['label'], 'link': button['link']}
+            else:
+                action = {'type': 'callback' if inline else 'text', 'label': button['label'], 'payload': button['payload']}
+            row.append({'action': action})
+        rows.append(row)
+        offset += size
+    return json.dumps({'inline': inline, 'buttons': rows}, ensure_ascii=False, separators=(',', ':'))
+
 @dataclass(frozen=True)
 class ProviderPayloadNormalizers:
     def normalize_outbound(self, *, provider: ProviderDefinition, operation: str, payload: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -28,7 +101,18 @@ class ProviderPayloadNormalizers:
                 return {'channel': str(raw.get('channel') or raw.get('channel_id') or '{channel_id}'), 'text': str(raw.get('text') or raw.get('message') or '')}
             if key == 'discord_messaging':
                 return {'channel_id': str(raw.get('channel_id') or '{channel_id}'), 'text': str(raw.get('text') or raw.get('message') or '')}
-            return {'peer_id': str(raw.get('peer_id') or raw.get('chat_id') or raw.get('user_id') or '{peer_id}'), 'random_id': int(raw.get('random_id') or 0), 'message': str(raw.get('message') or raw.get('text') or ''), 'group_id': str(raw.get('group_id') or '{group_id}')} if key == 'vk_messaging' else {'chat_id': str(raw.get('chat_id') or ''), 'user_id': str(raw.get('user_id') or ''), 'text': str(raw.get('text') or raw.get('message') or '')}
+            if key == 'vk_messaging':
+                normalized = {'peer_id': str(raw.get('peer_id') or raw.get('chat_id') or raw.get('user_id') or '{peer_id}'), 'random_id': int(raw.get('random_id') or 0), 'message': str(raw.get('message') or raw.get('text') or ''), 'group_id': str(raw.get('group_id') or '{group_id}')}
+                keyboard = _vk_keyboard_from_reply_markup(raw.get('reply_markup'))
+                if keyboard:
+                    normalized['keyboard'] = keyboard
+                if isinstance(raw.get('attachments'), list):
+                    normalized['attachments'] = [dict(item) for item in raw['attachments'] if isinstance(item, Mapping)]
+                return normalized
+            normalized = {'chat_id': str(raw.get('chat_id') or ''), 'user_id': str(raw.get('user_id') or ''), 'text': str(raw.get('text') or raw.get('message') or '')}
+            if isinstance(raw.get('attachments'), list):
+                normalized['attachments'] = [dict(item) for item in raw['attachments'] if isinstance(item, Mapping)]
+            return normalized
         if key in {'shopify', 'woocommerce'}:
             if operation.endswith('catalog_sync'):
                 return {'cursor': raw.get('cursor') or '', 'limit': int(raw.get('limit') or 100), **{k: v for k, v in raw.items() if k not in {'cursor', 'limit'}}}
@@ -60,8 +144,16 @@ class ProviderPayloadNormalizers:
             entry0 = entry[0] if isinstance(entry, list) and entry else {}
             return {'topic': header_map.get('x-hub-topic', '') or 'whatsapp_event', 'source_ref': str(entry0.get('id') or ''), 'resource_id': str(entry0.get('id') or ''), 'event_key_hint': header_map.get('x-request-id', '')}
         if key == 'vk_messaging':
-            event_id = str(parsed.get('event_id') or '')
+            obj = parsed.get('object') if isinstance(parsed.get('object'), Mapping) else {}
+            event_id = str(parsed.get('event_id') or obj.get('event_id') or '')
             return {'topic': str(parsed.get('type') or ''), 'source_ref': str(parsed.get('group_id') or ''), 'resource_id': event_id, 'event_key_hint': event_id}
+        if key == 'max_messaging':
+            callback = parsed.get('callback') if isinstance(parsed.get('callback'), Mapping) else {}
+            message = parsed.get('message') if isinstance(parsed.get('message'), Mapping) else {}
+            body_payload = message.get('body') if isinstance(message.get('body'), Mapping) else {}
+            resource_id = str(callback.get('callback_id') or body_payload.get('mid') or body_payload.get('message_id') or parsed.get('update_id') or '')
+            source = parsed.get('user') if isinstance(parsed.get('user'), Mapping) else message.get('sender') if isinstance(message.get('sender'), Mapping) else {}
+            return {'topic': str(parsed.get('update_type') or parsed.get('type') or ''), 'source_ref': str(source.get('user_id') or parsed.get('chat_id') or ''), 'resource_id': resource_id, 'event_key_hint': resource_id}
         if key == 'slack_messaging':
             event = parsed.get('event') if isinstance(parsed.get('event'), Mapping) else {}
             event_id = str(parsed.get('event_id') or event.get('client_msg_id') or event.get('event_ts') or event.get('ts') or '')

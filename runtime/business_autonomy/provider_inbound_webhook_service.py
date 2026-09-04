@@ -30,6 +30,7 @@ class ProviderInboundWebhookService:
     incident_registry: FileProviderIncidentRegistry = field(default_factory=FileProviderIncidentRegistry)
     inbound_processor: ProviderWebhookInboundProcessor | None = None
     customer_registry: object | None = None
+    operational_responder: object | None = None
 
     def ingest(
         self,
@@ -111,13 +112,35 @@ class ProviderInboundWebhookService:
         inbound_result = self.inbound_processor.process(handoff=handoff) if decision.accepted and self.inbound_processor is not None and handoff else {}
         if decision.accepted and (not handoff or inbound_result):
             self.complete(provider=provider, tenant_id=tenant_id, business_id=business_id, event_key=event_key, payload_digest=payload_digest, owner_id=decision.owner_id, topic=topic)
+        ack_required = provider.provider_key == 'vk_messaging' and str(topic or '') == 'message_event'
+        ack_eligible = bool(handoff) and (bool(inbound_result) or decision.resolution == 'replay_completed')
+        if ack_required and not ack_eligible:
+            provider_ack = {'required': True, 'ok': False, 'reason': 'inbound_processing_incomplete'}
+        elif ack_required and self.operational_responder is None:
+            provider_ack = {'required': True, 'ok': False, 'reason': 'operational_responder_unavailable'}
+        elif ack_required:
+            try:
+                provider_ack = self.operational_responder.acknowledge(
+                    provider=provider,
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    topic=topic,
+                    handoff=handoff,
+                )
+            except Exception as exc:
+                provider_ack = {'required': True, 'ok': False, 'reason': exc.__class__.__name__}
+        else:
+            provider_ack = {'required': False, 'ok': True}
         inbound_summary = summarize_provider_webhook_inbound_result(handoff=handoff, inbound_result=inbound_result)
         self.observability.record_webhook_inbound_handoff(tenant_id=str(tenant_id), provider_key=provider.provider_key, status=status, inbound_summary=inbound_summary)
-        return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=event_key, accepted=decision.accepted, status=status, metadata={'decision': {'resolution': decision.resolution, **dict(decision.metadata)}, 'owner_id': decision.owner_id, 'topic': topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': dict(route), 'messaging_handoff': handoff, 'messaging_inbound_result': inbound_result, 'messaging_inbound_summary': inbound_summary, 'customer': customer_result, 'incident': incident})
+        return ProviderWebhookIngressResult(provider_key=provider.provider_key, event_key=event_key, accepted=decision.accepted, status=status, metadata={'decision': {'resolution': decision.resolution, **dict(decision.metadata)}, 'owner_id': decision.owner_id, 'topic': topic, 'audit_refs': refs, 'export_refs': export_refs, 'route': dict(route), 'messaging_handoff': handoff, 'messaging_inbound_result': inbound_result, 'messaging_inbound_summary': inbound_summary, 'provider_ack': provider_ack, 'customer': customer_result, 'incident': incident})
 
     @staticmethod
     def transport_ack_safe(result: ProviderWebhookIngressResult) -> bool:
         metadata = dict(result.metadata or {})
+        provider_ack = dict(metadata.get('provider_ack') or {})
+        if provider_ack.get('required') and not provider_ack.get('ok'):
+            return False
         return not metadata.get('messaging_handoff') or bool(metadata.get('messaging_inbound_result')) or dict(metadata.get('decision') or {}).get('resolution') == 'replay_completed'
 
     def complete(

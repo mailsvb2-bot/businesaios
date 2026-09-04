@@ -88,6 +88,8 @@ from runtime.business_autonomy.distributed_state import (
 from runtime.business_autonomy.execution_support import build_execution_runtime, ensure_business_route
 from runtime.business_autonomy.fleet_read_model import BusinessAutonomyFleetReadModel
 from runtime.business_autonomy.provider_activation_store import FileProviderActivationStore
+from runtime.business_autonomy.provider_media import ProviderMediaPreparationCoordinator
+from runtime.business_autonomy.provider_pacing import ProviderPacingCoordinator
 from runtime.business_autonomy.sqlite_distributed_state import (
     SQLiteDistributedCompareAndSwap,
     SQLiteDistributedDocumentStore,
@@ -405,6 +407,8 @@ def _build_distributed_state() -> dict[str, object]:
         'documents': documents,
         'approvals': DistributedApprovalStore(FileApprovalDocumentPort(documents)),
         'operator_overrides': DistributedOperatorOverrideStore(FileOperatorOverrideDocumentPort(documents)),
+        'provider_pacing': SQLiteDistributedCompareAndSwap(database, scope='provider_runtime_pacing'),
+        'provider_media': SQLiteDistributedCompareAndSwap(database, scope='provider_runtime_media'),
         'idempotency': DistributedIdempotencyStore(
             cas=SQLiteDistributedCompareAndSwap(database, scope='idempotency_records'),
             sequence=SQLiteDistributedSequenceStore(database),
@@ -667,6 +671,8 @@ def build_business_autonomy_guarded_service(*, business_id: str = 'external_busi
         route_state=distributed['region_state'],
         idempotency_store=distributed['idempotency'],
         customer_registry=customer_registry,
+        provider_pacing=ProviderPacingCoordinator(distributed['provider_pacing']),
+        provider_media=ProviderMediaPreparationCoordinator(distributed['provider_media']),
     )
     return service
 

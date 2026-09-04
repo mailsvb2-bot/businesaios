@@ -40,6 +40,10 @@ def reap_expired_claims(self, **kwargs):
     return maybe_flush(self, changed)
 
 
+def set_claim_expiry_policy(self, **kwargs):
+    return wrap_flush(self, super(type(self), self).set_claim_expiry_policy(**kwargs))
+
+
 def mark_succeeded(self, **kwargs):
     return wrap_flush(self, super(type(self), self).mark_succeeded(**kwargs))
 

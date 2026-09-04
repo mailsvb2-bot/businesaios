@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from runtime._internal.http_transport import HttpTransport, build_http_transport
@@ -27,7 +28,7 @@ from ._telegram_delivery_state import (
 from ._telegram_delivery_support import delivery_key as build_delivery_key
 from ._telegram_delivery_support import payload_digest as build_payload_digest
 from ._telegram_delivery_support import stable_json
-from .http_client import http_json
+from .http_client import http_json, http_multipart_file
 
 
 def telegram_api_base() -> str:
@@ -158,6 +159,7 @@ class TelegramClient:
         url: str,
         delivery_key: str,
         payload_digest: str,
+        request_fn: Callable[[], dict[str, Any]] | None = None,
     ) -> dict[str, Any] | None:
         if not isinstance(existing, Mapping):
             return None
@@ -190,6 +192,7 @@ class TelegramClient:
                 timeout_s=int(timeout_s or 0),
                 delivery_key=delivery_key,
                 payload_digest=payload_digest,
+                request_fn=request_fn,
                 delivered_metadata=delivery_metadata(
                     method=method,
                     chat_id=str(chat_id),
@@ -212,9 +215,26 @@ class TelegramClient:
     def _http_post(self, *, url: str, payload: Mapping[str, Any], timeout_s: int) -> dict[str, Any]:
         return http_json("POST", url, dict(payload), timeout_s=int(timeout_s or 30), transport=self.transport)
 
-    def _queue_callable(self, *, url: str, payload: Mapping[str, Any], timeout_s: int, delivery_key: str | None = None, payload_digest: str | None = None, delivered_metadata: Mapping[str, Any] | None = None) -> Callable[[], dict[str, Any]]:
+    def _http_audio_post(self, *, url: str, payload: Mapping[str, Any], timeout_s: int) -> dict[str, Any]:
+        source = Path(str(payload.get("audio") or ""))
+        if not source.is_file():
+            return self._http_post(url=url, payload=payload, timeout_s=timeout_s)
+        fields = {"chat_id": str(payload.get("chat_id") or "")}
+        for key in ("caption", "parse_mode"):
+            if str(payload.get(key) or "").strip():
+                fields[key] = str(payload[key])
+        return http_multipart_file(
+            url,
+            path=str(source),
+            field_name="audio",
+            fields=fields,
+            timeout_s=int(timeout_s or 60),
+            transport=self.transport,
+        )
+
+    def _queue_callable(self, *, url: str, payload: Mapping[str, Any], timeout_s: int, delivery_key: str | None = None, payload_digest: str | None = None, request_fn: Callable[[], dict[str, Any]] | None = None, delivered_metadata: Mapping[str, Any] | None = None) -> Callable[[], dict[str, Any]]:
         def _run() -> dict[str, Any]:
-            out = self._http_post(url=url, payload=payload, timeout_s=timeout_s)
+            out = request_fn() if request_fn is not None else self._http_post(url=url, payload=payload, timeout_s=timeout_s)
             result = dict(out or {}) if isinstance(out, dict) else {}
             ok = bool(result.get("ok")) if isinstance(result, dict) else True
             if ok and delivery_key and payload_digest:
@@ -458,6 +478,7 @@ class TelegramClient:
                 url=url,
                 delivery_key=delivery_key,
                 payload_digest=payload_digest,
+                request_fn=lambda: self._http_audio_post(url=url, payload=payload, timeout_s=int(timeout_s or 60)),
             )
             current = recovered or existing
             phase = receipt_phase(current)
@@ -513,6 +534,7 @@ class TelegramClient:
                         timeout_s=int(timeout_s or 60),
                         delivery_key=delivery_key,
                         payload_digest=payload_digest,
+                        request_fn=lambda: self._http_audio_post(url=url, payload=payload, timeout_s=int(timeout_s or 60)),
                         delivered_metadata=delivery_metadata(
                             method="sendAudio",
                             chat_id=str(chat_id),
@@ -554,7 +576,7 @@ class TelegramClient:
                 swallow(__name__, "send_audio.queue")
 
         try:
-            output = self._http_post(
+            output = self._http_audio_post(
                 url=url,
                 payload=payload,
                 timeout_s=int(timeout_s or 60),

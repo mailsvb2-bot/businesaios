@@ -53,7 +53,7 @@ from runtime.queue._sqlite_job_store_runtime import (
 from runtime.queue._sqlite_job_store_runtime import (
     runtime_queue_sqlite_store_path,
 )
-from runtime.queue.job_contract import JobRecord, JobState, normalize_now
+from runtime.queue.job_contract import JobClaimExpiryPolicy, JobRecord, JobState, normalize_now
 from runtime.queue.job_fencing import validate_fencing_token
 from runtime.queue.queue_store_policy import DEFAULT_QUEUE_STORE_POLICY
 
@@ -115,10 +115,10 @@ class SqliteJobStore:
                 INSERT INTO runtime_queue_jobs (
                     tenant_id, job_id, queue_name, job_type, payload_json, payload_hash,
                     dedupe_key, run_at, created_at, updated_at, priority, state,
-                    attempts, max_attempts, last_error, correlation_id, causation_id,
+                    attempts, max_attempts, claim_expiry_policy, last_error, correlation_id, causation_id,
                     lease_owner_id, lease_fencing_token, lease_claimed_at, lease_expires_at,
                     claim_token_counter, tags_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job.tenant_id,
@@ -135,6 +135,7 @@ class SqliteJobStore:
                     job.state.value,
                     int(job.attempts),
                     int(job.max_attempts),
+                    job.claim_expiry_policy.value,
                     job.last_error,
                     job.correlation_id,
                     job.causation_id,
@@ -275,6 +276,26 @@ class SqliteJobStore:
             renewed = self._fetch_job(db, tenant_id=tid, job_id=jid)
             assert renewed is not None
             return renewed
+
+    def set_claim_expiry_policy(self, *, tenant_id: str, job_id: str, policy: JobClaimExpiryPolicy, owner_id: str | None = None, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord:
+        self._ensure_open()
+        tid = require_tenant_id(tenant_id)
+        jid = _require_job_id(job_id)
+        token = validate_fencing_token(fencing_token=fencing_token)
+        moment = normalize_now(now)
+        with self._lock, self._tx() as db:
+            current = self._require_transitionable(
+                db, tenant_id=tid, job_id=jid, allowed_from=(JobState.CLAIMED,),
+                owner_id=owner_id, fencing_token=token,
+            )
+            normalized = JobClaimExpiryPolicy(policy)
+            db.execute(
+                "UPDATE runtime_queue_jobs SET claim_expiry_policy = ?, updated_at = ? WHERE tenant_id = ? AND job_id = ?",
+                (normalized.value, iso_datetime(max(moment, current.updated_at)), tid, jid),
+            )
+            updated = self._fetch_job(db, tenant_id=tid, job_id=jid)
+            assert updated is not None
+            return updated
 
     def release_claim(self, *, tenant_id: str, job_id: str, owner_id: str, fencing_token: int | None = None, now: datetime | None = None) -> JobRecord | None:
         self._ensure_open()

@@ -32,6 +32,7 @@ class EffectsCommsPort(Protocol):
         decision_id: str,
         correlation_id: str,
         tenant_id: str,
+        business_id: str = "",
         user_id: str,
         path: str,
         kind: str = "voice",

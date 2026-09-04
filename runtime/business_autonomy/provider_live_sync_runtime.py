@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -9,6 +10,7 @@ from application.business_autonomy.provider_runtime_contract import ProviderSync
 from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
 from runtime.business_autonomy.provider_error_taxonomy import ProviderErrorTaxonomy
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
+from runtime.business_autonomy.provider_media import public_provider_media_payload
 from runtime.business_autonomy.provider_response_parsers import ProviderResponseParsers
 from runtime.business_autonomy.provider_retry_policy import ProviderRetryPolicy
 from runtime.business_autonomy.provider_runtime_audit import ProviderRuntimeAuditRecorder
@@ -21,6 +23,15 @@ from runtime.business_autonomy.provider_transport_bindings import ProviderTransp
 from security.secret_vault import SecretVault
 
 CANON_PROVIDER_LIVE_SYNC_RUNTIME = True
+
+
+def _vk_random_id_for_queue_job(queue_job_id: str) -> int:
+    job_id = str(queue_job_id or '').strip()
+    if not job_id:
+        raise ValueError('queue_job_id is required for VK provider idempotency')
+    digest = hashlib.sha256(f'vk-message-send:{job_id}'.encode()).digest()
+    value = int.from_bytes(digest[:4], 'big') & 0x7FFFFFFF
+    return value or 1
 
 
 class ProviderTransportPort(Protocol):
@@ -78,33 +89,39 @@ class ProviderLiveSyncRuntime:
         caller_payload = {str(key): value for key, value in dict(payload or {}).items() if str(key) not in {'_provider_queue_execution', '_provider_queue_job_id', '_provider_write_approved', '_allow_network'}}
         queue_job_id = str(_queue_job_id or '').strip()
         execution_payload = {**caller_payload, **({'_provider_queue_job_id': queue_job_id} if queue_job_id else {})}
+        public_caller_payload = public_provider_media_payload(caller_payload)
+        public_execution_payload = {**public_caller_payload, **({'_provider_queue_job_id': queue_job_id} if queue_job_id else {})}
         if normalized_operation not in planner.operations:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='unsupported_operation', accepted=False, metadata={'available_operations': list(planner.operations)})
             return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=execution_payload)
         binding = ProviderTransportBindings().describe(provider)
-        request_base = {'provider_key': provider.provider_key, 'operation': normalized_operation, 'tenant_id': str(tenant_id), 'business_id': str(business_id), 'payload': dict(caller_payload), 'domain': provider.domain, 'adapter_key': provider.adapter_key, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider)}
+        request_base = {'provider_key': provider.provider_key, 'operation': normalized_operation, 'tenant_id': str(tenant_id), 'business_id': str(business_id), 'payload': dict(public_caller_payload), 'domain': provider.domain, 'adapter_key': provider.adapter_key, 'transport_binding': binding, 'response_parser': self.response_parsers.describe(provider=provider)}
         if normalized_mode == 'live' and normalized_operation in planner.read_operations and not bool(binding.get('live_read_ready', binding.get('live_ready'))):
-            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_read_unsupported', accepted=False, metadata={'request_envelope': request_base, 'reason': 'live_read_transport_not_ready'}), payload=execution_payload)
+            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_read_unsupported', accepted=False, metadata={'request_envelope': request_base, 'reason': 'live_read_transport_not_ready'}), payload=public_execution_payload)
         write_guard_decision = self.write_guard.evaluate(provider=provider, operation=normalized_operation, mode=normalized_mode, tenant_id=str(tenant_id), business_id=str(business_id), payload=execution_payload)
         if not write_guard_decision.allowed:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status=write_guard_decision.status, accepted=False, metadata={'provider_write_guard': write_guard_decision.to_metadata(), 'request_envelope': request_base})
-            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=execution_payload)
+            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=public_execution_payload)
         if normalized_mode == 'live' and write_guard_decision.is_write_operation and not queue_job_id:
-            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='rejected_provider_write_requires_queue', accepted=False, metadata={'provider_write_guard': write_guard_decision.to_metadata(), 'request_envelope': request_base}), payload=execution_payload)
+            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='rejected_provider_write_requires_queue', accepted=False, metadata={'provider_write_guard': write_guard_decision.to_metadata(), 'request_envelope': request_base}), payload=public_execution_payload)
         health = ProviderConnectorHealthService(self.secret_vault).probe(provider=provider, tenant_id=tenant_id, business_id=business_id, probe_mode=normalized_mode)
         if health.status in {'misconfigured', 'invalid_secret_shape'}:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='rejected_misconfigured', accepted=False, metadata={'health_probe': {'status': health.status, 'reason': health.reason, 'metadata': dict(health.metadata or {})}, 'provider_write_guard': write_guard_decision.to_metadata()})
-            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=execution_payload)
+            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=public_execution_payload)
         envelope = {**request_base, 'provider_write_guard': write_guard_decision.to_metadata()}
         if normalized_mode != 'live':
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='dry_run_ready', accepted=True, metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata()})
-            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=execution_payload)
+            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=public_execution_payload)
         transport = self.transports.get(provider.provider_key)
         if transport is None:
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_transport_unbound', accepted=False, metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata()})
-            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=execution_payload)
+            return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=public_execution_payload)
         try:
-            transport_payload = {**caller_payload, '_allow_network': True, '_provider_write_approved': bool(write_guard_decision.allowed and write_guard_decision.is_write_operation)}
+            transport_payload = {**caller_payload, '_allow_network': True, '_provider_write_approved': bool(write_guard_decision.allowed and write_guard_decision.is_write_operation), **({'_provider_queue_job_id': queue_job_id} if queue_job_id else {})}
+            if provider.provider_key == 'vk_messaging' and normalized_operation == 'message_send' and queue_job_id:
+                raw_random_id = transport_payload.get('random_id')
+                if raw_random_id in {None, '', 0, '0'}:
+                    transport_payload['random_id'] = _vk_random_id_for_queue_job(queue_job_id)
             response = dict(transport.execute(provider=provider, tenant_id=str(tenant_id), business_id=str(business_id), operation=normalized_operation, payload=transport_payload) or {})
             parsed_response = dict(response.get('parsed_response') or {})
             if not parsed_response and not response.get('_prepared_only'):
@@ -120,7 +137,7 @@ class ProviderLiveSyncRuntime:
             error_view = self.error_taxonomy.classify(provider_key=provider.provider_key, error=exc)
             retry_metadata = self._retry_metadata(provider_key=provider.provider_key, category=error_view.category, retryable=error_view.retryable, attempts=max(1, int(attempts or 1)))
             result = ProviderSyncRunResult(provider_key=provider.provider_key, operation=normalized_operation, mode=normalized_mode, status='live_execution_failed', accepted=False, metadata={'request_envelope': envelope, 'health_probe': {'status': health.status, 'reason': health.reason}, 'provider_write_guard': write_guard_decision.to_metadata(), 'error': {'category': error_view.category, 'code': error_view.code, 'retryable': error_view.retryable, 'message': error_view.message, 'metadata': dict(error_view.metadata)}, **retry_metadata})
-        return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=execution_payload)
+        return self._finalize_result(tenant_id=tenant_id, business_id=business_id, provider=provider, operation=normalized_operation, mode=normalized_mode, result=result, payload=public_execution_payload)
 
 
 __all__ = ['CANON_PROVIDER_LIVE_SYNC_RUNTIME', 'ProviderLiveSyncRuntime', 'ProviderTransportPort']

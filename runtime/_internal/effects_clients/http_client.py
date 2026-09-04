@@ -154,3 +154,41 @@ def http_json(
         return {}
 
     return _run_coroutine_sync(_call_via_transport())
+
+
+def http_multipart_file(
+    url: str,
+    *,
+    path: str,
+    field_name: str,
+    fields: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
+    timeout_s: int = 120,
+    transport: HttpTransport | None = None,
+) -> dict[str, Any]:
+    if not str(url or '').strip():
+        raise ValueError('url_required')
+    active_transport = transport or build_http_transport()
+
+    async def _call_via_transport() -> dict[str, Any]:
+        resp = await active_transport.post_multipart_file(
+            url=str(url),
+            path=str(path),
+            field_name=str(field_name),
+            fields=dict(fields or {}),
+            headers=dict(headers or {}),
+            timeout_s=max(3, min(300, int(timeout_s or 120))),
+        )
+        if isinstance(resp.json, dict):
+            return dict(resp.json)
+        if resp.json is not None:
+            return {'result': resp.json}
+        if resp.text:
+            try:
+                parsed = json.loads(resp.text)
+            except Exception:
+                return {'result': resp.text}
+            return parsed if isinstance(parsed, dict) else {'result': parsed}
+        return {}
+
+    return _run_coroutine_sync(_call_via_transport())

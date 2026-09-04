@@ -140,10 +140,10 @@ class TikTokAdsVendorTransport(_PreparedOnlyTransport):
         return {'method': 'POST' if 'launch' in operation or 'update' in operation or 'pause' in operation else 'GET', 'url_template': str(binding['base_url']) + str(binding['sync_path_family']).format(operation=operation), 'headers': {'Access-Token': '{access_token}'}, 'json_body': dict(payload or {})}
 
 
-def build_provider_vendor_transports(secret_vault: SecretVault | None = None, *, bind_live_network: bool = True) -> dict[str, _PreparedOnlyTransport]:
+def build_provider_vendor_transports(secret_vault: SecretVault | None = None, *, bind_live_network: bool = True, media_preparation: Any | None = None) -> dict[str, _PreparedOnlyTransport]:
     if secret_vault is not None:
         from runtime.business_autonomy.provider_http_live_clients import build_live_http_transports
-        return build_live_http_transports(secret_vault, bind_live_network=bind_live_network)
+        return build_live_http_transports(secret_vault, bind_live_network=bind_live_network, media_preparation=media_preparation)
     return {
         'telegram_bot': TelegramVendorTransport(),
         'whatsapp_cloud': WhatsAppVendorTransport(),

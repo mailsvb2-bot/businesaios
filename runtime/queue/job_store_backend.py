@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
-from runtime.queue.job_contract import JobRecord, JobState
+from runtime.queue.job_contract import JobClaimExpiryPolicy, JobRecord, JobState
 
 CANON_RUNTIME_QUEUE_JOB_STORE_BACKEND = True
 
@@ -86,6 +86,17 @@ class JobStoreBackend(Protocol):
         queue_name: str,
         now: datetime | None = None,
     ) -> int: ...
+
+    def set_claim_expiry_policy(
+        self,
+        *,
+        tenant_id: str,
+        job_id: str,
+        policy: JobClaimExpiryPolicy,
+        owner_id: str | None = None,
+        fencing_token: int | None = None,
+        now: datetime | None = None,
+    ) -> JobRecord: ...
 
     def mark_succeeded(
         self,

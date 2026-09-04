@@ -24,6 +24,7 @@ from runtime.queue.capability_throttle_policy import (
     resolve_capability_key,
 )
 from runtime.queue.job_contract import (
+    JobClaimExpiryPolicy,
     JobDispatchRequest,
     JobLease,
     JobPriority,
@@ -84,6 +85,7 @@ __all__ = [
     "JanitorHandle",
     "JanitorLoopReport",
     "JobDeadLetterStore",
+    "JobClaimExpiryPolicy",
     "JobDispatchRequest",
     "JobDispatcher",
     "JobJanitorLoop",
