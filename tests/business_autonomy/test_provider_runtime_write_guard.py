@@ -171,6 +171,7 @@ def test_native_messaging_live_write_requires_exact_approved_subject() -> None:
         ('discord_messaging', 'discord-biz', {'channel_id': '123', 'text': 'hello'}),
         ('instagram_messaging', 'instagram-biz', {'recipient_id': 'ig-user-1', 'text': 'hello'}),
         ('messenger_messaging', 'messenger-biz', {'recipient_id': 'psid-1', 'text': 'hello'}),
+        ('email_connector', 'email-biz', {'recipient': 'user@example.org', 'subject': 'Subject', 'body': 'hello'}),
     ):
         provider, guard, payload = _approved_native_guard(provider_key=provider_key, business_id=business_id, message_payload=message_payload)
         allowed = guard.evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id=business_id, payload=payload)
@@ -181,7 +182,7 @@ def test_native_messaging_live_write_requires_exact_approved_subject() -> None:
 
 
 def test_native_messaging_live_write_truth_is_guarded_not_publicly_unconditional() -> None:
-    for provider_key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'):
+    for provider_key in ('vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging', 'email_connector'):
         provider = provider_map()[provider_key]
         denied = ProviderRuntimeWriteGuard().evaluate(provider=provider, operation='message_send', mode='live', tenant_id='tenant-a', business_id='biz-a', payload={'text': 'hello'})
         assert denied.allowed is False and denied.reason == 'approval_context_missing'
@@ -203,6 +204,7 @@ def test_guarded_native_approved_write_requires_canonical_queue_before_transport
         ('discord_messaging', 'discord-biz', {'channel_id': '123', 'text': 'hello'}),
         ('instagram_messaging', 'instagram-biz', {'recipient_id': 'ig-user-1', 'text': 'hello'}),
         ('messenger_messaging', 'messenger-biz', {'recipient_id': 'psid-1', 'text': 'hello'}),
+        ('email_connector', 'email-biz', {'recipient': 'user@example.org', 'subject': 'Subject', 'body': 'hello'}),
     ):
         provider, guard, payload = _approved_native_guard(provider_key=provider_key, business_id=business_id, message_payload=message_payload)
         runtime = ProviderLiveSyncRuntime(secret_vault=InMemorySecretVault(), transports={provider_key: object()}, write_guard=guard)
@@ -362,6 +364,164 @@ class _ProviderResultRuntime:
         self.calls.append(kwargs)
         return self.result
 
+
+
+def test_email_pre_send_transport_failure_can_retry_without_crossing_smtp_boundary(tmp_path: Path) -> None:
+    provider, guard, payload = _approved_native_guard(
+        provider_key='email_connector',
+        business_id='email-biz',
+        message_payload={'recipient': 'user@example.org', 'subject': 'Subject', 'body': 'hello'},
+    )
+    runtime = _ProviderResultRuntime(
+        ProviderSyncRunResult(
+            provider_key='email_connector', operation='message_send', mode='live',
+            status='live_execution_failed', accepted=False,
+            metadata={
+                'parsed_response': {
+                    'delivery_state': 'not_attempted', 'error_category': 'transport',
+                    'error_code': 'smtp_pre_send_transport_failure', 'retryable': True,
+                },
+                'retry_policy': {'category': 'transport', 'retryable': True, 'next_delay_seconds': 20, 'max_attempts': 6},
+            },
+        )
+    )
+    store = SqliteJobStore(tmp_path / 'email-pre-send.sqlite3')
+    queue = ProviderQueueExecutionRuntime(
+        InMemorySecretVault(), live_runtime=runtime, store=store, write_guard=guard,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    dispatched = queue.enqueue_sync(
+        provider=provider, tenant_id='tenant-a', business_id='email-biz',
+        operation='message_send', mode='live', payload=payload,
+    )
+    queued = store.get(tenant_id='tenant-a', job_id=dispatched.job_id)
+    assert queued is not None and queued.claim_expiry_policy is JobClaimExpiryPolicy.DEAD_LETTER_AMBIGUOUS
+    report = queue.tick(provider_registry={'email_connector': provider}, tenant_id='tenant-a', job_id=dispatched.job_id)
+    retried = store.get(tenant_id='tenant-a', job_id=dispatched.job_id)
+    assert report['retried'] == 1 and report['dead_lettered'] == 0
+    assert retried is not None and retried.state is JobState.PENDING
+    assert retried.claim_expiry_policy is JobClaimExpiryPolicy.RETRY_IF_BUDGET
+
+
+def test_email_nonretryable_pre_send_failure_is_not_misclassified_as_ambiguous(tmp_path: Path) -> None:
+    provider, guard, payload = _approved_native_guard(
+        provider_key='email_connector',
+        business_id='email-biz',
+        message_payload={'recipient': 'bad-address', 'subject': 'Subject', 'body': 'hello'},
+    )
+    runtime = _ProviderResultRuntime(
+        ProviderSyncRunResult(
+            provider_key='email_connector', operation='message_send', mode='live',
+            status='live_execution_failed', accepted=False,
+            metadata={
+                'parsed_response': {
+                    'delivery_state': 'not_attempted', 'error_category': 'validation',
+                    'error_code': 'email address is invalid', 'retryable': False,
+                },
+                'retry_policy': {'category': 'validation', 'retryable': False, 'next_delay_seconds': None, 'max_attempts': 1},
+            },
+        )
+    )
+    store = SqliteJobStore(tmp_path / 'email-validation.sqlite3')
+    queue = ProviderQueueExecutionRuntime(
+        InMemorySecretVault(), live_runtime=runtime, store=store, write_guard=guard,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    dispatched = queue.enqueue_sync(
+        provider=provider, tenant_id='tenant-a', business_id='email-biz',
+        operation='message_send', mode='live', payload=payload,
+    )
+    report = queue.tick(provider_registry={'email_connector': provider}, tenant_id='tenant-a', job_id=dispatched.job_id)
+    terminal = store.get(tenant_id='tenant-a', job_id=dispatched.job_id)
+    assert report['dead_lettered'] == 1 and report['retried'] == 0
+    assert terminal is not None and terminal.state is JobState.DEAD_LETTER
+    assert 'validation' in str(terminal.last_error).lower()
+    assert 'ambiguous_delivery' not in str(terminal.last_error)
+
+
+def test_email_safe_retry_rearms_ambiguous_claim_policy_before_next_smtp_attempt(tmp_path: Path) -> None:
+    provider, guard, payload = _approved_native_guard(
+        provider_key='email_connector',
+        business_id='email-biz',
+        message_payload={'recipient': 'user@example.org', 'subject': 'Subject', 'body': 'hello'},
+    )
+    store = SqliteJobStore(tmp_path / 'email-rearm.sqlite3')
+
+    class _Runtime:
+        def __init__(self):
+            self.calls = 0
+            self.second_attempt_policy = None
+
+        def run(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return ProviderSyncRunResult(
+                    provider_key='email_connector', operation='message_send', mode='live',
+                    status='live_execution_failed', accepted=False,
+                    metadata={
+                        'parsed_response': {'delivery_state': 'not_attempted', 'error_category': 'transport', 'error_code': 'smtp_pre_send_transport_failure', 'retryable': True},
+                        'retry_policy': {'category': 'transport', 'retryable': True, 'next_delay_seconds': 0, 'max_attempts': 6},
+                    },
+                )
+            current = store.get(tenant_id=kwargs['tenant_id'], job_id=kwargs['_queue_job_id'])
+            self.second_attempt_policy = current.claim_expiry_policy if current is not None else None
+            return ProviderSyncRunResult(
+                provider_key='email_connector', operation='message_send', mode='live',
+                status='live_executed', accepted=True, metadata={},
+            )
+
+    runtime = _Runtime()
+    queue = ProviderQueueExecutionRuntime(
+        InMemorySecretVault(), live_runtime=runtime, store=store, write_guard=guard,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    dispatched = queue.enqueue_sync(
+        provider=provider, tenant_id='tenant-a', business_id='email-biz',
+        operation='message_send', mode='live', payload=payload,
+    )
+    first = queue.tick(provider_registry={'email_connector': provider}, tenant_id='tenant-a', job_id=dispatched.job_id)
+    pending = store.get(tenant_id='tenant-a', job_id=dispatched.job_id)
+    assert first['retried'] == 1 and pending is not None and pending.state is JobState.PENDING
+    assert pending.claim_expiry_policy is JobClaimExpiryPolicy.RETRY_IF_BUDGET
+
+    second = queue.tick(provider_registry={'email_connector': provider}, tenant_id='tenant-a', job_id=dispatched.job_id)
+    assert second['succeeded'] == 1
+    assert runtime.second_attempt_policy is JobClaimExpiryPolicy.DEAD_LETTER_AMBIGUOUS
+
+
+def test_email_ambiguous_smtp_send_is_dead_lettered_and_never_replayed(tmp_path: Path) -> None:
+    provider, guard, payload = _approved_native_guard(
+        provider_key='email_connector',
+        business_id='email-biz',
+        message_payload={'recipient': 'user@example.org', 'subject': 'Subject', 'body': 'hello'},
+    )
+    runtime = _ProviderResultRuntime(
+        ProviderSyncRunResult(
+            provider_key='email_connector', operation='message_send', mode='live',
+            status='live_execution_failed', accepted=False,
+            metadata={
+                'parsed_response': {
+                    'delivery_state': 'unknown', 'error_category': 'ambiguous_delivery',
+                    'error_code': None, 'retryable': False,
+                },
+                'retry_policy': {'category': 'ambiguous_delivery', 'retryable': False, 'next_delay_seconds': None, 'max_attempts': 1},
+            },
+        )
+    )
+    store = SqliteJobStore(tmp_path / 'email-ambiguous.sqlite3')
+    queue = ProviderQueueExecutionRuntime(
+        InMemorySecretVault(), live_runtime=runtime, store=store, write_guard=guard,
+        idempotency_store=InMemoryIdempotencyStore(),
+    )
+    dispatched = queue.enqueue_sync(
+        provider=provider, tenant_id='tenant-a', business_id='email-biz',
+        operation='message_send', mode='live', payload=payload,
+    )
+    report = queue.tick(provider_registry={'email_connector': provider}, tenant_id='tenant-a', job_id=dispatched.job_id)
+    terminal = store.get(tenant_id='tenant-a', job_id=dispatched.job_id)
+    assert report['dead_lettered'] == 1 and report['retried'] == 0
+    assert terminal is not None and terminal.state is JobState.DEAD_LETTER
+    assert 'ambiguous_delivery' in str(terminal.last_error)
 
 def test_max_guarded_429_retries_same_canonical_job_without_relaxing_claim_expiry(tmp_path: Path) -> None:
     provider, guard, payload = _approved_native_guard(

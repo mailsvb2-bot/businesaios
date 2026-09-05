@@ -13,6 +13,7 @@ class EffectsCommsPort(Protocol):
         correlation_id: str,
         user_id: str,
         text: str,
+        subject: str | None = None,
         tenant_id: str = "",
         business_id: str = "",
         reply_markup: Optional[Dict[str, Any]] = None,

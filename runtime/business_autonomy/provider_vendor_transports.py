@@ -143,7 +143,10 @@ class TikTokAdsVendorTransport(_PreparedOnlyTransport):
 def build_provider_vendor_transports(secret_vault: SecretVault | None = None, *, bind_live_network: bool = True, media_preparation: Any | None = None) -> dict[str, _PreparedOnlyTransport]:
     if secret_vault is not None:
         from runtime.business_autonomy.provider_http_live_clients import build_live_http_transports
-        return build_live_http_transports(secret_vault, bind_live_network=bind_live_network, media_preparation=media_preparation)
+        from runtime.business_autonomy.provider_smtp_live_client import ProviderSmtpLiveTransport
+        transports = build_live_http_transports(secret_vault, bind_live_network=bind_live_network, media_preparation=media_preparation)
+        transports['email_connector'] = ProviderSmtpLiveTransport(secret_vault=secret_vault, bind_live_network=bind_live_network)
+        return transports
     return {
         'telegram_bot': TelegramVendorTransport(),
         'whatsapp_cloud': WhatsAppVendorTransport(),

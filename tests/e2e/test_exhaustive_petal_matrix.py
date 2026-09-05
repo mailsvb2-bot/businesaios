@@ -76,7 +76,7 @@ def test_every_declared_action_schema_accepts_only_its_contract() -> None:
             with pytest.raises(ValueError):
                 schema.validate(payload)  # type: ignore[arg-type]
             cases += 1
-    assert cases == 883
+    assert cases == 885
 
 
 def test_every_runtime_handler_and_compatibility_import_door_resolves() -> None:

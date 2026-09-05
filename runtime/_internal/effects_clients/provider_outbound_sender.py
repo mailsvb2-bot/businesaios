@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import smtplib
+import ssl
 from collections.abc import Mapping
 from contextlib import suppress
 from email.message import EmailMessage
@@ -388,14 +390,16 @@ def _send_smtp(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
     if transport_guard_blocks(msg.transport_guard, msg):
         return _guard_blocked_result(cfg=cfg, msg=msg)
     try:
+        starttls = not secure and env_bool(f"{cfg.env_prefix}_STARTTLS", True)
+        tls_context = ssl.create_default_context() if secure or starttls else None
         if secure:
-            client = smtplib.SMTP_SSL(host, port, timeout=timeout_s)
+            client = smtplib.SMTP_SSL(host, port, timeout=timeout_s, context=tls_context)
         else:
             client = smtplib.SMTP(host, port, timeout=timeout_s)
         try:
             client.ehlo()
-            if not secure and env_bool(f"{cfg.env_prefix}_STARTTLS", True):
-                client.starttls()
+            if starttls:
+                client.starttls(context=tls_context)
                 client.ehlo()
             if username and password:
                 client.login(username, password)
@@ -432,6 +436,112 @@ def _send_smtp(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
     }
 
 
+
+class SmtpExplicitError(RuntimeError):
+    def __init__(self, code: str, *, delivery_state: str, retryable: bool = False) -> None:
+        super().__init__(str(code or "smtp_error")[:160])
+        self.code = str(code or "smtp_error")[:160]
+        self.delivery_state = str(delivery_state or "unknown")
+        self.retryable = bool(retryable)
+
+
+def _smtp_connect_explicit(
+    *, host: str, port: int, security: str, username: str, password: str, timeout_s: float,
+):
+    if bool(username) != bool(password):
+        raise SmtpExplicitError("smtp_credentials_incomplete", delivery_state="not_attempted")
+    try:
+        tls_context = ssl.create_default_context()
+        if security == "ssl":
+            client = smtplib.SMTP_SSL(host, port, timeout=timeout_s, context=tls_context)
+        else:
+            client = smtplib.SMTP(host, port, timeout=timeout_s)
+            client.ehlo()
+            client.starttls(context=tls_context)
+            client.ehlo()
+        if username:
+            client.login(username, password)
+        return client
+    except smtplib.SMTPAuthenticationError as exc:
+        raise SmtpExplicitError("smtp_authentication_failed", delivery_state="rejected") from exc
+    except SmtpExplicitError:
+        raise
+    except (OSError, smtplib.SMTPException) as exc:
+        raise SmtpExplicitError(
+            "smtp_pre_send_transport_failure", delivery_state="not_attempted", retryable=True
+        ) from exc
+
+
+def smtp_probe_explicit(
+    *, host: str, port: int, security: str, username: str, password: str, timeout_s: float,
+) -> dict[str, Any]:
+    client = _smtp_connect_explicit(
+        host=host, port=port, security=security, username=username, password=password, timeout_s=timeout_s
+    )
+    try:
+        code, _response = client.noop()
+        if int(code) >= 400:
+            raise SmtpExplicitError("smtp_probe_rejected", delivery_state="rejected")
+        return {"ok": True, "smtp_status": int(code)}
+    except SmtpExplicitError:
+        raise
+    except (OSError, smtplib.SMTPException) as exc:
+        raise SmtpExplicitError("smtp_probe_failed", delivery_state="not_attempted", retryable=True) from exc
+    finally:
+        with suppress(Exception):
+            client.quit()
+
+
+def smtp_send_explicit(
+    *,
+    host: str,
+    port: int,
+    security: str,
+    username: str,
+    password: str,
+    sender: str,
+    recipient: str,
+    subject: str,
+    body: str,
+    idempotency_key: str,
+    timeout_s: float,
+) -> dict[str, Any]:
+    digest = hashlib.sha256(str(idempotency_key).encode("utf-8")).hexdigest()
+    domain = sender.rsplit("@", 1)[-1] if "@" in sender else "localhost"
+    message_id = f"<baios-{digest[:40]}@{domain}>"
+    message = EmailMessage()
+    message["From"] = sender
+    message["To"] = recipient
+    message["Subject"] = subject
+    message["Message-ID"] = message_id
+    message["Auto-Submitted"] = "auto-generated"
+    message.set_content(body)
+    client = _smtp_connect_explicit(
+        host=host, port=port, security=security, username=username, password=password, timeout_s=timeout_s
+    )
+    send_started = False
+    try:
+        send_started = True
+        refused = client.send_message(message)
+        if refused:
+            raise SmtpExplicitError("smtp_recipient_rejected", delivery_state="rejected")
+    except SmtpExplicitError:
+        raise
+    except smtplib.SMTPRecipientsRefused as exc:
+        raise SmtpExplicitError("smtp_recipient_rejected", delivery_state="rejected") from exc
+    except smtplib.SMTPAuthenticationError as exc:
+        raise SmtpExplicitError("smtp_authentication_failed", delivery_state="rejected") from exc
+    except (OSError, smtplib.SMTPException) as exc:
+        raise SmtpExplicitError(
+            "smtp_send_outcome_ambiguous" if send_started else "smtp_pre_send_transport_failure",
+            delivery_state="unknown" if send_started else "not_attempted",
+            retryable=not send_started,
+        ) from exc
+    finally:
+        with suppress(Exception):
+            client.quit()
+    return {"ok": True, "accepted": True, "message_id": message_id, "delivery_state": "accepted"}
+
 def send_outbound(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
     if transport_guard_blocks(msg.transport_guard, msg):
         return _guard_blocked_result(cfg=cfg, msg=msg)
@@ -464,5 +574,8 @@ __all__ = [
     "_smtp_coordinates",
     "_safe_header",
     "_send_smtp",
+    "SmtpExplicitError",
+    "smtp_probe_explicit",
+    "smtp_send_explicit",
     "send_outbound",
 ]

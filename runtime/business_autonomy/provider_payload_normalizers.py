@@ -92,6 +92,12 @@ class ProviderPayloadNormalizers:
             return {'chat_id': str(raw.get('chat_id') or '{chat_id}'), 'text': str(raw.get('text') or raw.get('message') or '')} if operation == 'communications_write' else raw
         if key == 'whatsapp_cloud':
             return {'messaging_product': raw.get('messaging_product') or 'whatsapp', 'to': str(raw.get('to') or '{recipient_phone}'), 'type': str(raw.get('type') or 'text'), 'text': dict(raw.get('text') or {'body': str(raw.get('body') or raw.get('message') or '')}), **{k: v for k, v in raw.items() if k not in {'messaging_product', 'to', 'type', 'text', 'body', 'message'}}}
+        if operation in {'communications_write', 'message_send'} and key == 'email_connector':
+            return {
+                'recipient': str(raw.get('recipient') or raw.get('email') or raw.get('to') or raw.get('user_id') or ''),
+                'subject': str(raw.get('subject') or 'BusinessAIOS notification'),
+                'body': str(raw.get('body') or raw.get('text') or raw.get('message') or ''),
+            }
         if operation in {'communications_write', 'message_send'} and key in {'line_messaging', 'viber_messaging'}:
             return {'to': str(raw.get('to') or raw.get('user_id') or '{recipient_id}'), 'messages': [{'type': 'text', 'text': str(raw.get('text') or raw.get('message') or '')}]} if key == 'line_messaging' else {'receiver': str(raw.get('receiver') or raw.get('user_id') or '{recipient_id}'), 'type': 'text', 'sender': {'name': str(raw.get('sender_name') or '{sender_name}')}, 'text': str(raw.get('text') or raw.get('message') or '')}
         if operation in {'communications_write', 'message_send'} and key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging'}:

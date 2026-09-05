@@ -87,12 +87,15 @@ class _SMTP:
         port: int,
         *,
         timeout: float,
+        context=None,
         refused: dict[str, object] | None = None,
         fail_quit: bool = False,
     ) -> None:
         self.host = host
         self.port = port
         self.timeout = timeout
+        self.context = context
+        self.starttls_context = None
         self.refused = dict(refused or {})
         self.fail_quit = fail_quit
         self.calls: list[tuple[str, tuple[object, ...]]] = []
@@ -102,7 +105,8 @@ class _SMTP:
     def ehlo(self) -> None:
         self.calls.append(("ehlo", ()))
 
-    def starttls(self) -> None:
+    def starttls(self, *, context=None) -> None:
+        self.starttls_context = context
         self.calls.append(("starttls", ()))
 
     def login(self, username: str, password: str) -> None:

@@ -51,7 +51,7 @@ def test_runtime_write_operations_require_explicit_guard_contract_for_write_supp
     for provider_key in providers_with_runtime_writes:
         row = truth[provider_key]
         assert row.write_capabilities
-        assert row.write_supported is (provider_key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'})
+        assert row.write_supported is (provider_key in {'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging', 'email_connector'})
 
 
 def test_ads_are_read_only_or_contract_not_live_write_ready() -> None:
@@ -75,7 +75,7 @@ def test_telegram_bot_is_not_telegram_ads() -> None:
 def test_matrix_summary_is_admin_safe_guarded_write_pilot() -> None:
     summary = summarize_provider_truth()
     assert summary["total"] == len(PROVIDERS)
-    assert summary["write_supported"] == 8
+    assert summary["write_supported"] == 9
     assert summary["live_ready"] == 0
     assert "guarded_write" in summary["live_ready_policy"]
     assert summary["admin_visible"] == len(PROVIDERS)

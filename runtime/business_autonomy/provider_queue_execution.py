@@ -124,7 +124,7 @@ class ProviderQueueExecutionRuntime:
             tenant_id=str(tenant_id), job_id=job_id, queue_name=str(queue_name), job_type=_PROVIDER_JOB_TYPE, payload=normalized_payload,
             dedupe_key=f"{provider.provider_key}-{normalized_operation}-{execution_identity}",
             not_before=None if pacing is None else pacing.scheduled_at,
-            max_attempts=(6 if provider.provider_key in {'vk_messaging', 'max_messaging'} else 1) if guarded_message_send else (6 if provider.provider_key in {'vk_messaging', 'max_messaging'} else 8),
+            max_attempts=(6 if provider.provider_key in {'vk_messaging', 'max_messaging', 'email_connector'} else 1) if guarded_message_send else (6 if provider.provider_key in {'vk_messaging', 'max_messaging'} else 8),
             claim_expiry_policy=JobClaimExpiryPolicy.RETRY_IF_BUDGET if (provider.provider_key == 'vk_messaging' or max_media is not None) else (JobClaimExpiryPolicy.DEAD_LETTER_AMBIGUOUS if guarded_message_send else JobClaimExpiryPolicy.RETRY_IF_BUDGET),
             tags=(f"provider:{provider.provider_key}", f"business:{business_id}"),
         )
@@ -173,6 +173,14 @@ class ProviderQueueExecutionRuntime:
             operation = str(payload.get('operation') or '')
             mode = str(payload.get('mode') or 'live')
             source_payload = dict(payload.get('payload') or {})
+            truth = provider_truth_map().get(provider_key)
+            guarded_message_send = (
+                str(payload.get('mode') or '').strip().lower() == 'live'
+                and str(payload.get('operation') or '') == 'message_send'
+                and bool(truth and truth.write_supported and truth.approval_required)
+            )
+            if guarded_message_send and provider_key == 'email_connector' and job.lease is not None and job.claim_expiry_policy is not JobClaimExpiryPolicy.DEAD_LETTER_AMBIGUOUS:
+                job = self.store.set_claim_expiry_policy(tenant_id=job.tenant_id, job_id=job.job_id, policy=JobClaimExpiryPolicy.DEAD_LETTER_AMBIGUOUS, owner_id=job.lease.owner_id, fencing_token=job.lease.fencing_token)
             media_pre_final = False
             if provider_key == 'max_messaging' and operation == 'message_send' and self.media_preparation is not None:
                 descriptor = _native_audio_descriptor(source_payload, provider_key=provider_key)
@@ -187,15 +195,9 @@ class ProviderQueueExecutionRuntime:
             result: ProviderSyncRunResult = runtime.run(provider=provider, tenant_id=job.tenant_id, business_id=business_id, operation=operation, mode=mode, payload=source_payload, attempts=max(1, int(job.attempts)), _queue_job_id=job.job_id)
             ok, retry = bool(result.accepted), dict(result.metadata.get('retry_policy') or {})
             retryable, category = bool(retry.get('retryable')), str(retry.get('category') or 'provider_runtime_error')
-            truth = provider_truth_map().get(provider_key)
-            guarded_message_send = (
-                str(payload.get('mode') or '').strip().lower() == 'live'
-                and str(payload.get('operation') or '') == 'message_send'
-                and bool(truth and truth.write_supported and truth.approval_required)
-            )
             if guarded_message_send:
                 retryable = retryable and self._guarded_send_retry_is_safe(provider_key=provider_key, result=result, media_pre_final=media_pre_final)
-                if not ok and retryable and provider_key == 'max_messaging' and job.lease is not None and job.claim_expiry_policy is not JobClaimExpiryPolicy.RETRY_IF_BUDGET:
+                if not ok and retryable and provider_key in {'max_messaging', 'email_connector'} and job.lease is not None and job.claim_expiry_policy is not JobClaimExpiryPolicy.RETRY_IF_BUDGET:
                     job = self.store.set_claim_expiry_policy(
                         tenant_id=job.tenant_id,
                         job_id=job.job_id,
@@ -214,6 +216,9 @@ class ProviderQueueExecutionRuntime:
             # VK messages.send is provider-idempotent when the canonical runtime
             # supplies a stable non-zero random_id for the durable queue job.
             return True
+        if provider_key == 'email_connector':
+            parsed = dict(result.metadata.get('parsed_response') or {})
+            return str(parsed.get('delivery_state') or '') == 'not_attempted' and bool(parsed.get('retryable'))
         if provider_key != 'max_messaging':
             return False
         if media_pre_final:
@@ -233,6 +238,6 @@ class ProviderQueueExecutionRuntime:
         if bool(result.accepted):
             return False
         parsed = dict(result.metadata.get('parsed_response') or {})
-        return not (parsed and str(parsed.get('delivery_state') or '') == 'rejected' and not bool(parsed.get('retryable')))
+        return not (parsed and str(parsed.get('delivery_state') or '') in {'rejected', 'not_attempted'} and not bool(parsed.get('retryable')))
 
 __all__ = ['CANON_PROVIDER_QUEUE_EXECUTION', 'ProviderQueueDispatchResult', 'ProviderQueueExecutionRuntime']

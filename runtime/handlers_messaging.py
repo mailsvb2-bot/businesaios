@@ -65,6 +65,7 @@ def _build_send_kwargs(payload: dict, env) -> dict:
         "business_id": str(payload.get("business_id") or "").strip(),
         "user_id": str(payload["user_id"]),
         "text": str(payload["text"]),
+        "subject": None if payload.get("subject") is None else str(payload.get("subject")),
         "channel": channel,
         "priority": priority,
         "critical": critical,
@@ -91,7 +92,7 @@ def handle_send_marketing_offer(payload, effects, env, *, composer):
     last_user_text = str(p.get("last_user_text") or "")
     channel = normalize_channel(str(p.get("channel") or "telegram"))
 
-    text = None
+    text = str(p.get("fallback_text") or "")
     if composer is not None:
         try:
             from runtime.marketing import (
@@ -127,8 +128,10 @@ def handle_send_marketing_offer(payload, effects, env, *, composer):
     return handle_send_message(
         {
             "tenant_id": tenant_id,
+            "business_id": str(p.get("business_id") or "").strip(),
             "user_id": user_id,
             "text": text,
+            "subject": p.get("subject"),
             "channel": channel,
             "kind": "marketing",
             "priority": p.get("priority", "low"),

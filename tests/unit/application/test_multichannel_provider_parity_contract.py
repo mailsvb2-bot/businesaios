@@ -109,7 +109,7 @@ def test_marketplace_exposes_channel_specific_connection_modes() -> None:
     marketplace = {row['provider_key']: row for row in public_integration_marketplace()}
     assert marketplace['telegram_bot']['connection_mode'] == 'provider_native_api'
     assert marketplace['whatsapp_cloud']['connection_mode'] == 'provider_webhook_and_cloud_api'
-    assert marketplace['email_connector']['connection_mode'] == 'mailbox_or_provider_api'
+    assert marketplace['email_connector']['connection_mode'] == 'smtp_outbound'
     assert marketplace['sms_connector']['connection_mode'] == 'sms_gateway'
     assert marketplace['generic_website']['connection_mode'] == 'web_ingress'
 
