@@ -84,9 +84,13 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   expect(await hasNoHorizontalOverflow(page)).toBe(true);
   expect(await persistentBrowserStateContains(page, ownerKey)).toBe(false);
 
-  const resumeCookie = (await page.context().cookies()).find((cookie) => cookie.name === "businessaios_owner_resume");
+  const cookiesAfterCreate = await page.context().cookies();
+  const resumeCookie = cookiesAfterCreate.find((cookie) => cookie.name === "businessaios_owner_resume");
+  const accountCookie = cookiesAfterCreate.find((cookie) => cookie.name === "businessaios_owner_account");
   expect(Boolean(resumeCookie?.httpOnly)).toBe(true);
+  expect(Boolean(accountCookie?.httpOnly)).toBe(true);
   expect(String(resumeCookie?.value || "")).not.toBe(ownerKey);
+  expect(String(accountCookie?.value || "")).not.toBe(ownerKey);
 
   const resumedStatusPromise = page.waitForResponse((response) => response.url().includes(`/api/public-site/cta/${cta.intake_id}`) && response.request().method() === "GET");
   const resumedWorkspacePromise = page.waitForResponse((response) => response.url().includes("/api/business-workspace/providers") && response.request().method() === "GET");
@@ -111,4 +115,42 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   expect(await hasNoHorizontalOverflow(page)).toBe(true);
   expect(await persistentBrowserStateContains(page, ownerKey)).toBe(false);
   expect(await persistentBrowserStateContains(page, resumedOwnerKey)).toBe(false);
+
+  await page.getByRole("button", { name: "Добавить бизнес" }).click();
+  await expect(page.getByRole("heading", { name: /Подключите бизнес/ })).toBeVisible();
+  const secondBusinessName = `${businessName} · Second`;
+  await page.getByLabel("Название бизнеса").fill(secondBusinessName);
+  await page.getByLabel("Email владельца").fill(email);
+  await page.getByLabel("Сфера").fill("commerce");
+  await page.getByLabel("Город").fill("Tallinn");
+  await page.getByRole("button", { name: /Продолжить/ }).click();
+  await page.getByRole("button", { name: /Сильнее продажи/ }).click();
+  await page.getByRole("button", { name: /Продолжить/ }).click();
+  const secondIntegration = page.locator("button.integration-card:not([disabled])").first();
+  await secondIntegration.click();
+  await page.getByRole("button", { name: /Продолжить/ }).click();
+  await page.getByRole("button", { name: /Советник/ }).click();
+  const secondCtaPromise = page.waitForResponse((response) => response.url().includes("/api/public-site/cta/start") && response.request().method() === "POST");
+  await page.getByRole("button", { name: /Создать мой BusinessAIOS/ }).click();
+  const secondCtaResponse = await secondCtaPromise;
+  expect(secondCtaResponse.status()).toBe(200);
+  const secondCta = await secondCtaResponse.json();
+  expect(secondCta.user_id).toBe(cta.user_id);
+  expect(secondCta.tenant_id).not.toBe(cta.tenant_id);
+  expect(secondCta.business_id).not.toBe(cta.business_id);
+  expect(secondCta.owner_businesses).toHaveLength(2);
+
+  const switcher = page.getByLabel("Бизнес");
+  await expect(switcher).toBeVisible();
+  await expect(switcher.locator("option")).toHaveCount(2);
+  const switchStatusPromise = page.waitForResponse((response) => response.url().includes(`/api/public-site/cta/${cta.intake_id}`) && response.request().method() === "GET");
+  await switcher.selectOption(cta.intake_id);
+  expect((await switchStatusPromise).status()).toBe(200);
+  await expect(page.getByRole("heading", { name: businessName, level: 1 })).toBeVisible();
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Мои бизнесы" })).toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(businessName) })).toBeVisible();
+  await expect(page.getByRole("button", { name: new RegExp(secondBusinessName) })).toBeVisible();
+  expect(await hasNoHorizontalOverflow(page)).toBe(true);
 });

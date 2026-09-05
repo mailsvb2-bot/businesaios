@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from fastapi import Request, Response
 
-from adapters.api.fastapi.public_site_routes import _OWNER_RESUME_COOKIE, _set_owner_resume_cookie
+from adapters.api.fastapi.public_site_routes import (
+    _OWNER_ACCOUNT_COOKIE,
+    _OWNER_RESUME_COOKIE,
+    _set_owner_account_cookie,
+    _set_owner_resume_cookie,
+)
 
 
 def _request(*, scheme: str) -> Request:
@@ -43,3 +48,16 @@ def test_owner_resume_cookie_allows_local_http_browser_proof_without_weakening_p
     assert 'HttpOnly' in header
     assert 'SameSite=strict' in header
     assert 'Secure' not in header
+
+
+def test_owner_account_cookie_is_distinct_http_only_and_strict() -> None:
+    response = Response()
+    _set_owner_account_cookie(response=response, request=_request(scheme='https'), raw_key='account.secret')
+
+    header = response.headers['set-cookie']
+    assert header.startswith(f'{_OWNER_ACCOUNT_COOKIE}=account.secret;')
+    assert _OWNER_ACCOUNT_COOKIE != _OWNER_RESUME_COOKIE
+    assert 'HttpOnly' in header
+    assert 'SameSite=strict' in header
+    assert 'Secure' in header
+    assert 'Path=/' in header

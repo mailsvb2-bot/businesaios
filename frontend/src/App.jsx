@@ -143,7 +143,7 @@ function isSuccessfulLiveEvidence(row) {
     && String(row?.status || "").toLowerCase() === "live_executed";
 }
 
-function Workspace({ data, apiBase, onRestart, onRetryAccess }) {
+function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwitchBusiness }) {
   const profile = data.business_profile || {};
   const progress = data.onboarding_progress || {};
   const preview = data.first_value_preview || {};
@@ -295,7 +295,11 @@ function Workspace({ data, apiBase, onRestart, onRetryAccess }) {
     <main className="app-shell">
       <header className="topbar">
         <a className="brand" href="/"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></a>
-        <div className="topbar-actions"><span className="safe-chip"><span className="safe-chip-full">Безопасный режим · чтение данных</span><span className="safe-chip-short">Режим чтения</span></span><button className="ghost small" onClick={onRestart}>Новый бизнес</button></div>
+        <div className="topbar-actions">
+          <span className="safe-chip"><span className="safe-chip-full">Безопасный режим · чтение данных</span><span className="safe-chip-short">Режим чтения</span></span>
+          {businesses.length > 1 ? <label className="business-switcher"><span>Бизнес</span><select value={data.intake_id} onChange={(event) => onSwitchBusiness(event.target.value)}>{businesses.map((item) => <option value={item.intake_id} key={item.intake_id}>{item.name || "Бизнес"}</option>)}</select></label> : null}
+          <button className="ghost small add-business-button" onClick={onRestart}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button>
+        </div>
       </header>
 
       <section className="workspace-hero">
@@ -415,6 +419,20 @@ function Workspace({ data, apiBase, onRestart, onRetryAccess }) {
   );
 }
 
+function BusinessChooser({ businesses, onOpen, onAdd }) {
+  return (
+    <main className="onboarding-shell account-home">
+      <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></div><button type="button" className="primary small add-business-button" onClick={onAdd}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button></header>
+      <section className="account-businesses panel">
+        <div className="section-heading"><p className="eyebrow">Ваш аккаунт</p><h1>Мои бизнесы</h1><p>Выберите бизнес. Данные, интеграции и действия каждого бизнеса остаются в его отдельном защищённом контуре.</p></div>
+        <div className="business-choice-grid">
+          {businesses.map((item) => <button type="button" className="business-choice-card" onClick={() => onOpen(item.intake_id)} key={item.intake_id}><strong>{item.name || "Бизнес"}</strong><span>{[item.industry, item.city].filter(Boolean).join(" · ") || "Открыть кабинет"}</span><small>Открыть →</small></button>)}
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export function App() {
   const [apiBase] = useState(DEFAULT_API);
   const [step, setStep] = useState(0);
@@ -427,17 +445,23 @@ export function App() {
   const availableMarketplace = useMemo(() => marketplace.filter((item) => item.selectable), [marketplace]);
   const roadmapMarketplace = useMemo(() => marketplace.filter((item) => !item.selectable), [marketplace]);
   const [result, setResult] = useState(null);
+  const [ownerBusinesses, setOwnerBusinesses] = useState([]);
+  const [ownerAccountChecked, setOwnerAccountChecked] = useState(false);
+  const [creatingNewBusiness, setCreatingNewBusiness] = useState(false);
   const [form, setForm] = useState(() => ({ ...INITIAL_FORM }));
 
   const endpoints = useMemo(() => {
     const base = apiBase.replace(/\/$/, "");
-    return { integrations: `${base}/public-site/integrations`, ctaStart: `${base}/public-site/cta/start`, ctaStatus: (id) => `${base}/public-site/cta/${encodeURIComponent(id)}` };
+    return { integrations: `${base}/public-site/integrations`, ctaStart: `${base}/public-site/cta/start`, ctaStatus: (id) => `${base}/public-site/cta/${encodeURIComponent(id)}`, ownerBusinesses: `${base}/public-site/owner/businesses` };
   }, [apiBase]);
 
   const openSavedWorkspace = useCallback(async (intakeId) => {
     const payload = await getJson(endpoints.ctaStatus(intakeId));
     if (!payload?.ok) throw new Error("workspace_not_found");
     setResult(payload);
+    setOwnerBusinesses(Array.isArray(payload.owner_businesses) ? payload.owner_businesses : []);
+    setOwnerAccountChecked(true);
+    setCreatingNewBusiness(false);
     setError("");
     return payload;
   }, [endpoints]);
@@ -445,6 +469,34 @@ export function App() {
   const restoreWorkspaceAccess = useCallback(async (intakeId) => {
     const payload = await openSavedWorkspace(intakeId);
     return Boolean(payload?.owner_session?.api_key);
+  }, [openSavedWorkspace]);
+
+  const loadOwnerBusinesses = useCallback(async () => {
+    try {
+      const payload = await getJson(endpoints.ownerBusinesses);
+      const rows = Array.isArray(payload.businesses) ? payload.businesses : [];
+      setOwnerBusinesses(rows);
+      return rows;
+    } catch {
+      setOwnerBusinesses([]);
+      return [];
+    } finally {
+      setOwnerAccountChecked(true);
+    }
+  }, [endpoints.ownerBusinesses]);
+
+  const switchBusiness = useCallback(async (intakeId) => {
+    if (!intakeId) return;
+    setLoading(true);
+    setError("");
+    try {
+      await openSavedWorkspace(intakeId);
+      window.history.replaceState(null, "", `?intake_id=${encodeURIComponent(intakeId)}`);
+    } catch {
+      setError("Не удалось открыть выбранный бизнес. Проверьте соединение и повторите попытку.");
+    } finally {
+      setLoading(false);
+    }
   }, [openSavedWorkspace]);
 
   const loadMarketplace = useCallback(async () => {
@@ -467,14 +519,17 @@ export function App() {
 
   useEffect(() => {
     const intakeId = initialIntakeId();
-    if (!intakeId) return;
+    if (!intakeId) {
+      void loadOwnerBusinesses();
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     openSavedWorkspace(intakeId)
       .catch(() => { if (!cancelled) setError("Не удалось открыть сохранённый кабинет бизнеса."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [openSavedWorkspace]);
+  }, [loadOwnerBusinesses, openSavedWorkspace]);
 
   const savedIntakeId = initialIntakeId();
   const retrySavedWorkspace = async () => {
@@ -509,6 +564,9 @@ export function App() {
     try {
       const payload = await postJson(endpoints.ctaStart, { ...form, selected_providers: selectedProviders, intent: form.goal, source: "businessaios_product_onboarding", requested_surface: "business_workspace" });
       setResult(payload);
+      setOwnerBusinesses(Array.isArray(payload.owner_businesses) ? payload.owner_businesses : []);
+      setOwnerAccountChecked(true);
+      setCreatingNewBusiness(false);
       if (payload.intake_id) window.history.replaceState(null, "", `?intake_id=${encodeURIComponent(payload.intake_id)}`);
     } catch {
       setError("Не удалось создать кабинет. Проверьте соединение и повторите попытку.");
@@ -519,6 +577,7 @@ export function App() {
 
   const restart = () => {
     window.history.replaceState(null, "", window.location.pathname);
+    setCreatingNewBusiness(true);
     setResult(null);
     setStep(0);
     setSelectedProviders([]);
@@ -526,7 +585,9 @@ export function App() {
     setError("");
   };
 
-  if (result) return <Workspace data={result} apiBase={apiBase} onRestart={restart} onRetryAccess={restoreWorkspaceAccess} />;
+  if (result) return <Workspace data={result} apiBase={apiBase} businesses={ownerBusinesses} onRestart={restart} onRetryAccess={restoreWorkspaceAccess} onSwitchBusiness={switchBusiness} />;
+  if (!creatingNewBusiness && !initialIntakeId() && !ownerAccountChecked) return <main className="onboarding-shell"><div className="account-loading" role="status">Открываем ваши бизнесы…</div></main>;
+  if (!creatingNewBusiness && ownerBusinesses.length) return <BusinessChooser businesses={ownerBusinesses} onOpen={switchBusiness} onAdd={restart} />;
 
   return (
     <main className="onboarding-shell">

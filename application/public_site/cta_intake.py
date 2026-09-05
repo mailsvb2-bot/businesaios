@@ -39,6 +39,7 @@ class CTASubmitResult:
     tenant_id: str = ""
     business_id: str = ""
     user_id: str = ""
+    owner_account_id: str = ""
     onboarding_status: str = "advisory_intake_created"
     next_actions: tuple[dict[str, object], ...] = ()
     user_functionality: dict[str, object] | None = None
@@ -60,6 +61,7 @@ class CTAIntakeStatus:
     tenant_id: str = ""
     business_id: str = ""
     user_id: str = ""
+    owner_account_id: str = ""
     onboarding_status: str = "not_found"
     next_actions: tuple[dict[str, object], ...] = ()
     user_functionality: dict[str, object] | None = None
@@ -98,15 +100,16 @@ class CTALandingIntakeService:
     def __init__(self, *, storage_path: str = "runtime_state/pilot_applications.jsonl", app_base_url: str = "https://app.businessaios.ru") -> None:
         self._storage_path, self._app_base_url = Path(storage_path), app_base_url.rstrip("/")
 
-    def submit(self, *, payload: dict[str, object]) -> CTASubmitResult:
+    def submit(self, *, payload: dict[str, object], owner_account_id: str | None = None, owner_subject: str | None = None) -> CTASubmitResult:
         data, intake_id = dict(payload or {}), f"cta-{uuid4().hex[:16]}"
         profile, selected, autonomy = _business_profile(data), _selected_providers(data), _autonomy_mode(data)
         tenant_id = _stable_id("tenant", intake_id)
         business_id = _stable_id("business", intake_id)
-        user_id = _stable_id("user", intake_id)
+        account_id = str(owner_account_id or "").strip() or _stable_id("owner", intake_id)
+        user_id = str(owner_subject or "").strip() or _stable_id("user", intake_id)
         result = CTASubmitResult(
             intake_id=intake_id, created_at=datetime.now(UTC).isoformat(), app_url=f"{self._app_base_url}/?intake_id={intake_id}",
-            tenant_id=tenant_id, business_id=business_id, user_id=user_id, business_profile=profile,
+            tenant_id=tenant_id, business_id=business_id, user_id=user_id, owner_account_id=account_id, business_profile=profile,
             selected_providers=selected, integration_plan=_integration_plan(selected), autonomy_mode=autonomy,
             first_value_preview=_first_value(profile, selected), onboarding_progress=_progress(profile, selected, autonomy),
             next_actions=_next_actions(intake_id, tenant_id, business_id, selected),
@@ -154,6 +157,41 @@ class CTALandingIntakeService:
                 rows.append(_admin_row(row))
         return tuple(rows)
 
+    def list_owner_businesses(self, *, owner_account_id: str, limit: int = 100) -> tuple[dict[str, object], ...]:
+        account_id = str(owner_account_id or "").strip()
+        if not account_id or not self._storage_path.exists():
+            return ()
+        rows, seen = [], set()
+        for line in reversed(self._storage_path.read_text(encoding="utf-8").splitlines()):
+            if len(rows) >= max(1, min(int(limit or 100), 200)):
+                break
+            try:
+                row = json.loads(line) if line.strip() else None
+            except Exception:
+                continue
+            if not isinstance(row, dict):
+                continue
+            intake_id = str(row.get("intake_id") or "").strip()
+            if not intake_id or intake_id in seen:
+                continue
+            seen.add(intake_id)
+            if _row_owner_account_id(row) != account_id:
+                continue
+            profile = dict(row.get("business_profile") or {}) if isinstance(row.get("business_profile"), dict) else _business_profile(dict(row.get("payload") or {}))
+            rows.append({
+                "intake_id": intake_id, "tenant_id": str(row.get("tenant_id") or ""), "business_id": str(row.get("business_id") or ""),
+                "name": str(profile.get("name") or "Бизнес"), "industry": str(profile.get("industry") or ""), "city": str(profile.get("city") or ""),
+                "website": str(profile.get("website") or ""), "goal": str(profile.get("goal") or "growth"),
+                "autonomy_mode": str(row.get("autonomy_mode") or "advisor"), "created_at": str(row.get("created_at") or ""),
+                "onboarding_status": str(row.get("onboarding_status") or "advisory_intake_created"),
+            })
+        return tuple(rows)
+
+
+def _row_owner_account_id(row: dict[str, object]) -> str:
+    explicit = str(row.get("owner_account_id") or "").strip()
+    return explicit or _stable_id("owner", str(row.get("user_id") or ""))
+
 
 def _status_from_row(token: str, row: dict[str, object]) -> CTAIntakeStatus:
     payload = dict(row.get("payload") or {}) if isinstance(row.get("payload"), dict) else {}
@@ -162,13 +200,13 @@ def _status_from_row(token: str, row: dict[str, object]) -> CTAIntakeStatus:
     autonomy = str(row.get("autonomy_mode") or _autonomy_mode(payload))
     plan = tuple(x for x in row.get("integration_plan", ()) if isinstance(x, dict)) if isinstance(row.get("integration_plan"), list) else _integration_plan(selected)
     return CTAIntakeStatus(
-        token, True, str(row.get("outcome") or "intake_recorded"), str(row.get("created_at") or ""),
-        str(row.get("tenant_id") or ""), str(row.get("business_id") or ""), str(row.get("user_id") or ""),
-        str(row.get("onboarding_status") or "advisory_intake_created"),
-        tuple(x for x in row.get("next_actions", ()) if isinstance(x, dict)),
-        dict(row.get("user_functionality") or {}) or None, dict(row.get("admin_visibility") or {}) or None, profile,
-        selected, plan, autonomy, dict(row.get("first_value_preview") or _first_value(profile, selected)),
-        dict(row.get("onboarding_progress") or _progress(profile, selected, autonomy)),
+        intake_id=token, found=True, outcome=str(row.get("outcome") or "intake_recorded"), created_at=str(row.get("created_at") or ""),
+        tenant_id=str(row.get("tenant_id") or ""), business_id=str(row.get("business_id") or ""), user_id=str(row.get("user_id") or ""),
+        owner_account_id=_row_owner_account_id(row), onboarding_status=str(row.get("onboarding_status") or "advisory_intake_created"),
+        next_actions=tuple(x for x in row.get("next_actions", ()) if isinstance(x, dict)),
+        user_functionality=dict(row.get("user_functionality") or {}) or None, admin_visibility=dict(row.get("admin_visibility") or {}) or None, business_profile=profile,
+        selected_providers=selected, integration_plan=plan, autonomy_mode=autonomy, first_value_preview=dict(row.get("first_value_preview") or _first_value(profile, selected)),
+        onboarding_progress=dict(row.get("onboarding_progress") or _progress(profile, selected, autonomy)),
     )
 
 
@@ -178,7 +216,7 @@ def _admin_row(row: dict[str, object]) -> dict[str, object]:
     return {
         "intake_id": str(row.get("intake_id") or ""), "created_at": str(row.get("created_at") or ""),
         "tenant_id": str(row.get("tenant_id") or ""), "business_id": str(row.get("business_id") or ""),
-        "user_id": str(row.get("user_id") or ""), "business_name": str(profile.get("name") or ""),
+        "user_id": str(row.get("user_id") or ""), "owner_account_id": _row_owner_account_id(row), "business_name": str(profile.get("name") or ""),
         "industry": str(profile.get("industry") or ""), "city": str(profile.get("city") or ""),
         "outcome": str(row.get("outcome") or ""), "onboarding_status": str(row.get("onboarding_status") or ""),
         "selected_providers": list(row.get("selected_providers") or ()), "autonomy_mode": str(row.get("autonomy_mode") or "advisor"),
