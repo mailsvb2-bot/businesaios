@@ -298,7 +298,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         <div className="topbar-actions">
           <span className="safe-chip"><span className="safe-chip-full">Безопасный режим · чтение данных</span><span className="safe-chip-short">Режим чтения</span></span>
           {businesses.length > 1 ? <label className="business-switcher"><span>Бизнес</span><select value={data.intake_id} onChange={(event) => onSwitchBusiness(event.target.value)}>{businesses.map((item) => <option value={item.intake_id} key={item.intake_id}>{item.name || "Бизнес"}</option>)}</select></label> : null}
-          <button className="ghost small add-business-button" onClick={onRestart}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button>
+          <button className="ghost small add-business-button" aria-label="Добавить бизнес" onClick={onRestart}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button>
         </div>
       </header>
 
@@ -422,7 +422,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
 function BusinessChooser({ businesses, onOpen, onAdd }) {
   return (
     <main className="onboarding-shell account-home">
-      <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></div><button type="button" className="primary small add-business-button" onClick={onAdd}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button></header>
+      <header className="topbar onboarding-topbar"><div className="brand"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></div><button type="button" className="primary small add-business-button" aria-label="Добавить бизнес" onClick={onAdd}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button></header>
       <section className="account-businesses panel">
         <div className="section-heading"><p className="eyebrow">Ваш аккаунт</p><h1>Мои бизнесы</h1><p>Выберите бизнес. Данные, интеграции и действия каждого бизнеса остаются в его отдельном защищённом контуре.</p></div>
         <div className="business-choice-grid">
