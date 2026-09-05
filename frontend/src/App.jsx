@@ -297,7 +297,7 @@ function Workspace({ data, apiBase, businesses, onRestart, onRetryAccess, onSwit
         <a className="brand" href="/"><span className="brand-mark">B</span><span className="brand-name">BusinessAIOS</span></a>
         <div className="topbar-actions">
           <span className="safe-chip"><span className="safe-chip-full">Безопасный режим · чтение данных</span><span className="safe-chip-short">Режим чтения</span></span>
-          {businesses.length > 1 ? <label className="business-switcher"><span>Бизнес</span><select value={data.intake_id} onChange={(event) => onSwitchBusiness(event.target.value)}>{businesses.map((item) => <option value={item.intake_id} key={item.intake_id}>{item.name || "Бизнес"}</option>)}</select></label> : null}
+          {businesses.length > 1 ? <label className="business-switcher"><span>Бизнес</span><select aria-label="Выбор бизнеса" value={data.intake_id} onChange={(event) => onSwitchBusiness(event.target.value)}>{businesses.map((item) => <option value={item.intake_id} key={item.intake_id}>{item.name || "Бизнес"}</option>)}</select></label> : null}
           <button className="ghost small add-business-button" aria-label="Добавить бизнес" onClick={onRestart}><span className="add-business-full">Добавить бизнес</span><span className="add-business-short">Добавить</span></button>
         </div>
       </header>

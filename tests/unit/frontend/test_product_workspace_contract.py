@@ -56,6 +56,7 @@ def test_owner_workspace_resumes_server_session_without_persisting_owner_key_in_
     assert "Обычная перезагрузка сама по себе сессию не завершает" in app
     assert "вход в кабинет завершился после перезагрузки страницы" not in visible_copy.lower()
     assert "onRetryAccess={restoreWorkspaceAccess}" in app
+    assert 'aria-label="Выбор бизнеса"' in app
 
 
 def test_saved_workspace_network_failure_has_explicit_retry_path() -> None:

@@ -140,7 +140,7 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
   expect(secondCta.business_id).not.toBe(cta.business_id);
   expect(secondCta.owner_businesses).toHaveLength(2);
 
-  const switcher = page.getByLabel("Бизнес");
+  const switcher = page.getByRole("combobox", { name: "Выбор бизнеса", exact: true });
   await expect(switcher).toBeVisible();
   await expect(switcher.locator("option")).toHaveCount(2);
   const switchStatusPromise = page.waitForResponse((response) => response.url().includes(`/api/public-site/cta/${cta.intake_id}`) && response.request().method() === "GET");
