@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import smtplib
+import ssl
 from collections.abc import Mapping
 from contextlib import suppress
 from email.message import EmailMessage
@@ -389,14 +390,16 @@ def _send_smtp(*, cfg: ProviderConfig, msg: OutboundMessage) -> dict[str, Any]:
     if transport_guard_blocks(msg.transport_guard, msg):
         return _guard_blocked_result(cfg=cfg, msg=msg)
     try:
+        starttls = not secure and env_bool(f"{cfg.env_prefix}_STARTTLS", True)
+        tls_context = ssl.create_default_context() if secure or starttls else None
         if secure:
-            client = smtplib.SMTP_SSL(host, port, timeout=timeout_s)
+            client = smtplib.SMTP_SSL(host, port, timeout=timeout_s, context=tls_context)
         else:
             client = smtplib.SMTP(host, port, timeout=timeout_s)
         try:
             client.ehlo()
-            if not secure and env_bool(f"{cfg.env_prefix}_STARTTLS", True):
-                client.starttls()
+            if starttls:
+                client.starttls(context=tls_context)
                 client.ehlo()
             if username and password:
                 client.login(username, password)
@@ -448,12 +451,13 @@ def _smtp_connect_explicit(
     if bool(username) != bool(password):
         raise SmtpExplicitError("smtp_credentials_incomplete", delivery_state="not_attempted")
     try:
+        tls_context = ssl.create_default_context()
         if security == "ssl":
-            client = smtplib.SMTP_SSL(host, port, timeout=timeout_s)
+            client = smtplib.SMTP_SSL(host, port, timeout=timeout_s, context=tls_context)
         else:
             client = smtplib.SMTP(host, port, timeout=timeout_s)
             client.ehlo()
-            client.starttls()
+            client.starttls(context=tls_context)
             client.ehlo()
         if username:
             client.login(username, password)

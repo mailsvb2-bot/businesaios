@@ -70,6 +70,11 @@ class _NativeProviderQueueAdapter:
             return DeliveryResult(False, self.channel, "in_progress", "", {"provider": self.provider_key, "reason": "provider_queue_result_pending", "job_id": dispatch.get("job_id")})
         if bool(result.get("accepted")) and str(result.get("status")) == "live_executed" and (external_id := str(dict(result.get("parsed_response") or {}).get("resource_id") or "").strip()):
             return DeliveryResult(True, self.channel, "accepted", external_id, {"provider": self.provider_key, "accepted": True, "delivered": False, "job_id": dispatch.get("job_id"), "provider_status": result.get("status")})
+        worker_state = str(dict(outcome.get("worker") or {}).get("job_state") or "").strip().casefold()
+        dispatch_state = str(dict(dispatch.get("metadata") or {}).get("job_state") or "").strip().casefold()
+        queue_state = worker_state or dispatch_state
+        if queue_state in {"pending", "claimed"}:
+            return DeliveryResult(False, self.channel, "in_progress", "", {"provider": self.provider_key, "reason": "provider_queue_retry_pending", "job_id": dispatch.get("job_id"), "provider_status": result.get("status"), "job_state": queue_state})
         reason = "provider_receipt_missing" if bool(result.get("accepted")) else str(dict(result.get("error") or {}).get("category") or result.get("status") or "provider_send_failed")
         return DeliveryResult(False, self.channel, "failed", "", {"provider": self.provider_key, "reason": reason, "job_id": dispatch.get("job_id"), "provider_status": result.get("status")})
 def build_multichannel_dispatcher() -> MultiChannelDispatcher:

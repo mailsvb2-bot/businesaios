@@ -199,6 +199,24 @@ def test_provider_approval_resume_finalizes_alert_dedup_only_after_verified_deli
     assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1', 'dedup_key': 'dedup-1', 'reservation_id': 'res-1', 'delivered': True, 'ambiguous': False}]
 
 
+def test_email_approval_resume_keeps_dedup_fail_closed_when_smtp_only_accepted():
+    completed = []
+
+    class _Store:
+        def get(self, approval_id):
+            metadata = {'action_name': 'provider.email_connector.message_send', 'decision_id': 'dec-1', 'approval_resume_context': {'provider_key': 'email_connector', 'business_id': 'biz-a', 'operation': 'message_send', 'payload': {'recipient': 'user@example.org', 'subject': 'Exact subject', 'body': 'hello'}}, 'approval_completion_context': {'dedup_key': 'dedup-1', 'reservation_id': 'res-1'}}
+            return SimpleNamespace(status=SimpleNamespace(value='approved'), request=SimpleNamespace(approval_id=approval_id, tenant_id='tenant-a', subject_id='dec-1', metadata=metadata))
+
+    class _Service:
+        def execute_queued_provider_sync(self, **kwargs):
+            return {'result': {'accepted': True, 'status': 'live_executed', 'parsed_response': {'resource_id': '<message-id>', 'delivery_state': 'accepted'}, 'transport_response': {'smtp': {'accepted': True, 'delivered': False}}}}
+
+    envelope = SimpleNamespace(decision=SimpleNamespace(decision_id='dec-1', action='domain_action@v1', payload={'tenant_id': 'tenant-a'}))
+    handlers = ProviderAdminRouteHandlers(service_factory=lambda **_: _Service(), approval_store_factory=lambda: _Store(), decision_loader=lambda **_: envelope, approval_completion_handler=lambda **kwargs: completed.append(kwargs))
+    handlers.resume_approved_message(tenant_id='tenant-a', approval_id='ap-1')
+    assert completed == [{'tenant_id': 'tenant-a', 'approval_id': 'ap-1', 'dedup_key': 'dedup-1', 'reservation_id': 'res-1', 'delivered': False, 'ambiguous': True}]
+
+
 def test_provider_approval_resume_releases_alert_dedup_after_terminal_non_delivery():
     completed = []
 

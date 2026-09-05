@@ -12,6 +12,22 @@ from runtime.messaging.channel_normalizer import normalize_channel
 from runtime.wiring import load_archived_decision
 
 CANON_API_PROVIDER_ADMIN_ROUTE_HANDLERS = True
+
+
+def _approval_completion_truth(*, provider_key: str, result: Mapping[str, Any]) -> tuple[bool, bool, bool]:
+    status = str(result.get('status') or '').strip()
+    parsed = dict(result.get('parsed_response') or {})
+    error_category = str(dict(result.get('error') or {}).get('category') or '').strip()
+    accepted_with_receipt = bool(result.get('accepted')) and status == 'live_executed' and bool(str(parsed.get('resource_id') or '').strip())
+    delivered = accepted_with_receipt
+    accepted_without_delivery_proof = False
+    if str(provider_key) == 'email_connector' and accepted_with_receipt:
+        smtp = dict(dict(result.get('transport_response') or {}).get('smtp') or {})
+        delivered = smtp.get('delivered') is True
+        accepted_without_delivery_proof = not delivered
+    ambiguous = accepted_without_delivery_proof or status in {'', 'ambiguous_delivery', 'in_progress'} or status.startswith('provider_queue_') or (status == 'live_execution_failed' and not bool(parsed.get('error_code'))) or error_category == 'ambiguous_delivery'
+    terminal_non_delivery = not delivered and not ambiguous and (status in {'rejected_misconfigured', 'rejected_provider_write_guard', 'rejected_provider_write_requires_queue', 'live_transport_unbound', 'unsupported_operation'} or (status == 'live_execution_failed' and bool(parsed.get('error_code'))))
+    return delivered, ambiguous, terminal_non_delivery
 @dataclass(frozen=True)
 class ProviderAdminRouteHandlers:
     service_factory: Any = build_business_autonomy_guarded_service
@@ -222,11 +238,7 @@ class ProviderAdminRouteHandlers:
         completion = dict(completion) if isinstance(completion, Mapping) else {}
         execution = service.execute_queued_provider_sync(tenant_id=tenant_id, business_id=business_id, provider_key=provider_key, operation='message_send', mode='live', payload=provider_payload, worker_id='provider-approval-resume', approval_completion_context=completion or None)
         result = dict(execution.get('result') or {})
-        status = str(result.get('status') or '').strip()
-        error_category = str(dict(result.get('error') or {}).get('category') or '').strip()
-        delivered = bool(result.get('accepted')) and status == 'live_executed' and bool(str(dict(result.get('parsed_response') or {}).get('resource_id') or '').strip())
-        ambiguous = status in {'', 'ambiguous_delivery', 'in_progress'} or status.startswith('provider_queue_') or (status == 'live_execution_failed' and not bool(dict(result.get('parsed_response') or {}).get('error_code'))) or error_category == 'ambiguous_delivery'
-        terminal_non_delivery = (not delivered and not ambiguous and (status in {'rejected_misconfigured', 'rejected_provider_write_guard', 'rejected_provider_write_requires_queue', 'live_transport_unbound', 'unsupported_operation'} or (status == 'live_execution_failed' and bool(dict(result.get('parsed_response') or {}).get('error_code')))))
+        delivered, ambiguous, terminal_non_delivery = _approval_completion_truth(provider_key=provider_key, result=result)
         if callable(self.approval_completion_handler) and (delivered or terminal_non_delivery or ambiguous):
             self.approval_completion_handler(tenant_id=str(tenant_id), approval_id=str(record.request.approval_id), dedup_key=str(completion.get('dedup_key') or ''), reservation_id=str(completion.get('reservation_id') or ''), delivered=delivered, ambiguous=ambiguous)
         return {'tenant_id': tenant_id, 'business_id': business_id, 'provider_key': provider_key, 'approval_id': record.request.approval_id, 'decision_id': decision_id, 'execution': execution}

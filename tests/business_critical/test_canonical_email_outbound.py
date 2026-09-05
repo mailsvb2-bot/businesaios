@@ -43,8 +43,10 @@ def _configured_vault() -> tuple[object, InMemorySecretVault]:
 class _SMTP:
     instances: list[_SMTP] = []
 
-    def __init__(self, host: str, port: int, *, timeout: float) -> None:
+    def __init__(self, host: str, port: int, *, timeout: float, context=None) -> None:
         self.host, self.port, self.timeout = host, port, timeout
+        self.context = context
+        self.starttls_context = None
         self.calls: list[str] = []
         self.message = None
         self.__class__.instances.append(self)
@@ -52,7 +54,8 @@ class _SMTP:
     def ehlo(self) -> None:
         self.calls.append("ehlo")
 
-    def starttls(self) -> None:
+    def starttls(self, *, context=None) -> None:
+        self.starttls_context = context
         self.calls.append("starttls")
 
     def login(self, _username: str, _password: str) -> None:
@@ -143,6 +146,30 @@ def test_email_live_probe_and_send_use_sealed_smtp_owner(monkeypatch, tmp_path) 
     assert _SMTP.instances[-1].message["Auto-Submitted"] == "auto-generated"
 
 
+def test_email_smtp_tls_verifies_certificate_and_hostname(monkeypatch) -> None:
+    import ssl
+
+    import runtime._internal.effects_clients.provider_outbound_sender as sender
+
+    _SMTP.instances.clear()
+    monkeypatch.setattr(sender.smtplib, "SMTP", _SMTP)
+    monkeypatch.setattr(sender.smtplib, "SMTP_SSL", _SMTP)
+    starttls_client = sender._smtp_connect_explicit(
+        host="smtp.example.test", port=587, security="starttls", username="", password="", timeout_s=5.0,
+    )
+    starttls_context = starttls_client.starttls_context
+    assert starttls_context is not None
+    assert starttls_context.verify_mode == ssl.CERT_REQUIRED and starttls_context.check_hostname is True
+    starttls_client.quit()
+
+    ssl_client = sender._smtp_connect_explicit(
+        host="smtp.example.test", port=465, security="ssl", username="", password="", timeout_s=5.0,
+    )
+    assert ssl_client.context is not None
+    assert ssl_client.context.verify_mode == ssl.CERT_REQUIRED and ssl_client.context.check_hostname is True
+    ssl_client.quit()
+
+
 def test_email_send_after_smtp_boundary_is_ambiguous_and_not_retryable(monkeypatch) -> None:
     import runtime._internal.effects_clients.provider_outbound_sender as sender
 
@@ -180,3 +207,203 @@ def test_smtplib_has_one_production_owner() -> None:
             if "import smtplib" in text or "from smtplib import" in text:
                 owners.append(path.relative_to(root).as_posix())
     assert owners == ["runtime/_internal/effects_clients/provider_outbound_sender.py"]
+
+
+def test_send_message_action_preserves_email_subject_to_outbound_message() -> None:
+    from types import SimpleNamespace
+
+    from core.actions.catalog import build_catalog
+    from runtime.handlers_messaging import handle_send_message
+
+    catalog = build_catalog()
+    schema = catalog["send_message@v1"].schema
+    schema.validate({"tenant_id": "tenant-a", "user_id": "user@example.org", "text": "Body", "subject": "Proposal", "channel": "email"})
+
+    captured = {}
+
+    class _Effects:
+        def send_message(self, **kwargs):
+            captured.update(kwargs)
+            return {"ok": True}
+
+    env = SimpleNamespace(decision=SimpleNamespace(decision_id="dec-1", correlation_id="corr-1"))
+    handle_send_message({"tenant_id": "tenant-a", "user_id": "user@example.org", "text": "Body", "subject": "Proposal", "channel": "email"}, _Effects(), env)
+    assert captured["subject"] == "Proposal" and captured["text"] == "Body" and captured["channel"] == "email"
+
+
+def test_email_subject_survives_sealed_outbound_message_factory() -> None:
+    from runtime._internal.effects_actions.telegram.messaging_parts.message_factory import build_outbound_message
+
+    msg = build_outbound_message(
+        decision_id="dec-1", correlation_id="corr-1", user_id="user@example.org", text="Body",
+        tenant_id="tenant-a", subject="Proposal", business_id="biz-a", reply_markup=None,
+        callback_query_id=None, track_event_type=None, track_payload=None, channel="email",
+        priority="normal", critical=True,
+    )
+    assert msg.payload["subject"] == "Proposal"
+
+
+def test_marketing_offer_without_llm_uses_fallback_text_and_preserves_email_subject() -> None:
+    from types import SimpleNamespace
+
+    from core.actions.catalog import build_catalog
+    from runtime.handlers_messaging import handle_send_marketing_offer
+
+    schema = build_catalog()["send_marketing_offer@v1"].schema
+    schema.validate({
+        "tenant_id": "tenant-a", "user_id": "user@example.org", "channel": "email",
+        "subject": "Proposal", "offer": {"id": "offer-1"}, "fallback_text": "Useful offer",
+    })
+    captured = {}
+
+    class _Effects:
+        def send_message(self, **kwargs):
+            captured.update(kwargs)
+            return {"ok": True}
+
+    env = SimpleNamespace(decision=SimpleNamespace(decision_id="dec-1", correlation_id="corr-1"))
+    handle_send_marketing_offer(
+        {"tenant_id": "tenant-a", "business_id": "biz-a", "user_id": "user@example.org", "channel": "email",
+         "subject": "Proposal", "offer": {"id": "offer-1"}, "fallback_text": "Useful offer"},
+        _Effects(), env, composer=None,
+    )
+    assert captured["text"] == "Useful offer"
+    assert captured["subject"] == "Proposal"
+    assert captured["business_id"] == "biz-a"
+    assert captured["channel"] == "email"
+
+
+def test_email_subject_and_business_scope_reach_existing_provider_queue() -> None:
+    from runtime._internal.effects_actions.telegram.messaging_parts.message_factory import build_outbound_message
+
+    provider = provider_map()["email_connector"]
+    captured = {}
+
+    class _Registry:
+        def get(self, key):
+            assert key == "email_connector"
+            return provider
+
+    class _Service:
+        provider_registry = _Registry()
+
+        def execute_queued_provider_sync(self, **kwargs):
+            captured.update(kwargs)
+            return {
+                "dispatch": {"queued": True, "job_id": "job-1"},
+                "result": {"accepted": True, "status": "live_executed", "parsed_response": {"resource_id": "<msg-1>"}},
+            }
+
+    msg = build_outbound_message(
+        decision_id="dec-1", correlation_id="corr-1", user_id="user@example.org", text="Body",
+        tenant_id="tenant-a", subject="Proposal", business_id="biz-a", reply_markup=None,
+        callback_query_id=None, track_event_type=None, track_payload=None, channel="email",
+        priority="normal", critical=True,
+    )
+    result = _NativeProviderQueueAdapter("email", service_factory=lambda: _Service()).send(msg)
+    assert result.ok is True and result.mode == "accepted"
+    assert captured["tenant_id"] == "tenant-a" and captured["business_id"] == "biz-a"
+    assert captured["provider_key"] == "email_connector" and captured["operation"] == "message_send"
+    assert captured["payload"]["recipient"] == "user@example.org"
+    assert captured["payload"]["subject"] == "Proposal" and captured["payload"]["body"] == "Body"
+
+
+def test_email_retrying_provider_job_stays_in_progress_for_messaging_policy() -> None:
+    from runtime._internal.effects_actions.telegram.messaging_parts.message_factory import build_outbound_message
+
+    provider = provider_map()["email_connector"]
+
+    class _Registry:
+        def get(self, key):
+            assert key == "email_connector"
+            return provider
+
+    class _Service:
+        provider_registry = _Registry()
+
+        def execute_queued_provider_sync(self, **kwargs):
+            return {
+                "dispatch": {"queued": True, "job_id": "job-retry", "metadata": {"job_state": "pending"}},
+                "worker": {"retried": 1, "job_state": "pending"},
+                "result": {
+                    "accepted": False,
+                    "status": "live_execution_failed",
+                    "parsed_response": {
+                        "delivery_state": "not_attempted",
+                        "error_code": "smtp_pre_send_transport_failure",
+                        "retryable": True,
+                    },
+                    "error": {"category": "transport"},
+                },
+            }
+
+    msg = build_outbound_message(
+        decision_id="dec-retry", correlation_id="corr-retry", user_id="user@example.org", text="Body",
+        tenant_id="tenant-a", subject="Proposal", business_id="biz-a", reply_markup=None,
+        callback_query_id=None, track_event_type=None, track_payload=None, channel="email",
+        priority="normal", critical=True,
+    )
+    result = _NativeProviderQueueAdapter("email", service_factory=lambda: _Service()).send(msg)
+    assert result.ok is False
+    assert result.mode == "in_progress"
+    assert result.detail["job_state"] == "pending"
+    assert result.detail["job_id"] == "job-retry"
+
+
+def test_email_pending_retry_stops_cross_channel_fallback() -> None:
+    from runtime._internal.effects_actions.telegram.messaging_parts.message_factory import build_outbound_message
+    from runtime.messaging_policy.policy_plan import PolicyPlan
+    from runtime.messaging_policy_events.execute_with_events import execute_policy_plan_with_events
+
+    provider = provider_map()["email_connector"]
+    calls: list[str] = []
+
+    class _Registry:
+        def get(self, key):
+            assert key == "email_connector"
+            return provider
+
+    class _Service:
+        provider_registry = _Registry()
+
+        def execute_queued_provider_sync(self, **kwargs):
+            return {
+                "dispatch": {"queued": True, "job_id": "job-retry", "metadata": {"job_state": "pending"}},
+                "worker": {"retried": 1, "job_state": "pending"},
+                "result": {
+                    "accepted": False,
+                    "status": "live_execution_failed",
+                    "parsed_response": {
+                        "delivery_state": "not_attempted",
+                        "error_code": "smtp_pre_send_transport_failure",
+                        "retryable": True,
+                    },
+                    "error": {"category": "transport"},
+                },
+            }
+
+    adapter = _NativeProviderQueueAdapter("email", service_factory=lambda: _Service())
+    base = build_outbound_message(
+        decision_id="dec-retry", correlation_id="corr-retry", user_id="user@example.org", text="Body",
+        tenant_id="tenant-a", subject="Proposal", business_id="biz-a", reply_markup=None,
+        callback_query_id=None, track_event_type=None, track_payload=None, channel="email",
+        priority="normal", critical=True,
+    )
+
+    def send_once(msg):
+        calls.append(msg.channel)
+        if msg.channel == "email":
+            result = adapter.send(msg)
+            return result.ok, {**dict(result.detail or {}), "mode": result.mode}
+        raise AssertionError("fallback channel must not run while email retry is pending")
+
+    ok, meta = execute_policy_plan_with_events(
+        plan=PolicyPlan(ordered_channels=("email", "vk"), reason_codes=("fallback",), terminal_reason=""),
+        base_message=base,
+        send_once=send_once,
+    )
+    assert ok is False
+    assert calls == ["email"]
+    assert meta["mode"] == "in_progress"
+    assert meta["job_id"] == "job-retry"
+    assert meta["policy"]["terminal_reason"] == "in_progress"
