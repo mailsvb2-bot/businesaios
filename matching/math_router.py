@@ -38,7 +38,7 @@ class MathAwareMatchRouter:
             reverse=True,
         )
         out: dict[str, float] = {}
-        for left, right in zip(ordered, ordered[1:]):
+        for left, right in zip(ordered, ordered[1:], strict=False):
             outcome = allocate_single_slot_vcg([
                 Bid(str(getattr(left, "business_id", "")), float(getattr(left, "score", 0.0))),
                 Bid(str(getattr(right, "business_id", "")), float(getattr(right, "score", 0.0))),
