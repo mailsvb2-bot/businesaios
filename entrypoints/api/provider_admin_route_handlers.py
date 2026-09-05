@@ -176,7 +176,7 @@ class ProviderAdminRouteHandlers:
             raise RuntimeError(f'provider_approval_not_approved:{getattr(record.status, "value", record.status)}')
         request_metadata = dict(record.request.metadata or {})
         action_name, decision_id = str(request_metadata.get('action_name') or '').strip(), str(request_metadata.get('decision_id') or '').strip()
-        provider_key = {'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging', 'provider.slack_messaging.message_send': 'slack_messaging', 'provider.discord_messaging.message_send': 'discord_messaging', 'provider.instagram_messaging.message_send': 'instagram_messaging', 'provider.messenger_messaging.message_send': 'messenger_messaging', 'provider.line_messaging.message_send': 'line_messaging', 'provider.viber_messaging.message_send': 'viber_messaging'}.get(action_name)
+        provider_key = {'provider.vk_messaging.message_send': 'vk_messaging', 'provider.max_messaging.message_send': 'max_messaging', 'provider.slack_messaging.message_send': 'slack_messaging', 'provider.discord_messaging.message_send': 'discord_messaging', 'provider.instagram_messaging.message_send': 'instagram_messaging', 'provider.messenger_messaging.message_send': 'messenger_messaging', 'provider.line_messaging.message_send': 'line_messaging', 'provider.viber_messaging.message_send': 'viber_messaging', 'provider.email_connector.message_send': 'email_connector'}.get(action_name)
         if provider_key is None:
             raise RuntimeError(f'approval_not_provider_message_send:{action_name}')
         if not decision_id:
@@ -206,7 +206,7 @@ class ProviderAdminRouteHandlers:
             if any(str(key).startswith('_') for key in provider_payload):
                 raise RuntimeError('provider_approval_resume_payload_contains_internal_controls')
         else:
-            expected_channel = {'vk_messaging': 'vk', 'max_messaging': 'max', 'slack_messaging': 'slack', 'discord_messaging': 'discord', 'instagram_messaging': 'instagram', 'messenger_messaging': 'messenger', 'line_messaging': 'line', 'viber_messaging': 'viber'}[provider_key]
+            expected_channel = {'vk_messaging': 'vk', 'max_messaging': 'max', 'slack_messaging': 'slack', 'discord_messaging': 'discord', 'instagram_messaging': 'instagram', 'messenger_messaging': 'messenger', 'line_messaging': 'line', 'viber_messaging': 'viber', 'email_connector': 'email'}[provider_key]
             business_id = str(archived_payload.get('business_id') or '').strip()
             if normalize_channel(str(archived_payload.get('channel') or '')) != expected_channel:
                 raise RuntimeError('provider_approval_resume_channel_mismatch')
@@ -216,7 +216,7 @@ class ProviderAdminRouteHandlers:
             raise RuntimeError('provider_approval_resume_business_id_missing')
         service = self._service(business_id)
         if provider_payload is None:
-            provider_payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(provider_key), operation='message_send', payload={'user_id': str(archived_payload.get('user_id') or ''), 'text': str(archived_payload.get('text') or ''), **{key: archived_payload[key] for key in ('peer_id', 'chat_id', 'random_id', 'channel_id') if archived_payload.get(key) not in {None, ''}}})
+            provider_payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(provider_key), operation='message_send', payload={'user_id': str(archived_payload.get('user_id') or archived_payload.get('recipient') or archived_payload.get('email') or ''), 'text': str(archived_payload.get('text') or archived_payload.get('body') or ''), **({'subject': archived_payload.get('subject')} if archived_payload.get('subject') else {}), **{key: archived_payload[key] for key in ('peer_id', 'chat_id', 'random_id', 'channel_id') if archived_payload.get(key) not in {None, ''}}})
         provider_payload = {**provider_payload, '_approval': {'decision_id': decision_id, 'execution_id': str(record.request.subject_id), 'approval_id': str(record.request.approval_id)}}
         completion = request_metadata.get('approval_completion_context')
         completion = dict(completion) if isinstance(completion, Mapping) else {}

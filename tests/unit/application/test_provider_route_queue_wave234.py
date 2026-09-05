@@ -42,10 +42,11 @@ def test_provider_approval_resume_uses_archived_send_message_only():
     assert call['payload']['_approval'] == {'decision_id': 'dec-1', 'execution_id': 'dec-1', 'approval_id': 'ap-1'}
 
 
-def test_slack_discord_approval_resume_replays_exact_approved_subject_after_fallback():
+def test_guarded_provider_approval_resume_replays_exact_approved_subject_after_fallback():
     for provider_key, channel_id, approved_payload in (
         ("slack_messaging", "C123", {"channel": "C123", "text": "hello"}),
         ("discord_messaging", "123", {"channel_id": "123", "text": "hello"}),
+        ("email_connector", "user@example.org", {"recipient": "user@example.org", "subject": "Exact subject", "body": "hello"}),
     ):
         action_name = f"provider.{provider_key}.message_send"
         hint = resume_hint({"status": "approved", "action_name": action_name, "approval_id": "ap-1", "subject_id": "dec-1", "decision_id": "dec-1"})

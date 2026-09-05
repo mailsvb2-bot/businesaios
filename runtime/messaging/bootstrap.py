@@ -18,7 +18,7 @@ _SPECIAL_ADAPTER_FACTORIES = {
     "api": APIGatewayAdapter,
 }
 _PROVIDER_TRANSPORT_KINDS = frozenset({"provider_webhook", "smtp"})
-_NATIVE_QUEUE_PROVIDERS = {"vk": "vk_messaging", "max": "max_messaging", "slack": "slack_messaging", "discord": "discord_messaging", "instagram": "instagram_messaging", "messenger": "messenger_messaging", "line": "line_messaging", "viber": "viber_messaging"}
+_NATIVE_QUEUE_PROVIDERS = {"vk": "vk_messaging", "max": "max_messaging", "slack": "slack_messaging", "discord": "discord_messaging", "instagram": "instagram_messaging", "messenger": "messenger_messaging", "line": "line_messaging", "viber": "viber_messaging", "email": "email_connector"}
 def _build_provider_adapter(channel: str):
     spec = CHANNEL_SPECS[channel]
     runner_type = make_channel_runner(
@@ -43,10 +43,10 @@ class _NativeProviderQueueAdapter:
         return self._cached_service
     def send(self, msg) -> DeliveryResult:
         native_context = (msg.track_payload or {}).get("_provider_native") if isinstance(msg.track_payload, dict) else None
-        if native_context is None:
+        if native_context is None and self.provider_key != "email_connector":
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_context_required"})
         context = dict(native_context or {})
-        business_id = str(context.get("business_id") or "").strip()
+        business_id = str(context.get("business_id") or getattr(msg, "business_id", "") or "").strip()
         if not business_id:
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_business_id_required"})
         if self.provider_key in {"slack_messaging", "discord_messaging"} and not str(context.get("channel_id") or "").strip():
@@ -54,7 +54,8 @@ class _NativeProviderQueueAdapter:
         if (recipient_key := {"instagram_messaging": "recipient_id", "messenger_messaging": "recipient_id", "line_messaging": "to", "viber_messaging": "receiver"}.get(self.provider_key)) and not str(context.get(recipient_key) or "").strip():
             return DeliveryResult(False, self.channel, "blocked", "", {"provider": self.provider_key, "reason": "native_recipient_id_required"})
         service = self._service()
-        payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(self.provider_key), operation="message_send", payload={"user_id": msg.user_id, "text": msg.text, "reply_markup": msg.reply_markup, **({"attachments": [dict(item) for item in msg.attachments]} if msg.attachments else {}), **{key: context[key] for key in ("peer_id", "chat_id", "random_id", "channel_id", "recipient_id", "to", "receiver") if key in context}})
+        message_payload = dict(getattr(msg, "payload", {}) or {})
+        payload = ProviderPayloadNormalizers().normalize_outbound(provider=service.provider_registry.get(self.provider_key), operation="message_send", payload={"user_id": msg.user_id, "text": msg.text, "reply_markup": msg.reply_markup, **({"subject": message_payload.get("subject")} if self.provider_key == "email_connector" and message_payload.get("subject") else {}), **({"attachments": [dict(item) for item in msg.attachments]} if msg.attachments else {}), **{key: context[key] for key in ("peer_id", "chat_id", "random_id", "channel_id", "recipient_id", "to", "receiver") if key in context}})
         payload["_approval"] = {"decision_id": str(msg.decision_id), "execution_id": str(msg.decision_id), **({"approval_id": str(context["approval_id"])} if context.get("approval_id") else {})}
         dedup_context = (msg.track_payload or {}).get("_alert_dedup") if isinstance(msg.track_payload, dict) else None
         completion_context = {key: str(dedup_context.get(key) or "").strip() for key in ("dedup_key", "reservation_id")} if isinstance(dedup_context, Mapping) else {}

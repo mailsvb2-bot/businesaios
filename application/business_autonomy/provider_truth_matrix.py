@@ -49,7 +49,7 @@ _PROVIDER_OWNERS: Mapping[str, str] = {
 }
 _HIGH_RISK_DOMAINS = {"ads", "marketplace", "platform_infra"}
 _HIGH_RISK_PROVIDERS = {"sms_connector", "whatsapp_cloud"}
-_GUARDED_WRITE_SUPPORTED: frozenset[str] = frozenset({'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging'})
+_GUARDED_WRITE_SUPPORTED: frozenset[str] = frozenset({'vk_messaging', 'max_messaging', 'slack_messaging', 'discord_messaging', 'instagram_messaging', 'messenger_messaging', 'line_messaging', 'viber_messaging', 'email_connector'})
 _GUARDED_WRITE_LIVE_READY: frozenset[str] = frozenset()
 
 
@@ -108,6 +108,8 @@ def _has_placeholder_endpoint(binding: Mapping[str, Any]) -> bool:
 
 
 def _has_real_endpoint(binding: Mapping[str, Any]) -> bool:
+    if bool(binding.get("live_endpoint_from_secret")):
+        return True
     base_url = str(binding.get("base_url") or "").strip().lower()
     return bool(base_url) and not _has_placeholder_endpoint(binding) and base_url.startswith(("https://", "postgres://", "redis://"))
 
