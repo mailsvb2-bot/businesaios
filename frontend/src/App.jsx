@@ -426,7 +426,7 @@ function BusinessChooser({ businesses, onOpen, onAdd }) {
       <section className="account-businesses panel">
         <div className="section-heading"><p className="eyebrow">Ваш аккаунт</p><h1>Мои бизнесы</h1><p>Выберите бизнес. Данные, интеграции и действия каждого бизнеса остаются в его отдельном защищённом контуре.</p></div>
         <div className="business-choice-grid">
-          {businesses.map((item) => <button type="button" className="business-choice-card" onClick={() => onOpen(item.intake_id)} key={item.intake_id}><strong>{item.name || "Бизнес"}</strong><span>{[item.industry, item.city].filter(Boolean).join(" · ") || "Открыть кабинет"}</span><small>Открыть →</small></button>)}
+          {businesses.map((item) => <button type="button" className="business-choice-card" aria-label={`Открыть бизнес ${item.name || "Бизнес"}`} onClick={() => onOpen(item.intake_id)} key={item.intake_id}><strong>{item.name || "Бизнес"}</strong><span>{[item.industry, item.city].filter(Boolean).join(" · ") || "Открыть кабинет"}</span><small>Открыть →</small></button>)}
         </div>
       </section>
     </main>

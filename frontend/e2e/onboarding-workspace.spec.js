@@ -150,7 +150,7 @@ test(canonicalScenario.title, async ({ page }, testInfo) => {
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Мои бизнесы" })).toBeVisible();
-  await expect(page.getByRole("button", { name: new RegExp(businessName) })).toBeVisible();
-  await expect(page.getByRole("button", { name: new RegExp(secondBusinessName) })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Открыть бизнес ${businessName}`, exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Открыть бизнес ${secondBusinessName}`, exact: true })).toBeVisible();
   expect(await hasNoHorizontalOverflow(page)).toBe(true);
 });
