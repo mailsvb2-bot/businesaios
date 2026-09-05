@@ -61,6 +61,7 @@ def test_smtp_coordinates_headers_and_transport_paths(
     assert accepted["external_id"] == "<id@example.com>"
     smtp = _SMTP.instances[-1]
     assert smtp.host == "mail.example" and smtp.port == 2525 and smtp.timeout == 9.0
+    assert smtp.starttls_context is not None and smtp.starttls_context.check_hostname is True
     assert [name for name, _args in smtp.calls] == ["ehlo", "starttls", "ehlo", "login", "send_message", "quit"]
     assert smtp.message is not None
     assert smtp.message["From"] == "sender@example.com"
@@ -68,13 +69,14 @@ def test_smtp_coordinates_headers_and_transport_paths(
     assert smtp.message["Subject"] == "Subject"
 
     class RefusingSMTP(_SMTP):
-        def __init__(self, host: str, port: int, *, timeout: float) -> None:
-            super().__init__(host, port, timeout=timeout, refused={"recipient": 550}, fail_quit=True)
+        def __init__(self, host: str, port: int, *, timeout: float, context=None) -> None:
+            super().__init__(host, port, timeout=timeout, context=context, refused={"recipient": 550}, fail_quit=True)
 
     monkeypatch.setattr(sender.smtplib, "SMTP_SSL", RefusingSMTP)
     refused = sender._send_smtp(cfg=_cfg(mode="smtp", endpoint="smtps://secure.example"), msg=msg)
     assert refused["reason"] == "smtp_recipient_refused"
     secure_client = RefusingSMTP.instances[-1]
+    assert secure_client.context is not None and secure_client.context.check_hostname is True
     assert not any(name == "starttls" for name, _args in secure_client.calls)
 
     env["DEMO_USERNAME"] = ""

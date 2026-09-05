@@ -330,8 +330,8 @@ def test_live_read_requires_explicit_binding_readiness_even_when_transport_is_bo
     runner = runtime.describe_runner(provider)
     assert runner['transport_bound'] is True and runner['live_read_supported'] is False
     result = runtime.run(provider=provider, tenant_id='tenant-a', business_id='biz-a', operation='message_read', mode='live', payload={})
-    assert result.status == 'live_read_unsupported' and result.accepted is False
-    assert result.metadata['reason'] == 'live_read_transport_not_ready'
+    assert result.status == 'unsupported_operation' and result.accepted is False
+    assert 'message_read' not in result.metadata['available_operations']
 
 
 

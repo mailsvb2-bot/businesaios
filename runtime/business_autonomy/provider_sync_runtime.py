@@ -11,7 +11,6 @@ CANON_PROVIDER_SYNC_RUNTIME = True
 _READS = {
     'telegram_bot': ('message_read', 'contact_profile_read'),
     'whatsapp_cloud': ('message_read', 'contact_profile_read'),
-    'email_connector': ('thread_sync', 'message_read'),
     'webflow': ('site_config_read',),
     'wordpress': ('site_config_read',),
     'shopify': ('catalog_sync', 'order_sync'),

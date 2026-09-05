@@ -4,6 +4,12 @@ from dataclasses import dataclass
 
 from application.business_autonomy.provider_admin_contract import ProviderDefinition
 from application.business_autonomy.provider_runtime_contract import ProviderHealthProbeResult
+from contracts.email_outbound import (
+    normalize_email_address,
+    normalize_smtp_host,
+    normalize_smtp_port,
+    normalize_smtp_security,
+)
 from runtime.business_autonomy.provider_transport_bindings import provider_transport_binding_for_key
 from security.secret_contract import SecretRef
 from security.secret_vault import SecretVault
@@ -12,7 +18,7 @@ CANON_PROVIDER_CONNECTOR_HEALTH = True
 _REQUIRED_BY_PROVIDER = {
     'telegram_bot': ('bot_token',),
     'whatsapp_cloud': ('access_token', 'phone_number_id'),
-    'email_connector': ('api_token', 'from_address'),
+    'email_connector': ('smtp_host', 'smtp_port', 'smtp_security', 'from_address'),
     'sms_connector': ('api_token', 'sender_id'),
     'generic_website': ('webhook_secret',),
     'webflow': ('api_token',),
@@ -95,6 +101,19 @@ class ProviderConnectorHealthService:
         )
 
     def _shallow_validate(self, *, provider_key: str, tenant_id: str, connector_id: str, business_id: str) -> tuple[bool, str]:
+        if provider_key == 'email_connector':
+            try:
+                normalize_smtp_host(self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.smtp_host'))
+                normalize_smtp_port(self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.smtp_port'))
+                normalize_smtp_security(self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.smtp_security'))
+                normalize_email_address(self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.from_address'))
+            except ValueError:
+                return False, 'invalid_smtp_configuration'
+            username = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.smtp_username')
+            password = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.smtp_password') or self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.api_token')
+            if bool(username) != bool(password):
+                return False, 'incomplete_smtp_authentication'
+            return True, 'ok'
         if provider_key == 'postgres_runtime':
             dsn = self._read_optional_secret(tenant_id=tenant_id, connector_id=connector_id, business_id=business_id, secret_name=f'{connector_id}.dsn')
             return (dsn.startswith('postgres://') or dsn.startswith('postgresql://'), 'invalid_postgres_dsn' if dsn else 'missing_postgres_dsn')
