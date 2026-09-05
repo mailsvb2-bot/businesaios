@@ -59,6 +59,7 @@ _ROUTE_SPECS: dict[str, PublicSurfaceRouteSpec] = {
     '/public-site/integrations': PublicSurfaceRouteSpec('api.public.public_site.integrations', 'public_site_integration_catalog', SecurityAction.READ, ('public', 'public_site', 'integrations', 'public_api')),
     '/public-site/cta/start': PublicSurfaceRouteSpec('api.public.public_site.cta_start', 'public_site_cta_intake', SecurityAction.WRITE, ('public', 'public_site', 'cta', 'public_api')),
     '/public-site/cta/{intake_id}': PublicSurfaceRouteSpec('api.public.public_site.cta_status', 'public_site_cta_intake', SecurityAction.READ, ('public', 'public_site', 'cta', 'public_api')),
+    '/public-site/owner/businesses': PublicSurfaceRouteSpec('api.public.public_site.owner_businesses', 'public_site_owner_businesses', SecurityAction.READ, ('public', 'public_site', 'owner', 'public_api')),
 }
 
 

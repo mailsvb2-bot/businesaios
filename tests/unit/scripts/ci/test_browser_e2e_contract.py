@@ -17,7 +17,7 @@ from scripts.ci.subprocess_io import CommandOutcome
 
 TITLE = "onboarding creates a read-only OWNER workspace without persisting the API key"
 SPEC = "onboarding-workspace.spec.js"
-STEP_SHA = "71b5f4c95cf6a6ed296aac8c6ec0edd7a0fbbcdf46c6a7ec74788f28a3611681"
+STEP_SHA = "6dbad4405c540f4a04b8f28d862609dacec15ab75da5df38afb5fea067dbb098"
 STEP_SHAPE = json.loads(Path("tests/fixtures/playwright/onboarding-step-shape.json").read_text(encoding="utf-8"))
 MATRIX = [
     {"name": "chromium", "device": "Desktop Chrome", "engine": "chromium", "surface": "desktop"},

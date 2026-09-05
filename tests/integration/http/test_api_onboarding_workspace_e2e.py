@@ -7,6 +7,7 @@ import socket
 import subprocess
 import sys
 import time
+from http.cookies import SimpleCookie
 
 from scripts.ci.paths import repo_root
 
@@ -25,9 +26,11 @@ def _log_tail(path, limit: int = 12000) -> str:
     return text[-limit:]
 
 
-def _request(port: int, path: str, *, method: str = "GET", headers: dict | None = None, payload: dict | None = None) -> tuple[int, dict]:
+def _request(port: int, path: str, *, method: str = "GET", headers: dict | None = None, payload: dict | None = None, cookies: dict[str, str] | None = None) -> tuple[int, dict]:
     body = None if payload is None else json.dumps(payload).encode("utf-8")
     request_headers = dict(headers or {})
+    if cookies:
+        request_headers.setdefault("Cookie", "; ".join(f"{key}={value}" for key, value in cookies.items()))
     if body is not None:
         request_headers.setdefault("Content-Type", "application/json")
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
@@ -35,6 +38,14 @@ def _request(port: int, path: str, *, method: str = "GET", headers: dict | None 
         connection.request(method, path, body=body, headers=request_headers)
         response = connection.getresponse()
         raw = response.read().decode("utf-8", errors="replace")
+        if cookies is not None:
+            for header, value in response.getheaders():
+                if header.lower() != "set-cookie":
+                    continue
+                parsed = SimpleCookie()
+                parsed.load(value)
+                for key, morsel in parsed.items():
+                    cookies[key] = morsel.value
         try:
             data = json.loads(raw) if raw else {}
         except json.JSONDecodeError:
@@ -113,12 +124,17 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             status, anonymous_workspace = _request(port, "/business-workspace/providers", headers=secure_headers)
             assert status == 401, anonymous_workspace
             assert anonymous_workspace["detail"] == "missing_authentication"
+            status, anonymous_businesses = _request(port, "/public-site/owner/businesses", headers=secure_headers)
+            assert status == 401, anonymous_businesses
+            assert anonymous_businesses["detail"] == "owner_account_session_required"
 
+            browser_cookies: dict[str, str] = {}
             status, cta = _request(
                 port,
                 "/public-site/cta/start",
                 method="POST",
                 headers=secure_headers,
+                cookies=browser_cookies,
                 payload={
                     "business_name": "Canonical API E2E Business",
                     "industry": "services",
@@ -138,6 +154,48 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             assert owner.get("business_id") == cta["business_id"]
             assert isinstance(owner.get("api_key"), str) and "." in owner["api_key"]
             assert cta["selected_providers"] == [provider_key]
+            assert set(browser_cookies) >= {"businessaios_owner_account", "businessaios_owner_resume"}
+            assert [item["business_id"] for item in cta["owner_businesses"]] == [cta["business_id"]]
+            status, account_token_workspace = _request(
+                port,
+                "/business-workspace/providers",
+                headers={**secure_headers, "X-API-Key": browser_cookies["businessaios_owner_account"]},
+            )
+            assert status == 403, account_token_workspace
+            assert account_token_workspace["detail"] in {"ttl_exceeds_policy", "owner_business_scope_required"}
+
+            status, second_cta = _request(
+                port,
+                "/public-site/cta/start",
+                method="POST",
+                headers=secure_headers,
+                cookies=browser_cookies,
+                payload={
+                    "business_name": "Canonical Second Business",
+                    "industry": "commerce",
+                    "city": "Tallinn",
+                    "goal": "sales",
+                    "selected_providers": [provider_key],
+                    "autonomy_mode": "advisor",
+                },
+            )
+            assert status == 200, second_cta
+            assert second_cta["tenant_id"] != cta["tenant_id"]
+            assert second_cta["business_id"] != cta["business_id"]
+            assert second_cta["user_id"] == cta["user_id"]
+            assert {item["business_id"] for item in second_cta["owner_businesses"]} == {cta["business_id"], second_cta["business_id"]}
+
+            status, business_list = _request(port, "/public-site/owner/businesses", headers=secure_headers, cookies=browser_cookies)
+            assert status == 200, business_list
+            assert {item["business_id"] for item in business_list["businesses"]} == {cta["business_id"], second_cta["business_id"]}
+
+            status, switched_back = _request(port, f"/public-site/cta/{cta['intake_id']}", headers=secure_headers, cookies=browser_cookies)
+            assert status == 200, switched_back
+            switched_owner = switched_back.get("owner_session") or {}
+            assert switched_owner.get("tenant_id") == cta["tenant_id"]
+            assert switched_owner.get("business_id") == cta["business_id"]
+            assert isinstance(switched_owner.get("api_key"), str) and "." in switched_owner["api_key"]
+            assert {item["business_id"] for item in switched_back["owner_businesses"]} == {cta["business_id"], second_cta["business_id"]}
 
             status, status_payload = _request(port, f"/public-site/cta/{cta['intake_id']}", headers=secure_headers)
             assert status == 200, status_payload
@@ -146,10 +204,18 @@ def test_real_api_onboarding_issues_owner_session_and_opens_workspace(tmp_path) 
             assert status_payload["business_id"] == cta["business_id"]
             assert status_payload["selected_providers"] == [provider_key]
 
-            status, workspace = _request(
+            status, stale_workspace = _request(
                 port,
                 "/business-workspace/providers",
                 headers={**secure_headers, "X-API-Key": owner["api_key"]},
+            )
+            assert status == 401, stale_workspace
+            assert stale_workspace["detail"] == "inactive_api_key"
+
+            status, workspace = _request(
+                port,
+                "/business-workspace/providers",
+                headers={**secure_headers, "X-API-Key": switched_owner["api_key"]},
             )
             assert status == 200, workspace
             assert workspace["scope_source"] == "authenticated_owner_session"

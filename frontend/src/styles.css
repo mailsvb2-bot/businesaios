@@ -38,7 +38,7 @@ a { color: inherit; text-decoration: none; }
   font-weight: 900;
 }
 .topbar-note { color: #728097; font-size: .9rem; font-weight: 700; }
-.topbar-actions { display: flex; align-items: center; gap: 10px; }
+.topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; min-width: 0; }
 .safe-chip { padding: 8px 11px; border-radius: 999px; background: #eef9f1; color: #238547; font-size: .78rem; font-weight: 800; border: 1px solid #d6f0dd; }
 .safe-chip-short { display: none; }
 
@@ -271,4 +271,33 @@ button:disabled { cursor: not-allowed; opacity: .46; transform: none !important;
 @media (max-width: 420px) {
   .brand-name { display: none; }
   .result-badge { white-space: normal; text-align: center; }
+}
+
+.business-switcher { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.business-switcher span { font-size: 12px; color: var(--muted, #6b7280); }
+.business-switcher select { min-width: 170px; max-width: 260px; padding: 8px 34px 8px 10px; }
+.account-home { min-height: 100vh; }
+.account-businesses { width: min(980px, calc(100% - 32px)); margin: 48px auto; }
+.business-choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 24px; }
+.business-choice-card { text-align: left; display: grid; gap: 8px; padding: 20px; border: 1px solid var(--line, #e5e7eb); border-radius: 16px; background: var(--panel, #fff); cursor: pointer; }
+.business-choice-card:hover { transform: translateY(-1px); }
+.business-choice-card strong { font-size: 18px; }
+.business-choice-card span, .business-choice-card small { color: var(--muted, #6b7280); }
+@media (max-width: 720px) {
+  .business-switcher span { display: none; }
+  .business-switcher select { min-width: 120px; max-width: 150px; }
+}
+
+.add-business-short { display: none; }
+.account-loading { min-height: 100vh; display: grid; place-items: center; color: #6d7b90; font-weight: 750; }
+@media (max-width: 700px) {
+  .topbar-actions { gap: 6px; }
+  .business-switcher select { min-width: 100px; max-width: 128px; min-height: 40px; padding-left: 9px; padding-right: 24px; }
+  .add-business-button { padding-left: 9px !important; padding-right: 9px !important; }
+}
+@media (max-width: 420px) {
+  .topbar .safe-chip { display: none; }
+  .business-switcher select { min-width: 92px; max-width: 112px; }
+  .add-business-full { display: none; }
+  .add-business-short { display: inline; }
 }

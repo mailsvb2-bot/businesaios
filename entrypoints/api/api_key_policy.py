@@ -22,6 +22,7 @@ from governance.rbac_contract import RoleId
 CANON_API_KEY_POLICY = True
 CANON_API_FINAL_OWNER = True
 OWNER_SESSION_RESUME_SCOPE = 'owner_session_resume'
+OWNER_ACCOUNT_RESUME_SCOPE = 'owner_account_resume'
 
 
 def utc_now() -> datetime:
@@ -204,6 +205,50 @@ class ApiKeyPolicy:
         metadata = {'principal_kind': 'user', 'session_kind': 'owner_onboarding_resume', 'business_id': business_id, 'intake_id': intake_id}
         return self._store.issue(tenant_id=tenant_id, subject=subject, actor_id=subject, roles=(), scopes=(OWNER_SESSION_RESUME_SCOPE,), display_name=display_name, ttl_seconds=ttl_seconds, metadata=metadata)
 
+    def issue_owner_account_session(self, *, tenant_id: str, owner_account_id: str, subject: str, display_name: str | None = None, ttl_seconds: int = 86400) -> tuple[ApiKeyRecord, str]:
+        account_id = str(owner_account_id or '').strip()
+        if not account_id:
+            raise ValueError('owner_account_id is required')
+        metadata = {'principal_kind': 'user', 'session_kind': 'owner_account_resume', 'owner_account_id': account_id}
+        return self._store.issue(tenant_id=tenant_id, subject=subject, actor_id=subject, roles=(), scopes=(OWNER_ACCOUNT_RESUME_SCOPE,), display_name=display_name, ttl_seconds=ttl_seconds, metadata=metadata)
+
+    def resolve_owner_account_session(self, *, resume_key: str) -> tuple[str, str] | None:
+        verdict = self.authenticate(RequestAuthentication(api_key=resume_key))
+        principal = verdict.principal
+        if not verdict.allowed or principal is None:
+            return None
+        metadata = dict(principal.metadata or {})
+        if tuple(principal.roles) or tuple(principal.scopes) != (OWNER_ACCOUNT_RESUME_SCOPE,) or str(metadata.get('session_kind') or '') != 'owner_account_resume':
+            return None
+        account_id = str(metadata.get('owner_account_id') or '').strip()
+        subject = str(principal.subject or '').strip()
+        return (account_id, subject) if account_id and subject else None
+
+    def owner_account_session_needs_refresh(self, *, resume_key: str, within_seconds: int = 21600) -> bool:
+        verdict = self.authenticate(RequestAuthentication(api_key=resume_key))
+        principal = verdict.principal
+        if not verdict.allowed or principal is None:
+            return False
+        metadata = dict(principal.metadata or {})
+        if tuple(principal.roles) or tuple(principal.scopes) != (OWNER_ACCOUNT_RESUME_SCOPE,) or str(metadata.get('session_kind') or '') != 'owner_account_resume':
+            return False
+        expires_raw = str(metadata.get('expires_at') or '').strip()
+        if not expires_raw:
+            return False
+        try:
+            expires_at = datetime.fromisoformat(expires_raw.replace('Z', '+00:00'))
+        except ValueError:
+            return True
+        if expires_at.tzinfo is None:
+            return True
+        return expires_at <= utc_now() + timedelta(seconds=max(0, int(within_seconds)))
+
+    def resume_owner_account_business(self, *, resume_key: str, owner_account_id: str, subject: str, tenant_id: str, business_id: str, display_name: str | None = None, ttl_seconds: int = 3600) -> tuple[ApiKeyRecord, str] | None:
+        resolved = self.resolve_owner_account_session(resume_key=resume_key)
+        if resolved != (str(owner_account_id or '').strip(), str(subject or '').strip()):
+            return None
+        return self._store.rotate_owner_session(tenant_id=tenant_id, business_id=business_id, subject=subject, display_name=display_name, ttl_seconds=ttl_seconds)
+
     def resume_owner_session(self, *, resume_key: str, intake_id: str, tenant_id: str, business_id: str, ttl_seconds: int = 3600) -> tuple[ApiKeyRecord, str] | None:
         verdict = self.authenticate(RequestAuthentication(tenant_id=tenant_id, api_key=resume_key))
         principal = verdict.principal
@@ -239,4 +284,4 @@ class ApiKeyPolicy:
         return verdict
 
 
-__all__ = ['ApiKeyPolicy', 'ApiKeyRecord', 'CANON_API_KEY_POLICY', 'InMemoryApiKeyStore', 'OWNER_SESSION_RESUME_SCOPE', 'PersistentApiKeyStore', 'build_default_api_key_store', 'api_key_store_path']
+__all__ = ['ApiKeyPolicy', 'ApiKeyRecord', 'CANON_API_KEY_POLICY', 'InMemoryApiKeyStore', 'OWNER_ACCOUNT_RESUME_SCOPE', 'OWNER_SESSION_RESUME_SCOPE', 'PersistentApiKeyStore', 'build_default_api_key_store', 'api_key_store_path']

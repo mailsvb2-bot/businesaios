@@ -85,3 +85,67 @@ def test_owner_resume_session_fails_closed_on_intake_business_or_tenant_mismatch
         tenant_id='tenant-other',
         business_id='business-a',
     ) is None
+
+
+def test_owner_account_session_is_navigation_only_and_can_resume_only_same_owner_membership() -> None:
+    policy = ApiKeyPolicy(store=InMemoryApiKeyStore(pepper='test-pepper'))
+    account_record, raw_account = policy.issue_owner_account_session(
+        tenant_id='tenant-a',
+        owner_account_id='owner-account-a',
+        subject='user-a',
+        display_name='Acme',
+    )
+
+    assert account_record.roles == ()
+    assert account_record.scopes == ('owner_account_resume',)
+    assert 'provider_control_plane' not in account_record.scopes
+    assert policy.resolve_owner_account_session(resume_key=raw_account) == ('owner-account-a', 'user-a')
+
+    assert policy.resume_owner_account_business(
+        resume_key=raw_account,
+        owner_account_id='owner-account-other',
+        subject='user-a',
+        tenant_id='tenant-b',
+        business_id='business-b',
+    ) is None
+    assert policy.resume_owner_account_business(
+        resume_key=raw_account,
+        owner_account_id='owner-account-a',
+        subject='user-other',
+        tenant_id='tenant-b',
+        business_id='business-b',
+    ) is None
+
+    resumed = policy.resume_owner_account_business(
+        resume_key=raw_account,
+        owner_account_id='owner-account-a',
+        subject='user-a',
+        tenant_id='tenant-b',
+        business_id='business-b',
+    )
+    assert resumed is not None
+    owner_record, raw_owner = resumed
+    assert owner_record.tenant_id == 'tenant-b'
+    assert owner_record.subject == 'user-a'
+    assert owner_record.roles == (RoleId.OWNER,)
+    assert owner_record.scopes == ('provider_control_plane',)
+    assert owner_record.metadata['business_id'] == 'business-b'
+    assert policy.authenticate(RequestAuthentication(tenant_id='tenant-b', api_key=raw_owner)).allowed is True
+
+
+def test_owner_account_session_refresh_threshold_is_narrow_and_expiry_aware() -> None:
+    policy = ApiKeyPolicy(store=InMemoryApiKeyStore(pepper='test-pepper'))
+    _, long_lived = policy.issue_owner_account_session(
+        tenant_id='tenant-a', owner_account_id='account-a', subject='user-a', ttl_seconds=86400,
+    )
+    _, near_expiry = policy.issue_owner_account_session(
+        tenant_id='tenant-a', owner_account_id='account-a', subject='user-a', ttl_seconds=60,
+    )
+    _, business_resume = policy.issue_owner_resume_session(
+        tenant_id='tenant-a', business_id='business-a', intake_id='cta-a', subject='user-a', ttl_seconds=60,
+    )
+
+    assert policy.owner_account_session_needs_refresh(resume_key=long_lived, within_seconds=3600) is False
+    assert policy.owner_account_session_needs_refresh(resume_key=near_expiry, within_seconds=3600) is True
+    assert policy.owner_account_session_needs_refresh(resume_key=business_resume, within_seconds=3600) is False
+    assert policy.owner_account_session_needs_refresh(resume_key='not-a-key', within_seconds=3600) is False

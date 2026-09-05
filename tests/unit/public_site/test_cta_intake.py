@@ -41,3 +41,26 @@ def test_native_messaging_connection_modes_are_exposed_truthfully() -> None:
     assert rows["discord_messaging"]["connection_mode"] == "native_discord_http_or_provider_webhook_bridge"
     assert rows["slack_messaging"]["credential_labels"] == ["Slack Signing Secret"]
     assert rows["discord_messaging"]["credential_labels"] == ["Bridge Webhook Secret"]
+
+
+def test_one_owner_account_can_have_multiple_isolated_businesses_without_email_identity_guessing(tmp_path) -> None:
+    service = CTALandingIntakeService(storage_path=str(tmp_path / "cta.jsonl"))
+    first = service.submit(payload={"email": "owner@example.test", "business_name": "Alpha", "industry": "services"})
+    second = service.submit(
+        payload={"email": "another-address@example.test", "business_name": "Beta", "industry": "commerce"},
+        owner_account_id=first.owner_account_id,
+        owner_subject=first.user_id,
+    )
+    unrelated = service.submit(payload={"email": "owner@example.test", "business_name": "Gamma", "industry": "services"})
+
+    assert second.owner_account_id == first.owner_account_id
+    assert second.user_id == first.user_id
+    assert second.tenant_id != first.tenant_id
+    assert second.business_id != first.business_id
+    assert unrelated.owner_account_id != first.owner_account_id
+    assert unrelated.user_id != first.user_id
+
+    businesses = service.list_owner_businesses(owner_account_id=first.owner_account_id)
+    assert [item["name"] for item in businesses] == ["Beta", "Alpha"]
+    assert {item["business_id"] for item in businesses} == {first.business_id, second.business_id}
+    assert unrelated.business_id not in {item["business_id"] for item in businesses}

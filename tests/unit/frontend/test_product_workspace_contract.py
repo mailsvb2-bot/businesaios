@@ -56,6 +56,8 @@ def test_owner_workspace_resumes_server_session_without_persisting_owner_key_in_
     assert "Обычная перезагрузка сама по себе сессию не завершает" in app
     assert "вход в кабинет завершился после перезагрузки страницы" not in visible_copy.lower()
     assert "onRetryAccess={restoreWorkspaceAccess}" in app
+    assert 'aria-label="Выбор бизнеса"' in app
+    assert 'aria-label={`Открыть бизнес ${item.name || "Бизнес"}`}' in app
 
 
 def test_saved_workspace_network_failure_has_explicit_retry_path() -> None:
@@ -176,3 +178,17 @@ def test_provider_setup_ui_distinguishes_public_config_from_secrets_and_explains
     assert 'new Set(["config", "url", "username", "oauth_client"])' in app
     assert 'input type="password" autoComplete="off"' not in app
     assert all(selector in styles for selector in (".provider-truth-card", ".field-label-row", ".readonly-value"))
+
+
+def test_owner_account_can_list_add_and_switch_multiple_businesses_without_browser_key_storage() -> None:
+    app = _read("App.jsx")
+    styles = _read("styles.css")
+    assert "/public-site/owner/businesses" in app
+    assert "owner_businesses" in app
+    assert "Мои бизнесы" in app
+    assert "Добавить бизнес" in app
+    assert "business-switcher" in app
+    assert "onSwitchBusiness={switchBusiness}" in app
+    assert "setCreatingNewBusiness(true)" in app
+    assert "localStorage" not in app and "sessionStorage" not in app
+    assert all(selector in styles for selector in (".business-switcher", ".account-businesses", ".business-choice-grid", ".business-choice-card"))
