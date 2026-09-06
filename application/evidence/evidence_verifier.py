@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from application.effects.effect_outcome_vocabulary import normalize_outcome_status, outcome_is_verified
@@ -107,6 +108,7 @@ class EvidenceVerifier:
         feedback: Mapping[str, Any] | None = None,
         router_evidence: Mapping[str, Any] | None = None,
         expectation: OutcomeExpectation | None = None,
+        now: datetime | None = None,
     ) -> EvidenceVerificationResult:
         action_payload = _safe_dict(action)
         action_type = _text(action_payload.get("action_type"))
@@ -240,7 +242,7 @@ class EvidenceVerifier:
             action_type,
             external_confirmation_mode=_text(action_payload.get("external_confirmation_mode") or "required"),
         )
-        engine_result = self._verification_engine.verify(action=action_payload, evidence=evidence_items).to_dict()
+        engine_result = self._verification_engine.verify(action=action_payload, evidence=evidence_items, now=now).to_dict()
         decision = _safe_dict(engine_result.get("decision"))
         source_of_truth = _text(decision.get("source_of_truth") or "observable_evidence")
         if source_of_truth == "effect_router":

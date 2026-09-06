@@ -44,7 +44,11 @@ def _build_executor(tmp_path, *, keyring, schemas, preg, events, core):
     return executor, ledger_ctx
 
 
-def test_ring_invariant_deterministic_execution(tmp_path):
+def test_ring_invariant_deterministic_execution(tmp_path, monkeypatch):
+    def wall_clock_read_is_forbidden():
+        raise AssertionError("deterministic execution must not read verification wall clock")
+
+    monkeypatch.setattr("execution.verification.verification_timeout_policy._utc_now", wall_clock_read_is_forbidden)
     schemas = SchemaRegistry()
     schemas.register(
         "send_message@v1",
