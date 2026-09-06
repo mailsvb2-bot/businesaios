@@ -6,6 +6,7 @@ from pathlib import Path
 def test_frontend_uses_owner_workspace_without_persisting_session_or_secrets() -> None:
     source = Path('frontend/src/App.jsx').read_text(encoding='utf-8')
     assert '/business-workspace/providers' in source
+    assert '/actions/execute' in source and '/business-workspace/customers' in source
     assert '/web/provider-tokens' not in source
     assert 'X-API-Key' in source
     assert 'owner_session' in source

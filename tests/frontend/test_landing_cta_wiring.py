@@ -8,6 +8,8 @@ def test_frontend_onboarding_is_wired_to_truthful_public_api() -> None:
     assert "finishOnboarding" in app
     assert "selected_providers: selectedProviders" in app
     assert "/business-workspace/providers" in app
+    assert "/actions/execute" in app
+    assert "/business-workspace/customers" in app
     assert "/web/provider-tokens" not in app
     assert "/control-plane/provider-admin/activate" not in app
 
