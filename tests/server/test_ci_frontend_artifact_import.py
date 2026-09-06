@@ -101,13 +101,14 @@ def test_expected_sha_requires_explicit_deploy_sha(monkeypatch: pytest.MonkeyPat
     assert importer._expected_sha() == SHA
 
 
-def test_main_requires_staged_pair_in_canonical_production(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_main_requires_staged_pair_in_canonical_production(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(importer, "DIST", importer.PRODUCTION_ROOT / "frontend" / "dist")
     monkeypatch.setattr(importer, "ARTIFACT_ZIP", tmp_path / "missing.zip")
     monkeypatch.setattr(importer, "ARTIFACT_ID", tmp_path / "missing.id")
-    with pytest.raises(RuntimeError, match="canonical production build requires"):
+    monkeypatch.setattr(importer, "_assert_deploy_lock", lambda: None)
+    monkeypatch.setenv("EXPECTED_SHA", SHA)
+    monkeypatch.setattr(importer, "_production_checkout_sha", lambda: SHA)
+    with pytest.raises(RuntimeError, match="release dist or manifest is invalid"):
         importer.main()
 
 
@@ -147,18 +148,14 @@ def test_main_rejects_tampered_already_published_bundle_without_staged_pair(
         importer.main()
 
 
-def test_main_allows_noop_outside_canonical_production(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_main_allows_noop_outside_canonical_production(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(importer, "DIST", tmp_path / "checkout" / "frontend" / "dist")
     monkeypatch.setattr(importer, "ARTIFACT_ZIP", tmp_path / "missing.zip")
     monkeypatch.setattr(importer, "ARTIFACT_ID", tmp_path / "missing.id")
     assert importer.main() == 0
 
 
-def test_main_does_not_consume_staged_pair_outside_production(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_main_does_not_consume_staged_pair_outside_production(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     artifact_zip = tmp_path / "frontend-dist.zip"
     artifact_id = tmp_path / "frontend-dist.artifact-id"
     artifact_zip.write_bytes(b"staged")
@@ -291,9 +288,7 @@ def test_production_checkout_sha_reads_packed_ref(monkeypatch: pytest.MonkeyPatc
     assert importer._production_checkout_sha() == SHA
 
 
-def test_main_rejects_expected_sha_different_from_checkout(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_main_rejects_expected_sha_different_from_checkout(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     artifact_zip = tmp_path / "frontend-dist.zip"
     artifact_id = tmp_path / "frontend-dist.artifact-id"
     artifact_zip.write_bytes(b"staged")
