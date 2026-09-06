@@ -90,7 +90,7 @@ PROVIDERS: tuple[ProviderDefinition, ...] = (
         adapter_key="chatbot.sms",
         channel_kind=ChannelKind.CHATBOT,
         domain="communications",
-        description="SMS gateway connector for transactional and campaign messaging.",
+        description="Contract-only SMS integration slot; a concrete vendor transport, auth contract and delivery evidence must be selected before live use.",
         secret_fields=(
             _token("API Token", "api_token", placeholder="sms-token"),
             _token("Sender ID", "sender_id", placeholder="BUSAIOS", kind="config"),
