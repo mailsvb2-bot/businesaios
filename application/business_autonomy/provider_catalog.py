@@ -91,10 +91,8 @@ PROVIDERS: tuple[ProviderDefinition, ...] = (
         channel_kind=ChannelKind.CHATBOT,
         domain="communications",
         description="Contract-only SMS integration slot; a concrete vendor transport, auth contract and delivery evidence must be selected before live use.",
-        secret_fields=(
-            _token("API Token", "api_token", placeholder="sms-token"),
-            _token("Sender ID", "sender_id", placeholder="BUSAIOS", kind="config"),
-        ),
+        secret_fields=(),
+        supports_business_onboarding=False,
         default_non_ai_mode="channel_driven",
         default_action_type="communications_write",
         messaging_channel="sms",

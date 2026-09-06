@@ -18,7 +18,10 @@ from application.business_autonomy.provider_messaging_metadata import messaging_
 from core.tenancy.normalization import require_tenant_id
 from reliability.idempotency_contract import IdempotencyStore
 from reliability.idempotency_store import InMemoryIdempotencyStore
-from runtime.business_autonomy.provider_connector_health import ProviderConnectorHealthService
+from runtime.business_autonomy.provider_connector_health import (
+    PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES,
+    ProviderConnectorHealthService,
+)
 from runtime.business_autonomy.provider_inbound_webhook_service import ProviderInboundWebhookService
 from runtime.business_autonomy.provider_incident_registry import FileProviderIncidentRegistry
 from runtime.business_autonomy.provider_live_probe_runtime import ProviderLiveProbeRuntime
@@ -293,7 +296,7 @@ class ProviderAdminService:
             business_id=normalized_business,
             provider_key=provider.provider_key,
             connected=(
-                health_probe.status not in {'missing_required_secrets', 'invalid_secret_shape', 'misconfigured'}
+                health_probe.status not in PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES
                 and not self._webhook_reconciliation_blocks_connection(webhook_reconciliation)
             ),
             connector_id=provider.connector_id,
@@ -305,7 +308,7 @@ class ProviderAdminService:
             persistent_surfaces=persistent_surfaces,
             onboarding_ready=(
                 onboarding_ready
-                and health_probe.status not in {'missing_required_secrets', 'invalid_secret_shape', 'misconfigured'}
+                and health_probe.status not in PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES
                 and not self._webhook_reconciliation_blocks_connection(webhook_reconciliation)
             ),
             metadata={
@@ -426,7 +429,7 @@ class ProviderAdminService:
             'secret_lifecycle': {'last_action': 'reconnected', 'requested_by': str(requested_by).strip() or 'admin_console'},
         }
         connected = (
-            health_probe.status not in {'missing_required_secrets', 'invalid_secret_shape', 'misconfigured'}
+            health_probe.status not in PROVIDER_HEALTH_CONNECTION_BLOCKING_STATUSES
             and not self._webhook_reconciliation_blocks_connection(webhook_reconciliation)
         )
         status = ProviderActivationStatus(
